@@ -128,6 +128,12 @@ try {
   assert(transactions.data.length >= 3, "SACCO admin should list own financial transactions");
   assert(transactions.data.every((transaction) => transaction.tenantId === "tenant_green"), "Financial transaction list must be tenant-scoped");
 
+  const pendingSeededTransaction = transactions.data.find((item) => item.status === "pending_approval");
+  assert(pendingSeededTransaction, "Seed data should include a pending financial transaction");
+  const postedTransaction = await api("PATCH", `/financial-transactions/${pendingSeededTransaction.id}/status`, { status: "posted" }, platformToken);
+  assert(postedTransaction.data.status === "posted", "Platform checker should post a pending financial transaction");
+  assert(postedTransaction.data.checkerUserId, "Posted financial transaction should record a checker");
+
   const transaction = await api("POST", "/financial-transactions", {
     memberId: member.data.id,
     branchId: branch.data.id,
@@ -138,6 +144,16 @@ try {
   }, saccoToken);
   assert(transaction.data.id, "Financial transaction should be created");
   assert(transaction.data.status === "pending_approval", "New financial transaction should require approval");
+
+  const makerDecision = await raw("PATCH", `/financial-transactions/${transaction.data.id}/status`, { status: "posted" }, saccoToken);
+  assert(makerDecision.status === 409, "Maker should not approve their own financial transaction");
+
+  const rejectedTransaction = await api("PATCH", `/financial-transactions/${transaction.data.id}/status`, {
+    status: "rejected",
+    reason: "Smoke test rejection"
+  }, platformToken);
+  assert(rejectedTransaction.data.status === "rejected", "Checker should reject a pending financial transaction");
+  assert(rejectedTransaction.data.rejectionReason === "Smoke test rejection", "Rejected transaction should record the reason");
 
   const invalidTenantTransaction = await raw("POST", "/financial-transactions", {
     memberId: "member_lake_peter",

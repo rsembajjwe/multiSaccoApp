@@ -38,6 +38,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Subscription UI can switch from local demo data to API-backed package, invoice, and payment records after login.
 - Transactions UI can switch from local demo data to API-backed financial postings after login.
 - Backend financial transaction creation validates tenant, member, branch, type, channel, and positive amount.
+- Approvals UI can post or reject API-backed pending financial transactions with maker-checker enforcement.
 
 ## Recommended backend modules for the next build
 

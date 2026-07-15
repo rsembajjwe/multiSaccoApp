@@ -17,6 +17,7 @@ const allowedKycStatuses = new Set(["not_verified", "pending_verification", "ver
 const allowedMemberTypes = new Set(["individual", "group", "institutional", "corporate"]);
 const allowedTransactionTypes = new Set(["savings_deposit", "share_purchase", "welfare_contribution", "withdrawal"]);
 const allowedTransactionChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
+const allowedTransactionDecisionStatuses = new Set(["posted", "rejected"]);
 
 export async function handleApi(request, response, url) {
   const correlationId = request.headers["x-correlation-id"] || newId("req");
@@ -74,6 +75,9 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/members") return createMember(request, response, auth, correlationId);
     if (method === "GET" && path === "/financial-transactions") return listFinancialTransactions(response, auth, url);
     if (method === "POST" && path === "/financial-transactions") return createFinancialTransaction(request, response, auth, correlationId);
+    if (method === "PATCH" && path.startsWith("/financial-transactions/") && path.endsWith("/status")) {
+      return updateFinancialTransactionStatus(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path.startsWith("/members/") && path.endsWith("/documents")) {
       return listMemberDocuments(response, auth, path.split("/")[2], correlationId);
     }
@@ -565,4 +569,43 @@ async function createFinancialTransaction(request, response, auth, correlationId
     ipAddress: requestIp(request)
   });
   return sendData(response, transaction, 201);
+}
+
+async function updateFinancialTransactionStatus(request, response, auth, transactionId, correlationId) {
+  const body = await readJson(request);
+  const status = String(body.status || "");
+  if (!allowedTransactionDecisionStatuses.has(status)) {
+    return sendError(response, 400, "INVALID_TRANSACTION_STATUS", "Financial transactions can only be posted or rejected from the approval queue.", correlationId);
+  }
+
+  const transaction = db.financialTransactions.find((item) => item.id === transactionId);
+  if (!transaction) return sendError(response, 404, "TRANSACTION_NOT_FOUND", "Financial transaction not found.", correlationId);
+  if (!assertTenantAccess(auth, transaction.tenantId, response, correlationId)) return;
+  if (transaction.status !== "pending_approval") {
+    return sendError(response, 409, "TRANSACTION_ALREADY_DECIDED", "Only pending financial transactions can be decided.", correlationId);
+  }
+  if (transaction.makerUserId === auth.user.id) {
+    return sendError(response, 409, "MAKER_CHECKER_REQUIRED", "The maker cannot approve or reject their own financial transaction.", correlationId);
+  }
+
+  const now = new Date().toISOString();
+  transaction.status = status;
+  transaction.checkerUserId = auth.user.id;
+  transaction.updatedAt = now;
+  if (status === "posted") transaction.postedAt = now;
+  if (status === "rejected") {
+    transaction.postedAt = null;
+    transaction.rejectionReason = String(body.reason || "");
+  }
+
+  createAuditEvent({
+    tenantId: transaction.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `${status === "posted" ? "Posted" : "Rejected"} financial transaction ${transaction.reference}`,
+    resourceType: "financial_transaction",
+    resourceId: transaction.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, transaction);
 }

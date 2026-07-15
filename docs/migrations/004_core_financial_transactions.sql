@@ -14,6 +14,7 @@ CREATE TABLE financial_transactions (
   narration TEXT,
   maker_user_id UUID NOT NULL REFERENCES users(id),
   checker_user_id UUID REFERENCES users(id),
+  rejection_reason TEXT,
   posted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),

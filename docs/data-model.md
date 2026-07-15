@@ -175,6 +175,9 @@ This model defines the Phase 1 and Phase 2 foundation tables. Production storage
 | maker_user_id | uuid/string | User who initiated the transaction. |
 | checker_user_id | uuid/string | User who approved or rejected the transaction. |
 | posted_at | timestamp | Set only after posting. |
+| rejection_reason | text | Optional reason captured when a transaction is rejected. |
+
+Financial transaction decisions follow maker-checker separation: a transaction can move from `pending_approval` to `posted` or `rejected`, and the maker cannot approve or reject their own transaction.
 
 ## Phase 2 Onboarding Entities
 

@@ -225,6 +225,20 @@ function apiTransactionToRow(transaction) {
   };
 }
 
+function apiTransactionApprovalItems() {
+  return apiState.financialTransactions
+    .filter((transaction) => transaction.status === "pending_approval")
+    .map((transaction) => ({
+      id: transaction.id,
+      tenantId: transaction.tenantId,
+      title: `Post ${transaction.reference} ${titleCase(transaction.type.replace(/_/g, " "))}`,
+      type: "Financial Posting",
+      requester: apiState.users.find((user) => user.id === transaction.makerUserId)?.fullName || "Maker",
+      risk: transaction.amount > 1000000 ? "High" : "Low",
+      source: "API"
+    }));
+}
+
 function apiTenantToRow(tenant) {
   return {
     id: tenant.id,
@@ -631,21 +645,24 @@ function renderLoans() {
 }
 
 function renderApprovals() {
-  const approvals = tenantScoped(state.approvals);
+  const approvals = apiState.user ? apiTransactionApprovalItems() : tenantScoped(state.approvals);
+  const source = apiState.user ? "API-backed" : "Local demo";
   return `
     <section class="card">
       <div class="toolbar">
         <div>
           <h2>Approval queue</h2>
-          <p class="eyebrow">Committee, board and maker-checker decisions</p>
+          <p class="eyebrow">${source} · Committee, board and maker-checker decisions</p>
         </div>
+        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
       </div>
+      ${apiState.user ? `<div class="notice">Pending financial postings shown from the backend for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}.</div>` : ""}
       <ul class="list">
         ${approvals.map((approval) => `
           <li>
             <span>
               <strong>${approval.title}</strong><br>
-              <small>${approval.type} requested by ${approval.requester} · risk ${approval.risk}</small>
+              <small>${approval.type} requested by ${approval.requester} · risk ${approval.risk}${approval.source ? ` · ${approval.source}` : ""}</small>
             </span>
             <span>
               <button class="secondary-button" data-reject="${approval.id}" type="button">Reject</button>
@@ -912,7 +929,7 @@ async function refreshApiStatus() {
     apiState.message = error.message;
   }
   renderApiChrome();
-  if (["dashboard", "reports", "members", "registrations", "subscriptions", "transactions"].includes(state.currentView)) render();
+  if (["dashboard", "reports", "members", "registrations", "subscriptions", "transactions", "approvals"].includes(state.currentView)) render();
 }
 
 function openApiLoginForm() {
@@ -1282,7 +1299,24 @@ async function approveTenant(id) {
   render();
 }
 
-function resolveApproval(id, outcome) {
+async function resolveApproval(id, outcome) {
+  const apiTransaction = apiState.financialTransactions.find((transaction) => transaction.id === id);
+  if (apiState.user && apiTransaction) {
+    try {
+      await apiRequest(`/financial-transactions/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: outcome === "Approved" ? "posted" : "rejected",
+          reason: outcome === "Rejected" ? "Rejected from approval queue" : ""
+        })
+      });
+      await refreshApiStatus();
+    } catch (error) {
+      openModal("Approval failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    }
+    return;
+  }
+
   const approval = state.approvals.find((item) => item.id === id);
   if (!approval) return;
   approval.status = outcome;

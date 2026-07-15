@@ -57,6 +57,8 @@ After Platform Admin API login, the Subscriptions screen reads backend packages/
 
 After SACCO API login, the Transactions screen reads backend financial postings and submits new pending transactions to `/api/v1/financial-transactions`.
 
+After API login, the Approvals screen reads pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
+
 ## Demo roles
 
 - Select **Platform Administration** to manage registrations, packages, subscriptions, support, and platform audit events.
