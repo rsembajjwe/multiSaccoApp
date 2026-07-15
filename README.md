@@ -1,6 +1,8 @@
 # SACCO Management Platform
 
-A dependency-free browser prototype for the Multi-Tenant SACCO Management Platform for Uganda described in the requirements document.
+A SACCO Management Platform for Uganda described in the requirements document.
+
+The production backend path is Java/Spring Boot in `backend-java`. The current Node server remains as a working prototype bridge while the Java API is built out endpoint by endpoint.
 
 ## What is included
 
@@ -35,6 +37,18 @@ http://127.0.0.1:5173
 
 No installation is required. The app uses browser `localStorage` for demo data, and the **Reset demo** button restores the original dataset.
 
+Run the Java backend:
+
+```powershell
+npm.cmd run java:start
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8080/api/v1/health
+```
+
 ## Developer checks
 
 ```powershell
@@ -42,6 +56,12 @@ npm.cmd run check
 ```
 
 This checks the JavaScript syntax for the app and local server.
+
+```powershell
+npm.cmd run java:test
+```
+
+This runs the Java/Spring Boot backend tests.
 
 ```powershell
 npm.cmd run test:api
@@ -110,7 +130,7 @@ Members can login from **Member portal** using the seeded account `GVS-0001` / `
 
 This is now the first build foundation. A production build should add:
 
-- Backend REST API with `/api/v1/...` endpoints.
+- Java/Spring Boot REST API with `/api/v1/...` endpoints.
 - PostgreSQL schema with mandatory `tenant_id` on tenant-owned tables.
 - Strong authentication, MFA, RBAC, branch restrictions, and approval limits.
 - Real mobile-money and bank integrations.

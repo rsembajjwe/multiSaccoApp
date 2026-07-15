@@ -1,0 +1,32 @@
+# SACCO Java Backend
+
+Spring Boot backend for the Multi SACCO Management Platform.
+
+## Run
+
+```powershell
+cd backend-java
+.\mvnw.cmd spring-boot:run
+```
+
+The Java API starts on:
+
+```text
+http://127.0.0.1:8080/api/v1/health
+```
+
+## Test
+
+```powershell
+cd backend-java
+.\mvnw.cmd test
+```
+
+## Current Scope
+
+- Java 17.
+- Spring Boot 4.0.
+- `/api/v1/health` with the same `{ "data": ... }` API envelope used by the prototype.
+- Baseline security headers on responses.
+- H2 development datasource configured in PostgreSQL compatibility mode.
+- PostgreSQL and Flyway dependencies included for the production database path.

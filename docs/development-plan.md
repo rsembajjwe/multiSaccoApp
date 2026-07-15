@@ -25,7 +25,7 @@ Recommended delivery order:
 Initial production architecture:
 
 - Frontend web app for platform administrators, SACCO staff, and members.
-- Backend REST API with versioned routes under `/api/v1`.
+- Java/Spring Boot REST API with versioned routes under `/api/v1`.
 - PostgreSQL database using shared tables with mandatory `tenant_id`.
 - Redis for caching, sessions, rate limiting, and OTPs.
 - Object storage for documents, KYC files, certificates, receipts, and statements.
@@ -68,12 +68,13 @@ Implemented now:
 - Approval queue.
 - Reports and audit trail.
 - Member portal demo.
-- Local development server.
+- Local Node prototype server.
+- Java/Spring Boot backend skeleton in `backend-java`.
 
 Current limits:
 
 - Data is stored in browser `localStorage`.
-- No real backend yet.
+- Java backend is scaffolded, but most business endpoints still need migration from the Node prototype.
 - No authentication.
 - No database.
 - No real payment integration.
@@ -88,7 +89,7 @@ Goal: create the production-ready base for multi-tenant SACCO operations.
 Deliverables:
 
 - Project structure for frontend and backend.
-- Backend REST API skeleton.
+- Java/Spring Boot REST API skeleton.
 - PostgreSQL schema and migrations.
 - Tenant model with `tenant_id` isolation.
 - Authentication with secure password hashing.
@@ -382,13 +383,14 @@ Progress:
 - Offline complaint draft support added for the Member Portal, with local draft save and server sync when online.
 - Android member app foundation added under `mobile/member_app`, with Flutter entrypoint, API contract, emulator base URL, and validation script.
 - Security headers and development rate limiting added for API/static responses, staff login, member login, and mobile-money callbacks.
+- Java/Spring Boot backend scaffold added under `backend-java`, with `/api/v1/health`, H2 dev datasource, PostgreSQL/Flyway dependencies, security headers, and MockMvc tests.
 
 Recommended stack:
 
 - Frontend: React or dependency-free progressive app until package tooling is stable.
-- Backend: Node.js with Fastify or Express, or Java/Spring Boot if preferred.
+- Backend: Java/Spring Boot.
 - Database: PostgreSQL.
-- Migrations: Prisma, Knex, Flyway, or Liquibase depending on backend choice.
+- Migrations: Flyway.
 - Authentication: server sessions or JWT with refresh-token rotation.
 
 Sprint 1 acceptance criteria:

@@ -59,6 +59,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Members can save offline complaint drafts locally and sync them later to server-side complaints with notification feedback.
 - Android member app foundation documents Flutter entrypoint, emulator API base URL, seed login, and required mobile API endpoints.
 - API/static responses include baseline security headers, and public login/callback endpoints include development rate limiting.
+- Java/Spring Boot backend skeleton added with the `/api/v1/health` envelope, security headers, H2 development datasource, and PostgreSQL/Flyway production dependencies.
 
 ## Recommended backend modules for the next build
 
