@@ -11,6 +11,8 @@ Java-backed routes currently implemented:
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/logout`
+- `GET /api/v1/users`
+- `POST /api/v1/users`
 
 All API responses include baseline security headers. Public staff login, member login, and mobile-money callback endpoints are rate limited and return `429 RATE_LIMITED` with `Retry-After` when the development limit is exceeded.
 

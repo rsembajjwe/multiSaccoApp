@@ -37,6 +37,26 @@ class User {
     protected User() {
     }
 
+    User(
+            String id,
+            String tenantId,
+            String fullName,
+            String email,
+            String phone,
+            String passwordHash,
+            String passwordSalt,
+            String status) {
+        this.id = id;
+        this.tenantId = tenantId;
+        this.fullName = fullName;
+        this.email = email;
+        this.phone = phone;
+        this.passwordHash = passwordHash;
+        this.passwordSalt = passwordSalt;
+        this.status = status;
+        this.createdAt = Instant.now();
+    }
+
     String getId() {
         return id;
     }

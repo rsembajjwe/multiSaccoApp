@@ -1,6 +1,7 @@
 package com.methaltech.sacco.security;
 
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.util.HexFormat;
 import javax.crypto.SecretKeyFactory;
@@ -12,6 +13,14 @@ public class PasswordHasher {
 
     private static final int ITERATIONS = 210_000;
     private static final int KEY_LENGTH_BITS = 256;
+    private final SecureRandom secureRandom = new SecureRandom();
+
+    public PasswordHash hash(String password) {
+        byte[] saltBytes = new byte[16];
+        secureRandom.nextBytes(saltBytes);
+        String salt = HexFormat.of().formatHex(saltBytes);
+        return new PasswordHash(hash(password, salt), salt);
+    }
 
     public boolean matches(String password, String salt, String expectedHash) {
         return hash(password, salt).equalsIgnoreCase(expectedHash);
@@ -25,5 +34,8 @@ public class PasswordHasher {
         } catch (NoSuchAlgorithmException | InvalidKeySpecException exception) {
             throw new IllegalStateException("Password hashing is unavailable", exception);
         }
+    }
+
+    public record PasswordHash(String hash, String salt) {
     }
 }

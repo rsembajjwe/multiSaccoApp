@@ -11,6 +11,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -118,15 +119,97 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.error.code", is("AUTH_REQUIRED")));
 	}
 
+	@Test
+	void platformUserCanListAllUsers() throws Exception {
+		String token = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/users")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data[0].passwordHash").doesNotExist())
+				.andExpect(jsonPath("$.data[0].passwordSalt").doesNotExist());
+	}
+
+	@Test
+	void saccoUserListIsTenantScoped() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/users")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+	}
+
+	@Test
+	void saccoUserCanCreateUserOnlyInOwnTenant() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String email = "new-staff-" + System.currentTimeMillis() + "@greenvalley.local";
+
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "New Green Staff",
+								  "email": "%s",
+								  "phone": "+256700111222",
+								  "password": "Staff@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.email", is(email)))
+				.andExpect(jsonPath("$.data.passwordHash").doesNotExist());
+
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "fullName": "Lake Staff",
+								  "email": "lake-staff-%s@example.local",
+								  "password": "Staff@12345"
+								}
+								""".formatted(System.currentTimeMillis())))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+	}
+
+	@Test
+	void duplicateUserEmailInTenantIsRejected() throws Exception {
+		String token = loginAndReturnToken();
+
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "fullName": "Duplicate Green Admin",
+								  "email": "admin@greenvalley.local",
+								  "password": "Staff@12345"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("USER_EXISTS")));
+	}
+
 	private String loginAndReturnToken() throws Exception {
+		return loginAndReturnToken("admin@platform.local", "Admin@12345");
+	}
+
+	private String loginAndReturnToken(String email, String password) throws Exception {
 		MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
 						.contentType("application/json")
 						.content("""
 								{
-								  "email": "admin@platform.local",
-								  "password": "Admin@12345"
+								  "email": "%s",
+								  "password": "%s"
 								}
-								"""))
+								""".formatted(email, password)))
 				.andExpect(status().isOk())
 				.andReturn();
 

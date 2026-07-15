@@ -27,6 +27,7 @@ class AuthController {
 
     private final UserRepository userRepository;
     private final AuthSessionRepository authSessionRepository;
+    private final AuthService authService;
     private final PasswordHasher passwordHasher;
     private final TokenGenerator tokenGenerator;
     private final TenantService tenantService;
@@ -34,11 +35,13 @@ class AuthController {
     AuthController(
             UserRepository userRepository,
             AuthSessionRepository authSessionRepository,
+            AuthService authService,
             PasswordHasher passwordHasher,
             TokenGenerator tokenGenerator,
             TenantService tenantService) {
         this.userRepository = userRepository;
         this.authSessionRepository = authSessionRepository;
+        this.authService = authService;
         this.passwordHasher = passwordHasher;
         this.tokenGenerator = tokenGenerator;
         this.tenantService = tenantService;
@@ -72,8 +75,8 @@ class AuthController {
 
     @GetMapping("/me")
     ResponseEntity<?> me(@RequestHeader(name = "Authorization", required = false) String authorization) {
-        CurrentSession currentSession = currentSession(authorization);
-        if (currentSession == null) return authRequired();
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
 
         TenantResponse tenant = tenantService.findById(currentSession.user().getTenantId()).orElse(null);
         return ResponseEntity.ok(ApiResponse.of(new CurrentUserResponse(
@@ -83,34 +86,12 @@ class AuthController {
 
     @PostMapping("/logout")
     ResponseEntity<?> logout(@RequestHeader(name = "Authorization", required = false) String authorization) {
-        CurrentSession currentSession = currentSession(authorization);
-        if (currentSession == null) return authRequired();
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
 
         currentSession.session().revoke();
         authSessionRepository.save(currentSession.session());
         return ResponseEntity.ok(ApiResponse.of(new LogoutResponse(true)));
-    }
-
-    private CurrentSession currentSession(String authorization) {
-        String token = bearerToken(authorization);
-        if (token == null) return null;
-        return authSessionRepository
-                .findByTokenHashAndRevokedAtIsNullAndExpiresAtAfter(tokenGenerator.hashToken(token), Instant.now())
-                .flatMap(session -> userRepository.findById(session.getUserId())
-                        .filter(user -> "active".equals(user.getStatus()))
-                        .map(user -> new CurrentSession(session, user)))
-                .orElse(null);
-    }
-
-    private String bearerToken(String authorization) {
-        if (authorization == null || !authorization.toLowerCase().startsWith("bearer ")) return null;
-        String token = authorization.substring(7).trim();
-        return token.isBlank() ? null : token;
-    }
-
-    private ResponseEntity<ApiErrorResponse> authRequired() {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiErrorResponse.of(401, "AUTH_REQUIRED", "A valid bearer token is required."));
     }
 
     record LoginRequest(@Email @NotBlank String email, @NotBlank String password) {
@@ -125,6 +106,4 @@ class AuthController {
     record LogoutResponse(boolean loggedOut) {
     }
 
-    record CurrentSession(AuthSession session, User user) {
-    }
 }
