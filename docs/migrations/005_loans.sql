@@ -26,6 +26,24 @@ CREATE TABLE loans (
 CREATE INDEX idx_loans_tenant_status ON loans (tenant_id, status);
 CREATE INDEX idx_loans_tenant_member ON loans (tenant_id, member_id);
 
+CREATE TABLE loan_repayments (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  loan_id UUID NOT NULL REFERENCES loans(id),
+  member_id UUID NOT NULL REFERENCES members(id),
+  amount NUMERIC(18, 2) NOT NULL,
+  channel TEXT NOT NULL,
+  external_reference TEXT NOT NULL,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  recorded_by_user_id UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, external_reference)
+);
+
+CREATE INDEX idx_loan_repayments_loan_received ON loan_repayments (loan_id, received_at);
+CREATE INDEX idx_loan_repayments_member_received ON loan_repayments (member_id, received_at);
+
 CREATE TABLE loan_guarantors (
   id UUID PRIMARY KEY,
   tenant_id UUID NOT NULL REFERENCES tenants(id),

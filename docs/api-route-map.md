@@ -65,6 +65,8 @@ All JSON responses should follow one of these shapes:
 | POST | `/loans` | Submit a loan application for an active member. | SACCO staff |
 | PATCH | `/loans/:id/status` | Approve or reject a loan application. | Authorized approver |
 | POST | `/loans/:id/disburse` | Disburse an approved loan. | Authorized disbursement officer |
+| GET | `/loans/:id/repayments` | List repayments recorded against a loan. | Required |
+| POST | `/loans/:id/repayments` | Record an active loan repayment and reduce balance. | SACCO staff |
 | GET | `/loans/:id/guarantors` | List guarantor requests for a loan. | Required |
 | POST | `/loans/:id/guarantors` | Request a member to guarantee a loan. | SACCO staff |
 | GET | `/member-auth/guarantor-requests` | List current member guarantee requests. | Member |
@@ -113,6 +115,8 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/loans`
 - `PATCH /api/v1/loans/:id/status`
 - `POST /api/v1/loans/:id/disburse`
+- `GET /api/v1/loans/:id/repayments`
+- `POST /api/v1/loans/:id/repayments`
 - `GET /api/v1/loans/:id/guarantors`
 - `POST /api/v1/loans/:id/guarantors`
 - `GET /api/v1/member-auth/guarantor-requests`

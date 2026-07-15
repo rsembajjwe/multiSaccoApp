@@ -367,6 +367,7 @@ Progress:
 - Loan listing and application endpoints added, and the Loans screen now submits applications through `/api/v1/loans`.
 - Loan guarantor request endpoints added, with member accept/reject decisions in the member portal.
 - Loan approval and disbursement endpoints added, enforcing accepted-guarantor approval and approval-before-disbursement controls.
+- Loan repayment endpoints added, with active-loan balance reduction, duplicate-reference protection, and close-on-full-payment behavior.
 
 Recommended stack:
 

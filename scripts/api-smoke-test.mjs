@@ -160,6 +160,13 @@ try {
   const earlyDisbursement = await raw("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
   assert(earlyDisbursement.status === 409, "Loan should not disburse before approval");
 
+  const earlyRepayment = await raw("POST", `/loans/${loan.data.id}/repayments`, {
+    amount: 1000,
+    channel: "cash",
+    externalReference: `SMOKE-EARLY-LRP-${Date.now()}`
+  }, saccoToken);
+  assert(earlyRepayment.status === 409, "Loan should not receive repayment before disbursement");
+
   const approvalWithoutGuarantor = await raw("PATCH", `/loans/${loan.data.id}/status`, { status: "approved" }, saccoToken);
   assert(approvalWithoutGuarantor.status === 409, "Loan should require an accepted guarantor before approval");
 
@@ -190,6 +197,26 @@ try {
   const disbursedLoan = await api("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
   assert(disbursedLoan.data.status === "active", "Disbursed loan should become active");
   assert(disbursedLoan.data.balance === disbursedLoan.data.amount, "Disbursed loan balance should equal principal");
+
+  const repaymentPayload = {
+    amount: 200000,
+    channel: "cash",
+    externalReference: `SMOKE-LRP-${Date.now()}`
+  };
+  const repayment = await api("POST", `/loans/${loan.data.id}/repayments`, repaymentPayload, saccoToken);
+  assert(repayment.data.repayment.id, "Loan repayment should be recorded");
+  assert(repayment.data.loan.balance === disbursedLoan.data.amount - repaymentPayload.amount, "Repayment should reduce the outstanding loan balance");
+  assert(repayment.data.loan.repaymentTotal === repaymentPayload.amount, "Loan should expose total repayments");
+
+  const duplicateRepayment = await api("POST", `/loans/${loan.data.id}/repayments`, repaymentPayload, saccoToken);
+  assert(duplicateRepayment.data.idempotent === true, "Duplicate repayment reference should return the existing repayment");
+
+  const overpayment = await raw("POST", `/loans/${loan.data.id}/repayments`, {
+    amount: 999999999,
+    channel: "cash",
+    externalReference: `SMOKE-OVERPAY-LRP-${Date.now()}`
+  }, saccoToken);
+  assert(overpayment.status === 409, "Repayment should not exceed the outstanding balance");
 
   const invalidTenantLoan = await raw("POST", "/loans", {
     memberId: "member_lake_peter",

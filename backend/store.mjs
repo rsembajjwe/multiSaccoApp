@@ -411,6 +411,21 @@ export const db = {
       updatedAt: now()
     }
   ],
+  loanRepayments: [
+    {
+      id: "loan_repayment_green_0001",
+      tenantId: "tenant_green",
+      loanId: "loan_green_0001",
+      memberId: "member_green_amina",
+      amount: 850000,
+      channel: "mobile_money",
+      externalReference: "LRP-GVS-0001",
+      receivedAt: "2026-07-14T12:30:00.000Z",
+      recordedByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
   sessions: [],
   memberSessions: [],
   auditEvents: [

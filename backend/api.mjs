@@ -28,6 +28,7 @@ const allowedTransactionDecisionStatuses = new Set(["posted", "rejected"]);
 const allowedLoanProducts = new Set(["Development Loan", "Emergency Loan", "Agriculture Loan", "School Fees Loan"]);
 const allowedGuarantorStatuses = new Set(["accepted", "rejected"]);
 const allowedLoanDecisionStatuses = new Set(["approved", "rejected"]);
+const allowedRepaymentChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 
 export async function handleApi(request, response, url) {
   const correlationId = request.headers["x-correlation-id"] || newId("req");
@@ -107,6 +108,12 @@ export async function handleApi(request, response, url) {
     }
     if (method === "POST" && path.startsWith("/loans/") && path.endsWith("/disburse")) {
       return disburseLoan(request, response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "GET" && path.startsWith("/loans/") && path.endsWith("/repayments")) {
+      return listLoanRepayments(response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "POST" && path.startsWith("/loans/") && path.endsWith("/repayments")) {
+      return recordLoanRepayment(request, response, auth, path.split("/")[2], correlationId);
     }
     if (method === "GET" && path.startsWith("/loans/") && path.endsWith("/guarantors")) {
       return listLoanGuarantors(response, auth, path.split("/")[2], correlationId);
@@ -734,11 +741,14 @@ function listLoans(response, auth, url) {
 function publicLoan(loan) {
   if (!loan) return null;
   const guarantors = db.loanGuarantors.filter((item) => item.loanId === loan.id);
+  const repayments = db.loanRepayments.filter((item) => item.loanId === loan.id);
   return {
     ...loan,
     guarantors: guarantors.filter((item) => item.status === "accepted").length || loan.guarantors,
     guarantorRequests: guarantors.length,
-    pendingGuarantors: guarantors.filter((item) => item.status === "pending").length
+    pendingGuarantors: guarantors.filter((item) => item.status === "pending").length,
+    repayments: repayments.length,
+    repaymentTotal: repayments.reduce((sum, item) => sum + item.amount, 0)
   };
 }
 
@@ -851,6 +861,82 @@ async function disburseLoan(request, response, auth, loanId, correlationId) {
     ipAddress: requestIp(request)
   });
   return sendData(response, publicLoan(loan));
+}
+
+function listLoanRepayments(response, auth, loanId, correlationId) {
+  const loan = db.loans.find((item) => item.id === loanId);
+  if (!loan) return sendError(response, 404, "LOAN_NOT_FOUND", "Loan not found.", correlationId);
+  if (!assertTenantAccess(auth, loan.tenantId, response, correlationId)) return;
+  return sendData(response, db.loanRepayments.filter((item) => item.loanId === loan.id));
+}
+
+async function recordLoanRepayment(request, response, auth, loanId, correlationId) {
+  const loan = db.loans.find((item) => item.id === loanId);
+  if (!loan) return sendError(response, 404, "LOAN_NOT_FOUND", "Loan not found.", correlationId);
+  if (!assertTenantAccess(auth, loan.tenantId, response, correlationId)) return;
+
+  const body = await readJson(request);
+  const amount = Number(body.amount);
+  const channel = String(body.channel || "");
+  const externalReference = String(body.externalReference || "").trim();
+  if (!externalReference) {
+    return sendError(response, 400, "INVALID_REPAYMENT_REFERENCE", "External repayment reference is required.", correlationId);
+  }
+
+  const existing = db.loanRepayments.find((item) => item.tenantId === loan.tenantId && item.externalReference === externalReference);
+  if (existing) {
+    const existingLoan = db.loans.find((item) => item.id === existing.loanId);
+    return sendData(response, { repayment: existing, loan: publicLoan(existingLoan), idempotent: true });
+  }
+
+  if (loan.status !== "active") {
+    return sendError(response, 409, "LOAN_NOT_ACTIVE", "Only active loans can receive repayments.", correlationId);
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return sendError(response, 400, "INVALID_REPAYMENT_AMOUNT", "Repayment amount must be greater than zero.", correlationId);
+  }
+  if (amount > loan.balance) {
+    return sendError(response, 409, "REPAYMENT_EXCEEDS_BALANCE", "Repayment cannot exceed the outstanding loan balance.", correlationId);
+  }
+  if (!allowedRepaymentChannels.has(channel)) {
+    return sendError(response, 400, "INVALID_REPAYMENT_CHANNEL", "Unsupported repayment channel.", correlationId);
+  }
+
+  const now = new Date().toISOString();
+  const repayment = {
+    id: newId("loan_repayment"),
+    tenantId: loan.tenantId,
+    loanId: loan.id,
+    memberId: loan.memberId,
+    amount,
+    channel,
+    externalReference,
+    receivedAt: String(body.receivedAt || now),
+    recordedByUserId: auth.user.id,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.loanRepayments.push(repayment);
+
+  loan.balance = Math.max(0, loan.balance - amount);
+  if (loan.balance === 0) {
+    loan.status = "closed";
+    loan.stage = "Closed";
+  } else {
+    loan.stage = "Disbursed";
+  }
+  loan.updatedAt = now;
+
+  createAuditEvent({
+    tenantId: loan.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: "Recorded loan repayment",
+    resourceType: "loan_repayment",
+    resourceId: repayment.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, { repayment, loan: publicLoan(loan) }, 201);
 }
 
 function listLoanGuarantors(response, auth, loanId, correlationId) {

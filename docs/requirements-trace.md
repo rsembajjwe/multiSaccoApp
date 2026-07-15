@@ -44,6 +44,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Loans UI can switch from local demo data to API-backed loan files and submit new loan applications.
 - SACCO staff can request loan guarantors, and members can accept or reject guarantee requests.
 - Loan applications require approval before disbursement, and approval requires an accepted guarantor.
+- Active loan repayments reduce outstanding balance, reject overpayments, and close a fully repaid loan.
 
 ## Recommended backend modules for the next build
 

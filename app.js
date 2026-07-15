@@ -303,6 +303,8 @@ function apiLoanToRow(loan) {
     dsr: loan.dsr,
     guarantorRequests: loan.guarantorRequests || 0,
     pendingGuarantors: loan.pendingGuarantors || 0,
+    repayments: loan.repayments || 0,
+    repaymentTotal: loan.repaymentTotal || 0,
     source: "API"
   };
 }
@@ -736,7 +738,7 @@ function renderLoans() {
                 <td>${memberName(loan.memberId)}${loan.source ? `<br><small>${loan.source}</small>` : ""}</td>
                 <td>${loan.product}</td>
                 <td>${money.format(loan.amount)}</td>
-                <td>${money.format(loan.balance)}</td>
+                <td>${money.format(loan.balance)}${loan.repaymentTotal ? `<br><small>${money.format(loan.repaymentTotal)} repaid</small>` : ""}</td>
                 <td>${loan.stage}</td>
                 <td>${loan.guarantors}${loan.pendingGuarantors ? `<br><small>${loan.pendingGuarantors} pending</small>` : ""}</td>
                 <td>${loan.dsr}%</td>
@@ -755,9 +757,11 @@ function loanActions(loan) {
   const status = String(loan.status).toLowerCase();
   const canDecide = ["submitted", "under review"].includes(status);
   const canDisburse = status === "approved";
+  const canRepay = status === "active";
   return `
     ${canDecide ? `<button class="secondary-button" data-loan-reject="${loan.id}" type="button">Reject</button><button class="primary-button" data-loan-approve="${loan.id}" type="button">Approve</button>` : ""}
     ${canDisburse ? `<button class="primary-button" data-loan-disburse="${loan.id}" type="button">Disburse</button>` : ""}
+    ${canRepay ? `<button class="primary-button" data-loan-repay="${loan.id}" type="button">Record repayment</button>` : ""}
     <button class="secondary-button" data-request-guarantor="${loan.id}" type="button">Request guarantor</button>
   `;
 }
@@ -1022,6 +1026,10 @@ function bindViewActions() {
 
   document.querySelectorAll("[data-loan-disburse]").forEach((button) => {
     button.addEventListener("click", () => disburseLoan(button.dataset.loanDisburse));
+  });
+
+  document.querySelectorAll("[data-loan-repay]").forEach((button) => {
+    button.addEventListener("click", () => openLoanRepaymentForm(button.dataset.loanRepay));
   });
 
   document.querySelectorAll("[data-guarantor-accept]").forEach((button) => {
@@ -1624,6 +1632,37 @@ async function disburseLoan(id) {
   } catch (error) {
     openModal("Loan disbursement failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
   }
+}
+
+function openLoanRepaymentForm(loanId) {
+  const loan = apiState.loans.find((item) => item.id === loanId);
+  if (!loan) return;
+  const defaultAmount = Math.min(50000, loan.balance);
+  openModal("Record loan repayment", `
+    <div class="form-grid">
+      <label class="field full"><span>Loan</span><input class="input" value="${memberName(loan.memberId)} - ${loan.product}" disabled></label>
+      ${field("Amount", "repaymentAmount", "number", String(defaultAmount))}
+      <label class="field"><span>Channel</span><select id="repaymentChannel" class="select"><option value="mobile_money">Mobile Money</option><option value="cash">Cash</option><option value="bank">Bank</option><option value="payroll_deduction">Payroll Deduction</option></select></label>
+      ${field("External reference", "repaymentReference", "text", `UI-LRP-${Date.now()}`)}
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveLoanRepayment" class="primary-button" type="button">Post repayment</button>`);
+
+  document.getElementById("saveLoanRepayment").addEventListener("click", async () => {
+    try {
+      await apiRequest(`/loans/${loanId}/repayments`, {
+        method: "POST",
+        body: JSON.stringify({
+          amount: Number(value("repaymentAmount")),
+          channel: value("repaymentChannel"),
+          externalReference: value("repaymentReference")
+        })
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
 }
 
 async function recordSubscriptionPayment() {

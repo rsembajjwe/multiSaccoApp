@@ -217,6 +217,24 @@ Financial transaction decisions follow maker-checker separation: a transaction c
 
 Loan control rule: a loan cannot be disbursed until it is approved. Approval currently requires at least one accepted guarantor.
 
+### loan_repayments
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| loan_id | uuid/string | Loan being repaid. |
+| member_id | uuid/string | Borrowing member. |
+| amount | decimal | Repayment amount. |
+| channel | enum | `mobile_money`, `cash`, `bank`, `payroll_deduction`. |
+| external_reference | text | Unique idempotency reference for the SACCO tenant. |
+| received_at | timestamp | Value date or receipt timestamp. |
+| recorded_by_user_id | uuid/string | Staff user who recorded the repayment. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+Repayment control rule: repayments can only be posted to active loans, cannot exceed the outstanding balance, and close the loan once the balance reaches zero.
+
 ### loan_guarantors
 
 | Field | Type | Notes |
