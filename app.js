@@ -562,6 +562,22 @@ function renderDashboard() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
+          <h2>Android member app</h2>
+          <p class="eyebrow">Flutter foundation · mobile/member_app</p>
+        </div>
+        <button class="secondary-button" data-view-jump="memberPortal" type="button">Open member portal</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("Mobile auth", "Ready", "member token flow")}
+        ${metric("Dashboard API", "Ready", "/member-auth/mobile-dashboard")}
+        ${metric("Offline drafts", "Ready", "local save + sync")}
+      </div>
+      <div class="notice" style="margin-top:16px">Android emulator API base: <strong>http://10.0.2.2:5173/api/v1</strong>. Seed login: <strong>GVS-0001</strong> / <strong>Member@12345</strong>.</div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
           <h2>Mobile money callbacks</h2>
           <p class="eyebrow">Provider posting monitor</p>
         </div>

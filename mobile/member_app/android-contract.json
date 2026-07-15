@@ -1,0 +1,20 @@
+{
+  "app": "SACCO Member",
+  "platform": "android",
+  "framework": "flutter",
+  "apiBaseUrlForEmulator": "http://10.0.2.2:5173/api/v1",
+  "seedLogin": {
+    "identifier": "GVS-0001",
+    "password": "Member@12345"
+  },
+  "requiredEndpoints": [
+    "POST /api/v1/member-auth/login",
+    "GET /api/v1/member-auth/mobile-dashboard",
+    "GET /api/v1/member-auth/notifications",
+    "POST /api/v1/member-auth/mobile-loans",
+    "POST /api/v1/member-auth/mobile-complaints",
+    "GET /api/v1/member-auth/guarantor-requests",
+    "PATCH /api/v1/member-auth/guarantor-requests/:id/status",
+    "POST /api/v1/integrations/mobile-money/callback"
+  ]
+}

@@ -57,6 +57,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Member mobile dashboard endpoint and UI show server-confirmed balances, loan totals, latest notifications, and last-updated time.
 - Members can submit mobile loan applications for their own account, with server confirmation and mobile-dashboard refresh.
 - Members can save offline complaint drafts locally and sync them later to server-side complaints with notification feedback.
+- Android member app foundation documents Flutter entrypoint, emulator API base URL, seed login, and required mobile API endpoints.
 
 ## Recommended backend modules for the next build
 

@@ -93,6 +93,8 @@ Members can submit a mobile loan application from the Member Portal and see the 
 
 Members can save offline complaint drafts locally and sync them later from the Member Portal.
 
+Android member app foundation lives in `mobile/member_app`, with a Flutter-ready API contract for emulator base URL `http://10.0.2.2:5173/api/v1`.
+
 After API login, the Approvals screen reads pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
 
 Members can login from **Member portal** using the seeded account `GVS-0001` / `Member@12345` to view their savings, shares, and welfare balances.
@@ -121,6 +123,7 @@ This is now the first build foundation. A production build should add:
 - [Requirements trace](docs/requirements-trace.md)
 - [Data model](docs/data-model.md)
 - [API route map](docs/api-route-map.md)
+- [Android member app foundation](mobile/member_app/README.md)
 
 ## Seed API accounts
 
