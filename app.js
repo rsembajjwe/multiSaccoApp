@@ -109,6 +109,8 @@ let apiState = {
   token: localStorage.getItem(API_SESSION_KEY) || "",
   tenants: [],
   users: [],
+  branches: [],
+  members: [],
   auditEvents: [],
   message: "Checking backend connection..."
 };
@@ -141,6 +143,49 @@ function memberName(id) {
 
 function packageName(id) {
   return state.packages.find((pkg) => pkg.id === id)?.name || "Unassigned";
+}
+
+function currentApiTenantId() {
+  if (!apiState.user) return "";
+  if (apiState.user.tenantId !== "tenant_platform") return apiState.user.tenantId;
+  const map = { platform: "tenant_platform", green: "tenant_green", lake: "tenant_lake" };
+  return map[state.tenantId] || "tenant_platform";
+}
+
+function apiTenantQuery() {
+  const tenantId = currentApiTenantId();
+  return apiState.user?.tenantId === "tenant_platform" && tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : "";
+}
+
+function useApiMembers() {
+  return Boolean(apiState.user);
+}
+
+function apiBranchName(id) {
+  return apiState.branches.find((branch) => branch.id === id)?.name || "Unassigned";
+}
+
+function apiMemberToRow(member) {
+  return {
+    id: member.id,
+    tenantId: member.tenantId,
+    no: member.membershipNo,
+    name: member.fullName,
+    phone: member.phone,
+    type: titleCase(member.memberType),
+    status: titleCase(member.status.replace(/_/g, " ")),
+    branchId: member.branchId,
+    branchName: apiBranchName(member.branchId),
+    kyc: titleCase(member.kycStatus.replace(/_/g, " ")),
+    savings: 0,
+    shares: 0,
+    welfare: 0,
+    source: "API"
+  };
+}
+
+function titleCase(value) {
+  return String(value).replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
 }
 
 function statusClass(status) {
@@ -300,7 +345,7 @@ function renderDashboard() {
       <div class="grid three">
         ${miniFact("Authenticated user", apiState.user ? apiState.user.fullName : "Not logged in")}
         ${miniFact("API tenants", String(apiState.tenants.length))}
-        ${miniFact("API audit events", String(apiState.auditEvents.length))}
+        ${miniFact("API members", String(apiState.members.length))}
       </div>
       <p class="muted">${apiState.message}</p>
     </section>
@@ -392,22 +437,25 @@ function renderSubscriptions() {
 }
 
 function renderMembers() {
-  const members = tenantScoped(state.members);
+  const members = useApiMembers() ? apiState.members.map(apiMemberToRow) : tenantScoped(state.members);
+  const source = useApiMembers() ? "API-backed" : "Local demo";
   return `
     <section class="card">
       <div class="toolbar">
         <div>
           <h2>Member register</h2>
-          <p class="eyebrow">KYC, status, balances and branch access</p>
+          <p class="eyebrow">${source} · KYC, status, balances and branch access</p>
         </div>
         <div class="filters">
           <input class="input" id="memberSearch" placeholder="Search members">
+          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
           <button class="primary-button" data-action="newMember" type="button">Register member</button>
         </div>
       </div>
+      ${apiState.user ? `<div class="notice">Members shown from the backend for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}.</div>` : `<div class="notice">Login to the API to use server-side member onboarding. The table below is still using local demo data.</div>`}
       <div class="table-wrap">
         <table id="membersTable">
-          <thead><tr><th>Member</th><th>Type</th><th>KYC</th><th>Savings</th><th>Shares</th><th>Welfare</th><th>Status</th></tr></thead>
+          <thead><tr><th>Member</th><th>Type</th><th>Branch</th><th>KYC</th><th>Savings</th><th>Shares</th><th>Welfare</th><th>Status</th></tr></thead>
           <tbody>
             ${members.map(memberRow).join("")}
           </tbody>
@@ -687,7 +735,8 @@ function bindViewActions() {
   if (search) {
     search.addEventListener("input", () => {
       const term = search.value.toLowerCase();
-      const rows = tenantScoped(state.members).filter((member) => JSON.stringify(member).toLowerCase().includes(term));
+      const sourceRows = useApiMembers() ? apiState.members.map(apiMemberToRow) : tenantScoped(state.members);
+      const rows = sourceRows.filter((member) => JSON.stringify(member).toLowerCase().includes(term));
       document.querySelector("#membersTable tbody").innerHTML = rows.map(memberRow).join("");
     });
   }
@@ -736,15 +785,19 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
-        apiRequest("/audit-events")
+        apiRequest("/audit-events"),
+        apiRequest(`/branches${apiTenantQuery()}`),
+        apiRequest(`/members${apiTenantQuery()}`)
       ]);
       apiState.tenants = tenants;
       apiState.users = users;
       apiState.auditEvents = auditEvents;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), and ${auditEvents.length} audit event(s).`;
+      apiState.branches = branches;
+      apiState.members = members;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -756,7 +809,7 @@ async function refreshApiStatus() {
     apiState.message = error.message;
   }
   renderApiChrome();
-  if (state.currentView === "dashboard" || state.currentView === "reports") render();
+  if (["dashboard", "reports", "members"].includes(state.currentView)) render();
 }
 
 function openApiLoginForm() {
@@ -793,7 +846,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -818,6 +871,29 @@ function apiAuditTable(rows) {
     </div>
   `;
 }
+
+function branchName(id) {
+  for (const tenant of state.tenants) {
+    const branch = tenant.branches?.find((item) => item.id === id);
+    if (branch) return branch.name;
+  }
+  return "Unassigned";
+}
+
+memberRow = function renderMemberRow(member) {
+  return `
+    <tr>
+      <td><strong>${member.name}</strong><br><small>${member.no} · ${member.phone}${member.source ? ` · ${member.source}` : ""}</small></td>
+      <td>${member.type}</td>
+      <td>${member.branchName || branchName(member.branchId)}</td>
+      <td>${member.kyc}</td>
+      <td>${money.format(member.savings)}</td>
+      <td>${money.format(member.shares)}</td>
+      <td>${money.format(member.welfare)}</td>
+      <td><span class="status ${statusClass(member.status)}">${member.status}</span></td>
+    </tr>
+  `;
+};
 
 function closeModal() {
   document.getElementById("modal").close();
@@ -859,23 +935,49 @@ function openTenantForm() {
 }
 
 function openMemberForm() {
-  if (state.tenantId === "platform") {
+  if (!apiState.user && state.tenantId === "platform") {
     state.tenantId = "green";
     renderTenantSelect();
   }
   const tenant = currentTenant();
+  const apiMode = Boolean(apiState.user);
+  const branches = apiMode ? apiState.branches : tenant.branches;
+  const branchOptions = branches.map((branch) => `<option value="${branch.id}">${branch.name}</option>`).join("");
   openModal("Register member", `
     <div class="form-grid">
       ${field("Full name", "memberName", "text", "New SACCO Member")}
       ${field("Telephone", "memberPhone", "tel", "+256700000000")}
       ${field("National ID or group ID", "memberNin", "text", "CM0000000K0AA")}
       <label class="field"><span>Member type</span><select id="memberType" class="select"><option>Individual</option><option>Group</option><option>Institutional</option><option>Corporate</option></select></label>
-      <label class="field"><span>Branch</span><select id="memberBranch" class="select">${tenant.branches.map((branch) => `<option value="${branch.id}">${branch.name}</option>`).join("")}</select></label>
+      <label class="field"><span>Branch</span><select id="memberBranch" class="select">${branchOptions}</select></label>
       <label class="field"><span>KYC status</span><select id="memberKyc" class="select"><option>Pending Verification</option><option>Verified</option><option>Not Verified</option></select></label>
     </div>
   `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveMember" class="primary-button" type="button">Save member</button>`);
 
-  document.getElementById("saveMember").addEventListener("click", () => {
+  document.getElementById("saveMember").addEventListener("click", async () => {
+    if (apiMode) {
+      try {
+        await apiRequest("/members", {
+          method: "POST",
+          body: JSON.stringify({
+            tenantId: currentApiTenantId(),
+            branchId: value("memberBranch"),
+            fullName: value("memberName"),
+            phone: value("memberPhone"),
+            nationalId: value("memberNin"),
+            memberType: value("memberType").toLowerCase(),
+            kycStatus: value("memberKyc").toLowerCase().replace(/\s+/g, "_")
+          })
+        });
+        closeModal();
+        state.currentView = "members";
+        await refreshApiStatus();
+      } catch (error) {
+        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+      }
+      return;
+    }
+
     const count = state.members.filter((member) => member.tenantId === state.tenantId).length + 1;
     state.members.push({
       id: `m-${Date.now()}`,

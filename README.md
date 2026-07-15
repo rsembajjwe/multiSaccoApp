@@ -49,6 +49,8 @@ This starts the development server on a test port and verifies the Phase 1 API f
 
 The API smoke test now also covers Phase 2 branch and member onboarding endpoints.
 
+After API login, the Members screen reads backend branches and members and posts new members to `/api/v1/members`.
+
 ## Demo roles
 
 - Select **Platform Administration** to manage registrations, packages, subscriptions, support, and platform audit events.

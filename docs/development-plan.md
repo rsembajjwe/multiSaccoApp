@@ -355,6 +355,7 @@ Progress:
 - Frontend API adapter added for health, login/logout, tenants, users, and audit events.
 - Branch, member, member status, and member document API endpoints added.
 - Phase 2 onboarding and membership migration draft added.
+- Members screen now reads API-backed branches/members after login and creates members through `/api/v1/members`.
 
 Recommended stack:
 
