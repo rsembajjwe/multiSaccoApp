@@ -548,6 +548,21 @@ function renderDashboard() {
 
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
+        <div>
+          <h2>Mobile money callbacks</h2>
+          <p class="eyebrow">Provider posting monitor</p>
+        </div>
+        <button class="primary-button" data-action="simulateMobileMoneyCallback" type="button">Simulate callback</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("Callbacks", apiState.mobileMoneyCallbacks.length, `${money.format(apiState.mobileMoneyCallbacks.reduce((sum, item) => sum + item.amount, 0))} received`)}
+        ${metric("Notifications", memberApiState.notifications.length || apiState.mobileMoneyCallbacks.length, "member alerts")}
+      </div>
+      ${mobileMoneyCallbackTable(apiState.mobileMoneyCallbacks.slice(0, 5))}
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
         <h2>Recent activity</h2>
         <button class="secondary-button" data-view-jump="reports" type="button">View audit</button>
       </div>
@@ -1468,6 +1483,7 @@ function bindViewActions() {
         newTransaction: openTransactionForm,
         newLoan: openLoanForm,
         recordSubscriptionPayment: recordSubscriptionPayment,
+        simulateMobileMoneyCallback: simulateMobileMoneyCallback,
         newExpense: openExpenseForm,
         newAsset: openAssetForm,
         newGovernanceMeeting: openGovernanceMeetingForm,
@@ -1688,6 +1704,33 @@ function openMemberLoginForm() {
       document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
     }
   });
+}
+
+async function simulateMobileMoneyCallback() {
+  try {
+    const data = await apiRequest("/integrations/mobile-money/callback", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: "tenant_green",
+        membershipNo: "GVS-0001",
+        purpose: "savings_deposit",
+        amount: 42000,
+        externalReference: `MM-UI-${Date.now()}`,
+        provider: "ui_demo_mobile_money",
+        receivedAt: today.toISOString()
+      })
+    });
+    apiState.mobileMoneyCallbacks = [data.callback, ...apiState.mobileMoneyCallbacks.filter((item) => item.id !== data.callback.id)];
+    apiState.message = `Mobile-money callback ${data.callback.externalReference} posted for ${money.format(data.callback.amount)}.`;
+    if (apiState.user) {
+      await refreshApiStatus();
+      return;
+    }
+    render();
+  } catch (error) {
+    apiState.message = error.message;
+    render();
+  }
 }
 
 async function apiLogout() {
