@@ -5,6 +5,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -21,6 +25,9 @@ class SaccoBackendApplicationTests {
 
 	@Autowired
 	private MockMvc mockMvc;
+
+	@Autowired
+	private ObjectMapper objectMapper;
 
 	@Test
 	void contextLoads() {
@@ -80,6 +87,51 @@ class SaccoBackendApplicationTests {
 								"""))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.error.code", is("AUTH_INVALID")));
+	}
+
+	@Test
+	void currentUserEndpointUsesBearerSessionAndLogoutRevokesIt() throws Exception {
+		String token = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/auth/me")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.id", is("user_platform_admin")))
+				.andExpect(jsonPath("$.data.tenant.id", is("tenant_platform")))
+				.andExpect(jsonPath("$.data.tenant.name", is("Platform Administration")));
+
+		mockMvc.perform(post("/api/v1/auth/logout")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.loggedOut", is(true)));
+
+		mockMvc.perform(get("/api/v1/auth/me")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("AUTH_REQUIRED")));
+	}
+
+	@Test
+	void currentUserEndpointRejectsMissingToken() throws Exception {
+		mockMvc.perform(get("/api/v1/auth/me"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("AUTH_REQUIRED")));
+	}
+
+	private String loginAndReturnToken() throws Exception {
+		MvcResult result = mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "email": "admin@platform.local",
+								  "password": "Admin@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andReturn();
+
+		JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
+		return root.path("data").path("token").asString();
 	}
 
 }

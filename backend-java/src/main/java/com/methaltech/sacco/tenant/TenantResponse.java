@@ -2,7 +2,7 @@ package com.methaltech.sacco.tenant;
 
 import java.time.LocalDate;
 
-record TenantResponse(
+public record TenantResponse(
         String id,
         String name,
         String abbreviation,
@@ -13,7 +13,7 @@ record TenantResponse(
         String packageId,
         int onboarding) {
 
-    static TenantResponse from(Tenant tenant) {
+    public static TenantResponse from(Tenant tenant) {
         return new TenantResponse(
                 tenant.getId(),
                 tenant.getName(),

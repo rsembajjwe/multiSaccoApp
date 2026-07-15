@@ -29,6 +29,7 @@ cd backend-java
 - `/api/v1/health` with the same `{ "data": ... }` API envelope used by the prototype.
 - `/api/v1/tenants` backed by a Flyway migration and seeded tenant records.
 - `/api/v1/auth/login` for seeded staff users, using PBKDF2 password verification and safe user responses.
+- `/api/v1/auth/me` and `/api/v1/auth/logout` backed by hashed bearer-token sessions.
 - Baseline security headers on responses.
 - H2 development datasource configured in PostgreSQL compatibility mode.
 - PostgreSQL and Flyway dependencies included for the production database path.
