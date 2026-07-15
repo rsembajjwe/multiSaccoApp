@@ -373,6 +373,7 @@ Progress:
 - Governance meeting, resolution, and complaint endpoints added, with Reports showing open governance actions and complaints.
 - Regulatory report endpoint added, with tenant/consolidated supervisory summaries and exportable CSV payloads shown in Reports.
 - Accounting period controls added, with closed periods blocking ordinary financial postings and visible in Reports.
+- Supplier and expense endpoints added, with expenses posting balanced journal entries and appearing in Reports.
 
 Recommended stack:
 

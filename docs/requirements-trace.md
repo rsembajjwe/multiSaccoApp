@@ -50,6 +50,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Governance records support meetings, resolutions, complaints, audit events, and tenant-scoped reporting.
 - Regulatory reports provide tenant-scoped and platform-consolidated supervisory summaries with CSV export data.
 - Closed accounting periods block ordinary posting activity and can be opened or closed from Reports.
+- Supplier and expense workflows create balanced accounting entries and respect closed-period controls.
 
 ## Recommended backend modules for the next build
 

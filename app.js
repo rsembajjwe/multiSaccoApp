@@ -130,6 +130,8 @@ let apiState = {
   statementLines: [],
   reconciliation: null,
   regulatoryReport: null,
+  suppliers: [],
+  expenses: [],
   governanceMeetings: [],
   complaints: [],
   auditEvents: [],
@@ -851,6 +853,7 @@ function renderApiReports() {
   const journals = apiState.journalEntries;
   const periods = apiState.accountingPeriods;
   const accounts = apiState.chartOfAccounts;
+  const expenses = apiState.expenses;
   const reconciliation = apiState.reconciliation || { summary: {}, unmatchedStatementLines: [], unmatchedLedgerLines: [] };
   const regulatoryReport = apiState.regulatoryReport || { reports: [], consolidated: {}, csv: "" };
   const meetings = apiState.governanceMeetings;
@@ -892,6 +895,20 @@ function renderApiReports() {
         <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
       </div>
       ${accountingPeriodTable(periods)}
+    </section>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Expenses</h2>
+          <p class="eyebrow">Supplier expenses posted to the accounting ledger</p>
+        </div>
+        <button class="primary-button" data-action="newExpense" type="button">New expense</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("Posted expenses", expenses.length, `${money.format(expenses.reduce((sum, expense) => sum + expense.amount, 0))} total`)}
+        ${metric("Suppliers", apiState.suppliers.length, "active supplier records")}
+      </div>
+      ${expenseTable(expenses)}
     </section>
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
@@ -982,6 +999,28 @@ function accountingPeriodTable(periods) {
               <td><button class="secondary-button" data-period-status="${period.id}" data-period-next="${period.status === "closed" ? "open" : "closed"}" type="button">${period.status === "closed" ? "Reopen" : "Close"}</button></td>
             </tr>
           `).join("") || `<tr><td colspan="4">No accounting periods found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function expenseTable(expenses) {
+  return `
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>Date</th><th>Reference</th><th>Supplier</th><th>Account</th><th>Channel</th><th>Amount</th></tr></thead>
+        <tbody>
+          ${expenses.map((expense) => `
+            <tr>
+              <td>${expense.expenseDate || ""}</td>
+              <td>${expense.reference}<br><small>${expense.description || ""}</small></td>
+              <td>${expense.supplier?.name || "Direct expense"}</td>
+              <td>${expense.accountCode} ${expense.accountName || ""}</td>
+              <td>${titleCase(expense.channel.replace(/_/g, " "))}</td>
+              <td>${money.format(expense.amount)}</td>
+            </tr>
+          `).join("") || `<tr><td colspan="6">No expenses found.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -1336,6 +1375,7 @@ function bindViewActions() {
         newTransaction: openTransactionForm,
         newLoan: openLoanForm,
         recordSubscriptionPayment: recordSubscriptionPayment,
+        newExpense: openExpenseForm,
         newGovernanceMeeting: openGovernanceMeetingForm,
         newComplaint: openComplaintForm,
         memberLogin: openMemberLoginForm,
@@ -1435,7 +1475,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, governanceMeetings, complaints] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, suppliers, expenses, governanceMeetings, complaints] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1451,6 +1491,8 @@ async function refreshApiStatus() {
         apiRequest(`/statement-lines${apiTenantQuery()}`),
         apiRequest(`/reconciliation${apiTenantQuery()}`),
         apiRequest(`/regulatory-report${apiTenantQuery()}`),
+        apiRequest(`/suppliers${apiTenantQuery()}`),
+        apiRequest(`/expenses${apiTenantQuery()}`),
         apiRequest(`/governance-meetings${apiTenantQuery()}`),
         apiRequest(`/complaints${apiTenantQuery()}`)
       ]);
@@ -1469,9 +1511,11 @@ async function refreshApiStatus() {
       apiState.statementLines = statementLines;
       apiState.reconciliation = reconciliation;
       apiState.regulatoryReport = regulatoryReport;
+      apiState.suppliers = suppliers;
+      apiState.expenses = expenses;
       apiState.governanceMeetings = governanceMeetings;
       apiState.complaints = complaints;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${expenses.length} expense(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -1553,7 +1597,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, suppliers: [], expenses: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -1950,6 +1994,44 @@ async function updateAccountingPeriodStatus(id, status) {
   } catch (error) {
     openModal("Accounting period update failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
   }
+}
+
+function openExpenseForm() {
+  if (!apiState.user) return;
+  const suppliers = apiState.suppliers;
+  openModal("New expense", `
+    <div class="form-grid">
+      ${field("Reference", "expenseReference", "text", `EXP-UI-${Date.now()}`)}
+      ${field("Amount", "expenseAmount", "number", "50000")}
+      <label class="field"><span>Supplier</span><select id="expenseSupplier" class="select"><option value="">Direct expense</option>${suppliers.map((supplier) => `<option value="${supplier.id}">${supplier.name}</option>`).join("")}</select></label>
+      <label class="field"><span>Account</span><select id="expenseAccount" class="select"><option value="5000">Operations Expense</option><option value="5010">Rent Expense</option><option value="5020">Utilities Expense</option><option value="5030">Staff Expense</option><option value="5040">Technology Expense</option></select></label>
+      <label class="field"><span>Channel</span><select id="expenseChannel" class="select"><option value="bank">Bank</option><option value="cash">Cash</option><option value="mobile_money">Mobile Money</option><option value="payroll_deduction">Payroll Deduction</option></select></label>
+      ${field("Expense date", "expenseDate", "date", today.toISOString().slice(0, 10))}
+      <label class="field full"><span>Description</span><textarea id="expenseDescription" class="input" rows="3">Operating expense posted from Reports.</textarea></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveExpense" class="primary-button" type="button">Post expense</button>`);
+
+  document.getElementById("saveExpense").addEventListener("click", async () => {
+    try {
+      await apiRequest("/expenses", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: apiState.user.tenantId === "tenant_platform" ? apiTenantId() : apiState.user.tenantId,
+          reference: value("expenseReference"),
+          amount: Number(value("expenseAmount")),
+          supplierId: value("expenseSupplier") || null,
+          accountCode: value("expenseAccount"),
+          channel: value("expenseChannel"),
+          expenseDate: value("expenseDate"),
+          description: value("expenseDescription")
+        })
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
 }
 
 function openGovernanceMeetingForm() {

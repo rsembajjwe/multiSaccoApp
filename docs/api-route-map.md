@@ -65,6 +65,10 @@ All JSON responses should follow one of these shapes:
 | PATCH | `/accounting-periods/:id/status` | Open or close an accounting period. | SACCO staff |
 | GET | `/chart-of-accounts` | List the accounting chart used for journal lines. | Required |
 | GET | `/journal-entries` | List balanced journal entries derived from posted events. | Required |
+| GET | `/suppliers` | List tenant suppliers. | Required |
+| POST | `/suppliers` | Create a supplier. | SACCO staff |
+| GET | `/expenses` | List posted tenant expenses. | Required |
+| POST | `/expenses` | Post an operating expense. | SACCO staff |
 | GET | `/statement-lines` | List imported bank, cash, mobile-money, and payroll statement lines. | Required |
 | POST | `/statement-lines` | Import a statement line for reconciliation. | SACCO staff |
 | GET | `/reconciliation` | Compare statement lines with ledger cash movements. | Required |
@@ -129,6 +133,10 @@ Implemented in the no-dependency development server:
 - `PATCH /api/v1/accounting-periods/:id/status`
 - `GET /api/v1/chart-of-accounts`
 - `GET /api/v1/journal-entries`
+- `GET /api/v1/suppliers`
+- `POST /api/v1/suppliers`
+- `GET /api/v1/expenses`
+- `POST /api/v1/expenses`
 - `GET /api/v1/statement-lines`
 - `POST /api/v1/statement-lines`
 - `GET /api/v1/reconciliation`

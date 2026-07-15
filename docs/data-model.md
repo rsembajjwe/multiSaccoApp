@@ -306,6 +306,41 @@ Closed-period control rule: ordinary postings that create ledger or reconciliati
 
 Accounting control rule: every posted event must produce equal debit and credit totals. The prototype currently derives journals from posted source records; production storage should persist journal entries and lines.
 
+### suppliers
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| name | text | Supplier name. |
+| phone | text | Supplier phone. |
+| email | text | Supplier email. |
+| tax_id | text | Supplier tax identifier. |
+| status | enum | `active`, `inactive`. |
+| created_by_user_id | uuid/string | User who created the supplier. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+### expenses
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| supplier_id | uuid/string | Optional supplier reference. |
+| account_code | text | Expense account code. |
+| amount | decimal | Expense amount. |
+| channel | enum | `mobile_money`, `cash`, `bank`, `payroll_deduction`. |
+| reference | text | Unique expense reference per tenant. |
+| description | text | Expense narration. |
+| expense_date | date | Posting date. |
+| status | enum | `posted`, `voided`. |
+| recorded_by_user_id | uuid/string | User who recorded the expense. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+Expense control rule: expenses post balanced journal entries and are blocked when the expense date falls inside a closed accounting period.
+
 ### statement_lines
 
 | Field | Type | Notes |

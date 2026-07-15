@@ -121,6 +121,11 @@ export const db = {
     { code: "2000", name: "Member Savings", type: "liability", normalBalance: "credit" },
     { code: "2100", name: "Member Share Capital", type: "equity", normalBalance: "credit" },
     { code: "2200", name: "Welfare Fund", type: "liability", normalBalance: "credit" },
+    { code: "5000", name: "Operations Expense", type: "expense", normalBalance: "debit" },
+    { code: "5010", name: "Rent Expense", type: "expense", normalBalance: "debit" },
+    { code: "5020", name: "Utilities Expense", type: "expense", normalBalance: "debit" },
+    { code: "5030", name: "Staff Expense", type: "expense", normalBalance: "debit" },
+    { code: "5040", name: "Technology Expense", type: "expense", normalBalance: "debit" },
     { code: "6100", name: "Platform Subscription Expense", type: "expense", normalBalance: "debit" }
   ],
   accountingPeriods: [
@@ -557,6 +562,37 @@ export const db = {
       createdByUserId: "user_green_admin",
       resolvedByUserId: null,
       resolvedAt: null,
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  suppliers: [
+    {
+      id: "supplier_green_0001",
+      tenantId: "tenant_green",
+      name: "Mukono Office Supplies",
+      phone: "+256701990011",
+      email: "accounts@mukono-office.example",
+      taxId: "TIN-883001",
+      status: "active",
+      createdByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  expenses: [
+    {
+      id: "expense_green_0001",
+      tenantId: "tenant_green",
+      supplierId: "supplier_green_0001",
+      accountCode: "5000",
+      amount: 120000,
+      channel: "bank",
+      reference: "EXP-GVS-0001",
+      description: "Office supplies for Mukono Main",
+      expenseDate: "2026-07-12",
+      status: "posted",
+      recordedByUserId: "user_green_admin",
       createdAt: now(),
       updatedAt: now()
     }

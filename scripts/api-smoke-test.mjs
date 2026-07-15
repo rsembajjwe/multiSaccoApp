@@ -291,6 +291,46 @@ try {
   const reopenedPeriod = await api("PATCH", `/accounting-periods/${openPeriod.id}/status`, { status: "open" }, saccoToken);
   assert(reopenedPeriod.data.status === "open", "Accounting period should reopen for the remaining smoke test");
 
+  const supplier = await api("POST", "/suppliers", {
+    name: `Smoke Supplier ${Date.now()}`,
+    phone: "+256700123123",
+    taxId: `TIN-${Date.now()}`
+  }, saccoToken);
+  assert(supplier.data.id, "Supplier should be created");
+  assert(supplier.data.tenantId === "tenant_green", "Supplier should be tenant-scoped");
+
+  const closedPeriodExpense = await raw("POST", "/expenses", {
+    supplierId: supplier.data.id,
+    accountCode: "5000",
+    channel: "bank",
+    amount: 25000,
+    reference: `SMOKE-CLOSED-EXP-${Date.now()}`,
+    expenseDate: "2026-06-15"
+  }, saccoToken);
+  assert(closedPeriodExpense.status === 409, "Closed periods should block expenses");
+
+  const expense = await api("POST", "/expenses", {
+    supplierId: supplier.data.id,
+    accountCode: "5040",
+    channel: "bank",
+    amount: 45000,
+    reference: `SMOKE-EXP-${Date.now()}`,
+    expenseDate: "2026-07-15",
+    description: "Smoke test technology expense"
+  }, saccoToken);
+  assert(expense.data.id, "Expense should be posted");
+  assert(expense.data.supplier.name === supplier.data.name, "Expense should include supplier details");
+
+  const duplicateExpense = await raw("POST", "/expenses", {
+    supplierId: supplier.data.id,
+    accountCode: "5040",
+    channel: "bank",
+    amount: 45000,
+    reference: expense.data.reference,
+    expenseDate: "2026-07-15"
+  }, saccoToken);
+  assert(duplicateExpense.status === 409, "Expense references should be unique per tenant");
+
   const statementLine = await api("POST", "/statement-lines", {
     channel: "bank",
     amount: postedTransaction.data.amount,
@@ -315,6 +355,7 @@ try {
   assert(journalEntries.data.every((entry) => entry.tenantId === "tenant_green"), "Journal entries must be tenant-scoped");
   assert(journalEntries.data.every((entry) => entry.isBalanced), "Every derived journal entry should be balanced");
   assert(journalEntries.data.some((entry) => entry.sourceType === "loan_repayment"), "Loan repayments should create journal entries");
+  assert(journalEntries.data.some((entry) => entry.sourceType === "expense"), "Expenses should create journal entries");
 
   const platformJournals = await api("GET", "/journal-entries", null, platformToken);
   assert(platformJournals.data.length >= journalEntries.data.length, "Platform admin should list journals across tenants");

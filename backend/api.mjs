@@ -27,6 +27,8 @@ const allowedTransactionChannels = new Set(["mobile_money", "cash", "bank", "pay
 const allowedTransactionDecisionStatuses = new Set(["posted", "rejected"]);
 const allowedStatementChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedAccountingPeriodStatuses = new Set(["open", "closed"]);
+const allowedExpenseChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
+const allowedExpenseAccountCodes = new Set(["5000", "5010", "5020", "5030", "5040", "6100"]);
 const allowedLoanProducts = new Set(["Development Loan", "Emergency Loan", "Agriculture Loan", "School Fees Loan"]);
 const allowedGuarantorStatuses = new Set(["accepted", "rejected"]);
 const allowedLoanDecisionStatuses = new Set(["approved", "rejected"]);
@@ -108,6 +110,10 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/statement-lines") return createStatementLine(request, response, auth, correlationId);
     if (method === "GET" && path === "/reconciliation") return getReconciliation(response, auth, url);
     if (method === "GET" && path === "/regulatory-report") return getRegulatoryReport(response, auth, url);
+    if (method === "GET" && path === "/suppliers") return listSuppliers(response, auth, url);
+    if (method === "POST" && path === "/suppliers") return createSupplier(request, response, auth, correlationId);
+    if (method === "GET" && path === "/expenses") return listExpenses(response, auth, url);
+    if (method === "POST" && path === "/expenses") return createExpense(request, response, auth, correlationId);
     if (method === "GET" && path === "/governance-meetings") return listGovernanceMeetings(response, auth, url);
     if (method === "POST" && path === "/governance-meetings") return createGovernanceMeeting(request, response, auth, correlationId);
     if (method === "POST" && path.startsWith("/governance-meetings/") && path.endsWith("/resolutions")) {
@@ -593,6 +599,119 @@ function getRegulatoryReport(response, auth, url) {
   });
 }
 
+function listSuppliers(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const suppliers = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.suppliers
+    : db.suppliers.filter((supplier) => supplier.tenantId === tenantId);
+  return sendData(response, suppliers);
+}
+
+async function createSupplier(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  const name = String(body.name || "").trim();
+  if (!name) return sendError(response, 400, "VALIDATION_ERROR", "Supplier name is required.", correlationId);
+  if (db.suppliers.some((supplier) => supplier.tenantId === tenantId && supplier.name.toLowerCase() === name.toLowerCase())) {
+    return sendError(response, 409, "SUPPLIER_EXISTS", "A supplier with that name already exists.", correlationId);
+  }
+
+  const now = new Date().toISOString();
+  const supplier = {
+    id: newId("supplier"),
+    tenantId,
+    name,
+    phone: String(body.phone || ""),
+    email: String(body.email || ""),
+    taxId: String(body.taxId || ""),
+    status: "active",
+    createdByUserId: auth.user.id,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.suppliers.push(supplier);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Created supplier ${supplier.name}`,
+    resourceType: "supplier",
+    resourceId: supplier.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, supplier, 201);
+}
+
+function listExpenses(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const expenses = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.expenses
+    : db.expenses.filter((expense) => expense.tenantId === tenantId);
+  return sendData(response, expenses.map(publicExpense));
+}
+
+async function createExpense(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  const amount = Number(body.amount);
+  const accountCode = String(body.accountCode || "5000");
+  const channel = String(body.channel || "bank");
+  const reference = String(body.reference || "").trim();
+  const expenseDate = String(body.expenseDate || new Date().toISOString().slice(0, 10));
+  const supplierId = body.supplierId ? String(body.supplierId) : null;
+  if (!Number.isFinite(amount) || amount <= 0) return sendError(response, 400, "INVALID_EXPENSE_AMOUNT", "Expense amount must be greater than zero.", correlationId);
+  if (!allowedExpenseAccountCodes.has(accountCode)) return sendError(response, 400, "INVALID_EXPENSE_ACCOUNT", "Unsupported expense account.", correlationId);
+  if (!allowedExpenseChannels.has(channel)) return sendError(response, 400, "INVALID_EXPENSE_CHANNEL", "Unsupported expense channel.", correlationId);
+  if (!reference) return sendError(response, 400, "INVALID_EXPENSE_REFERENCE", "Expense reference is required.", correlationId);
+  if (db.expenses.some((expense) => expense.tenantId === tenantId && expense.reference === reference)) {
+    return sendError(response, 409, "EXPENSE_EXISTS", "An expense with that reference already exists.", correlationId);
+  }
+  if (supplierId && !db.suppliers.some((supplier) => supplier.id === supplierId && supplier.tenantId === tenantId)) {
+    return sendError(response, 400, "INVALID_SUPPLIER", "Supplier does not exist for this tenant.", correlationId);
+  }
+  if (!assertAccountingPeriodOpen(tenantId, expenseDate, response, correlationId)) return;
+
+  const now = new Date().toISOString();
+  const expense = {
+    id: newId("expense"),
+    tenantId,
+    supplierId,
+    accountCode,
+    amount,
+    channel,
+    reference,
+    description: String(body.description || ""),
+    expenseDate,
+    status: "posted",
+    recordedByUserId: auth.user.id,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.expenses.push(expense);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Recorded expense ${expense.reference}`,
+    resourceType: "expense",
+    resourceId: expense.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicExpense(expense), 201);
+}
+
+function publicExpense(expense) {
+  return {
+    ...expense,
+    supplier: expense.supplierId ? db.suppliers.find((supplier) => supplier.id === expense.supplierId) || null : null,
+    accountName: db.chartOfAccounts.find((account) => account.code === expense.accountCode)?.name || expense.accountCode
+  };
+}
+
 function buildTenantRegulatoryReport(tenantId) {
   const tenant = db.tenants.find((item) => item.id === tenantId);
   const members = db.members.filter((member) => member.tenantId === tenantId);
@@ -610,6 +729,8 @@ function buildTenantRegulatoryReport(tenantId) {
   const loansAtRisk = activeLoans.filter((loan) => loan.dsr >= 40).reduce((sum, loan) => sum + loan.balance, 0);
   const parPercent = loanPortfolio ? Math.round((loansAtRisk / loanPortfolio) * 100) : 0;
   const entries = buildJournalEntries().filter((entry) => entry.tenantId === tenantId);
+  const expenses = db.expenses.filter((expense) => expense.tenantId === tenantId && expense.status === "posted");
+  const expenseTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
   const reconciliationData = reconciliationForTenantIds([tenantId]);
   const openComplaints = db.complaints.filter((complaint) => complaint.tenantId === tenantId && !["resolved", "closed"].includes(complaint.status)).length;
   const openResolutions = db.governanceResolutions.filter((resolution) => resolution.tenantId === tenantId && resolution.status !== "closed").length;
@@ -626,6 +747,7 @@ function buildTenantRegulatoryReport(tenantId) {
     activeLoans: activeLoans.length,
     loansAtRisk,
     parPercent,
+    expenseTotal,
     journalEntries: entries.length,
     unbalancedJournalEntries: entries.filter((entry) => !entry.isBalanced).length,
     reconciliationExceptions: reconciliationData.summary.unmatchedStatementLines + reconciliationData.summary.unmatchedLedgerLines,
@@ -645,6 +767,7 @@ function consolidateRegulatoryReports(reports) {
     totals.loanPortfolio += report.loanPortfolio;
     totals.activeLoans += report.activeLoans;
     totals.loansAtRisk += report.loansAtRisk;
+    totals.expenseTotal += report.expenseTotal;
     totals.journalEntries += report.journalEntries;
     totals.unbalancedJournalEntries += report.unbalancedJournalEntries;
     totals.reconciliationExceptions += report.reconciliationExceptions;
@@ -662,6 +785,7 @@ function consolidateRegulatoryReports(reports) {
     loanPortfolio: 0,
     activeLoans: 0,
     loansAtRisk: 0,
+    expenseTotal: 0,
     parPercent: 0,
     journalEntries: 0,
     unbalancedJournalEntries: 0,
@@ -682,6 +806,7 @@ function regulatoryReportCsv(reports) {
     "welfare",
     "loan_portfolio",
     "active_loans",
+    "expenses",
     "par_percent",
     "reconciliation_exceptions",
     "open_complaints",
@@ -697,6 +822,7 @@ function regulatoryReportCsv(reports) {
     report.welfare,
     report.loanPortfolio,
     report.activeLoans,
+    report.expenseTotal,
     report.parPercent,
     report.reconciliationExceptions,
     report.openComplaints,
@@ -991,6 +1117,22 @@ function buildJournalEntries() {
       lines: [
         journalLine("6100", payment.amount, 0, null),
         journalLine(accountForChannel(payment.channel), 0, payment.amount, null)
+      ]
+    }));
+  }
+
+  for (const expense of db.expenses.filter((item) => item.status === "posted")) {
+    entries.push(journalEntry({
+      id: `je_${expense.id}`,
+      tenantId: expense.tenantId,
+      sourceType: "expense",
+      sourceId: expense.id,
+      reference: expense.reference,
+      description: expense.description || "Recorded operating expense",
+      postedAt: expense.expenseDate,
+      lines: [
+        journalLine(expense.accountCode, expense.amount, 0, null),
+        journalLine(accountForChannel(expense.channel), 0, expense.amount, null)
       ]
     }));
   }

@@ -53,6 +53,42 @@ CREATE INDEX idx_journal_entries_tenant_posted ON journal_entries (tenant_id, po
 CREATE INDEX idx_journal_entries_source ON journal_entries (source_type, source_id);
 CREATE INDEX idx_journal_lines_account ON journal_lines (account_code);
 
+CREATE TABLE suppliers (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  name TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  tax_id TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_by_user_id UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, name)
+);
+
+CREATE TABLE expenses (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  supplier_id UUID REFERENCES suppliers(id),
+  account_code TEXT NOT NULL REFERENCES chart_of_accounts(code),
+  amount NUMERIC(18, 2) NOT NULL,
+  channel TEXT NOT NULL,
+  reference TEXT NOT NULL,
+  description TEXT,
+  expense_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'posted',
+  recorded_by_user_id UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, reference),
+  CHECK (amount > 0)
+);
+
+CREATE INDEX idx_suppliers_tenant_status ON suppliers (tenant_id, status);
+CREATE INDEX idx_expenses_tenant_date ON expenses (tenant_id, expense_date);
+CREATE INDEX idx_expenses_supplier ON expenses (supplier_id);
+
 CREATE TABLE statement_lines (
   id UUID PRIMARY KEY,
   tenant_id UUID NOT NULL REFERENCES tenants(id),
