@@ -347,6 +347,56 @@ export const db = {
       updatedAt: now()
     }
   ],
+  loans: [
+    {
+      id: "loan_green_0001",
+      tenantId: "tenant_green",
+      memberId: "member_green_amina",
+      product: "Development Loan",
+      amount: 3000000,
+      balance: 2150000,
+      status: "active",
+      stage: "Disbursed",
+      guarantors: 2,
+      dsr: 31,
+      repaymentMonths: 12,
+      purpose: "Business expansion",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "loan_green_0002",
+      tenantId: "tenant_green",
+      memberId: "member_green_daniel",
+      product: "Emergency Loan",
+      amount: 800000,
+      balance: 800000,
+      status: "under_review",
+      stage: "Credit Appraisal",
+      guarantors: 1,
+      dsr: 44,
+      repaymentMonths: 6,
+      purpose: "Medical emergency",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "loan_lake_0001",
+      tenantId: "tenant_lake",
+      memberId: "member_lake_peter",
+      product: "Agriculture Loan",
+      amount: 1500000,
+      balance: 0,
+      status: "submitted",
+      stage: "Guarantor Review",
+      guarantors: 0,
+      dsr: 27,
+      repaymentMonths: 10,
+      purpose: "Farm inputs",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
   sessions: [],
   memberSessions: [],
   auditEvents: [

@@ -189,6 +189,27 @@ Subscription billing rule: SACCOs with up to 250 members pay UGX 5,000 per membe
 
 Financial transaction decisions follow maker-checker separation: a transaction can move from `pending_approval` to `posted` or `rejected`, and the maker cannot approve or reject their own transaction.
 
+## Phase 4 Loan Entities
+
+### loans
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| member_id | uuid/string | Borrowing member. |
+| product | text | Loan product selected by staff/member. |
+| amount | decimal | Requested or approved principal. |
+| balance | decimal | Outstanding balance after disbursement and repayments. |
+| status | enum | `submitted`, `under_review`, `approved`, `active`, `rejected`, `closed`. |
+| stage | text | Current workflow stage such as `Credit Appraisal`. |
+| guarantors | integer | Number of guarantors attached. |
+| dsr | integer | Estimated debt-service risk ratio. |
+| repayment_months | integer | Requested repayment term. |
+| purpose | text | Applicant purpose. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
 ## Phase 2 Onboarding Entities
 
 ### branches

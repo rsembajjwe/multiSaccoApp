@@ -123,6 +123,7 @@ let apiState = {
   subscriptionPackages: [],
   subscriptions: [],
   financialTransactions: [],
+  loans: [],
   auditEvents: [],
   message: "Checking backend connection..."
 };
@@ -196,6 +197,10 @@ function useApiSubscriptions() {
 }
 
 function useApiTransactions() {
+  return Boolean(apiState.user);
+}
+
+function useApiLoans() {
   return Boolean(apiState.user);
 }
 
@@ -279,6 +284,22 @@ function apiTransactionToRow(transaction) {
     date: transaction.createdAt?.slice(0, 10) || "",
     maker: apiState.users.find((user) => user.id === transaction.makerUserId)?.fullName || "Maker",
     checker: transaction.checkerUserId ? (apiState.users.find((user) => user.id === transaction.checkerUserId)?.fullName || "Checker") : "",
+    source: "API"
+  };
+}
+
+function apiLoanToRow(loan) {
+  return {
+    id: loan.id,
+    tenantId: loan.tenantId,
+    memberId: loan.memberId,
+    product: loan.product,
+    amount: loan.amount,
+    balance: loan.balance,
+    status: titleCase(loan.status.replace(/_/g, " ")),
+    stage: loan.stage,
+    guarantors: loan.guarantors,
+    dsr: loan.dsr,
     source: "API"
   };
 }
@@ -690,23 +711,26 @@ function renderTransactions() {
 }
 
 function renderLoans() {
-  const loans = tenantScoped(state.loans);
+  const loans = useApiLoans() ? apiState.loans.map(apiLoanToRow) : tenantScoped(state.loans);
+  const source = useApiLoans() ? "API-backed" : "Local demo";
   return `
     <section class="card">
       <div class="toolbar">
         <div>
           <h2>Loan files</h2>
-          <p class="eyebrow">Applications, appraisal, guarantors and portfolio risk</p>
+          <p class="eyebrow">${source} · Applications, appraisal, guarantors and portfolio risk</p>
         </div>
+        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
         <button class="primary-button" data-action="newLoan" type="button">New loan application</button>
       </div>
+      ${apiState.user ? `<div class="notice">Loan files shown from the backend for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}.</div>` : `<div class="notice">Login to the API to create server-side loan applications. The table below is local demo data.</div>`}
       <div class="table-wrap">
         <table>
           <thead><tr><th>Applicant</th><th>Product</th><th>Amount</th><th>Balance</th><th>Stage</th><th>Guarantors</th><th>DSR</th><th>Status</th></tr></thead>
           <tbody>
             ${loans.map((loan) => `
               <tr>
-                <td>${memberName(loan.memberId)}</td>
+                <td>${memberName(loan.memberId)}${loan.source ? `<br><small>${loan.source}</small>` : ""}</td>
                 <td>${loan.product}</td>
                 <td>${money.format(loan.amount)}</td>
                 <td>${money.format(loan.balance)}</td>
@@ -1054,7 +1078,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1062,7 +1086,8 @@ async function refreshApiStatus() {
         apiRequest(`/members${apiTenantQuery()}`),
         apiRequest("/subscription-packages"),
         apiRequest(`/subscriptions${apiSubscriptionQuery()}`),
-        apiRequest(`/financial-transactions${apiTenantQuery()}`)
+        apiRequest(`/financial-transactions${apiTenantQuery()}`),
+        apiRequest(`/loans${apiTenantQuery()}`)
       ]);
       apiState.tenants = tenants;
       apiState.users = users;
@@ -1072,7 +1097,8 @@ async function refreshApiStatus() {
       apiState.subscriptionPackages = subscriptionPackages;
       apiState.subscriptions = subscriptions;
       apiState.financialTransactions = financialTransactions;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), and ${auditEvents.length} audit event(s).`;
+      apiState.loans = loans;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -1084,7 +1110,7 @@ async function refreshApiStatus() {
     apiState.message = error.message;
   }
   renderApiChrome();
-  if (["dashboard", "reports", "members", "registrations", "subscriptions", "transactions", "approvals"].includes(state.currentView)) render();
+  if (["dashboard", "reports", "members", "registrations", "subscriptions", "transactions", "approvals", "loans"].includes(state.currentView)) render();
 }
 
 function openApiLoginForm() {
@@ -1153,7 +1179,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -1410,7 +1436,8 @@ function openTransactionForm() {
 }
 
 function openLoanForm() {
-  const members = tenantScoped(state.members);
+  const apiMode = Boolean(apiState.user);
+  const members = apiMode ? apiState.members.map(apiMemberToRow).filter((member) => member.status === "Active") : tenantScoped(state.members);
   if (!members.length) return;
   openModal("Loan application", `
     <div class="form-grid">
@@ -1422,7 +1449,29 @@ function openLoanForm() {
     </div>
   `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveLoan" class="primary-button" type="button">Submit loan</button>`);
 
-  document.getElementById("saveLoan").addEventListener("click", () => {
+  document.getElementById("saveLoan").addEventListener("click", async () => {
+    if (apiMode) {
+      try {
+        await apiRequest("/loans", {
+          method: "POST",
+          body: JSON.stringify({
+            tenantId: currentApiTenantId(),
+            memberId: value("loanMember"),
+            product: value("loanProduct"),
+            amount: Number(value("loanAmount")),
+            repaymentMonths: Number(value("loanPeriod")),
+            purpose: document.getElementById("loanPurpose").value.trim()
+          })
+        });
+        closeModal();
+        state.currentView = "loans";
+        await refreshApiStatus();
+      } catch (error) {
+        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+      }
+      return;
+    }
+
     const amount = Number(value("loanAmount"));
     const member = state.members.find((item) => item.id === value("loanMember"));
     const dsr = Math.min(65, Math.round((amount / Math.max(member.savings * 3, 1)) * 35));

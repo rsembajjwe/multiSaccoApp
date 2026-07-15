@@ -41,6 +41,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Backend financial transaction creation validates tenant, member, branch, type, channel, and positive amount.
 - Approvals UI can post or reject API-backed pending financial transactions with maker-checker enforcement.
 - Members can authenticate into the member portal and view their own backend balances.
+- Loans UI can switch from local demo data to API-backed loan files and submit new loan applications.
 
 ## Recommended backend modules for the next build
 

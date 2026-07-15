@@ -142,6 +142,29 @@ try {
   }, saccoToken);
   assert(document.data.id, "Member document metadata should be created");
 
+  const loans = await api("GET", "/loans", null, saccoToken);
+  assert(loans.data.length >= 2, "SACCO admin should list own loan files");
+  assert(loans.data.every((loan) => loan.tenantId === "tenant_green"), "Loan list must be tenant-scoped");
+
+  const loan = await api("POST", "/loans", {
+    memberId: member.data.id,
+    product: "Development Loan",
+    amount: 1200000,
+    repaymentMonths: 12,
+    purpose: "Smoke test working capital"
+  }, saccoToken);
+  assert(loan.data.id, "Loan application should be created");
+  assert(loan.data.status === "submitted", "New loan application should start submitted");
+  assert(loan.data.stage === "Credit Appraisal", "New loan application should enter credit appraisal");
+
+  const invalidTenantLoan = await raw("POST", "/loans", {
+    memberId: "member_lake_peter",
+    product: "Agriculture Loan",
+    amount: 500000,
+    repaymentMonths: 8
+  }, saccoToken);
+  assert(invalidTenantLoan.status === 400, "SACCO admin should not create a loan for another tenant member");
+
   const transactions = await api("GET", "/financial-transactions", null, saccoToken);
   assert(transactions.data.length >= 3, "SACCO admin should list own financial transactions");
   assert(transactions.data.every((transaction) => transaction.tenantId === "tenant_green"), "Financial transaction list must be tenant-scoped");

@@ -61,6 +61,8 @@ All JSON responses should follow one of these shapes:
 | GET | `/financial-transactions` | List tenant financial transactions. | Required |
 | POST | `/financial-transactions` | Submit a pending financial transaction. | SACCO staff |
 | PATCH | `/financial-transactions/:id/status` | Post or reject a pending financial transaction. | Authorized checker |
+| GET | `/loans` | List tenant loan applications and files. | Required |
+| POST | `/loans` | Submit a loan application for an active member. | SACCO staff |
 | GET | `/approval-workflows` | List workflows. | Admin |
 | POST | `/approval-workflows` | Create workflow. | Admin |
 | GET | `/approval-decisions` | List pending or historical decisions. | Required |
@@ -101,5 +103,7 @@ Implemented in the no-dependency development server:
 - `GET /api/v1/financial-transactions`
 - `POST /api/v1/financial-transactions`
 - `PATCH /api/v1/financial-transactions/:id/status`
+- `GET /api/v1/loans`
+- `POST /api/v1/loans`
 
 The development server uses an in-memory store seeded at startup. PostgreSQL migrations are documented separately and will replace the development store in the next backend step.

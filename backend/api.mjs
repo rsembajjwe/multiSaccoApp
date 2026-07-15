@@ -24,6 +24,7 @@ const allowedMemberTypes = new Set(["individual", "group", "institutional", "cor
 const allowedTransactionTypes = new Set(["savings_deposit", "share_purchase", "welfare_contribution", "withdrawal"]);
 const allowedTransactionChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedTransactionDecisionStatuses = new Set(["posted", "rejected"]);
+const allowedLoanProducts = new Set(["Development Loan", "Emergency Loan", "Agriculture Loan", "School Fees Loan"]);
 
 export async function handleApi(request, response, url) {
   const correlationId = request.headers["x-correlation-id"] || newId("req");
@@ -92,6 +93,8 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/members") return createMember(request, response, auth, correlationId);
     if (method === "GET" && path === "/financial-transactions") return listFinancialTransactions(response, auth, url);
     if (method === "POST" && path === "/financial-transactions") return createFinancialTransaction(request, response, auth, correlationId);
+    if (method === "GET" && path === "/loans") return listLoans(response, auth, url);
+    if (method === "POST" && path === "/loans") return createLoan(request, response, auth, correlationId);
     if (method === "PATCH" && path.startsWith("/financial-transactions/") && path.endsWith("/status")) {
       return updateFinancialTransactionStatus(request, response, auth, path.split("/")[2], correlationId);
     }
@@ -699,4 +702,61 @@ async function updateFinancialTransactionStatus(request, response, auth, transac
     ipAddress: requestIp(request)
   });
   return sendData(response, transaction);
+}
+
+function listLoans(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const loans = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.loans
+    : db.loans.filter((loan) => loan.tenantId === tenantId);
+  return sendData(response, loans);
+}
+
+async function createLoan(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  const member = db.members.find((item) => item.id === String(body.memberId) && item.tenantId === tenantId);
+  if (!member) return sendError(response, 400, "INVALID_MEMBER", "Member does not exist for this tenant.", correlationId);
+  if (member.status !== "active") return sendError(response, 400, "MEMBER_NOT_ACTIVE", "Only active members can apply for loans.", correlationId);
+
+  const product = String(body.product || "");
+  const amount = Number(body.amount);
+  const repaymentMonths = Number(body.repaymentMonths || 12);
+  if (!allowedLoanProducts.has(product)) return sendError(response, 400, "INVALID_LOAN_PRODUCT", "Unsupported loan product.", correlationId);
+  if (!Number.isFinite(amount) || amount <= 0) return sendError(response, 400, "INVALID_LOAN_AMOUNT", "Loan amount must be greater than zero.", correlationId);
+  if (!Number.isInteger(repaymentMonths) || repaymentMonths < 1 || repaymentMonths > 60) {
+    return sendError(response, 400, "INVALID_REPAYMENT_PERIOD", "Repayment period must be between 1 and 60 months.", correlationId);
+  }
+
+  const balances = memberBalances(member.id);
+  const dsr = Math.min(65, Math.round((amount / Math.max(balances.savings * 3, 1)) * 35));
+  const loan = {
+    id: newId("loan"),
+    tenantId,
+    memberId: member.id,
+    product,
+    amount,
+    balance: 0,
+    status: "submitted",
+    stage: "Credit Appraisal",
+    guarantors: 0,
+    dsr,
+    repaymentMonths,
+    purpose: String(body.purpose || ""),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  db.loans.push(loan);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Submitted loan application for ${member.membershipNo}`,
+    resourceType: "loan",
+    resourceId: loan.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, loan, 201);
 }
