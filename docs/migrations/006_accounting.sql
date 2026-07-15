@@ -38,3 +38,22 @@ CREATE TABLE journal_lines (
 CREATE INDEX idx_journal_entries_tenant_posted ON journal_entries (tenant_id, posted_at);
 CREATE INDEX idx_journal_entries_source ON journal_entries (source_type, source_id);
 CREATE INDEX idx_journal_lines_account ON journal_lines (account_code);
+
+CREATE TABLE statement_lines (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  account_code TEXT NOT NULL REFERENCES chart_of_accounts(code),
+  channel TEXT NOT NULL,
+  amount NUMERIC(18, 2) NOT NULL,
+  external_reference TEXT NOT NULL,
+  description TEXT,
+  statement_date DATE NOT NULL,
+  imported_by_user_id UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, external_reference),
+  CHECK (amount <> 0)
+);
+
+CREATE INDEX idx_statement_lines_tenant_date ON statement_lines (tenant_id, statement_date);
+CREATE INDEX idx_statement_lines_match ON statement_lines (tenant_id, account_code, external_reference, amount);

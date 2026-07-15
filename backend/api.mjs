@@ -25,6 +25,7 @@ const allowedMemberTypes = new Set(["individual", "group", "institutional", "cor
 const allowedTransactionTypes = new Set(["savings_deposit", "share_purchase", "welfare_contribution", "withdrawal"]);
 const allowedTransactionChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedTransactionDecisionStatuses = new Set(["posted", "rejected"]);
+const allowedStatementChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedLoanProducts = new Set(["Development Loan", "Emergency Loan", "Agriculture Loan", "School Fees Loan"]);
 const allowedGuarantorStatuses = new Set(["accepted", "rejected"]);
 const allowedLoanDecisionStatuses = new Set(["approved", "rejected"]);
@@ -92,6 +93,9 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/audit-events") return createAudit(request, response, auth, correlationId);
     if (method === "GET" && path === "/chart-of-accounts") return listChartOfAccounts(response);
     if (method === "GET" && path === "/journal-entries") return listJournalEntries(response, auth, url);
+    if (method === "GET" && path === "/statement-lines") return listStatementLines(response, auth, url);
+    if (method === "POST" && path === "/statement-lines") return createStatementLine(request, response, auth, correlationId);
+    if (method === "GET" && path === "/reconciliation") return getReconciliation(response, auth, url);
     if (method === "GET" && path === "/subscription-packages") return sendData(response, db.subscriptionPackages);
     if (method === "GET" && path === "/subscriptions") return listSubscriptions(response, auth, url);
     if (method === "POST" && path.startsWith("/subscriptions/") && path.endsWith("/payments")) {
@@ -403,6 +407,121 @@ function listJournalEntries(response, auth, url) {
     .filter((entry) => (isPlatform(auth) && !url.searchParams.get("tenantId")) || entry.tenantId === tenantId)
     .sort((a, b) => String(b.postedAt).localeCompare(String(a.postedAt)));
   return sendData(response, entries);
+}
+
+function listStatementLines(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const lines = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.statementLines
+    : db.statementLines.filter((line) => line.tenantId === tenantId);
+  return sendData(response, lines);
+}
+
+async function createStatementLine(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  const channel = String(body.channel || "");
+  const amount = Number(body.amount);
+  const externalReference = String(body.externalReference || "").trim();
+  if (!allowedStatementChannels.has(channel)) return sendError(response, 400, "INVALID_STATEMENT_CHANNEL", "Unsupported statement channel.", correlationId);
+  if (!Number.isFinite(amount) || amount === 0) return sendError(response, 400, "INVALID_STATEMENT_AMOUNT", "Statement amount cannot be zero.", correlationId);
+  if (!externalReference) return sendError(response, 400, "INVALID_STATEMENT_REFERENCE", "Statement reference is required.", correlationId);
+  if (db.statementLines.some((line) => line.tenantId === tenantId && line.externalReference === externalReference)) {
+    return sendError(response, 409, "STATEMENT_LINE_EXISTS", "A statement line with that reference already exists for this tenant.", correlationId);
+  }
+
+  const now = new Date().toISOString();
+  const line = {
+    id: newId("statement"),
+    tenantId,
+    accountCode: accountForChannel(channel),
+    channel,
+    amount,
+    externalReference,
+    description: String(body.description || ""),
+    statementDate: String(body.statementDate || now.slice(0, 10)),
+    importedByUserId: auth.user.id,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.statementLines.push(line);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Imported statement line ${line.externalReference}`,
+    resourceType: "statement_line",
+    resourceId: line.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, line, 201);
+}
+
+function getReconciliation(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const tenantIds = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.tenants.filter((tenant) => tenant.id !== "tenant_platform").map((tenant) => tenant.id)
+    : [tenantId];
+  const entries = buildJournalEntries().filter((entry) => tenantIds.includes(entry.tenantId));
+  const statementLines = db.statementLines.filter((line) => tenantIds.includes(line.tenantId));
+  const ledgerLines = cashLedgerLines(entries);
+  const matches = [];
+  const matchedStatementIds = new Set();
+  const matchedLedgerIds = new Set();
+
+  for (const statementLine of statementLines) {
+    const ledgerLine = ledgerLines.find((line) => {
+      return !matchedLedgerIds.has(line.id)
+        && line.tenantId === statementLine.tenantId
+        && line.accountCode === statementLine.accountCode
+        && line.reference === statementLine.externalReference
+        && line.amount === statementLine.amount;
+    });
+    if (!ledgerLine) continue;
+    matchedStatementIds.add(statementLine.id);
+    matchedLedgerIds.add(ledgerLine.id);
+    matches.push({ statementLine, ledgerLine });
+  }
+
+  const unmatchedStatementLines = statementLines.filter((line) => !matchedStatementIds.has(line.id));
+  const unmatchedLedgerLines = ledgerLines.filter((line) => !matchedLedgerIds.has(line.id));
+  return sendData(response, {
+    summary: {
+      statementLines: statementLines.length,
+      ledgerLines: ledgerLines.length,
+      matched: matches.length,
+      unmatchedStatementLines: unmatchedStatementLines.length,
+      unmatchedLedgerLines: unmatchedLedgerLines.length,
+      matchedAmount: matches.reduce((sum, item) => sum + Math.abs(item.statementLine.amount), 0),
+      unmatchedStatementAmount: unmatchedStatementLines.reduce((sum, item) => sum + Math.abs(item.amount), 0),
+      unmatchedLedgerAmount: unmatchedLedgerLines.reduce((sum, item) => sum + Math.abs(item.amount), 0)
+    },
+    matches,
+    unmatchedStatementLines,
+    unmatchedLedgerLines
+  });
+}
+
+function cashLedgerLines(entries) {
+  const cashAccounts = new Set(["1000", "1010", "1020", "1030"]);
+  return entries.flatMap((entry) => entry.lines
+    .map((line, index) => ({ entry, line, index }))
+    .filter(({ line }) => cashAccounts.has(line.accountCode))
+    .map(({ entry, line, index }) => ({
+      id: `${entry.id}_${index}`,
+      tenantId: entry.tenantId,
+      journalEntryId: entry.id,
+      sourceType: entry.sourceType,
+      sourceId: entry.sourceId,
+      reference: entry.reference,
+      description: entry.description,
+      postedAt: entry.postedAt,
+      accountCode: line.accountCode,
+      accountName: line.accountName,
+      amount: line.debit - line.credit
+    })));
 }
 
 function buildJournalEntries() {

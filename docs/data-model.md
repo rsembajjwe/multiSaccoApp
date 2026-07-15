@@ -291,6 +291,24 @@ Guarantee capacity currently uses posted savings less pending or accepted guaran
 
 Accounting control rule: every posted event must produce equal debit and credit totals. The prototype currently derives journals from posted source records; production storage should persist journal entries and lines.
 
+### statement_lines
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| account_code | text | Cash, bank, mobile-money, or payroll account. |
+| channel | enum | `mobile_money`, `cash`, `bank`, `payroll_deduction`. |
+| amount | decimal | Positive for receipt, negative for payment or charge. |
+| external_reference | text | Unique statement reference per tenant. |
+| description | text | Statement narration. |
+| statement_date | date | Statement value date. |
+| imported_by_user_id | uuid/string | User who imported the line. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+Reconciliation control rule: statement lines are matched to ledger cash movements by tenant, account, reference, and signed amount. Unmatched statement or ledger lines remain visible for review.
+
 ## Phase 2 Onboarding Entities
 
 ### branches

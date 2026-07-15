@@ -369,6 +369,7 @@ Progress:
 - Loan approval and disbursement endpoints added, enforcing accepted-guarantor approval and approval-before-disbursement controls.
 - Loan repayment endpoints added, with active-loan balance reduction, duplicate-reference protection, and close-on-full-payment behavior.
 - Accounting chart and derived journal endpoints added, and Reports now displays API-backed balanced ledger entries.
+- Statement-line import and reconciliation endpoints added, and Reports now highlights matched and unmatched cash movements.
 
 Recommended stack:
 

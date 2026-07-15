@@ -439,6 +439,47 @@ export const db = {
       updatedAt: now()
     }
   ],
+  statementLines: [
+    {
+      id: "statement_green_0001",
+      tenantId: "tenant_green",
+      accountCode: "1020",
+      channel: "mobile_money",
+      amount: 250000,
+      externalReference: "GVS-TX-0001",
+      description: "Mobile money savings collection",
+      statementDate: "2026-07-14",
+      importedByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "statement_green_0002",
+      tenantId: "tenant_green",
+      accountCode: "1020",
+      channel: "mobile_money",
+      amount: 850000,
+      externalReference: "LRP-GVS-0001",
+      description: "Mobile money loan repayment",
+      statementDate: "2026-07-14",
+      importedByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "statement_green_0003",
+      tenantId: "tenant_green",
+      accountCode: "1010",
+      channel: "bank",
+      amount: -25000,
+      externalReference: "BANK-FEE-0001",
+      description: "Unmatched bank charge awaiting allocation",
+      statementDate: "2026-07-14",
+      importedByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
   sessions: [],
   memberSessions: [],
   auditEvents: [

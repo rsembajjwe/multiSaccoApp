@@ -126,6 +126,8 @@ let apiState = {
   loans: [],
   chartOfAccounts: [],
   journalEntries: [],
+  statementLines: [],
+  reconciliation: null,
   auditEvents: [],
   message: "Checking backend connection..."
 };
@@ -844,6 +846,7 @@ function renderReports() {
 function renderApiReports() {
   const journals = apiState.journalEntries;
   const accounts = apiState.chartOfAccounts;
+  const reconciliation = apiState.reconciliation || { summary: {}, unmatchedStatementLines: [], unmatchedLedgerLines: [] };
   const debitTotal = journals.reduce((sum, entry) => sum + entry.debitTotal, 0);
   const creditTotal = journals.reduce((sum, entry) => sum + entry.creditTotal, 0);
   const unbalanced = journals.filter((entry) => !entry.isBalanced).length;
@@ -873,6 +876,21 @@ function renderApiReports() {
       ${journalTable(journals)}
     </section>
     <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Reconciliation</h2>
+          <p class="eyebrow">Bank, cash, mobile money and payroll statement matching</p>
+        </div>
+        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("Matched", reconciliation.summary.matched || 0, `${money.format(reconciliation.summary.matchedAmount || 0)} cleared`)}
+        ${metric("Statement exceptions", reconciliation.summary.unmatchedStatementLines || 0, money.format(reconciliation.summary.unmatchedStatementAmount || 0))}
+        ${metric("Ledger exceptions", reconciliation.summary.unmatchedLedgerLines || 0, money.format(reconciliation.summary.unmatchedLedgerAmount || 0))}
+      </div>
+      ${reconciliationTable(reconciliation)}
+    </section>
+    <section class="card" style="margin-top:16px">
       <h2>Chart of accounts</h2>
       <div class="table-wrap">
         <table>
@@ -894,6 +912,51 @@ function renderApiReports() {
       <h2>API audit events</h2>
       ${apiAuditTable(apiState.auditEvents)}
     </section>
+  `;
+}
+
+function reconciliationTable(reconciliation) {
+  const statementLines = reconciliation.unmatchedStatementLines || [];
+  const ledgerLines = reconciliation.unmatchedLedgerLines || [];
+  return `
+    <div class="grid two" style="margin-top:16px">
+      <div>
+        <h3>Unmatched statement lines</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Reference</th><th>Account</th><th>Amount</th></tr></thead>
+            <tbody>
+              ${statementLines.map((line) => `
+                <tr>
+                  <td>${line.statementDate || ""}</td>
+                  <td>${line.externalReference}<br><small>${line.description || titleCase(line.channel.replace(/_/g, " "))}</small></td>
+                  <td>${line.accountCode}</td>
+                  <td>${money.format(line.amount)}</td>
+                </tr>
+              `).join("") || `<tr><td colspan="4">No unmatched statement lines.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h3>Unmatched ledger lines</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th>Reference</th><th>Account</th><th>Amount</th></tr></thead>
+            <tbody>
+              ${ledgerLines.map((line) => `
+                <tr>
+                  <td>${line.postedAt?.slice(0, 10) || ""}</td>
+                  <td>${line.reference}<br><small>${line.description}</small></td>
+                  <td>${line.accountCode} ${line.accountName}</td>
+                  <td>${money.format(line.amount)}</td>
+                </tr>
+              `).join("") || `<tr><td colspan="4">No unmatched ledger lines.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -1227,7 +1290,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, chartOfAccounts, journalEntries] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, chartOfAccounts, journalEntries, statementLines, reconciliation] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1238,7 +1301,9 @@ async function refreshApiStatus() {
         apiRequest(`/financial-transactions${apiTenantQuery()}`),
         apiRequest(`/loans${apiTenantQuery()}`),
         apiRequest("/chart-of-accounts"),
-        apiRequest(`/journal-entries${apiTenantQuery()}`)
+        apiRequest(`/journal-entries${apiTenantQuery()}`),
+        apiRequest(`/statement-lines${apiTenantQuery()}`),
+        apiRequest(`/reconciliation${apiTenantQuery()}`)
       ]);
       apiState.tenants = tenants;
       apiState.users = users;
@@ -1251,7 +1316,9 @@ async function refreshApiStatus() {
       apiState.loans = loans;
       apiState.chartOfAccounts = chartOfAccounts;
       apiState.journalEntries = journalEntries;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${journalEntries.length} journal(s), and ${auditEvents.length} audit event(s).`;
+      apiState.statementLines = statementLines;
+      apiState.reconciliation = reconciliation;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -1333,7 +1400,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], chartOfAccounts: [], journalEntries: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }

@@ -272,6 +272,25 @@ try {
   const chartOfAccounts = await api("GET", "/chart-of-accounts", null, saccoToken);
   assert(chartOfAccounts.data.some((account) => account.code === "1100"), "Chart of accounts should include loans receivable");
 
+  const statementLine = await api("POST", "/statement-lines", {
+    channel: "bank",
+    amount: postedTransaction.data.amount,
+    externalReference: postedTransaction.data.reference,
+    description: "Smoke test bank statement line"
+  }, saccoToken);
+  assert(statementLine.data.id, "Statement line import should return an id");
+  assert(statementLine.data.accountCode === "1010", "Bank statement lines should map to the bank account");
+
+  const duplicateStatementLine = await raw("POST", "/statement-lines", {
+    channel: "bank",
+    amount: postedTransaction.data.amount,
+    externalReference: postedTransaction.data.reference
+  }, saccoToken);
+  assert(duplicateStatementLine.status === 409, "Statement line references should be unique per tenant");
+
+  const statementLines = await api("GET", "/statement-lines", null, saccoToken);
+  assert(statementLines.data.every((line) => line.tenantId === "tenant_green"), "Statement lines must be tenant-scoped");
+
   const journalEntries = await api("GET", "/journal-entries", null, saccoToken);
   assert(journalEntries.data.length >= 4, "SACCO admin should list derived journal entries");
   assert(journalEntries.data.every((entry) => entry.tenantId === "tenant_green"), "Journal entries must be tenant-scoped");
@@ -281,6 +300,11 @@ try {
   const platformJournals = await api("GET", "/journal-entries", null, platformToken);
   assert(platformJournals.data.length >= journalEntries.data.length, "Platform admin should list journals across tenants");
   assert(platformJournals.data.every((entry) => entry.debitTotal === entry.creditTotal), "Platform journal listing should remain balanced");
+
+  const reconciliation = await api("GET", "/reconciliation", null, saccoToken);
+  assert(reconciliation.data.summary.matched >= 3, "Reconciliation should match statement lines to ledger lines");
+  assert(reconciliation.data.summary.unmatchedStatementLines >= 1, "Reconciliation should expose unmatched statement lines");
+  assert(reconciliation.data.unmatchedStatementLines.some((line) => line.externalReference === "BANK-FEE-0001"), "Seeded bank charge should remain unmatched");
 
   console.log("API smoke test passed");
 } finally {
