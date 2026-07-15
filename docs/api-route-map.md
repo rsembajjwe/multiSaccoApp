@@ -66,6 +66,12 @@ All JSON responses should follow one of these shapes:
 | GET | `/statement-lines` | List imported bank, cash, mobile-money, and payroll statement lines. | Required |
 | POST | `/statement-lines` | Import a statement line for reconciliation. | SACCO staff |
 | GET | `/reconciliation` | Compare statement lines with ledger cash movements. | Required |
+| GET | `/governance-meetings` | List tenant governance meetings and resolutions. | Required |
+| POST | `/governance-meetings` | Create a governance meeting record. | SACCO staff |
+| POST | `/governance-meetings/:id/resolutions` | Record a meeting resolution. | SACCO staff |
+| GET | `/complaints` | List member or service complaints. | Required |
+| POST | `/complaints` | Capture a complaint. | SACCO staff |
+| PATCH | `/complaints/:id/status` | Update complaint status and resolution notes. | SACCO staff |
 | GET | `/loans` | List tenant loan applications and files. | Required |
 | POST | `/loans` | Submit a loan application for an active member. | SACCO staff |
 | PATCH | `/loans/:id/status` | Approve or reject a loan application. | Authorized approver |
@@ -121,6 +127,12 @@ Implemented in the no-dependency development server:
 - `GET /api/v1/statement-lines`
 - `POST /api/v1/statement-lines`
 - `GET /api/v1/reconciliation`
+- `GET /api/v1/governance-meetings`
+- `POST /api/v1/governance-meetings`
+- `POST /api/v1/governance-meetings/:id/resolutions`
+- `GET /api/v1/complaints`
+- `POST /api/v1/complaints`
+- `PATCH /api/v1/complaints/:id/status`
 - `GET /api/v1/loans`
 - `POST /api/v1/loans`
 - `PATCH /api/v1/loans/:id/status`

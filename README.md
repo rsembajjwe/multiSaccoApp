@@ -71,6 +71,8 @@ After API login, the Reports screen reads the backend chart of accounts and bala
 
 Reports also show reconciliation results for imported bank, cash, mobile-money, and payroll statement lines.
 
+Reports include governance meetings, open resolutions, and member/service complaints from the backend.
+
 After API login, the Approvals screen reads pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
 
 Members can login from **Member portal** using the seeded account `GVS-0001` / `Member@12345` to view their savings, shares, and welfare balances.

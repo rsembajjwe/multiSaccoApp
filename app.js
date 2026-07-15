@@ -128,6 +128,8 @@ let apiState = {
   journalEntries: [],
   statementLines: [],
   reconciliation: null,
+  governanceMeetings: [],
+  complaints: [],
   auditEvents: [],
   message: "Checking backend connection..."
 };
@@ -847,6 +849,8 @@ function renderApiReports() {
   const journals = apiState.journalEntries;
   const accounts = apiState.chartOfAccounts;
   const reconciliation = apiState.reconciliation || { summary: {}, unmatchedStatementLines: [], unmatchedLedgerLines: [] };
+  const meetings = apiState.governanceMeetings;
+  const complaints = apiState.complaints;
   const debitTotal = journals.reduce((sum, entry) => sum + entry.debitTotal, 0);
   const creditTotal = journals.reduce((sum, entry) => sum + entry.creditTotal, 0);
   const unbalanced = journals.filter((entry) => !entry.isBalanced).length;
@@ -891,6 +895,25 @@ function renderApiReports() {
       ${reconciliationTable(reconciliation)}
     </section>
     <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Governance</h2>
+          <p class="eyebrow">Meetings, resolutions and member complaints for ${tenantLabel}</p>
+        </div>
+        <button class="secondary-button" data-action="newComplaint" type="button">New complaint</button>
+        <button class="primary-button" data-action="newGovernanceMeeting" type="button">New meeting</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("Meetings", meetings.length, `${meetings.reduce((sum, meeting) => sum + (meeting.openResolutions || 0), 0)} open resolution(s)`)}
+        ${metric("Complaints", complaints.length, `${complaints.filter((complaint) => !["resolved", "closed"].includes(complaint.status)).length} open`)}
+        ${metric("High priority", complaints.filter((complaint) => complaint.priority === "high" && !["resolved", "closed"].includes(complaint.status)).length, "complaints requiring attention")}
+      </div>
+      <div class="grid two" style="margin-top:16px">
+        ${governanceMeetingList(meetings)}
+        ${complaintList(complaints)}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
       <h2>Chart of accounts</h2>
       <div class="table-wrap">
         <table>
@@ -912,6 +935,45 @@ function renderApiReports() {
       <h2>API audit events</h2>
       ${apiAuditTable(apiState.auditEvents)}
     </section>
+  `;
+}
+
+function governanceMeetingList(meetings) {
+  return `
+    <div>
+      <h3>Meetings and resolutions</h3>
+      <ul class="list">
+        ${meetings.map((meeting) => `
+          <li>
+            <span>
+              <strong>${meeting.title}</strong><br>
+              <small>${titleCase(meeting.meetingType.replace(/_/g, " "))} · ${meeting.scheduledAt?.slice(0, 10) || ""} · ${titleCase(meeting.status)}</small>
+              ${(meeting.resolutions || []).map((resolution) => `<br><small>${resolution.status === "closed" ? "Closed" : "Open"} resolution: ${resolution.title}</small>`).join("")}
+            </span>
+            <span><span class="status ${statusClass(meeting.status)}">${meeting.openResolutions || 0} open</span></span>
+          </li>
+        `).join("") || `<li><span>No governance meetings found.</span><span class="status active">Clear</span></li>`}
+      </ul>
+    </div>
+  `;
+}
+
+function complaintList(complaints) {
+  return `
+    <div>
+      <h3>Complaints</h3>
+      <ul class="list">
+        ${complaints.map((complaint) => `
+          <li>
+            <span>
+              <strong>${complaint.subject}</strong><br>
+              <small>${titleCase(complaint.category)} · ${titleCase(complaint.priority)} priority${complaint.member ? ` · ${complaint.member.fullName}` : ""}</small>
+            </span>
+            <span><span class="status ${statusClass(complaint.status)}">${titleCase(complaint.status.replace(/_/g, " "))}</span></span>
+          </li>
+        `).join("") || `<li><span>No complaints found.</span><span class="status active">Clear</span></li>`}
+      </ul>
+    </div>
   `;
 }
 
@@ -1193,6 +1255,8 @@ function bindViewActions() {
         newTransaction: openTransactionForm,
         newLoan: openLoanForm,
         recordSubscriptionPayment: recordSubscriptionPayment,
+        newGovernanceMeeting: openGovernanceMeetingForm,
+        newComplaint: openComplaintForm,
         memberLogin: openMemberLoginForm,
         memberLogout: memberLogout,
         refreshApi: refreshApiStatus
@@ -1290,7 +1354,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, chartOfAccounts, journalEntries, statementLines, reconciliation] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, chartOfAccounts, journalEntries, statementLines, reconciliation, governanceMeetings, complaints] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1303,7 +1367,9 @@ async function refreshApiStatus() {
         apiRequest("/chart-of-accounts"),
         apiRequest(`/journal-entries${apiTenantQuery()}`),
         apiRequest(`/statement-lines${apiTenantQuery()}`),
-        apiRequest(`/reconciliation${apiTenantQuery()}`)
+        apiRequest(`/reconciliation${apiTenantQuery()}`),
+        apiRequest(`/governance-meetings${apiTenantQuery()}`),
+        apiRequest(`/complaints${apiTenantQuery()}`)
       ]);
       apiState.tenants = tenants;
       apiState.users = users;
@@ -1318,7 +1384,9 @@ async function refreshApiStatus() {
       apiState.journalEntries = journalEntries;
       apiState.statementLines = statementLines;
       apiState.reconciliation = reconciliation;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), and ${auditEvents.length} audit event(s).`;
+      apiState.governanceMeetings = governanceMeetings;
+      apiState.complaints = complaints;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -1400,7 +1468,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -1785,6 +1853,71 @@ async function disburseLoan(id) {
   } catch (error) {
     openModal("Loan disbursement failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
   }
+}
+
+function openGovernanceMeetingForm() {
+  if (!apiState.user) return;
+  openModal("New governance meeting", `
+    <div class="form-grid">
+      ${field("Title", "governanceMeetingTitle", "text", "Board risk review")}
+      <label class="field"><span>Type</span><select id="governanceMeetingType" class="select"><option value="board">Board</option><option value="agm">AGM</option><option value="credit_committee">Credit Committee</option><option value="audit_committee">Audit Committee</option><option value="management">Management</option></select></label>
+      ${field("Scheduled at", "governanceMeetingDate", "date", today.toISOString().slice(0, 10))}
+      <label class="field full"><span>Minutes or agenda</span><textarea id="governanceMeetingMinutes" class="input" rows="3">Review portfolio, reconciliation exceptions, and open complaints.</textarea></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveGovernanceMeeting" class="primary-button" type="button">Save meeting</button>`);
+
+  document.getElementById("saveGovernanceMeeting").addEventListener("click", async () => {
+    try {
+      await apiRequest("/governance-meetings", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: apiState.user.tenantId === "tenant_platform" ? apiTenantId() : apiState.user.tenantId,
+          title: value("governanceMeetingTitle"),
+          meetingType: value("governanceMeetingType"),
+          scheduledAt: `${value("governanceMeetingDate")}T09:00:00.000Z`,
+          minutes: value("governanceMeetingMinutes")
+        })
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+function openComplaintForm() {
+  if (!apiState.user) return;
+  const activeMembers = apiState.members.map(apiMemberToRow).filter((member) => member.status === "Active");
+  openModal("New complaint", `
+    <div class="form-grid">
+      ${field("Subject", "complaintSubject", "text", "Member service follow-up")}
+      <label class="field"><span>Category</span><select id="complaintCategory" class="select"><option value="statement">Statement</option><option value="loan">Loan</option><option value="savings">Savings</option><option value="shares">Shares</option><option value="service">Service</option><option value="other">Other</option></select></label>
+      <label class="field"><span>Priority</span><select id="complaintPriority" class="select"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option></select></label>
+      <label class="field"><span>Member</span><select id="complaintMember" class="select"><option value="">No member linked</option>${activeMembers.map((member) => `<option value="${member.id}">${member.name} · ${member.no}</option>`).join("")}</select></label>
+      <label class="field full"><span>Description</span><textarea id="complaintDescription" class="input" rows="3">Complaint captured for governance follow-up.</textarea></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveComplaint" class="primary-button" type="button">Save complaint</button>`);
+
+  document.getElementById("saveComplaint").addEventListener("click", async () => {
+    try {
+      await apiRequest("/complaints", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: apiState.user.tenantId === "tenant_platform" ? apiTenantId() : apiState.user.tenantId,
+          subject: value("complaintSubject"),
+          category: value("complaintCategory"),
+          priority: value("complaintPriority"),
+          memberId: value("complaintMember") || null,
+          description: value("complaintDescription")
+        })
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
 }
 
 function openLoanRepaymentForm(loanId) {

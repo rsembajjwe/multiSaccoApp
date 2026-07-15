@@ -306,6 +306,46 @@ try {
   assert(reconciliation.data.summary.unmatchedStatementLines >= 1, "Reconciliation should expose unmatched statement lines");
   assert(reconciliation.data.unmatchedStatementLines.some((line) => line.externalReference === "BANK-FEE-0001"), "Seeded bank charge should remain unmatched");
 
+  const governanceMeeting = await api("POST", "/governance-meetings", {
+    title: "Smoke governance review",
+    meetingType: "board",
+    scheduledAt: "2026-07-30T09:00:00.000Z",
+    minutes: "Smoke test agenda"
+  }, saccoToken);
+  assert(governanceMeeting.data.id, "Governance meeting should be created");
+  assert(governanceMeeting.data.tenantId === "tenant_green", "Governance meeting should be tenant-scoped");
+
+  const resolution = await api("POST", `/governance-meetings/${governanceMeeting.data.id}/resolutions`, {
+    title: "Resolve smoke reconciliation exception",
+    decision: "Assign accountant to review unmatched bank fees.",
+    dueDate: "2026-08-05"
+  }, saccoToken);
+  assert(resolution.data.status === "open", "New governance resolution should start open");
+
+  const meetings = await api("GET", "/governance-meetings", null, saccoToken);
+  assert(meetings.data.every((meeting) => meeting.tenantId === "tenant_green"), "Governance meetings must be tenant-scoped");
+  assert(meetings.data.some((meeting) => meeting.id === governanceMeeting.data.id && meeting.openResolutions >= 1), "Meeting list should include open resolution counts");
+
+  const complaint = await api("POST", "/complaints", {
+    memberId: "member_green_amina",
+    category: "service",
+    subject: "Smoke complaint",
+    description: "Smoke test complaint capture",
+    priority: "high"
+  }, saccoToken);
+  assert(complaint.data.status === "open", "Complaint should start open");
+  assert(complaint.data.member.fullName === "Amina Nakitende", "Complaint should include linked member details");
+
+  const resolvedComplaint = await api("PATCH", `/complaints/${complaint.data.id}/status`, {
+    status: "resolved",
+    resolution: "Smoke complaint resolved"
+  }, saccoToken);
+  assert(resolvedComplaint.data.status === "resolved", "Complaint status should update");
+  assert(resolvedComplaint.data.resolvedByUserId, "Resolved complaint should capture resolver");
+
+  const complaints = await api("GET", "/complaints", null, saccoToken);
+  assert(complaints.data.every((item) => item.tenantId === "tenant_green"), "Complaints must be tenant-scoped");
+
   console.log("API smoke test passed");
 } finally {
   server.kill();

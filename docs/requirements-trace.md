@@ -47,6 +47,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Active loan repayments reduce outstanding balance, reject overpayments, and close a fully repaid loan.
 - Reports can read API-backed chart of accounts and balanced journal entries derived from posted financial events.
 - Reconciliation compares imported statement lines with ledger cash movements and exposes unmatched exceptions.
+- Governance records support meetings, resolutions, complaints, audit events, and tenant-scoped reporting.
 
 ## Recommended backend modules for the next build
 

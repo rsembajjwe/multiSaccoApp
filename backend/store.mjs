@@ -480,6 +480,55 @@ export const db = {
       updatedAt: now()
     }
   ],
+  governanceMeetings: [
+    {
+      id: "meeting_green_0001",
+      tenantId: "tenant_green",
+      title: "Quarterly Credit Committee",
+      meetingType: "credit_committee",
+      scheduledAt: "2026-07-20T09:00:00.000Z",
+      chairUserId: "user_green_admin",
+      status: "scheduled",
+      minutes: "Agenda includes loan portfolio quality, guarantor exposure, and repayment performance.",
+      createdByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  governanceResolutions: [
+    {
+      id: "resolution_green_0001",
+      tenantId: "tenant_green",
+      meetingId: "meeting_green_0001",
+      title: "Review high-risk emergency loan files",
+      decision: "Credit officer to present guarantor status and repayment capacity before approval.",
+      ownerUserId: "user_green_admin",
+      dueDate: "2026-07-25",
+      status: "open",
+      createdByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  complaints: [
+    {
+      id: "complaint_green_0001",
+      tenantId: "tenant_green",
+      memberId: "member_green_amina",
+      category: "statement",
+      subject: "Statement balance clarification",
+      description: "Member requested clarification on loan repayment reflection.",
+      priority: "medium",
+      status: "open",
+      assignedUserId: "user_green_admin",
+      resolution: "",
+      createdByUserId: "user_green_admin",
+      resolvedByUserId: null,
+      resolvedAt: null,
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
   sessions: [],
   memberSessions: [],
   auditEvents: [

@@ -309,6 +309,62 @@ Accounting control rule: every posted event must produce equal debit and credit 
 
 Reconciliation control rule: statement lines are matched to ledger cash movements by tenant, account, reference, and signed amount. Unmatched statement or ledger lines remain visible for review.
 
+## Phase 5 Governance Entities
+
+### governance_meetings
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| title | text | Meeting title. |
+| meeting_type | enum | `board`, `agm`, `credit_committee`, `audit_committee`, `management`. |
+| scheduled_at | timestamp | Meeting schedule. |
+| chair_user_id | uuid/string | Chairperson or responsible user. |
+| status | enum | `scheduled`, `completed`, `cancelled`. |
+| minutes | text | Agenda or minutes. |
+| created_by_user_id | uuid/string | User who created the record. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+### governance_resolutions
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| meeting_id | uuid/string | Parent meeting. |
+| title | text | Resolution title. |
+| decision | text | Decision or action description. |
+| owner_user_id | uuid/string | Responsible user. |
+| due_date | date | Follow-up deadline. |
+| status | enum | `open`, `in_progress`, `closed`. |
+| created_by_user_id | uuid/string | User who recorded the resolution. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+### complaints
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| member_id | uuid/string | Optional member reference. |
+| category | enum | `statement`, `loan`, `savings`, `shares`, `service`, `other`. |
+| subject | text | Complaint subject. |
+| description | text | Complaint details. |
+| priority | enum | `low`, `medium`, `high`. |
+| status | enum | `open`, `in_progress`, `resolved`, `closed`. |
+| assigned_user_id | uuid/string | Responsible staff user. |
+| resolution | text | Resolution notes. |
+| resolved_by_user_id | uuid/string | User who resolved or closed the complaint. |
+| resolved_at | timestamp | Resolution timestamp. |
+| created_by_user_id | uuid/string | User who captured the complaint. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+Governance control rule: meetings, resolutions, and complaints are tenant-scoped and create audit events when captured or updated.
+
 ## Phase 2 Onboarding Entities
 
 ### branches

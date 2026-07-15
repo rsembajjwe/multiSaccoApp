@@ -30,6 +30,12 @@ const allowedLoanProducts = new Set(["Development Loan", "Emergency Loan", "Agri
 const allowedGuarantorStatuses = new Set(["accepted", "rejected"]);
 const allowedLoanDecisionStatuses = new Set(["approved", "rejected"]);
 const allowedRepaymentChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
+const allowedMeetingTypes = new Set(["board", "agm", "credit_committee", "audit_committee", "management"]);
+const allowedGovernanceStatuses = new Set(["scheduled", "completed", "cancelled"]);
+const allowedResolutionStatuses = new Set(["open", "in_progress", "closed"]);
+const allowedComplaintCategories = new Set(["statement", "loan", "savings", "shares", "service", "other"]);
+const allowedComplaintPriorities = new Set(["low", "medium", "high"]);
+const allowedComplaintStatuses = new Set(["open", "in_progress", "resolved", "closed"]);
 
 export async function handleApi(request, response, url) {
   const correlationId = request.headers["x-correlation-id"] || newId("req");
@@ -96,6 +102,16 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path === "/statement-lines") return listStatementLines(response, auth, url);
     if (method === "POST" && path === "/statement-lines") return createStatementLine(request, response, auth, correlationId);
     if (method === "GET" && path === "/reconciliation") return getReconciliation(response, auth, url);
+    if (method === "GET" && path === "/governance-meetings") return listGovernanceMeetings(response, auth, url);
+    if (method === "POST" && path === "/governance-meetings") return createGovernanceMeeting(request, response, auth, correlationId);
+    if (method === "POST" && path.startsWith("/governance-meetings/") && path.endsWith("/resolutions")) {
+      return createGovernanceResolution(request, response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "GET" && path === "/complaints") return listComplaints(response, auth, url);
+    if (method === "POST" && path === "/complaints") return createComplaint(request, response, auth, correlationId);
+    if (method === "PATCH" && path.startsWith("/complaints/") && path.endsWith("/status")) {
+      return updateComplaintStatus(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path === "/subscription-packages") return sendData(response, db.subscriptionPackages);
     if (method === "GET" && path === "/subscriptions") return listSubscriptions(response, auth, url);
     if (method === "POST" && path.startsWith("/subscriptions/") && path.endsWith("/payments")) {
@@ -502,6 +518,189 @@ function getReconciliation(response, auth, url) {
     unmatchedStatementLines,
     unmatchedLedgerLines
   });
+}
+
+function listGovernanceMeetings(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const meetings = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.governanceMeetings
+    : db.governanceMeetings.filter((meeting) => meeting.tenantId === tenantId);
+  return sendData(response, meetings.map(publicGovernanceMeeting));
+}
+
+async function createGovernanceMeeting(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  const title = String(body.title || "").trim();
+  const meetingType = String(body.meetingType || "management");
+  if (!title) return sendError(response, 400, "VALIDATION_ERROR", "Meeting title is required.", correlationId);
+  if (!allowedMeetingTypes.has(meetingType)) return sendError(response, 400, "INVALID_MEETING_TYPE", "Unsupported meeting type.", correlationId);
+
+  const now = new Date().toISOString();
+  const meeting = {
+    id: newId("meeting"),
+    tenantId,
+    title,
+    meetingType,
+    scheduledAt: String(body.scheduledAt || now),
+    chairUserId: String(body.chairUserId || auth.user.id),
+    status: allowedGovernanceStatuses.has(String(body.status || "scheduled")) ? String(body.status || "scheduled") : "scheduled",
+    minutes: String(body.minutes || ""),
+    createdByUserId: auth.user.id,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.governanceMeetings.push(meeting);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Created governance meeting ${meeting.title}`,
+    resourceType: "governance_meeting",
+    resourceId: meeting.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicGovernanceMeeting(meeting), 201);
+}
+
+async function createGovernanceResolution(request, response, auth, meetingId, correlationId) {
+  const meeting = db.governanceMeetings.find((item) => item.id === meetingId);
+  if (!meeting) return sendError(response, 404, "MEETING_NOT_FOUND", "Governance meeting not found.", correlationId);
+  if (!assertTenantAccess(auth, meeting.tenantId, response, correlationId)) return;
+
+  const body = await readJson(request);
+  const title = String(body.title || "").trim();
+  if (!title) return sendError(response, 400, "VALIDATION_ERROR", "Resolution title is required.", correlationId);
+  const status = String(body.status || "open");
+  if (!allowedResolutionStatuses.has(status)) return sendError(response, 400, "INVALID_RESOLUTION_STATUS", "Unsupported resolution status.", correlationId);
+
+  const now = new Date().toISOString();
+  const resolution = {
+    id: newId("resolution"),
+    tenantId: meeting.tenantId,
+    meetingId: meeting.id,
+    title,
+    decision: String(body.decision || ""),
+    ownerUserId: String(body.ownerUserId || auth.user.id),
+    dueDate: String(body.dueDate || ""),
+    status,
+    createdByUserId: auth.user.id,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.governanceResolutions.push(resolution);
+  meeting.updatedAt = now;
+  createAuditEvent({
+    tenantId: meeting.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Recorded governance resolution ${resolution.title}`,
+    resourceType: "governance_resolution",
+    resourceId: resolution.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, resolution, 201);
+}
+
+function publicGovernanceMeeting(meeting) {
+  const resolutions = db.governanceResolutions.filter((resolution) => resolution.meetingId === meeting.id);
+  return {
+    ...meeting,
+    resolutions,
+    openResolutions: resolutions.filter((resolution) => resolution.status !== "closed").length
+  };
+}
+
+function listComplaints(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const complaints = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.complaints
+    : db.complaints.filter((complaint) => complaint.tenantId === tenantId);
+  return sendData(response, complaints.map(publicComplaint));
+}
+
+async function createComplaint(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  const subject = String(body.subject || "").trim();
+  const category = String(body.category || "other");
+  const priority = String(body.priority || "medium");
+  const memberId = body.memberId ? String(body.memberId) : null;
+  if (!subject) return sendError(response, 400, "VALIDATION_ERROR", "Complaint subject is required.", correlationId);
+  if (!allowedComplaintCategories.has(category)) return sendError(response, 400, "INVALID_COMPLAINT_CATEGORY", "Unsupported complaint category.", correlationId);
+  if (!allowedComplaintPriorities.has(priority)) return sendError(response, 400, "INVALID_COMPLAINT_PRIORITY", "Unsupported complaint priority.", correlationId);
+  if (memberId && !db.members.some((member) => member.id === memberId && member.tenantId === tenantId)) {
+    return sendError(response, 400, "INVALID_MEMBER", "Complaint member does not exist for this tenant.", correlationId);
+  }
+
+  const now = new Date().toISOString();
+  const complaint = {
+    id: newId("complaint"),
+    tenantId,
+    memberId,
+    category,
+    subject,
+    description: String(body.description || ""),
+    priority,
+    status: "open",
+    assignedUserId: String(body.assignedUserId || auth.user.id),
+    resolution: "",
+    createdByUserId: auth.user.id,
+    resolvedByUserId: null,
+    resolvedAt: null,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.complaints.push(complaint);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Created complaint ${complaint.subject}`,
+    resourceType: "complaint",
+    resourceId: complaint.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicComplaint(complaint), 201);
+}
+
+async function updateComplaintStatus(request, response, auth, complaintId, correlationId) {
+  const complaint = db.complaints.find((item) => item.id === complaintId);
+  if (!complaint) return sendError(response, 404, "COMPLAINT_NOT_FOUND", "Complaint not found.", correlationId);
+  if (!assertTenantAccess(auth, complaint.tenantId, response, correlationId)) return;
+
+  const body = await readJson(request);
+  const status = String(body.status || "");
+  if (!allowedComplaintStatuses.has(status)) return sendError(response, 400, "INVALID_COMPLAINT_STATUS", "Unsupported complaint status.", correlationId);
+
+  complaint.status = status;
+  complaint.resolution = String(body.resolution || complaint.resolution || "");
+  complaint.updatedAt = new Date().toISOString();
+  if (["resolved", "closed"].includes(status)) {
+    complaint.resolvedByUserId = auth.user.id;
+    complaint.resolvedAt = complaint.updatedAt;
+  }
+  createAuditEvent({
+    tenantId: complaint.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Updated complaint status to ${status}`,
+    resourceType: "complaint",
+    resourceId: complaint.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicComplaint(complaint));
+}
+
+function publicComplaint(complaint) {
+  return {
+    ...complaint,
+    member: complaint.memberId ? publicMember(db.members.find((member) => member.id === complaint.memberId)) : null
+  };
 }
 
 function cashLedgerLines(entries) {
