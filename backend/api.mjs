@@ -102,6 +102,7 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path === "/statement-lines") return listStatementLines(response, auth, url);
     if (method === "POST" && path === "/statement-lines") return createStatementLine(request, response, auth, correlationId);
     if (method === "GET" && path === "/reconciliation") return getReconciliation(response, auth, url);
+    if (method === "GET" && path === "/regulatory-report") return getRegulatoryReport(response, auth, url);
     if (method === "GET" && path === "/governance-meetings") return listGovernanceMeetings(response, auth, url);
     if (method === "POST" && path === "/governance-meetings") return createGovernanceMeeting(request, response, auth, correlationId);
     if (method === "POST" && path.startsWith("/governance-meetings/") && path.endsWith("/resolutions")) {
@@ -480,6 +481,10 @@ function getReconciliation(response, auth, url) {
   const tenantIds = isPlatform(auth) && !url.searchParams.get("tenantId")
     ? db.tenants.filter((tenant) => tenant.id !== "tenant_platform").map((tenant) => tenant.id)
     : [tenantId];
+  return sendData(response, reconciliationForTenantIds(tenantIds));
+}
+
+function reconciliationForTenantIds(tenantIds) {
   const entries = buildJournalEntries().filter((entry) => tenantIds.includes(entry.tenantId));
   const statementLines = db.statementLines.filter((line) => tenantIds.includes(line.tenantId));
   const ledgerLines = cashLedgerLines(entries);
@@ -503,7 +508,7 @@ function getReconciliation(response, auth, url) {
 
   const unmatchedStatementLines = statementLines.filter((line) => !matchedStatementIds.has(line.id));
   const unmatchedLedgerLines = ledgerLines.filter((line) => !matchedLedgerIds.has(line.id));
-  return sendData(response, {
+  return {
     summary: {
       statementLines: statementLines.length,
       ledgerLines: ledgerLines.length,
@@ -517,7 +522,138 @@ function getReconciliation(response, auth, url) {
     matches,
     unmatchedStatementLines,
     unmatchedLedgerLines
+  };
+}
+
+function getRegulatoryReport(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const tenantIds = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.tenants.filter((tenant) => tenant.id !== "tenant_platform").map((tenant) => tenant.id)
+    : [tenantId];
+  const reports = tenantIds.map((id) => buildTenantRegulatoryReport(id));
+  const consolidated = consolidateRegulatoryReports(reports);
+  return sendData(response, {
+    generatedAt: new Date().toISOString(),
+    period: url.searchParams.get("period") || new Date().toISOString().slice(0, 7),
+    reports,
+    consolidated,
+    csv: regulatoryReportCsv(reports)
   });
+}
+
+function buildTenantRegulatoryReport(tenantId) {
+  const tenant = db.tenants.find((item) => item.id === tenantId);
+  const members = db.members.filter((member) => member.tenantId === tenantId);
+  const activeMembers = members.filter((member) => member.status === "active");
+  const balances = members.reduce((totals, member) => {
+    const memberBalance = memberBalances(member.id);
+    totals.savings += memberBalance.savings;
+    totals.shares += memberBalance.shares;
+    totals.welfare += memberBalance.welfare;
+    return totals;
+  }, { savings: 0, shares: 0, welfare: 0 });
+  const tenantLoans = db.loans.filter((loan) => loan.tenantId === tenantId);
+  const activeLoans = tenantLoans.filter((loan) => loan.status === "active");
+  const loanPortfolio = activeLoans.reduce((sum, loan) => sum + loan.balance, 0);
+  const loansAtRisk = activeLoans.filter((loan) => loan.dsr >= 40).reduce((sum, loan) => sum + loan.balance, 0);
+  const parPercent = loanPortfolio ? Math.round((loansAtRisk / loanPortfolio) * 100) : 0;
+  const entries = buildJournalEntries().filter((entry) => entry.tenantId === tenantId);
+  const reconciliationData = reconciliationForTenantIds([tenantId]);
+  const openComplaints = db.complaints.filter((complaint) => complaint.tenantId === tenantId && !["resolved", "closed"].includes(complaint.status)).length;
+  const openResolutions = db.governanceResolutions.filter((resolution) => resolution.tenantId === tenantId && resolution.status !== "closed").length;
+
+  return {
+    tenantId,
+    tenantName: tenant?.name || tenantId,
+    memberCount: members.length,
+    activeMembers: activeMembers.length,
+    savings: balances.savings,
+    shares: balances.shares,
+    welfare: balances.welfare,
+    loanPortfolio,
+    activeLoans: activeLoans.length,
+    loansAtRisk,
+    parPercent,
+    journalEntries: entries.length,
+    unbalancedJournalEntries: entries.filter((entry) => !entry.isBalanced).length,
+    reconciliationExceptions: reconciliationData.summary.unmatchedStatementLines + reconciliationData.summary.unmatchedLedgerLines,
+    openComplaints,
+    openResolutions,
+    complianceStatus: entries.every((entry) => entry.isBalanced) && reconciliationData.summary.unmatchedStatementLines === 0 ? "review" : "action_required"
+  };
+}
+
+function consolidateRegulatoryReports(reports) {
+  return reports.reduce((totals, report) => {
+    totals.memberCount += report.memberCount;
+    totals.activeMembers += report.activeMembers;
+    totals.savings += report.savings;
+    totals.shares += report.shares;
+    totals.welfare += report.welfare;
+    totals.loanPortfolio += report.loanPortfolio;
+    totals.activeLoans += report.activeLoans;
+    totals.loansAtRisk += report.loansAtRisk;
+    totals.journalEntries += report.journalEntries;
+    totals.unbalancedJournalEntries += report.unbalancedJournalEntries;
+    totals.reconciliationExceptions += report.reconciliationExceptions;
+    totals.openComplaints += report.openComplaints;
+    totals.openResolutions += report.openResolutions;
+    totals.parPercent = totals.loanPortfolio ? Math.round((totals.loansAtRisk / totals.loanPortfolio) * 100) : 0;
+    totals.complianceStatus = totals.unbalancedJournalEntries === 0 && totals.reconciliationExceptions === 0 ? "clear" : "review";
+    return totals;
+  }, {
+    memberCount: 0,
+    activeMembers: 0,
+    savings: 0,
+    shares: 0,
+    welfare: 0,
+    loanPortfolio: 0,
+    activeLoans: 0,
+    loansAtRisk: 0,
+    parPercent: 0,
+    journalEntries: 0,
+    unbalancedJournalEntries: 0,
+    reconciliationExceptions: 0,
+    openComplaints: 0,
+    openResolutions: 0,
+    complianceStatus: "clear"
+  });
+}
+
+function regulatoryReportCsv(reports) {
+  const headers = [
+    "tenant",
+    "members",
+    "active_members",
+    "savings",
+    "shares",
+    "welfare",
+    "loan_portfolio",
+    "active_loans",
+    "par_percent",
+    "reconciliation_exceptions",
+    "open_complaints",
+    "open_resolutions",
+    "compliance_status"
+  ];
+  const rows = reports.map((report) => [
+    report.tenantName,
+    report.memberCount,
+    report.activeMembers,
+    report.savings,
+    report.shares,
+    report.welfare,
+    report.loanPortfolio,
+    report.activeLoans,
+    report.parPercent,
+    report.reconciliationExceptions,
+    report.openComplaints,
+    report.openResolutions,
+    report.complianceStatus
+  ]);
+  return [headers, ...rows]
+    .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
 }
 
 function listGovernanceMeetings(response, auth, url) {

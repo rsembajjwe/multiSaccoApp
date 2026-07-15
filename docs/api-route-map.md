@@ -66,6 +66,7 @@ All JSON responses should follow one of these shapes:
 | GET | `/statement-lines` | List imported bank, cash, mobile-money, and payroll statement lines. | Required |
 | POST | `/statement-lines` | Import a statement line for reconciliation. | SACCO staff |
 | GET | `/reconciliation` | Compare statement lines with ledger cash movements. | Required |
+| GET | `/regulatory-report` | Return supervisory report rows, consolidated totals, and CSV export text. | Required |
 | GET | `/governance-meetings` | List tenant governance meetings and resolutions. | Required |
 | POST | `/governance-meetings` | Create a governance meeting record. | SACCO staff |
 | POST | `/governance-meetings/:id/resolutions` | Record a meeting resolution. | SACCO staff |
@@ -127,6 +128,7 @@ Implemented in the no-dependency development server:
 - `GET /api/v1/statement-lines`
 - `POST /api/v1/statement-lines`
 - `GET /api/v1/reconciliation`
+- `GET /api/v1/regulatory-report`
 - `GET /api/v1/governance-meetings`
 - `POST /api/v1/governance-meetings`
 - `POST /api/v1/governance-meetings/:id/resolutions`

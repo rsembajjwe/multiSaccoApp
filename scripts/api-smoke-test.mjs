@@ -306,6 +306,16 @@ try {
   assert(reconciliation.data.summary.unmatchedStatementLines >= 1, "Reconciliation should expose unmatched statement lines");
   assert(reconciliation.data.unmatchedStatementLines.some((line) => line.externalReference === "BANK-FEE-0001"), "Seeded bank charge should remain unmatched");
 
+  const regulatoryReport = await api("GET", "/regulatory-report", null, saccoToken);
+  assert(regulatoryReport.data.reports.length === 1, "SACCO admin should receive one tenant regulatory report");
+  assert(regulatoryReport.data.reports[0].tenantId === "tenant_green", "Regulatory report must be tenant-scoped");
+  assert(regulatoryReport.data.reports[0].loanPortfolio > 0, "Regulatory report should include loan portfolio");
+  assert(regulatoryReport.data.csv.includes("loan_portfolio"), "Regulatory report should include exportable CSV data");
+
+  const platformRegulatoryReport = await api("GET", "/regulatory-report", null, platformToken);
+  assert(platformRegulatoryReport.data.reports.length >= 2, "Platform admin should receive consolidated tenant reports");
+  assert(platformRegulatoryReport.data.consolidated.memberCount >= regulatoryReport.data.consolidated.memberCount, "Consolidated report should include tenant totals");
+
   const governanceMeeting = await api("POST", "/governance-meetings", {
     title: "Smoke governance review",
     meetingType: "board",

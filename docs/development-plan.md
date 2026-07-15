@@ -371,6 +371,7 @@ Progress:
 - Accounting chart and derived journal endpoints added, and Reports now displays API-backed balanced ledger entries.
 - Statement-line import and reconciliation endpoints added, and Reports now highlights matched and unmatched cash movements.
 - Governance meeting, resolution, and complaint endpoints added, with Reports showing open governance actions and complaints.
+- Regulatory report endpoint added, with tenant/consolidated supervisory summaries and exportable CSV payloads shown in Reports.
 
 Recommended stack:
 

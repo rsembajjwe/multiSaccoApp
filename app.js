@@ -128,6 +128,7 @@ let apiState = {
   journalEntries: [],
   statementLines: [],
   reconciliation: null,
+  regulatoryReport: null,
   governanceMeetings: [],
   complaints: [],
   auditEvents: [],
@@ -849,6 +850,7 @@ function renderApiReports() {
   const journals = apiState.journalEntries;
   const accounts = apiState.chartOfAccounts;
   const reconciliation = apiState.reconciliation || { summary: {}, unmatchedStatementLines: [], unmatchedLedgerLines: [] };
+  const regulatoryReport = apiState.regulatoryReport || { reports: [], consolidated: {}, csv: "" };
   const meetings = apiState.governanceMeetings;
   const complaints = apiState.complaints;
   const debitTotal = journals.reduce((sum, entry) => sum + entry.debitTotal, 0);
@@ -897,6 +899,22 @@ function renderApiReports() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
+          <h2>Regulatory report</h2>
+          <p class="eyebrow">Export-ready supervisory snapshot for ${tenantLabel}</p>
+        </div>
+        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("Members", regulatoryReport.consolidated.memberCount || 0, `${regulatoryReport.consolidated.activeMembers || 0} active`)}
+        ${metric("Savings", money.format(regulatoryReport.consolidated.savings || 0), "member deposits")}
+        ${metric("Loan portfolio", money.format(regulatoryReport.consolidated.loanPortfolio || 0), `${regulatoryReport.consolidated.parPercent || 0}% PAR indicator`)}
+        ${metric("Compliance", titleCase((regulatoryReport.consolidated.complianceStatus || "review").replace(/_/g, " ")), `${regulatoryReport.consolidated.reconciliationExceptions || 0} reconciliation exception(s)`)}
+      </div>
+      ${regulatoryReportTable(regulatoryReport)}
+    </section>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
           <h2>Governance</h2>
           <p class="eyebrow">Meetings, resolutions and member complaints for ${tenantLabel}</p>
         </div>
@@ -935,6 +953,33 @@ function renderApiReports() {
       <h2>API audit events</h2>
       ${apiAuditTable(apiState.auditEvents)}
     </section>
+  `;
+}
+
+function regulatoryReportTable(report) {
+  const rows = report.reports || [];
+  return `
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>SACCO</th><th>Members</th><th>Savings</th><th>Shares</th><th>Welfare</th><th>Loans</th><th>PAR</th><th>Exceptions</th><th>Status</th></tr></thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr>
+              <td>${row.tenantName}</td>
+              <td>${row.activeMembers}/${row.memberCount}</td>
+              <td>${money.format(row.savings)}</td>
+              <td>${money.format(row.shares)}</td>
+              <td>${money.format(row.welfare)}</td>
+              <td>${money.format(row.loanPortfolio)}</td>
+              <td>${row.parPercent}%</td>
+              <td>${row.reconciliationExceptions}</td>
+              <td><span class="status ${row.complianceStatus === "action_required" ? "overdue" : "pending"}">${titleCase(row.complianceStatus.replace(/_/g, " "))}</span></td>
+            </tr>
+          `).join("") || `<tr><td colspan="9">No regulatory report rows found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    <div class="notice" style="margin-top:16px"><strong>CSV export preview</strong><br><small>${(report.csv || "").split("\n").slice(0, 3).join(" | ")}</small></div>
   `;
 }
 
@@ -1354,7 +1399,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, chartOfAccounts, journalEntries, statementLines, reconciliation, governanceMeetings, complaints] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, governanceMeetings, complaints] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1368,6 +1413,7 @@ async function refreshApiStatus() {
         apiRequest(`/journal-entries${apiTenantQuery()}`),
         apiRequest(`/statement-lines${apiTenantQuery()}`),
         apiRequest(`/reconciliation${apiTenantQuery()}`),
+        apiRequest(`/regulatory-report${apiTenantQuery()}`),
         apiRequest(`/governance-meetings${apiTenantQuery()}`),
         apiRequest(`/complaints${apiTenantQuery()}`)
       ]);
@@ -1384,9 +1430,10 @@ async function refreshApiStatus() {
       apiState.journalEntries = journalEntries;
       apiState.statementLines = statementLines;
       apiState.reconciliation = reconciliation;
+      apiState.regulatoryReport = regulatoryReport;
       apiState.governanceMeetings = governanceMeetings;
       apiState.complaints = complaints;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -1468,7 +1515,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }

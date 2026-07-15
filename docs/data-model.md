@@ -309,6 +309,28 @@ Accounting control rule: every posted event must produce equal debit and credit 
 
 Reconciliation control rule: statement lines are matched to ledger cash movements by tenant, account, reference, and signed amount. Unmatched statement or ledger lines remain visible for review.
 
+### regulatory_report_view
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| tenant_name | text | SACCO name. |
+| member_count | integer | Total registered members. |
+| active_members | integer | Active members. |
+| savings | decimal | Posted savings balance. |
+| shares | decimal | Posted share capital. |
+| welfare | decimal | Posted welfare fund. |
+| loan_portfolio | decimal | Active outstanding loan balance. |
+| active_loans | integer | Active loan count. |
+| loans_at_risk | decimal | Outstanding balance for loans with high DSR. |
+| par_percent | integer | Portfolio-at-risk indicator. |
+| reconciliation_exceptions | integer | Unmatched statement plus unmatched ledger lines. |
+| open_complaints | integer | Complaints not resolved or closed. |
+| open_resolutions | integer | Governance resolutions not closed. |
+| compliance_status | enum | `clear`, `review`, `action_required`. |
+
+Regulatory reporting rule: reports are tenant-scoped for SACCO users and consolidated for platform users. The API also returns CSV text for export.
+
 ## Phase 5 Governance Entities
 
 ### governance_meetings
