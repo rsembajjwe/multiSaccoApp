@@ -385,6 +385,7 @@ Progress:
 - Security headers and development rate limiting added for API/static responses, staff login, member login, and mobile-money callbacks.
 - Java/Spring Boot backend scaffold added under `backend-java`, with `/api/v1/health`, H2 dev datasource, PostgreSQL/Flyway dependencies, security headers, and MockMvc tests.
 - Java tenant foundation added with Flyway `tenants` migration, seeded SACCO tenants, JPA repository, and `/api/v1/tenants`.
+- Java identity foundation added with seeded users, PBKDF2 password verification, safe user responses, token generation, and `/api/v1/auth/login`.
 
 Recommended stack:
 

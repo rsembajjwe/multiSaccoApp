@@ -73,6 +73,7 @@ The Java backend now owns the tenant foundation endpoint:
 
 ```text
 GET http://127.0.0.1:8080/api/v1/tenants
+POST http://127.0.0.1:8080/api/v1/auth/login
 ```
 
 ```powershell

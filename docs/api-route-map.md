@@ -8,6 +8,7 @@ Java-backed routes currently implemented:
 
 - `GET /api/v1/health`
 - `GET /api/v1/tenants`
+- `POST /api/v1/auth/login`
 
 All API responses include baseline security headers. Public staff login, member login, and mobile-money callback endpoints are rate limited and return `429 RATE_LIMITED` with `Retry-After` when the development limit is exceeded.
 

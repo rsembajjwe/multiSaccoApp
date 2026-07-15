@@ -8,7 +8,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -44,6 +46,40 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data[0].name", is("Green Valley SACCO")))
 				.andExpect(jsonPath("$.data[0].registrationNo", is("COOP/GVS/2018/014")))
 				.andExpect(jsonPath("$.data[0].packageId", is("starter")));
+	}
+
+	@Test
+	void loginReturnsTokenAndSafeUserProfile() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "email": "admin@platform.local",
+								  "password": "Admin@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(header().string("X-Content-Type-Options", "nosniff"))
+				.andExpect(jsonPath("$.data.token", notNullValue()))
+				.andExpect(jsonPath("$.data.tokenType", is("Bearer")))
+				.andExpect(jsonPath("$.data.user.id", is("user_platform_admin")))
+				.andExpect(jsonPath("$.data.user.tenantId", is("tenant_platform")))
+				.andExpect(jsonPath("$.data.user.passwordHash").doesNotExist())
+				.andExpect(jsonPath("$.data.user.passwordSalt").doesNotExist());
+	}
+
+	@Test
+	void loginRejectsBadPassword() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "email": "admin@platform.local",
+								  "password": "wrong"
+								}
+								"""))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("AUTH_INVALID")));
 	}
 
 }

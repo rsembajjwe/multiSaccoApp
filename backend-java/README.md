@@ -28,6 +28,12 @@ cd backend-java
 - Spring Boot 4.0.
 - `/api/v1/health` with the same `{ "data": ... }` API envelope used by the prototype.
 - `/api/v1/tenants` backed by a Flyway migration and seeded tenant records.
+- `/api/v1/auth/login` for seeded staff users, using PBKDF2 password verification and safe user responses.
 - Baseline security headers on responses.
 - H2 development datasource configured in PostgreSQL compatibility mode.
 - PostgreSQL and Flyway dependencies included for the production database path.
+
+Seed logins:
+
+- Platform admin: `admin@platform.local` / `Admin@12345`
+- SACCO admin: `admin@greenvalley.local` / `Sacco@12345`

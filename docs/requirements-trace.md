@@ -61,6 +61,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - API/static responses include baseline security headers, and public login/callback endpoints include development rate limiting.
 - Java/Spring Boot backend skeleton added with the `/api/v1/health` envelope, security headers, H2 development datasource, and PostgreSQL/Flyway production dependencies.
 - Java tenant foundation exposes seeded SACCO tenants from a Flyway-managed table through `/api/v1/tenants`.
+- Java identity foundation authenticates seeded platform/SACCO administrators through `/api/v1/auth/login` without exposing password hashes or salts.
 
 ## Recommended backend modules for the next build
 
