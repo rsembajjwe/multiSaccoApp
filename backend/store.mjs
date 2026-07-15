@@ -112,6 +112,17 @@ export const db = {
     { tenantId: "tenant_platform", userId: "user_platform_admin", roleId: "role_platform_admin" },
     { tenantId: "tenant_green", userId: "user_green_admin", roleId: "role_sacco_admin" }
   ],
+  chartOfAccounts: [
+    { code: "1000", name: "Cash on Hand", type: "asset", normalBalance: "debit" },
+    { code: "1010", name: "Bank Account", type: "asset", normalBalance: "debit" },
+    { code: "1020", name: "Mobile Money Wallet", type: "asset", normalBalance: "debit" },
+    { code: "1030", name: "Payroll Clearing", type: "asset", normalBalance: "debit" },
+    { code: "1100", name: "Loans Receivable", type: "asset", normalBalance: "debit" },
+    { code: "2000", name: "Member Savings", type: "liability", normalBalance: "credit" },
+    { code: "2100", name: "Member Share Capital", type: "equity", normalBalance: "credit" },
+    { code: "2200", name: "Welfare Fund", type: "liability", normalBalance: "credit" },
+    { code: "6100", name: "Platform Subscription Expense", type: "expense", normalBalance: "debit" }
+  ],
   subscriptionPackages: [
     {
       id: "starter",
@@ -361,6 +372,8 @@ export const db = {
       dsr: 31,
       repaymentMonths: 12,
       purpose: "Business expansion",
+      disbursedByUserId: "user_green_admin",
+      disbursedAt: "2026-07-10T10:00:00.000Z",
       createdAt: now(),
       updatedAt: now()
     },

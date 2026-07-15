@@ -124,6 +124,8 @@ let apiState = {
   subscriptions: [],
   financialTransactions: [],
   loans: [],
+  chartOfAccounts: [],
+  journalEntries: [],
   auditEvents: [],
   message: "Checking backend connection..."
 };
@@ -798,6 +800,8 @@ function renderApprovals() {
 }
 
 function renderReports() {
+  if (apiState.user) return renderApiReports();
+
   const members = tenantScoped(state.members);
   const savings = members.reduce((sum, member) => sum + member.savings, 0);
   const shares = members.reduce((sum, member) => sum + member.shares, 0);
@@ -834,6 +838,84 @@ function renderReports() {
       </div>
       ${apiAuditTable(apiState.auditEvents)}
     </section>
+  `;
+}
+
+function renderApiReports() {
+  const journals = apiState.journalEntries;
+  const accounts = apiState.chartOfAccounts;
+  const debitTotal = journals.reduce((sum, entry) => sum + entry.debitTotal, 0);
+  const creditTotal = journals.reduce((sum, entry) => sum + entry.creditTotal, 0);
+  const unbalanced = journals.filter((entry) => !entry.isBalanced).length;
+  const cashPosition = journals.reduce((sum, entry) => {
+    return sum + entry.lines
+      .filter((line) => ["1000", "1010", "1020", "1030"].includes(line.accountCode))
+      .reduce((lineSum, line) => lineSum + line.debit - line.credit, 0);
+  }, 0);
+  const tenantLabel = apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant";
+
+  return `
+    <div class="grid metrics">
+      ${metric("Journal entries", journals.length, `${unbalanced} unbalanced`)}
+      ${metric("Debits", money.format(debitTotal), "derived from posted events")}
+      ${metric("Credits", money.format(creditTotal), "must equal debits")}
+      ${metric("Cash position", money.format(cashPosition), "cash, bank, mobile money, payroll")}
+    </div>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Accounting ledger</h2>
+          <p class="eyebrow">API-backed · Balanced double-entry journals for ${tenantLabel}</p>
+        </div>
+        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+      </div>
+      <div class="notice">Journal entries are derived from posted financial transactions, loan disbursements, loan repayments, and subscription payments.</div>
+      ${journalTable(journals)}
+    </section>
+    <section class="card" style="margin-top:16px">
+      <h2>Chart of accounts</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Code</th><th>Account</th><th>Type</th><th>Normal balance</th></tr></thead>
+          <tbody>
+            ${accounts.map((account) => `
+              <tr>
+                <td>${account.code}</td>
+                <td>${account.name}</td>
+                <td>${titleCase(account.type)}</td>
+                <td>${titleCase(account.normalBalance)}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="4">No accounts found.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
+      <h2>API audit events</h2>
+      ${apiAuditTable(apiState.auditEvents)}
+    </section>
+  `;
+}
+
+function journalTable(entries) {
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Debit</th><th>Credit</th><th>Status</th></tr></thead>
+        <tbody>
+          ${entries.map((entry) => `
+            <tr>
+              <td>${entry.postedAt?.slice(0, 10) || ""}</td>
+              <td>${entry.reference}<br><small>${titleCase(entry.sourceType.replace(/_/g, " "))}</small></td>
+              <td>${entry.description}<br><small>${entry.lines.map((line) => `${line.accountCode} ${line.accountName}: Dr ${money.format(line.debit)} / Cr ${money.format(line.credit)}`).join(" · ")}</small></td>
+              <td>${money.format(entry.debitTotal)}</td>
+              <td>${money.format(entry.creditTotal)}</td>
+              <td><span class="status ${entry.isBalanced ? "active" : "pending"}">${entry.isBalanced ? "Balanced" : "Review"}</span></td>
+            </tr>
+          `).join("") || `<tr><td colspan="6">No journal entries found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -1145,7 +1227,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, chartOfAccounts, journalEntries] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1154,7 +1236,9 @@ async function refreshApiStatus() {
         apiRequest("/subscription-packages"),
         apiRequest(`/subscriptions${apiSubscriptionQuery()}`),
         apiRequest(`/financial-transactions${apiTenantQuery()}`),
-        apiRequest(`/loans${apiTenantQuery()}`)
+        apiRequest(`/loans${apiTenantQuery()}`),
+        apiRequest("/chart-of-accounts"),
+        apiRequest(`/journal-entries${apiTenantQuery()}`)
       ]);
       apiState.tenants = tenants;
       apiState.users = users;
@@ -1165,7 +1249,9 @@ async function refreshApiStatus() {
       apiState.subscriptions = subscriptions;
       apiState.financialTransactions = financialTransactions;
       apiState.loans = loans;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), and ${auditEvents.length} audit event(s).`;
+      apiState.chartOfAccounts = chartOfAccounts;
+      apiState.journalEntries = journalEntries;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${journalEntries.length} journal(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -1247,7 +1333,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], chartOfAccounts: [], journalEntries: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }

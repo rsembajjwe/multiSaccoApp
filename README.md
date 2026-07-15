@@ -67,6 +67,8 @@ SACCO staff can approve guaranteed loan applications and disburse approved loans
 
 SACCO staff can record repayments on active loans, with balances reduced by the backend.
 
+After API login, the Reports screen reads the backend chart of accounts and balanced journal entries.
+
 After API login, the Approvals screen reads pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
 
 Members can login from **Member portal** using the seeded account `GVS-0001` / `Member@12345` to view their savings, shares, and welfare balances.

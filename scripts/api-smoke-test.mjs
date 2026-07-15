@@ -269,6 +269,19 @@ try {
   const lakeMemberDenied = await raw("GET", "/members/member_lake_peter", null, saccoToken);
   assert(lakeMemberDenied.status === 403, "SACCO admin should be blocked from another tenant member");
 
+  const chartOfAccounts = await api("GET", "/chart-of-accounts", null, saccoToken);
+  assert(chartOfAccounts.data.some((account) => account.code === "1100"), "Chart of accounts should include loans receivable");
+
+  const journalEntries = await api("GET", "/journal-entries", null, saccoToken);
+  assert(journalEntries.data.length >= 4, "SACCO admin should list derived journal entries");
+  assert(journalEntries.data.every((entry) => entry.tenantId === "tenant_green"), "Journal entries must be tenant-scoped");
+  assert(journalEntries.data.every((entry) => entry.isBalanced), "Every derived journal entry should be balanced");
+  assert(journalEntries.data.some((entry) => entry.sourceType === "loan_repayment"), "Loan repayments should create journal entries");
+
+  const platformJournals = await api("GET", "/journal-entries", null, platformToken);
+  assert(platformJournals.data.length >= journalEntries.data.length, "Platform admin should list journals across tenants");
+  assert(platformJournals.data.every((entry) => entry.debitTotal === entry.creditTotal), "Platform journal listing should remain balanced");
+
   console.log("API smoke test passed");
 } finally {
   server.kill();

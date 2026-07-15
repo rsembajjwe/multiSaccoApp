@@ -90,6 +90,8 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path === "/permissions") return sendData(response, db.permissions);
     if (method === "GET" && path === "/audit-events") return listAuditEvents(response, auth);
     if (method === "POST" && path === "/audit-events") return createAudit(request, response, auth, correlationId);
+    if (method === "GET" && path === "/chart-of-accounts") return listChartOfAccounts(response);
+    if (method === "GET" && path === "/journal-entries") return listJournalEntries(response, auth, url);
     if (method === "GET" && path === "/subscription-packages") return sendData(response, db.subscriptionPackages);
     if (method === "GET" && path === "/subscriptions") return listSubscriptions(response, auth, url);
     if (method === "POST" && path.startsWith("/subscriptions/") && path.endsWith("/payments")) {
@@ -389,6 +391,153 @@ async function createAudit(request, response, auth, correlationId) {
     ipAddress: requestIp(request)
   });
   return sendData(response, event, 201);
+}
+
+function listChartOfAccounts(response) {
+  return sendData(response, db.chartOfAccounts);
+}
+
+function listJournalEntries(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const entries = buildJournalEntries()
+    .filter((entry) => (isPlatform(auth) && !url.searchParams.get("tenantId")) || entry.tenantId === tenantId)
+    .sort((a, b) => String(b.postedAt).localeCompare(String(a.postedAt)));
+  return sendData(response, entries);
+}
+
+function buildJournalEntries() {
+  const entries = [];
+
+  for (const transaction of db.financialTransactions.filter((item) => item.status === "posted")) {
+    const cashAccount = accountForChannel(transaction.channel);
+    if (transaction.type === "withdrawal") {
+      entries.push(journalEntry({
+        id: `je_${transaction.id}`,
+        tenantId: transaction.tenantId,
+        sourceType: "financial_transaction",
+        sourceId: transaction.id,
+        reference: transaction.reference,
+        description: transaction.narration || `Posted ${transaction.type.replace(/_/g, " ")}`,
+        postedAt: transaction.postedAt || transaction.updatedAt,
+        lines: [
+          journalLine("2000", transaction.amount, 0, transaction.memberId),
+          journalLine(cashAccount, 0, transaction.amount, transaction.memberId)
+        ]
+      }));
+    } else {
+      entries.push(journalEntry({
+        id: `je_${transaction.id}`,
+        tenantId: transaction.tenantId,
+        sourceType: "financial_transaction",
+        sourceId: transaction.id,
+        reference: transaction.reference,
+        description: transaction.narration || `Posted ${transaction.type.replace(/_/g, " ")}`,
+        postedAt: transaction.postedAt || transaction.updatedAt,
+        lines: [
+          journalLine(cashAccount, transaction.amount, 0, transaction.memberId),
+          journalLine(accountForTransactionType(transaction.type), 0, transaction.amount, transaction.memberId)
+        ]
+      }));
+    }
+  }
+
+  for (const loan of db.loans.filter((item) => item.disbursedAt)) {
+    entries.push(journalEntry({
+      id: `je_disbursement_${loan.id}`,
+      tenantId: loan.tenantId,
+      sourceType: "loan_disbursement",
+      sourceId: loan.id,
+      reference: loan.id,
+      description: `Disbursed ${loan.product}`,
+      postedAt: loan.disbursedAt,
+      lines: [
+        journalLine("1100", loan.amount, 0, loan.memberId),
+        journalLine("1010", 0, loan.amount, loan.memberId)
+      ]
+    }));
+  }
+
+  for (const repayment of db.loanRepayments) {
+    entries.push(journalEntry({
+      id: `je_${repayment.id}`,
+      tenantId: repayment.tenantId,
+      sourceType: "loan_repayment",
+      sourceId: repayment.id,
+      reference: repayment.externalReference,
+      description: "Recorded loan repayment",
+      postedAt: repayment.receivedAt,
+      lines: [
+        journalLine(accountForChannel(repayment.channel), repayment.amount, 0, repayment.memberId),
+        journalLine("1100", 0, repayment.amount, repayment.memberId)
+      ]
+    }));
+  }
+
+  for (const payment of db.subscriptionPayments) {
+    entries.push(journalEntry({
+      id: `je_${payment.id}`,
+      tenantId: payment.tenantId,
+      sourceType: "subscription_payment",
+      sourceId: payment.id,
+      reference: payment.externalReference,
+      description: "Recorded platform subscription payment",
+      postedAt: payment.receivedAt,
+      lines: [
+        journalLine("6100", payment.amount, 0, null),
+        journalLine(accountForChannel(payment.channel), 0, payment.amount, null)
+      ]
+    }));
+  }
+
+  return entries;
+}
+
+function journalEntry({ id, tenantId, sourceType, sourceId, reference, description, postedAt, lines }) {
+  const debitTotal = lines.reduce((sum, line) => sum + line.debit, 0);
+  const creditTotal = lines.reduce((sum, line) => sum + line.credit, 0);
+  return {
+    id,
+    tenantId,
+    sourceType,
+    sourceId,
+    reference,
+    description,
+    postedAt,
+    debitTotal,
+    creditTotal,
+    isBalanced: debitTotal === creditTotal,
+    lines
+  };
+}
+
+function journalLine(accountCode, debit, credit, memberId) {
+  const account = db.chartOfAccounts.find((item) => item.code === accountCode);
+  return {
+    accountCode,
+    accountName: account?.name || accountCode,
+    accountType: account?.type || "unknown",
+    memberId,
+    debit,
+    credit
+  };
+}
+
+function accountForChannel(channel) {
+  return {
+    bank: "1010",
+    cash: "1000",
+    mobile_money: "1020",
+    payroll_deduction: "1030",
+    manual: "1010"
+  }[channel] || "1010";
+}
+
+function accountForTransactionType(type) {
+  return {
+    savings_deposit: "2000",
+    share_purchase: "2100",
+    welfare_contribution: "2200"
+  }[type] || "2000";
 }
 
 function listSubscriptions(response, auth, url) {

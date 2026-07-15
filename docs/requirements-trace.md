@@ -45,6 +45,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - SACCO staff can request loan guarantors, and members can accept or reject guarantee requests.
 - Loan applications require approval before disbursement, and approval requires an accepted guarantor.
 - Active loan repayments reduce outstanding balance, reject overpayments, and close a fully repaid loan.
+- Reports can read API-backed chart of accounts and balanced journal entries derived from posted financial events.
 
 ## Recommended backend modules for the next build
 

@@ -252,6 +252,45 @@ Repayment control rule: repayments can only be posted to active loans, cannot ex
 
 Guarantee capacity currently uses posted savings less pending or accepted guarantees. A borrower cannot guarantee their own loan.
 
+## Phase 5 Accounting Entities
+
+### chart_of_accounts
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| code | text | Account code, unique per tenant or platform template. |
+| name | text | Account display name. |
+| type | enum | `asset`, `liability`, `equity`, `income`, `expense`. |
+| normal_balance | enum | `debit`, `credit`. |
+
+### journal_entries
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| source_type | text | Source event such as `financial_transaction`, `loan_disbursement`, `loan_repayment`, or `subscription_payment`. |
+| source_id | uuid/string | Source record identifier. |
+| reference | text | Human-readable posting reference. |
+| description | text | Posting description. |
+| posted_at | timestamp | Accounting posting date. |
+| debit_total | decimal | Sum of debit lines. |
+| credit_total | decimal | Sum of credit lines. |
+| is_balanced | boolean | Must be true before posting. |
+
+### journal_lines
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| journal_entry_id | uuid/string | Parent journal entry. |
+| account_code | text | Chart of accounts code. |
+| member_id | uuid/string | Optional member reference. |
+| debit | decimal | Debit amount. |
+| credit | decimal | Credit amount. |
+
+Accounting control rule: every posted event must produce equal debit and credit totals. The prototype currently derives journals from posted source records; production storage should persist journal entries and lines.
+
 ## Phase 2 Onboarding Entities
 
 ### branches
