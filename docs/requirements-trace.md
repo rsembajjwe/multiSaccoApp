@@ -51,6 +51,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Regulatory reports provide tenant-scoped and platform-consolidated supervisory summaries with CSV export data.
 - Closed accounting periods block ordinary posting activity and can be opened or closed from Reports.
 - Supplier and expense workflows create balanced accounting entries and respect closed-period controls.
+- Fixed asset registration creates balanced acquisition and depreciation entries, with asset totals included in regulatory reporting.
 
 ## Recommended backend modules for the next build
 

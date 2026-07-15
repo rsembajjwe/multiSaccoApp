@@ -69,6 +69,8 @@ All JSON responses should follow one of these shapes:
 | POST | `/suppliers` | Create a supplier. | SACCO staff |
 | GET | `/expenses` | List posted tenant expenses. | Required |
 | POST | `/expenses` | Post an operating expense. | SACCO staff |
+| GET | `/assets` | List tenant fixed assets with depreciation values. | Required |
+| POST | `/assets` | Register a fixed asset acquisition. | SACCO staff |
 | GET | `/statement-lines` | List imported bank, cash, mobile-money, and payroll statement lines. | Required |
 | POST | `/statement-lines` | Import a statement line for reconciliation. | SACCO staff |
 | GET | `/reconciliation` | Compare statement lines with ledger cash movements. | Required |
@@ -137,6 +139,8 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/suppliers`
 - `GET /api/v1/expenses`
 - `POST /api/v1/expenses`
+- `GET /api/v1/assets`
+- `POST /api/v1/assets`
 - `GET /api/v1/statement-lines`
 - `POST /api/v1/statement-lines`
 - `GET /api/v1/reconciliation`

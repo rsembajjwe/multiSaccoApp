@@ -89,6 +89,35 @@ CREATE INDEX idx_suppliers_tenant_status ON suppliers (tenant_id, status);
 CREATE INDEX idx_expenses_tenant_date ON expenses (tenant_id, expense_date);
 CREATE INDEX idx_expenses_supplier ON expenses (supplier_id);
 
+CREATE TABLE assets (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  asset_account_code TEXT NOT NULL REFERENCES chart_of_accounts(code),
+  cost NUMERIC(18, 2) NOT NULL,
+  salvage_value NUMERIC(18, 2) NOT NULL DEFAULT 0,
+  useful_life_months INTEGER NOT NULL,
+  purchase_date DATE NOT NULL,
+  depreciation_start_date DATE NOT NULL,
+  channel TEXT NOT NULL,
+  reference TEXT NOT NULL,
+  location TEXT,
+  custodian_user_id UUID REFERENCES users(id),
+  status TEXT NOT NULL DEFAULT 'active',
+  recorded_by_user_id UUID NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, reference),
+  CHECK (cost > 0),
+  CHECK (salvage_value >= 0),
+  CHECK (salvage_value < cost),
+  CHECK (useful_life_months > 0)
+);
+
+CREATE INDEX idx_assets_tenant_status ON assets (tenant_id, status);
+CREATE INDEX idx_assets_purchase_date ON assets (tenant_id, purchase_date);
+
 CREATE TABLE statement_lines (
   id UUID PRIMARY KEY,
   tenant_id UUID NOT NULL REFERENCES tenants(id),

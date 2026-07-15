@@ -29,6 +29,8 @@ const allowedStatementChannels = new Set(["mobile_money", "cash", "bank", "payro
 const allowedAccountingPeriodStatuses = new Set(["open", "closed"]);
 const allowedExpenseChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedExpenseAccountCodes = new Set(["5000", "5010", "5020", "5030", "5040", "6100"]);
+const allowedAssetChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
+const allowedAssetCategories = new Set(["equipment", "furniture", "vehicle", "building", "technology", "other"]);
 const allowedLoanProducts = new Set(["Development Loan", "Emergency Loan", "Agriculture Loan", "School Fees Loan"]);
 const allowedGuarantorStatuses = new Set(["accepted", "rejected"]);
 const allowedLoanDecisionStatuses = new Set(["approved", "rejected"]);
@@ -114,6 +116,8 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/suppliers") return createSupplier(request, response, auth, correlationId);
     if (method === "GET" && path === "/expenses") return listExpenses(response, auth, url);
     if (method === "POST" && path === "/expenses") return createExpense(request, response, auth, correlationId);
+    if (method === "GET" && path === "/assets") return listAssets(response, auth, url);
+    if (method === "POST" && path === "/assets") return createAsset(request, response, auth, correlationId);
     if (method === "GET" && path === "/governance-meetings") return listGovernanceMeetings(response, auth, url);
     if (method === "POST" && path === "/governance-meetings") return createGovernanceMeeting(request, response, auth, correlationId);
     if (method === "POST" && path.startsWith("/governance-meetings/") && path.endsWith("/resolutions")) {
@@ -712,6 +716,99 @@ function publicExpense(expense) {
   };
 }
 
+function listAssets(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const assets = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.assets
+    : db.assets.filter((asset) => asset.tenantId === tenantId);
+  return sendData(response, assets.map(publicAsset));
+}
+
+async function createAsset(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  const name = String(body.name || "").trim();
+  const category = String(body.category || "equipment");
+  const cost = Number(body.cost);
+  const salvageValue = Number(body.salvageValue || 0);
+  const usefulLifeMonths = Number(body.usefulLifeMonths || 36);
+  const purchaseDate = String(body.purchaseDate || new Date().toISOString().slice(0, 10));
+  const depreciationStartDate = String(body.depreciationStartDate || purchaseDate);
+  const channel = String(body.channel || "bank");
+  const reference = String(body.reference || "").trim();
+  if (!name) return sendError(response, 400, "VALIDATION_ERROR", "Asset name is required.", correlationId);
+  if (!allowedAssetCategories.has(category)) return sendError(response, 400, "INVALID_ASSET_CATEGORY", "Unsupported asset category.", correlationId);
+  if (!Number.isFinite(cost) || cost <= 0) return sendError(response, 400, "INVALID_ASSET_COST", "Asset cost must be greater than zero.", correlationId);
+  if (!Number.isFinite(salvageValue) || salvageValue < 0 || salvageValue >= cost) return sendError(response, 400, "INVALID_SALVAGE_VALUE", "Salvage value must be less than asset cost.", correlationId);
+  if (!Number.isFinite(usefulLifeMonths) || usefulLifeMonths <= 0) return sendError(response, 400, "INVALID_USEFUL_LIFE", "Useful life must be greater than zero months.", correlationId);
+  if (!allowedAssetChannels.has(channel)) return sendError(response, 400, "INVALID_ASSET_CHANNEL", "Unsupported asset payment channel.", correlationId);
+  if (!reference) return sendError(response, 400, "INVALID_ASSET_REFERENCE", "Asset reference is required.", correlationId);
+  if (db.assets.some((asset) => asset.tenantId === tenantId && asset.reference === reference)) {
+    return sendError(response, 409, "ASSET_EXISTS", "An asset with that reference already exists.", correlationId);
+  }
+  if (!assertAccountingPeriodOpen(tenantId, purchaseDate, response, correlationId)) return;
+
+  const now = new Date().toISOString();
+  const asset = {
+    id: newId("asset"),
+    tenantId,
+    name,
+    category,
+    assetAccountCode: "1300",
+    cost,
+    salvageValue,
+    usefulLifeMonths,
+    purchaseDate,
+    depreciationStartDate,
+    channel,
+    reference,
+    location: String(body.location || ""),
+    custodianUserId: String(body.custodianUserId || auth.user.id),
+    status: "active",
+    recordedByUserId: auth.user.id,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.assets.push(asset);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Registered asset ${asset.reference}`,
+    resourceType: "asset",
+    resourceId: asset.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicAsset(asset), 201);
+}
+
+function publicAsset(asset) {
+  const accumulatedDepreciation = assetDepreciation(asset);
+  return {
+    ...asset,
+    accountName: db.chartOfAccounts.find((account) => account.code === asset.assetAccountCode)?.name || asset.assetAccountCode,
+    monthlyDepreciation: monthlyDepreciation(asset),
+    accumulatedDepreciation,
+    netBookValue: Math.max(asset.salvageValue || 0, asset.cost - accumulatedDepreciation)
+  };
+}
+
+function monthlyDepreciation(asset) {
+  return Math.round((asset.cost - (asset.salvageValue || 0)) / asset.usefulLifeMonths);
+}
+
+function assetDepreciation(asset, asOf = new Date()) {
+  if (asset.status !== "active") return 0;
+  const start = new Date(`${asset.depreciationStartDate || asset.purchaseDate}T00:00:00.000Z`);
+  if (Number.isNaN(start.getTime()) || start > asOf) return 0;
+  const elapsedMonths = (asOf.getUTCFullYear() - start.getUTCFullYear()) * 12 + asOf.getUTCMonth() - start.getUTCMonth() + 1;
+  const depreciableMonths = Math.min(Math.max(elapsedMonths, 0), asset.usefulLifeMonths);
+  const depreciableAmount = asset.cost - (asset.salvageValue || 0);
+  return Math.min(depreciableAmount, Math.round(monthlyDepreciation(asset) * depreciableMonths));
+}
+
 function buildTenantRegulatoryReport(tenantId) {
   const tenant = db.tenants.find((item) => item.id === tenantId);
   const members = db.members.filter((member) => member.tenantId === tenantId);
@@ -731,6 +828,9 @@ function buildTenantRegulatoryReport(tenantId) {
   const entries = buildJournalEntries().filter((entry) => entry.tenantId === tenantId);
   const expenses = db.expenses.filter((expense) => expense.tenantId === tenantId && expense.status === "posted");
   const expenseTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const assets = db.assets.filter((asset) => asset.tenantId === tenantId && asset.status === "active");
+  const assetCost = assets.reduce((sum, asset) => sum + asset.cost, 0);
+  const assetNetBookValue = assets.reduce((sum, asset) => sum + publicAsset(asset).netBookValue, 0);
   const reconciliationData = reconciliationForTenantIds([tenantId]);
   const openComplaints = db.complaints.filter((complaint) => complaint.tenantId === tenantId && !["resolved", "closed"].includes(complaint.status)).length;
   const openResolutions = db.governanceResolutions.filter((resolution) => resolution.tenantId === tenantId && resolution.status !== "closed").length;
@@ -748,6 +848,8 @@ function buildTenantRegulatoryReport(tenantId) {
     loansAtRisk,
     parPercent,
     expenseTotal,
+    assetCost,
+    assetNetBookValue,
     journalEntries: entries.length,
     unbalancedJournalEntries: entries.filter((entry) => !entry.isBalanced).length,
     reconciliationExceptions: reconciliationData.summary.unmatchedStatementLines + reconciliationData.summary.unmatchedLedgerLines,
@@ -768,6 +870,8 @@ function consolidateRegulatoryReports(reports) {
     totals.activeLoans += report.activeLoans;
     totals.loansAtRisk += report.loansAtRisk;
     totals.expenseTotal += report.expenseTotal;
+    totals.assetCost += report.assetCost;
+    totals.assetNetBookValue += report.assetNetBookValue;
     totals.journalEntries += report.journalEntries;
     totals.unbalancedJournalEntries += report.unbalancedJournalEntries;
     totals.reconciliationExceptions += report.reconciliationExceptions;
@@ -786,6 +890,8 @@ function consolidateRegulatoryReports(reports) {
     activeLoans: 0,
     loansAtRisk: 0,
     expenseTotal: 0,
+    assetCost: 0,
+    assetNetBookValue: 0,
     parPercent: 0,
     journalEntries: 0,
     unbalancedJournalEntries: 0,
@@ -807,6 +913,8 @@ function regulatoryReportCsv(reports) {
     "loan_portfolio",
     "active_loans",
     "expenses",
+    "fixed_assets",
+    "net_assets",
     "par_percent",
     "reconciliation_exceptions",
     "open_complaints",
@@ -823,6 +931,8 @@ function regulatoryReportCsv(reports) {
     report.loanPortfolio,
     report.activeLoans,
     report.expenseTotal,
+    report.assetCost,
+    report.assetNetBookValue,
     report.parPercent,
     report.reconciliationExceptions,
     report.openComplaints,
@@ -1135,6 +1245,39 @@ function buildJournalEntries() {
         journalLine(accountForChannel(expense.channel), 0, expense.amount, null)
       ]
     }));
+  }
+
+  for (const asset of db.assets.filter((item) => item.status === "active")) {
+    entries.push(journalEntry({
+      id: `je_acquisition_${asset.id}`,
+      tenantId: asset.tenantId,
+      sourceType: "asset_acquisition",
+      sourceId: asset.id,
+      reference: asset.reference,
+      description: `Registered fixed asset ${asset.name}`,
+      postedAt: asset.purchaseDate,
+      lines: [
+        journalLine(asset.assetAccountCode, asset.cost, 0, null),
+        journalLine(accountForChannel(asset.channel), 0, asset.cost, null)
+      ]
+    }));
+
+    const depreciation = assetDepreciation(asset);
+    if (depreciation > 0) {
+      entries.push(journalEntry({
+        id: `je_depreciation_${asset.id}`,
+        tenantId: asset.tenantId,
+        sourceType: "asset_depreciation",
+        sourceId: asset.id,
+        reference: `${asset.reference}-DEP`,
+        description: `Accumulated depreciation for ${asset.name}`,
+        postedAt: new Date().toISOString(),
+        lines: [
+          journalLine("5050", depreciation, 0, null),
+          journalLine("1310", 0, depreciation, null)
+        ]
+      }));
+    }
   }
 
   return entries;

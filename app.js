@@ -132,6 +132,7 @@ let apiState = {
   regulatoryReport: null,
   suppliers: [],
   expenses: [],
+  assets: [],
   governanceMeetings: [],
   complaints: [],
   auditEvents: [],
@@ -854,6 +855,7 @@ function renderApiReports() {
   const periods = apiState.accountingPeriods;
   const accounts = apiState.chartOfAccounts;
   const expenses = apiState.expenses;
+  const assets = apiState.assets;
   const reconciliation = apiState.reconciliation || { summary: {}, unmatchedStatementLines: [], unmatchedLedgerLines: [] };
   const regulatoryReport = apiState.regulatoryReport || { reports: [], consolidated: {}, csv: "" };
   const meetings = apiState.governanceMeetings;
@@ -909,6 +911,20 @@ function renderApiReports() {
         ${metric("Suppliers", apiState.suppliers.length, "active supplier records")}
       </div>
       ${expenseTable(expenses)}
+    </section>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Assets</h2>
+          <p class="eyebrow">Fixed asset register with derived depreciation journals</p>
+        </div>
+        <button class="primary-button" data-action="newAsset" type="button">New asset</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("Registered assets", assets.length, `${money.format(assets.reduce((sum, asset) => sum + asset.cost, 0))} cost`)}
+        ${metric("Net book value", money.format(assets.reduce((sum, asset) => sum + asset.netBookValue, 0)), `${money.format(assets.reduce((sum, asset) => sum + asset.accumulatedDepreciation, 0))} depreciated`)}
+      </div>
+      ${assetTable(assets)}
     </section>
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
@@ -1021,6 +1037,29 @@ function expenseTable(expenses) {
               <td>${money.format(expense.amount)}</td>
             </tr>
           `).join("") || `<tr><td colspan="6">No expenses found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function assetTable(assets) {
+  return `
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>Purchased</th><th>Reference</th><th>Asset</th><th>Category</th><th>Cost</th><th>Depreciation</th><th>NBV</th></tr></thead>
+        <tbody>
+          ${assets.map((asset) => `
+            <tr>
+              <td>${asset.purchaseDate || ""}</td>
+              <td>${asset.reference}<br><small>${asset.location || ""}</small></td>
+              <td>${asset.name}<br><small>${asset.accountCode || asset.assetAccountCode} ${asset.accountName || ""}</small></td>
+              <td>${titleCase(asset.category.replace(/_/g, " "))}</td>
+              <td>${money.format(asset.cost)}</td>
+              <td>${money.format(asset.accumulatedDepreciation)}<br><small>${money.format(asset.monthlyDepreciation)} monthly</small></td>
+              <td>${money.format(asset.netBookValue)}</td>
+            </tr>
+          `).join("") || `<tr><td colspan="7">No assets found.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -1376,6 +1415,7 @@ function bindViewActions() {
         newLoan: openLoanForm,
         recordSubscriptionPayment: recordSubscriptionPayment,
         newExpense: openExpenseForm,
+        newAsset: openAssetForm,
         newGovernanceMeeting: openGovernanceMeetingForm,
         newComplaint: openComplaintForm,
         memberLogin: openMemberLoginForm,
@@ -1475,7 +1515,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, suppliers, expenses, governanceMeetings, complaints] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, suppliers, expenses, assets, governanceMeetings, complaints] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1493,6 +1533,7 @@ async function refreshApiStatus() {
         apiRequest(`/regulatory-report${apiTenantQuery()}`),
         apiRequest(`/suppliers${apiTenantQuery()}`),
         apiRequest(`/expenses${apiTenantQuery()}`),
+        apiRequest(`/assets${apiTenantQuery()}`),
         apiRequest(`/governance-meetings${apiTenantQuery()}`),
         apiRequest(`/complaints${apiTenantQuery()}`)
       ]);
@@ -1513,9 +1554,10 @@ async function refreshApiStatus() {
       apiState.regulatoryReport = regulatoryReport;
       apiState.suppliers = suppliers;
       apiState.expenses = expenses;
+      apiState.assets = assets;
       apiState.governanceMeetings = governanceMeetings;
       apiState.complaints = complaints;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${expenses.length} expense(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -1597,7 +1639,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, suppliers: [], expenses: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -2016,7 +2058,7 @@ function openExpenseForm() {
       await apiRequest("/expenses", {
         method: "POST",
         body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? apiTenantId() : apiState.user.tenantId,
+          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
           reference: value("expenseReference"),
           amount: Number(value("expenseAmount")),
           supplierId: value("expenseSupplier") || null,
@@ -2024,6 +2066,46 @@ function openExpenseForm() {
           channel: value("expenseChannel"),
           expenseDate: value("expenseDate"),
           description: value("expenseDescription")
+        })
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+function openAssetForm() {
+  if (!apiState.user) return;
+  openModal("New asset", `
+    <div class="form-grid">
+      ${field("Reference", "assetReference", "text", `AST-UI-${Date.now()}`)}
+      ${field("Asset name", "assetName", "text", "Branch laptop")}
+      <label class="field"><span>Category</span><select id="assetCategory" class="select"><option value="equipment">Equipment</option><option value="technology">Technology</option><option value="furniture">Furniture</option><option value="vehicle">Vehicle</option><option value="building">Building</option><option value="other">Other</option></select></label>
+      ${field("Cost", "assetCost", "number", "1800000")}
+      ${field("Useful life months", "assetLife", "number", "36")}
+      ${field("Purchase date", "assetPurchaseDate", "date", today.toISOString().slice(0, 10))}
+      <label class="field"><span>Channel</span><select id="assetChannel" class="select"><option value="bank">Bank</option><option value="cash">Cash</option><option value="mobile_money">Mobile Money</option><option value="payroll_deduction">Payroll Deduction</option></select></label>
+      ${field("Location", "assetLocation", "text", "Mukono Main")}
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveAsset" class="primary-button" type="button">Register asset</button>`);
+
+  document.getElementById("saveAsset").addEventListener("click", async () => {
+    try {
+      await apiRequest("/assets", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
+          reference: value("assetReference"),
+          name: value("assetName"),
+          category: value("assetCategory"),
+          cost: Number(value("assetCost")),
+          usefulLifeMonths: Number(value("assetLife")),
+          purchaseDate: value("assetPurchaseDate"),
+          depreciationStartDate: value("assetPurchaseDate"),
+          channel: value("assetChannel"),
+          location: value("assetLocation")
         })
       });
       closeModal();
@@ -2050,7 +2132,7 @@ function openGovernanceMeetingForm() {
       await apiRequest("/governance-meetings", {
         method: "POST",
         body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? apiTenantId() : apiState.user.tenantId,
+          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
           title: value("governanceMeetingTitle"),
           meetingType: value("governanceMeetingType"),
           scheduledAt: `${value("governanceMeetingDate")}T09:00:00.000Z`,
@@ -2083,7 +2165,7 @@ function openComplaintForm() {
       await apiRequest("/complaints", {
         method: "POST",
         body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? apiTenantId() : apiState.user.tenantId,
+          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
           subject: value("complaintSubject"),
           category: value("complaintCategory"),
           priority: value("complaintPriority"),

@@ -118,6 +118,8 @@ export const db = {
     { code: "1020", name: "Mobile Money Wallet", type: "asset", normalBalance: "debit" },
     { code: "1030", name: "Payroll Clearing", type: "asset", normalBalance: "debit" },
     { code: "1100", name: "Loans Receivable", type: "asset", normalBalance: "debit" },
+    { code: "1300", name: "Fixed Assets", type: "asset", normalBalance: "debit" },
+    { code: "1310", name: "Accumulated Depreciation", type: "asset", normalBalance: "credit" },
     { code: "2000", name: "Member Savings", type: "liability", normalBalance: "credit" },
     { code: "2100", name: "Member Share Capital", type: "equity", normalBalance: "credit" },
     { code: "2200", name: "Welfare Fund", type: "liability", normalBalance: "credit" },
@@ -126,6 +128,7 @@ export const db = {
     { code: "5020", name: "Utilities Expense", type: "expense", normalBalance: "debit" },
     { code: "5030", name: "Staff Expense", type: "expense", normalBalance: "debit" },
     { code: "5040", name: "Technology Expense", type: "expense", normalBalance: "debit" },
+    { code: "5050", name: "Depreciation Expense", type: "expense", normalBalance: "debit" },
     { code: "6100", name: "Platform Subscription Expense", type: "expense", normalBalance: "debit" }
   ],
   accountingPeriods: [
@@ -592,6 +595,28 @@ export const db = {
       description: "Office supplies for Mukono Main",
       expenseDate: "2026-07-12",
       status: "posted",
+      recordedByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  assets: [
+    {
+      id: "asset_green_0001",
+      tenantId: "tenant_green",
+      name: "Dell OptiPlex teller workstation",
+      category: "equipment",
+      assetAccountCode: "1300",
+      cost: 2400000,
+      salvageValue: 0,
+      usefulLifeMonths: 36,
+      purchaseDate: "2026-07-01",
+      depreciationStartDate: "2026-07-01",
+      channel: "bank",
+      reference: "AST-GVS-0001",
+      location: "Mukono Main",
+      custodianUserId: "user_green_admin",
+      status: "active",
       recordedByUserId: "user_green_admin",
       createdAt: now(),
       updatedAt: now()

@@ -331,6 +331,43 @@ try {
   }, saccoToken);
   assert(duplicateExpense.status === 409, "Expense references should be unique per tenant");
 
+  const closedPeriodAsset = await raw("POST", "/assets", {
+    name: "Closed Period Laptop",
+    category: "technology",
+    channel: "bank",
+    cost: 1800000,
+    usefulLifeMonths: 36,
+    reference: `SMOKE-CLOSED-AST-${Date.now()}`,
+    purchaseDate: "2026-06-15"
+  }, saccoToken);
+  assert(closedPeriodAsset.status === 409, "Closed periods should block asset acquisition");
+
+  const asset = await api("POST", "/assets", {
+    name: "Smoke Test Laptop",
+    category: "technology",
+    channel: "bank",
+    cost: 1800000,
+    salvageValue: 0,
+    usefulLifeMonths: 36,
+    reference: `SMOKE-AST-${Date.now()}`,
+    purchaseDate: "2026-07-15",
+    depreciationStartDate: "2026-07-01",
+    location: "Smoke branch"
+  }, saccoToken);
+  assert(asset.data.id, "Asset should be registered");
+  assert(asset.data.netBookValue < asset.data.cost, "Asset should include derived depreciation");
+
+  const duplicateAsset = await raw("POST", "/assets", {
+    name: "Duplicate Smoke Test Laptop",
+    category: "technology",
+    channel: "bank",
+    cost: 1800000,
+    usefulLifeMonths: 36,
+    reference: asset.data.reference,
+    purchaseDate: "2026-07-15"
+  }, saccoToken);
+  assert(duplicateAsset.status === 409, "Asset references should be unique per tenant");
+
   const statementLine = await api("POST", "/statement-lines", {
     channel: "bank",
     amount: postedTransaction.data.amount,
@@ -356,6 +393,8 @@ try {
   assert(journalEntries.data.every((entry) => entry.isBalanced), "Every derived journal entry should be balanced");
   assert(journalEntries.data.some((entry) => entry.sourceType === "loan_repayment"), "Loan repayments should create journal entries");
   assert(journalEntries.data.some((entry) => entry.sourceType === "expense"), "Expenses should create journal entries");
+  assert(journalEntries.data.some((entry) => entry.sourceType === "asset_acquisition"), "Assets should create acquisition journal entries");
+  assert(journalEntries.data.some((entry) => entry.sourceType === "asset_depreciation"), "Assets should create depreciation journal entries");
 
   const platformJournals = await api("GET", "/journal-entries", null, platformToken);
   assert(platformJournals.data.length >= journalEntries.data.length, "Platform admin should list journals across tenants");
@@ -370,6 +409,7 @@ try {
   assert(regulatoryReport.data.reports.length === 1, "SACCO admin should receive one tenant regulatory report");
   assert(regulatoryReport.data.reports[0].tenantId === "tenant_green", "Regulatory report must be tenant-scoped");
   assert(regulatoryReport.data.reports[0].loanPortfolio > 0, "Regulatory report should include loan portfolio");
+  assert(regulatoryReport.data.reports[0].assetNetBookValue > 0, "Regulatory report should include fixed assets");
   assert(regulatoryReport.data.csv.includes("loan_portfolio"), "Regulatory report should include exportable CSV data");
 
   const platformRegulatoryReport = await api("GET", "/regulatory-report", null, platformToken);

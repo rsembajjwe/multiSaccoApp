@@ -374,6 +374,7 @@ Progress:
 - Regulatory report endpoint added, with tenant/consolidated supervisory summaries and exportable CSV payloads shown in Reports.
 - Accounting period controls added, with closed periods blocking ordinary financial postings and visible in Reports.
 - Supplier and expense endpoints added, with expenses posting balanced journal entries and appearing in Reports.
+- Fixed asset endpoints added, with acquisition and depreciation journals plus asset totals in Reports and regulatory summaries.
 
 Recommended stack:
 

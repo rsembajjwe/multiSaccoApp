@@ -341,6 +341,31 @@ Accounting control rule: every posted event must produce equal debit and credit 
 
 Expense control rule: expenses post balanced journal entries and are blocked when the expense date falls inside a closed accounting period.
 
+### assets
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| name | text | Asset name or description. |
+| category | enum | `equipment`, `furniture`, `vehicle`, `building`, `technology`, `other`. |
+| asset_account_code | text | Fixed asset account code. |
+| cost | decimal | Acquisition cost. |
+| salvage_value | decimal | Residual value excluded from depreciation. |
+| useful_life_months | integer | Depreciation period in months. |
+| purchase_date | date | Acquisition posting date. |
+| depreciation_start_date | date | First depreciation month. |
+| channel | enum | `mobile_money`, `cash`, `bank`, `payroll_deduction`. |
+| reference | text | Unique asset reference per tenant. |
+| location | text | Branch or physical location. |
+| custodian_user_id | uuid/string | Responsible staff user. |
+| status | enum | `active`, `disposed`, `written_off`. |
+| recorded_by_user_id | uuid/string | User who recorded the asset. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+Asset control rule: acquisitions post balanced fixed-asset journals, derived depreciation posts to accumulated depreciation, and purchases are blocked when the purchase date falls inside a closed accounting period.
+
 ### statement_lines
 
 | Field | Type | Notes |
