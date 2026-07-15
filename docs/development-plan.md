@@ -366,6 +366,7 @@ Progress:
 - Approval queue now reads API-backed pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
 - Loan listing and application endpoints added, and the Loans screen now submits applications through `/api/v1/loans`.
 - Loan guarantor request endpoints added, with member accept/reject decisions in the member portal.
+- Loan approval and disbursement endpoints added, enforcing accepted-guarantor approval and approval-before-disbursement controls.
 
 Recommended stack:
 

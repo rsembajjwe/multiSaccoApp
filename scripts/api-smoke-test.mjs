@@ -157,6 +157,12 @@ try {
   assert(loan.data.status === "submitted", "New loan application should start submitted");
   assert(loan.data.stage === "Credit Appraisal", "New loan application should enter credit appraisal");
 
+  const earlyDisbursement = await raw("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
+  assert(earlyDisbursement.status === 409, "Loan should not disburse before approval");
+
+  const approvalWithoutGuarantor = await raw("PATCH", `/loans/${loan.data.id}/status`, { status: "approved" }, saccoToken);
+  assert(approvalWithoutGuarantor.status === 409, "Loan should require an accepted guarantor before approval");
+
   const selfGuarantee = await raw("POST", `/loans/${loan.data.id}/guarantors`, {
     memberId: member.data.id,
     guaranteedAmount: 100000
@@ -176,6 +182,14 @@ try {
     status: "accepted"
   }, memberToken);
   assert(acceptedGuarantor.data.status === "accepted", "Member should accept guarantor request");
+
+  const approvedLoan = await api("PATCH", `/loans/${loan.data.id}/status`, { status: "approved" }, saccoToken);
+  assert(approvedLoan.data.status === "approved", "Loan should approve after guarantor acceptance");
+  assert(approvedLoan.data.stage === "Ready for Disbursement", "Approved loan should be ready for disbursement");
+
+  const disbursedLoan = await api("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
+  assert(disbursedLoan.data.status === "active", "Disbursed loan should become active");
+  assert(disbursedLoan.data.balance === disbursedLoan.data.amount, "Disbursed loan balance should equal principal");
 
   const invalidTenantLoan = await raw("POST", "/loans", {
     memberId: "member_lake_peter",

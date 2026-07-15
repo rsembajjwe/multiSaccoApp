@@ -207,8 +207,15 @@ Financial transaction decisions follow maker-checker separation: a transaction c
 | dsr | integer | Estimated debt-service risk ratio. |
 | repayment_months | integer | Requested repayment term. |
 | purpose | text | Applicant purpose. |
+| approved_by_user_id | uuid/string | User who approved the loan. |
+| approved_at | timestamp | Approval timestamp. |
+| disbursed_by_user_id | uuid/string | User who disbursed the loan. |
+| disbursed_at | timestamp | Disbursement timestamp. |
+| rejection_reason | text | Reason captured when rejected. |
 | created_at | timestamp | Creation timestamp. |
 | updated_at | timestamp | Last update timestamp. |
+
+Loan control rule: a loan cannot be disbursed until it is approved. Approval currently requires at least one accepted guarantor.
 
 ### loan_guarantors
 

@@ -63,6 +63,8 @@ All JSON responses should follow one of these shapes:
 | PATCH | `/financial-transactions/:id/status` | Post or reject a pending financial transaction. | Authorized checker |
 | GET | `/loans` | List tenant loan applications and files. | Required |
 | POST | `/loans` | Submit a loan application for an active member. | SACCO staff |
+| PATCH | `/loans/:id/status` | Approve or reject a loan application. | Authorized approver |
+| POST | `/loans/:id/disburse` | Disburse an approved loan. | Authorized disbursement officer |
 | GET | `/loans/:id/guarantors` | List guarantor requests for a loan. | Required |
 | POST | `/loans/:id/guarantors` | Request a member to guarantee a loan. | SACCO staff |
 | GET | `/member-auth/guarantor-requests` | List current member guarantee requests. | Member |
@@ -109,6 +111,8 @@ Implemented in the no-dependency development server:
 - `PATCH /api/v1/financial-transactions/:id/status`
 - `GET /api/v1/loans`
 - `POST /api/v1/loans`
+- `PATCH /api/v1/loans/:id/status`
+- `POST /api/v1/loans/:id/disburse`
 - `GET /api/v1/loans/:id/guarantors`
 - `POST /api/v1/loans/:id/guarantors`
 - `GET /api/v1/member-auth/guarantor-requests`

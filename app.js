@@ -741,13 +741,24 @@ function renderLoans() {
                 <td>${loan.guarantors}${loan.pendingGuarantors ? `<br><small>${loan.pendingGuarantors} pending</small>` : ""}</td>
                 <td>${loan.dsr}%</td>
                 <td><span class="status ${statusClass(loan.status)}">${loan.status}</span></td>
-                <td>${apiState.user ? `<button class="secondary-button" data-request-guarantor="${loan.id}" type="button">Request guarantor</button>` : ""}</td>
+                <td>${apiState.user ? loanActions(loan) : ""}</td>
               </tr>
             `).join("") || `<tr><td colspan="9">No loan files found.</td></tr>`}
           </tbody>
         </table>
       </div>
     </section>
+  `;
+}
+
+function loanActions(loan) {
+  const status = String(loan.status).toLowerCase();
+  const canDecide = ["submitted", "under review"].includes(status);
+  const canDisburse = status === "approved";
+  return `
+    ${canDecide ? `<button class="secondary-button" data-loan-reject="${loan.id}" type="button">Reject</button><button class="primary-button" data-loan-approve="${loan.id}" type="button">Approve</button>` : ""}
+    ${canDisburse ? `<button class="primary-button" data-loan-disburse="${loan.id}" type="button">Disburse</button>` : ""}
+    <button class="secondary-button" data-request-guarantor="${loan.id}" type="button">Request guarantor</button>
   `;
 }
 
@@ -999,6 +1010,18 @@ function bindViewActions() {
 
   document.querySelectorAll("[data-request-guarantor]").forEach((button) => {
     button.addEventListener("click", () => openGuarantorRequestForm(button.dataset.requestGuarantor));
+  });
+
+  document.querySelectorAll("[data-loan-approve]").forEach((button) => {
+    button.addEventListener("click", () => decideLoan(button.dataset.loanApprove, "approved"));
+  });
+
+  document.querySelectorAll("[data-loan-reject]").forEach((button) => {
+    button.addEventListener("click", () => decideLoan(button.dataset.loanReject, "rejected"));
+  });
+
+  document.querySelectorAll("[data-loan-disburse]").forEach((button) => {
+    button.addEventListener("click", () => disburseLoan(button.dataset.loanDisburse));
   });
 
   document.querySelectorAll("[data-guarantor-accept]").forEach((button) => {
@@ -1576,6 +1599,30 @@ async function decideGuarantorRequest(id, status) {
     await refreshMemberStatus();
   } catch (error) {
     openModal("Guarantee decision failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
+}
+
+async function decideLoan(id, status) {
+  try {
+    await apiRequest(`/loans/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status,
+        reason: status === "rejected" ? "Rejected from loan queue" : ""
+      })
+    });
+    await refreshApiStatus();
+  } catch (error) {
+    openModal("Loan decision failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
+}
+
+async function disburseLoan(id) {
+  try {
+    await apiRequest(`/loans/${id}/disburse`, { method: "POST" });
+    await refreshApiStatus();
+  } catch (error) {
+    openModal("Loan disbursement failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
   }
 }
 

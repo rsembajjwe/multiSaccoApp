@@ -27,6 +27,7 @@ const allowedTransactionChannels = new Set(["mobile_money", "cash", "bank", "pay
 const allowedTransactionDecisionStatuses = new Set(["posted", "rejected"]);
 const allowedLoanProducts = new Set(["Development Loan", "Emergency Loan", "Agriculture Loan", "School Fees Loan"]);
 const allowedGuarantorStatuses = new Set(["accepted", "rejected"]);
+const allowedLoanDecisionStatuses = new Set(["approved", "rejected"]);
 
 export async function handleApi(request, response, url) {
   const correlationId = request.headers["x-correlation-id"] || newId("req");
@@ -101,6 +102,12 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/financial-transactions") return createFinancialTransaction(request, response, auth, correlationId);
     if (method === "GET" && path === "/loans") return listLoans(response, auth, url);
     if (method === "POST" && path === "/loans") return createLoan(request, response, auth, correlationId);
+    if (method === "PATCH" && path.startsWith("/loans/") && path.endsWith("/status")) {
+      return updateLoanStatus(request, response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "POST" && path.startsWith("/loans/") && path.endsWith("/disburse")) {
+      return disburseLoan(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path.startsWith("/loans/") && path.endsWith("/guarantors")) {
       return listLoanGuarantors(response, auth, path.split("/")[2], correlationId);
     }
@@ -782,6 +789,68 @@ async function createLoan(request, response, auth, correlationId) {
     ipAddress: requestIp(request)
   });
   return sendData(response, publicLoan(loan), 201);
+}
+
+async function updateLoanStatus(request, response, auth, loanId, correlationId) {
+  const loan = db.loans.find((item) => item.id === loanId);
+  if (!loan) return sendError(response, 404, "LOAN_NOT_FOUND", "Loan not found.", correlationId);
+  if (!assertTenantAccess(auth, loan.tenantId, response, correlationId)) return;
+
+  const body = await readJson(request);
+  const status = String(body.status || "");
+  if (!allowedLoanDecisionStatuses.has(status)) {
+    return sendError(response, 400, "INVALID_LOAN_STATUS", "Loans can only be approved or rejected from this endpoint.", correlationId);
+  }
+  if (!["submitted", "under_review"].includes(loan.status)) {
+    return sendError(response, 409, "LOAN_ALREADY_DECIDED", "Only submitted or under-review loans can be decided.", correlationId);
+  }
+  const acceptedGuarantors = db.loanGuarantors.filter((item) => item.loanId === loan.id && item.status === "accepted");
+  if (status === "approved" && acceptedGuarantors.length < 1) {
+    return sendError(response, 409, "GUARANTOR_REQUIRED", "At least one accepted guarantor is required before loan approval.", correlationId);
+  }
+
+  loan.status = status;
+  loan.stage = status === "approved" ? "Ready for Disbursement" : "Rejected";
+  loan.approvedByUserId = status === "approved" ? auth.user.id : null;
+  loan.approvedAt = status === "approved" ? new Date().toISOString() : null;
+  loan.rejectionReason = status === "rejected" ? String(body.reason || "") : "";
+  loan.updatedAt = new Date().toISOString();
+  createAuditEvent({
+    tenantId: loan.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `${status === "approved" ? "Approved" : "Rejected"} loan application`,
+    resourceType: "loan",
+    resourceId: loan.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicLoan(loan));
+}
+
+async function disburseLoan(request, response, auth, loanId, correlationId) {
+  const loan = db.loans.find((item) => item.id === loanId);
+  if (!loan) return sendError(response, 404, "LOAN_NOT_FOUND", "Loan not found.", correlationId);
+  if (!assertTenantAccess(auth, loan.tenantId, response, correlationId)) return;
+  if (loan.status !== "approved") {
+    return sendError(response, 409, "LOAN_NOT_APPROVED", "A loan must be approved before disbursement.", correlationId);
+  }
+
+  loan.status = "active";
+  loan.stage = "Disbursed";
+  loan.balance = loan.amount;
+  loan.disbursedByUserId = auth.user.id;
+  loan.disbursedAt = new Date().toISOString();
+  loan.updatedAt = loan.disbursedAt;
+  createAuditEvent({
+    tenantId: loan.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: "Disbursed loan",
+    resourceType: "loan",
+    resourceId: loan.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicLoan(loan));
 }
 
 function listLoanGuarantors(response, auth, loanId, correlationId) {

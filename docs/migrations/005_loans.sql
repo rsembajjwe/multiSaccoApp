@@ -14,6 +14,11 @@ CREATE TABLE loans (
   dsr INTEGER NOT NULL DEFAULT 0,
   repayment_months INTEGER NOT NULL,
   purpose TEXT,
+  approved_by_user_id UUID REFERENCES users(id),
+  approved_at TIMESTAMPTZ,
+  disbursed_by_user_id UUID REFERENCES users(id),
+  disbursed_at TIMESTAMPTZ,
+  rejection_reason TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

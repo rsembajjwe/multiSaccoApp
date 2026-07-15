@@ -43,6 +43,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Members can authenticate into the member portal and view their own backend balances.
 - Loans UI can switch from local demo data to API-backed loan files and submit new loan applications.
 - SACCO staff can request loan guarantors, and members can accept or reject guarantee requests.
+- Loan applications require approval before disbursement, and approval requires an accepted guarantor.
 
 ## Recommended backend modules for the next build
 
