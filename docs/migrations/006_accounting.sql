@@ -8,6 +8,20 @@ CREATE TABLE chart_of_accounts (
   normal_balance TEXT NOT NULL
 );
 
+CREATE TABLE accounting_periods (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  period TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  closed_by_user_id UUID REFERENCES users(id),
+  closed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, period)
+);
+
+CREATE INDEX idx_accounting_periods_tenant_status ON accounting_periods (tenant_id, status);
+
 CREATE TABLE journal_entries (
   id UUID PRIMARY KEY,
   tenant_id UUID NOT NULL REFERENCES tenants(id),

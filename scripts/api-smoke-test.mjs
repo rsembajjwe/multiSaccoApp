@@ -272,6 +272,25 @@ try {
   const chartOfAccounts = await api("GET", "/chart-of-accounts", null, saccoToken);
   assert(chartOfAccounts.data.some((account) => account.code === "1100"), "Chart of accounts should include loans receivable");
 
+  const accountingPeriods = await api("GET", "/accounting-periods", null, saccoToken);
+  assert(accountingPeriods.data.some((period) => period.period === "2026-06" && period.status === "closed"), "Seed data should include a closed accounting period");
+  assert(accountingPeriods.data.every((period) => period.tenantId === "tenant_green"), "Accounting periods must be tenant-scoped");
+
+  const closedPeriodStatementLine = await raw("POST", "/statement-lines", {
+    channel: "bank",
+    amount: 15000,
+    externalReference: `SMOKE-CLOSED-${Date.now()}`,
+    statementDate: "2026-06-15"
+  }, saccoToken);
+  assert(closedPeriodStatementLine.status === 409, "Closed periods should block ordinary statement imports");
+
+  const openPeriod = accountingPeriods.data.find((period) => period.period === "2026-07" && period.status === "open");
+  assert(openPeriod, "Seed data should include an open current accounting period");
+  const closedPeriod = await api("PATCH", `/accounting-periods/${openPeriod.id}/status`, { status: "closed" }, saccoToken);
+  assert(closedPeriod.data.status === "closed", "Accounting period should close");
+  const reopenedPeriod = await api("PATCH", `/accounting-periods/${openPeriod.id}/status`, { status: "open" }, saccoToken);
+  assert(reopenedPeriod.data.status === "open", "Accounting period should reopen for the remaining smoke test");
+
   const statementLine = await api("POST", "/statement-lines", {
     channel: "bank",
     amount: postedTransaction.data.amount,

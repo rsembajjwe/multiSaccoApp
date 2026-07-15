@@ -75,6 +75,8 @@ Reports include governance meetings, open resolutions, and member/service compla
 
 Reports include regulatory summaries with CSV export data for supervisory filing.
 
+Reports include accounting periods, and closed periods block ordinary financial postings.
+
 After API login, the Approvals screen reads pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
 
 Members can login from **Member portal** using the seeded account `GVS-0001` / `Member@12345` to view their savings, shares, and welfare balances.

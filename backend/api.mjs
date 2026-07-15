@@ -26,6 +26,7 @@ const allowedTransactionTypes = new Set(["savings_deposit", "share_purchase", "w
 const allowedTransactionChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedTransactionDecisionStatuses = new Set(["posted", "rejected"]);
 const allowedStatementChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
+const allowedAccountingPeriodStatuses = new Set(["open", "closed"]);
 const allowedLoanProducts = new Set(["Development Loan", "Emergency Loan", "Agriculture Loan", "School Fees Loan"]);
 const allowedGuarantorStatuses = new Set(["accepted", "rejected"]);
 const allowedLoanDecisionStatuses = new Set(["approved", "rejected"]);
@@ -97,6 +98,10 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path === "/permissions") return sendData(response, db.permissions);
     if (method === "GET" && path === "/audit-events") return listAuditEvents(response, auth);
     if (method === "POST" && path === "/audit-events") return createAudit(request, response, auth, correlationId);
+    if (method === "GET" && path === "/accounting-periods") return listAccountingPeriods(response, auth, url);
+    if (method === "PATCH" && path.startsWith("/accounting-periods/") && path.endsWith("/status")) {
+      return updateAccountingPeriodStatus(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path === "/chart-of-accounts") return listChartOfAccounts(response);
     if (method === "GET" && path === "/journal-entries") return listJournalEntries(response, auth, url);
     if (method === "GET" && path === "/statement-lines") return listStatementLines(response, auth, url);
@@ -414,6 +419,51 @@ async function createAudit(request, response, auth, correlationId) {
   return sendData(response, event, 201);
 }
 
+function listAccountingPeriods(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const periods = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.accountingPeriods
+    : db.accountingPeriods.filter((period) => period.tenantId === tenantId);
+  return sendData(response, periods.sort((a, b) => b.period.localeCompare(a.period)));
+}
+
+async function updateAccountingPeriodStatus(request, response, auth, periodId, correlationId) {
+  const period = db.accountingPeriods.find((item) => item.id === periodId);
+  if (!period) return sendError(response, 404, "ACCOUNTING_PERIOD_NOT_FOUND", "Accounting period not found.", correlationId);
+  if (!assertTenantAccess(auth, period.tenantId, response, correlationId)) return;
+
+  const body = await readJson(request);
+  const status = String(body.status || "");
+  if (!allowedAccountingPeriodStatuses.has(status)) {
+    return sendError(response, 400, "INVALID_ACCOUNTING_PERIOD_STATUS", "Accounting period can only be open or closed.", correlationId);
+  }
+
+  period.status = status;
+  period.closedByUserId = status === "closed" ? auth.user.id : null;
+  period.closedAt = status === "closed" ? new Date().toISOString() : null;
+  period.updatedAt = new Date().toISOString();
+  createAuditEvent({
+    tenantId: period.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `${status === "closed" ? "Closed" : "Reopened"} accounting period ${period.period}`,
+    resourceType: "accounting_period",
+    resourceId: period.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, period);
+}
+
+function assertAccountingPeriodOpen(tenantId, postingDate, response, correlationId) {
+  const periodKey = String(postingDate || new Date().toISOString()).slice(0, 7);
+  const period = db.accountingPeriods.find((item) => item.tenantId === tenantId && item.period === periodKey);
+  if (period?.status === "closed") {
+    sendError(response, 409, "ACCOUNTING_PERIOD_CLOSED", `Accounting period ${period.period} is closed.`, correlationId);
+    return false;
+  }
+  return true;
+}
+
 function listChartOfAccounts(response) {
   return sendData(response, db.chartOfAccounts);
 }
@@ -442,12 +492,14 @@ async function createStatementLine(request, response, auth, correlationId) {
   const channel = String(body.channel || "");
   const amount = Number(body.amount);
   const externalReference = String(body.externalReference || "").trim();
+  const statementDate = String(body.statementDate || new Date().toISOString().slice(0, 10));
   if (!allowedStatementChannels.has(channel)) return sendError(response, 400, "INVALID_STATEMENT_CHANNEL", "Unsupported statement channel.", correlationId);
   if (!Number.isFinite(amount) || amount === 0) return sendError(response, 400, "INVALID_STATEMENT_AMOUNT", "Statement amount cannot be zero.", correlationId);
   if (!externalReference) return sendError(response, 400, "INVALID_STATEMENT_REFERENCE", "Statement reference is required.", correlationId);
   if (db.statementLines.some((line) => line.tenantId === tenantId && line.externalReference === externalReference)) {
     return sendError(response, 409, "STATEMENT_LINE_EXISTS", "A statement line with that reference already exists for this tenant.", correlationId);
   }
+  if (!assertAccountingPeriodOpen(tenantId, statementDate, response, correlationId)) return;
 
   const now = new Date().toISOString();
   const line = {
@@ -458,7 +510,7 @@ async function createStatementLine(request, response, auth, correlationId) {
     amount,
     externalReference,
     description: String(body.description || ""),
-    statementDate: String(body.statementDate || now.slice(0, 10)),
+    statementDate,
     importedByUserId: auth.user.id,
     createdAt: now,
     updatedAt: now
@@ -1028,6 +1080,8 @@ async function recordSubscriptionPayment(request, response, auth, subscriptionId
   const body = await readJson(request);
   const amount = Number(body.amount || subscription.amount - subscription.paid);
   if (!Number.isFinite(amount) || amount <= 0) return sendError(response, 400, "INVALID_PAYMENT_AMOUNT", "Payment amount must be greater than zero.", correlationId);
+  const receivedAt = String(body.receivedAt || new Date().toISOString());
+  if (!assertAccountingPeriodOpen(subscription.tenantId, receivedAt, response, correlationId)) return;
 
   const existing = body.externalReference
     ? db.subscriptionPayments.find((payment) => payment.externalReference === String(body.externalReference))
@@ -1041,7 +1095,7 @@ async function recordSubscriptionPayment(request, response, auth, subscriptionId
     amount,
     channel: String(body.channel || "manual"),
     externalReference: String(body.externalReference || newId("manual_ref")),
-    receivedAt: new Date().toISOString(),
+    receivedAt,
     recordedBy: auth.user.id
   };
   db.subscriptionPayments.push(payment);
@@ -1312,6 +1366,7 @@ async function updateFinancialTransactionStatus(request, response, auth, transac
   }
 
   const now = new Date().toISOString();
+  if (status === "posted" && !assertAccountingPeriodOpen(transaction.tenantId, now, response, correlationId)) return;
   transaction.status = status;
   transaction.checkerUserId = auth.user.id;
   transaction.updatedAt = now;
@@ -1506,6 +1561,8 @@ async function recordLoanRepayment(request, response, auth, loanId, correlationI
   }
 
   const now = new Date().toISOString();
+  const receivedAt = String(body.receivedAt || now);
+  if (!assertAccountingPeriodOpen(loan.tenantId, receivedAt, response, correlationId)) return;
   const repayment = {
     id: newId("loan_repayment"),
     tenantId: loan.tenantId,
@@ -1514,7 +1571,7 @@ async function recordLoanRepayment(request, response, auth, loanId, correlationI
     amount,
     channel,
     externalReference,
-    receivedAt: String(body.receivedAt || now),
+    receivedAt,
     recordedByUserId: auth.user.id,
     createdAt: now,
     updatedAt: now

@@ -124,6 +124,7 @@ let apiState = {
   subscriptions: [],
   financialTransactions: [],
   loans: [],
+  accountingPeriods: [],
   chartOfAccounts: [],
   journalEntries: [],
   statementLines: [],
@@ -848,6 +849,7 @@ function renderReports() {
 
 function renderApiReports() {
   const journals = apiState.journalEntries;
+  const periods = apiState.accountingPeriods;
   const accounts = apiState.chartOfAccounts;
   const reconciliation = apiState.reconciliation || { summary: {}, unmatchedStatementLines: [], unmatchedLedgerLines: [] };
   const regulatoryReport = apiState.regulatoryReport || { reports: [], consolidated: {}, csv: "" };
@@ -880,6 +882,16 @@ function renderApiReports() {
       </div>
       <div class="notice">Journal entries are derived from posted financial transactions, loan disbursements, loan repayments, and subscription payments.</div>
       ${journalTable(journals)}
+    </section>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Accounting periods</h2>
+          <p class="eyebrow">Closed periods block ordinary financial postings</p>
+        </div>
+        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+      </div>
+      ${accountingPeriodTable(periods)}
     </section>
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
@@ -953,6 +965,26 @@ function renderApiReports() {
       <h2>API audit events</h2>
       ${apiAuditTable(apiState.auditEvents)}
     </section>
+  `;
+}
+
+function accountingPeriodTable(periods) {
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Period</th><th>Status</th><th>Closed at</th><th>Action</th></tr></thead>
+        <tbody>
+          ${periods.map((period) => `
+            <tr>
+              <td>${period.period}</td>
+              <td><span class="status ${period.status === "closed" ? "overdue" : "active"}">${titleCase(period.status)}</span></td>
+              <td>${period.closedAt?.slice(0, 10) || ""}</td>
+              <td><button class="secondary-button" data-period-status="${period.id}" data-period-next="${period.status === "closed" ? "open" : "closed"}" type="button">${period.status === "closed" ? "Reopen" : "Close"}</button></td>
+            </tr>
+          `).join("") || `<tr><td colspan="4">No accounting periods found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -1284,6 +1316,10 @@ function bindViewActions() {
     button.addEventListener("click", () => openLoanRepaymentForm(button.dataset.loanRepay));
   });
 
+  document.querySelectorAll("[data-period-status]").forEach((button) => {
+    button.addEventListener("click", () => updateAccountingPeriodStatus(button.dataset.periodStatus, button.dataset.periodNext));
+  });
+
   document.querySelectorAll("[data-guarantor-accept]").forEach((button) => {
     button.addEventListener("click", () => decideGuarantorRequest(button.dataset.guarantorAccept, "accepted"));
   });
@@ -1399,7 +1435,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, governanceMeetings, complaints] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, governanceMeetings, complaints] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1409,6 +1445,7 @@ async function refreshApiStatus() {
         apiRequest(`/subscriptions${apiSubscriptionQuery()}`),
         apiRequest(`/financial-transactions${apiTenantQuery()}`),
         apiRequest(`/loans${apiTenantQuery()}`),
+        apiRequest(`/accounting-periods${apiTenantQuery()}`),
         apiRequest("/chart-of-accounts"),
         apiRequest(`/journal-entries${apiTenantQuery()}`),
         apiRequest(`/statement-lines${apiTenantQuery()}`),
@@ -1426,6 +1463,7 @@ async function refreshApiStatus() {
       apiState.subscriptions = subscriptions;
       apiState.financialTransactions = financialTransactions;
       apiState.loans = loans;
+      apiState.accountingPeriods = accountingPeriods;
       apiState.chartOfAccounts = chartOfAccounts;
       apiState.journalEntries = journalEntries;
       apiState.statementLines = statementLines;
@@ -1433,7 +1471,7 @@ async function refreshApiStatus() {
       apiState.regulatoryReport = regulatoryReport;
       apiState.governanceMeetings = governanceMeetings;
       apiState.complaints = complaints;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -1515,7 +1553,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -1899,6 +1937,18 @@ async function disburseLoan(id) {
     await refreshApiStatus();
   } catch (error) {
     openModal("Loan disbursement failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
+}
+
+async function updateAccountingPeriodStatus(id, status) {
+  try {
+    await apiRequest(`/accounting-periods/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+    await refreshApiStatus();
+  } catch (error) {
+    openModal("Accounting period update failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
   }
 }
 

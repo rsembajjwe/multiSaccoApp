@@ -372,6 +372,7 @@ Progress:
 - Statement-line import and reconciliation endpoints added, and Reports now highlights matched and unmatched cash movements.
 - Governance meeting, resolution, and complaint endpoints added, with Reports showing open governance actions and complaints.
 - Regulatory report endpoint added, with tenant/consolidated supervisory summaries and exportable CSV payloads shown in Reports.
+- Accounting period controls added, with closed periods blocking ordinary financial postings and visible in Reports.
 
 Recommended stack:
 

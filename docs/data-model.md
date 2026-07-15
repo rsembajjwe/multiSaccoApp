@@ -254,6 +254,21 @@ Guarantee capacity currently uses posted savings less pending or accepted guaran
 
 ## Phase 5 Accounting Entities
 
+### accounting_periods
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| period | text | Accounting period key, such as `2026-07`. |
+| status | enum | `open`, `closed`. |
+| closed_by_user_id | uuid/string | User who closed the period. |
+| closed_at | timestamp | Closure timestamp. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+Closed-period control rule: ordinary postings that create ledger or reconciliation activity are rejected when their posting date falls inside a closed period.
+
 ### chart_of_accounts
 
 | Field | Type | Notes |

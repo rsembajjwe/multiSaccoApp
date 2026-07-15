@@ -123,6 +123,38 @@ export const db = {
     { code: "2200", name: "Welfare Fund", type: "liability", normalBalance: "credit" },
     { code: "6100", name: "Platform Subscription Expense", type: "expense", normalBalance: "debit" }
   ],
+  accountingPeriods: [
+    {
+      id: "period_green_2026_06",
+      tenantId: "tenant_green",
+      period: "2026-06",
+      status: "closed",
+      closedByUserId: "user_green_admin",
+      closedAt: "2026-07-01T08:00:00.000Z",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "period_green_2026_07",
+      tenantId: "tenant_green",
+      period: "2026-07",
+      status: "open",
+      closedByUserId: null,
+      closedAt: null,
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "period_lake_2026_07",
+      tenantId: "tenant_lake",
+      period: "2026-07",
+      status: "open",
+      closedByUserId: null,
+      closedAt: null,
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
   subscriptionPackages: [
     {
       id: "starter",

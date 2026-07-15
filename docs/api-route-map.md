@@ -61,6 +61,8 @@ All JSON responses should follow one of these shapes:
 | GET | `/financial-transactions` | List tenant financial transactions. | Required |
 | POST | `/financial-transactions` | Submit a pending financial transaction. | SACCO staff |
 | PATCH | `/financial-transactions/:id/status` | Post or reject a pending financial transaction. | Authorized checker |
+| GET | `/accounting-periods` | List tenant accounting periods. | Required |
+| PATCH | `/accounting-periods/:id/status` | Open or close an accounting period. | SACCO staff |
 | GET | `/chart-of-accounts` | List the accounting chart used for journal lines. | Required |
 | GET | `/journal-entries` | List balanced journal entries derived from posted events. | Required |
 | GET | `/statement-lines` | List imported bank, cash, mobile-money, and payroll statement lines. | Required |
@@ -123,6 +125,8 @@ Implemented in the no-dependency development server:
 - `GET /api/v1/financial-transactions`
 - `POST /api/v1/financial-transactions`
 - `PATCH /api/v1/financial-transactions/:id/status`
+- `GET /api/v1/accounting-periods`
+- `PATCH /api/v1/accounting-periods/:id/status`
 - `GET /api/v1/chart-of-accounts`
 - `GET /api/v1/journal-entries`
 - `GET /api/v1/statement-lines`

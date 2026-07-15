@@ -49,6 +49,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Reconciliation compares imported statement lines with ledger cash movements and exposes unmatched exceptions.
 - Governance records support meetings, resolutions, complaints, audit events, and tenant-scoped reporting.
 - Regulatory reports provide tenant-scoped and platform-consolidated supervisory summaries with CSV export data.
+- Closed accounting periods block ordinary posting activity and can be opened or closed from Reports.
 
 ## Recommended backend modules for the next build
 
