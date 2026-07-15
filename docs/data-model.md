@@ -122,8 +122,9 @@ This model defines the Phase 1 and Phase 2 foundation tables. Production storage
 | --- | --- | --- |
 | id | uuid/string | Primary key. |
 | name | text | Package name. |
-| price | decimal | Annual or configured billing amount. |
+| price | decimal | Unit price per member per annual cycle. Current rule: UGX 5,000. |
 | billing_period | text | `monthly`, `quarterly`, `annual`, etc. |
+| min_members | integer | Minimum billable members per cycle. Current rule: 100. |
 | member_limit | integer | Optional package limit. |
 | user_limit | integer | Optional package limit. |
 | branch_limit | integer | Optional package limit. |
@@ -141,7 +142,12 @@ This model defines the Phase 1 and Phase 2 foundation tables. Production storage
 | invoice | text | Unique invoice reference. |
 | amount | decimal | Invoice amount. |
 | paid | decimal | Amount received. |
+| member_count | integer | Actual member count used for the billing cycle. |
+| billable_members | integer | `max(member_count, 100)` for annual billing. |
+| unit_price | decimal | Price per member for the cycle. |
 | expiry | date | Subscription expiry. |
+
+Subscription billing rule: every SACCO pays UGX 5,000 per member for each annual cycle, with a 100-member minimum. The minimum annual invoice is therefore UGX 500,000.
 
 ### subscription_payments
 

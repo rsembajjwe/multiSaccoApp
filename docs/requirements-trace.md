@@ -36,6 +36,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Member register UI can switch from local demo data to API-backed member onboarding after login.
 - SACCO registration UI can switch from local demo data to API-backed tenant onboarding after platform login.
 - Subscription UI can switch from local demo data to API-backed package, invoice, and payment records after login.
+- Subscription billing uses UGX 5,000 per member annually, with a 100-member minimum per cycle.
 - Transactions UI can switch from local demo data to API-backed financial postings after login.
 - Backend financial transaction creation validates tenant, member, branch, type, channel, and positive amount.
 - Approvals UI can post or reject API-backed pending financial transactions with maker-checker enforcement.

@@ -359,6 +359,7 @@ Progress:
 - SACCO registration screen now reads API-backed tenants after login and creates/approves tenants through `/api/v1/tenants`.
 - Subscription package, invoice, and payment endpoints added.
 - Subscriptions screen now reads API-backed packages/subscriptions after login and records payments through `/api/v1/subscriptions/:id/payments`.
+- Subscription billing now uses UGX 5,000 per member per annual cycle with a 100-member minimum.
 - Financial transaction listing and submission endpoints added for savings deposits, share purchases, welfare contributions, and withdrawals.
 - Transactions screen now reads API-backed postings after login and submits new pending transactions through `/api/v1/financial-transactions`.
 - Approval queue now reads API-backed pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.

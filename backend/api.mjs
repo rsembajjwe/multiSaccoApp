@@ -1,5 +1,7 @@
 import { hashPassword, newId, verifyPassword } from "./security.mjs";
 import {
+  MINIMUM_BILLABLE_MEMBERS,
+  SUBSCRIPTION_UNIT_PRICE,
   createAuditEvent,
   createSession,
   db,
@@ -295,7 +297,20 @@ function listSubscriptions(response, auth, url) {
   const subscriptions = isPlatform(auth) && !url.searchParams.get("tenantId")
     ? db.subscriptions
     : db.subscriptions.filter((subscription) => subscription.tenantId === tenantId);
-  return sendData(response, subscriptions);
+  return sendData(response, subscriptions.map(refreshSubscriptionBilling));
+}
+
+function refreshSubscriptionBilling(subscription) {
+  const memberCount = db.members.filter((member) => member.tenantId === subscription.tenantId).length;
+  const billableMembers = Math.max(memberCount, MINIMUM_BILLABLE_MEMBERS);
+  const amount = billableMembers * SUBSCRIPTION_UNIT_PRICE;
+  subscription.memberCount = memberCount;
+  subscription.billableMembers = billableMembers;
+  subscription.unitPrice = SUBSCRIPTION_UNIT_PRICE;
+  subscription.amount = amount;
+  subscription.paid = Math.min(subscription.paid, amount);
+  if (subscription.status === "active" && subscription.paid < amount) subscription.status = "pending_payment";
+  return subscription;
 }
 
 async function recordSubscriptionPayment(request, response, auth, subscriptionId, correlationId) {
@@ -304,6 +319,7 @@ async function recordSubscriptionPayment(request, response, auth, subscriptionId
   }
   const subscription = db.subscriptions.find((item) => item.id === subscriptionId);
   if (!subscription) return sendError(response, 404, "SUBSCRIPTION_NOT_FOUND", "Subscription not found.", correlationId);
+  refreshSubscriptionBilling(subscription);
 
   const body = await readJson(request);
   const amount = Number(body.amount || subscription.amount - subscription.paid);

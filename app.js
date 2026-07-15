@@ -19,6 +19,8 @@ const money = new Intl.NumberFormat("en-UG", {
   maximumFractionDigits: 0
 });
 
+const SUBSCRIPTION_UNIT_PRICE = 5000;
+const MINIMUM_BILLABLE_MEMBERS = 100;
 const today = new Date("2026-07-15T12:00:00+03:00");
 
 const seedData = {
@@ -66,13 +68,13 @@ const seedData = {
     }
   ],
   packages: [
-    { id: "starter", name: "Starter", price: 1200000, members: 500, users: 8, branches: 1, modules: "Members, savings, shares" },
-    { id: "growth", name: "Growth", price: 3600000, members: 2500, users: 25, branches: 5, modules: "Core finance, loans, approvals, reports" },
-    { id: "enterprise", name: "Enterprise", price: 9000000, members: 10000, users: 100, branches: 25, modules: "All modules, API, advanced support" }
+    { id: "starter", name: "Starter", price: SUBSCRIPTION_UNIT_PRICE, members: 500, minMembers: MINIMUM_BILLABLE_MEMBERS, users: 8, branches: 1, modules: "Members, savings, shares" },
+    { id: "growth", name: "Growth", price: SUBSCRIPTION_UNIT_PRICE, members: 2500, minMembers: MINIMUM_BILLABLE_MEMBERS, users: 25, branches: 5, modules: "Core finance, loans, approvals, reports" },
+    { id: "enterprise", name: "Enterprise", price: SUBSCRIPTION_UNIT_PRICE, members: 10000, minMembers: MINIMUM_BILLABLE_MEMBERS, users: 100, branches: 25, modules: "All modules, API, advanced support" }
   ],
   subscriptions: [
-    { id: "sub-1", tenantId: "green", packageId: "growth", status: "Active", invoice: "INV-2026-001", amount: 3600000, paid: 3600000, expiry: "2027-07-14" },
-    { id: "sub-2", tenantId: "lake", packageId: "starter", status: "Pending Payment", invoice: "INV-2026-002", amount: 1200000, paid: 0, expiry: "2026-07-30" }
+    { id: "sub-1", tenantId: "green", packageId: "growth", status: "Active", invoice: "INV-2026-001", memberCount: 3, billableMembers: MINIMUM_BILLABLE_MEMBERS, unitPrice: SUBSCRIPTION_UNIT_PRICE, amount: 500000, paid: 500000, expiry: "2027-07-14" },
+    { id: "sub-2", tenantId: "lake", packageId: "starter", status: "Pending Payment", invoice: "INV-2026-002", memberCount: 1, billableMembers: MINIMUM_BILLABLE_MEMBERS, unitPrice: SUBSCRIPTION_UNIT_PRICE, amount: 500000, paid: 0, expiry: "2026-07-30" }
   ],
   members: [
     { id: "m-1", tenantId: "green", no: "GVS-0001", name: "Amina Nakitende", phone: "+256701234567", nin: "CM9000012K4PA", type: "Individual", status: "Active", branchId: "g-main", kyc: "Verified", savings: 2450000, shares: 850000, welfare: 180000 },
@@ -182,12 +184,26 @@ function useApiTransactions() {
   return Boolean(apiState.user);
 }
 
+function subscriptionBillingDetails(subscription) {
+  const memberCount = subscription.memberCount ?? state.members.filter((member) => member.tenantId === subscription.tenantId).length;
+  const billableMembers = subscription.billableMembers ?? Math.max(memberCount, MINIMUM_BILLABLE_MEMBERS);
+  const unitPrice = subscription.unitPrice ?? SUBSCRIPTION_UNIT_PRICE;
+  return {
+    memberCount,
+    billableMembers,
+    unitPrice,
+    amount: billableMembers * unitPrice,
+    paid: Math.min(subscription.paid || 0, billableMembers * unitPrice)
+  };
+}
+
 function apiPackageToRow(pkg) {
   return {
     id: pkg.id,
     name: pkg.name,
     price: pkg.price,
     members: pkg.members,
+    minMembers: pkg.minMembers || MINIMUM_BILLABLE_MEMBERS,
     users: pkg.users,
     branches: pkg.branches,
     modules: pkg.modules
@@ -203,6 +219,9 @@ function apiSubscriptionToRow(subscription) {
     invoice: subscription.invoice,
     amount: subscription.amount,
     paid: subscription.paid,
+    memberCount: subscription.memberCount,
+    billableMembers: subscription.billableMembers,
+    unitPrice: subscription.unitPrice,
     expiry: subscription.expiry,
     source: "API"
   };
@@ -503,9 +522,10 @@ function renderSubscriptions() {
       ${packages.map((pkg) => `
         <section class="card">
           <h2>${pkg.name}</h2>
-          <p><strong>${money.format(pkg.price)}</strong> per year</p>
+          <p><strong>${money.format(SUBSCRIPTION_UNIT_PRICE)}</strong> per member / year</p>
           <ul class="list">
-            <li><span>Members</span><strong>${pkg.members.toLocaleString()}</strong></li>
+            <li><span>Minimum billable members</span><strong>${(pkg.minMembers || MINIMUM_BILLABLE_MEMBERS).toLocaleString()}</strong></li>
+            <li><span>Member limit</span><strong>${pkg.members.toLocaleString()}</strong></li>
             <li><span>Users</span><strong>${pkg.users}</strong></li>
             <li><span>Branches</span><strong>${pkg.branches}</strong></li>
             <li><span>Modules</span><strong>${pkg.modules}</strong></li>
@@ -524,23 +544,29 @@ function renderSubscriptions() {
       ${useApiSubscriptions() ? `<div class="notice">${canRecordApiPayment ? "Platform Admin is managing subscription payments from the backend." : "Your API account can view only its own SACCO subscription."}</div>` : `<div class="notice">Login as Platform Admin to record subscription payments through the backend.</div>`}
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Invoice</th><th>SACCO</th><th>Package</th><th>Amount</th><th>Paid</th><th>Expiry</th><th>Status</th></tr></thead>
+          <thead><tr><th>Invoice</th><th>SACCO</th><th>Package</th><th>Members</th><th>Amount</th><th>Paid</th><th>Expiry</th><th>Status</th></tr></thead>
           <tbody>
-            ${subscriptions.map((sub) => `
-              <tr>
-                <td>${sub.invoice}${sub.source ? `<br><small>${sub.source}</small>` : ""}</td>
-                <td>${tenantName(sub.tenantId)}</td>
-                <td>${packageName(sub.packageId)}</td>
-                <td>${money.format(sub.amount)}</td>
-                <td>${money.format(sub.paid)}</td>
-                <td>${sub.expiry}</td>
-                <td><span class="status ${statusClass(sub.status)}">${sub.status}</span></td>
-              </tr>
-            `).join("") || `<tr><td colspan="7">No subscriptions found.</td></tr>`}
+            ${subscriptions.map(subscriptionRow).join("") || `<tr><td colspan="8">No subscriptions found.</td></tr>`}
           </tbody>
         </table>
       </div>
     </section>
+  `;
+}
+
+function subscriptionRow(sub) {
+  const billing = subscriptionBillingDetails(sub);
+  return `
+    <tr>
+      <td>${sub.invoice}${sub.source ? `<br><small>${sub.source}</small>` : ""}</td>
+      <td>${tenantName(sub.tenantId)}</td>
+      <td>${packageName(sub.packageId)}<br><small>${money.format(billing.unitPrice)} each / year</small></td>
+      <td>${billing.memberCount.toLocaleString()} actual<br><small>${billing.billableMembers.toLocaleString()} billable minimum</small></td>
+      <td>${money.format(billing.amount)}</td>
+      <td>${money.format(billing.paid)}</td>
+      <td>${sub.expiry}</td>
+      <td><span class="status ${statusClass(sub.status)}">${sub.status}</span></td>
+    </tr>
   `;
 }
 
@@ -1268,7 +1294,12 @@ async function recordSubscriptionPayment() {
   }
 
   const pending = state.subscriptions.find((sub) => sub.status !== "Active") || state.subscriptions[0];
-  pending.paid = pending.amount;
+  const billing = subscriptionBillingDetails(pending);
+  pending.memberCount = billing.memberCount;
+  pending.billableMembers = billing.billableMembers;
+  pending.unitPrice = billing.unitPrice;
+  pending.amount = billing.amount;
+  pending.paid = billing.amount;
   pending.status = "Active";
   pending.expiry = "2027-07-15";
   addAudit("platform", "Finance Officer", `Recorded subscription payment ${pending.invoice}`);

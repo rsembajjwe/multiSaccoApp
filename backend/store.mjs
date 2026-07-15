@@ -1,6 +1,8 @@
 import { hashPassword, hashToken, newId } from "./security.mjs";
 
 const now = () => new Date().toISOString();
+export const SUBSCRIPTION_UNIT_PRICE = 5000;
+export const MINIMUM_BILLABLE_MEMBERS = 100;
 
 const platformPassword = hashPassword("Admin@12345");
 const saccoPassword = hashPassword("Sacco@12345");
@@ -89,9 +91,10 @@ export const db = {
     {
       id: "starter",
       name: "Starter",
-      price: 1200000,
+      price: SUBSCRIPTION_UNIT_PRICE,
       billingPeriod: "annual",
       members: 500,
+      minMembers: MINIMUM_BILLABLE_MEMBERS,
       users: 8,
       branches: 1,
       modules: "Members, savings, shares",
@@ -100,9 +103,10 @@ export const db = {
     {
       id: "growth",
       name: "Growth",
-      price: 3600000,
+      price: SUBSCRIPTION_UNIT_PRICE,
       billingPeriod: "annual",
       members: 2500,
+      minMembers: MINIMUM_BILLABLE_MEMBERS,
       users: 25,
       branches: 5,
       modules: "Core finance, loans, approvals, reports",
@@ -111,9 +115,10 @@ export const db = {
     {
       id: "enterprise",
       name: "Enterprise",
-      price: 9000000,
+      price: SUBSCRIPTION_UNIT_PRICE,
       billingPeriod: "annual",
       members: 10000,
+      minMembers: MINIMUM_BILLABLE_MEMBERS,
       users: 100,
       branches: 25,
       modules: "All modules, API, advanced support",
@@ -127,8 +132,11 @@ export const db = {
       packageId: "growth",
       status: "active",
       invoice: "INV-2026-001",
-      amount: 3600000,
-      paid: 3600000,
+      memberCount: 3,
+      billableMembers: MINIMUM_BILLABLE_MEMBERS,
+      unitPrice: SUBSCRIPTION_UNIT_PRICE,
+      amount: 500000,
+      paid: 500000,
       expiry: "2027-07-14",
       createdAt: now(),
       updatedAt: now()
@@ -139,7 +147,10 @@ export const db = {
       packageId: "starter",
       status: "pending_payment",
       invoice: "INV-2026-002",
-      amount: 1200000,
+      memberCount: 1,
+      billableMembers: MINIMUM_BILLABLE_MEMBERS,
+      unitPrice: SUBSCRIPTION_UNIT_PRICE,
+      amount: 500000,
       paid: 0,
       expiry: "2026-07-30",
       createdAt: now(),

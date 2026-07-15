@@ -7,6 +7,7 @@ A dependency-free browser prototype for the Multi-Tenant SACCO Management Platfo
 - Platform administration dashboard.
 - SACCO self-registration and approval workflow.
 - Subscription packages, invoices, and payment activation.
+- Annual subscription billing at UGX 5,000 per member, with a 100-member minimum per cycle.
 - Tenant switching with tenant-scoped demo data.
 - Branch-aware member registration and KYC statuses.
 - Savings, shares, and welfare transaction posting.

@@ -49,9 +49,13 @@ try {
 
   const packages = await api("GET", "/subscription-packages", null, platformToken);
   assert(packages.data.length >= 3, "Subscription packages should be listed");
+  assert(packages.data.every((pkg) => pkg.price === 5000), "Each subscription package should bill UGX 5,000 per member annually");
+  assert(packages.data.every((pkg) => pkg.minMembers === 100), "Each subscription package should enforce the 100-member annual minimum");
 
   const subscriptions = await api("GET", "/subscriptions", null, platformToken);
   assert(subscriptions.data.length >= 2, "Platform admin should list subscriptions");
+  assert(subscriptions.data.every((subscription) => subscription.billableMembers >= 100), "Subscriptions should bill at least 100 members per annual cycle");
+  assert(subscriptions.data.every((subscription) => subscription.amount === subscription.billableMembers * 5000), "Subscription amount should be billable members times UGX 5,000");
   const pendingSubscription = subscriptions.data.find((subscription) => subscription.status !== "active") || subscriptions.data[0];
   const payment = await api("POST", `/subscriptions/${pendingSubscription.id}/payments`, {
     amount: pendingSubscription.amount - pendingSubscription.paid,
