@@ -31,6 +31,7 @@ const allowedExpenseChannels = new Set(["mobile_money", "cash", "bank", "payroll
 const allowedExpenseAccountCodes = new Set(["5000", "5010", "5020", "5030", "5040", "6100"]);
 const allowedAssetChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedAssetCategories = new Set(["equipment", "furniture", "vehicle", "building", "technology", "other"]);
+const allowedMobileMoneyPurposes = new Set(["savings_deposit", "share_purchase", "welfare_contribution", "loan_repayment"]);
 const allowedLoanProducts = new Set(["Development Loan", "Emergency Loan", "Agriculture Loan", "School Fees Loan"]);
 const allowedGuarantorStatuses = new Set(["accepted", "rejected"]);
 const allowedLoanDecisionStatuses = new Set(["approved", "rejected"]);
@@ -59,11 +60,13 @@ export async function handleApi(request, response, url) {
 
     if (method === "POST" && path === "/auth/login") return login(request, response, correlationId);
     if (method === "POST" && path === "/member-auth/login") return memberLogin(request, response, correlationId);
+    if (method === "POST" && path === "/integrations/mobile-money/callback") return receiveMobileMoneyCallback(request, response, correlationId);
 
     if (path.startsWith("/member-auth/")) {
       const memberAuth = requireMemberAuth(request, response, correlationId);
       if (!memberAuth) return;
       if (method === "GET" && path === "/member-auth/me") return getMemberSession(response, memberAuth);
+      if (method === "GET" && path === "/member-auth/notifications") return listMemberNotifications(response, memberAuth);
       if (method === "GET" && path === "/member-auth/guarantor-requests") return listMemberGuarantorRequests(response, memberAuth);
       if (method === "PATCH" && path.startsWith("/member-auth/guarantor-requests/") && path.endsWith("/status")) {
         return updateMemberGuarantorRequest(request, response, memberAuth, path.split("/")[3], correlationId);
@@ -112,6 +115,7 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/statement-lines") return createStatementLine(request, response, auth, correlationId);
     if (method === "GET" && path === "/reconciliation") return getReconciliation(response, auth, url);
     if (method === "GET" && path === "/regulatory-report") return getRegulatoryReport(response, auth, url);
+    if (method === "GET" && path === "/integrations/mobile-money/callbacks") return listMobileMoneyCallbacks(response, auth, url);
     if (method === "GET" && path === "/suppliers") return listSuppliers(response, auth, url);
     if (method === "POST" && path === "/suppliers") return createSupplier(request, response, auth, correlationId);
     if (method === "GET" && path === "/expenses") return listExpenses(response, auth, url);
@@ -249,6 +253,12 @@ function getMemberSession(response, auth) {
     branch: db.branches.find((branch) => branch.id === auth.member.branchId) || null,
     balances: memberBalances(auth.member.id)
   });
+}
+
+function listMemberNotifications(response, auth) {
+  return sendData(response, db.notifications
+    .filter((notification) => notification.memberId === auth.member.id)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
 }
 
 function requireAuth(request, response, correlationId) {
@@ -601,6 +611,197 @@ function getRegulatoryReport(response, auth, url) {
     consolidated,
     csv: regulatoryReportCsv(reports)
   });
+}
+
+function listMobileMoneyCallbacks(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const callbacks = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.mobileMoneyCallbacks
+    : db.mobileMoneyCallbacks.filter((callback) => callback.tenantId === tenantId);
+  return sendData(response, callbacks.sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt))));
+}
+
+async function receiveMobileMoneyCallback(request, response, correlationId) {
+  const body = await readJson(request);
+  const tenantId = String(body.tenantId || "").trim();
+  const externalReference = String(body.externalReference || body.transactionId || "").trim();
+  const amount = Number(body.amount);
+  const purpose = String(body.purpose || "savings_deposit");
+  const receivedAt = String(body.receivedAt || new Date().toISOString());
+
+  if (!tenantId || !db.tenants.some((tenant) => tenant.id === tenantId)) {
+    return sendError(response, 400, "INVALID_TENANT", "A valid tenantId is required.", correlationId);
+  }
+  if (!externalReference) return sendError(response, 400, "INVALID_CALLBACK_REFERENCE", "A mobile-money reference is required.", correlationId);
+  if (!Number.isFinite(amount) || amount <= 0) return sendError(response, 400, "INVALID_CALLBACK_AMOUNT", "Callback amount must be greater than zero.", correlationId);
+  if (!allowedMobileMoneyPurposes.has(purpose)) return sendError(response, 400, "INVALID_CALLBACK_PURPOSE", "Unsupported mobile-money purpose.", correlationId);
+
+  const existing = db.mobileMoneyCallbacks.find((callback) => callback.tenantId === tenantId && callback.externalReference === externalReference);
+  if (existing) return sendData(response, { callback: existing, result: callbackResult(existing), idempotent: true });
+
+  const member = findCallbackMember(tenantId, body);
+  if (!member) return sendError(response, 400, "INVALID_MEMBER", "Callback member was not found for this tenant.", correlationId);
+  if (!assertAccountingPeriodOpen(tenantId, receivedAt, response, correlationId)) return;
+
+  const callback = {
+    id: newId("mm_callback"),
+    tenantId,
+    memberId: member.id,
+    purpose,
+    amount,
+    externalReference,
+    provider: String(body.provider || "demo_mobile_money"),
+    providerPayload: body,
+    status: "posted",
+    receivedAt,
+    createdAt: new Date().toISOString(),
+    resourceType: null,
+    resourceId: null
+  };
+
+  if (purpose === "loan_repayment") {
+    const loan = body.loanId
+      ? db.loans.find((item) => item.id === String(body.loanId) && item.tenantId === tenantId && item.memberId === member.id)
+      : db.loans.find((item) => item.tenantId === tenantId && item.memberId === member.id && item.status === "active");
+    if (!loan) return sendError(response, 400, "INVALID_LOAN", "No active loan was found for this repayment callback.", correlationId);
+    if (loan.status !== "active") return sendError(response, 409, "LOAN_NOT_ACTIVE", "Only active loans can receive mobile-money repayments.", correlationId);
+    if (amount > loan.balance) return sendError(response, 409, "REPAYMENT_EXCEEDS_BALANCE", "Repayment cannot exceed the outstanding loan balance.", correlationId);
+
+    const repayment = postLoanRepayment({ loan, amount, channel: "mobile_money", externalReference, receivedAt, recordedByUserId: null });
+    callback.resourceType = "loan_repayment";
+    callback.resourceId = repayment.id;
+    createMemberNotification({
+      tenantId,
+      memberId: member.id,
+      eventType: "loan_repayment_received",
+      resourceType: "loan_repayment",
+      resourceId: repayment.id,
+      body: `Mobile money loan repayment ${externalReference} for UGX ${amount} was posted.`
+    });
+  } else {
+    const transaction = postMemberCollection({ tenantId, member, purpose, amount, externalReference, receivedAt });
+    callback.resourceType = "financial_transaction";
+    callback.resourceId = transaction.id;
+    createMemberNotification({
+      tenantId,
+      memberId: member.id,
+      eventType: "payment_received",
+      resourceType: "financial_transaction",
+      resourceId: transaction.id,
+      body: `Mobile money ${purpose.replace(/_/g, " ")} ${externalReference} for UGX ${amount} was posted.`
+    });
+  }
+
+  db.mobileMoneyCallbacks.push(callback);
+  db.statementLines.push({
+    id: newId("statement"),
+    tenantId,
+    accountCode: "1020",
+    channel: "mobile_money",
+    amount,
+    externalReference,
+    description: `Mobile money callback for ${purpose.replace(/_/g, " ")}`,
+    statementDate: receivedAt.slice(0, 10),
+    importedByUserId: null,
+    createdAt: callback.createdAt,
+    updatedAt: callback.createdAt
+  });
+  createAuditEvent({
+    tenantId,
+    actorUserId: null,
+    actorName: callback.provider,
+    action: `Processed mobile-money callback ${externalReference}`,
+    resourceType: callback.resourceType,
+    resourceId: callback.resourceId,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, { callback, result: callbackResult(callback), idempotent: false }, 201);
+}
+
+function findCallbackMember(tenantId, body) {
+  const memberId = body.memberId ? String(body.memberId) : "";
+  const membershipNo = body.membershipNo ? String(body.membershipNo).toLowerCase().trim() : "";
+  const phone = body.phone ? String(body.phone).toLowerCase().trim() : "";
+  return db.members.find((member) => {
+    if (member.tenantId !== tenantId) return false;
+    if (memberId && member.id === memberId) return true;
+    if (membershipNo && member.membershipNo.toLowerCase() === membershipNo) return true;
+    if (phone && member.phone.toLowerCase() === phone) return true;
+    return false;
+  });
+}
+
+function postMemberCollection({ tenantId, member, purpose, amount, externalReference, receivedAt }) {
+  const transaction = {
+    id: newId("txn"),
+    tenantId,
+    branchId: member.branchId,
+    memberId: member.id,
+    type: purpose,
+    channel: "mobile_money",
+    amount,
+    status: "posted",
+    reference: externalReference,
+    narration: "Mobile-money callback collection",
+    makerUserId: null,
+    checkerUserId: null,
+    postedAt: receivedAt,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  db.financialTransactions.push(transaction);
+  return transaction;
+}
+
+function postLoanRepayment({ loan, amount, channel, externalReference, receivedAt, recordedByUserId }) {
+  const now = new Date().toISOString();
+  const repayment = {
+    id: newId("loan_repayment"),
+    tenantId: loan.tenantId,
+    loanId: loan.id,
+    memberId: loan.memberId,
+    amount,
+    channel,
+    externalReference,
+    receivedAt,
+    recordedByUserId,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.loanRepayments.push(repayment);
+  loan.balance = Math.max(0, loan.balance - amount);
+  loan.status = loan.balance === 0 ? "closed" : loan.status;
+  loan.stage = loan.balance === 0 ? "Closed" : "Disbursed";
+  loan.updatedAt = now;
+  return repayment;
+}
+
+function createMemberNotification({ tenantId, memberId, eventType, resourceType, resourceId, body }) {
+  const template = db.notificationTemplates.find((item) => item.eventType === eventType && item.status === "active");
+  const notification = {
+    id: newId("notification"),
+    tenantId,
+    memberId,
+    channel: template?.channel || "in_app",
+    eventType,
+    title: template?.title || "Notification",
+    body: body || template?.body || "",
+    status: "unread",
+    resourceType,
+    resourceId,
+    createdAt: new Date().toISOString(),
+    readAt: null
+  };
+  db.notifications.unshift(notification);
+  return notification;
+}
+
+function callbackResult(callback) {
+  return {
+    resourceType: callback.resourceType,
+    resourceId: callback.resourceId,
+    status: callback.status
+  };
 }
 
 function listSuppliers(response, auth, url) {

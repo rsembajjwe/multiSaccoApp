@@ -93,6 +93,52 @@ try {
   assert(memberSession.data.member.id === memberLogin.data.member.id, "Member session should return the logged-in member");
   assert(memberSession.data.tenant.id === "tenant_green", "Member session should include tenant context");
 
+  const mobileMoneyReference = `MM-SMOKE-${Date.now()}`;
+  const mobileMoneyCallback = await api("POST", "/integrations/mobile-money/callback", {
+    tenantId: "tenant_green",
+    membershipNo: "GVS-0001",
+    purpose: "savings_deposit",
+    amount: 30000,
+    externalReference: mobileMoneyReference,
+    provider: "smoke_mobile_money",
+    receivedAt: "2026-07-15T08:00:00.000Z"
+  });
+  assert(mobileMoneyCallback.data.callback.status === "posted", "Mobile-money callback should post");
+  assert(mobileMoneyCallback.data.result.resourceType === "financial_transaction", "Collection callback should create a financial transaction");
+
+  const duplicateMobileMoneyCallback = await api("POST", "/integrations/mobile-money/callback", {
+    tenantId: "tenant_green",
+    membershipNo: "GVS-0001",
+    purpose: "savings_deposit",
+    amount: 30000,
+    externalReference: mobileMoneyReference,
+    provider: "smoke_mobile_money",
+    receivedAt: "2026-07-15T08:00:00.000Z"
+  });
+  assert(duplicateMobileMoneyCallback.data.idempotent === true, "Duplicate mobile-money callbacks should be idempotent");
+
+  const loanRepaymentCallback = await api("POST", "/integrations/mobile-money/callback", {
+    tenantId: "tenant_green",
+    memberId: "member_green_amina",
+    loanId: "loan_green_0001",
+    purpose: "loan_repayment",
+    amount: 50000,
+    externalReference: `MM-LRP-SMOKE-${Date.now()}`,
+    provider: "smoke_mobile_money",
+    receivedAt: "2026-07-15T08:15:00.000Z"
+  });
+  assert(loanRepaymentCallback.data.result.resourceType === "loan_repayment", "Loan callback should create a loan repayment");
+
+  const refreshedMemberSession = await api("GET", "/member-auth/me", null, memberToken);
+  assert(refreshedMemberSession.data.balances.savings === 280000, "Mobile-money collection should update member savings once");
+
+  const memberNotifications = await api("GET", "/member-auth/notifications", null, memberToken);
+  assert(memberNotifications.data.some((notification) => notification.eventType === "payment_received"), "Member should receive payment notification");
+  assert(memberNotifications.data.some((notification) => notification.eventType === "loan_repayment_received"), "Member should receive loan repayment notification");
+
+  const mobileMoneyCallbacks = await api("GET", "/integrations/mobile-money/callbacks", null, saccoToken);
+  assert(mobileMoneyCallbacks.data.some((callback) => callback.externalReference === mobileMoneyReference), "SACCO admin should list tenant mobile-money callbacks");
+
   const saccoSubscriptions = await api("GET", "/subscriptions", null, saccoToken);
   assert(saccoSubscriptions.data.every((subscription) => subscription.tenantId === "tenant_green"), "SACCO subscription list must be tenant-scoped");
 

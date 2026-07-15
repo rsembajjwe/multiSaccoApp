@@ -479,6 +479,47 @@ export const db = {
       updatedAt: now()
     }
   ],
+  mobileMoneyCallbacks: [],
+  notificationTemplates: [
+    {
+      id: "template_payment_received",
+      tenantId: null,
+      channel: "in_app",
+      eventType: "payment_received",
+      title: "Payment received",
+      body: "Your SACCO payment has been received and posted.",
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "template_loan_repayment_received",
+      tenantId: null,
+      channel: "in_app",
+      eventType: "loan_repayment_received",
+      title: "Loan repayment received",
+      body: "Your loan repayment has been received and posted.",
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  notifications: [
+    {
+      id: "notification_green_0001",
+      tenantId: "tenant_green",
+      memberId: "member_green_amina",
+      channel: "in_app",
+      eventType: "payment_received",
+      title: "Payment received",
+      body: "Mobile money savings deposit GVS-TX-0001 for UGX 250000 was posted.",
+      status: "unread",
+      resourceType: "financial_transaction",
+      resourceId: "txn_green_0001",
+      createdAt: now(),
+      readAt: null
+    }
+  ],
   statementLines: [
     {
       id: "statement_green_0001",

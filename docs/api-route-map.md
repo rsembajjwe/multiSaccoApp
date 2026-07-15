@@ -36,6 +36,7 @@ All JSON responses should follow one of these shapes:
 | GET | `/auth/me` | Get current authenticated user. | Required |
 | POST | `/member-auth/login` | Authenticate a member with membership number, phone, or email. | Public |
 | GET | `/member-auth/me` | Get current member profile, tenant, branch, and balances. | Member |
+| GET | `/member-auth/notifications` | List current member in-app notifications. | Member |
 | POST | `/member-auth/logout` | End current member session. | Member |
 | GET | `/roles` | List roles for current tenant. | Required |
 | POST | `/roles` | Create custom role. | Admin |
@@ -75,6 +76,8 @@ All JSON responses should follow one of these shapes:
 | POST | `/statement-lines` | Import a statement line for reconciliation. | SACCO staff |
 | GET | `/reconciliation` | Compare statement lines with ledger cash movements. | Required |
 | GET | `/regulatory-report` | Return supervisory report rows, consolidated totals, and CSV export text. | Required |
+| POST | `/integrations/mobile-money/callback` | Receive idempotent mobile-money payment callbacks. | Public/provider |
+| GET | `/integrations/mobile-money/callbacks` | List tenant mobile-money callback history. | Required |
 | GET | `/governance-meetings` | List tenant governance meetings and resolutions. | Required |
 | POST | `/governance-meetings` | Create a governance meeting record. | SACCO staff |
 | POST | `/governance-meetings/:id/resolutions` | Record a meeting resolution. | SACCO staff |
@@ -112,6 +115,7 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/member-auth/login`
 - `GET /api/v1/member-auth/me`
+- `GET /api/v1/member-auth/notifications`
 - `POST /api/v1/member-auth/logout`
 - `GET /api/v1/roles`
 - `GET /api/v1/permissions`
@@ -145,6 +149,8 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/statement-lines`
 - `GET /api/v1/reconciliation`
 - `GET /api/v1/regulatory-report`
+- `POST /api/v1/integrations/mobile-money/callback`
+- `GET /api/v1/integrations/mobile-money/callbacks`
 - `GET /api/v1/governance-meetings`
 - `POST /api/v1/governance-meetings`
 - `POST /api/v1/governance-meetings/:id/resolutions`

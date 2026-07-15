@@ -366,6 +366,55 @@ Expense control rule: expenses post balanced journal entries and are blocked whe
 
 Asset control rule: acquisitions post balanced fixed-asset journals, derived depreciation posts to accumulated depreciation, and purchases are blocked when the purchase date falls inside a closed accounting period.
 
+### mobile_money_callbacks
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| member_id | uuid/string | Member matched from callback identifiers. |
+| purpose | enum | `savings_deposit`, `share_purchase`, `welfare_contribution`, `loan_repayment`. |
+| amount | decimal | Provider amount. |
+| external_reference | text | Provider transaction reference, unique per tenant. |
+| provider | text | Provider identifier. |
+| provider_payload | json | Original callback payload for audit. |
+| status | enum | `posted`, `failed`, `ignored`. |
+| resource_type | text | Posted resource type. |
+| resource_id | uuid/string | Posted transaction or repayment id. |
+| received_at | timestamp | Provider payment timestamp. |
+| created_at | timestamp | Processing timestamp. |
+
+Callback control rule: duplicate provider references return the original posted resource and do not create a second transaction, repayment, statement line, or notification.
+
+### notification_templates
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Optional tenant override. |
+| channel | enum | `in_app`, `sms`, `email`. |
+| event_type | text | Event key such as `payment_received`. |
+| title | text | Notification title. |
+| body | text | Template body. |
+| status | enum | `active`, `inactive`. |
+
+### notifications
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| member_id | uuid/string | Recipient member. |
+| channel | enum | `in_app`, `sms`, `email`. |
+| event_type | text | Event key. |
+| title | text | Rendered notification title. |
+| body | text | Rendered notification body. |
+| status | enum | `unread`, `read`, `sent`, `failed`. |
+| resource_type | text | Related resource type. |
+| resource_id | uuid/string | Related resource id. |
+| created_at | timestamp | Creation timestamp. |
+| read_at | timestamp | In-app read timestamp. |
+
 ### statement_lines
 
 | Field | Type | Notes |

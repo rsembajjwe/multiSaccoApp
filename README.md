@@ -81,6 +81,10 @@ Reports include supplier expenses, and posted expenses feed the accounting ledge
 
 Reports include a fixed asset register, acquisition journals, and derived depreciation journals.
 
+Reports include mobile-money callback history, and duplicate provider callbacks are idempotent.
+
+Members receive in-app notifications for mobile-money collections and loan repayments.
+
 After API login, the Approvals screen reads pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
 
 Members can login from **Member portal** using the seeded account `GVS-0001` / `Member@12345` to view their savings, shares, and welfare balances.

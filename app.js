@@ -133,6 +133,7 @@ let apiState = {
   suppliers: [],
   expenses: [],
   assets: [],
+  mobileMoneyCallbacks: [],
   governanceMeetings: [],
   complaints: [],
   auditEvents: [],
@@ -145,6 +146,7 @@ let memberApiState = {
   branch: null,
   balances: null,
   guarantorRequests: [],
+  notifications: [],
   message: "Member portal not signed in."
 };
 
@@ -856,6 +858,7 @@ function renderApiReports() {
   const accounts = apiState.chartOfAccounts;
   const expenses = apiState.expenses;
   const assets = apiState.assets;
+  const mobileMoneyCallbacks = apiState.mobileMoneyCallbacks;
   const reconciliation = apiState.reconciliation || { summary: {}, unmatchedStatementLines: [], unmatchedLedgerLines: [] };
   const regulatoryReport = apiState.regulatoryReport || { reports: [], consolidated: {}, csv: "" };
   const meetings = apiState.governanceMeetings;
@@ -940,6 +943,20 @@ function renderApiReports() {
         ${metric("Ledger exceptions", reconciliation.summary.unmatchedLedgerLines || 0, money.format(reconciliation.summary.unmatchedLedgerAmount || 0))}
       </div>
       ${reconciliationTable(reconciliation)}
+    </section>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Mobile money callbacks</h2>
+          <p class="eyebrow">Idempotent provider callback history and posted resources</p>
+        </div>
+        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("Callbacks", mobileMoneyCallbacks.length, `${money.format(mobileMoneyCallbacks.reduce((sum, item) => sum + item.amount, 0))} received`)}
+        ${metric("Posted", mobileMoneyCallbacks.filter((item) => item.status === "posted").length, "server-confirmed events")}
+      </div>
+      ${mobileMoneyCallbackTable(mobileMoneyCallbacks)}
     </section>
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
@@ -1060,6 +1077,28 @@ function assetTable(assets) {
               <td>${money.format(asset.netBookValue)}</td>
             </tr>
           `).join("") || `<tr><td colspan="7">No assets found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function mobileMoneyCallbackTable(callbacks) {
+  return `
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>Received</th><th>Reference</th><th>Purpose</th><th>Amount</th><th>Resource</th><th>Status</th></tr></thead>
+        <tbody>
+          ${callbacks.map((callback) => `
+            <tr>
+              <td>${callback.receivedAt?.slice(0, 16).replace("T", " ") || ""}</td>
+              <td>${callback.externalReference}<br><small>${callback.provider || ""}</small></td>
+              <td>${titleCase(callback.purpose.replace(/_/g, " "))}</td>
+              <td>${money.format(callback.amount)}</td>
+              <td>${titleCase(String(callback.resourceType || "").replace(/_/g, " "))}<br><small>${callback.resourceId || ""}</small></td>
+              <td><span class="status ${callback.status === "posted" ? "active" : "pending"}">${titleCase(callback.status)}</span></td>
+            </tr>
+          `).join("") || `<tr><td colspan="6">No mobile-money callbacks found.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -1203,6 +1242,7 @@ function renderMemberPortal() {
   if (memberApiState.member) {
     const member = memberApiState.member;
     const balances = memberApiState.balances || { savings: 0, shares: 0, welfare: 0 };
+    const notifications = memberApiState.notifications || [];
     return `
       <div class="toolbar">
         <div>
@@ -1249,6 +1289,20 @@ function renderMemberPortal() {
               </span>
             </li>
           `).join("") || `<li><span>No guarantee requests for this member.</span><span class="status active">Clear</span></li>`}
+        </ul>
+      </section>
+      <section class="card" style="margin-top:16px">
+        <h2>Notifications</h2>
+        <ul class="list">
+          ${notifications.map((notification) => `
+            <li>
+              <span>
+                <strong>${notification.title}</strong><br>
+                <small>${notification.body}</small>
+              </span>
+              <span class="status ${notification.status === "unread" ? "pending" : "active"}">${titleCase(notification.status)}</span>
+            </li>
+          `).join("") || `<li><span>No notifications yet.</span><span class="status active">Clear</span></li>`}
         </ul>
       </section>
     `;
@@ -1489,19 +1543,21 @@ async function memberApiRequest(path, options = {}) {
 async function refreshMemberStatus() {
   if (!memberApiState.token) return;
   try {
-    const [session, guarantorRequests] = await Promise.all([
+    const [session, guarantorRequests, notifications] = await Promise.all([
       memberApiRequest("/member-auth/me"),
-      memberApiRequest("/member-auth/guarantor-requests")
+      memberApiRequest("/member-auth/guarantor-requests"),
+      memberApiRequest("/member-auth/notifications")
     ]);
     memberApiState.member = session.member;
     memberApiState.tenant = session.tenant;
     memberApiState.branch = session.branch;
     memberApiState.balances = session.balances;
     memberApiState.guarantorRequests = guarantorRequests;
+    memberApiState.notifications = notifications;
     memberApiState.message = `Member portal signed in as ${session.member.fullName}.`;
   } catch (error) {
     localStorage.removeItem(MEMBER_SESSION_KEY);
-    memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, guarantorRequests: [], message: error.message };
+    memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, guarantorRequests: [], notifications: [], message: error.message };
   }
   if (state.currentView === "memberPortal") render();
 }
@@ -1515,7 +1571,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, suppliers, expenses, assets, governanceMeetings, complaints] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, suppliers, expenses, assets, governanceMeetings, complaints] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1531,6 +1587,7 @@ async function refreshApiStatus() {
         apiRequest(`/statement-lines${apiTenantQuery()}`),
         apiRequest(`/reconciliation${apiTenantQuery()}`),
         apiRequest(`/regulatory-report${apiTenantQuery()}`),
+        apiRequest(`/integrations/mobile-money/callbacks${apiTenantQuery()}`),
         apiRequest(`/suppliers${apiTenantQuery()}`),
         apiRequest(`/expenses${apiTenantQuery()}`),
         apiRequest(`/assets${apiTenantQuery()}`),
@@ -1552,12 +1609,13 @@ async function refreshApiStatus() {
       apiState.statementLines = statementLines;
       apiState.reconciliation = reconciliation;
       apiState.regulatoryReport = regulatoryReport;
+      apiState.mobileMoneyCallbacks = mobileMoneyCallbacks;
       apiState.suppliers = suppliers;
       apiState.expenses = expenses;
       apiState.assets = assets;
       apiState.governanceMeetings = governanceMeetings;
       apiState.complaints = complaints;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -1639,7 +1697,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -1651,7 +1709,7 @@ async function memberLogout() {
     // Local logout should still clear the client member session if the server has restarted.
   }
   localStorage.removeItem(MEMBER_SESSION_KEY);
-  memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, guarantorRequests: [], message: "Logged out of member portal." };
+  memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, guarantorRequests: [], notifications: [], message: "Logged out of member portal." };
   render();
 }
 

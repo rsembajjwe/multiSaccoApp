@@ -52,6 +52,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Closed accounting periods block ordinary posting activity and can be opened or closed from Reports.
 - Supplier and expense workflows create balanced accounting entries and respect closed-period controls.
 - Fixed asset registration creates balanced acquisition and depreciation entries, with asset totals included in regulatory reporting.
+- Mobile-money callback ingestion posts confirmed member collections or loan repayments, rejects duplicate provider references through idempotency, and creates member notifications.
 
 ## Recommended backend modules for the next build
 

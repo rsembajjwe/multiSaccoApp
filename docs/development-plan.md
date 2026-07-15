@@ -375,6 +375,7 @@ Progress:
 - Accounting period controls added, with closed periods blocking ordinary financial postings and visible in Reports.
 - Supplier and expense endpoints added, with expenses posting balanced journal entries and appearing in Reports.
 - Fixed asset endpoints added, with acquisition and depreciation journals plus asset totals in Reports and regulatory summaries.
+- Mobile-money callback endpoint added, with idempotent posting for member collections/loan repayments and member in-app notifications.
 
 Recommended stack:
 
