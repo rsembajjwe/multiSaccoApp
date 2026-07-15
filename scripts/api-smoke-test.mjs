@@ -108,6 +108,16 @@ try {
   assert(mobileLoan.data.memberId === memberLogin.data.member.id, "Mobile loan must be submitted for the authenticated member");
   assert(mobileLoan.data.channel === "mobile", "Mobile loan should be marked as mobile-originated");
 
+  const mobileComplaint = await api("POST", "/member-auth/mobile-complaints", {
+    subject: "Offline draft smoke complaint",
+    category: "service",
+    priority: "medium",
+    description: "Synced from a mobile offline draft"
+  }, memberToken);
+  assert(mobileComplaint.data.status === "open", "Synced mobile complaint should start open");
+  assert(mobileComplaint.data.member.id === memberLogin.data.member.id, "Synced mobile complaint should belong to the authenticated member");
+  assert(mobileComplaint.data.channel === "mobile_offline_sync", "Synced complaint should record the offline sync channel");
+
   const mobileMoneyReference = `MM-SMOKE-${Date.now()}`;
   const mobileMoneyCallback = await api("POST", "/integrations/mobile-money/callback", {
     tenantId: "tenant_green",
@@ -155,6 +165,7 @@ try {
   const memberNotifications = await api("GET", "/member-auth/notifications", null, memberToken);
   assert(memberNotifications.data.some((notification) => notification.eventType === "payment_received"), "Member should receive payment notification");
   assert(memberNotifications.data.some((notification) => notification.eventType === "loan_repayment_received"), "Member should receive loan repayment notification");
+  assert(memberNotifications.data.some((notification) => notification.eventType === "complaint_synced"), "Member should receive complaint sync notification");
 
   const mobileMoneyCallbacks = await api("GET", "/integrations/mobile-money/callbacks", null, saccoToken);
   assert(mobileMoneyCallbacks.data.some((callback) => callback.externalReference === mobileMoneyReference), "SACCO admin should list tenant mobile-money callbacks");

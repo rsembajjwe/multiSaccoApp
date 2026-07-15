@@ -89,6 +89,8 @@ Member Portal includes a mobile dashboard card with server-confirmed balances, l
 
 Members can submit a mobile loan application from the Member Portal and see the dashboard refresh after server confirmation.
 
+Members can save offline complaint drafts locally and sync them later from the Member Portal.
+
 After API login, the Approvals screen reads pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
 
 Members can login from **Member portal** using the seeded account `GVS-0001` / `Member@12345` to view their savings, shares, and welfare balances.

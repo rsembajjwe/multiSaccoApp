@@ -513,6 +513,17 @@ export const db = {
       status: "active",
       createdAt: now(),
       updatedAt: now()
+    },
+    {
+      id: "template_complaint_synced",
+      tenantId: null,
+      channel: "in_app",
+      eventType: "complaint_synced",
+      title: "Complaint synced",
+      body: "Your offline complaint draft has been synced to the SACCO.",
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
     }
   ],
   notifications: [

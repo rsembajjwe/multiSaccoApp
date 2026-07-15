@@ -68,6 +68,7 @@ export async function handleApi(request, response, url) {
       if (method === "GET" && path === "/member-auth/me") return getMemberSession(response, memberAuth);
       if (method === "GET" && path === "/member-auth/mobile-dashboard") return getMemberMobileDashboard(response, memberAuth);
       if (method === "POST" && path === "/member-auth/mobile-loans") return createMemberMobileLoan(request, response, memberAuth, correlationId);
+      if (method === "POST" && path === "/member-auth/mobile-complaints") return createMemberMobileComplaint(request, response, memberAuth, correlationId);
       if (method === "GET" && path === "/member-auth/notifications") return listMemberNotifications(response, memberAuth);
       if (method === "GET" && path === "/member-auth/guarantor-requests") return listMemberGuarantorRequests(response, memberAuth);
       if (method === "PATCH" && path.startsWith("/member-auth/guarantor-requests/") && path.endsWith("/status")) {
@@ -1979,6 +1980,55 @@ async function createMemberMobileLoan(request, response, auth, correlationId) {
     ipAddress: requestIp(request)
   });
   return sendData(response, publicLoan(loan), 201);
+}
+
+async function createMemberMobileComplaint(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const subject = String(body.subject || "").trim();
+  const category = String(body.category || "other");
+  const priority = String(body.priority || "medium");
+  if (!subject) return sendError(response, 400, "VALIDATION_ERROR", "Complaint subject is required.", correlationId);
+  if (!allowedComplaintCategories.has(category)) return sendError(response, 400, "INVALID_COMPLAINT_CATEGORY", "Unsupported complaint category.", correlationId);
+  if (!allowedComplaintPriorities.has(priority)) return sendError(response, 400, "INVALID_COMPLAINT_PRIORITY", "Unsupported complaint priority.", correlationId);
+
+  const now = new Date().toISOString();
+  const complaint = {
+    id: newId("complaint"),
+    tenantId: auth.member.tenantId,
+    memberId: auth.member.id,
+    category,
+    subject,
+    description: String(body.description || ""),
+    priority,
+    status: "open",
+    assignedUserId: null,
+    resolution: "",
+    createdByUserId: null,
+    resolvedByUserId: null,
+    resolvedAt: null,
+    channel: "mobile_offline_sync",
+    createdAt: now,
+    updatedAt: now
+  };
+  db.complaints.push(complaint);
+  createMemberNotification({
+    tenantId: auth.member.tenantId,
+    memberId: auth.member.id,
+    eventType: "complaint_synced",
+    resourceType: "complaint",
+    resourceId: complaint.id,
+    body: `Complaint draft ${complaint.subject} was synced to the SACCO.`
+  });
+  createAuditEvent({
+    tenantId: auth.member.tenantId,
+    actorUserId: null,
+    actorName: auth.member.fullName,
+    action: `Synced mobile complaint ${complaint.subject}`,
+    resourceType: "complaint",
+    resourceId: complaint.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicComplaint(complaint), 201);
 }
 
 function createLoanForMember({ body, member, actorUserId, response, correlationId }) {

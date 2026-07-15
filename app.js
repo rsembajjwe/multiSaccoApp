@@ -1,6 +1,7 @@
 const STORAGE_KEY = "sacco-platform-demo-v1";
 const API_SESSION_KEY = "sacco-platform-api-session-v1";
 const MEMBER_SESSION_KEY = "sacco-platform-member-session-v1";
+const OFFLINE_DRAFTS_KEY = "sacco-platform-offline-drafts-v1";
 const API_BASE = "/api/v1";
 
 const navItems = [
@@ -112,6 +113,7 @@ const seedData = {
 };
 
 let state = loadState();
+let offlineDrafts = loadOfflineDrafts();
 let apiState = {
   health: "checking",
   user: null,
@@ -154,6 +156,15 @@ let memberApiState = {
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   return saved ? JSON.parse(saved) : structuredClone(seedData);
+}
+
+function loadOfflineDrafts() {
+  const saved = localStorage.getItem(OFFLINE_DRAFTS_KEY);
+  return saved ? JSON.parse(saved) : [];
+}
+
+function saveOfflineDrafts() {
+  localStorage.setItem(OFFLINE_DRAFTS_KEY, JSON.stringify(offlineDrafts));
 }
 
 function saveState() {
@@ -1300,6 +1311,8 @@ function renderMemberPortal() {
             <h2>Mobile dashboard</h2>
             <p class="eyebrow">Server-confirmed member app view</p>
           </div>
+          <button class="secondary-button" data-action="offlineComplaintDraft" type="button">Draft complaint</button>
+          <button class="secondary-button" data-action="syncOfflineDrafts" type="button">Sync drafts</button>
           <button class="secondary-button" data-action="memberMobileLoan" type="button">Apply for mobile loan</button>
           <button class="primary-button" data-action="memberMobilePayment" type="button">Pay by mobile money</button>
         </div>
@@ -1309,6 +1322,14 @@ function renderMemberPortal() {
           ${metric("Notifications", mobileDashboard.notifications?.length || notifications.length, "latest alerts")}
           ${metric("Confirmation", mobileDashboard.serverConfirmed ? "Server OK" : "Waiting", "critical actions confirmed by API")}
         </div>
+        <ul class="list" style="margin-top:16px">
+          ${offlineDrafts.filter((draft) => draft.memberId === member.id).map((draft) => `
+            <li>
+              <span><strong>${draft.subject}</strong><br><small>${titleCase(draft.category)} · saved ${draft.createdAt.slice(0, 16).replace("T", " ")}</small></span>
+              <span class="status pending">Draft</span>
+            </li>
+          `).join("") || `<li><span>No offline drafts saved.</span><span class="status active">Synced</span></li>`}
+        </ul>
       </section>
       <section class="card" style="margin-top:16px">
         <h2>Guarantee requests</h2>
@@ -1506,6 +1527,8 @@ function bindViewActions() {
         simulateMobileMoneyCallback: simulateMobileMoneyCallback,
         memberMobilePayment: memberMobilePayment,
         memberMobileLoan: openMemberMobileLoanForm,
+        offlineComplaintDraft: openOfflineComplaintDraft,
+        syncOfflineDrafts: syncOfflineDrafts,
         newExpense: openExpenseForm,
         newAsset: openAssetForm,
         newGovernanceMeeting: openGovernanceMeetingForm,
@@ -1814,6 +1837,69 @@ function openMemberMobileLoanForm() {
       document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
     }
   });
+}
+
+function openOfflineComplaintDraft() {
+  if (!memberApiState.member) return;
+  openModal("Offline complaint draft", `
+    <div class="notice">This saves locally first. Use Sync drafts when the member app is online.</div>
+    <div class="form-grid" style="margin-top:14px">
+      ${field("Subject", "offlineComplaintSubject", "text", "Mobile service follow-up")}
+      <label class="field"><span>Category</span><select id="offlineComplaintCategory" class="select"><option value="service">Service</option><option value="statement">Statement</option><option value="loan">Loan</option><option value="savings">Savings</option><option value="shares">Shares</option><option value="other">Other</option></select></label>
+      <label class="field"><span>Priority</span><select id="offlineComplaintPriority" class="select"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option></select></label>
+      <label class="field full"><span>Description</span><textarea id="offlineComplaintDescription" class="input" rows="3">Draft captured from the member mobile dashboard.</textarea></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveOfflineDraft" class="primary-button" type="button">Save draft</button>`);
+
+  document.getElementById("saveOfflineDraft").addEventListener("click", () => {
+    offlineDrafts.unshift({
+      id: `draft-${Date.now()}`,
+      type: "complaint",
+      tenantId: memberApiState.member.tenantId,
+      memberId: memberApiState.member.id,
+      subject: value("offlineComplaintSubject"),
+      category: value("offlineComplaintCategory"),
+      priority: value("offlineComplaintPriority"),
+      description: value("offlineComplaintDescription"),
+      createdAt: new Date().toISOString()
+    });
+    saveOfflineDrafts();
+    memberApiState.message = "Offline complaint draft saved locally.";
+    closeModal();
+    render();
+  });
+}
+
+async function syncOfflineDrafts() {
+  if (!memberApiState.member) return;
+  const memberDrafts = offlineDrafts.filter((draft) => draft.memberId === memberApiState.member.id);
+  if (!memberDrafts.length) {
+    memberApiState.message = "No offline drafts to sync.";
+    render();
+    return;
+  }
+
+  try {
+    for (const draft of memberDrafts) {
+      await memberApiRequest("/member-auth/mobile-complaints", {
+        method: "POST",
+        body: JSON.stringify({
+          subject: draft.subject,
+          category: draft.category,
+          priority: draft.priority,
+          description: draft.description
+        })
+      });
+    }
+    offlineDrafts = offlineDrafts.filter((draft) => draft.memberId !== memberApiState.member.id);
+    saveOfflineDrafts();
+    await refreshMemberStatus();
+    memberApiState.message = `${memberDrafts.length} offline draft(s) synced to the server.`;
+    render();
+  } catch (error) {
+    memberApiState.message = error.message;
+    render();
+  }
 }
 
 async function apiLogout() {

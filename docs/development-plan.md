@@ -378,6 +378,7 @@ Progress:
 - Mobile-money callback endpoint added, with idempotent posting for member collections/loan repayments and member in-app notifications.
 - Member mobile dashboard endpoint and Member Portal card added, including server-confirmed balances, notifications, loan totals, and last-updated time.
 - Mobile loan application endpoint and Member Portal flow added, allowing members to submit their own loan applications with server confirmation.
+- Offline complaint draft support added for the Member Portal, with local draft save and server sync when online.
 
 Recommended stack:
 

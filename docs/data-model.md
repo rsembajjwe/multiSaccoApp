@@ -417,7 +417,7 @@ Callback control rule: duplicate provider references return the original posted 
 
 ### member_mobile_dashboard view
 
-This API projection combines member profile, branch, balances, active loans, pending guarantor requests, latest notifications, and `last_updated_at` for the member mobile app. It is read from server-confirmed records only; critical actions such as mobile-money payments and mobile loan applications refresh this view after the server accepts the action.
+This API projection combines member profile, branch, balances, active loans, pending guarantor requests, latest notifications, and `last_updated_at` for the member mobile app. It is read from server-confirmed records only; critical actions such as mobile-money payments and mobile loan applications refresh this view after the server accepts the action. Non-financial complaint drafts can be saved locally and later synced through the mobile complaint endpoint.
 
 ### statement_lines
 

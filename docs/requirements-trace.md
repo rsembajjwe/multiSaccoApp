@@ -55,6 +55,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Mobile-money callback ingestion posts confirmed member collections or loan repayments, rejects duplicate provider references through idempotency, and creates member notifications.
 - Member mobile dashboard endpoint and UI show server-confirmed balances, loan totals, latest notifications, and last-updated time.
 - Members can submit mobile loan applications for their own account, with server confirmation and mobile-dashboard refresh.
+- Members can save offline complaint drafts locally and sync them later to server-side complaints with notification feedback.
 
 ## Recommended backend modules for the next build
 
