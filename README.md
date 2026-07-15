@@ -7,13 +7,14 @@ A dependency-free browser prototype for the Multi-Tenant SACCO Management Platfo
 - Platform administration dashboard.
 - SACCO self-registration and approval workflow.
 - Subscription packages, invoices, and payment activation.
-- Annual subscription billing at UGX 5,000 per member, with a 100-member minimum per cycle.
+- Tiered annual subscription billing, with UGX 5,000/member for SACCOs up to 250 members and fixed tiers above that.
 - Tenant switching with tenant-scoped demo data.
 - Branch-aware member registration and KYC statuses.
 - Savings, shares, and welfare transaction posting.
 - Maker-checker approval queue.
 - Loan application and appraisal queue.
 - Member self-service portal.
+- Member login with balance viewing.
 - Reports, compliance snapshot, and audit trail.
 
 ## How to run
@@ -59,6 +60,8 @@ After Platform Admin API login, the Subscriptions screen reads backend packages/
 After SACCO API login, the Transactions screen reads backend financial postings and submits new pending transactions to `/api/v1/financial-transactions`.
 
 After API login, the Approvals screen reads pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
+
+Members can login from **Member portal** using the seeded account `GVS-0001` / `Member@12345` to view their savings, shares, and welfare balances.
 
 ## Demo roles
 

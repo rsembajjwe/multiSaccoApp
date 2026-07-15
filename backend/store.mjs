@@ -3,9 +3,34 @@ import { hashPassword, hashToken, newId } from "./security.mjs";
 const now = () => new Date().toISOString();
 export const SUBSCRIPTION_UNIT_PRICE = 5000;
 export const MINIMUM_BILLABLE_MEMBERS = 100;
+export const SUBSCRIPTION_BILLING_TIERS = [
+  { id: "per_member", label: "100-250 members", minMembers: 100, maxMembers: 250, unitPrice: SUBSCRIPTION_UNIT_PRICE, amount: null },
+  { id: "starter_fixed", label: "251-500 members", minMembers: 251, maxMembers: 500, unitPrice: null, amount: 1200000 },
+  { id: "growth_fixed", label: "501-2,500 members", minMembers: 501, maxMembers: 2500, unitPrice: null, amount: 3600000 },
+  { id: "enterprise_fixed", label: "2,501-10,000 members", minMembers: 2501, maxMembers: 10000, unitPrice: null, amount: 9000000 }
+];
+
+export function calculateSubscriptionBilling(memberCount) {
+  const safeMemberCount = Math.max(0, Number(memberCount) || 0);
+  const tier = SUBSCRIPTION_BILLING_TIERS.find((item) => safeMemberCount <= item.maxMembers) || SUBSCRIPTION_BILLING_TIERS.at(-1);
+  const billableMembers = tier.id === "per_member" ? Math.max(safeMemberCount, MINIMUM_BILLABLE_MEMBERS) : safeMemberCount;
+  const amount = tier.id === "per_member" ? billableMembers * SUBSCRIPTION_UNIT_PRICE : tier.amount;
+  return {
+    memberCount: safeMemberCount,
+    billableMembers,
+    unitPrice: tier.unitPrice,
+    amount,
+    tierId: tier.id,
+    tierLabel: tier.label,
+    billingDescription: tier.id === "per_member"
+      ? `UGX 5,000 per member, minimum ${MINIMUM_BILLABLE_MEMBERS}`
+      : `Fixed annual tier for ${tier.label}`
+  };
+}
 
 const platformPassword = hashPassword("Admin@12345");
 const saccoPassword = hashPassword("Sacco@12345");
+const memberPassword = hashPassword("Member@12345");
 
 export const db = {
   tenants: [
@@ -91,10 +116,11 @@ export const db = {
     {
       id: "starter",
       name: "Starter",
-      price: SUBSCRIPTION_UNIT_PRICE,
+      price: 1200000,
       billingPeriod: "annual",
       members: 500,
       minMembers: MINIMUM_BILLABLE_MEMBERS,
+      tierLabel: "251-500 members",
       users: 8,
       branches: 1,
       modules: "Members, savings, shares",
@@ -103,10 +129,11 @@ export const db = {
     {
       id: "growth",
       name: "Growth",
-      price: SUBSCRIPTION_UNIT_PRICE,
+      price: 3600000,
       billingPeriod: "annual",
       members: 2500,
       minMembers: MINIMUM_BILLABLE_MEMBERS,
+      tierLabel: "501-2,500 members",
       users: 25,
       branches: 5,
       modules: "Core finance, loans, approvals, reports",
@@ -115,10 +142,11 @@ export const db = {
     {
       id: "enterprise",
       name: "Enterprise",
-      price: SUBSCRIPTION_UNIT_PRICE,
+      price: 9000000,
       billingPeriod: "annual",
       members: 10000,
       minMembers: MINIMUM_BILLABLE_MEMBERS,
+      tierLabel: "2,501-10,000 members",
       users: 100,
       branches: 25,
       modules: "All modules, API, advanced support",
@@ -135,6 +163,9 @@ export const db = {
       memberCount: 3,
       billableMembers: MINIMUM_BILLABLE_MEMBERS,
       unitPrice: SUBSCRIPTION_UNIT_PRICE,
+      tierId: "per_member",
+      tierLabel: "100-250 members",
+      billingDescription: "UGX 5,000 per member, minimum 100",
       amount: 500000,
       paid: 500000,
       expiry: "2027-07-14",
@@ -150,6 +181,9 @@ export const db = {
       memberCount: 1,
       billableMembers: MINIMUM_BILLABLE_MEMBERS,
       unitPrice: SUBSCRIPTION_UNIT_PRICE,
+      tierId: "per_member",
+      tierLabel: "100-250 members",
+      billingDescription: "UGX 5,000 per member, minimum 100",
       amount: 500000,
       paid: 0,
       expiry: "2026-07-30",
@@ -204,6 +238,8 @@ export const db = {
       phone: "+256701234567",
       email: "amina@example.local",
       nationalId: "CM9000012K4PA",
+      passwordHash: memberPassword.hash,
+      passwordSalt: memberPassword.salt,
       status: "active",
       kycStatus: "verified",
       joiningDate: "2024-04-12",
@@ -220,6 +256,8 @@ export const db = {
       phone: "+256772222118",
       email: "daniel@example.local",
       nationalId: "CM9000455K8AB",
+      passwordHash: memberPassword.hash,
+      passwordSalt: memberPassword.salt,
       status: "active",
       kycStatus: "pending_verification",
       joiningDate: "2024-08-03",
@@ -236,6 +274,8 @@ export const db = {
       phone: "+256704111889",
       email: "peter@example.local",
       nationalId: "CM8800142K2RE",
+      passwordHash: memberPassword.hash,
+      passwordSalt: memberPassword.salt,
       status: "applicant",
       kycStatus: "pending_verification",
       joiningDate: "2026-07-02",
@@ -308,6 +348,7 @@ export const db = {
     }
   ],
   sessions: [],
+  memberSessions: [],
   auditEvents: [
     {
       id: "audit_seed_1",
@@ -329,8 +370,26 @@ export function publicUser(user) {
   return safeUser;
 }
 
+export function publicMember(member) {
+  if (!member) return null;
+  const { passwordHash, passwordSalt, ...safeMember } = member;
+  return safeMember;
+}
+
 export function publicTenant(tenant) {
   return tenant;
+}
+
+export function memberBalances(memberId) {
+  const balances = { savings: 0, shares: 0, welfare: 0 };
+  for (const transaction of db.financialTransactions) {
+    if (transaction.memberId !== memberId || transaction.status !== "posted") continue;
+    if (transaction.type === "savings_deposit") balances.savings += transaction.amount;
+    if (transaction.type === "withdrawal") balances.savings -= transaction.amount;
+    if (transaction.type === "share_purchase") balances.shares += transaction.amount;
+    if (transaction.type === "welfare_contribution") balances.welfare += transaction.amount;
+  }
+  return balances;
 }
 
 export function createAuditEvent({ tenantId, actorUserId, actorName, action, resourceType = null, resourceId = null, ipAddress = null }) {
@@ -363,6 +422,20 @@ export function createSession(user) {
   return { token, session };
 }
 
+export function createMemberSession(member) {
+  const token = `${newId("member_session")}.${cryptoRandomSuffix()}`;
+  const session = {
+    id: newId("member_session"),
+    memberId: member.id,
+    tenantId: member.tenantId,
+    tokenHash: hashToken(token),
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString(),
+    createdAt: now()
+  };
+  db.memberSessions.push(session);
+  return { token, session };
+}
+
 export function findSessionByToken(token) {
   if (!token) return null;
   const tokenHash = hashToken(token);
@@ -372,11 +445,27 @@ export function findSessionByToken(token) {
   return user ? { session, user } : null;
 }
 
+export function findMemberSessionByToken(token) {
+  if (!token) return null;
+  const tokenHash = hashToken(token);
+  const session = db.memberSessions.find((item) => item.tokenHash === tokenHash && new Date(item.expiresAt) > new Date());
+  if (!session) return null;
+  const member = db.members.find((item) => item.id === session.memberId && item.status === "active");
+  return member ? { session, member } : null;
+}
+
 export function removeSession(token) {
   const tokenHash = hashToken(token);
   const before = db.sessions.length;
   db.sessions = db.sessions.filter((item) => item.tokenHash !== tokenHash);
   return before !== db.sessions.length;
+}
+
+export function removeMemberSession(token) {
+  const tokenHash = hashToken(token);
+  const before = db.memberSessions.length;
+  db.memberSessions = db.memberSessions.filter((item) => item.tokenHash !== tokenHash);
+  return before !== db.memberSessions.length;
 }
 
 function cryptoRandomSuffix() {

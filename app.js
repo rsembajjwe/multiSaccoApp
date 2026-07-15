@@ -1,5 +1,6 @@
 const STORAGE_KEY = "sacco-platform-demo-v1";
 const API_SESSION_KEY = "sacco-platform-api-session-v1";
+const MEMBER_SESSION_KEY = "sacco-platform-member-session-v1";
 const API_BASE = "/api/v1";
 
 const navItems = [
@@ -21,6 +22,12 @@ const money = new Intl.NumberFormat("en-UG", {
 
 const SUBSCRIPTION_UNIT_PRICE = 5000;
 const MINIMUM_BILLABLE_MEMBERS = 100;
+const SUBSCRIPTION_BILLING_TIERS = [
+  { id: "per_member", label: "100-250 members", minMembers: 100, maxMembers: 250, unitPrice: SUBSCRIPTION_UNIT_PRICE, amount: null },
+  { id: "starter_fixed", label: "251-500 members", minMembers: 251, maxMembers: 500, unitPrice: null, amount: 1200000 },
+  { id: "growth_fixed", label: "501-2,500 members", minMembers: 501, maxMembers: 2500, unitPrice: null, amount: 3600000 },
+  { id: "enterprise_fixed", label: "2,501-10,000 members", minMembers: 2501, maxMembers: 10000, unitPrice: null, amount: 9000000 }
+];
 const today = new Date("2026-07-15T12:00:00+03:00");
 
 const seedData = {
@@ -68,13 +75,13 @@ const seedData = {
     }
   ],
   packages: [
-    { id: "starter", name: "Starter", price: SUBSCRIPTION_UNIT_PRICE, members: 500, minMembers: MINIMUM_BILLABLE_MEMBERS, users: 8, branches: 1, modules: "Members, savings, shares" },
-    { id: "growth", name: "Growth", price: SUBSCRIPTION_UNIT_PRICE, members: 2500, minMembers: MINIMUM_BILLABLE_MEMBERS, users: 25, branches: 5, modules: "Core finance, loans, approvals, reports" },
-    { id: "enterprise", name: "Enterprise", price: SUBSCRIPTION_UNIT_PRICE, members: 10000, minMembers: MINIMUM_BILLABLE_MEMBERS, users: 100, branches: 25, modules: "All modules, API, advanced support" }
+    { id: "starter", name: "Starter", price: 1200000, members: 500, minMembers: MINIMUM_BILLABLE_MEMBERS, tierLabel: "251-500 members", users: 8, branches: 1, modules: "Members, savings, shares" },
+    { id: "growth", name: "Growth", price: 3600000, members: 2500, minMembers: MINIMUM_BILLABLE_MEMBERS, tierLabel: "501-2,500 members", users: 25, branches: 5, modules: "Core finance, loans, approvals, reports" },
+    { id: "enterprise", name: "Enterprise", price: 9000000, members: 10000, minMembers: MINIMUM_BILLABLE_MEMBERS, tierLabel: "2,501-10,000 members", users: 100, branches: 25, modules: "All modules, API, advanced support" }
   ],
   subscriptions: [
-    { id: "sub-1", tenantId: "green", packageId: "growth", status: "Active", invoice: "INV-2026-001", memberCount: 3, billableMembers: MINIMUM_BILLABLE_MEMBERS, unitPrice: SUBSCRIPTION_UNIT_PRICE, amount: 500000, paid: 500000, expiry: "2027-07-14" },
-    { id: "sub-2", tenantId: "lake", packageId: "starter", status: "Pending Payment", invoice: "INV-2026-002", memberCount: 1, billableMembers: MINIMUM_BILLABLE_MEMBERS, unitPrice: SUBSCRIPTION_UNIT_PRICE, amount: 500000, paid: 0, expiry: "2026-07-30" }
+    { id: "sub-1", tenantId: "green", packageId: "growth", status: "Active", invoice: "INV-2026-001", memberCount: 3, billableMembers: MINIMUM_BILLABLE_MEMBERS, unitPrice: SUBSCRIPTION_UNIT_PRICE, tierId: "per_member", tierLabel: "100-250 members", billingDescription: "UGX 5,000 per member, minimum 100", amount: 500000, paid: 500000, expiry: "2027-07-14" },
+    { id: "sub-2", tenantId: "lake", packageId: "starter", status: "Pending Payment", invoice: "INV-2026-002", memberCount: 1, billableMembers: MINIMUM_BILLABLE_MEMBERS, unitPrice: SUBSCRIPTION_UNIT_PRICE, tierId: "per_member", tierLabel: "100-250 members", billingDescription: "UGX 5,000 per member, minimum 100", amount: 500000, paid: 0, expiry: "2026-07-30" }
   ],
   members: [
     { id: "m-1", tenantId: "green", no: "GVS-0001", name: "Amina Nakitende", phone: "+256701234567", nin: "CM9000012K4PA", type: "Individual", status: "Active", branchId: "g-main", kyc: "Verified", savings: 2450000, shares: 850000, welfare: 180000 },
@@ -118,6 +125,14 @@ let apiState = {
   financialTransactions: [],
   auditEvents: [],
   message: "Checking backend connection..."
+};
+let memberApiState = {
+  token: localStorage.getItem(MEMBER_SESSION_KEY) || "",
+  member: null,
+  tenant: null,
+  branch: null,
+  balances: null,
+  message: "Member portal not signed in."
 };
 
 function loadState() {
@@ -184,16 +199,36 @@ function useApiTransactions() {
   return Boolean(apiState.user);
 }
 
+function calculateSubscriptionBilling(memberCount) {
+  const safeMemberCount = Math.max(0, Number(memberCount) || 0);
+  const tier = SUBSCRIPTION_BILLING_TIERS.find((item) => safeMemberCount <= item.maxMembers) || SUBSCRIPTION_BILLING_TIERS[SUBSCRIPTION_BILLING_TIERS.length - 1];
+  const billableMembers = tier.id === "per_member" ? Math.max(safeMemberCount, MINIMUM_BILLABLE_MEMBERS) : safeMemberCount;
+  const amount = tier.id === "per_member" ? billableMembers * SUBSCRIPTION_UNIT_PRICE : tier.amount;
+  return {
+    memberCount: safeMemberCount,
+    billableMembers,
+    unitPrice: tier.unitPrice,
+    amount,
+    tierId: tier.id,
+    tierLabel: tier.label,
+    billingDescription: tier.id === "per_member"
+      ? `UGX 5,000 per member, minimum ${MINIMUM_BILLABLE_MEMBERS}`
+      : `Fixed annual tier for ${tier.label}`
+  };
+}
+
 function subscriptionBillingDetails(subscription) {
   const memberCount = subscription.memberCount ?? state.members.filter((member) => member.tenantId === subscription.tenantId).length;
-  const billableMembers = subscription.billableMembers ?? Math.max(memberCount, MINIMUM_BILLABLE_MEMBERS);
-  const unitPrice = subscription.unitPrice ?? SUBSCRIPTION_UNIT_PRICE;
+  const computed = calculateSubscriptionBilling(memberCount);
   return {
     memberCount,
-    billableMembers,
-    unitPrice,
-    amount: billableMembers * unitPrice,
-    paid: Math.min(subscription.paid || 0, billableMembers * unitPrice)
+    billableMembers: subscription.billableMembers ?? computed.billableMembers,
+    unitPrice: subscription.unitPrice ?? computed.unitPrice,
+    amount: computed.amount,
+    paid: Math.min(subscription.paid || 0, computed.amount),
+    tierId: subscription.tierId || computed.tierId,
+    tierLabel: subscription.tierLabel || computed.tierLabel,
+    billingDescription: subscription.billingDescription || computed.billingDescription
   };
 }
 
@@ -204,6 +239,7 @@ function apiPackageToRow(pkg) {
     price: pkg.price,
     members: pkg.members,
     minMembers: pkg.minMembers || MINIMUM_BILLABLE_MEMBERS,
+    tierLabel: pkg.tierLabel,
     users: pkg.users,
     branches: pkg.branches,
     modules: pkg.modules
@@ -222,6 +258,9 @@ function apiSubscriptionToRow(subscription) {
     memberCount: subscription.memberCount,
     billableMembers: subscription.billableMembers,
     unitPrice: subscription.unitPrice,
+    tierId: subscription.tierId,
+    tierLabel: subscription.tierLabel,
+    billingDescription: subscription.billingDescription,
     expiry: subscription.expiry,
     source: "API"
   };
@@ -310,6 +349,7 @@ function init() {
   bindGlobalActions();
   render();
   refreshApiStatus();
+  refreshMemberStatus();
 }
 
 function renderTenantSelect() {
@@ -352,6 +392,10 @@ function bindGlobalActions() {
 
   document.getElementById("newMemberBtn").addEventListener("click", openMemberForm);
   document.getElementById("memberPortalBtn").addEventListener("click", () => {
+    if (!memberApiState.member) {
+      openMemberLoginForm();
+      return;
+    }
     state.currentView = "memberPortal";
     saveState();
     render();
@@ -519,12 +563,21 @@ function renderSubscriptions() {
   const source = useApiSubscriptions() ? "API-backed" : "Local demo";
   return `
     <div class="grid three">
+      <section class="card">
+        <h2>100-250 members</h2>
+        <p><strong>${money.format(SUBSCRIPTION_UNIT_PRICE)}</strong> per member / year</p>
+        <ul class="list">
+          <li><span>Minimum billable members</span><strong>${MINIMUM_BILLABLE_MEMBERS}</strong></li>
+          <li><span>Minimum annual invoice</span><strong>${money.format(MINIMUM_BILLABLE_MEMBERS * SUBSCRIPTION_UNIT_PRICE)}</strong></li>
+          <li><span>Applies up to</span><strong>250 members</strong></li>
+        </ul>
+      </section>
       ${packages.map((pkg) => `
         <section class="card">
           <h2>${pkg.name}</h2>
-          <p><strong>${money.format(SUBSCRIPTION_UNIT_PRICE)}</strong> per member / year</p>
+          <p><strong>${money.format(pkg.price)}</strong> per year</p>
           <ul class="list">
-            <li><span>Minimum billable members</span><strong>${(pkg.minMembers || MINIMUM_BILLABLE_MEMBERS).toLocaleString()}</strong></li>
+            <li><span>Billing band</span><strong>${pkg.tierLabel || `Up to ${pkg.members.toLocaleString()}`}</strong></li>
             <li><span>Member limit</span><strong>${pkg.members.toLocaleString()}</strong></li>
             <li><span>Users</span><strong>${pkg.users}</strong></li>
             <li><span>Branches</span><strong>${pkg.branches}</strong></li>
@@ -560,8 +613,8 @@ function subscriptionRow(sub) {
     <tr>
       <td>${sub.invoice}${sub.source ? `<br><small>${sub.source}</small>` : ""}</td>
       <td>${tenantName(sub.tenantId)}</td>
-      <td>${packageName(sub.packageId)}<br><small>${money.format(billing.unitPrice)} each / year</small></td>
-      <td>${billing.memberCount.toLocaleString()} actual<br><small>${billing.billableMembers.toLocaleString()} billable minimum</small></td>
+      <td>${packageName(sub.packageId)}<br><small>${billing.tierLabel}</small></td>
+      <td>${billing.memberCount.toLocaleString()} actual<br><small>${billing.billingDescription}</small></td>
       <td>${money.format(billing.amount)}</td>
       <td>${money.format(billing.paid)}</td>
       <td>${sub.expiry}</td>
@@ -742,10 +795,52 @@ function renderReports() {
 }
 
 function renderMemberPortal() {
+  if (memberApiState.member) {
+    const member = memberApiState.member;
+    const balances = memberApiState.balances || { savings: 0, shares: 0, welfare: 0 };
+    return `
+      <div class="toolbar">
+        <div>
+          <h2>${member.fullName}</h2>
+          <p class="eyebrow">${member.membershipNo} · ${memberApiState.tenant?.name || tenantName(member.tenantId)}</p>
+        </div>
+        <button class="secondary-button" data-action="memberLogout" type="button">Logout member</button>
+      </div>
+      <div class="grid metrics" style="margin-top:16px">
+        ${metric("Savings", money.format(balances.savings), "posted deposits less withdrawals")}
+        ${metric("Shares", money.format(balances.shares), "posted share purchases")}
+        ${metric("Welfare", money.format(balances.welfare), "posted welfare contributions")}
+        ${metric("Status", titleCase(member.status.replace(/_/g, " ")), member.kycStatus ? `KYC ${titleCase(member.kycStatus.replace(/_/g, " "))}` : "Member profile")}
+      </div>
+      <div class="grid two" style="margin-top:16px">
+        <section class="card">
+          <h2>Profile</h2>
+          <div class="grid three">
+            ${miniFact("Member no.", member.membershipNo)}
+            ${miniFact("Phone", member.phone)}
+            ${miniFact("Branch", memberApiState.branch?.name || branchName(member.branchId))}
+          </div>
+        </section>
+        <section class="card">
+          <h2>Self-service</h2>
+          <ul class="list">
+            <li><span>Statements</span><strong>Available soon</strong></li>
+            <li><span>Payments</span><strong>Mobile money next</strong></li>
+            <li><span>Security</span><strong>Password login active</strong></li>
+          </ul>
+        </section>
+      </div>
+    `;
+  }
+
+  if (memberApiState.token) {
+    return `<section class="card"><h2>Member portal</h2><p>${memberApiState.message}</p><button class="primary-button" data-action="memberLogin" type="button">Member login</button></section>`;
+  }
+
   const members = tenantScoped(state.members).filter((member) => member.status === "Active");
   const member = members[0] || tenantScoped(state.members)[0];
   if (!member) {
-    return `<section class="card"><h2>Member portal</h2><p>No members exist for this tenant yet.</p></section>`;
+    return `<section class="card"><h2>Member portal</h2><p>No members exist for this tenant yet.</p><button class="primary-button" data-action="memberLogin" type="button">Member login</button></section>`;
   }
   const memberLoans = state.loans.filter((loan) => loan.memberId === member.id);
   return `
@@ -764,6 +859,7 @@ function renderMemberPortal() {
           ${miniFact("KYC", member.kyc)}
         </div>
         <div class="toolbar" style="margin-top:16px">
+          <button class="primary-button" data-action="memberLogin" type="button">Member login</button>
           <button class="secondary-button" type="button">Download statement</button>
           <button class="secondary-button" type="button">Make payment</button>
           <button class="primary-button" data-action="newLoan" type="button">Apply for loan</button>
@@ -865,6 +961,8 @@ function bindViewActions() {
         newTransaction: openTransactionForm,
         newLoan: openLoanForm,
         recordSubscriptionPayment: recordSubscriptionPayment,
+        memberLogin: openMemberLoginForm,
+        memberLogout: memberLogout,
         refreshApi: refreshApiStatus
       };
       actions[button.dataset.action]?.();
@@ -914,6 +1012,37 @@ async function apiRequest(path, options = {}) {
     throw new Error(message);
   }
   return payload.data;
+}
+
+async function memberApiRequest(path, options = {}) {
+  const headers = {
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(memberApiState.token ? { Authorization: `Bearer ${memberApiState.token}` } : {}),
+    ...(options.headers || {})
+  };
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const payload = await response.json();
+  if (!response.ok) {
+    const message = payload.error?.message || `Member request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+  return payload.data;
+}
+
+async function refreshMemberStatus() {
+  if (!memberApiState.token) return;
+  try {
+    const session = await memberApiRequest("/member-auth/me");
+    memberApiState.member = session.member;
+    memberApiState.tenant = session.tenant;
+    memberApiState.branch = session.branch;
+    memberApiState.balances = session.balances;
+    memberApiState.message = `Member portal signed in as ${session.member.fullName}.`;
+  } catch (error) {
+    localStorage.removeItem(MEMBER_SESSION_KEY);
+    memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, message: error.message };
+  }
+  if (state.currentView === "memberPortal") render();
 }
 
 async function refreshApiStatus() {
@@ -985,6 +1114,38 @@ function openApiLoginForm() {
   });
 }
 
+function openMemberLoginForm() {
+  openModal("Member login", `
+    <div class="notice">Seed member account: <strong>GVS-0001</strong> / <strong>Member@12345</strong>. Phone or email also work.</div>
+    <div class="form-grid" style="margin-top:14px">
+      ${field("Membership no., phone, or email", "memberIdentifier", "text", "GVS-0001")}
+      ${field("Password", "memberPassword", "password", "Member@12345")}
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="memberLoginSubmit" class="primary-button" type="button">Login</button>`);
+
+  document.getElementById("memberLoginSubmit").addEventListener("click", async () => {
+    try {
+      const data = await memberApiRequest("/member-auth/login", {
+        method: "POST",
+        headers: {},
+        body: JSON.stringify({ identifier: value("memberIdentifier"), password: value("memberPassword") })
+      });
+      memberApiState.token = data.token;
+      memberApiState.member = data.member;
+      memberApiState.tenant = data.tenant;
+      memberApiState.branch = data.branch;
+      memberApiState.balances = data.balances;
+      localStorage.setItem(MEMBER_SESSION_KEY, data.token);
+      closeModal();
+      state.currentView = "memberPortal";
+      await refreshMemberStatus();
+      render();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
 async function apiLogout() {
   try {
     if (apiState.token) await apiRequest("/auth/logout", { method: "POST" });
@@ -994,6 +1155,17 @@ async function apiLogout() {
   localStorage.removeItem(API_SESSION_KEY);
   apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
+  render();
+}
+
+async function memberLogout() {
+  try {
+    if (memberApiState.token) await memberApiRequest("/member-auth/logout", { method: "POST" });
+  } catch {
+    // Local logout should still clear the client member session if the server has restarted.
+  }
+  localStorage.removeItem(MEMBER_SESSION_KEY);
+  memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, message: "Logged out of member portal." };
   render();
 }
 
@@ -1019,6 +1191,8 @@ function apiAuditTable(rows) {
 }
 
 function branchName(id) {
+  const apiBranch = apiState.branches.find((item) => item.id === id);
+  if (apiBranch) return apiBranch.name;
   for (const tenant of state.tenants) {
     const branch = tenant.branches?.find((item) => item.id === id);
     if (branch) return branch.name;

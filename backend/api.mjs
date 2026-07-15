@@ -1,13 +1,17 @@
 import { hashPassword, newId, verifyPassword } from "./security.mjs";
 import {
-  MINIMUM_BILLABLE_MEMBERS,
-  SUBSCRIPTION_UNIT_PRICE,
+  calculateSubscriptionBilling,
   createAuditEvent,
+  createMemberSession,
   createSession,
   db,
+  findMemberSessionByToken,
   findSessionByToken,
+  memberBalances,
+  publicMember,
   publicTenant,
   publicUser,
+  removeMemberSession,
   removeSession
 } from "./store.mjs";
 import { authToken, readJson, requestIp, sendData, sendError } from "./http.mjs";
@@ -37,6 +41,17 @@ export async function handleApi(request, response, url) {
     }
 
     if (method === "POST" && path === "/auth/login") return login(request, response, correlationId);
+    if (method === "POST" && path === "/member-auth/login") return memberLogin(request, response, correlationId);
+
+    if (path.startsWith("/member-auth/")) {
+      const memberAuth = requireMemberAuth(request, response, correlationId);
+      if (!memberAuth) return;
+      if (method === "GET" && path === "/member-auth/me") return getMemberSession(response, memberAuth);
+      if (method === "POST" && path === "/member-auth/logout") {
+        removeMemberSession(memberAuth.token);
+        return sendData(response, { loggedOut: true });
+      }
+    }
 
     const auth = requireAuth(request, response, correlationId);
     if (!auth) return;
@@ -124,11 +139,66 @@ async function login(request, response, correlationId) {
   return sendData(response, { token, user: publicUser(user), expiresAt: session.expiresAt });
 }
 
+async function memberLogin(request, response, correlationId) {
+  const body = await readJson(request);
+  const identifier = String(body.identifier || "").toLowerCase().trim();
+  const password = String(body.password || "");
+
+  if (!identifier || !password) return sendError(response, 400, "VALIDATION_ERROR", "Membership number, phone, email, and password are required.", correlationId);
+
+  const member = db.members.find((item) => {
+    const candidates = [item.membershipNo, item.phone, item.email].filter(Boolean).map((value) => String(value).toLowerCase());
+    return candidates.includes(identifier);
+  });
+  if (!member || member.status !== "active" || !verifyPassword(password, member.passwordSalt, member.passwordHash)) {
+    return sendError(response, 401, "INVALID_MEMBER_CREDENTIALS", "Invalid member credentials or inactive member account.", correlationId);
+  }
+
+  const { token, session } = createMemberSession(member);
+  createAuditEvent({
+    tenantId: member.tenantId,
+    actorUserId: null,
+    actorName: member.fullName,
+    action: "Member logged in",
+    resourceType: "member_session",
+    resourceId: session.id,
+    ipAddress: requestIp(request)
+  });
+
+  return sendData(response, {
+    token,
+    member: publicMember(member),
+    tenant: publicTenant(db.tenants.find((tenant) => tenant.id === member.tenantId)),
+    branch: db.branches.find((branch) => branch.id === member.branchId) || null,
+    balances: memberBalances(member.id),
+    expiresAt: session.expiresAt
+  });
+}
+
+function getMemberSession(response, auth) {
+  return sendData(response, {
+    member: publicMember(auth.member),
+    tenant: publicTenant(db.tenants.find((tenant) => tenant.id === auth.member.tenantId)),
+    branch: db.branches.find((branch) => branch.id === auth.member.branchId) || null,
+    balances: memberBalances(auth.member.id)
+  });
+}
+
 function requireAuth(request, response, correlationId) {
   const token = authToken(request);
   const auth = findSessionByToken(token);
   if (!auth) {
     sendError(response, 401, "AUTH_REQUIRED", "A valid bearer token is required.", correlationId);
+    return null;
+  }
+  return { ...auth, token };
+}
+
+function requireMemberAuth(request, response, correlationId) {
+  const token = authToken(request);
+  const auth = findMemberSessionByToken(token);
+  if (!auth) {
+    sendError(response, 401, "MEMBER_AUTH_REQUIRED", "A valid member bearer token is required.", correlationId);
     return null;
   }
   return { ...auth, token };
@@ -302,14 +372,16 @@ function listSubscriptions(response, auth, url) {
 
 function refreshSubscriptionBilling(subscription) {
   const memberCount = db.members.filter((member) => member.tenantId === subscription.tenantId).length;
-  const billableMembers = Math.max(memberCount, MINIMUM_BILLABLE_MEMBERS);
-  const amount = billableMembers * SUBSCRIPTION_UNIT_PRICE;
-  subscription.memberCount = memberCount;
-  subscription.billableMembers = billableMembers;
-  subscription.unitPrice = SUBSCRIPTION_UNIT_PRICE;
-  subscription.amount = amount;
-  subscription.paid = Math.min(subscription.paid, amount);
-  if (subscription.status === "active" && subscription.paid < amount) subscription.status = "pending_payment";
+  const billing = calculateSubscriptionBilling(memberCount);
+  subscription.memberCount = billing.memberCount;
+  subscription.billableMembers = billing.billableMembers;
+  subscription.unitPrice = billing.unitPrice;
+  subscription.tierId = billing.tierId;
+  subscription.tierLabel = billing.tierLabel;
+  subscription.billingDescription = billing.billingDescription;
+  subscription.amount = billing.amount;
+  subscription.paid = Math.min(subscription.paid, billing.amount);
+  if (subscription.status === "active" && subscription.paid < billing.amount) subscription.status = "pending_payment";
   return subscription;
 }
 
@@ -431,6 +503,7 @@ async function createMember(request, response, auth, correlationId) {
     return sendError(response, 409, "MEMBER_EXISTS", "A member with that membership number already exists.", correlationId);
   }
 
+  const password = hashPassword(String(body.password || "Member@12345"));
   const member = {
     id: newId("member"),
     tenantId,
@@ -441,6 +514,8 @@ async function createMember(request, response, auth, correlationId) {
     phone: String(body.phone),
     email: String(body.email || ""),
     nationalId: String(body.nationalId || ""),
+    passwordHash: password.hash,
+    passwordSalt: password.salt,
     status: "pending_approval",
     kycStatus,
     joiningDate: String(body.joiningDate || new Date().toISOString().slice(0, 10)),

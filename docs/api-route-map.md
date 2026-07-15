@@ -34,6 +34,9 @@ All JSON responses should follow one of these shapes:
 | POST | `/auth/login` | Authenticate user. | Public |
 | POST | `/auth/logout` | End current session. | Required |
 | GET | `/auth/me` | Get current authenticated user. | Required |
+| POST | `/member-auth/login` | Authenticate a member with membership number, phone, or email. | Public |
+| GET | `/member-auth/me` | Get current member profile, tenant, branch, and balances. | Member |
+| POST | `/member-auth/logout` | End current member session. | Member |
 | GET | `/roles` | List roles for current tenant. | Required |
 | POST | `/roles` | Create custom role. | Admin |
 | GET | `/permissions` | List known permissions. | Required |
@@ -77,6 +80,9 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/logout`
+- `POST /api/v1/member-auth/login`
+- `GET /api/v1/member-auth/me`
+- `POST /api/v1/member-auth/logout`
 - `GET /api/v1/roles`
 - `GET /api/v1/permissions`
 - `GET /api/v1/audit-events`

@@ -24,6 +24,8 @@ CREATE TABLE members (
   phone TEXT NOT NULL,
   email TEXT,
   national_id TEXT,
+  password_hash TEXT NOT NULL,
+  password_salt TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending_approval',
   kyc_status TEXT NOT NULL DEFAULT 'pending_verification',
   joining_date DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -34,6 +36,17 @@ CREATE TABLE members (
 
 CREATE INDEX idx_members_tenant_status ON members (tenant_id, status);
 CREATE INDEX idx_members_tenant_branch ON members (tenant_id, branch_id);
+
+CREATE TABLE member_sessions (
+  id UUID PRIMARY KEY,
+  member_id UUID NOT NULL REFERENCES members(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  token_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_member_sessions_member ON member_sessions (member_id, expires_at);
 
 CREATE TABLE member_documents (
   id UUID PRIMARY KEY,

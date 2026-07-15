@@ -122,10 +122,11 @@ This model defines the Phase 1 and Phase 2 foundation tables. Production storage
 | --- | --- | --- |
 | id | uuid/string | Primary key. |
 | name | text | Package name. |
-| price | decimal | Unit price per member per annual cycle. Current rule: UGX 5,000. |
+| price | decimal | Fixed annual package price for the package tier. |
 | billing_period | text | `monthly`, `quarterly`, `annual`, etc. |
-| min_members | integer | Minimum billable members per cycle. Current rule: 100. |
+| min_members | integer | Minimum billable members for the low-member per-member tier. |
 | member_limit | integer | Optional package limit. |
+| tier_label | text | Display label for the package billing band. |
 | user_limit | integer | Optional package limit. |
 | branch_limit | integer | Optional package limit. |
 | modules | text | Available module summary. |
@@ -143,11 +144,14 @@ This model defines the Phase 1 and Phase 2 foundation tables. Production storage
 | amount | decimal | Invoice amount. |
 | paid | decimal | Amount received. |
 | member_count | integer | Actual member count used for the billing cycle. |
-| billable_members | integer | `max(member_count, 100)` for annual billing. |
-| unit_price | decimal | Price per member for the cycle. |
+| billable_members | integer | Billable member count for the per-member tier. |
+| unit_price | decimal | Price per member for the per-member tier, otherwise null. |
+| tier_id | text | Billing tier selected for the cycle. |
+| tier_label | text | Billing tier display label. |
+| billing_description | text | Human-readable billing rule snapshot. |
 | expiry | date | Subscription expiry. |
 
-Subscription billing rule: every SACCO pays UGX 5,000 per member for each annual cycle, with a 100-member minimum. The minimum annual invoice is therefore UGX 500,000.
+Subscription billing rule: SACCOs with up to 250 members pay UGX 5,000 per member annually, with a 100-member minimum. From 251-500 members the Starter fixed annual tier is UGX 1,200,000; from 501-2,500 members the Growth tier is UGX 3,600,000; from 2,501-10,000 members the Enterprise tier is UGX 9,000,000.
 
 ### subscription_payments
 
@@ -212,9 +216,22 @@ Financial transaction decisions follow maker-checker separation: a transaction c
 | phone | text | Primary telephone. |
 | email | text | Optional email. |
 | national_id | text | NIN or alternate identifier. |
+| password_hash | text | Member portal password hash. |
+| password_salt | text | Member portal password salt. |
 | status | enum | `applicant`, `pending_approval`, `active`, `inactive`, `dormant`, `suspended`, `exited`. |
 | kyc_status | enum | `not_verified`, `pending_verification`, `verified`, `rejected`, `expired`. |
 | joining_date | date | Membership date. |
+
+### member_sessions
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| member_id | uuid/string | Authenticated member. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| token_hash | text | Hash of issued member token. |
+| expires_at | timestamp | Expiry timestamp. |
+| created_at | timestamp | Creation timestamp. |
 
 ### member_documents
 

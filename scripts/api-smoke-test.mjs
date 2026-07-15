@@ -49,13 +49,14 @@ try {
 
   const packages = await api("GET", "/subscription-packages", null, platformToken);
   assert(packages.data.length >= 3, "Subscription packages should be listed");
-  assert(packages.data.every((pkg) => pkg.price === 5000), "Each subscription package should bill UGX 5,000 per member annually");
-  assert(packages.data.every((pkg) => pkg.minMembers === 100), "Each subscription package should enforce the 100-member annual minimum");
+  assert(packages.data.some((pkg) => pkg.price === 1200000 && pkg.members === 500), "Starter fixed tier should be retained for 251-500 members");
+  assert(packages.data.some((pkg) => pkg.price === 3600000 && pkg.members === 2500), "Growth fixed tier should be retained for 501-2,500 members");
+  assert(packages.data.some((pkg) => pkg.price === 9000000 && pkg.members === 10000), "Enterprise fixed tier should be retained for 2,501-10,000 members");
 
   const subscriptions = await api("GET", "/subscriptions", null, platformToken);
   assert(subscriptions.data.length >= 2, "Platform admin should list subscriptions");
-  assert(subscriptions.data.every((subscription) => subscription.billableMembers >= 100), "Subscriptions should bill at least 100 members per annual cycle");
-  assert(subscriptions.data.every((subscription) => subscription.amount === subscription.billableMembers * 5000), "Subscription amount should be billable members times UGX 5,000");
+  assert(subscriptions.data.every((subscription) => subscription.tierId), "Subscriptions should include a billing tier");
+  assert(subscriptions.data.every((subscription) => subscription.memberCount <= 250 ? subscription.amount === subscription.billableMembers * 5000 : true), "Small SACCO subscriptions should bill UGX 5,000 per billable member");
   const pendingSubscription = subscriptions.data.find((subscription) => subscription.status !== "active") || subscriptions.data[0];
   const payment = await api("POST", `/subscriptions/${pendingSubscription.id}/payments`, {
     amount: pendingSubscription.amount - pendingSubscription.paid,
@@ -78,6 +79,19 @@ try {
     password: "Sacco@12345"
   });
   const saccoToken = saccoLogin.data.token;
+
+  const memberLogin = await api("POST", "/member-auth/login", {
+    identifier: "GVS-0001",
+    password: "Member@12345"
+  });
+  const memberToken = memberLogin.data.token;
+  assert(memberLogin.data.member.membershipNo === "GVS-0001", "Member login should return the member profile");
+  assert(memberLogin.data.balances.savings === 250000, "Member login should return posted savings balance");
+  assert(!("passwordHash" in memberLogin.data.member), "Member profile should not expose password hash");
+
+  const memberSession = await api("GET", "/member-auth/me", null, memberToken);
+  assert(memberSession.data.member.id === memberLogin.data.member.id, "Member session should return the logged-in member");
+  assert(memberSession.data.tenant.id === "tenant_green", "Member session should include tenant context");
 
   const saccoSubscriptions = await api("GET", "/subscriptions", null, saccoToken);
   assert(saccoSubscriptions.data.every((subscription) => subscription.tenantId === "tenant_green"), "SACCO subscription list must be tenant-scoped");
