@@ -58,6 +58,42 @@ try {
   }, saccoToken);
   assert(audit.data.id, "Audit event should be created");
 
+  const branches = await api("GET", "/branches", null, saccoToken);
+  assert(branches.data.length >= 2, "SACCO admin should list own branches");
+  assert(branches.data.every((branch) => branch.tenantId === "tenant_green"), "SACCO branch list must be tenant-scoped");
+
+  const branch = await api("POST", "/branches", {
+    code: `SM${Date.now().toString().slice(-5)}`,
+    name: "Smoke Test Branch",
+    address: "Temporary test location"
+  }, saccoToken);
+  assert(branch.data.id, "Branch creation should return a branch");
+  assert(branch.data.tenantId === "tenant_green", "Branch should be created in authenticated tenant");
+
+  const member = await api("POST", "/members", {
+    branchId: branch.data.id,
+    fullName: "Smoke Test Member",
+    phone: "+256700123456",
+    email: "member-smoke@example.local",
+    nationalId: `SMOKE-${Date.now()}`,
+    memberType: "individual",
+    kycStatus: "pending_verification"
+  }, saccoToken);
+  assert(member.data.id, "Member creation should return a member");
+  assert(member.data.status === "pending_approval", "New member should start pending approval");
+
+  const status = await api("PATCH", `/members/${member.data.id}/status`, { status: "active" }, saccoToken);
+  assert(status.data.status === "active", "Member status should update");
+
+  const document = await api("POST", `/members/${member.data.id}/documents`, {
+    documentType: "national_id",
+    storageKey: `tenant_green/members/${member.data.id}/national-id.pdf`
+  }, saccoToken);
+  assert(document.data.id, "Member document metadata should be created");
+
+  const lakeMemberDenied = await raw("GET", "/members/member_lake_peter", null, saccoToken);
+  assert(lakeMemberDenied.status === 403, "SACCO admin should be blocked from another tenant member");
+
   console.log("API smoke test passed");
 } finally {
   server.kill();

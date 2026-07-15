@@ -47,6 +47,8 @@ npm.cmd run test:api
 
 This starts the development server on a test port and verifies the Phase 1 API foundation.
 
+The API smoke test now also covers Phase 2 branch and member onboarding endpoints.
+
 ## Demo roles
 
 - Select **Platform Administration** to manage registrations, packages, subscriptions, support, and platform audit events.

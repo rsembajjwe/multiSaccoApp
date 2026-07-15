@@ -85,6 +85,102 @@ export const db = {
     { tenantId: "tenant_platform", userId: "user_platform_admin", roleId: "role_platform_admin" },
     { tenantId: "tenant_green", userId: "user_green_admin", roleId: "role_sacco_admin" }
   ],
+  branches: [
+    {
+      id: "branch_green_main",
+      tenantId: "tenant_green",
+      code: "GV001",
+      name: "Mukono Main",
+      address: "Mukono Central Division",
+      managerUserId: "user_green_admin",
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "branch_green_seeta",
+      tenantId: "tenant_green",
+      code: "GV002",
+      name: "Seeta Branch",
+      address: "Seeta Trading Centre",
+      managerUserId: null,
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "branch_lake_main",
+      tenantId: "tenant_lake",
+      code: "LF001",
+      name: "Jinja Main",
+      address: "Jinja Central",
+      managerUserId: null,
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  members: [
+    {
+      id: "member_green_amina",
+      tenantId: "tenant_green",
+      branchId: "branch_green_main",
+      membershipNo: "GVS-0001",
+      fullName: "Amina Nakitende",
+      memberType: "individual",
+      phone: "+256701234567",
+      email: "amina@example.local",
+      nationalId: "CM9000012K4PA",
+      status: "active",
+      kycStatus: "verified",
+      joiningDate: "2024-04-12",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "member_green_daniel",
+      tenantId: "tenant_green",
+      branchId: "branch_green_seeta",
+      membershipNo: "GVS-0002",
+      fullName: "Daniel Ssekajja",
+      memberType: "individual",
+      phone: "+256772222118",
+      email: "daniel@example.local",
+      nationalId: "CM9000455K8AB",
+      status: "active",
+      kycStatus: "pending_verification",
+      joiningDate: "2024-08-03",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "member_lake_peter",
+      tenantId: "tenant_lake",
+      branchId: "branch_lake_main",
+      membershipNo: "LFS-0001",
+      fullName: "Peter Ocen",
+      memberType: "individual",
+      phone: "+256704111889",
+      email: "peter@example.local",
+      nationalId: "CM8800142K2RE",
+      status: "applicant",
+      kycStatus: "pending_verification",
+      joiningDate: "2026-07-02",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  memberDocuments: [
+    {
+      id: "doc_amina_nin",
+      tenantId: "tenant_green",
+      memberId: "member_green_amina",
+      documentType: "national_id",
+      storageKey: "tenant_green/members/member_green_amina/national-id.pdf",
+      verificationStatus: "verified",
+      createdAt: now()
+    }
+  ],
   sessions: [],
   auditEvents: [
     {

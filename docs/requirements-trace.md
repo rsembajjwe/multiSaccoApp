@@ -19,6 +19,8 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Backend health check and API session status shown in the web UI.
 - Seeded API login/logout from the web UI.
 - Server-side tenants, users, and audit events fetched through `/api/v1`.
+- Server-side branch and member onboarding endpoints with tenant isolation.
+- Member document metadata endpoint for KYC/document tracking.
 
 ## Represented as design controls
 
@@ -30,6 +32,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Role separation between platform and SACCO administration.
 - Financial transaction approval before posting.
 - Frontend API adapter allows gradual migration away from browser `localStorage`.
+- Backend rejects cross-tenant member access for SACCO-level users.
 
 ## Recommended backend modules for the next build
 

@@ -353,6 +353,8 @@ Progress:
 - Health, login, tenants, users, roles, permissions, and audit endpoints added.
 - API smoke test added.
 - Frontend API adapter added for health, login/logout, tenants, users, and audit events.
+- Branch, member, member status, and member document API endpoints added.
+- Phase 2 onboarding and membership migration draft added.
 
 Recommended stack:
 

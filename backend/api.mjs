@@ -11,6 +11,10 @@ import {
 import { authToken, readJson, requestIp, sendData, sendError } from "./http.mjs";
 
 const allowedTenantStatuses = new Set(["pending_review", "approved", "active", "suspended", "terminated"]);
+const allowedBranchStatuses = new Set(["active", "inactive"]);
+const allowedMemberStatuses = new Set(["applicant", "pending_approval", "active", "inactive", "dormant", "suspended", "exited"]);
+const allowedKycStatuses = new Set(["not_verified", "pending_verification", "verified", "rejected", "expired"]);
+const allowedMemberTypes = new Set(["individual", "group", "institutional", "corporate"]);
 
 export async function handleApi(request, response, url) {
   const correlationId = request.headers["x-correlation-id"] || newId("req");
@@ -57,6 +61,20 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path === "/permissions") return sendData(response, db.permissions);
     if (method === "GET" && path === "/audit-events") return listAuditEvents(response, auth);
     if (method === "POST" && path === "/audit-events") return createAudit(request, response, auth, correlationId);
+    if (method === "GET" && path === "/branches") return listBranches(response, auth, url);
+    if (method === "POST" && path === "/branches") return createBranch(request, response, auth, correlationId);
+    if (method === "GET" && path === "/members") return listMembers(response, auth, url);
+    if (method === "POST" && path === "/members") return createMember(request, response, auth, correlationId);
+    if (method === "GET" && path.startsWith("/members/") && path.endsWith("/documents")) {
+      return listMemberDocuments(response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "POST" && path.startsWith("/members/") && path.endsWith("/documents")) {
+      return createMemberDocument(request, response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "GET" && path.startsWith("/members/")) return getMember(response, auth, path.split("/")[2], correlationId);
+    if (method === "PATCH" && path.startsWith("/members/") && path.endsWith("/status")) {
+      return updateMemberStatus(request, response, auth, path.split("/")[2], correlationId);
+    }
 
     return sendError(response, 404, "NOT_FOUND", "API route not found.", correlationId);
   } catch (error) {
@@ -108,6 +126,18 @@ function isPlatform(auth) {
 function visibleTenantId(auth, requestedTenantId) {
   if (isPlatform(auth)) return requestedTenantId;
   return auth.user.tenantId;
+}
+
+function requestedTenant(auth, url) {
+  return visibleTenantId(auth, url.searchParams.get("tenantId") || auth.user.tenantId);
+}
+
+function assertTenantAccess(auth, tenantId, response, correlationId) {
+  if (visibleTenantId(auth, tenantId) !== tenantId) {
+    sendError(response, 403, "TENANT_ACCESS_DENIED", "Cross-tenant access is not allowed.", correlationId);
+    return false;
+  }
+  return true;
 }
 
 function listTenants(response, auth) {
@@ -245,4 +275,173 @@ async function createAudit(request, response, auth, correlationId) {
     ipAddress: requestIp(request)
   });
   return sendData(response, event, 201);
+}
+
+function listBranches(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const branches = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.branches
+    : db.branches.filter((branch) => branch.tenantId === tenantId);
+  return sendData(response, branches);
+}
+
+async function createBranch(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+  if (!body.code || !body.name) return sendError(response, 400, "VALIDATION_ERROR", "Branch code and name are required.", correlationId);
+  const code = String(body.code).toUpperCase().trim();
+  if (db.branches.some((branch) => branch.tenantId === tenantId && branch.code.toUpperCase() === code)) {
+    return sendError(response, 409, "BRANCH_EXISTS", "A branch with that code already exists in this tenant.", correlationId);
+  }
+  const branch = {
+    id: newId("branch"),
+    tenantId,
+    code,
+    name: String(body.name),
+    address: String(body.address || ""),
+    managerUserId: body.managerUserId ? String(body.managerUserId) : null,
+    status: allowedBranchStatuses.has(String(body.status || "active")) ? String(body.status || "active") : "active",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  db.branches.push(branch);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Created branch ${branch.code}`,
+    resourceType: "branch",
+    resourceId: branch.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, branch, 201);
+}
+
+function listMembers(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const members = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.members
+    : db.members.filter((member) => member.tenantId === tenantId);
+  return sendData(response, members);
+}
+
+async function createMember(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  if (!body.branchId || !body.fullName || !body.phone) {
+    return sendError(response, 400, "VALIDATION_ERROR", "Branch, full name, and phone are required.", correlationId);
+  }
+  const branch = db.branches.find((item) => item.id === String(body.branchId) && item.tenantId === tenantId);
+  if (!branch) return sendError(response, 400, "INVALID_BRANCH", "Branch does not exist for this tenant.", correlationId);
+
+  const memberType = String(body.memberType || "individual");
+  const kycStatus = String(body.kycStatus || "pending_verification");
+  if (!allowedMemberTypes.has(memberType)) return sendError(response, 400, "INVALID_MEMBER_TYPE", "Unsupported member type.", correlationId);
+  if (!allowedKycStatuses.has(kycStatus)) return sendError(response, 400, "INVALID_KYC_STATUS", "Unsupported KYC status.", correlationId);
+
+  const tenant = db.tenants.find((item) => item.id === tenantId);
+  const count = db.members.filter((member) => member.tenantId === tenantId).length + 1;
+  const membershipNo = String(body.membershipNo || `${tenant?.abbreviation || "SACCO"}-${String(count).padStart(4, "0")}`);
+
+  if (db.members.some((member) => member.tenantId === tenantId && member.membershipNo.toUpperCase() === membershipNo.toUpperCase())) {
+    return sendError(response, 409, "MEMBER_EXISTS", "A member with that membership number already exists.", correlationId);
+  }
+
+  const member = {
+    id: newId("member"),
+    tenantId,
+    branchId: branch.id,
+    membershipNo,
+    fullName: String(body.fullName),
+    memberType,
+    phone: String(body.phone),
+    email: String(body.email || ""),
+    nationalId: String(body.nationalId || ""),
+    status: "pending_approval",
+    kycStatus,
+    joiningDate: String(body.joiningDate || new Date().toISOString().slice(0, 10)),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  db.members.push(member);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Registered member ${member.membershipNo}`,
+    resourceType: "member",
+    resourceId: member.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, member, 201);
+}
+
+function getMember(response, auth, memberId, correlationId) {
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+  return sendData(response, member);
+}
+
+async function updateMemberStatus(request, response, auth, memberId, correlationId) {
+  const body = await readJson(request);
+  const status = String(body.status || "");
+  if (!allowedMemberStatuses.has(status)) return sendError(response, 400, "INVALID_MEMBER_STATUS", "Unsupported member status.", correlationId);
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+  member.status = status;
+  member.updatedAt = new Date().toISOString();
+  createAuditEvent({
+    tenantId: member.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Updated member ${member.membershipNo} status to ${status}`,
+    resourceType: "member",
+    resourceId: member.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, member);
+}
+
+function listMemberDocuments(response, auth, memberId, correlationId) {
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+  return sendData(response, db.memberDocuments.filter((document) => document.memberId === memberId));
+}
+
+async function createMemberDocument(request, response, auth, memberId, correlationId) {
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+  const body = await readJson(request);
+  if (!body.documentType || !body.storageKey) {
+    return sendError(response, 400, "VALIDATION_ERROR", "Document type and storage key are required.", correlationId);
+  }
+  const verificationStatus = String(body.verificationStatus || "pending_verification");
+  if (!allowedKycStatuses.has(verificationStatus)) return sendError(response, 400, "INVALID_VERIFICATION_STATUS", "Unsupported verification status.", correlationId);
+  const document = {
+    id: newId("doc"),
+    tenantId: member.tenantId,
+    memberId,
+    documentType: String(body.documentType),
+    storageKey: String(body.storageKey),
+    verificationStatus,
+    createdAt: new Date().toISOString()
+  };
+  db.memberDocuments.push(document);
+  createAuditEvent({
+    tenantId: member.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Registered ${document.documentType} document for ${member.membershipNo}`,
+    resourceType: "member_document",
+    resourceId: document.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, document, 201);
 }

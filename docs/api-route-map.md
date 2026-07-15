@@ -75,5 +75,13 @@ Implemented in the no-dependency development server:
 - `GET /api/v1/permissions`
 - `GET /api/v1/audit-events`
 - `POST /api/v1/audit-events`
+- `GET /api/v1/branches`
+- `POST /api/v1/branches`
+- `GET /api/v1/members`
+- `POST /api/v1/members`
+- `GET /api/v1/members/:id`
+- `PATCH /api/v1/members/:id/status`
+- `GET /api/v1/members/:id/documents`
+- `POST /api/v1/members/:id/documents`
 
 The development server uses an in-memory store seeded at startup. PostgreSQL migrations are documented separately and will replace the development store in the next backend step.
