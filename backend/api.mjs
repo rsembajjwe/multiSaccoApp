@@ -66,6 +66,7 @@ export async function handleApi(request, response, url) {
       const memberAuth = requireMemberAuth(request, response, correlationId);
       if (!memberAuth) return;
       if (method === "GET" && path === "/member-auth/me") return getMemberSession(response, memberAuth);
+      if (method === "GET" && path === "/member-auth/mobile-dashboard") return getMemberMobileDashboard(response, memberAuth);
       if (method === "GET" && path === "/member-auth/notifications") return listMemberNotifications(response, memberAuth);
       if (method === "GET" && path === "/member-auth/guarantor-requests") return listMemberGuarantorRequests(response, memberAuth);
       if (method === "PATCH" && path.startsWith("/member-auth/guarantor-requests/") && path.endsWith("/status")) {
@@ -252,6 +253,42 @@ function getMemberSession(response, auth) {
     tenant: publicTenant(db.tenants.find((tenant) => tenant.id === auth.member.tenantId)),
     branch: db.branches.find((branch) => branch.id === auth.member.branchId) || null,
     balances: memberBalances(auth.member.id)
+  });
+}
+
+function getMemberMobileDashboard(response, auth) {
+  const member = auth.member;
+  const balances = memberBalances(member.id);
+  const loans = db.loans
+    .filter((loan) => loan.memberId === member.id)
+    .map(publicLoan);
+  const notifications = db.notifications
+    .filter((notification) => notification.memberId === member.id)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const guarantorRequests = db.loanGuarantors
+    .filter((request) => request.memberId === member.id && request.status === "pending")
+    .map((request) => publicMemberGuarantorRequest(request, member.id));
+  const transactionTimes = db.financialTransactions
+    .filter((transaction) => transaction.memberId === member.id && transaction.status === "posted")
+    .map((transaction) => transaction.postedAt || transaction.updatedAt || transaction.createdAt);
+  const repaymentTimes = db.loanRepayments
+    .filter((repayment) => repayment.memberId === member.id)
+    .map((repayment) => repayment.receivedAt || repayment.updatedAt || repayment.createdAt);
+  const lastUpdatedAt = [...transactionTimes, ...repaymentTimes, ...notifications.map((notification) => notification.createdAt)]
+    .filter(Boolean)
+    .sort()
+    .at(-1) || new Date().toISOString();
+
+  return sendData(response, {
+    member: publicMember(member),
+    tenant: publicTenant(db.tenants.find((tenant) => tenant.id === member.tenantId)),
+    branch: db.branches.find((branch) => branch.id === member.branchId) || null,
+    balances,
+    loans,
+    notifications: notifications.slice(0, 5),
+    pendingGuarantorRequests: guarantorRequests,
+    lastUpdatedAt,
+    serverConfirmed: true
   });
 }
 
@@ -2144,13 +2181,18 @@ async function createLoanGuarantor(request, response, auth, loanId, correlationI
 function listMemberGuarantorRequests(response, auth) {
   const requests = db.loanGuarantors
     .filter((item) => item.memberId === auth.member.id)
-    .map((item) => ({
-      ...item,
-      loan: publicLoan(db.loans.find((loan) => loan.id === item.loanId)),
-      borrower: publicMember(db.members.find((member) => member.id === db.loans.find((loan) => loan.id === item.loanId)?.memberId)),
-      capacity: guaranteeCapacity(auth.member.id, item.id)
-    }));
+    .map((item) => publicMemberGuarantorRequest(item, auth.member.id));
   return sendData(response, requests);
+}
+
+function publicMemberGuarantorRequest(requestRecord, memberId) {
+  const loan = db.loans.find((item) => item.id === requestRecord.loanId);
+  return {
+    ...requestRecord,
+    loan: publicLoan(loan),
+    borrower: publicMember(db.members.find((member) => member.id === loan?.memberId)),
+    capacity: guaranteeCapacity(memberId, requestRecord.id)
+  };
 }
 
 async function updateMemberGuarantorRequest(request, response, auth, guarantorId, correlationId) {

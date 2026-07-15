@@ -415,6 +415,10 @@ Callback control rule: duplicate provider references return the original posted 
 | created_at | timestamp | Creation timestamp. |
 | read_at | timestamp | In-app read timestamp. |
 
+### member_mobile_dashboard view
+
+This API projection combines member profile, branch, balances, active loans, pending guarantor requests, latest notifications, and `last_updated_at` for the member mobile app. It is read from server-confirmed records only; critical actions such as mobile-money payments refresh this view after the callback posts.
+
 ### statement_lines
 
 | Field | Type | Notes |

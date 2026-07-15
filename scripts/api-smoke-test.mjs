@@ -93,6 +93,11 @@ try {
   assert(memberSession.data.member.id === memberLogin.data.member.id, "Member session should return the logged-in member");
   assert(memberSession.data.tenant.id === "tenant_green", "Member session should include tenant context");
 
+  const initialMobileDashboard = await api("GET", "/member-auth/mobile-dashboard", null, memberToken);
+  assert(initialMobileDashboard.data.serverConfirmed === true, "Mobile dashboard should be server-confirmed");
+  assert(initialMobileDashboard.data.lastUpdatedAt, "Mobile dashboard should include a last-updated timestamp");
+  assert(initialMobileDashboard.data.balances.savings === 250000, "Mobile dashboard should include member balances");
+
   const mobileMoneyReference = `MM-SMOKE-${Date.now()}`;
   const mobileMoneyCallback = await api("POST", "/integrations/mobile-money/callback", {
     tenantId: "tenant_green",
@@ -131,6 +136,10 @@ try {
 
   const refreshedMemberSession = await api("GET", "/member-auth/me", null, memberToken);
   assert(refreshedMemberSession.data.balances.savings === 280000, "Mobile-money collection should update member savings once");
+
+  const refreshedMobileDashboard = await api("GET", "/member-auth/mobile-dashboard", null, memberToken);
+  assert(refreshedMobileDashboard.data.balances.savings === 280000, "Mobile dashboard should refresh after confirmed payment");
+  assert(refreshedMobileDashboard.data.notifications.length >= 1, "Mobile dashboard should include latest notifications");
 
   const memberNotifications = await api("GET", "/member-auth/notifications", null, memberToken);
   assert(memberNotifications.data.some((notification) => notification.eventType === "payment_received"), "Member should receive payment notification");

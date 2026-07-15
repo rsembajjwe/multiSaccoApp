@@ -145,6 +145,7 @@ let memberApiState = {
   tenant: null,
   branch: null,
   balances: null,
+  mobileDashboard: null,
   guarantorRequests: [],
   notifications: [],
   message: "Member portal not signed in."
@@ -1258,6 +1259,8 @@ function renderMemberPortal() {
     const member = memberApiState.member;
     const balances = memberApiState.balances || { savings: 0, shares: 0, welfare: 0 };
     const notifications = memberApiState.notifications || [];
+    const mobileDashboard = memberApiState.mobileDashboard || {};
+    const mobileLoans = mobileDashboard.loans || [];
     return `
       <div class="toolbar">
         <div>
@@ -1266,6 +1269,7 @@ function renderMemberPortal() {
         </div>
         <button class="secondary-button" data-action="memberLogout" type="button">Logout member</button>
       </div>
+      <div class="notice" style="margin-top:16px">${memberApiState.message}</div>
       <div class="grid metrics" style="margin-top:16px">
         ${metric("Savings", money.format(balances.savings), "posted deposits less withdrawals")}
         ${metric("Shares", money.format(balances.shares), "posted share purchases")}
@@ -1290,6 +1294,21 @@ function renderMemberPortal() {
           </ul>
         </section>
       </div>
+      <section class="card" style="margin-top:16px">
+        <div class="toolbar">
+          <div>
+            <h2>Mobile dashboard</h2>
+            <p class="eyebrow">Server-confirmed member app view</p>
+          </div>
+          <button class="primary-button" data-action="memberMobilePayment" type="button">Pay by mobile money</button>
+        </div>
+        <div class="grid metrics">
+          ${metric("App savings", money.format(mobileDashboard.balances?.savings ?? balances.savings), mobileDashboard.lastUpdatedAt ? `updated ${mobileDashboard.lastUpdatedAt.slice(0, 16).replace("T", " ")}` : "server pending")}
+          ${metric("Loan balance", money.format(mobileLoans.reduce((sum, loan) => sum + loan.balance, 0)), `${mobileLoans.length} loan file(s)`)}
+          ${metric("Notifications", mobileDashboard.notifications?.length || notifications.length, "latest alerts")}
+          ${metric("Confirmation", mobileDashboard.serverConfirmed ? "Server OK" : "Waiting", "critical actions confirmed by API")}
+        </div>
+      </section>
       <section class="card" style="margin-top:16px">
         <h2>Guarantee requests</h2>
         <ul class="list">
@@ -1484,6 +1503,7 @@ function bindViewActions() {
         newLoan: openLoanForm,
         recordSubscriptionPayment: recordSubscriptionPayment,
         simulateMobileMoneyCallback: simulateMobileMoneyCallback,
+        memberMobilePayment: memberMobilePayment,
         newExpense: openExpenseForm,
         newAsset: openAssetForm,
         newGovernanceMeeting: openGovernanceMeetingForm,
@@ -1559,8 +1579,9 @@ async function memberApiRequest(path, options = {}) {
 async function refreshMemberStatus() {
   if (!memberApiState.token) return;
   try {
-    const [session, guarantorRequests, notifications] = await Promise.all([
+    const [session, mobileDashboard, guarantorRequests, notifications] = await Promise.all([
       memberApiRequest("/member-auth/me"),
+      memberApiRequest("/member-auth/mobile-dashboard"),
       memberApiRequest("/member-auth/guarantor-requests"),
       memberApiRequest("/member-auth/notifications")
     ]);
@@ -1568,12 +1589,13 @@ async function refreshMemberStatus() {
     memberApiState.tenant = session.tenant;
     memberApiState.branch = session.branch;
     memberApiState.balances = session.balances;
+    memberApiState.mobileDashboard = mobileDashboard;
     memberApiState.guarantorRequests = guarantorRequests;
     memberApiState.notifications = notifications;
     memberApiState.message = `Member portal signed in as ${session.member.fullName}.`;
   } catch (error) {
     localStorage.removeItem(MEMBER_SESSION_KEY);
-    memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, guarantorRequests: [], notifications: [], message: error.message };
+    memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, mobileDashboard: null, guarantorRequests: [], notifications: [], message: error.message };
   }
   if (state.currentView === "memberPortal") render();
 }
@@ -1694,7 +1716,9 @@ function openMemberLoginForm() {
       memberApiState.tenant = data.tenant;
       memberApiState.branch = data.branch;
       memberApiState.balances = data.balances;
+      memberApiState.mobileDashboard = null;
       memberApiState.guarantorRequests = [];
+      memberApiState.notifications = [];
       localStorage.setItem(MEMBER_SESSION_KEY, data.token);
       closeModal();
       state.currentView = "memberPortal";
@@ -1733,6 +1757,30 @@ async function simulateMobileMoneyCallback() {
   }
 }
 
+async function memberMobilePayment() {
+  if (!memberApiState.member) return;
+  try {
+    const data = await apiRequest("/integrations/mobile-money/callback", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: memberApiState.member.tenantId,
+        membershipNo: memberApiState.member.membershipNo,
+        purpose: "savings_deposit",
+        amount: 25000,
+        externalReference: `MM-MEMBER-${Date.now()}`,
+        provider: "member_mobile_demo",
+        receivedAt: today.toISOString()
+      })
+    });
+    await refreshMemberStatus();
+    memberApiState.message = `Server confirmed mobile-money payment ${data.callback.externalReference}.`;
+    render();
+  } catch (error) {
+    memberApiState.message = error.message;
+    render();
+  }
+}
+
 async function apiLogout() {
   try {
     if (apiState.token) await apiRequest("/auth/logout", { method: "POST" });
@@ -1752,7 +1800,7 @@ async function memberLogout() {
     // Local logout should still clear the client member session if the server has restarted.
   }
   localStorage.removeItem(MEMBER_SESSION_KEY);
-  memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, guarantorRequests: [], notifications: [], message: "Logged out of member portal." };
+  memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, mobileDashboard: null, guarantorRequests: [], notifications: [], message: "Logged out of member portal." };
   render();
 }
 

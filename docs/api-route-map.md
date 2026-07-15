@@ -36,6 +36,7 @@ All JSON responses should follow one of these shapes:
 | GET | `/auth/me` | Get current authenticated user. | Required |
 | POST | `/member-auth/login` | Authenticate a member with membership number, phone, or email. | Public |
 | GET | `/member-auth/me` | Get current member profile, tenant, branch, and balances. | Member |
+| GET | `/member-auth/mobile-dashboard` | Get mobile app dashboard balances, loans, notifications, and last update time. | Member |
 | GET | `/member-auth/notifications` | List current member in-app notifications. | Member |
 | POST | `/member-auth/logout` | End current member session. | Member |
 | GET | `/roles` | List roles for current tenant. | Required |
@@ -115,6 +116,7 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/auth/logout`
 - `POST /api/v1/member-auth/login`
 - `GET /api/v1/member-auth/me`
+- `GET /api/v1/member-auth/mobile-dashboard`
 - `GET /api/v1/member-auth/notifications`
 - `POST /api/v1/member-auth/logout`
 - `GET /api/v1/roles`

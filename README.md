@@ -85,6 +85,8 @@ Reports include mobile-money callback history, and duplicate provider callbacks 
 
 Members receive in-app notifications for mobile-money collections and loan repayments.
 
+Member Portal includes a mobile dashboard card with server-confirmed balances, last-updated time, loan totals, notifications, and a demo mobile-money payment action.
+
 After API login, the Approvals screen reads pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
 
 Members can login from **Member portal** using the seeded account `GVS-0001` / `Member@12345` to view their savings, shares, and welfare balances.

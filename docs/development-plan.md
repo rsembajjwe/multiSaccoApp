@@ -376,6 +376,7 @@ Progress:
 - Supplier and expense endpoints added, with expenses posting balanced journal entries and appearing in Reports.
 - Fixed asset endpoints added, with acquisition and depreciation journals plus asset totals in Reports and regulatory summaries.
 - Mobile-money callback endpoint added, with idempotent posting for member collections/loan repayments and member in-app notifications.
+- Member mobile dashboard endpoint and Member Portal card added, including server-confirmed balances, notifications, loan totals, and last-updated time.
 
 Recommended stack:
 
