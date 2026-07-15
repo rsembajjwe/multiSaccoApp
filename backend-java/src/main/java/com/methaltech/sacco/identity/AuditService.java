@@ -4,7 +4,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 @Service
-class AuditService {
+public class AuditService {
 
     private final AuditEventRepository auditEventRepository;
 
@@ -12,7 +12,7 @@ class AuditService {
         this.auditEventRepository = auditEventRepository;
     }
 
-    AuditEvent record(
+    public AuditEvent record(
             String tenantId,
             User actor,
             String action,

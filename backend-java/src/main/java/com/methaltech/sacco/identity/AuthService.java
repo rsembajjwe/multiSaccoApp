@@ -8,7 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 @Service
-class AuthService {
+public class AuthService {
 
     private final UserRepository userRepository;
     private final AuthSessionRepository authSessionRepository;
@@ -20,7 +20,7 @@ class AuthService {
         this.tokenGenerator = tokenGenerator;
     }
 
-    CurrentSession currentSession(String authorization) {
+    public CurrentSession currentSession(String authorization) {
         String token = bearerToken(authorization);
         if (token == null) return null;
         return authSessionRepository
@@ -31,12 +31,12 @@ class AuthService {
                 .orElse(null);
     }
 
-    ResponseEntity<ApiErrorResponse> authRequired() {
+    public ResponseEntity<ApiErrorResponse> authRequired() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiErrorResponse.of(401, "AUTH_REQUIRED", "A valid bearer token is required."));
     }
 
-    boolean isPlatform(User user) {
+    public boolean isPlatform(User user) {
         return "tenant_platform".equals(user.getTenantId());
     }
 
@@ -46,6 +46,6 @@ class AuthService {
         return token.isBlank() ? null : token;
     }
 
-    record CurrentSession(AuthSession session, User user) {
+    public record CurrentSession(AuthSession session, User user) {
     }
 }

@@ -15,6 +15,7 @@ import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -47,13 +48,104 @@ class SaccoBackendApplicationTests {
 
 	@Test
 	void tenantsEndpointReturnsSeededTenants() throws Exception {
-		mockMvc.perform(get("/api/v1/tenants"))
+		String token = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/tenants")
+						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(header().string("X-Content-Type-Options", "nosniff"))
 				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(3)))
 				.andExpect(jsonPath("$.data[0].name", is("Green Valley SACCO")))
 				.andExpect(jsonPath("$.data[0].registrationNo", is("COOP/GVS/2018/014")))
 				.andExpect(jsonPath("$.data[0].packageId", is("starter")));
+	}
+
+	@Test
+	void saccoUserCanOnlyViewOwnTenant() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/tenants")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(1)))
+				.andExpect(jsonPath("$.data[0].id", is("tenant_green")));
+
+		mockMvc.perform(get("/api/v1/tenants/tenant_lake")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+	}
+
+	@Test
+	void platformUserCanCreateAndApproveTenant() throws Exception {
+		String token = loginAndReturnToken();
+		String registrationNo = "COOP-SMOKE-" + System.currentTimeMillis();
+
+		MvcResult createdTenant = mockMvc.perform(post("/api/v1/tenants")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Smoke Java SACCO",
+								  "abbreviation": "sjs",
+								  "registrationNo": "%s",
+								  "district": "Kampala",
+								  "licenseExpiry": "2027-12-31",
+								  "packageId": "starter"
+								}
+								""".formatted(registrationNo)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status", is("pending_review")))
+				.andExpect(jsonPath("$.data.abbreviation", is("SJS")))
+				.andReturn();
+
+		String tenantId = objectMapper.readTree(createdTenant.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/tenants/" + tenantId)
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.registrationNo", is(registrationNo)));
+
+		mockMvc.perform(patch("/api/v1/tenants/" + tenantId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "approved" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("approved")));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].action", is("Updated tenant status to approved")));
+	}
+
+	@Test
+	void saccoUserCannotCreateOrApproveTenants() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/tenants")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Denied SACCO",
+								  "abbreviation": "DEN",
+								  "licenseExpiry": "2027-12-31"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PLATFORM_ADMIN_REQUIRED")));
+
+		mockMvc.perform(patch("/api/v1/tenants/tenant_green/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "approved" }
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PLATFORM_ADMIN_REQUIRED")));
 	}
 
 	@Test

@@ -8,6 +8,9 @@ Java-backed routes currently implemented:
 
 - `GET /api/v1/health`
 - `GET /api/v1/tenants`
+- `GET /api/v1/tenants/:id`
+- `POST /api/v1/tenants`
+- `PATCH /api/v1/tenants/:id/status`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/logout`

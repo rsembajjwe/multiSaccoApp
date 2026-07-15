@@ -43,6 +43,32 @@ class Tenant {
     protected Tenant() {
     }
 
+    Tenant(
+            String id,
+            String name,
+            String abbreviation,
+            String registrationNo,
+            String district,
+            LocalDate licenseExpiry,
+            String packageId) {
+        this.id = id;
+        this.name = name;
+        this.abbreviation = abbreviation;
+        this.status = "pending_review";
+        this.registrationNo = registrationNo;
+        this.district = district;
+        this.licenseExpiry = licenseExpiry;
+        this.packageId = packageId;
+        this.onboarding = 0;
+        this.createdAt = Instant.now();
+        this.updatedAt = this.createdAt;
+    }
+
+    void updateStatus(String status) {
+        this.status = status;
+        this.updatedAt = Instant.now();
+    }
+
     String getId() {
         return id;
     }

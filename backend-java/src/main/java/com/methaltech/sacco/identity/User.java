@@ -8,7 +8,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "users")
-class User {
+public class User {
 
     @Id
     private String id;
@@ -57,39 +57,39 @@ class User {
         this.createdAt = Instant.now();
     }
 
-    String getId() {
+    public String getId() {
         return id;
     }
 
-    String getTenantId() {
+    public String getTenantId() {
         return tenantId;
     }
 
-    String getFullName() {
+    public String getFullName() {
         return fullName;
     }
 
-    String getEmail() {
+    public String getEmail() {
         return email;
     }
 
-    String getPhone() {
+    public String getPhone() {
         return phone;
     }
 
-    String getPasswordHash() {
+    public String getPasswordHash() {
         return passwordHash;
     }
 
-    String getPasswordSalt() {
+    public String getPasswordSalt() {
         return passwordSalt;
     }
 
-    String getStatus() {
+    public String getStatus() {
         return status;
     }
 
-    Instant getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 }

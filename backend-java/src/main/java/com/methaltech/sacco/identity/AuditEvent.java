@@ -8,7 +8,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "audit_events")
-class AuditEvent {
+public class AuditEvent {
 
     @Id
     private String id;
@@ -59,39 +59,39 @@ class AuditEvent {
         this.createdAt = Instant.now();
     }
 
-    String getId() {
+    public String getId() {
         return id;
     }
 
-    String getTenantId() {
+    public String getTenantId() {
         return tenantId;
     }
 
-    String getActorUserId() {
+    public String getActorUserId() {
         return actorUserId;
     }
 
-    String getActorName() {
+    public String getActorName() {
         return actorName;
     }
 
-    String getAction() {
+    public String getAction() {
         return action;
     }
 
-    String getResourceType() {
+    public String getResourceType() {
         return resourceType;
     }
 
-    String getResourceId() {
+    public String getResourceId() {
         return resourceId;
     }
 
-    String getIpAddress() {
+    public String getIpAddress() {
         return ipAddress;
     }
 
-    Instant getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 }
