@@ -85,6 +85,8 @@ Reports include mobile-money callback history, and duplicate provider callbacks 
 
 Members receive in-app notifications for mobile-money collections and loan repayments.
 
+Reports and Dashboard show simulated SMS/email provider deliveries for member notifications.
+
 Member Portal includes a mobile dashboard card with server-confirmed balances, last-updated time, loan totals, notifications, and a demo mobile-money payment action.
 
 Members can submit a mobile loan application from the Member Portal and see the dashboard refresh after server confirmation.

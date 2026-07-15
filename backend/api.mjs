@@ -119,6 +119,7 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path === "/reconciliation") return getReconciliation(response, auth, url);
     if (method === "GET" && path === "/regulatory-report") return getRegulatoryReport(response, auth, url);
     if (method === "GET" && path === "/integrations/mobile-money/callbacks") return listMobileMoneyCallbacks(response, auth, url);
+    if (method === "GET" && path === "/notifications/deliveries") return listNotificationDeliveries(response, auth, url);
     if (method === "GET" && path === "/suppliers") return listSuppliers(response, auth, url);
     if (method === "POST" && path === "/suppliers") return createSupplier(request, response, auth, correlationId);
     if (method === "GET" && path === "/expenses") return listExpenses(response, auth, url);
@@ -660,6 +661,14 @@ function listMobileMoneyCallbacks(response, auth, url) {
   return sendData(response, callbacks.sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt))));
 }
 
+function listNotificationDeliveries(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const deliveries = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.notificationDeliveries
+    : db.notificationDeliveries.filter((delivery) => delivery.tenantId === tenantId);
+  return sendData(response, deliveries.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+}
+
 async function receiveMobileMoneyCallback(request, response, correlationId) {
   const body = await readJson(request);
   const tenantId = String(body.tenantId || "").trim();
@@ -709,7 +718,7 @@ async function receiveMobileMoneyCallback(request, response, correlationId) {
     const repayment = postLoanRepayment({ loan, amount, channel: "mobile_money", externalReference, receivedAt, recordedByUserId: null });
     callback.resourceType = "loan_repayment";
     callback.resourceId = repayment.id;
-    createMemberNotification({
+    var notification = createMemberNotification({
       tenantId,
       memberId: member.id,
       eventType: "loan_repayment_received",
@@ -721,7 +730,7 @@ async function receiveMobileMoneyCallback(request, response, correlationId) {
     const transaction = postMemberCollection({ tenantId, member, purpose, amount, externalReference, receivedAt });
     callback.resourceType = "financial_transaction";
     callback.resourceId = transaction.id;
-    createMemberNotification({
+    var notification = createMemberNotification({
       tenantId,
       memberId: member.id,
       eventType: "payment_received",
@@ -754,7 +763,7 @@ async function receiveMobileMoneyCallback(request, response, correlationId) {
     resourceId: callback.resourceId,
     ipAddress: requestIp(request)
   });
-  return sendData(response, { callback, result: callbackResult(callback), idempotent: false }, 201);
+  return sendData(response, { callback, result: callbackResult(callback), notification, deliveries: notification?.deliveries || [], idempotent: false }, 201);
 }
 
 function findCallbackMember(tenantId, body) {
@@ -817,6 +826,7 @@ function postLoanRepayment({ loan, amount, channel, externalReference, receivedA
 
 function createMemberNotification({ tenantId, memberId, eventType, resourceType, resourceId, body }) {
   const template = db.notificationTemplates.find((item) => item.eventType === eventType && item.status === "active");
+  const member = db.members.find((item) => item.id === memberId);
   const notification = {
     id: newId("notification"),
     tenantId,
@@ -832,7 +842,30 @@ function createMemberNotification({ tenantId, memberId, eventType, resourceType,
     readAt: null
   };
   db.notifications.unshift(notification);
+  notification.deliveries = createNotificationDeliveries(notification, member);
   return notification;
+}
+
+function createNotificationDeliveries(notification, member) {
+  const recipients = [
+    member?.phone ? { channel: "sms", provider: "demo_sms", recipient: member.phone } : null,
+    member?.email ? { channel: "email", provider: "demo_email", recipient: member.email } : null
+  ].filter(Boolean);
+  const deliveries = recipients.map((recipient) => ({
+    id: newId("delivery"),
+    tenantId: notification.tenantId,
+    notificationId: notification.id,
+    memberId: notification.memberId,
+    channel: recipient.channel,
+    provider: recipient.provider,
+    recipient: recipient.recipient,
+    status: "sent",
+    message: notification.body,
+    sentAt: new Date().toISOString(),
+    createdAt: new Date().toISOString()
+  }));
+  db.notificationDeliveries.unshift(...deliveries);
+  return deliveries;
 }
 
 function callbackResult(callback) {

@@ -130,6 +130,8 @@ try {
   });
   assert(mobileMoneyCallback.data.callback.status === "posted", "Mobile-money callback should post");
   assert(mobileMoneyCallback.data.result.resourceType === "financial_transaction", "Collection callback should create a financial transaction");
+  assert(mobileMoneyCallback.data.deliveries.some((delivery) => delivery.channel === "sms"), "Callback should enqueue an SMS delivery");
+  assert(mobileMoneyCallback.data.deliveries.some((delivery) => delivery.channel === "email"), "Callback should enqueue an email delivery");
 
   const duplicateMobileMoneyCallback = await api("POST", "/integrations/mobile-money/callback", {
     tenantId: "tenant_green",
@@ -169,6 +171,10 @@ try {
 
   const mobileMoneyCallbacks = await api("GET", "/integrations/mobile-money/callbacks", null, saccoToken);
   assert(mobileMoneyCallbacks.data.some((callback) => callback.externalReference === mobileMoneyReference), "SACCO admin should list tenant mobile-money callbacks");
+
+  const notificationDeliveries = await api("GET", "/notifications/deliveries", null, saccoToken);
+  assert(notificationDeliveries.data.some((delivery) => delivery.channel === "sms" && delivery.status === "sent"), "SACCO admin should see SMS delivery history");
+  assert(notificationDeliveries.data.some((delivery) => delivery.channel === "email" && delivery.status === "sent"), "SACCO admin should see email delivery history");
 
   const saccoSubscriptions = await api("GET", "/subscriptions", null, saccoToken);
   assert(saccoSubscriptions.data.every((subscription) => subscription.tenantId === "tenant_green"), "SACCO subscription list must be tenant-scoped");

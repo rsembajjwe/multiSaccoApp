@@ -52,3 +52,20 @@ CREATE TABLE notifications (
 
 CREATE INDEX idx_notifications_member_created ON notifications (member_id, created_at DESC);
 CREATE INDEX idx_notifications_tenant_status ON notifications (tenant_id, status);
+
+CREATE TABLE notification_deliveries (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  notification_id UUID NOT NULL REFERENCES notifications(id),
+  member_id UUID NOT NULL REFERENCES members(id),
+  channel TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  recipient TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued',
+  message TEXT NOT NULL,
+  sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_notification_deliveries_tenant_created ON notification_deliveries (tenant_id, created_at DESC);
+CREATE INDEX idx_notification_deliveries_notification ON notification_deliveries (notification_id);

@@ -136,6 +136,7 @@ let apiState = {
   expenses: [],
   assets: [],
   mobileMoneyCallbacks: [],
+  notificationDeliveries: [],
   governanceMeetings: [],
   complaints: [],
   auditEvents: [],
@@ -568,9 +569,11 @@ function renderDashboard() {
       </div>
       <div class="grid metrics">
         ${metric("Callbacks", apiState.mobileMoneyCallbacks.length, `${money.format(apiState.mobileMoneyCallbacks.reduce((sum, item) => sum + item.amount, 0))} received`)}
-        ${metric("Notifications", memberApiState.notifications.length || apiState.mobileMoneyCallbacks.length, "member alerts")}
+        ${metric("SMS sent", apiState.notificationDeliveries.filter((item) => item.channel === "sms").length, "demo provider")}
+        ${metric("Email sent", apiState.notificationDeliveries.filter((item) => item.channel === "email").length, "demo provider")}
       </div>
       ${mobileMoneyCallbackTable(apiState.mobileMoneyCallbacks.slice(0, 5))}
+      ${notificationDeliveryTable(apiState.notificationDeliveries.slice(0, 5))}
     </section>
 
     <section class="card" style="margin-top:16px">
@@ -886,6 +889,7 @@ function renderApiReports() {
   const expenses = apiState.expenses;
   const assets = apiState.assets;
   const mobileMoneyCallbacks = apiState.mobileMoneyCallbacks;
+  const notificationDeliveries = apiState.notificationDeliveries;
   const reconciliation = apiState.reconciliation || { summary: {}, unmatchedStatementLines: [], unmatchedLedgerLines: [] };
   const regulatoryReport = apiState.regulatoryReport || { reports: [], consolidated: {}, csv: "" };
   const meetings = apiState.governanceMeetings;
@@ -984,6 +988,21 @@ function renderApiReports() {
         ${metric("Posted", mobileMoneyCallbacks.filter((item) => item.status === "posted").length, "server-confirmed events")}
       </div>
       ${mobileMoneyCallbackTable(mobileMoneyCallbacks)}
+    </section>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>SMS and email deliveries</h2>
+          <p class="eyebrow">Simulated provider outbox for member notifications</p>
+        </div>
+        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("SMS", notificationDeliveries.filter((item) => item.channel === "sms").length, "demo_sms")}
+        ${metric("Email", notificationDeliveries.filter((item) => item.channel === "email").length, "demo_email")}
+        ${metric("Sent", notificationDeliveries.filter((item) => item.status === "sent").length, "provider-confirmed")}
+      </div>
+      ${notificationDeliveryTable(notificationDeliveries)}
     </section>
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
@@ -1126,6 +1145,27 @@ function mobileMoneyCallbackTable(callbacks) {
               <td><span class="status ${callback.status === "posted" ? "active" : "pending"}">${titleCase(callback.status)}</span></td>
             </tr>
           `).join("") || `<tr><td colspan="6">No mobile-money callbacks found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function notificationDeliveryTable(deliveries) {
+  return `
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>Sent</th><th>Channel</th><th>Provider</th><th>Recipient</th><th>Status</th></tr></thead>
+        <tbody>
+          ${deliveries.map((delivery) => `
+            <tr>
+              <td>${delivery.sentAt?.slice(0, 16).replace("T", " ") || delivery.createdAt?.slice(0, 16).replace("T", " ") || ""}</td>
+              <td>${titleCase(delivery.channel)}</td>
+              <td>${delivery.provider}</td>
+              <td>${delivery.recipient}</td>
+              <td><span class="status ${delivery.status === "sent" ? "active" : "pending"}">${titleCase(delivery.status)}</span></td>
+            </tr>
+          `).join("") || `<tr><td colspan="5">No SMS or email deliveries found.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -1634,7 +1674,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, suppliers, expenses, assets, governanceMeetings, complaints] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, suppliers, expenses, assets, governanceMeetings, complaints] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1651,6 +1691,7 @@ async function refreshApiStatus() {
         apiRequest(`/reconciliation${apiTenantQuery()}`),
         apiRequest(`/regulatory-report${apiTenantQuery()}`),
         apiRequest(`/integrations/mobile-money/callbacks${apiTenantQuery()}`),
+        apiRequest(`/notifications/deliveries${apiTenantQuery()}`),
         apiRequest(`/suppliers${apiTenantQuery()}`),
         apiRequest(`/expenses${apiTenantQuery()}`),
         apiRequest(`/assets${apiTenantQuery()}`),
@@ -1673,12 +1714,13 @@ async function refreshApiStatus() {
       apiState.reconciliation = reconciliation;
       apiState.regulatoryReport = regulatoryReport;
       apiState.mobileMoneyCallbacks = mobileMoneyCallbacks;
+      apiState.notificationDeliveries = notificationDeliveries;
       apiState.suppliers = suppliers;
       apiState.expenses = expenses;
       apiState.assets = assets;
       apiState.governanceMeetings = governanceMeetings;
       apiState.complaints = complaints;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -1770,6 +1812,7 @@ async function simulateMobileMoneyCallback() {
       })
     });
     apiState.mobileMoneyCallbacks = [data.callback, ...apiState.mobileMoneyCallbacks.filter((item) => item.id !== data.callback.id)];
+    apiState.notificationDeliveries = [...(data.deliveries || []), ...apiState.notificationDeliveries.filter((item) => !(data.deliveries || []).some((delivery) => delivery.id === item.id))];
     apiState.message = `Mobile-money callback ${data.callback.externalReference} posted for ${money.format(data.callback.amount)}.`;
     if (apiState.user) {
       await refreshApiStatus();
@@ -1909,7 +1952,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }

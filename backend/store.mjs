@@ -542,6 +542,34 @@ export const db = {
       readAt: null
     }
   ],
+  notificationDeliveries: [
+    {
+      id: "delivery_green_0001",
+      tenantId: "tenant_green",
+      notificationId: "notification_green_0001",
+      memberId: "member_green_amina",
+      channel: "sms",
+      provider: "demo_sms",
+      recipient: "+256701234567",
+      status: "sent",
+      message: "Mobile money savings deposit GVS-TX-0001 for UGX 250000 was posted.",
+      sentAt: now(),
+      createdAt: now()
+    },
+    {
+      id: "delivery_green_0002",
+      tenantId: "tenant_green",
+      notificationId: "notification_green_0001",
+      memberId: "member_green_amina",
+      channel: "email",
+      provider: "demo_email",
+      recipient: "amina@example.local",
+      status: "sent",
+      message: "Mobile money savings deposit GVS-TX-0001 for UGX 250000 was posted.",
+      sentAt: now(),
+      createdAt: now()
+    }
+  ],
   statementLines: [
     {
       id: "statement_green_0001",

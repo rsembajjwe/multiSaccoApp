@@ -81,6 +81,7 @@ All JSON responses should follow one of these shapes:
 | GET | `/regulatory-report` | Return supervisory report rows, consolidated totals, and CSV export text. | Required |
 | POST | `/integrations/mobile-money/callback` | Receive idempotent mobile-money payment callbacks. | Public/provider |
 | GET | `/integrations/mobile-money/callbacks` | List tenant mobile-money callback history. | Required |
+| GET | `/notifications/deliveries` | List simulated SMS and email provider delivery history. | Required |
 | GET | `/governance-meetings` | List tenant governance meetings and resolutions. | Required |
 | POST | `/governance-meetings` | Create a governance meeting record. | SACCO staff |
 | POST | `/governance-meetings/:id/resolutions` | Record a meeting resolution. | SACCO staff |
@@ -157,6 +158,7 @@ Implemented in the no-dependency development server:
 - `GET /api/v1/regulatory-report`
 - `POST /api/v1/integrations/mobile-money/callback`
 - `GET /api/v1/integrations/mobile-money/callbacks`
+- `GET /api/v1/notifications/deliveries`
 - `GET /api/v1/governance-meetings`
 - `POST /api/v1/governance-meetings`
 - `POST /api/v1/governance-meetings/:id/resolutions`

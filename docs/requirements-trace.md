@@ -53,6 +53,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Supplier and expense workflows create balanced accounting entries and respect closed-period controls.
 - Fixed asset registration creates balanced acquisition and depreciation entries, with asset totals included in regulatory reporting.
 - Mobile-money callback ingestion posts confirmed member collections or loan repayments, rejects duplicate provider references through idempotency, and creates member notifications.
+- Notification delivery outbox simulates SMS and email provider sends for member notifications.
 - Member mobile dashboard endpoint and UI show server-confirmed balances, loan totals, latest notifications, and last-updated time.
 - Members can submit mobile loan applications for their own account, with server confirmation and mobile-dashboard refresh.
 - Members can save offline complaint drafts locally and sync them later to server-side complaints with notification feedback.

@@ -376,6 +376,7 @@ Progress:
 - Supplier and expense endpoints added, with expenses posting balanced journal entries and appearing in Reports.
 - Fixed asset endpoints added, with acquisition and depreciation journals plus asset totals in Reports and regulatory summaries.
 - Mobile-money callback endpoint added, with idempotent posting for member collections/loan repayments and member in-app notifications.
+- Simulated SMS and email provider delivery outbox added for member notifications, visible on Dashboard and Reports.
 - Member mobile dashboard endpoint and Member Portal card added, including server-confirmed balances, notifications, loan totals, and last-updated time.
 - Mobile loan application endpoint and Member Portal flow added, allowing members to submit their own loan applications with server confirmation.
 - Offline complaint draft support added for the Member Portal, with local draft save and server sync when online.
