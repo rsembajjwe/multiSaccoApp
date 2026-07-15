@@ -359,6 +359,8 @@ Progress:
 - SACCO registration screen now reads API-backed tenants after login and creates/approves tenants through `/api/v1/tenants`.
 - Subscription package, invoice, and payment endpoints added.
 - Subscriptions screen now reads API-backed packages/subscriptions after login and records payments through `/api/v1/subscriptions/:id/payments`.
+- Financial transaction listing and submission endpoints added for savings deposits, share purchases, welfare contributions, and withdrawals.
+- Transactions screen now reads API-backed postings after login and submits new pending transactions through `/api/v1/financial-transactions`.
 
 Recommended stack:
 

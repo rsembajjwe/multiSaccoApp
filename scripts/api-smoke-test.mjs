@@ -124,6 +124,30 @@ try {
   }, saccoToken);
   assert(document.data.id, "Member document metadata should be created");
 
+  const transactions = await api("GET", "/financial-transactions", null, saccoToken);
+  assert(transactions.data.length >= 3, "SACCO admin should list own financial transactions");
+  assert(transactions.data.every((transaction) => transaction.tenantId === "tenant_green"), "Financial transaction list must be tenant-scoped");
+
+  const transaction = await api("POST", "/financial-transactions", {
+    memberId: member.data.id,
+    branchId: branch.data.id,
+    type: "savings_deposit",
+    channel: "cash",
+    amount: 75000,
+    narration: "Smoke test savings deposit"
+  }, saccoToken);
+  assert(transaction.data.id, "Financial transaction should be created");
+  assert(transaction.data.status === "pending_approval", "New financial transaction should require approval");
+
+  const invalidTenantTransaction = await raw("POST", "/financial-transactions", {
+    memberId: "member_lake_peter",
+    branchId: "branch_lake_main",
+    type: "savings_deposit",
+    channel: "cash",
+    amount: 10000
+  }, saccoToken);
+  assert(invalidTenantTransaction.status === 400, "SACCO admin should not post against another tenant member");
+
   const lakeMemberDenied = await raw("GET", "/members/member_lake_peter", null, saccoToken);
   assert(lakeMemberDenied.status === 403, "SACCO admin should be blocked from another tenant member");
 

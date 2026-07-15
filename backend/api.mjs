@@ -15,6 +15,8 @@ const allowedBranchStatuses = new Set(["active", "inactive"]);
 const allowedMemberStatuses = new Set(["applicant", "pending_approval", "active", "inactive", "dormant", "suspended", "exited"]);
 const allowedKycStatuses = new Set(["not_verified", "pending_verification", "verified", "rejected", "expired"]);
 const allowedMemberTypes = new Set(["individual", "group", "institutional", "corporate"]);
+const allowedTransactionTypes = new Set(["savings_deposit", "share_purchase", "welfare_contribution", "withdrawal"]);
+const allowedTransactionChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 
 export async function handleApi(request, response, url) {
   const correlationId = request.headers["x-correlation-id"] || newId("req");
@@ -70,6 +72,8 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/branches") return createBranch(request, response, auth, correlationId);
     if (method === "GET" && path === "/members") return listMembers(response, auth, url);
     if (method === "POST" && path === "/members") return createMember(request, response, auth, correlationId);
+    if (method === "GET" && path === "/financial-transactions") return listFinancialTransactions(response, auth, url);
+    if (method === "POST" && path === "/financial-transactions") return createFinancialTransaction(request, response, auth, correlationId);
     if (method === "GET" && path.startsWith("/members/") && path.endsWith("/documents")) {
       return listMemberDocuments(response, auth, path.split("/")[2], correlationId);
     }
@@ -501,4 +505,64 @@ async function createMemberDocument(request, response, auth, memberId, correlati
     ipAddress: requestIp(request)
   });
   return sendData(response, document, 201);
+}
+
+function listFinancialTransactions(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const transactions = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.financialTransactions
+    : db.financialTransactions.filter((transaction) => transaction.tenantId === tenantId);
+  return sendData(response, transactions);
+}
+
+async function createFinancialTransaction(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  const member = db.members.find((item) => item.id === String(body.memberId) && item.tenantId === tenantId);
+  if (!member) return sendError(response, 400, "INVALID_MEMBER", "Member does not exist for this tenant.", correlationId);
+
+  const branchId = String(body.branchId || member.branchId);
+  const branch = db.branches.find((item) => item.id === branchId && item.tenantId === tenantId);
+  if (!branch) return sendError(response, 400, "INVALID_BRANCH", "Branch does not exist for this tenant.", correlationId);
+
+  const type = String(body.type || "");
+  const channel = String(body.channel || "");
+  const amount = Number(body.amount);
+  if (!allowedTransactionTypes.has(type)) return sendError(response, 400, "INVALID_TRANSACTION_TYPE", "Unsupported transaction type.", correlationId);
+  if (!allowedTransactionChannels.has(channel)) return sendError(response, 400, "INVALID_PAYMENT_CHANNEL", "Unsupported payment channel.", correlationId);
+  if (!Number.isFinite(amount) || amount <= 0) return sendError(response, 400, "INVALID_TRANSACTION_AMOUNT", "Amount must be greater than zero.", correlationId);
+
+  const tenant = db.tenants.find((item) => item.id === tenantId);
+  const count = db.financialTransactions.filter((transaction) => transaction.tenantId === tenantId).length + 1;
+  const reference = `${tenant?.abbreviation || "SACCO"}-TX-${String(count).padStart(4, "0")}`;
+  const transaction = {
+    id: newId("txn"),
+    tenantId,
+    branchId,
+    memberId: member.id,
+    type,
+    channel,
+    amount,
+    status: "pending_approval",
+    reference,
+    narration: String(body.narration || ""),
+    makerUserId: auth.user.id,
+    checkerUserId: null,
+    postedAt: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  db.financialTransactions.push(transaction);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Submitted financial transaction ${reference}`,
+    resourceType: "financial_transaction",
+    resourceId: transaction.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, transaction, 201);
 }

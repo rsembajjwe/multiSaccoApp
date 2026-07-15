@@ -156,6 +156,26 @@ This model defines the Phase 1 and Phase 2 foundation tables. Production storage
 | received_at | timestamp | Payment timestamp. |
 | recorded_by | uuid/string | User who posted the payment. |
 
+## Phase 3 Core Financial Entities
+
+### financial_transactions
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Required tenant reference. |
+| branch_id | uuid/string | Branch reference. |
+| member_id | uuid/string | Member reference. |
+| type | enum | `savings_deposit`, `share_purchase`, `welfare_contribution`, `withdrawal`. |
+| channel | enum | `mobile_money`, `cash`, `bank`, `payroll_deduction`. |
+| amount | decimal | Fixed-precision monetary value. |
+| status | enum | `pending_approval`, `posted`, `rejected`, `reversed`. |
+| reference | text | Unique per tenant. |
+| narration | text | Transaction narration. |
+| maker_user_id | uuid/string | User who initiated the transaction. |
+| checker_user_id | uuid/string | User who approved or rejected the transaction. |
+| posted_at | timestamp | Set only after posting. |
+
 ## Phase 2 Onboarding Entities
 
 ### branches

@@ -55,6 +55,8 @@ After Platform Admin API login, the SACCO Registration screen reads backend tena
 
 After Platform Admin API login, the Subscriptions screen reads backend packages/invoices and records subscription payments through `/api/v1/subscriptions/:id/payments`.
 
+After SACCO API login, the Transactions screen reads backend financial postings and submits new pending transactions to `/api/v1/financial-transactions`.
+
 ## Demo roles
 
 - Select **Platform Administration** to manage registrations, packages, subscriptions, support, and platform audit events.

@@ -243,6 +243,59 @@ export const db = {
       createdAt: now()
     }
   ],
+  financialTransactions: [
+    {
+      id: "txn_green_0001",
+      tenantId: "tenant_green",
+      branchId: "branch_green_main",
+      memberId: "member_green_amina",
+      type: "savings_deposit",
+      channel: "mobile_money",
+      amount: 250000,
+      status: "posted",
+      reference: "GVS-TX-0001",
+      narration: "Mobile money savings deposit",
+      makerUserId: "user_green_admin",
+      checkerUserId: "user_green_admin",
+      postedAt: "2026-07-14T09:15:00.000Z",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "txn_green_0002",
+      tenantId: "tenant_green",
+      branchId: "branch_green_seeta",
+      memberId: "member_green_daniel",
+      type: "share_purchase",
+      channel: "cash",
+      amount: 100000,
+      status: "posted",
+      reference: "GVS-TX-0002",
+      narration: "Share capital purchase",
+      makerUserId: "user_green_admin",
+      checkerUserId: "user_green_admin",
+      postedAt: "2026-07-14T11:20:00.000Z",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "txn_green_0003",
+      tenantId: "tenant_green",
+      branchId: "branch_green_main",
+      memberId: "member_green_amina",
+      type: "welfare_contribution",
+      channel: "bank",
+      amount: 60000,
+      status: "pending_approval",
+      reference: "GVS-TX-0003",
+      narration: "Welfare contribution awaiting approval",
+      makerUserId: "user_green_admin",
+      checkerUserId: null,
+      postedAt: null,
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
   sessions: [],
   auditEvents: [
     {

@@ -113,6 +113,7 @@ let apiState = {
   members: [],
   subscriptionPackages: [],
   subscriptions: [],
+  financialTransactions: [],
   auditEvents: [],
   message: "Checking backend connection..."
 };
@@ -140,6 +141,8 @@ function tenantName(id) {
 }
 
 function memberName(id) {
+  const apiMember = apiState.members.find((member) => member.id === id);
+  if (apiMember) return apiMember.fullName;
   return state.members.find((member) => member.id === id)?.name || "Unknown member";
 }
 
@@ -175,6 +178,10 @@ function useApiSubscriptions() {
   return Boolean(apiState.user);
 }
 
+function useApiTransactions() {
+  return Boolean(apiState.user);
+}
+
 function apiPackageToRow(pkg) {
   return {
     id: pkg.id,
@@ -197,6 +204,23 @@ function apiSubscriptionToRow(subscription) {
     amount: subscription.amount,
     paid: subscription.paid,
     expiry: subscription.expiry,
+    source: "API"
+  };
+}
+
+function apiTransactionToRow(transaction) {
+  return {
+    id: transaction.id,
+    tenantId: transaction.tenantId,
+    memberId: transaction.memberId,
+    type: titleCase(transaction.type.replace(/_/g, " ")),
+    channel: titleCase(transaction.channel.replace(/_/g, " ")),
+    amount: transaction.amount,
+    status: titleCase(transaction.status.replace(/_/g, " ")),
+    ref: transaction.reference,
+    date: transaction.createdAt?.slice(0, 10) || "",
+    maker: apiState.users.find((user) => user.id === transaction.makerUserId)?.fullName || "Maker",
+    checker: transaction.checkerUserId ? (apiState.users.find((user) => user.id === transaction.checkerUserId)?.fullName || "Checker") : "",
     source: "API"
   };
 }
@@ -263,6 +287,7 @@ function renderTenantSelect() {
     state.tenantId = select.value;
     saveState();
     render();
+    if (apiState.user?.tenantId === "tenant_platform") refreshApiStatus();
   });
 }
 
@@ -535,23 +560,26 @@ function renderMembers() {
 }
 
 function renderTransactions() {
-  const transactions = tenantScoped(state.transactions);
+  const transactions = useApiTransactions() ? apiState.financialTransactions.map(apiTransactionToRow) : tenantScoped(state.transactions);
+  const source = useApiTransactions() ? "API-backed" : "Local demo";
   return `
     <section class="card">
       <div class="toolbar">
         <div>
           <h2>Financial postings</h2>
-          <p class="eyebrow">Fixed precision amounts, references, maker-checker and reversals</p>
+          <p class="eyebrow">${source} · Fixed precision amounts, references, maker-checker and reversals</p>
         </div>
+        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
         <button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>
       </div>
+      ${apiState.user ? `<div class="notice">Transactions shown from the backend for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}.</div>` : `<div class="notice">Login to the API to post server-side financial transactions. The table below is local demo data.</div>`}
       <div class="table-wrap">
         <table>
           <thead><tr><th>Reference</th><th>Member</th><th>Type</th><th>Channel</th><th>Amount</th><th>Maker</th><th>Checker</th><th>Status</th></tr></thead>
           <tbody>
             ${transactions.map((tx) => `
               <tr>
-                <td>${tx.ref}<br><small>${tx.date}</small></td>
+                <td>${tx.ref}${tx.source ? `<br><small>${tx.source}</small>` : `<br><small>${tx.date}</small>`}</td>
                 <td>${memberName(tx.memberId)}</td>
                 <td>${tx.type}</td>
                 <td>${tx.channel}</td>
@@ -854,14 +882,15 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
         apiRequest(`/branches${apiTenantQuery()}`),
         apiRequest(`/members${apiTenantQuery()}`),
         apiRequest("/subscription-packages"),
-        apiRequest(`/subscriptions${apiSubscriptionQuery()}`)
+        apiRequest(`/subscriptions${apiSubscriptionQuery()}`),
+        apiRequest(`/financial-transactions${apiTenantQuery()}`)
       ]);
       apiState.tenants = tenants;
       apiState.users = users;
@@ -870,7 +899,8 @@ async function refreshApiStatus() {
       apiState.members = members;
       apiState.subscriptionPackages = subscriptionPackages;
       apiState.subscriptions = subscriptions;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), and ${auditEvents.length} audit event(s).`;
+      apiState.financialTransactions = financialTransactions;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -882,7 +912,7 @@ async function refreshApiStatus() {
     apiState.message = error.message;
   }
   renderApiChrome();
-  if (["dashboard", "reports", "members", "registrations", "subscriptions"].includes(state.currentView)) render();
+  if (["dashboard", "reports", "members", "registrations", "subscriptions", "transactions"].includes(state.currentView)) render();
 }
 
 function openApiLoginForm() {
@@ -919,7 +949,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -1099,7 +1129,8 @@ function openMemberForm() {
 }
 
 function openTransactionForm() {
-  const members = tenantScoped(state.members);
+  const apiMode = Boolean(apiState.user);
+  const members = apiMode ? apiState.members.map(apiMemberToRow) : tenantScoped(state.members);
   if (!members.length) return;
   openModal("Post transaction", `
     <div class="form-grid">
@@ -1111,7 +1142,31 @@ function openTransactionForm() {
     </div>
   `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveTx" class="primary-button" type="button">Submit for approval</button>`);
 
-  document.getElementById("saveTx").addEventListener("click", () => {
+  document.getElementById("saveTx").addEventListener("click", async () => {
+    if (apiMode) {
+      const selectedMember = apiState.members.find((member) => member.id === value("txMember"));
+      try {
+        await apiRequest("/financial-transactions", {
+          method: "POST",
+          body: JSON.stringify({
+            tenantId: currentApiTenantId(),
+            memberId: value("txMember"),
+            branchId: selectedMember?.branchId,
+            type: value("txType").toLowerCase().replace(/\s+/g, "_"),
+            channel: value("txChannel").toLowerCase().replace(/\s+/g, "_"),
+            amount: Number(value("txAmount")),
+            narration: value("txNarration")
+          })
+        });
+        closeModal();
+        state.currentView = "transactions";
+        await refreshApiStatus();
+      } catch (error) {
+        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+      }
+      return;
+    }
+
     const tenant = currentTenant();
     const count = state.transactions.filter((tx) => tx.tenantId === state.tenantId).length + 1;
     const ref = `${tenant.abbreviation}-TX-${String(count).padStart(4, "0")}`;

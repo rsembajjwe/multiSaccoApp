@@ -55,6 +55,8 @@ All JSON responses should follow one of these shapes:
 | PATCH | `/members/:id/status` | Approve, suspend, activate, or exit member. | Authorized approver |
 | GET | `/members/:id/documents` | List member documents. | Required |
 | POST | `/members/:id/documents` | Upload/register member document metadata. | SACCO staff |
+| GET | `/financial-transactions` | List tenant financial transactions. | Required |
+| POST | `/financial-transactions` | Submit a pending financial transaction. | SACCO staff |
 | GET | `/approval-workflows` | List workflows. | Admin |
 | POST | `/approval-workflows` | Create workflow. | Admin |
 | GET | `/approval-decisions` | List pending or historical decisions. | Required |
@@ -89,5 +91,7 @@ Implemented in the no-dependency development server:
 - `PATCH /api/v1/members/:id/status`
 - `GET /api/v1/members/:id/documents`
 - `POST /api/v1/members/:id/documents`
+- `GET /api/v1/financial-transactions`
+- `POST /api/v1/financial-transactions`
 
 The development server uses an in-memory store seeded at startup. PostgreSQL migrations are documented separately and will replace the development store in the next backend step.
