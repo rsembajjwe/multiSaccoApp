@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check app.js && node --check server.mjs"
+    "check": "node --check app.js && node --check server.mjs && node --check backend/api.mjs && node --check backend/http.mjs && node --check backend/security.mjs && node --check backend/store.mjs && node --check scripts/api-smoke-test.mjs",
+    "test:api": "node scripts/api-smoke-test.mjs"
   }
 }

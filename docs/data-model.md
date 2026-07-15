@@ -1,0 +1,183 @@
+# Data Model
+
+This model defines the Phase 1 and Phase 2 foundation tables. Production storage should use PostgreSQL with migrations. The current development backend uses a JSON store with the same logical fields so the API can be built before database tooling is introduced.
+
+## Core Rules
+
+- Every SACCO-owned table must include `tenant_id`.
+- Platform-owned configuration may omit `tenant_id`.
+- IDs should be opaque strings or UUIDs.
+- Monetary values must use fixed-precision decimal storage in production.
+- Sensitive actions must create `audit_events`.
+- Posted financial records must not be edited directly.
+
+## Phase 1 Foundation Entities
+
+### tenants
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| name | text | SACCO or platform tenant name. |
+| abbreviation | text | Used for local references. |
+| status | enum | `pending_review`, `approved`, `active`, `suspended`, `terminated`. |
+| registration_no | text | Cooperative registration number. |
+| district | text | Primary operating district. |
+| license_expiry | date | UMRA or relevant licence expiry. |
+| package_id | uuid/string | Subscription package reference. |
+| onboarding_percent | integer | 0-100 setup progress. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+### sacco_profiles
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Required tenant reference. |
+| legal_name | text | Registered SACCO name. |
+| tin | text | Tax Identification Number. |
+| umra_license_no | text | Optional where applicable. |
+| cooperative_registration_no | text | Official cooperative number. |
+| address | text | Physical address. |
+| email | text | Official email. |
+| phone | text | Official telephone. |
+| website | text | Optional website. |
+
+### users
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Tenant scope; platform users belong to platform tenant. |
+| full_name | text | User display name. |
+| email | text | Unique per tenant. |
+| phone | text | Optional login identifier. |
+| password_hash | text | PBKDF2 now; Argon2id/bcrypt recommended in production. |
+| password_salt | text | Password salt. |
+| status | enum | `active`, `locked`, `disabled`. |
+| created_at | timestamp | Creation timestamp. |
+
+### roles
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Tenant scope. |
+| name | text | Role name. |
+| protected | boolean | Prevents accidental removal of system roles. |
+
+### permissions
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | string | Primary key, e.g. `members:create`. |
+| module | text | Module name. |
+| action | text | `view`, `create`, `edit`, `approve`, `post`, etc. |
+| description | text | Human-readable description. |
+
+### user_roles
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| user_id | uuid/string | User reference. |
+| role_id | uuid/string | Role reference. |
+| tenant_id | uuid/string | Tenant scope. |
+
+### role_permissions
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| role_id | uuid/string | Role reference. |
+| permission_id | string | Permission reference. |
+
+### sessions
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Session/token id. |
+| user_id | uuid/string | Authenticated user. |
+| tenant_id | uuid/string | Session tenant. |
+| token_hash | text | Store a hash of the issued token in production. |
+| expires_at | timestamp | Expiry timestamp. |
+| created_at | timestamp | Creation timestamp. |
+
+### audit_events
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Tenant scope. |
+| actor_user_id | uuid/string | Optional user reference. |
+| actor_name | text | Snapshot of actor name. |
+| action | text | What happened. |
+| resource_type | text | Optional resource category. |
+| resource_id | text | Optional resource id. |
+| ip_address | text | Request IP where available. |
+| created_at | timestamp | Event timestamp. |
+
+## Phase 2 Onboarding Entities
+
+### branches
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Required tenant reference. |
+| code | text | Unique per tenant. |
+| name | text | Branch name. |
+| address | text | Physical address. |
+| manager_user_id | uuid/string | Optional user reference. |
+| status | enum | `active`, `inactive`. |
+
+### members
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Required tenant reference. |
+| branch_id | uuid/string | Branch reference. |
+| membership_no | text | Unique per tenant. |
+| full_name | text | Individual, group, or institutional name. |
+| member_type | enum | `individual`, `group`, `institutional`, `corporate`. |
+| phone | text | Primary telephone. |
+| email | text | Optional email. |
+| national_id | text | NIN or alternate identifier. |
+| status | enum | `applicant`, `pending_approval`, `active`, `inactive`, `dormant`, `suspended`, `exited`. |
+| kyc_status | enum | `not_verified`, `pending_verification`, `verified`, `rejected`, `expired`. |
+| joining_date | date | Membership date. |
+
+### member_documents
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Required tenant reference. |
+| member_id | uuid/string | Member reference. |
+| document_type | text | NIN, photo, signature, bylaws, etc. |
+| storage_key | text | Object storage key. |
+| verification_status | enum | `not_verified`, `pending_verification`, `verified`, `rejected`, `expired`. |
+
+### approval_workflows
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Tenant scope. |
+| name | text | Workflow name. |
+| module | text | Members, loans, transactions, etc. |
+| active | boolean | Whether workflow is used. |
+
+### approval_decisions
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Tenant scope. |
+| workflow_id | uuid/string | Workflow reference. |
+| resource_type | text | Entity being approved. |
+| resource_id | text | Entity id. |
+| decision | enum | `pending`, `approved`, `rejected`, `corrections_requested`. |
+| decided_by | uuid/string | User reference. |
+| reason | text | Required for rejection/override. |
+| created_at | timestamp | Decision timestamp. |

@@ -41,6 +41,12 @@ npm.cmd run check
 
 This checks the JavaScript syntax for the app and local server.
 
+```powershell
+npm.cmd run test:api
+```
+
+This starts the development server on a test port and verifies the Phase 1 API foundation.
+
 ## Demo roles
 
 - Select **Platform Administration** to manage registrations, packages, subscriptions, support, and platform audit events.
@@ -63,3 +69,5 @@ This is now the first build foundation. A production build should add:
 
 - [Development plan](docs/development-plan.md)
 - [Requirements trace](docs/requirements-trace.md)
+- [Data model](docs/data-model.md)
+- [API route map](docs/api-route-map.md)

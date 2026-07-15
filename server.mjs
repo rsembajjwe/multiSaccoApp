@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { handleApi } from "./backend/api.mjs";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 5173);
@@ -17,6 +18,12 @@ const mimeTypes = {
 createServer(async (request, response) => {
   try {
     const url = new URL(request.url || "/", `http://${request.headers.host}`);
+
+    if (url.pathname.startsWith("/api/v1")) {
+      await handleApi(request, response, url);
+      return;
+    }
+
     const requestedPath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
     const filePath = normalize(join(root, requestedPath));
 
