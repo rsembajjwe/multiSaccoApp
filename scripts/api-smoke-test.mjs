@@ -157,6 +157,26 @@ try {
   assert(loan.data.status === "submitted", "New loan application should start submitted");
   assert(loan.data.stage === "Credit Appraisal", "New loan application should enter credit appraisal");
 
+  const selfGuarantee = await raw("POST", `/loans/${loan.data.id}/guarantors`, {
+    memberId: member.data.id,
+    guaranteedAmount: 100000
+  }, saccoToken);
+  assert(selfGuarantee.status === 409, "Borrower should not guarantee their own loan");
+
+  const guarantor = await api("POST", `/loans/${loan.data.id}/guarantors`, {
+    memberId: "member_green_amina",
+    guaranteedAmount: 300000
+  }, saccoToken);
+  assert(guarantor.data.status === "pending", "Guarantor request should start pending");
+
+  const memberGuarantorRequests = await api("GET", "/member-auth/guarantor-requests", null, memberToken);
+  assert(memberGuarantorRequests.data.some((request) => request.id === guarantor.data.id), "Member should see their guarantor request");
+
+  const acceptedGuarantor = await api("PATCH", `/member-auth/guarantor-requests/${guarantor.data.id}/status`, {
+    status: "accepted"
+  }, memberToken);
+  assert(acceptedGuarantor.data.status === "accepted", "Member should accept guarantor request");
+
   const invalidTenantLoan = await raw("POST", "/loans", {
     memberId: "member_lake_peter",
     product: "Agriculture Loan",

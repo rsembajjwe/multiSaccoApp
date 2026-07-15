@@ -42,6 +42,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Approvals UI can post or reject API-backed pending financial transactions with maker-checker enforcement.
 - Members can authenticate into the member portal and view their own backend balances.
 - Loans UI can switch from local demo data to API-backed loan files and submit new loan applications.
+- SACCO staff can request loan guarantors, and members can accept or reject guarantee requests.
 
 ## Recommended backend modules for the next build
 

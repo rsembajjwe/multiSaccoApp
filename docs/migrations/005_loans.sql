@@ -20,3 +20,20 @@ CREATE TABLE loans (
 
 CREATE INDEX idx_loans_tenant_status ON loans (tenant_id, status);
 CREATE INDEX idx_loans_tenant_member ON loans (tenant_id, member_id);
+
+CREATE TABLE loan_guarantors (
+  id UUID PRIMARY KEY,
+  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  loan_id UUID NOT NULL REFERENCES loans(id),
+  member_id UUID NOT NULL REFERENCES members(id),
+  guaranteed_amount NUMERIC(18, 2) NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  requested_by_user_id UUID NOT NULL REFERENCES users(id),
+  decided_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (loan_id, member_id)
+);
+
+CREATE INDEX idx_loan_guarantors_member_status ON loan_guarantors (member_id, status);
+CREATE INDEX idx_loan_guarantors_loan_status ON loan_guarantors (loan_id, status);

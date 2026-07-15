@@ -397,6 +397,20 @@ export const db = {
       updatedAt: now()
     }
   ],
+  loanGuarantors: [
+    {
+      id: "guarantor_green_0001",
+      tenantId: "tenant_green",
+      loanId: "loan_green_0002",
+      memberId: "member_green_amina",
+      guaranteedAmount: 400000,
+      status: "pending",
+      requestedByUserId: "user_green_admin",
+      decidedAt: null,
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
   sessions: [],
   memberSessions: [],
   auditEvents: [
@@ -440,6 +454,14 @@ export function memberBalances(memberId) {
     if (transaction.type === "welfare_contribution") balances.welfare += transaction.amount;
   }
   return balances;
+}
+
+export function guaranteeCapacity(memberId, excludeGuarantorId = null) {
+  const balances = memberBalances(memberId);
+  const committed = db.loanGuarantors
+    .filter((item) => item.id !== excludeGuarantorId && item.memberId === memberId && ["pending", "accepted"].includes(item.status))
+    .reduce((sum, item) => sum + item.guaranteedAmount, 0);
+  return Math.max(0, balances.savings * 3 - committed);
 }
 
 export function createAuditEvent({ tenantId, actorUserId, actorName, action, resourceType = null, resourceId = null, ipAddress = null }) {

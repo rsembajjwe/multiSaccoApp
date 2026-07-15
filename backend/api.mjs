@@ -7,6 +7,7 @@ import {
   db,
   findMemberSessionByToken,
   findSessionByToken,
+  guaranteeCapacity,
   memberBalances,
   publicMember,
   publicTenant,
@@ -25,6 +26,7 @@ const allowedTransactionTypes = new Set(["savings_deposit", "share_purchase", "w
 const allowedTransactionChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedTransactionDecisionStatuses = new Set(["posted", "rejected"]);
 const allowedLoanProducts = new Set(["Development Loan", "Emergency Loan", "Agriculture Loan", "School Fees Loan"]);
+const allowedGuarantorStatuses = new Set(["accepted", "rejected"]);
 
 export async function handleApi(request, response, url) {
   const correlationId = request.headers["x-correlation-id"] || newId("req");
@@ -48,6 +50,10 @@ export async function handleApi(request, response, url) {
       const memberAuth = requireMemberAuth(request, response, correlationId);
       if (!memberAuth) return;
       if (method === "GET" && path === "/member-auth/me") return getMemberSession(response, memberAuth);
+      if (method === "GET" && path === "/member-auth/guarantor-requests") return listMemberGuarantorRequests(response, memberAuth);
+      if (method === "PATCH" && path.startsWith("/member-auth/guarantor-requests/") && path.endsWith("/status")) {
+        return updateMemberGuarantorRequest(request, response, memberAuth, path.split("/")[3], correlationId);
+      }
       if (method === "POST" && path === "/member-auth/logout") {
         removeMemberSession(memberAuth.token);
         return sendData(response, { loggedOut: true });
@@ -95,6 +101,12 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/financial-transactions") return createFinancialTransaction(request, response, auth, correlationId);
     if (method === "GET" && path === "/loans") return listLoans(response, auth, url);
     if (method === "POST" && path === "/loans") return createLoan(request, response, auth, correlationId);
+    if (method === "GET" && path.startsWith("/loans/") && path.endsWith("/guarantors")) {
+      return listLoanGuarantors(response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "POST" && path.startsWith("/loans/") && path.endsWith("/guarantors")) {
+      return createLoanGuarantor(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "PATCH" && path.startsWith("/financial-transactions/") && path.endsWith("/status")) {
       return updateFinancialTransactionStatus(request, response, auth, path.split("/")[2], correlationId);
     }
@@ -709,7 +721,18 @@ function listLoans(response, auth, url) {
   const loans = isPlatform(auth) && !url.searchParams.get("tenantId")
     ? db.loans
     : db.loans.filter((loan) => loan.tenantId === tenantId);
-  return sendData(response, loans);
+  return sendData(response, loans.map(publicLoan));
+}
+
+function publicLoan(loan) {
+  if (!loan) return null;
+  const guarantors = db.loanGuarantors.filter((item) => item.loanId === loan.id);
+  return {
+    ...loan,
+    guarantors: guarantors.filter((item) => item.status === "accepted").length || loan.guarantors,
+    guarantorRequests: guarantors.length,
+    pendingGuarantors: guarantors.filter((item) => item.status === "pending").length
+  };
 }
 
 async function createLoan(request, response, auth, correlationId) {
@@ -758,5 +781,107 @@ async function createLoan(request, response, auth, correlationId) {
     resourceId: loan.id,
     ipAddress: requestIp(request)
   });
-  return sendData(response, loan, 201);
+  return sendData(response, publicLoan(loan), 201);
+}
+
+function listLoanGuarantors(response, auth, loanId, correlationId) {
+  const loan = db.loans.find((item) => item.id === loanId);
+  if (!loan) return sendError(response, 404, "LOAN_NOT_FOUND", "Loan not found.", correlationId);
+  if (!assertTenantAccess(auth, loan.tenantId, response, correlationId)) return;
+  return sendData(response, db.loanGuarantors.filter((item) => item.loanId === loan.id));
+}
+
+async function createLoanGuarantor(request, response, auth, loanId, correlationId) {
+  const loan = db.loans.find((item) => item.id === loanId);
+  if (!loan) return sendError(response, 404, "LOAN_NOT_FOUND", "Loan not found.", correlationId);
+  if (!assertTenantAccess(auth, loan.tenantId, response, correlationId)) return;
+
+  const body = await readJson(request);
+  const guarantor = db.members.find((item) => item.id === String(body.memberId) && item.tenantId === loan.tenantId);
+  if (!guarantor) return sendError(response, 400, "INVALID_GUARANTOR", "Guarantor member does not exist for this tenant.", correlationId);
+  if (guarantor.status !== "active") return sendError(response, 400, "GUARANTOR_NOT_ACTIVE", "Only active members can guarantee a loan.", correlationId);
+  if (guarantor.id === loan.memberId) return sendError(response, 409, "BORROWER_CANNOT_GUARANTEE", "A borrower cannot guarantee their own loan.", correlationId);
+  if (db.loanGuarantors.some((item) => item.loanId === loan.id && item.memberId === guarantor.id && item.status !== "rejected")) {
+    return sendError(response, 409, "GUARANTOR_ALREADY_REQUESTED", "This guarantor already has an active request for the loan.", correlationId);
+  }
+
+  const guaranteedAmount = Number(body.guaranteedAmount || Math.ceil(loan.amount / 2));
+  if (!Number.isFinite(guaranteedAmount) || guaranteedAmount <= 0) {
+    return sendError(response, 400, "INVALID_GUARANTEE_AMOUNT", "Guarantee amount must be greater than zero.", correlationId);
+  }
+  if (guaranteedAmount > guaranteeCapacity(guarantor.id)) {
+    return sendError(response, 409, "GUARANTEE_CAPACITY_EXCEEDED", "Requested guarantee exceeds the member's available guarantee capacity.", correlationId);
+  }
+
+  const requestRecord = {
+    id: newId("guarantor"),
+    tenantId: loan.tenantId,
+    loanId: loan.id,
+    memberId: guarantor.id,
+    guaranteedAmount,
+    status: "pending",
+    requestedByUserId: auth.user.id,
+    decidedAt: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  db.loanGuarantors.push(requestRecord);
+  loan.stage = "Guarantor Review";
+  loan.updatedAt = new Date().toISOString();
+  createAuditEvent({
+    tenantId: loan.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Requested loan guarantor ${guarantor.membershipNo}`,
+    resourceType: "loan_guarantor",
+    resourceId: requestRecord.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, requestRecord, 201);
+}
+
+function listMemberGuarantorRequests(response, auth) {
+  const requests = db.loanGuarantors
+    .filter((item) => item.memberId === auth.member.id)
+    .map((item) => ({
+      ...item,
+      loan: publicLoan(db.loans.find((loan) => loan.id === item.loanId)),
+      borrower: publicMember(db.members.find((member) => member.id === db.loans.find((loan) => loan.id === item.loanId)?.memberId)),
+      capacity: guaranteeCapacity(auth.member.id, item.id)
+    }));
+  return sendData(response, requests);
+}
+
+async function updateMemberGuarantorRequest(request, response, auth, guarantorId, correlationId) {
+  const body = await readJson(request);
+  const status = String(body.status || "");
+  if (!allowedGuarantorStatuses.has(status)) {
+    return sendError(response, 400, "INVALID_GUARANTOR_STATUS", "Guarantor requests can only be accepted or rejected.", correlationId);
+  }
+  const requestRecord = db.loanGuarantors.find((item) => item.id === guarantorId && item.memberId === auth.member.id);
+  if (!requestRecord) return sendError(response, 404, "GUARANTOR_REQUEST_NOT_FOUND", "Guarantor request not found.", correlationId);
+  if (requestRecord.status !== "pending") return sendError(response, 409, "GUARANTOR_ALREADY_DECIDED", "Only pending guarantor requests can be decided.", correlationId);
+  if (status === "accepted" && requestRecord.guaranteedAmount > guaranteeCapacity(auth.member.id, requestRecord.id)) {
+    return sendError(response, 409, "GUARANTEE_CAPACITY_EXCEEDED", "Guarantee exceeds your available guarantee capacity.", correlationId);
+  }
+
+  requestRecord.status = status;
+  requestRecord.decidedAt = new Date().toISOString();
+  requestRecord.updatedAt = requestRecord.decidedAt;
+  const loan = db.loans.find((item) => item.id === requestRecord.loanId);
+  if (loan) {
+    loan.guarantors = db.loanGuarantors.filter((item) => item.loanId === loan.id && item.status === "accepted").length;
+    loan.stage = loan.guarantors > 0 ? "Loan Committee" : loan.stage;
+    loan.updatedAt = new Date().toISOString();
+  }
+  createAuditEvent({
+    tenantId: requestRecord.tenantId,
+    actorUserId: null,
+    actorName: auth.member.fullName,
+    action: `${status === "accepted" ? "Accepted" : "Rejected"} loan guarantee request`,
+    resourceType: "loan_guarantor",
+    resourceId: requestRecord.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, requestRecord);
 }

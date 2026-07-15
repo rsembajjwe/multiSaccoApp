@@ -133,6 +133,7 @@ let memberApiState = {
   tenant: null,
   branch: null,
   balances: null,
+  guarantorRequests: [],
   message: "Member portal not signed in."
 };
 
@@ -300,6 +301,8 @@ function apiLoanToRow(loan) {
     stage: loan.stage,
     guarantors: loan.guarantors,
     dsr: loan.dsr,
+    guarantorRequests: loan.guarantorRequests || 0,
+    pendingGuarantors: loan.pendingGuarantors || 0,
     source: "API"
   };
 }
@@ -726,7 +729,7 @@ function renderLoans() {
       ${apiState.user ? `<div class="notice">Loan files shown from the backend for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}.</div>` : `<div class="notice">Login to the API to create server-side loan applications. The table below is local demo data.</div>`}
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Applicant</th><th>Product</th><th>Amount</th><th>Balance</th><th>Stage</th><th>Guarantors</th><th>DSR</th><th>Status</th></tr></thead>
+          <thead><tr><th>Applicant</th><th>Product</th><th>Amount</th><th>Balance</th><th>Stage</th><th>Guarantors</th><th>DSR</th><th>Status</th><th>Action</th></tr></thead>
           <tbody>
             ${loans.map((loan) => `
               <tr>
@@ -735,11 +738,12 @@ function renderLoans() {
                 <td>${money.format(loan.amount)}</td>
                 <td>${money.format(loan.balance)}</td>
                 <td>${loan.stage}</td>
-                <td>${loan.guarantors}</td>
+                <td>${loan.guarantors}${loan.pendingGuarantors ? `<br><small>${loan.pendingGuarantors} pending</small>` : ""}</td>
                 <td>${loan.dsr}%</td>
                 <td><span class="status ${statusClass(loan.status)}">${loan.status}</span></td>
+                <td>${apiState.user ? `<button class="secondary-button" data-request-guarantor="${loan.id}" type="button">Request guarantor</button>` : ""}</td>
               </tr>
-            `).join("")}
+            `).join("") || `<tr><td colspan="9">No loan files found.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -854,6 +858,22 @@ function renderMemberPortal() {
           </ul>
         </section>
       </div>
+      <section class="card" style="margin-top:16px">
+        <h2>Guarantee requests</h2>
+        <ul class="list">
+          ${memberApiState.guarantorRequests.map((request) => `
+            <li>
+              <span>
+                <strong>${request.loan?.product || "Loan request"} for ${request.borrower?.fullName || "Borrower"}</strong><br>
+                <small>${money.format(request.guaranteedAmount)} · ${titleCase(request.status.replace(/_/g, " "))} · capacity ${money.format(request.capacity || 0)}</small>
+              </span>
+              <span>
+                ${request.status === "pending" ? `<button class="secondary-button" data-guarantor-reject="${request.id}" type="button">Reject</button><button class="primary-button" data-guarantor-accept="${request.id}" type="button">Accept</button>` : `<span class="status ${statusClass(request.status)}">${titleCase(request.status)}</span>`}
+              </span>
+            </li>
+          `).join("") || `<li><span>No guarantee requests for this member.</span><span class="status active">Clear</span></li>`}
+        </ul>
+      </section>
     `;
   }
 
@@ -977,6 +997,18 @@ function bindViewActions() {
     button.addEventListener("click", () => resolveApproval(button.dataset.reject, "Rejected"));
   });
 
+  document.querySelectorAll("[data-request-guarantor]").forEach((button) => {
+    button.addEventListener("click", () => openGuarantorRequestForm(button.dataset.requestGuarantor));
+  });
+
+  document.querySelectorAll("[data-guarantor-accept]").forEach((button) => {
+    button.addEventListener("click", () => decideGuarantorRequest(button.dataset.guarantorAccept, "accepted"));
+  });
+
+  document.querySelectorAll("[data-guarantor-reject]").forEach((button) => {
+    button.addEventListener("click", () => decideGuarantorRequest(button.dataset.guarantorReject, "rejected"));
+  });
+
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const actions = {
@@ -1056,15 +1088,19 @@ async function memberApiRequest(path, options = {}) {
 async function refreshMemberStatus() {
   if (!memberApiState.token) return;
   try {
-    const session = await memberApiRequest("/member-auth/me");
+    const [session, guarantorRequests] = await Promise.all([
+      memberApiRequest("/member-auth/me"),
+      memberApiRequest("/member-auth/guarantor-requests")
+    ]);
     memberApiState.member = session.member;
     memberApiState.tenant = session.tenant;
     memberApiState.branch = session.branch;
     memberApiState.balances = session.balances;
+    memberApiState.guarantorRequests = guarantorRequests;
     memberApiState.message = `Member portal signed in as ${session.member.fullName}.`;
   } catch (error) {
     localStorage.removeItem(MEMBER_SESSION_KEY);
-    memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, message: error.message };
+    memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, guarantorRequests: [], message: error.message };
   }
   if (state.currentView === "memberPortal") render();
 }
@@ -1161,6 +1197,7 @@ function openMemberLoginForm() {
       memberApiState.tenant = data.tenant;
       memberApiState.branch = data.branch;
       memberApiState.balances = data.balances;
+      memberApiState.guarantorRequests = [];
       localStorage.setItem(MEMBER_SESSION_KEY, data.token);
       closeModal();
       state.currentView = "memberPortal";
@@ -1191,7 +1228,7 @@ async function memberLogout() {
     // Local logout should still clear the client member session if the server has restarted.
   }
   localStorage.removeItem(MEMBER_SESSION_KEY);
-  memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, message: "Logged out of member portal." };
+  memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, guarantorRequests: [], message: "Logged out of member portal." };
   render();
 }
 
@@ -1494,6 +1531,52 @@ function openLoanForm() {
     state.currentView = "loans";
     render();
   });
+}
+
+function openGuarantorRequestForm(loanId) {
+  const loan = apiState.loans.find((item) => item.id === loanId);
+  if (!loan) return;
+  const candidates = apiState.members
+    .map(apiMemberToRow)
+    .filter((member) => member.status === "Active" && member.id !== loan.memberId);
+  if (!candidates.length) {
+    openModal("No guarantor available", `<div class="notice error">No active member is available to guarantee this loan.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    return;
+  }
+  openModal("Request guarantor", `
+    <div class="form-grid">
+      <label class="field full"><span>Guarantor</span><select id="guarantorMember" class="select">${candidates.map((member) => `<option value="${member.id}">${member.name} · ${member.no}</option>`).join("")}</select></label>
+      ${field("Guaranteed amount", "guaranteedAmount", "number", String(Math.ceil(loan.amount / 2)))}
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveGuarantorRequest" class="primary-button" type="button">Send request</button>`);
+
+  document.getElementById("saveGuarantorRequest").addEventListener("click", async () => {
+    try {
+      await apiRequest(`/loans/${loanId}/guarantors`, {
+        method: "POST",
+        body: JSON.stringify({
+          memberId: value("guarantorMember"),
+          guaranteedAmount: Number(value("guaranteedAmount"))
+        })
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+async function decideGuarantorRequest(id, status) {
+  try {
+    await memberApiRequest(`/member-auth/guarantor-requests/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+    await refreshMemberStatus();
+  } catch (error) {
+    openModal("Guarantee decision failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
 }
 
 async function recordSubscriptionPayment() {

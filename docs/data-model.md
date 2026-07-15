@@ -210,6 +210,23 @@ Financial transaction decisions follow maker-checker separation: a transaction c
 | created_at | timestamp | Creation timestamp. |
 | updated_at | timestamp | Last update timestamp. |
 
+### loan_guarantors
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| loan_id | uuid/string | Guaranteed loan. |
+| member_id | uuid/string | Guarantor member. |
+| guaranteed_amount | decimal | Amount guaranteed by the member. |
+| status | enum | `pending`, `accepted`, `rejected`. |
+| requested_by_user_id | uuid/string | Staff user who requested the guarantee. |
+| decided_at | timestamp | Member decision timestamp. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+Guarantee capacity currently uses posted savings less pending or accepted guarantees. A borrower cannot guarantee their own loan.
+
 ## Phase 2 Onboarding Entities
 
 ### branches

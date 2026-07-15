@@ -63,6 +63,10 @@ All JSON responses should follow one of these shapes:
 | PATCH | `/financial-transactions/:id/status` | Post or reject a pending financial transaction. | Authorized checker |
 | GET | `/loans` | List tenant loan applications and files. | Required |
 | POST | `/loans` | Submit a loan application for an active member. | SACCO staff |
+| GET | `/loans/:id/guarantors` | List guarantor requests for a loan. | Required |
+| POST | `/loans/:id/guarantors` | Request a member to guarantee a loan. | SACCO staff |
+| GET | `/member-auth/guarantor-requests` | List current member guarantee requests. | Member |
+| PATCH | `/member-auth/guarantor-requests/:id/status` | Accept or reject a guarantee request. | Member |
 | GET | `/approval-workflows` | List workflows. | Admin |
 | POST | `/approval-workflows` | Create workflow. | Admin |
 | GET | `/approval-decisions` | List pending or historical decisions. | Required |
@@ -105,5 +109,9 @@ Implemented in the no-dependency development server:
 - `PATCH /api/v1/financial-transactions/:id/status`
 - `GET /api/v1/loans`
 - `POST /api/v1/loans`
+- `GET /api/v1/loans/:id/guarantors`
+- `POST /api/v1/loans/:id/guarantors`
+- `GET /api/v1/member-auth/guarantor-requests`
+- `PATCH /api/v1/member-auth/guarantor-requests/:id/status`
 
 The development server uses an in-memory store seeded at startup. PostgreSQL migrations are documented separately and will replace the development store in the next backend step.
