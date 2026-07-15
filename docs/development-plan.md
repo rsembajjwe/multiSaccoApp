@@ -357,6 +357,8 @@ Progress:
 - Phase 2 onboarding and membership migration draft added.
 - Members screen now reads API-backed branches/members after login and creates members through `/api/v1/members`.
 - SACCO registration screen now reads API-backed tenants after login and creates/approves tenants through `/api/v1/tenants`.
+- Subscription package, invoice, and payment endpoints added.
+- Subscriptions screen now reads API-backed packages/subscriptions after login and records payments through `/api/v1/subscriptions/:id/payments`.
 
 Recommended stack:
 

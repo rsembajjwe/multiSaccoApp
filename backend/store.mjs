@@ -85,6 +85,68 @@ export const db = {
     { tenantId: "tenant_platform", userId: "user_platform_admin", roleId: "role_platform_admin" },
     { tenantId: "tenant_green", userId: "user_green_admin", roleId: "role_sacco_admin" }
   ],
+  subscriptionPackages: [
+    {
+      id: "starter",
+      name: "Starter",
+      price: 1200000,
+      billingPeriod: "annual",
+      members: 500,
+      users: 8,
+      branches: 1,
+      modules: "Members, savings, shares",
+      status: "active"
+    },
+    {
+      id: "growth",
+      name: "Growth",
+      price: 3600000,
+      billingPeriod: "annual",
+      members: 2500,
+      users: 25,
+      branches: 5,
+      modules: "Core finance, loans, approvals, reports",
+      status: "active"
+    },
+    {
+      id: "enterprise",
+      name: "Enterprise",
+      price: 9000000,
+      billingPeriod: "annual",
+      members: 10000,
+      users: 100,
+      branches: 25,
+      modules: "All modules, API, advanced support",
+      status: "active"
+    }
+  ],
+  subscriptions: [
+    {
+      id: "subscription_green_growth",
+      tenantId: "tenant_green",
+      packageId: "growth",
+      status: "active",
+      invoice: "INV-2026-001",
+      amount: 3600000,
+      paid: 3600000,
+      expiry: "2027-07-14",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "subscription_lake_starter",
+      tenantId: "tenant_lake",
+      packageId: "starter",
+      status: "pending_payment",
+      invoice: "INV-2026-002",
+      amount: 1200000,
+      paid: 0,
+      expiry: "2026-07-30",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  subscriptionPayments: [],
   branches: [
     {
       id: "branch_green_main",

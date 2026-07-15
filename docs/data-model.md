@@ -116,6 +116,46 @@ This model defines the Phase 1 and Phase 2 foundation tables. Production storage
 | ip_address | text | Request IP where available. |
 | created_at | timestamp | Event timestamp. |
 
+### subscription_packages
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| name | text | Package name. |
+| price | decimal | Annual or configured billing amount. |
+| billing_period | text | `monthly`, `quarterly`, `annual`, etc. |
+| member_limit | integer | Optional package limit. |
+| user_limit | integer | Optional package limit. |
+| branch_limit | integer | Optional package limit. |
+| modules | text | Available module summary. |
+| status | enum | `active`, `inactive`. |
+
+### subscriptions
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| package_id | uuid/string | Subscription package reference. |
+| status | enum | `pending_payment`, `active`, `grace_period`, `expired`, `suspended`, `cancelled`. |
+| invoice | text | Unique invoice reference. |
+| amount | decimal | Invoice amount. |
+| paid | decimal | Amount received. |
+| expiry | date | Subscription expiry. |
+
+### subscription_payments
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| subscription_id | uuid/string | Subscription reference. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| amount | decimal | Payment amount. |
+| channel | text | Manual, mobile money, bank, etc. |
+| external_reference | text | Unique payment reference for idempotency. |
+| received_at | timestamp | Payment timestamp. |
+| recorded_by | uuid/string | User who posted the payment. |
+
 ## Phase 2 Onboarding Entities
 
 ### branches

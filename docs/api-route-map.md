@@ -39,6 +39,9 @@ All JSON responses should follow one of these shapes:
 | GET | `/permissions` | List known permissions. | Required |
 | GET | `/audit-events` | List tenant audit events. | Required |
 | POST | `/audit-events` | Write an audit event. | Internal/admin |
+| GET | `/subscription-packages` | List platform subscription packages. | Required |
+| GET | `/subscriptions` | List visible subscriptions. | Required |
+| POST | `/subscriptions/:id/payments` | Record a subscription payment. | Platform admin |
 
 ## Onboarding and Membership Routes
 
@@ -75,6 +78,9 @@ Implemented in the no-dependency development server:
 - `GET /api/v1/permissions`
 - `GET /api/v1/audit-events`
 - `POST /api/v1/audit-events`
+- `GET /api/v1/subscription-packages`
+- `GET /api/v1/subscriptions`
+- `POST /api/v1/subscriptions/:id/payments`
 - `GET /api/v1/branches`
 - `POST /api/v1/branches`
 - `GET /api/v1/members`

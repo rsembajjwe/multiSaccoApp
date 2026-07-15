@@ -61,6 +61,11 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path === "/permissions") return sendData(response, db.permissions);
     if (method === "GET" && path === "/audit-events") return listAuditEvents(response, auth);
     if (method === "POST" && path === "/audit-events") return createAudit(request, response, auth, correlationId);
+    if (method === "GET" && path === "/subscription-packages") return sendData(response, db.subscriptionPackages);
+    if (method === "GET" && path === "/subscriptions") return listSubscriptions(response, auth, url);
+    if (method === "POST" && path.startsWith("/subscriptions/") && path.endsWith("/payments")) {
+      return recordSubscriptionPayment(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path === "/branches") return listBranches(response, auth, url);
     if (method === "POST" && path === "/branches") return createBranch(request, response, auth, correlationId);
     if (method === "GET" && path === "/members") return listMembers(response, auth, url);
@@ -275,6 +280,58 @@ async function createAudit(request, response, auth, correlationId) {
     ipAddress: requestIp(request)
   });
   return sendData(response, event, 201);
+}
+
+function listSubscriptions(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const subscriptions = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.subscriptions
+    : db.subscriptions.filter((subscription) => subscription.tenantId === tenantId);
+  return sendData(response, subscriptions);
+}
+
+async function recordSubscriptionPayment(request, response, auth, subscriptionId, correlationId) {
+  if (!isPlatform(auth)) {
+    return sendError(response, 403, "PLATFORM_ADMIN_REQUIRED", "Only platform administrators can record subscription payments.", correlationId);
+  }
+  const subscription = db.subscriptions.find((item) => item.id === subscriptionId);
+  if (!subscription) return sendError(response, 404, "SUBSCRIPTION_NOT_FOUND", "Subscription not found.", correlationId);
+
+  const body = await readJson(request);
+  const amount = Number(body.amount || subscription.amount - subscription.paid);
+  if (!Number.isFinite(amount) || amount <= 0) return sendError(response, 400, "INVALID_PAYMENT_AMOUNT", "Payment amount must be greater than zero.", correlationId);
+
+  const existing = body.externalReference
+    ? db.subscriptionPayments.find((payment) => payment.externalReference === String(body.externalReference))
+    : null;
+  if (existing) return sendData(response, { subscription, payment: existing, idempotent: true });
+
+  const payment = {
+    id: newId("subscription_payment"),
+    subscriptionId,
+    tenantId: subscription.tenantId,
+    amount,
+    channel: String(body.channel || "manual"),
+    externalReference: String(body.externalReference || newId("manual_ref")),
+    receivedAt: new Date().toISOString(),
+    recordedBy: auth.user.id
+  };
+  db.subscriptionPayments.push(payment);
+  subscription.paid = Math.min(subscription.amount, subscription.paid + amount);
+  subscription.status = subscription.paid >= subscription.amount ? "active" : "pending_payment";
+  subscription.expiry = subscription.status === "active" ? "2027-07-15" : subscription.expiry;
+  subscription.updatedAt = new Date().toISOString();
+
+  createAuditEvent({
+    tenantId: subscription.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Recorded subscription payment ${payment.externalReference}`,
+    resourceType: "subscription",
+    resourceId: subscription.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, { subscription, payment }, 201);
 }
 
 function listBranches(response, auth, url) {

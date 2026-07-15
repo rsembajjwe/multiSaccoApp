@@ -47,6 +47,19 @@ try {
   const approvedTenant = await api("PATCH", `/tenants/${tenant.data.id}/status`, { status: "approved" }, platformToken);
   assert(approvedTenant.data.status === "approved", "Tenant status should update to approved");
 
+  const packages = await api("GET", "/subscription-packages", null, platformToken);
+  assert(packages.data.length >= 3, "Subscription packages should be listed");
+
+  const subscriptions = await api("GET", "/subscriptions", null, platformToken);
+  assert(subscriptions.data.length >= 2, "Platform admin should list subscriptions");
+  const pendingSubscription = subscriptions.data.find((subscription) => subscription.status !== "active") || subscriptions.data[0];
+  const payment = await api("POST", `/subscriptions/${pendingSubscription.id}/payments`, {
+    amount: pendingSubscription.amount - pendingSubscription.paid,
+    channel: "manual",
+    externalReference: `SMOKE-PAY-${Date.now()}`
+  }, platformToken);
+  assert(payment.data.subscription.status === "active", "Subscription payment should activate paid subscription");
+
   const user = await api("POST", "/users", {
     tenantId: "tenant_green",
     fullName: "Sprint Smoke User",
@@ -61,6 +74,12 @@ try {
     password: "Sacco@12345"
   });
   const saccoToken = saccoLogin.data.token;
+
+  const saccoSubscriptions = await api("GET", "/subscriptions", null, saccoToken);
+  assert(saccoSubscriptions.data.every((subscription) => subscription.tenantId === "tenant_green"), "SACCO subscription list must be tenant-scoped");
+
+  const paymentDenied = await raw("POST", `/subscriptions/${pendingSubscription.id}/payments`, { amount: 1 }, saccoToken);
+  assert(paymentDenied.status === 403, "SACCO admin should not record platform subscription payments");
 
   const denied = await raw("GET", "/tenants/tenant_lake", null, saccoToken);
   assert(denied.status === 403, "SACCO admin should be blocked from another tenant");

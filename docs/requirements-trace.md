@@ -35,6 +35,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Backend rejects cross-tenant member access for SACCO-level users.
 - Member register UI can switch from local demo data to API-backed member onboarding after login.
 - SACCO registration UI can switch from local demo data to API-backed tenant onboarding after platform login.
+- Subscription UI can switch from local demo data to API-backed package, invoice, and payment records after login.
 
 ## Recommended backend modules for the next build
 

@@ -111,6 +111,8 @@ let apiState = {
   users: [],
   branches: [],
   members: [],
+  subscriptionPackages: [],
+  subscriptions: [],
   auditEvents: [],
   message: "Checking backend connection..."
 };
@@ -134,7 +136,7 @@ function tenantScoped(collection) {
 }
 
 function tenantName(id) {
-  return state.tenants.find((tenant) => tenant.id === id)?.name || "Unknown tenant";
+  return [...apiState.tenants, ...state.tenants].find((tenant) => tenant.id === id)?.name || "Unknown tenant";
 }
 
 function memberName(id) {
@@ -142,7 +144,7 @@ function memberName(id) {
 }
 
 function packageName(id) {
-  return state.packages.find((pkg) => pkg.id === id)?.name || "Unassigned";
+  return [...apiState.subscriptionPackages, ...state.packages].find((pkg) => pkg.id === id)?.name || "Unassigned";
 }
 
 function currentApiTenantId() {
@@ -157,12 +159,46 @@ function apiTenantQuery() {
   return apiState.user?.tenantId === "tenant_platform" && tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : "";
 }
 
+function apiSubscriptionQuery() {
+  return apiState.user?.tenantId === "tenant_platform" ? "" : apiTenantQuery();
+}
+
 function useApiMembers() {
   return Boolean(apiState.user);
 }
 
 function useApiTenants() {
   return Boolean(apiState.user);
+}
+
+function useApiSubscriptions() {
+  return Boolean(apiState.user);
+}
+
+function apiPackageToRow(pkg) {
+  return {
+    id: pkg.id,
+    name: pkg.name,
+    price: pkg.price,
+    members: pkg.members,
+    users: pkg.users,
+    branches: pkg.branches,
+    modules: pkg.modules
+  };
+}
+
+function apiSubscriptionToRow(subscription) {
+  return {
+    id: subscription.id,
+    tenantId: subscription.tenantId,
+    packageId: subscription.packageId,
+    status: titleCase(subscription.status.replace(/_/g, " ")),
+    invoice: subscription.invoice,
+    amount: subscription.amount,
+    paid: subscription.paid,
+    expiry: subscription.expiry,
+    source: "API"
+  };
 }
 
 function apiTenantToRow(tenant) {
@@ -419,9 +455,13 @@ function renderRegistrations() {
 }
 
 function renderSubscriptions() {
+  const packages = useApiSubscriptions() ? apiState.subscriptionPackages.map(apiPackageToRow) : state.packages;
+  const subscriptions = useApiSubscriptions() ? apiState.subscriptions.map(apiSubscriptionToRow) : state.subscriptions;
+  const canRecordApiPayment = apiState.user?.tenantId === "tenant_platform";
+  const source = useApiSubscriptions() ? "API-backed" : "Local demo";
   return `
     <div class="grid three">
-      ${state.packages.map((pkg) => `
+      ${packages.map((pkg) => `
         <section class="card">
           <h2>${pkg.name}</h2>
           <p><strong>${money.format(pkg.price)}</strong> per year</p>
@@ -436,16 +476,20 @@ function renderSubscriptions() {
     </div>
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
-        <h2>Invoices and payments</h2>
-        <button class="primary-button" data-action="recordSubscriptionPayment" type="button">Record payment</button>
+        <div>
+          <h2>Invoices and payments</h2>
+          <p class="eyebrow">${source} · Subscription lifecycle</p>
+        </div>
+        ${useApiSubscriptions() && !canRecordApiPayment ? "" : `<button class="primary-button" data-action="recordSubscriptionPayment" type="button">Record payment</button>`}
       </div>
+      ${useApiSubscriptions() ? `<div class="notice">${canRecordApiPayment ? "Platform Admin is managing subscription payments from the backend." : "Your API account can view only its own SACCO subscription."}</div>` : `<div class="notice">Login as Platform Admin to record subscription payments through the backend.</div>`}
       <div class="table-wrap">
         <table>
           <thead><tr><th>Invoice</th><th>SACCO</th><th>Package</th><th>Amount</th><th>Paid</th><th>Expiry</th><th>Status</th></tr></thead>
           <tbody>
-            ${state.subscriptions.map((sub) => `
+            ${subscriptions.map((sub) => `
               <tr>
-                <td>${sub.invoice}</td>
+                <td>${sub.invoice}${sub.source ? `<br><small>${sub.source}</small>` : ""}</td>
                 <td>${tenantName(sub.tenantId)}</td>
                 <td>${packageName(sub.packageId)}</td>
                 <td>${money.format(sub.amount)}</td>
@@ -453,7 +497,7 @@ function renderSubscriptions() {
                 <td>${sub.expiry}</td>
                 <td><span class="status ${statusClass(sub.status)}">${sub.status}</span></td>
               </tr>
-            `).join("")}
+            `).join("") || `<tr><td colspan="7">No subscriptions found.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -810,19 +854,23 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
         apiRequest(`/branches${apiTenantQuery()}`),
-        apiRequest(`/members${apiTenantQuery()}`)
+        apiRequest(`/members${apiTenantQuery()}`),
+        apiRequest("/subscription-packages"),
+        apiRequest(`/subscriptions${apiSubscriptionQuery()}`)
       ]);
       apiState.tenants = tenants;
       apiState.users = users;
       apiState.auditEvents = auditEvents;
       apiState.branches = branches;
       apiState.members = members;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), and ${auditEvents.length} audit event(s).`;
+      apiState.subscriptionPackages = subscriptionPackages;
+      apiState.subscriptions = subscriptions;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -834,7 +882,7 @@ async function refreshApiStatus() {
     apiState.message = error.message;
   }
   renderApiChrome();
-  if (["dashboard", "reports", "members", "registrations"].includes(state.currentView)) render();
+  if (["dashboard", "reports", "members", "registrations", "subscriptions"].includes(state.currentView)) render();
 }
 
 function openApiLoginForm() {
@@ -871,7 +919,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -1127,7 +1175,26 @@ function openLoanForm() {
   });
 }
 
-function recordSubscriptionPayment() {
+async function recordSubscriptionPayment() {
+  if (apiState.user?.tenantId === "tenant_platform") {
+    const pending = apiState.subscriptions.find((sub) => sub.status !== "active") || apiState.subscriptions[0];
+    if (!pending) return;
+    try {
+      await apiRequest(`/subscriptions/${pending.id}/payments`, {
+        method: "POST",
+        body: JSON.stringify({
+          amount: Math.max(1, pending.amount - pending.paid),
+          channel: "manual",
+          externalReference: `UI-PAY-${Date.now()}`
+        })
+      });
+      await refreshApiStatus();
+    } catch (error) {
+      openModal("Payment failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    }
+    return;
+  }
+
   const pending = state.subscriptions.find((sub) => sub.status !== "Active") || state.subscriptions[0];
   pending.paid = pending.amount;
   pending.status = "Active";
