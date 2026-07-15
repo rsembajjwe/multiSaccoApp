@@ -1,4 +1,6 @@
 const STORAGE_KEY = "sacco-platform-demo-v1";
+const API_SESSION_KEY = "sacco-platform-api-session-v1";
+const API_BASE = "/api/v1";
 
 const navItems = [
   ["dashboard", "Dashboard", "overview"],
@@ -101,6 +103,15 @@ const seedData = {
 };
 
 let state = loadState();
+let apiState = {
+  health: "checking",
+  user: null,
+  token: localStorage.getItem(API_SESSION_KEY) || "",
+  tenants: [],
+  users: [],
+  auditEvents: [],
+  message: "Checking backend connection..."
+};
 
 function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
@@ -141,6 +152,7 @@ function init() {
   renderNav();
   bindGlobalActions();
   render();
+  refreshApiStatus();
 }
 
 function renderTenantSelect() {
@@ -186,6 +198,8 @@ function bindGlobalActions() {
     saveState();
     render();
   });
+  document.getElementById("apiLoginBtn").addEventListener("click", openApiLoginForm);
+  document.getElementById("apiLogoutBtn").addEventListener("click", apiLogout);
 }
 
 function render() {
@@ -195,6 +209,7 @@ function render() {
 
   document.getElementById("tenantSelect").value = state.tenantId;
   document.getElementById("sessionRole").textContent = state.tenantId === "platform" ? "Platform Administrator" : "SACCO Administrator";
+  renderApiChrome();
 
   const titles = {
     dashboard: ["Dashboard", "Command center"],
@@ -273,6 +288,22 @@ function renderDashboard() {
         </ul>
       </section>
     </div>
+
+    <section class="card api-panel" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Backend connection</h2>
+          <p class="eyebrow">Sprint 1 API foundation</p>
+        </div>
+        <span class="status ${apiState.health === "online" ? "active" : apiState.health === "offline" ? "overdue" : "trial"}">${apiState.health}</span>
+      </div>
+      <div class="grid three">
+        ${miniFact("Authenticated user", apiState.user ? apiState.user.fullName : "Not logged in")}
+        ${miniFact("API tenants", String(apiState.tenants.length))}
+        ${miniFact("API audit events", String(apiState.auditEvents.length))}
+      </div>
+      <p class="muted">${apiState.message}</p>
+    </section>
 
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
@@ -512,6 +543,13 @@ function renderReports() {
       <h2>Audit trail</h2>
       ${auditTable(tenantScoped(state.audit))}
     </section>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <h2>API audit events</h2>
+        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+      </div>
+      ${apiAuditTable(apiState.auditEvents)}
+    </section>
   `;
 }
 
@@ -638,7 +676,8 @@ function bindViewActions() {
         newMember: openMemberForm,
         newTransaction: openTransactionForm,
         newLoan: openLoanForm,
-        recordSubscriptionPayment: recordSubscriptionPayment
+        recordSubscriptionPayment: recordSubscriptionPayment,
+        refreshApi: refreshApiStatus
       };
       actions[button.dataset.action]?.();
     });
@@ -659,6 +698,125 @@ function openModal(title, body, footer) {
   document.getElementById("modalBody").innerHTML = body;
   document.getElementById("modalFooter").innerHTML = footer;
   document.getElementById("modal").showModal();
+}
+
+function renderApiChrome() {
+  const badge = document.getElementById("apiBadge");
+  const login = document.getElementById("apiLoginBtn");
+  const logout = document.getElementById("apiLogoutBtn");
+  if (!badge || !login || !logout) return;
+
+  badge.textContent = apiState.user ? `API: ${apiState.user.fullName}` : `API: ${apiState.health}`;
+  badge.className = `api-badge ${apiState.health}`;
+  login.hidden = Boolean(apiState.user);
+  logout.hidden = !apiState.user;
+}
+
+async function apiRequest(path, options = {}) {
+  const headers = {
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(apiState.token ? { Authorization: `Bearer ${apiState.token}` } : {}),
+    ...(options.headers || {})
+  };
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const payload = await response.json();
+  if (!response.ok) {
+    const message = payload.error?.message || `API request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+  return payload.data;
+}
+
+async function refreshApiStatus() {
+  try {
+    const health = await apiRequest("/health");
+    apiState.health = health.ok ? "online" : "offline";
+    apiState.message = `${health.service} ${health.version} responded successfully.`;
+
+    if (apiState.token) {
+      const session = await apiRequest("/auth/me");
+      apiState.user = session.user;
+      const [tenants, users, auditEvents] = await Promise.all([
+        apiRequest("/tenants"),
+        apiRequest("/users"),
+        apiRequest("/audit-events")
+      ]);
+      apiState.tenants = tenants;
+      apiState.users = users;
+      apiState.auditEvents = auditEvents;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), and ${auditEvents.length} audit event(s).`;
+    }
+  } catch (error) {
+    if (apiState.token) {
+      localStorage.removeItem(API_SESSION_KEY);
+      apiState.token = "";
+      apiState.user = null;
+    }
+    apiState.health = "offline";
+    apiState.message = error.message;
+  }
+  renderApiChrome();
+  if (state.currentView === "dashboard" || state.currentView === "reports") render();
+}
+
+function openApiLoginForm() {
+  openModal("API login", `
+    <div class="notice">Seed accounts: <strong>admin@platform.local</strong> / <strong>Admin@12345</strong> or <strong>admin@greenvalley.local</strong> / <strong>Sacco@12345</strong>.</div>
+    <div class="form-grid" style="margin-top:14px">
+      ${field("Email", "apiEmail", "email", "admin@platform.local")}
+      ${field("Password", "apiPassword", "password", "Admin@12345")}
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="apiLoginSubmit" class="primary-button" type="button">Login</button>`);
+
+  document.getElementById("apiLoginSubmit").addEventListener("click", async () => {
+    try {
+      const data = await apiRequest("/auth/login", {
+        method: "POST",
+        headers: {},
+        body: JSON.stringify({ email: value("apiEmail"), password: value("apiPassword") })
+      });
+      apiState.token = data.token;
+      apiState.user = data.user;
+      localStorage.setItem(API_SESSION_KEY, data.token);
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+async function apiLogout() {
+  try {
+    if (apiState.token) await apiRequest("/auth/logout", { method: "POST" });
+  } catch {
+    // Local logout should still clear the client session if the server has restarted.
+  }
+  localStorage.removeItem(API_SESSION_KEY);
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], auditEvents: [], message: "Logged out of API session." };
+  renderApiChrome();
+  render();
+}
+
+function apiAuditTable(rows) {
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Tenant</th><th>Actor</th><th>Action</th><th>Resource</th></tr></thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr>
+              <td>${row.createdAt}</td>
+              <td>${row.tenantId}</td>
+              <td>${row.actorName}</td>
+              <td>${row.action}</td>
+              <td>${row.resourceType || ""} ${row.resourceId || ""}</td>
+            </tr>
+          `).join("") || `<tr><td colspan="5">Login to the API to view server-side audit events.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 function closeModal() {

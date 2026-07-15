@@ -16,6 +16,9 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Loan application queue with product, amount, appraisal stage, guarantors, debt-service ratio, and risk.
 - Member portal dashboard for balances, loans, statements, payments, and loan application entry points.
 - Reports page with financial summary, compliance snapshot, and audit trail.
+- Backend health check and API session status shown in the web UI.
+- Seeded API login/logout from the web UI.
+- Server-side tenants, users, and audit events fetched through `/api/v1`.
 
 ## Represented as design controls
 
@@ -26,6 +29,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Licence expiry alerts.
 - Role separation between platform and SACCO administration.
 - Financial transaction approval before posting.
+- Frontend API adapter allows gradual migration away from browser `localStorage`.
 
 ## Recommended backend modules for the next build
 

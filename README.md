@@ -71,3 +71,8 @@ This is now the first build foundation. A production build should add:
 - [Requirements trace](docs/requirements-trace.md)
 - [Data model](docs/data-model.md)
 - [API route map](docs/api-route-map.md)
+
+## Seed API accounts
+
+- Platform admin: `admin@platform.local` / `Admin@12345`
+- SACCO admin: `admin@greenvalley.local` / `Sacco@12345`

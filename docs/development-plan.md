@@ -344,6 +344,16 @@ Tasks:
 9. Keep the current UI working while backend is introduced.
 10. Add basic automated checks.
 
+Progress:
+
+- Data model document added.
+- API route map added.
+- Backend development server routes added under `/api/v1`.
+- Migration draft added for the Phase 1 foundation schema.
+- Health, login, tenants, users, roles, permissions, and audit endpoints added.
+- API smoke test added.
+- Frontend API adapter added for health, login/logout, tenants, users, and audit events.
+
 Recommended stack:
 
 - Frontend: React or dependency-free progressive app until package tooling is stable.

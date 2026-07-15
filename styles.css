@@ -136,6 +136,28 @@ button {
   gap: 10px;
 }
 
+.api-badge {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #d7e8e1;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.api-badge.online {
+  color: #10231f;
+  background: #b8f3dd;
+}
+
+.api-badge.offline {
+  color: #ffe1de;
+  background: rgba(180, 35, 24, 0.22);
+}
+
 .main {
   min-width: 0;
 }
@@ -482,6 +504,12 @@ th {
   border-left: 4px solid var(--gold);
   border-radius: 8px;
   background: #fff8e5;
+}
+
+.notice.error {
+  margin-bottom: 12px;
+  border-left-color: var(--red);
+  background: #ffe1de;
 }
 
 .chart {
