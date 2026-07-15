@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SACCO Management Platform</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="brand">
+        <div class="brand-mark">SM</div>
+        <div>
+          <strong>SACCO Manager</strong>
+          <span>Uganda multi-tenant platform</span>
+        </div>
+      </div>
+
+      <div class="tenant-switcher">
+        <label for="tenantSelect">Tenant</label>
+        <select id="tenantSelect"></select>
+      </div>
+
+      <nav id="nav" class="nav-list"></nav>
+
+      <div class="sidebar-footer">
+        <span id="sessionRole">Platform Administrator</span>
+        <button id="resetDemo" class="ghost-button" type="button">Reset demo</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="sectionKicker">Dashboard</p>
+          <h1 id="pageTitle">Command center</h1>
+        </div>
+        <div class="top-actions">
+          <button id="memberPortalBtn" class="secondary-button" type="button">Member portal</button>
+          <button id="newMemberBtn" class="primary-button" type="button">New member</button>
+        </div>
+      </header>
+
+      <section id="app" class="content" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <dialog id="modal" class="modal">
+    <form method="dialog">
+      <header class="modal-header">
+        <h2 id="modalTitle"></h2>
+        <button class="icon-button" value="cancel" aria-label="Close" type="submit">x</button>
+      </header>
+      <div id="modalBody" class="modal-body"></div>
+      <footer id="modalFooter" class="modal-footer"></footer>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
