@@ -33,6 +33,20 @@ try {
   const tenants = await api("GET", "/tenants", null, platformToken);
   assert(tenants.data.length >= 3, "Platform admin should list all seeded tenants");
 
+  const tenant = await api("POST", "/tenants", {
+    name: `Smoke SACCO ${Date.now()}`,
+    abbreviation: "SMS",
+    registrationNo: `COOP-SMOKE-${Date.now()}`,
+    district: "Kampala",
+    licenseExpiry: "2027-12-31",
+    packageId: "starter"
+  }, platformToken);
+  assert(tenant.data.id, "Tenant creation should return a tenant");
+  assert(tenant.data.status === "pending_review", "New tenant should start pending review");
+
+  const approvedTenant = await api("PATCH", `/tenants/${tenant.data.id}/status`, { status: "approved" }, platformToken);
+  assert(approvedTenant.data.status === "approved", "Tenant status should update to approved");
+
   const user = await api("POST", "/users", {
     tenantId: "tenant_green",
     fullName: "Sprint Smoke User",

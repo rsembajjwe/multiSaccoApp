@@ -161,6 +161,25 @@ function useApiMembers() {
   return Boolean(apiState.user);
 }
 
+function useApiTenants() {
+  return Boolean(apiState.user);
+}
+
+function apiTenantToRow(tenant) {
+  return {
+    id: tenant.id,
+    name: tenant.name,
+    abbreviation: tenant.abbreviation,
+    status: titleCase(tenant.status.replace(/_/g, " ")),
+    packageId: tenant.packageId,
+    onboarding: tenant.onboardingPercent,
+    licenseExpiry: tenant.licenseExpiry,
+    district: tenant.district,
+    registrationNo: tenant.registrationNo,
+    source: "API"
+  };
+}
+
 function apiBranchName(id) {
   return apiState.branches.find((branch) => branch.id === id)?.name || "Unassigned";
 }
@@ -361,31 +380,37 @@ function renderDashboard() {
 }
 
 function renderRegistrations() {
+  const tenants = useApiTenants()
+    ? apiState.tenants.filter((tenant) => tenant.id !== "tenant_platform").map(apiTenantToRow)
+    : state.tenants.filter((tenant) => tenant.id !== "platform");
+  const source = useApiTenants() ? "API-backed" : "Local demo";
+  const canCreateOnApi = apiState.user?.tenantId === "tenant_platform";
   return `
     <section class="card">
       <div class="toolbar">
         <div>
           <h2>SACCO applications</h2>
-          <p class="eyebrow">Self-registration, compliance checks and approval history</p>
+          <p class="eyebrow">${source} · Self-registration, compliance checks and approval history</p>
         </div>
-        <button class="primary-button" data-action="newTenant" type="button">New SACCO application</button>
+        ${apiState.user && !canCreateOnApi ? "" : `<button class="primary-button" data-action="newTenant" type="button">New SACCO application</button>`}
       </div>
+      ${apiState.user ? `<div class="notice">${canCreateOnApi ? "Platform Admin is managing SACCO applications from the backend." : "Your API account can view only its own tenant."}</div>` : `<div class="notice">Login as Platform Admin to create and approve SACCO tenants through the backend.</div>`}
       <div class="table-wrap">
         <table>
           <thead><tr><th>SACCO</th><th>District</th><th>Licence expiry</th><th>Package</th><th>Status</th><th>Action</th></tr></thead>
           <tbody>
-            ${state.tenants.filter((tenant) => tenant.id !== "platform").map((tenant) => `
+            ${tenants.map((tenant) => `
               <tr>
-                <td><strong>${tenant.name}</strong><br><span class="pill">${tenant.registrationNo}</span></td>
+                <td><strong>${tenant.name}</strong><br><span class="pill">${tenant.registrationNo}${tenant.source ? ` · ${tenant.source}` : ""}</span></td>
                 <td>${tenant.district}</td>
                 <td>${tenant.licenseExpiry}<br><small>${daysTo(tenant.licenseExpiry)} days remaining</small></td>
                 <td>${packageName(tenant.packageId)}</td>
                 <td><span class="status ${statusClass(tenant.status)}">${tenant.status}</span></td>
                 <td>
-                  <button class="secondary-button" data-approve-tenant="${tenant.id}" type="button">Approve</button>
+                  ${apiState.user && !canCreateOnApi ? "" : `<button class="secondary-button" data-approve-tenant="${tenant.id}" type="button">Approve</button>`}
                 </td>
               </tr>
-            `).join("")}
+            `).join("") || `<tr><td colspan="6">No SACCO applications found.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -809,7 +834,7 @@ async function refreshApiStatus() {
     apiState.message = error.message;
   }
   renderApiChrome();
-  if (["dashboard", "reports", "members"].includes(state.currentView)) render();
+  if (["dashboard", "reports", "members", "registrations"].includes(state.currentView)) render();
 }
 
 function openApiLoginForm() {
@@ -900,6 +925,7 @@ function closeModal() {
 }
 
 function openTenantForm() {
+  const apiMode = apiState.user?.tenantId === "tenant_platform";
   openModal("New SACCO application", `
     <div class="form-grid">
       ${field("SACCO name", "tenantName", "text", "Bweyogerere Traders SACCO")}
@@ -911,7 +937,29 @@ function openTenantForm() {
     </div>
   `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveTenant" class="primary-button" type="button">Submit application</button>`);
 
-  document.getElementById("saveTenant").addEventListener("click", () => {
+  document.getElementById("saveTenant").addEventListener("click", async () => {
+    if (apiMode) {
+      try {
+        await apiRequest("/tenants", {
+          method: "POST",
+          body: JSON.stringify({
+            name: value("tenantName"),
+            abbreviation: value("tenantAbbr"),
+            registrationNo: value("tenantReg"),
+            district: value("tenantDistrict"),
+            licenseExpiry: value("tenantExpiry"),
+            packageId: value("tenantPackage")
+          })
+        });
+        closeModal();
+        state.currentView = "registrations";
+        await refreshApiStatus();
+      } catch (error) {
+        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+      }
+      return;
+    }
+
     const id = `tenant-${Date.now()}`;
     state.tenants.push({
       id,
@@ -1089,7 +1137,20 @@ function recordSubscriptionPayment() {
   render();
 }
 
-function approveTenant(id) {
+async function approveTenant(id) {
+  if (apiState.user?.tenantId === "tenant_platform" && id.startsWith("tenant_")) {
+    try {
+      await apiRequest(`/tenants/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "approved" })
+      });
+      await refreshApiStatus();
+    } catch (error) {
+      openModal("Approval failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    }
+    return;
+  }
+
   const tenant = state.tenants.find((item) => item.id === id);
   if (!tenant) return;
   tenant.status = "Approved";

@@ -356,6 +356,7 @@ Progress:
 - Branch, member, member status, and member document API endpoints added.
 - Phase 2 onboarding and membership migration draft added.
 - Members screen now reads API-backed branches/members after login and creates members through `/api/v1/members`.
+- SACCO registration screen now reads API-backed tenants after login and creates/approves tenants through `/api/v1/tenants`.
 
 Recommended stack:
 

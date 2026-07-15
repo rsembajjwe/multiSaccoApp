@@ -34,6 +34,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Frontend API adapter allows gradual migration away from browser `localStorage`.
 - Backend rejects cross-tenant member access for SACCO-level users.
 - Member register UI can switch from local demo data to API-backed member onboarding after login.
+- SACCO registration UI can switch from local demo data to API-backed tenant onboarding after platform login.
 
 ## Recommended backend modules for the next build
 
