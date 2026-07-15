@@ -1300,6 +1300,7 @@ function renderMemberPortal() {
             <h2>Mobile dashboard</h2>
             <p class="eyebrow">Server-confirmed member app view</p>
           </div>
+          <button class="secondary-button" data-action="memberMobileLoan" type="button">Apply for mobile loan</button>
           <button class="primary-button" data-action="memberMobilePayment" type="button">Pay by mobile money</button>
         </div>
         <div class="grid metrics">
@@ -1504,6 +1505,7 @@ function bindViewActions() {
         recordSubscriptionPayment: recordSubscriptionPayment,
         simulateMobileMoneyCallback: simulateMobileMoneyCallback,
         memberMobilePayment: memberMobilePayment,
+        memberMobileLoan: openMemberMobileLoanForm,
         newExpense: openExpenseForm,
         newAsset: openAssetForm,
         newGovernanceMeeting: openGovernanceMeetingForm,
@@ -1779,6 +1781,39 @@ async function memberMobilePayment() {
     memberApiState.message = error.message;
     render();
   }
+}
+
+function openMemberMobileLoanForm() {
+  if (!memberApiState.member) return;
+  openModal("Mobile loan application", `
+    <div class="notice">This submits directly as ${memberApiState.member.fullName} and waits for server confirmation before updating the mobile dashboard.</div>
+    <div class="form-grid" style="margin-top:14px">
+      <label class="field"><span>Loan product</span><select id="mobileLoanProduct" class="select"><option>Development Loan</option><option>Emergency Loan</option><option>Agriculture Loan</option><option>School Fees Loan</option></select></label>
+      ${field("Requested amount", "mobileLoanAmount", "number", "750000")}
+      ${field("Repayment months", "mobileLoanPeriod", "number", "10")}
+      <label class="field full"><span>Purpose</span><textarea id="mobileLoanPurpose" class="input" rows="3">Mobile working capital request</textarea></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveMobileLoan" class="primary-button" type="button">Submit mobile loan</button>`);
+
+  document.getElementById("saveMobileLoan").addEventListener("click", async () => {
+    try {
+      const loan = await memberApiRequest("/member-auth/mobile-loans", {
+        method: "POST",
+        body: JSON.stringify({
+          product: value("mobileLoanProduct"),
+          amount: Number(value("mobileLoanAmount")),
+          repaymentMonths: Number(value("mobileLoanPeriod")),
+          purpose: value("mobileLoanPurpose")
+        })
+      });
+      closeModal();
+      await refreshMemberStatus();
+      memberApiState.message = `Server confirmed mobile loan ${loan.product} for ${money.format(loan.amount)}.`;
+      render();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
 }
 
 async function apiLogout() {

@@ -98,6 +98,16 @@ try {
   assert(initialMobileDashboard.data.lastUpdatedAt, "Mobile dashboard should include a last-updated timestamp");
   assert(initialMobileDashboard.data.balances.savings === 250000, "Mobile dashboard should include member balances");
 
+  const mobileLoan = await api("POST", "/member-auth/mobile-loans", {
+    product: "Emergency Loan",
+    amount: 650000,
+    repaymentMonths: 8,
+    purpose: "Mobile emergency application"
+  }, memberToken);
+  assert(mobileLoan.data.status === "submitted", "Mobile loan application should start submitted");
+  assert(mobileLoan.data.memberId === memberLogin.data.member.id, "Mobile loan must be submitted for the authenticated member");
+  assert(mobileLoan.data.channel === "mobile", "Mobile loan should be marked as mobile-originated");
+
   const mobileMoneyReference = `MM-SMOKE-${Date.now()}`;
   const mobileMoneyCallback = await api("POST", "/integrations/mobile-money/callback", {
     tenantId: "tenant_green",
@@ -139,6 +149,7 @@ try {
 
   const refreshedMobileDashboard = await api("GET", "/member-auth/mobile-dashboard", null, memberToken);
   assert(refreshedMobileDashboard.data.balances.savings === 280000, "Mobile dashboard should refresh after confirmed payment");
+  assert(refreshedMobileDashboard.data.loans.some((loan) => loan.id === mobileLoan.data.id), "Mobile dashboard should include submitted mobile loan");
   assert(refreshedMobileDashboard.data.notifications.length >= 1, "Mobile dashboard should include latest notifications");
 
   const memberNotifications = await api("GET", "/member-auth/notifications", null, memberToken);

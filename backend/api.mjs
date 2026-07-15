@@ -67,6 +67,7 @@ export async function handleApi(request, response, url) {
       if (!memberAuth) return;
       if (method === "GET" && path === "/member-auth/me") return getMemberSession(response, memberAuth);
       if (method === "GET" && path === "/member-auth/mobile-dashboard") return getMemberMobileDashboard(response, memberAuth);
+      if (method === "POST" && path === "/member-auth/mobile-loans") return createMemberMobileLoan(request, response, memberAuth, correlationId);
       if (method === "GET" && path === "/member-auth/notifications") return listMemberNotifications(response, memberAuth);
       if (method === "GET" && path === "/member-auth/guarantor-requests") return listMemberGuarantorRequests(response, memberAuth);
       if (method === "PATCH" && path.startsWith("/member-auth/guarantor-requests/") && path.endsWith("/status")) {
@@ -1940,36 +1941,9 @@ async function createLoan(request, response, auth, correlationId) {
 
   const member = db.members.find((item) => item.id === String(body.memberId) && item.tenantId === tenantId);
   if (!member) return sendError(response, 400, "INVALID_MEMBER", "Member does not exist for this tenant.", correlationId);
-  if (member.status !== "active") return sendError(response, 400, "MEMBER_NOT_ACTIVE", "Only active members can apply for loans.", correlationId);
+  const loan = createLoanForMember({ body, member, actorUserId: auth.user.id, response, correlationId });
+  if (!loan) return;
 
-  const product = String(body.product || "");
-  const amount = Number(body.amount);
-  const repaymentMonths = Number(body.repaymentMonths || 12);
-  if (!allowedLoanProducts.has(product)) return sendError(response, 400, "INVALID_LOAN_PRODUCT", "Unsupported loan product.", correlationId);
-  if (!Number.isFinite(amount) || amount <= 0) return sendError(response, 400, "INVALID_LOAN_AMOUNT", "Loan amount must be greater than zero.", correlationId);
-  if (!Number.isInteger(repaymentMonths) || repaymentMonths < 1 || repaymentMonths > 60) {
-    return sendError(response, 400, "INVALID_REPAYMENT_PERIOD", "Repayment period must be between 1 and 60 months.", correlationId);
-  }
-
-  const balances = memberBalances(member.id);
-  const dsr = Math.min(65, Math.round((amount / Math.max(balances.savings * 3, 1)) * 35));
-  const loan = {
-    id: newId("loan"),
-    tenantId,
-    memberId: member.id,
-    product,
-    amount,
-    balance: 0,
-    status: "submitted",
-    stage: "Credit Appraisal",
-    guarantors: 0,
-    dsr,
-    repaymentMonths,
-    purpose: String(body.purpose || ""),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-  db.loans.push(loan);
   createAuditEvent({
     tenantId,
     actorUserId: auth.user.id,
@@ -1980,6 +1954,76 @@ async function createLoan(request, response, auth, correlationId) {
     ipAddress: requestIp(request)
   });
   return sendData(response, publicLoan(loan), 201);
+}
+
+async function createMemberMobileLoan(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const loan = createLoanForMember({ body, member: auth.member, actorUserId: null, response, correlationId });
+  if (!loan) return;
+
+  createMemberNotification({
+    tenantId: auth.member.tenantId,
+    memberId: auth.member.id,
+    eventType: "loan_application_submitted",
+    resourceType: "loan",
+    resourceId: loan.id,
+    body: `Mobile loan application ${loan.product} for UGX ${loan.amount} was submitted.`
+  });
+  createAuditEvent({
+    tenantId: auth.member.tenantId,
+    actorUserId: null,
+    actorName: auth.member.fullName,
+    action: `Submitted mobile loan application for ${auth.member.membershipNo}`,
+    resourceType: "loan",
+    resourceId: loan.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicLoan(loan), 201);
+}
+
+function createLoanForMember({ body, member, actorUserId, response, correlationId }) {
+  if (member.status !== "active") {
+    sendError(response, 400, "MEMBER_NOT_ACTIVE", "Only active members can apply for loans.", correlationId);
+    return null;
+  }
+  const product = String(body.product || "");
+  const amount = Number(body.amount);
+  const repaymentMonths = Number(body.repaymentMonths || 12);
+  if (!allowedLoanProducts.has(product)) {
+    sendError(response, 400, "INVALID_LOAN_PRODUCT", "Unsupported loan product.", correlationId);
+    return null;
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    sendError(response, 400, "INVALID_LOAN_AMOUNT", "Loan amount must be greater than zero.", correlationId);
+    return null;
+  }
+  if (!Number.isInteger(repaymentMonths) || repaymentMonths < 1 || repaymentMonths > 60) {
+    sendError(response, 400, "INVALID_REPAYMENT_PERIOD", "Repayment period must be between 1 and 60 months.", correlationId);
+    return null;
+  }
+
+  const balances = memberBalances(member.id);
+  const dsr = Math.min(65, Math.round((amount / Math.max(balances.savings * 3, 1)) * 35));
+  const loan = {
+    id: newId("loan"),
+    tenantId: member.tenantId,
+    memberId: member.id,
+    product,
+    amount,
+    balance: 0,
+    status: "submitted",
+    stage: "Credit Appraisal",
+    guarantors: 0,
+    dsr,
+    repaymentMonths,
+    purpose: String(body.purpose || ""),
+    channel: actorUserId ? "staff" : "mobile",
+    submittedByMemberId: actorUserId ? null : member.id,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  db.loans.push(loan);
+  return loan;
 }
 
 async function updateLoanStatus(request, response, auth, loanId, correlationId) {

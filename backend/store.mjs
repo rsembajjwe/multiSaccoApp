@@ -502,6 +502,17 @@ export const db = {
       status: "active",
       createdAt: now(),
       updatedAt: now()
+    },
+    {
+      id: "template_loan_application_submitted",
+      tenantId: null,
+      channel: "in_app",
+      eventType: "loan_application_submitted",
+      title: "Loan application submitted",
+      body: "Your mobile loan application has been submitted for review.",
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
     }
   ],
   notifications: [

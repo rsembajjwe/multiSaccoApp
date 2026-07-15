@@ -54,6 +54,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Fixed asset registration creates balanced acquisition and depreciation entries, with asset totals included in regulatory reporting.
 - Mobile-money callback ingestion posts confirmed member collections or loan repayments, rejects duplicate provider references through idempotency, and creates member notifications.
 - Member mobile dashboard endpoint and UI show server-confirmed balances, loan totals, latest notifications, and last-updated time.
+- Members can submit mobile loan applications for their own account, with server confirmation and mobile-dashboard refresh.
 
 ## Recommended backend modules for the next build
 
