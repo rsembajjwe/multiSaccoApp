@@ -381,6 +381,7 @@ Progress:
 - Mobile loan application endpoint and Member Portal flow added, allowing members to submit their own loan applications with server confirmation.
 - Offline complaint draft support added for the Member Portal, with local draft save and server sync when online.
 - Android member app foundation added under `mobile/member_app`, with Flutter entrypoint, API contract, emulator base URL, and validation script.
+- Security headers and development rate limiting added for API/static responses, staff login, member login, and mobile-money callbacks.
 
 Recommended stack:
 

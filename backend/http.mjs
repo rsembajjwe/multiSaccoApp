@@ -7,12 +7,23 @@ export async function readJson(request) {
   return text ? JSON.parse(text) : {};
 }
 
+export function securityHeaders(headers = {}) {
+  return {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    ...headers
+  };
+}
+
 export function sendJson(response, status, body, headers = {}) {
-  response.writeHead(status, {
+  response.writeHead(status, securityHeaders({
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     ...headers
-  });
+  }));
   response.end(JSON.stringify(body, null, 2));
 }
 
@@ -20,7 +31,7 @@ export function sendData(response, data, status = 200, headers = {}) {
   sendJson(response, status, { data }, headers);
 }
 
-export function sendError(response, status, code, message, correlationId = randomUUID()) {
+export function sendError(response, status, code, message, correlationId = randomUUID(), headers = {}) {
   sendJson(response, status, {
     error: {
       timestamp: new Date().toISOString(),
@@ -29,7 +40,7 @@ export function sendError(response, status, code, message, correlationId = rando
       message,
       correlationId
     }
-  });
+  }, headers);
 }
 
 export function authToken(request) {

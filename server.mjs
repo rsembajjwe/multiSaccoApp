@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleApi } from "./backend/api.mjs";
+import { securityHeaders } from "./backend/http.mjs";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 5173);
@@ -28,16 +29,18 @@ createServer(async (request, response) => {
     const filePath = normalize(join(root, requestedPath));
 
     if (!filePath.startsWith(root)) {
-      response.writeHead(403);
+      response.writeHead(403, securityHeaders({ "Content-Type": "text/plain; charset=utf-8" }));
       response.end("Forbidden");
       return;
     }
 
     const content = await readFile(filePath);
-    response.writeHead(200, { "Content-Type": mimeTypes[extname(filePath)] || "application/octet-stream" });
+    response.writeHead(200, securityHeaders({
+      "Content-Type": mimeTypes[extname(filePath)] || "application/octet-stream"
+    }));
     response.end(content);
   } catch {
-    response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    response.writeHead(404, securityHeaders({ "Content-Type": "text/plain; charset=utf-8" }));
     response.end("Not found");
   }
 }).listen(port, "127.0.0.1", () => {

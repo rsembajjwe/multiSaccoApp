@@ -578,6 +578,21 @@ function renderDashboard() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
+          <h2>Security hardening</h2>
+          <p class="eyebrow">Phase 7 production controls</p>
+        </div>
+        <span class="status active">enabled</span>
+      </div>
+      <div class="grid metrics">
+        ${metric("Security headers", "On", "nosniff, frame deny, referrer policy")}
+        ${metric("Rate limiting", "On", "staff login, member login, callbacks")}
+        ${metric("API cache policy", "No-store", "JSON responses")}
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
           <h2>Mobile money callbacks</h2>
           <p class="eyebrow">Provider posting monitor</p>
         </div>

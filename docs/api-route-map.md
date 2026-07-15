@@ -2,6 +2,8 @@
 
 Base path: `/api/v1`
 
+All API responses include baseline security headers. Public staff login, member login, and mobile-money callback endpoints are rate limited and return `429 RATE_LIMITED` with `Retry-After` when the development limit is exceeded.
+
 All JSON responses should follow one of these shapes:
 
 ```json

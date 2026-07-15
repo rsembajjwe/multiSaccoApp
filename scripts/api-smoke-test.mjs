@@ -20,7 +20,11 @@ server.stderr.on("data", (chunk) => {
 try {
   await waitForServer();
 
-  const health = await api("GET", "/health");
+  const healthResponse = await raw("GET", "/health");
+  assert(healthResponse.headers.get("x-content-type-options") === "nosniff", "API responses should include nosniff security header");
+  assert(healthResponse.headers.get("x-frame-options") === "DENY", "API responses should deny framing");
+  assert(healthResponse.headers.get("referrer-policy") === "no-referrer", "API responses should suppress referrer leakage");
+  const health = await healthResponse.json();
   assert(health.data.ok === true, "Health endpoint should return ok=true");
 
   const login = await api("POST", "/auth/login", {
@@ -538,6 +542,20 @@ try {
 
   const complaints = await api("GET", "/complaints", null, saccoToken);
   assert(complaints.data.every((item) => item.tenantId === "tenant_green"), "Complaints must be tenant-scoped");
+
+  let rateLimitedLogin = null;
+  for (let index = 0; index < 8; index += 1) {
+    const response = await raw("POST", "/auth/login", {
+      email: `bad-login-${index}@example.local`,
+      password: "wrong-password"
+    });
+    if (response.status === 429) {
+      rateLimitedLogin = response;
+      break;
+    }
+  }
+  assert(rateLimitedLogin?.status === 429, "Repeated login failures should be rate limited");
+  assert(rateLimitedLogin.headers.get("retry-after"), "Rate-limited responses should include Retry-After");
 
   console.log("API smoke test passed");
 } finally {

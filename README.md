@@ -95,6 +95,8 @@ Members can save offline complaint drafts locally and sync them later from the M
 
 Android member app foundation lives in `mobile/member_app`, with a Flutter-ready API contract for emulator base URL `http://10.0.2.2:5173/api/v1`.
 
+All API and static responses now include baseline security headers, and public login/callback endpoints include in-memory rate limiting for the development build.
+
 After API login, the Approvals screen reads pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
 
 Members can login from **Member portal** using the seeded account `GVS-0001` / `Member@12345` to view their savings, shares, and welfare balances.

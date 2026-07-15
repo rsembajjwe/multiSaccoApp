@@ -42,6 +42,12 @@ const allowedResolutionStatuses = new Set(["open", "in_progress", "closed"]);
 const allowedComplaintCategories = new Set(["statement", "loan", "savings", "shares", "service", "other"]);
 const allowedComplaintPriorities = new Set(["low", "medium", "high"]);
 const allowedComplaintStatuses = new Set(["open", "in_progress", "resolved", "closed"]);
+const rateLimitBuckets = new Map();
+const rateLimitPolicies = {
+  staffLogin: { max: 5, windowMs: 60_000 },
+  memberLogin: { max: 5, windowMs: 60_000 },
+  mobileMoneyCallback: { max: 20, windowMs: 60_000 }
+};
 
 export async function handleApi(request, response, url) {
   const correlationId = request.headers["x-correlation-id"] || newId("req");
@@ -58,9 +64,18 @@ export async function handleApi(request, response, url) {
       });
     }
 
-    if (method === "POST" && path === "/auth/login") return login(request, response, correlationId);
-    if (method === "POST" && path === "/member-auth/login") return memberLogin(request, response, correlationId);
-    if (method === "POST" && path === "/integrations/mobile-money/callback") return receiveMobileMoneyCallback(request, response, correlationId);
+    if (method === "POST" && path === "/auth/login") {
+      if (!allowRequest(request, response, correlationId, "staffLogin")) return;
+      return login(request, response, correlationId);
+    }
+    if (method === "POST" && path === "/member-auth/login") {
+      if (!allowRequest(request, response, correlationId, "memberLogin")) return;
+      return memberLogin(request, response, correlationId);
+    }
+    if (method === "POST" && path === "/integrations/mobile-money/callback") {
+      if (!allowRequest(request, response, correlationId, "mobileMoneyCallback")) return;
+      return receiveMobileMoneyCallback(request, response, correlationId);
+    }
 
     if (path.startsWith("/member-auth/")) {
       const memberAuth = requireMemberAuth(request, response, correlationId);
@@ -185,6 +200,27 @@ export async function handleApi(request, response, url) {
   } catch (error) {
     return sendError(response, 500, "INTERNAL_ERROR", error.message || "Unexpected server error.", correlationId);
   }
+}
+
+function allowRequest(request, response, correlationId, policyName) {
+  const policy = rateLimitPolicies[policyName];
+  const now = Date.now();
+  const key = `${policyName}:${requestIp(request)}`;
+  const bucket = rateLimitBuckets.get(key);
+
+  if (!bucket || bucket.resetAt <= now) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + policy.windowMs });
+    return true;
+  }
+
+  bucket.count += 1;
+  if (bucket.count <= policy.max) return true;
+
+  const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+  sendError(response, 429, "RATE_LIMITED", "Too many requests. Please try again later.", correlationId, {
+    "Retry-After": String(retryAfter)
+  });
+  return false;
 }
 
 async function login(request, response, correlationId) {
