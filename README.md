@@ -49,6 +49,12 @@ Then open:
 http://127.0.0.1:8080/api/v1/health
 ```
 
+If port `8080` is already used locally, run from `backend-java` with:
+
+```powershell
+.\mvnw.cmd spring-boot:run -Dspring-boot.run.arguments=--server.port=18080
+```
+
 ## Developer checks
 
 ```powershell
@@ -62,6 +68,12 @@ npm.cmd run java:test
 ```
 
 This runs the Java/Spring Boot backend tests.
+
+The Java backend now owns the tenant foundation endpoint:
+
+```text
+GET http://127.0.0.1:8080/api/v1/tenants
+```
 
 ```powershell
 npm.cmd run test:api

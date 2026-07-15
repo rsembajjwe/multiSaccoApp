@@ -4,6 +4,11 @@ Base path: `/api/v1`
 
 Production backend target: Java/Spring Boot in `backend-java`. The Node API currently remains the prototype implementation until endpoints are migrated.
 
+Java-backed routes currently implemented:
+
+- `GET /api/v1/health`
+- `GET /api/v1/tenants`
+
 All API responses include baseline security headers. Public staff login, member login, and mobile-money callback endpoints are rate limited and return `429 RATE_LIMITED` with `Retry-After` when the development limit is exceeded.
 
 All JSON responses should follow one of these shapes:

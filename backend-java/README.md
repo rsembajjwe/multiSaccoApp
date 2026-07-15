@@ -27,6 +27,7 @@ cd backend-java
 - Java 17.
 - Spring Boot 4.0.
 - `/api/v1/health` with the same `{ "data": ... }` API envelope used by the prototype.
+- `/api/v1/tenants` backed by a Flyway migration and seeded tenant records.
 - Baseline security headers on responses.
 - H2 development datasource configured in PostgreSQL compatibility mode.
 - PostgreSQL and Flyway dependencies included for the production database path.

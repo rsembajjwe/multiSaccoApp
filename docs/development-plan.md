@@ -384,6 +384,7 @@ Progress:
 - Android member app foundation added under `mobile/member_app`, with Flutter entrypoint, API contract, emulator base URL, and validation script.
 - Security headers and development rate limiting added for API/static responses, staff login, member login, and mobile-money callbacks.
 - Java/Spring Boot backend scaffold added under `backend-java`, with `/api/v1/health`, H2 dev datasource, PostgreSQL/Flyway dependencies, security headers, and MockMvc tests.
+- Java tenant foundation added with Flyway `tenants` migration, seeded SACCO tenants, JPA repository, and `/api/v1/tenants`.
 
 Recommended stack:
 
