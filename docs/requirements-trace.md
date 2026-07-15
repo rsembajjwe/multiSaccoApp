@@ -64,6 +64,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java identity foundation authenticates seeded platform/SACCO administrators through `/api/v1/auth/login` without exposing password hashes or salts.
 - Java auth sessions store hashed bearer tokens and support current-user lookup plus logout revocation.
 - Java user administration enforces tenant-scoped listing and blocks SACCO admins from creating users in another tenant.
+- Java audit events are tenant-scoped and capture manual entries plus automatic user-creation events.
 
 ## Recommended backend modules for the next build
 

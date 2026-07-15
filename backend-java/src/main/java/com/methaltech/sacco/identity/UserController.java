@@ -3,6 +3,7 @@ package com.methaltech.sacco.identity;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.security.PasswordHasher;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -24,11 +25,13 @@ class UserController {
     private final UserRepository userRepository;
     private final AuthService authService;
     private final PasswordHasher passwordHasher;
+    private final AuditService auditService;
 
-    UserController(UserRepository userRepository, AuthService authService, PasswordHasher passwordHasher) {
+    UserController(UserRepository userRepository, AuthService authService, PasswordHasher passwordHasher, AuditService auditService) {
         this.userRepository = userRepository;
         this.authService = authService;
         this.passwordHasher = passwordHasher;
+        this.auditService = auditService;
     }
 
     @GetMapping
@@ -46,7 +49,8 @@ class UserController {
     @PostMapping
     ResponseEntity<?> createUser(
             @RequestHeader(name = "Authorization", required = false) String authorization,
-            @Valid @RequestBody CreateUserRequest request) {
+            @Valid @RequestBody CreateUserRequest request,
+            HttpServletRequest httpRequest) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
 
@@ -76,7 +80,16 @@ class UserController {
                 password.salt(),
                 "active");
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(UserResponse.from(userRepository.save(user))));
+        User savedUser = userRepository.save(user);
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Created user " + savedUser.getEmail(),
+                "user",
+                savedUser.getId(),
+                httpRequest.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(UserResponse.from(savedUser)));
     }
 
     record CreateUserRequest(

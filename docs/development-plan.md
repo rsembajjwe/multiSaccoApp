@@ -388,6 +388,7 @@ Progress:
 - Java identity foundation added with seeded users, PBKDF2 password verification, safe user responses, token generation, and `/api/v1/auth/login`.
 - Java session foundation added with hashed bearer-token sessions, `/api/v1/auth/me`, and `/api/v1/auth/logout`.
 - Java user administration added with authenticated tenant-scoped `/api/v1/users` listing and creation.
+- Java audit foundation added with Flyway `audit_events`, tenant-scoped `/api/v1/audit-events`, and automatic audit entries for user creation.
 
 Recommended stack:
 

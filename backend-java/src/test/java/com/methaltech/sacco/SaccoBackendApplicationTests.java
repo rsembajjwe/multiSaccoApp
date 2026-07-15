@@ -197,6 +197,80 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.error.code", is("USER_EXISTS")));
 	}
 
+	@Test
+	void auditEventsCanBeCreatedAndListedWithTenantScope() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String action = "Smoke audit " + System.currentTimeMillis();
+
+		mockMvc.perform(post("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "action": "%s",
+								  "resourceType": "test",
+								  "resourceId": "audit-smoke"
+								}
+								""".formatted(action)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.actorUserId", is("user_platform_admin")))
+				.andExpect(jsonPath("$.data.action", is(action)));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+	}
+
+	@Test
+	void saccoUserCannotWriteAuditForAnotherTenant() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "action": "Cross tenant audit attempt"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+	}
+
+	@Test
+	void creatingUserWritesAuditEvent() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String email = "audited-staff-" + System.currentTimeMillis() + "@greenvalley.local";
+
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Audited Green Staff",
+								  "email": "%s",
+								  "password": "Staff@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isCreated())
+				.andReturn();
+
+		String userId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].action", is("Created user " + email)))
+				.andExpect(jsonPath("$.data[0].resourceType", is("user")))
+				.andExpect(jsonPath("$.data[0].resourceId", is(userId)));
+	}
+
 	private String loginAndReturnToken() throws Exception {
 		return loginAndReturnToken("admin@platform.local", "Admin@12345");
 	}
