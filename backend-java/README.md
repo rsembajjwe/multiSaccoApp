@@ -40,6 +40,7 @@ cd backend-java
 - `/api/v1/chart-of-accounts` and `/api/v1/journal-entries` for seeded accounting accounts and balanced journals derived from posted Java financial and loan events.
 - `/api/v1/accounting-periods` for tenant-scoped period listing, close/reopen controls, and closed-period posting protection.
 - `/api/v1/suppliers` and `/api/v1/expenses` for tenant-scoped supplier setup, posted operating expenses, and balanced expense journals.
+- `/api/v1/assets` for tenant-scoped fixed asset registration, acquisition journals, and derived depreciation journals.
 - `/api/v1/statement-lines` and `/api/v1/reconciliation` for statement imports and matched/unmatched cash ledger movements.
 - `/api/v1/regulatory-report` for tenant and consolidated supervisory summaries with CSV export text.
 - `/api/v1/loans` for tenant-scoped loan file listing, staff-submitted applications, decisions, and disbursement.

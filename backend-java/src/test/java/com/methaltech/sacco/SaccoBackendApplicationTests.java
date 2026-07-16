@@ -873,6 +873,8 @@ class SaccoBackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "loan_disbursement"));
 		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "loan_repayment"));
 		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "expense"));
+		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "asset_acquisition"));
+		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "asset_depreciation"));
 	}
 
 	@Test
@@ -1129,6 +1131,118 @@ class SaccoBackendApplicationTests {
 								"""))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error.code", is("ACCOUNTING_PERIOD_CLOSED")));
+	}
+
+	@Test
+	void assetsPostAcquisitionAndDepreciationJournals() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String assetReference = "AST-SMOKE-" + System.currentTimeMillis();
+
+		mockMvc.perform(get("/api/v1/assets")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+				.andExpect(jsonPath("$.data[0].netBookValue", greaterThanOrEqualTo(0.0)));
+
+		mockMvc.perform(post("/api/v1/assets")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Smoke Router",
+								  "category": "technology",
+								  "assetAccountCode": "1300",
+								  "cost": 600000,
+								  "salvageValue": 60000,
+								  "usefulLifeMonths": 24,
+								  "purchaseDate": "2026-08-16",
+								  "depreciationStartDate": "2026-08-01",
+								  "channel": "bank",
+								  "reference": "%s",
+								  "location": "Main office"
+								}
+								""".formatted(assetReference)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.reference", is(assetReference)))
+				.andExpect(jsonPath("$.data.status", is("active")))
+				.andExpect(jsonPath("$.data.accumulatedDepreciation", is(0)))
+				.andExpect(jsonPath("$.data.netBookValue", is(600000)));
+
+		MvcResult journals = mockMvc.perform(get("/api/v1/journal-entries")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].isBalanced", everyItem(is(true))))
+				.andReturn();
+		JsonNode journalData = objectMapper.readTree(journals.getResponse().getContentAsString()).path("data");
+		org.junit.jupiter.api.Assertions.assertTrue(hasJournalReference(journalData, assetReference, "asset_acquisition"));
+
+		mockMvc.perform(get("/api/v1/regulatory-report")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.reports[0].assetCost", greaterThanOrEqualTo(3000000.0)))
+				.andExpect(jsonPath("$.data.reports[0].assetNetBookValue", greaterThanOrEqualTo(2500000.0)));
+	}
+
+	@Test
+	void assetControlsAreEnforced() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/assets")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Bad Category",
+								  "category": "software",
+								  "assetAccountCode": "1300",
+								  "cost": 100000,
+								  "usefulLifeMonths": 12,
+								  "channel": "bank"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_ASSET_CATEGORY")));
+
+		mockMvc.perform(post("/api/v1/assets")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Bad Account",
+								  "category": "technology",
+								  "assetAccountCode": "5000",
+								  "cost": 100000,
+								  "usefulLifeMonths": 12,
+								  "channel": "bank"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_ASSET_ACCOUNT")));
+
+		mockMvc.perform(post("/api/v1/assets")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Closed Period Asset",
+								  "category": "equipment",
+								  "assetAccountCode": "1300",
+								  "cost": 100000,
+								  "usefulLifeMonths": 12,
+								  "purchaseDate": "2026-06-15",
+								  "channel": "bank",
+								  "reference": "AST-CLOSED-TEST"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("ACCOUNTING_PERIOD_CLOSED")));
+
+		mockMvc.perform(get("/api/v1/assets?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
 	}
 
 	@Test

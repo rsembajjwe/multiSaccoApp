@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ class RegulatoryReportController {
     private final LoanRepaymentRepository repaymentRepository;
     private final StatementLineRepository statementLineRepository;
     private final ExpenseRepository expenseRepository;
+    private final AssetRepository assetRepository;
     private final AuthService authService;
 
     @GetMapping
@@ -100,6 +102,12 @@ class RegulatoryReportController {
                 .filter(expense -> "posted".equals(expense.getStatus()))
                 .map(Expense::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<Asset> activeAssets = assetRepository.findByTenantIdOrderByPurchaseDateDescCreatedAtDesc(tenantId)
+                .stream()
+                .filter(asset -> "active".equals(asset.getStatus()))
+                .toList();
+        BigDecimal assetCost = activeAssets.stream().map(Asset::getCost).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal assetNetBookValue = activeAssets.stream().map(this::netBookValue).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         int journalEntries = transactionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)
                 .stream()
@@ -108,7 +116,9 @@ class RegulatoryReportController {
                 .size()
                 + (int) loanRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().filter(loan -> loan.getDisbursedAt() != null).count()
                 + repaymentRepository.findAll().stream().filter(repayment -> repayment.getTenantId().equals(tenantId)).toList().size()
-                + expenseRepository.findByTenantIdOrderByExpenseDateDescCreatedAtDesc(tenantId).stream().filter(expense -> "posted".equals(expense.getStatus())).toList().size();
+                + expenseRepository.findByTenantIdOrderByExpenseDateDescCreatedAtDesc(tenantId).stream().filter(expense -> "posted".equals(expense.getStatus())).toList().size()
+                + activeAssets.size()
+                + (int) activeAssets.stream().filter(asset -> accumulatedDepreciation(asset).compareTo(BigDecimal.ZERO) > 0).count();
         int reconciliationExceptions = reconciliationExceptions(tenantId);
 
         return RegulatoryTenantReport.builder()
@@ -124,8 +134,8 @@ class RegulatoryReportController {
                 .loansAtRisk(loansAtRisk)
                 .parPercent(parPercent)
                 .expenseTotal(expenseTotal)
-                .assetCost(BigDecimal.ZERO)
-                .assetNetBookValue(BigDecimal.ZERO)
+                .assetCost(assetCost)
+                .assetNetBookValue(assetNetBookValue)
                 .journalEntries(journalEntries)
                 .unbalancedJournalEntries(0)
                 .reconciliationExceptions(reconciliationExceptions)
@@ -145,16 +155,21 @@ class RegulatoryReportController {
                                 loanRepository.findByTenantIdOrderByCreatedAtDesc(tenantId)
                                         .stream()
                                         .filter(loan -> loan.getDisbursedAt() != null)
-                                .map(loan -> "1010|" + loan.getId() + "|" + loan.getAmount().negate())),
+                                        .map(loan -> "1010|" + loan.getId() + "|" + loan.getAmount().negate())),
                         java.util.stream.Stream.concat(
                                 repaymentRepository.findAll()
                                         .stream()
                                         .filter(repayment -> repayment.getTenantId().equals(tenantId))
                                         .map(repayment -> accountForChannel(repayment.getChannel()) + "|" + repayment.getReference() + "|" + repayment.getAmount()),
-                                expenseRepository.findByTenantIdOrderByExpenseDateDescCreatedAtDesc(tenantId)
-                                        .stream()
-                                        .filter(expense -> "posted".equals(expense.getStatus()))
-                                        .map(expense -> accountForChannel(expense.getChannel()) + "|" + expense.getReference() + "|" + expense.getAmount().negate())))
+                                java.util.stream.Stream.concat(
+                                        expenseRepository.findByTenantIdOrderByExpenseDateDescCreatedAtDesc(tenantId)
+                                                .stream()
+                                                .filter(expense -> "posted".equals(expense.getStatus()))
+                                                .map(expense -> accountForChannel(expense.getChannel()) + "|" + expense.getReference() + "|" + expense.getAmount().negate()),
+                                        assetRepository.findByTenantIdOrderByPurchaseDateDescCreatedAtDesc(tenantId)
+                                                .stream()
+                                                .filter(asset -> "active".equals(asset.getStatus()))
+                                                .map(asset -> accountForChannel(asset.getChannel()) + "|" + asset.getReference() + "|" + asset.getCost().negate()))))
                 .collect(java.util.stream.Collectors.toSet());
 
         List<StatementLine> statementLines = statementLineRepository.findByTenantIdOrderByStatementDateDescCreatedAtDesc(tenantId);
@@ -198,8 +213,8 @@ class RegulatoryReportController {
                 .loansAtRisk(loansAtRisk)
                 .parPercent(percent(loansAtRisk, loanPortfolio))
                 .expenseTotal(reports.stream().map(RegulatoryTenantReport::getExpenseTotal).reduce(BigDecimal.ZERO, BigDecimal::add))
-                .assetCost(BigDecimal.ZERO)
-                .assetNetBookValue(BigDecimal.ZERO)
+                .assetCost(reports.stream().map(RegulatoryTenantReport::getAssetCost).reduce(BigDecimal.ZERO, BigDecimal::add))
+                .assetNetBookValue(reports.stream().map(RegulatoryTenantReport::getAssetNetBookValue).reduce(BigDecimal.ZERO, BigDecimal::add))
                 .journalEntries(reports.stream().mapToInt(RegulatoryTenantReport::getJournalEntries).sum())
                 .unbalancedJournalEntries(unbalanced)
                 .reconciliationExceptions(reconciliationExceptions)
@@ -214,6 +229,24 @@ class RegulatoryReportController {
         return numerator.multiply(BigDecimal.valueOf(100))
                 .divide(denominator, 0, RoundingMode.HALF_UP)
                 .intValue();
+    }
+
+    private BigDecimal netBookValue(Asset asset) {
+        return asset.getCost().subtract(accumulatedDepreciation(asset)).max(asset.getSalvageValue());
+    }
+
+    private BigDecimal accumulatedDepreciation(Asset asset) {
+        if (!"active".equals(asset.getStatus()) || asset.getDepreciationStartDate() == null) return BigDecimal.ZERO;
+        LocalDate today = LocalDate.now();
+        LocalDate start = asset.getDepreciationStartDate().withDayOfMonth(1);
+        if (start.isAfter(today)) return BigDecimal.ZERO;
+        LocalDate currentMonth = today.withDayOfMonth(1);
+        int elapsedMonths = (int) Period.between(start, currentMonth).toTotalMonths() + 1;
+        int depreciatedMonths = Math.min(elapsedMonths, asset.getUsefulLifeMonths());
+        BigDecimal depreciableAmount = asset.getCost().subtract(asset.getSalvageValue());
+        return depreciableAmount
+                .multiply(BigDecimal.valueOf(depreciatedMonths))
+                .divide(BigDecimal.valueOf(asset.getUsefulLifeMonths()), 2, RoundingMode.HALF_UP);
     }
 
     private String csv(List<RegulatoryTenantReport> reports) {

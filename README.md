@@ -103,6 +103,8 @@ GET http://127.0.0.1:8080/api/v1/suppliers
 POST http://127.0.0.1:8080/api/v1/suppliers
 GET http://127.0.0.1:8080/api/v1/expenses
 POST http://127.0.0.1:8080/api/v1/expenses
+GET http://127.0.0.1:8080/api/v1/assets
+POST http://127.0.0.1:8080/api/v1/assets
 GET http://127.0.0.1:8080/api/v1/statement-lines
 POST http://127.0.0.1:8080/api/v1/statement-lines
 GET http://127.0.0.1:8080/api/v1/reconciliation

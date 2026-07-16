@@ -15,8 +15,10 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -43,6 +45,7 @@ class AccountingController {
     private static final Set<String> STATEMENT_CHANNELS = Set.of("cash", "bank", "mobile_money", "payroll_deduction");
     private static final Set<String> CASH_ACCOUNTS = Set.of("1000", "1010", "1020", "1030");
     private static final Set<String> EXPENSE_CHANNELS = Set.of("mobile_money", "cash", "bank", "payroll_deduction");
+    private static final Set<String> ASSET_CATEGORIES = Set.of("equipment", "furniture", "vehicle", "building", "technology", "other");
 
     private final AccountingPeriodRepository periodRepository;
     private final AccountingPeriodService periodService;
@@ -50,6 +53,7 @@ class AccountingController {
     private final StatementLineRepository statementLineRepository;
     private final SupplierRepository supplierRepository;
     private final ExpenseRepository expenseRepository;
+    private final AssetRepository assetRepository;
     private final FinancialTransactionRepository transactionRepository;
     private final LoanRepository loanRepository;
     private final LoanRepaymentRepository repaymentRepository;
@@ -63,6 +67,7 @@ class AccountingController {
             StatementLineRepository statementLineRepository,
             SupplierRepository supplierRepository,
             ExpenseRepository expenseRepository,
+            AssetRepository assetRepository,
             FinancialTransactionRepository transactionRepository,
             LoanRepository loanRepository,
             LoanRepaymentRepository repaymentRepository,
@@ -74,6 +79,7 @@ class AccountingController {
         this.statementLineRepository = statementLineRepository;
         this.supplierRepository = supplierRepository;
         this.expenseRepository = expenseRepository;
+        this.assetRepository = assetRepository;
         this.transactionRepository = transactionRepository;
         this.loanRepository = loanRepository;
         this.repaymentRepository = repaymentRepository;
@@ -162,7 +168,9 @@ class AccountingController {
                                 loanDisbursementJournalEntries(tenantId, currentSession, accounts).stream()),
                         java.util.stream.Stream.concat(
                                 loanRepaymentJournalEntries(tenantId, currentSession, accounts).stream(),
-                                expenseJournalEntries(tenantId, currentSession, accounts).stream()))
+                                java.util.stream.Stream.concat(
+                                        expenseJournalEntries(tenantId, currentSession, accounts).stream(),
+                                        assetJournalEntries(tenantId, currentSession, accounts).stream())))
                 .sorted(Comparator.comparing(JournalEntryResponse::postedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                 .toList();
 
@@ -309,6 +317,108 @@ class AccountingController {
                 request.getRemoteAddr());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(ExpenseResponse.from(expense)));
+    }
+
+    @GetMapping("/assets")
+    ResponseEntity<?> listAssets(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null && !authService.isPlatform(currentSession.user())) return tenantAccessDenied();
+
+        List<Asset> assets = authService.isPlatform(currentSession.user()) && requestedTenantId == null
+                ? assetRepository.findAllByOrderByTenantIdAscPurchaseDateDescCreatedAtDesc()
+                : assetRepository.findByTenantIdOrderByPurchaseDateDescCreatedAtDesc(tenantId);
+
+        return ResponseEntity.ok(ApiResponse.of(assets.stream().map(this::assetResponse).toList()));
+    }
+
+    @PostMapping("/assets")
+    ResponseEntity<?> createAsset(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody CreateAssetRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, body.tenantId());
+        if (tenantId == null) return tenantAccessDenied();
+
+        String category = body.category().trim();
+        if (!ASSET_CATEGORIES.contains(category)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_ASSET_CATEGORY", "Unsupported fixed asset category."));
+        }
+
+        String assetAccountCode = body.assetAccountCode().trim();
+        ChartOfAccount account = chartRepository.findById(assetAccountCode).orElse(null);
+        if (account == null || !"asset".equals(account.getType()) || "1310".equals(assetAccountCode)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_ASSET_ACCOUNT", "Asset account code must be a fixed asset account."));
+        }
+
+        String channel = body.channel().trim();
+        if (!EXPENSE_CHANNELS.contains(channel)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_ASSET_CHANNEL", "Unsupported asset payment channel."));
+        }
+        if (body.cost().compareTo(BigDecimal.ZERO) <= 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_ASSET_COST", "Asset cost must be greater than zero."));
+        }
+
+        BigDecimal salvageValue = body.salvageValue() == null ? BigDecimal.ZERO : body.salvageValue();
+        if (salvageValue.compareTo(BigDecimal.ZERO) < 0 || salvageValue.compareTo(body.cost()) >= 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_ASSET_SALVAGE_VALUE", "Salvage value must be at least zero and less than cost."));
+        }
+        if (body.usefulLifeMonths() == null || body.usefulLifeMonths() <= 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_ASSET_LIFE", "Useful life must be greater than zero months."));
+        }
+
+        LocalDate purchaseDate = body.purchaseDate() == null ? LocalDate.now() : body.purchaseDate();
+        if (periodService.isClosed(tenantId, purchaseDate)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "ACCOUNTING_PERIOD_CLOSED", "Accounting period " + periodService.periodKey(purchaseDate) + " is closed."));
+        }
+
+        String reference = body.reference() == null || body.reference().isBlank()
+                ? referenceForAsset(tenantId)
+                : body.reference().trim();
+        if (assetRepository.existsByTenantIdAndReferenceIgnoreCase(tenantId, reference)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "ASSET_REFERENCE_EXISTS", "An asset with that reference already exists for this tenant."));
+        }
+
+        Asset asset = assetRepository.save(new Asset(
+                "asset_" + UUID.randomUUID(),
+                tenantId,
+                body.name().trim(),
+                category,
+                assetAccountCode,
+                body.cost(),
+                salvageValue,
+                body.usefulLifeMonths(),
+                purchaseDate,
+                body.depreciationStartDate() == null ? purchaseDate.withDayOfMonth(1) : body.depreciationStartDate(),
+                channel,
+                reference,
+                blankToNull(body.location()),
+                blankToNull(body.custodianUserId()),
+                currentSession.user().getId()));
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Registered asset " + asset.getReference(),
+                "asset",
+                asset.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(assetResponse(asset)));
     }
 
     @GetMapping("/statement-lines")
@@ -507,6 +617,48 @@ class AccountingController {
                 .toList();
     }
 
+    private List<JournalEntryResponse> assetJournalEntries(
+            String tenantId,
+            AuthService.CurrentSession currentSession,
+            Map<String, ChartOfAccount> accounts) {
+        List<Asset> assets = authService.isPlatform(currentSession.user()) && tenantId == null
+                ? assetRepository.findAllByOrderByTenantIdAscPurchaseDateDescCreatedAtDesc()
+                : assetRepository.findByTenantIdOrderByPurchaseDateDescCreatedAtDesc(tenantId);
+
+        return assets.stream()
+                .filter(asset -> "active".equals(asset.getStatus()))
+                .flatMap(asset -> {
+                    JournalEntryResponse acquisition = journal(
+                            "je_acquisition_" + asset.getId(),
+                            asset.getTenantId(),
+                            "asset_acquisition",
+                            asset.getId(),
+                            asset.getReference(),
+                            "Registered fixed asset " + asset.getName(),
+                            asset.getCreatedAt(),
+                            List.of(
+                                    line(asset.getAssetAccountCode(), asset.getCost(), BigDecimal.ZERO, null, accounts),
+                                    line(accountForChannel(asset.getChannel()), BigDecimal.ZERO, asset.getCost(), null, accounts)));
+                    BigDecimal depreciation = accumulatedDepreciation(asset);
+                    if (depreciation.compareTo(BigDecimal.ZERO) <= 0) {
+                        return java.util.stream.Stream.of(acquisition);
+                    }
+                    JournalEntryResponse depreciationEntry = journal(
+                            "je_depreciation_" + asset.getId(),
+                            asset.getTenantId(),
+                            "asset_depreciation",
+                            asset.getId(),
+                            asset.getReference() + "-DEP",
+                            "Accumulated depreciation for " + asset.getName(),
+                            Instant.now(),
+                            List.of(
+                                    line("5050", depreciation, BigDecimal.ZERO, null, accounts),
+                                    line("1310", BigDecimal.ZERO, depreciation, null, accounts)));
+                    return java.util.stream.Stream.of(acquisition, depreciationEntry);
+                })
+                .toList();
+    }
+
     private ReconciliationResponse reconciliationForTenants(List<String> tenantIds, AuthService.CurrentSession currentSession) {
         Map<String, ChartOfAccount> accounts = chartRepository.findAllByOrderByCodeAsc()
                 .stream()
@@ -518,7 +670,9 @@ class AccountingController {
                                 loanDisbursementJournalEntries(tenantId, currentSession, accounts).stream()),
                         java.util.stream.Stream.concat(
                                 loanRepaymentJournalEntries(tenantId, currentSession, accounts).stream(),
-                                expenseJournalEntries(tenantId, currentSession, accounts).stream())))
+                                java.util.stream.Stream.concat(
+                                        expenseJournalEntries(tenantId, currentSession, accounts).stream(),
+                                        assetJournalEntries(tenantId, currentSession, accounts).stream()))))
                 .toList();
         List<StatementLine> statementLines = tenantIds.size() == 1
                 ? statementLineRepository.findByTenantIdOrderByStatementDateDescCreatedAtDesc(tenantIds.get(0))
@@ -643,6 +797,30 @@ class AccountingController {
                 credit);
     }
 
+    private AssetResponse assetResponse(Asset asset) {
+        BigDecimal depreciation = accumulatedDepreciation(asset);
+        return AssetResponse.from(asset, depreciation, netBookValue(asset));
+    }
+
+    private BigDecimal netBookValue(Asset asset) {
+        BigDecimal value = asset.getCost().subtract(accumulatedDepreciation(asset));
+        return value.max(asset.getSalvageValue());
+    }
+
+    private BigDecimal accumulatedDepreciation(Asset asset) {
+        if (!"active".equals(asset.getStatus()) || asset.getDepreciationStartDate() == null) return BigDecimal.ZERO;
+        LocalDate today = LocalDate.now();
+        LocalDate start = asset.getDepreciationStartDate().withDayOfMonth(1);
+        if (start.isAfter(today)) return BigDecimal.ZERO;
+        LocalDate currentMonth = today.withDayOfMonth(1);
+        int elapsedMonths = (int) Period.between(start, currentMonth).toTotalMonths() + 1;
+        int depreciatedMonths = Math.min(elapsedMonths, asset.getUsefulLifeMonths());
+        BigDecimal depreciableAmount = asset.getCost().subtract(asset.getSalvageValue());
+        return depreciableAmount
+                .multiply(BigDecimal.valueOf(depreciatedMonths))
+                .divide(BigDecimal.valueOf(asset.getUsefulLifeMonths()), 2, RoundingMode.HALF_UP);
+    }
+
     private String accountForChannel(String channel) {
         return switch (channel) {
             case "cash" -> "1000";
@@ -664,6 +842,10 @@ class AccountingController {
 
     private String referenceForExpense(String tenantId) {
         return "EXP-" + tenantId.replace("tenant_", "").toUpperCase() + "-" + String.format("%04d", expenseRepository.countByTenantId(tenantId) + 1);
+    }
+
+    private String referenceForAsset(String tenantId) {
+        return "AST-" + tenantId.replace("tenant_", "").toUpperCase() + "-" + String.format("%04d", assetRepository.countByTenantId(tenantId) + 1);
     }
 
     private String blankToNull(String value) {
@@ -719,5 +901,21 @@ class AccountingController {
             String reference,
             String description,
             LocalDate expenseDate) {
+    }
+
+    record CreateAssetRequest(
+            String tenantId,
+            @NotBlank String name,
+            @NotBlank String category,
+            @NotBlank String assetAccountCode,
+            @NotNull BigDecimal cost,
+            BigDecimal salvageValue,
+            Integer usefulLifeMonths,
+            LocalDate purchaseDate,
+            LocalDate depreciationStartDate,
+            @NotBlank String channel,
+            String reference,
+            String location,
+            String custodianUserId) {
     }
 }

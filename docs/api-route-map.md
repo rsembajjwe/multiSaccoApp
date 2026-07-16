@@ -38,6 +38,8 @@ Java-backed routes currently implemented:
 - `POST /api/v1/suppliers`
 - `GET /api/v1/expenses`
 - `POST /api/v1/expenses`
+- `GET /api/v1/assets`
+- `POST /api/v1/assets`
 - `GET /api/v1/statement-lines`
 - `POST /api/v1/statement-lines`
 - `GET /api/v1/reconciliation`
