@@ -11,6 +11,7 @@ import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.loan.LoanRepository;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
+import com.methaltech.sacco.notification.NotificationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -44,6 +45,7 @@ class MobileMoneyController {
     private final LoanRepository loanRepository;
     private final LoanRepaymentRepository repaymentRepository;
     private final StatementLineRepository statementLineRepository;
+    private final NotificationService notificationService;
     private final AuthService authService;
     private final ObjectMapper objectMapper;
 
@@ -130,6 +132,7 @@ class MobileMoneyController {
                 "Mobile-money " + body.purpose().trim().replace('_', ' '),
                 SYSTEM_USER_ID));
         createStatementLine(tenantId, body.amount(), externalReference, "Mobile-money collection " + body.purpose().trim());
+        notificationService.notifyPaymentPosted(member, body.purpose().trim(), body.amount(), "financial_transaction", transaction.getId());
 
         MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
                 "callback_" + UUID.randomUUID(),
@@ -190,6 +193,7 @@ class MobileMoneyController {
         loan.recordRepayment(body.amount());
         loanRepository.save(loan);
         createStatementLine(tenantId, body.amount(), externalReference, "Mobile-money loan repayment");
+        notificationService.notifyPaymentPosted(member, "loan_repayment", body.amount(), "loan_repayment", repayment.getId());
 
         MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
                 "callback_" + UUID.randomUUID(),

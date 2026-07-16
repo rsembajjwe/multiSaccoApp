@@ -1300,6 +1300,13 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(4)));
+
+		mockMvc.perform(get("/api/v1/notifications/deliveries")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+				.andExpect(jsonPath("$.data[0].status", is("sent")));
 	}
 
 	@Test
@@ -1363,6 +1370,11 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.error.code", is("INVALID_CALLBACK_PURPOSE")));
 
 		mockMvc.perform(get("/api/v1/integrations/mobile-money/callbacks?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(get("/api/v1/notifications/deliveries?tenantId=tenant_lake")
 						.header("Authorization", "Bearer " + staffToken))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));

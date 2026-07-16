@@ -146,11 +146,11 @@ public class Member {
         return memberType;
     }
 
-    String getPhone() {
+    public String getPhone() {
         return phone;
     }
 
-    String getEmail() {
+    public String getEmail() {
         return email;
     }
 
