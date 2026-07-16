@@ -2,6 +2,7 @@ package com.methaltech.sacco.accounting;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.complaint.ComplaintRepository;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
 import com.methaltech.sacco.governance.GovernanceResolutionRepository;
 import com.methaltech.sacco.identity.AuthService;
@@ -41,6 +42,7 @@ class RegulatoryReportController {
     private final StatementLineRepository statementLineRepository;
     private final ExpenseRepository expenseRepository;
     private final AssetRepository assetRepository;
+    private final ComplaintRepository complaintRepository;
     private final GovernanceResolutionRepository resolutionRepository;
     private final AuthService authService;
 
@@ -141,7 +143,7 @@ class RegulatoryReportController {
                 .journalEntries(journalEntries)
                 .unbalancedJournalEntries(0)
                 .reconciliationExceptions(reconciliationExceptions)
-                .openComplaints(0)
+                .openComplaints((int) complaintRepository.countByTenantIdAndStatusNotIn(tenantId, List.of("resolved", "closed")))
                 .openResolutions((int) resolutionRepository.countByTenantIdAndStatusNot(tenantId, "closed"))
                 .complianceStatus(reconciliationExceptions == 0 ? "clear" : "review")
                 .build();
@@ -220,7 +222,7 @@ class RegulatoryReportController {
                 .journalEntries(reports.stream().mapToInt(RegulatoryTenantReport::getJournalEntries).sum())
                 .unbalancedJournalEntries(unbalanced)
                 .reconciliationExceptions(reconciliationExceptions)
-                .openComplaints(0)
+                .openComplaints(reports.stream().mapToInt(RegulatoryTenantReport::getOpenComplaints).sum())
                 .openResolutions(reports.stream().mapToInt(RegulatoryTenantReport::getOpenResolutions).sum())
                 .complianceStatus(unbalanced == 0 && reconciliationExceptions == 0 ? "clear" : "review")
                 .build();

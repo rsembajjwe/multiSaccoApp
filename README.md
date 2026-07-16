@@ -115,6 +115,10 @@ GET http://127.0.0.1:8080/api/v1/notifications/deliveries
 GET http://127.0.0.1:8080/api/v1/governance-meetings
 POST http://127.0.0.1:8080/api/v1/governance-meetings
 POST http://127.0.0.1:8080/api/v1/governance-meetings/{meetingId}/resolutions
+GET http://127.0.0.1:8080/api/v1/complaints
+POST http://127.0.0.1:8080/api/v1/complaints
+PATCH http://127.0.0.1:8080/api/v1/complaints/{complaintId}/status
+POST http://127.0.0.1:8080/api/v1/member-auth/mobile-complaints
 GET http://127.0.0.1:8080/api/v1/loans
 POST http://127.0.0.1:8080/api/v1/loans
 PATCH http://127.0.0.1:8080/api/v1/loans/{loanId}/status

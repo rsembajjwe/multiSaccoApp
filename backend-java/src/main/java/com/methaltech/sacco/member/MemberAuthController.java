@@ -2,6 +2,9 @@ package com.methaltech.sacco.member;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.complaint.Complaint;
+import com.methaltech.sacco.complaint.ComplaintResponse;
+import com.methaltech.sacco.complaint.ComplaintService;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.loan.Loan;
 import com.methaltech.sacco.loan.LoanGuarantor;
@@ -42,6 +45,7 @@ class MemberAuthController {
     private final MemberSessionRepository memberSessionRepository;
     private final LoanRepository loanRepository;
     private final LoanGuarantorRepository guarantorRepository;
+    private final ComplaintService complaintService;
     private final MemberAuthService memberAuthService;
     private final BranchLookup branchLookup;
     private final TenantService tenantService;
@@ -54,6 +58,7 @@ class MemberAuthController {
             MemberSessionRepository memberSessionRepository,
             LoanRepository loanRepository,
             LoanGuarantorRepository guarantorRepository,
+            ComplaintService complaintService,
             MemberAuthService memberAuthService,
             BranchLookup branchLookup,
             TenantService tenantService,
@@ -64,6 +69,7 @@ class MemberAuthController {
         this.memberSessionRepository = memberSessionRepository;
         this.loanRepository = loanRepository;
         this.guarantorRepository = guarantorRepository;
+        this.complaintService = complaintService;
         this.memberAuthService = memberAuthService;
         this.branchLookup = branchLookup;
         this.tenantService = tenantService;
@@ -136,6 +142,43 @@ class MemberAuthController {
         currentSession.session().revoke();
         memberSessionRepository.save(currentSession.session());
         return ResponseEntity.ok(ApiResponse.of(new LogoutResponse(true)));
+    }
+
+    @PostMapping("/mobile-complaints")
+    ResponseEntity<?> syncMobileComplaint(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody MobileComplaintRequest body,
+            HttpServletRequest request) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        String category = body.category().trim();
+        if (!ComplaintService.CATEGORIES.contains(category)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_COMPLAINT_CATEGORY", "Unsupported complaint category."));
+        }
+        String priority = body.priority() == null || body.priority().isBlank() ? "medium" : body.priority().trim();
+        if (!ComplaintService.PRIORITIES.contains(priority)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_COMPLAINT_PRIORITY", "Unsupported complaint priority."));
+        }
+
+        Member member = currentSession.member();
+        Complaint complaint = complaintService.createMemberComplaint(
+                member,
+                category,
+                body.subject().trim(),
+                body.description() == null ? "" : body.description().trim(),
+                priority);
+        auditService.record(
+                member.getTenantId(),
+                (String) null,
+                member.getFullName(),
+                "Synced mobile complaint " + complaint.getSubject(),
+                "complaint",
+                complaint.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(ComplaintResponse.from(complaint)));
     }
 
     @GetMapping("/guarantor-requests")
@@ -251,5 +294,12 @@ class MemberAuthController {
     }
 
     record UpdateGuarantorStatusRequest(@NotBlank String status) {
+    }
+
+    record MobileComplaintRequest(
+            @NotBlank String category,
+            @NotBlank String subject,
+            String description,
+            String priority) {
     }
 }

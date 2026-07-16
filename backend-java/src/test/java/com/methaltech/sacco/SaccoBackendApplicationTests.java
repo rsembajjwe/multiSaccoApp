@@ -1488,6 +1488,145 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void complaintsCanBeCapturedUpdatedAndSyncedFromMobile() throws Exception {
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String subject = "Mobile receipt clarification " + System.currentTimeMillis();
+
+		mockMvc.perform(get("/api/v1/complaints")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+				.andExpect(jsonPath("$.data[0].status", is("open")));
+
+		MvcResult createdComplaint = mockMvc.perform(post("/api/v1/complaints")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "category": "statement",
+								  "subject": "%s",
+								  "description": "Member says latest receipt is missing from the branch statement.",
+								  "channel": "branch",
+								  "priority": "high"
+								}
+								""".formatted(subject)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.category", is("statement")))
+				.andExpect(jsonPath("$.data.priority", is("high")))
+				.andReturn();
+		String complaintId = objectMapper.readTree(createdComplaint.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/complaints/" + complaintId + "/status")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "status": "resolved",
+								  "resolutionNotes": "Receipt traced to mobile-money callback batch."
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("resolved")))
+				.andExpect(jsonPath("$.data.resolvedByUserId", is("user_green_admin")));
+
+		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		mockMvc.perform(post("/api/v1/member-auth/mobile-complaints")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "category": "service",
+								  "subject": "Queue follow-up",
+								  "description": "Offline draft synced from member mobile app.",
+								  "priority": "medium"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.channel", is("mobile")))
+				.andExpect(jsonPath("$.data.createdByMemberId", is("member_green_amina")));
+
+		mockMvc.perform(get("/api/v1/regulatory-report")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.reports[0].openComplaints", greaterThanOrEqualTo(2)));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].resourceType", is("complaint")));
+	}
+
+	@Test
+	void complaintControlsAreEnforced() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+
+		mockMvc.perform(get("/api/v1/complaints?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/complaints")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_lake_peter",
+								  "category": "service",
+								  "subject": "Wrong SACCO member",
+								  "channel": "branch"
+								}
+								"""))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code", is("MEMBER_NOT_FOUND")));
+
+		mockMvc.perform(post("/api/v1/complaints")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "category": "bad_category",
+								  "subject": "Bad category"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_COMPLAINT_CATEGORY")));
+
+		mockMvc.perform(patch("/api/v1/complaints/complaint_green_0001/status")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "stalled" }
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_COMPLAINT_STATUS")));
+
+		mockMvc.perform(post("/api/v1/member-auth/mobile-complaints")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "category": "bad_category",
+								  "subject": "Bad mobile complaint"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_COMPLAINT_CATEGORY")));
+
+		mockMvc.perform(get("/api/v1/complaints?tenantId=tenant_green")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+	}
+
+	@Test
 	void statementLinesAndReconciliationAreAvailable() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 

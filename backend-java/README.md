@@ -46,6 +46,7 @@ cd backend-java
 - `/api/v1/integrations/mobile-money/callback` and `/api/v1/integrations/mobile-money/callbacks` for idempotent provider payment callbacks and tenant-scoped callback history.
 - `/api/v1/notifications/deliveries` for tenant-scoped demo SMS/email delivery history generated from payment notifications.
 - `/api/v1/governance-meetings` for tenant-scoped meeting records, nested resolutions, audit events, and regulatory open-resolution totals.
+- `/api/v1/complaints` and `/api/v1/member-auth/mobile-complaints` for staff complaint management, member mobile complaint sync, audit events, and regulatory open-complaint totals.
 - `/api/v1/loans` for tenant-scoped loan file listing, staff-submitted applications, decisions, and disbursement.
 - `/api/v1/loans/{loanId}/guarantors` and `/api/v1/member-auth/guarantor-requests` for staff guarantor requests and member accept/reject decisions.
 - `/api/v1/loans/{loanId}/repayments` for staff repayment capture, duplicate reference controls, balance reduction, and loan closure on full payoff.

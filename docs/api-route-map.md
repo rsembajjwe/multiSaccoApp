@@ -50,6 +50,10 @@ Java-backed routes currently implemented:
 - `GET /api/v1/governance-meetings`
 - `POST /api/v1/governance-meetings`
 - `POST /api/v1/governance-meetings/:id/resolutions`
+- `GET /api/v1/complaints`
+- `POST /api/v1/complaints`
+- `PATCH /api/v1/complaints/:id/status`
+- `POST /api/v1/member-auth/mobile-complaints`
 - `GET /api/v1/loans`
 - `POST /api/v1/loans`
 - `PATCH /api/v1/loans/:id/status`
