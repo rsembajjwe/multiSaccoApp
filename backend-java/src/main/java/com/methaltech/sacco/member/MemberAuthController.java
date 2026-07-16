@@ -208,6 +208,17 @@ class MemberAuthController {
                 true)));
     }
 
+    @GetMapping("/notifications")
+    ResponseEntity<?> listNotifications(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        return ResponseEntity.ok(ApiResponse.of(notificationRepository.findByMemberIdOrderByCreatedAtDesc(currentSession.member().getId())
+                .stream()
+                .map(NotificationResponse::from)
+                .toList()));
+    }
+
     @PostMapping("/mobile-loans")
     ResponseEntity<?> createMobileLoan(
             @RequestHeader(name = "Authorization", required = false) String authorization,

@@ -13,6 +13,7 @@ import tools.jackson.databind.ObjectMapper;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -1054,10 +1055,32 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberNotificationsAreListedForCurrentMemberOnly() throws Exception {
+		String aminaToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String danielToken = memberLoginAndReturnToken("GVS-0002", "Member@12345");
+
+		mockMvc.perform(get("/api/v1/member-auth/notifications")
+						.header("Authorization", "Bearer " + aminaToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[*].memberId", everyItem(is("member_green_amina"))))
+				.andExpect(jsonPath("$.data[*].eventType", hasItem("payment_received")));
+
+		mockMvc.perform(get("/api/v1/member-auth/notifications")
+						.header("Authorization", "Bearer " + danielToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].memberId", everyItem(is("member_green_daniel"))));
+	}
+
+	@Test
 	void memberMobileLoanControlsAreEnforced() throws Exception {
 		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
 
 		mockMvc.perform(get("/api/v1/member-auth/mobile-dashboard"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("MEMBER_AUTH_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/member-auth/notifications"))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.error.code", is("MEMBER_AUTH_REQUIRED")));
 

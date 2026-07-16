@@ -33,6 +33,7 @@ Java-backed routes currently implemented:
 - `POST /api/v1/members/:id/documents`
 - `POST /api/v1/member-auth/login`
 - `GET /api/v1/member-auth/me`
+- `GET /api/v1/member-auth/notifications`
 - `POST /api/v1/member-auth/logout`
 - `GET /api/v1/financial-transactions`
 - `POST /api/v1/financial-transactions`
