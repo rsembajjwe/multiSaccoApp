@@ -1043,6 +1043,37 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberImportTemplateUsesTenantScopedDefaults() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/members/import-template")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.filename", is("member-import-template-tenant_green.csv")))
+				.andExpect(jsonPath("$.data.contentType", is("text/csv")))
+				.andExpect(jsonPath("$.data.headers.length()", is(10)))
+				.andExpect(jsonPath("$.data.headers[0]", is("membershipNo")))
+				.andExpect(jsonPath("$.data.headers", hasItem("branchId")))
+				.andExpect(jsonPath("$.data.sampleRows[0].branchId", is("branch_green_main")))
+				.andExpect(jsonPath("$.data.sampleRows[0].membershipNo", startsWith("GVS-")))
+				.andExpect(jsonPath("$.data.csv", startsWith("membershipNo,branchId,fullName")));
+
+		mockMvc.perform(get("/api/v1/members/import-template?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(get("/api/v1/members/import-template?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_lake")))
+				.andExpect(jsonPath("$.data.sampleRows[0].branchId", is("branch_lake_main")))
+				.andExpect(jsonPath("$.data.sampleRows[0].membershipNo", startsWith("LFS-")));
+	}
+
+	@Test
 	void activeMemberCanLoginViewProfileAndLogout() throws Exception {
 		MvcResult login = mockMvc.perform(post("/api/v1/member-auth/login")
 						.contentType("application/json")

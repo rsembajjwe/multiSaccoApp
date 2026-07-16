@@ -73,6 +73,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java SACCO profile endpoints store and update legal, registration, tax, license, address, and contact metadata with tenant isolation and audit logging.
 - Java branch management lists and creates tenant-scoped branches while blocking cross-tenant branch access.
 - Java member management registers and lists branch-linked members with tenant isolation, balance fields, KYC state, and status updates.
+- Java member import template endpoint returns tenant-scoped CSV headers and sample rows for bulk onboarding preparation.
 - Java member document endpoints store KYC/document metadata per member with tenant isolation, validation, and audit logging.
 - Java member next-of-kin and beneficiary endpoints store onboarding contacts with tenant isolation, beneficiary allocation caps, and audit logging.
 - Java member self-service authentication lets active members login and view only their own profile, tenant, branch, and savings/share/welfare balances.

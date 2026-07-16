@@ -28,6 +28,7 @@ Java-backed routes currently implemented:
 - `GET /api/v1/branches`
 - `POST /api/v1/branches`
 - `GET /api/v1/members`
+- `GET /api/v1/members/import-template`
 - `POST /api/v1/members`
 - `GET /api/v1/members/:id`
 - `PATCH /api/v1/members/:id/status`
@@ -144,6 +145,7 @@ All JSON responses should follow one of these shapes:
 | GET | `/branches` | List tenant branches. | Required |
 | POST | `/branches` | Create branch. | SACCO admin |
 | GET | `/members` | List tenant members. | Required |
+| GET | `/members/import-template` | Return CSV headers, sample rows, and content for bulk member import. | Required |
 | POST | `/members` | Register member. | SACCO staff |
 | GET | `/members/:id` | Get member profile. | Required |
 | PATCH | `/members/:id/status` | Approve, suspend, activate, or exit member. | Authorized approver |

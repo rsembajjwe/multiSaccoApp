@@ -35,6 +35,12 @@ class BranchLookup {
                 branch.getUpdatedAt()));
     }
 
+    Optional<String> defaultBranchId(String tenantId) {
+        return branchRepository.findByTenantIdOrderByCodeAsc(tenantId).stream()
+                .findFirst()
+                .map(branch -> branch.getId());
+    }
+
     record BranchSummary(
             String id,
             String tenantId,

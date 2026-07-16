@@ -394,6 +394,7 @@ Progress:
 - Java SACCO profile management added with Flyway `sacco_profiles`, seeded legal/contact details, tenant-scoped read/update endpoints, validation, and audit events.
 - Java branch management added with Flyway `branches`, seeded branch records, tenant-scoped `/api/v1/branches`, duplicate-code checks, and audit events.
 - Java member management added with Flyway `members`, seeded member balances, tenant-scoped `/api/v1/members`, registration, detail, status updates, and audit events.
+- Java bulk member import template added with `/api/v1/members/import-template`, tenant-scoped sample rows, headers, and CSV content for onboarding preparation.
 - Java member document metadata added with Flyway `member_documents`, seeded KYC records, member-scoped listing/upload, validation, tenant isolation, and audit events.
 - Java member next-of-kin and beneficiaries added with Flyway `member_next_of_kin`/`member_beneficiaries`, seeded onboarding contacts, tenant-scoped member routes, allocation caps, and audit events.
 - Java member self-service auth added with Flyway `member_sessions`, member login by membership number/phone/email, balance-aware `/api/v1/member-auth/me`, logout revocation, and member audit events.

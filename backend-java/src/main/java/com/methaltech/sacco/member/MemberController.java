@@ -31,6 +31,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/members")
 class MemberController {
 
+    private static final List<String> MEMBER_IMPORT_HEADERS = List.of(
+            "membershipNo",
+            "branchId",
+            "fullName",
+            "memberType",
+            "phone",
+            "email",
+            "nationalId",
+            "kycStatus",
+            "joiningDate",
+            "password");
     private static final Set<String> ALLOWED_MEMBER_TYPES = Set.of("individual", "group", "institutional", "corporate");
     private static final Set<String> ALLOWED_KYC_STATUSES = Set.of(
             "not_verified",
@@ -100,6 +111,39 @@ class MemberController {
                 : memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId);
 
         return ResponseEntity.ok(ApiResponse.of(members.stream().map(MemberResponse::from).toList()));
+    }
+
+    @GetMapping("/import-template")
+    ResponseEntity<?> memberImportTemplate(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+
+        String defaultBranchId = branchLookup.defaultBranchId(tenantId).orElse("");
+        String nextMembershipNo = membershipNo(tenantId, null);
+        List<MemberImportSampleRow> sampleRows = List.of(new MemberImportSampleRow(
+                nextMembershipNo,
+                defaultBranchId,
+                "Sample Member",
+                "individual",
+                "+256700000000",
+                "sample.member@example.local",
+                "CM0000000SAMP",
+                "pending_verification",
+                LocalDate.now(),
+                "Member@12345"));
+
+        return ResponseEntity.ok(ApiResponse.of(new MemberImportTemplateResponse(
+                tenantId,
+                "member-import-template-" + tenantId + ".csv",
+                "text/csv",
+                MEMBER_IMPORT_HEADERS,
+                sampleRows,
+                csvTemplate(sampleRows))));
     }
 
     @PostMapping
@@ -430,6 +474,30 @@ class MemberController {
         return value == null || value.isBlank() ? "" : value.trim();
     }
 
+    private String csvTemplate(List<MemberImportSampleRow> sampleRows) {
+        String header = String.join(",", MEMBER_IMPORT_HEADERS);
+        List<String> rows = sampleRows.stream()
+                .map(row -> String.join(",",
+                        csv(row.membershipNo()),
+                        csv(row.branchId()),
+                        csv(row.fullName()),
+                        csv(row.memberType()),
+                        csv(row.phone()),
+                        csv(row.email()),
+                        csv(row.nationalId()),
+                        csv(row.kycStatus()),
+                        csv(row.joiningDate().toString()),
+                        csv(row.password())))
+                .toList();
+        return header + "\n" + String.join("\n", rows) + "\n";
+    }
+
+    private String csv(String value) {
+        if (value == null) return "";
+        if (!value.contains(",") && !value.contains("\"") && !value.contains("\n")) return value;
+        return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+
     record CreateMemberRequest(
             String tenantId,
             @NotBlank String branchId,
@@ -466,5 +534,27 @@ class MemberController {
             @NotBlank String relationship,
             String phone,
             @NotNull BigDecimal allocationPercent) {
+    }
+
+    record MemberImportTemplateResponse(
+            String tenantId,
+            String filename,
+            String contentType,
+            List<String> headers,
+            List<MemberImportSampleRow> sampleRows,
+            String csv) {
+    }
+
+    record MemberImportSampleRow(
+            String membershipNo,
+            String branchId,
+            String fullName,
+            String memberType,
+            String phone,
+            String email,
+            String nationalId,
+            String kycStatus,
+            LocalDate joiningDate,
+            String password) {
     }
 }
