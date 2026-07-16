@@ -687,6 +687,167 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.error.code", is("INVALID_MEMBER_CREDENTIALS")));
 	}
 
+	@Test
+	void financialTransactionsAreListedWithTenantScope() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(3)));
+
+		mockMvc.perform(get("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(3)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		mockMvc.perform(get("/api/v1/financial-transactions?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+	}
+
+	@Test
+	void financialTransactionPostingUsesMakerCheckerAndUpdatesBalances() throws Exception {
+		String makerToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String checkerEmail = "checker-" + System.currentTimeMillis() + "@greenvalley.local";
+
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + makerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Green Checker",
+								  "email": "%s",
+								  "password": "Checker@12345"
+								}
+								""".formatted(checkerEmail)))
+				.andExpect(status().isCreated());
+
+		String checkerToken = loginAndReturnToken(checkerEmail, "Checker@12345");
+		String membershipNo = "GVS-TX-" + System.currentTimeMillis();
+
+		MvcResult createdMember = mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + makerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "branchId": "branch_green_main",
+								  "membershipNo": "%s",
+								  "fullName": "Transaction Member",
+								  "phone": "+256701111333"
+								}
+								""".formatted(membershipNo)))
+				.andExpect(status().isCreated())
+				.andReturn();
+
+		String memberId = objectMapper.readTree(createdMember.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/members/" + memberId + "/status")
+						.header("Authorization", "Bearer " + makerToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "active" }
+								"""))
+				.andExpect(status().isOk());
+
+		MvcResult createdTransaction = mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + makerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "%s",
+								  "type": "savings_deposit",
+								  "channel": "cash",
+								  "amount": 125000,
+								  "narration": "Opening savings"
+								}
+								""".formatted(memberId)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status", is("pending_approval")))
+				.andExpect(jsonPath("$.data.reference", startsWith("GVS-TX-")))
+				.andReturn();
+
+		String transactionId = objectMapper.readTree(createdTransaction.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/financial-transactions/" + transactionId + "/status")
+						.header("Authorization", "Bearer " + makerToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "posted" }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("MAKER_CHECKER_REQUIRED")));
+
+		mockMvc.perform(patch("/api/v1/financial-transactions/" + transactionId + "/status")
+						.header("Authorization", "Bearer " + checkerToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "posted" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("posted")))
+				.andExpect(jsonPath("$.data.checkerUserId", notNullValue()))
+				.andExpect(jsonPath("$.data.postedAt", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/members/" + memberId)
+				.header("Authorization", "Bearer " + makerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.savingsBalance", is(125000.00)))
+				.andExpect(jsonPath("$.data.sharesBalance", is(0.00)))
+				.andExpect(jsonPath("$.data.welfareBalance", is(0.00)));
+	}
+
+	@Test
+	void invalidFinancialTransactionsAreRejected() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "memberId": "member_lake_peter",
+								  "type": "savings_deposit",
+								  "channel": "cash",
+								  "amount": 10000
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "type": "bad_type",
+								  "channel": "cash",
+								  "amount": 10000
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_TRANSACTION_TYPE")));
+
+		mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "type": "savings_deposit",
+								  "channel": "cash",
+								  "amount": 0
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_TRANSACTION_AMOUNT")));
+	}
+
 	private String loginAndReturnToken() throws Exception {
 		return loginAndReturnToken("admin@platform.local", "Admin@12345");
 	}

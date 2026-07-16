@@ -10,7 +10,7 @@ import java.time.LocalDate;
 
 @Entity
 @Table(name = "members")
-class Member {
+public class Member {
 
     @Id
     private String id;
@@ -110,23 +110,35 @@ class Member {
         this.updatedAt = Instant.now();
     }
 
-    String getId() {
+    public void applyPostedTransaction(String type, BigDecimal amount) {
+        if ("savings_deposit".equals(type)) this.savingsBalance = this.savingsBalance.add(amount);
+        if ("withdrawal".equals(type)) this.savingsBalance = this.savingsBalance.subtract(amount);
+        if ("share_purchase".equals(type)) this.sharesBalance = this.sharesBalance.add(amount);
+        if ("welfare_contribution".equals(type)) this.welfareBalance = this.welfareBalance.add(amount);
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean hasEnoughSavings(BigDecimal amount) {
+        return savingsBalance.compareTo(amount) >= 0;
+    }
+
+    public String getId() {
         return id;
     }
 
-    String getTenantId() {
+    public String getTenantId() {
         return tenantId;
     }
 
-    String getBranchId() {
+    public String getBranchId() {
         return branchId;
     }
 
-    String getMembershipNo() {
+    public String getMembershipNo() {
         return membershipNo;
     }
 
-    String getFullName() {
+    public String getFullName() {
         return fullName;
     }
 
@@ -154,7 +166,7 @@ class Member {
         return passwordSalt;
     }
 
-    String getStatus() {
+    public String getStatus() {
         return status;
     }
 
@@ -166,15 +178,15 @@ class Member {
         return joiningDate;
     }
 
-    BigDecimal getSavingsBalance() {
+    public BigDecimal getSavingsBalance() {
         return savingsBalance;
     }
 
-    BigDecimal getSharesBalance() {
+    public BigDecimal getSharesBalance() {
         return sharesBalance;
     }
 
-    BigDecimal getWelfareBalance() {
+    public BigDecimal getWelfareBalance() {
         return welfareBalance;
     }
 
