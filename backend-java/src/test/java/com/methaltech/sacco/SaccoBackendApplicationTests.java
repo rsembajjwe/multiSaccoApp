@@ -597,6 +597,96 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
 	}
 
+	@Test
+	void activeMemberCanLoginViewProfileAndLogout() throws Exception {
+		MvcResult login = mockMvc.perform(post("/api/v1/member-auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "identifier": "GVS-0001",
+								  "password": "Member@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.token", notNullValue()))
+				.andExpect(jsonPath("$.data.member.membershipNo", is("GVS-0001")))
+				.andExpect(jsonPath("$.data.member.passwordHash").doesNotExist())
+				.andExpect(jsonPath("$.data.tenant.id", is("tenant_green")))
+				.andExpect(jsonPath("$.data.branch.id", is("branch_green_main")))
+				.andExpect(jsonPath("$.data.balances.savings", is(2450000.00)))
+				.andExpect(jsonPath("$.data.balances.shares", is(850000.00)))
+				.andExpect(jsonPath("$.data.balances.welfare", is(180000.00)))
+				.andReturn();
+
+		String memberToken = objectMapper.readTree(login.getResponse().getContentAsString()).path("data").path("token").asString();
+
+		mockMvc.perform(get("/api/v1/member-auth/me")
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.member.fullName", is("Amina Nakitende")))
+				.andExpect(jsonPath("$.data.balances.savings", is(2450000.00)));
+
+		mockMvc.perform(post("/api/v1/member-auth/logout")
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.loggedOut", is(true)));
+
+		mockMvc.perform(get("/api/v1/member-auth/me")
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("MEMBER_AUTH_REQUIRED")));
+	}
+
+	@Test
+	void memberLoginAcceptsPhoneOrEmailIdentifier() throws Exception {
+		mockMvc.perform(post("/api/v1/member-auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "identifier": "+256772222118",
+								  "password": "Member@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.member.membershipNo", is("GVS-0002")));
+
+		mockMvc.perform(post("/api/v1/member-auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "identifier": "daniel@example.local",
+								  "password": "Member@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.member.membershipNo", is("GVS-0002")));
+	}
+
+	@Test
+	void memberLoginRejectsBadPasswordOrInactiveMember() throws Exception {
+		mockMvc.perform(post("/api/v1/member-auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "identifier": "GVS-0001",
+								  "password": "wrong"
+								}
+								"""))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("INVALID_MEMBER_CREDENTIALS")));
+
+		mockMvc.perform(post("/api/v1/member-auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "identifier": "LFS-0001",
+								  "password": "Member@12345"
+								}
+								"""))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("INVALID_MEMBER_CREDENTIALS")));
+	}
+
 	private String loginAndReturnToken() throws Exception {
 		return loginAndReturnToken("admin@platform.local", "Admin@12345");
 	}

@@ -48,7 +48,7 @@ public class Branch {
         this.updatedAt = this.createdAt;
     }
 
-    String getId() {
+    public String getId() {
         return id;
     }
 
@@ -56,31 +56,31 @@ public class Branch {
         return tenantId;
     }
 
-    String getCode() {
+    public String getCode() {
         return code;
     }
 
-    String getName() {
+    public String getName() {
         return name;
     }
 
-    String getAddress() {
+    public String getAddress() {
         return address;
     }
 
-    String getManagerUserId() {
+    public String getManagerUserId() {
         return managerUserId;
     }
 
-    String getStatus() {
+    public String getStatus() {
         return status;
     }
 
-    Instant getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    Instant getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
 }

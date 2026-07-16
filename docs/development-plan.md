@@ -392,6 +392,7 @@ Progress:
 - Java SACCO onboarding added with authenticated tenant detail, platform-only tenant creation, platform-only status updates, tenant access checks, and audit events.
 - Java branch management added with Flyway `branches`, seeded branch records, tenant-scoped `/api/v1/branches`, duplicate-code checks, and audit events.
 - Java member management added with Flyway `members`, seeded member balances, tenant-scoped `/api/v1/members`, registration, detail, status updates, and audit events.
+- Java member self-service auth added with Flyway `member_sessions`, member login by membership number/phone/email, balance-aware `/api/v1/member-auth/me`, logout revocation, and member audit events.
 
 Recommended stack:
 

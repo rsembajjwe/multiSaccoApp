@@ -19,11 +19,29 @@ public class AuditService {
             String resourceType,
             String resourceId,
             String ipAddress) {
+        return record(
+                tenantId,
+                actor == null ? null : actor.getId(),
+                actor == null ? "System" : actor.getFullName(),
+                action,
+                resourceType,
+                resourceId,
+                ipAddress);
+    }
+
+    public AuditEvent record(
+            String tenantId,
+            String actorUserId,
+            String actorName,
+            String action,
+            String resourceType,
+            String resourceId,
+            String ipAddress) {
         return auditEventRepository.save(new AuditEvent(
                 "audit_" + UUID.randomUUID(),
                 tenantId,
-                actor.getId(),
-                actor.getFullName(),
+                actorUserId,
+                actorName,
                 action,
                 resourceType,
                 resourceId,

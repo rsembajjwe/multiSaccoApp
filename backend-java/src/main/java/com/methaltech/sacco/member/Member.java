@@ -146,6 +146,14 @@ class Member {
         return nationalId;
     }
 
+    String getPasswordHash() {
+        return passwordHash;
+    }
+
+    String getPasswordSalt() {
+        return passwordSalt;
+    }
+
     String getStatus() {
         return status;
     }

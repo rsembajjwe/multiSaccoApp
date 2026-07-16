@@ -89,6 +89,9 @@ GET http://127.0.0.1:8080/api/v1/members
 POST http://127.0.0.1:8080/api/v1/members
 GET http://127.0.0.1:8080/api/v1/members/{memberId}
 PATCH http://127.0.0.1:8080/api/v1/members/{memberId}/status
+POST http://127.0.0.1:8080/api/v1/member-auth/login
+GET http://127.0.0.1:8080/api/v1/member-auth/me
+POST http://127.0.0.1:8080/api/v1/member-auth/logout
 ```
 
 ```powershell

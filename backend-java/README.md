@@ -35,6 +35,7 @@ cd backend-java
 - `/api/v1/audit-events` for authenticated tenant-scoped audit listing and manual audit capture.
 - `/api/v1/branches` for authenticated tenant-scoped branch listing and creation.
 - `/api/v1/members` for authenticated tenant-scoped member listing, registration, detail, and status updates.
+- `/api/v1/member-auth/login`, `/api/v1/member-auth/me`, and `/api/v1/member-auth/logout` for member portal sessions and balances.
 - Baseline security headers on responses.
 - H2 development datasource configured in PostgreSQL compatibility mode.
 - PostgreSQL and Flyway dependencies included for the production database path.
@@ -43,3 +44,4 @@ Seed logins:
 
 - Platform admin: `admin@platform.local` / `Admin@12345`
 - SACCO admin: `admin@greenvalley.local` / `Sacco@12345`
+- Member portal: `GVS-0001` / `Member@12345`
