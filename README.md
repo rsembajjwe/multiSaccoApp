@@ -102,6 +102,7 @@ PATCH http://127.0.0.1:8080/api/v1/accounting-periods/{periodId}/status
 GET http://127.0.0.1:8080/api/v1/statement-lines
 POST http://127.0.0.1:8080/api/v1/statement-lines
 GET http://127.0.0.1:8080/api/v1/reconciliation
+GET http://127.0.0.1:8080/api/v1/regulatory-report
 GET http://127.0.0.1:8080/api/v1/loans
 POST http://127.0.0.1:8080/api/v1/loans
 PATCH http://127.0.0.1:8080/api/v1/loans/{loanId}/status

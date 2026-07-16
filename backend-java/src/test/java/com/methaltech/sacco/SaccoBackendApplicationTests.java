@@ -1088,6 +1088,46 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void regulatoryReportSummarizesTenantAndConsolidatedMetrics() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/regulatory-report")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.period", notNullValue()))
+				.andExpect(jsonPath("$.data.reports.length()", is(1)))
+				.andExpect(jsonPath("$.data.reports[0].tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.reports[0].memberCount", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data.reports[0].activeMembers", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data.reports[0].savings", greaterThanOrEqualTo(0.0)))
+				.andExpect(jsonPath("$.data.reports[0].journalEntries", greaterThanOrEqualTo(4)))
+				.andExpect(jsonPath("$.data.reports[0].reconciliationExceptions", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.consolidated.tenantId", is("consolidated")))
+				.andExpect(jsonPath("$.data.csv", startsWith("\"tenant\",\"members\"")));
+
+		mockMvc.perform(get("/api/v1/regulatory-report")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.reports.length()", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data.consolidated.memberCount", greaterThanOrEqualTo(3)));
+	}
+
+	@Test
+	void regulatoryReportTenantAccessIsEnforced() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/regulatory-report?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(get("/api/v1/regulatory-report"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("AUTH_REQUIRED")));
+	}
+
+	@Test
 	void loansAreListedWithTenantScope() throws Exception {
 		String platformToken = loginAndReturnToken();
 		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
