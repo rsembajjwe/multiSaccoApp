@@ -848,6 +848,112 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.error.code", is("INVALID_TRANSACTION_AMOUNT")));
 	}
 
+	@Test
+	void loansAreListedWithTenantScope() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/loans")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(3)));
+
+		mockMvc.perform(get("/api/v1/loans")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		mockMvc.perform(get("/api/v1/loans?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+	}
+
+	@Test
+	void saccoUserCanSubmitLoanForActiveMemberAndAuditIsWritten() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		MvcResult createdLoan = mockMvc.perform(post("/api/v1/loans")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "product": "Development Loan",
+								  "amount": 1200000,
+								  "repaymentMonths": 12,
+								  "purpose": "Stock expansion"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.status", is("submitted")))
+				.andExpect(jsonPath("$.data.stage", is("Credit Appraisal")))
+				.andExpect(jsonPath("$.data.balance", is(0)))
+				.andExpect(jsonPath("$.data.channel", is("staff")))
+				.andExpect(jsonPath("$.data.repaymentMonths", is(12)))
+				.andReturn();
+
+		String loanId = objectMapper.readTree(createdLoan.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].action", is("Submitted loan application for GVS-0001")))
+				.andExpect(jsonPath("$.data[0].resourceType", is("loan")))
+				.andExpect(jsonPath("$.data[0].resourceId", is(loanId)));
+	}
+
+	@Test
+	void invalidLoanApplicationsAreRejected() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/loans")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "memberId": "member_lake_peter",
+								  "product": "Agriculture Loan",
+								  "amount": 500000,
+								  "repaymentMonths": 6
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/loans")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "product": "Unsupported Loan",
+								  "amount": 500000,
+								  "repaymentMonths": 6
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_LOAN_PRODUCT")));
+
+		mockMvc.perform(post("/api/v1/loans")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "product": "Emergency Loan",
+								  "amount": 500000,
+								  "repaymentMonths": 0
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_REPAYMENT_PERIOD")));
+	}
+
 	private String loginAndReturnToken() throws Exception {
 		return loginAndReturnToken("admin@platform.local", "Admin@12345");
 	}

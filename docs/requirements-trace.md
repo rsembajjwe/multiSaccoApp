@@ -70,6 +70,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java member management registers and lists branch-linked members with tenant isolation, balance fields, KYC state, and status updates.
 - Java member self-service authentication lets active members login and view only their own profile, tenant, branch, and savings/share/welfare balances.
 - Java financial transactions validate tenant, member, branch, type, channel, and amount before maker-checker posting updates member balances.
+- Java loan applications list tenant loan files and validate active borrowers, product, amount, and repayment term before creating staff-submitted loan requests.
 
 ## Recommended backend modules for the next build
 

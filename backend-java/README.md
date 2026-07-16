@@ -37,6 +37,7 @@ cd backend-java
 - `/api/v1/members` for authenticated tenant-scoped member listing, registration, detail, and status updates.
 - `/api/v1/member-auth/login`, `/api/v1/member-auth/me`, and `/api/v1/member-auth/logout` for member portal sessions and balances.
 - `/api/v1/financial-transactions` for savings, shares, welfare, and withdrawal posting workflows.
+- `/api/v1/loans` for tenant-scoped loan file listing and staff-submitted loan applications.
 - Baseline security headers on responses.
 - H2 development datasource configured in PostgreSQL compatibility mode.
 - PostgreSQL and Flyway dependencies included for the production database path.
