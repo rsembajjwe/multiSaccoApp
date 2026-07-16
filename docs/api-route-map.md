@@ -34,6 +34,10 @@ Java-backed routes currently implemented:
 - `GET /api/v1/journal-entries`
 - `GET /api/v1/accounting-periods`
 - `PATCH /api/v1/accounting-periods/:id/status`
+- `GET /api/v1/suppliers`
+- `POST /api/v1/suppliers`
+- `GET /api/v1/expenses`
+- `POST /api/v1/expenses`
 - `GET /api/v1/statement-lines`
 - `POST /api/v1/statement-lines`
 - `GET /api/v1/reconciliation`

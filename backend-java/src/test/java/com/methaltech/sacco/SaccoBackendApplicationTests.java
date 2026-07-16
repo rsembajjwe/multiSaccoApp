@@ -872,6 +872,7 @@ class SaccoBackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "financial_transaction"));
 		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "loan_disbursement"));
 		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "loan_repayment"));
+		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "expense"));
 	}
 
 	@Test
@@ -1000,6 +1001,134 @@ class SaccoBackendApplicationTests {
 								"""))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code", is("INVALID_ACCOUNTING_PERIOD_STATUS")));
+	}
+
+	@Test
+	void suppliersAndExpensesPostIntoAccounting() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String supplierName = "Smoke Supplier " + System.currentTimeMillis();
+		String expenseReference = "EXP-SMOKE-" + System.currentTimeMillis();
+
+		MvcResult supplier = mockMvc.perform(post("/api/v1/suppliers")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "%s",
+								  "phone": "+256700444555",
+								  "email": "supplier@example.local",
+								  "taxId": "TIN-SMOKE"
+								}
+								""".formatted(supplierName)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.name", is(supplierName)))
+				.andExpect(jsonPath("$.data.createdByUserId", is("user_green_admin")))
+				.andReturn();
+		String supplierId = objectMapper.readTree(supplier.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/suppliers")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		mockMvc.perform(post("/api/v1/expenses")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "supplierId": "%s",
+								  "accountCode": "5040",
+								  "amount": 76000,
+								  "channel": "mobile_money",
+								  "reference": "%s",
+								  "description": "Core banking support",
+								  "expenseDate": "2026-08-16"
+								}
+								""".formatted(supplierId, expenseReference)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.supplierId", is(supplierId)))
+				.andExpect(jsonPath("$.data.accountCode", is("5040")))
+				.andExpect(jsonPath("$.data.reference", is(expenseReference)))
+				.andExpect(jsonPath("$.data.status", is("posted")))
+				.andExpect(jsonPath("$.data.recordedByUserId", is("user_green_admin")));
+
+		MvcResult journals = mockMvc.perform(get("/api/v1/journal-entries")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].isBalanced", everyItem(is(true))))
+				.andReturn();
+		JsonNode journalData = objectMapper.readTree(journals.getResponse().getContentAsString()).path("data");
+		org.junit.jupiter.api.Assertions.assertTrue(hasJournalReference(journalData, expenseReference, "expense"));
+
+		mockMvc.perform(get("/api/v1/regulatory-report")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.reports[0].expenseTotal", greaterThanOrEqualTo(256000.0)));
+	}
+
+	@Test
+	void supplierAndExpenseControlsAreEnforced() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/suppliers")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "name": "Green Valley Stationery" }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("SUPPLIER_EXISTS")));
+
+		mockMvc.perform(get("/api/v1/suppliers?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/expenses")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "accountCode": "1010",
+								  "amount": 10000,
+								  "channel": "cash",
+								  "reference": "BAD-EXP-ACCOUNT"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_EXPENSE_ACCOUNT")));
+
+		mockMvc.perform(post("/api/v1/expenses")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "supplierId": "supplier_lake_utilities",
+								  "accountCode": "5000",
+								  "amount": 10000,
+								  "channel": "cash",
+								  "reference": "BAD-EXP-SUPPLIER"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_SUPPLIER")));
+
+		mockMvc.perform(post("/api/v1/expenses")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "accountCode": "5000",
+								  "amount": 10000,
+								  "channel": "bank",
+								  "reference": "BAD-EXP-CLOSED",
+								  "expenseDate": "2026-06-15"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("ACCOUNTING_PERIOD_CLOSED")));
 	}
 
 	@Test
@@ -1773,6 +1902,17 @@ class SaccoBackendApplicationTests {
 	private boolean hasJournalSource(JsonNode journalData, String sourceType) {
 		for (JsonNode journal : journalData) {
 			if (sourceType.equals(journal.path("sourceType").asString()) && journal.path("lines").size() >= 2) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private boolean hasJournalReference(JsonNode journalData, String reference, String sourceType) {
+		for (JsonNode journal : journalData) {
+			if (reference.equals(journal.path("reference").asString())
+					&& sourceType.equals(journal.path("sourceType").asString())
+					&& journal.path("isBalanced").asBoolean()) {
 				return true;
 			}
 		}

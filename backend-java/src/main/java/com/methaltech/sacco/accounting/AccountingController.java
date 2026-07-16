@@ -42,11 +42,14 @@ class AccountingController {
     private static final Set<String> PERIOD_STATUSES = Set.of("open", "closed");
     private static final Set<String> STATEMENT_CHANNELS = Set.of("cash", "bank", "mobile_money", "payroll_deduction");
     private static final Set<String> CASH_ACCOUNTS = Set.of("1000", "1010", "1020", "1030");
+    private static final Set<String> EXPENSE_CHANNELS = Set.of("mobile_money", "cash", "bank", "payroll_deduction");
 
     private final AccountingPeriodRepository periodRepository;
     private final AccountingPeriodService periodService;
     private final ChartOfAccountRepository chartRepository;
     private final StatementLineRepository statementLineRepository;
+    private final SupplierRepository supplierRepository;
+    private final ExpenseRepository expenseRepository;
     private final FinancialTransactionRepository transactionRepository;
     private final LoanRepository loanRepository;
     private final LoanRepaymentRepository repaymentRepository;
@@ -58,6 +61,8 @@ class AccountingController {
             AccountingPeriodService periodService,
             ChartOfAccountRepository chartRepository,
             StatementLineRepository statementLineRepository,
+            SupplierRepository supplierRepository,
+            ExpenseRepository expenseRepository,
             FinancialTransactionRepository transactionRepository,
             LoanRepository loanRepository,
             LoanRepaymentRepository repaymentRepository,
@@ -67,6 +72,8 @@ class AccountingController {
         this.periodService = periodService;
         this.chartRepository = chartRepository;
         this.statementLineRepository = statementLineRepository;
+        this.supplierRepository = supplierRepository;
+        this.expenseRepository = expenseRepository;
         this.transactionRepository = transactionRepository;
         this.loanRepository = loanRepository;
         this.repaymentRepository = repaymentRepository;
@@ -153,11 +160,155 @@ class AccountingController {
                         java.util.stream.Stream.concat(
                                 transactionJournalEntries(tenantId, currentSession, accounts).stream(),
                                 loanDisbursementJournalEntries(tenantId, currentSession, accounts).stream()),
-                        loanRepaymentJournalEntries(tenantId, currentSession, accounts).stream())
+                        java.util.stream.Stream.concat(
+                                loanRepaymentJournalEntries(tenantId, currentSession, accounts).stream(),
+                                expenseJournalEntries(tenantId, currentSession, accounts).stream()))
                 .sorted(Comparator.comparing(JournalEntryResponse::postedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                 .toList();
 
         return ResponseEntity.ok(ApiResponse.of(entries));
+    }
+
+    @GetMapping("/suppliers")
+    ResponseEntity<?> listSuppliers(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null && !authService.isPlatform(currentSession.user())) return tenantAccessDenied();
+
+        List<Supplier> suppliers = authService.isPlatform(currentSession.user()) && requestedTenantId == null
+                ? supplierRepository.findAllByOrderByTenantIdAscNameAsc()
+                : supplierRepository.findByTenantIdOrderByNameAsc(tenantId);
+
+        return ResponseEntity.ok(ApiResponse.of(suppliers.stream().map(SupplierResponse::from).toList()));
+    }
+
+    @PostMapping("/suppliers")
+    ResponseEntity<?> createSupplier(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody CreateSupplierRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, body.tenantId());
+        if (tenantId == null) return tenantAccessDenied();
+
+        String name = body.name().trim();
+        if (supplierRepository.existsByTenantIdAndNameIgnoreCase(tenantId, name)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "SUPPLIER_EXISTS", "A supplier with that name already exists for this tenant."));
+        }
+
+        Supplier supplier = supplierRepository.save(new Supplier(
+                "supplier_" + UUID.randomUUID(),
+                tenantId,
+                name,
+                blankToNull(body.phone()),
+                blankToNull(body.email()),
+                blankToNull(body.taxId()),
+                currentSession.user().getId()));
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Created supplier " + supplier.getName(),
+                "supplier",
+                supplier.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(SupplierResponse.from(supplier)));
+    }
+
+    @GetMapping("/expenses")
+    ResponseEntity<?> listExpenses(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null && !authService.isPlatform(currentSession.user())) return tenantAccessDenied();
+
+        List<Expense> expenses = authService.isPlatform(currentSession.user()) && requestedTenantId == null
+                ? expenseRepository.findAllByOrderByTenantIdAscExpenseDateDescCreatedAtDesc()
+                : expenseRepository.findByTenantIdOrderByExpenseDateDescCreatedAtDesc(tenantId);
+
+        return ResponseEntity.ok(ApiResponse.of(expenses.stream().map(ExpenseResponse::from).toList()));
+    }
+
+    @PostMapping("/expenses")
+    ResponseEntity<?> createExpense(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody CreateExpenseRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, body.tenantId());
+        if (tenantId == null) return tenantAccessDenied();
+
+        String accountCode = body.accountCode().trim();
+        ChartOfAccount account = chartRepository.findById(accountCode).orElse(null);
+        if (account == null || !"expense".equals(account.getType())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_EXPENSE_ACCOUNT", "Expense account code must exist and be an expense account."));
+        }
+
+        String channel = body.channel().trim();
+        if (!EXPENSE_CHANNELS.contains(channel)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_EXPENSE_CHANNEL", "Unsupported expense payment channel."));
+        }
+        if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_EXPENSE_AMOUNT", "Expense amount must be greater than zero."));
+        }
+
+        String supplierId = blankToNull(body.supplierId());
+        if (supplierId != null && supplierRepository.findById(supplierId)
+                .filter(supplier -> supplier.getTenantId().equals(tenantId))
+                .isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_SUPPLIER", "Supplier does not exist for this tenant."));
+        }
+
+        LocalDate expenseDate = body.expenseDate() == null ? LocalDate.now() : body.expenseDate();
+        if (periodService.isClosed(tenantId, expenseDate)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "ACCOUNTING_PERIOD_CLOSED", "Accounting period " + periodService.periodKey(expenseDate) + " is closed."));
+        }
+
+        String reference = body.reference() == null || body.reference().isBlank()
+                ? referenceForExpense(tenantId)
+                : body.reference().trim();
+        if (expenseRepository.existsByTenantIdAndReferenceIgnoreCase(tenantId, reference)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "EXPENSE_REFERENCE_EXISTS", "An expense with that reference already exists for this tenant."));
+        }
+
+        Expense expense = expenseRepository.save(new Expense(
+                "expense_" + UUID.randomUUID(),
+                tenantId,
+                supplierId,
+                accountCode,
+                body.amount(),
+                channel,
+                reference,
+                body.description() == null ? "" : body.description().trim(),
+                expenseDate,
+                currentSession.user().getId()));
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Posted expense " + expense.getReference(),
+                "expense",
+                expense.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(ExpenseResponse.from(expense)));
     }
 
     @GetMapping("/statement-lines")
@@ -330,6 +481,32 @@ class AccountingController {
                 .toList();
     }
 
+    private List<JournalEntryResponse> expenseJournalEntries(
+            String tenantId,
+            AuthService.CurrentSession currentSession,
+            Map<String, ChartOfAccount> accounts) {
+        List<Expense> expenses = authService.isPlatform(currentSession.user()) && tenantId == null
+                ? expenseRepository.findAllByOrderByTenantIdAscExpenseDateDescCreatedAtDesc()
+                : expenseRepository.findByTenantIdOrderByExpenseDateDescCreatedAtDesc(tenantId);
+
+        return expenses.stream()
+                .filter(expense -> "posted".equals(expense.getStatus()))
+                .map(expense -> journal(
+                        "je_" + expense.getId(),
+                        expense.getTenantId(),
+                        "expense",
+                        expense.getId(),
+                        expense.getReference(),
+                        expense.getDescription() == null || expense.getDescription().isBlank()
+                                ? "Posted operating expense"
+                                : expense.getDescription(),
+                        expense.getCreatedAt(),
+                        List.of(
+                                line(expense.getAccountCode(), expense.getAmount(), BigDecimal.ZERO, null, accounts),
+                                line(accountForChannel(expense.getChannel()), BigDecimal.ZERO, expense.getAmount(), null, accounts))))
+                .toList();
+    }
+
     private ReconciliationResponse reconciliationForTenants(List<String> tenantIds, AuthService.CurrentSession currentSession) {
         Map<String, ChartOfAccount> accounts = chartRepository.findAllByOrderByCodeAsc()
                 .stream()
@@ -339,7 +516,9 @@ class AccountingController {
                         java.util.stream.Stream.concat(
                                 transactionJournalEntries(tenantId, currentSession, accounts).stream(),
                                 loanDisbursementJournalEntries(tenantId, currentSession, accounts).stream()),
-                        loanRepaymentJournalEntries(tenantId, currentSession, accounts).stream()))
+                        java.util.stream.Stream.concat(
+                                loanRepaymentJournalEntries(tenantId, currentSession, accounts).stream(),
+                                expenseJournalEntries(tenantId, currentSession, accounts).stream())))
                 .toList();
         List<StatementLine> statementLines = tenantIds.size() == 1
                 ? statementLineRepository.findByTenantIdOrderByStatementDateDescCreatedAtDesc(tenantIds.get(0))
@@ -483,6 +662,14 @@ class AccountingController {
         };
     }
 
+    private String referenceForExpense(String tenantId) {
+        return "EXP-" + tenantId.replace("tenant_", "").toUpperCase() + "-" + String.format("%04d", expenseRepository.countByTenantId(tenantId) + 1);
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
         if (authService.isPlatform(currentSession.user()) && (requestedTenantId == null || requestedTenantId.isBlank())) {
             return null;
@@ -513,5 +700,24 @@ class AccountingController {
             @NotBlank String externalReference,
             String description,
             LocalDate statementDate) {
+    }
+
+    record CreateSupplierRequest(
+            String tenantId,
+            @NotBlank String name,
+            String phone,
+            String email,
+            String taxId) {
+    }
+
+    record CreateExpenseRequest(
+            String tenantId,
+            String supplierId,
+            @NotBlank String accountCode,
+            @NotNull BigDecimal amount,
+            @NotBlank String channel,
+            String reference,
+            String description,
+            LocalDate expenseDate) {
     }
 }

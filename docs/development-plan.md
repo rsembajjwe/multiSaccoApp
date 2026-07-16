@@ -396,6 +396,7 @@ Progress:
 - Java financial transactions added with Flyway `financial_transactions`, tenant-scoped listing, pending transaction submission, maker-checker posting/rejection, and member balance updates.
 - Java accounting foundation added with Flyway `chart_of_accounts`, seeded accounts, authenticated `/api/v1/chart-of-accounts`, and tenant-scoped balanced `/api/v1/journal-entries` derived from posted Java financial transactions, loan disbursements, and loan repayments.
 - Java accounting periods added with Flyway `accounting_periods`, tenant-scoped listing, close/reopen status changes, audit events, and closed-period checks for financial transaction posting, loan disbursement, and loan repayment.
+- Java supplier and expense accounting added with Flyway `suppliers`/`expenses`, Lombok-backed entities, tenant-scoped supplier setup, posted expense controls, balanced expense journals, reconciliation matching, and regulatory expense totals.
 - Java reconciliation foundation added with Flyway `statement_lines`, statement import controls, closed-period protection, and `/api/v1/reconciliation` matching statement lines to Java cash ledger movements by tenant, account, reference, and amount.
 - Java regulatory reporting added with Lombok-backed response DTOs, tenant/consolidated supervisory summaries, PAR indicator, reconciliation exception totals, and CSV export text.
 - Java loan applications added with Flyway `loans`, seeded loan files, tenant-scoped `/api/v1/loans`, active-member validation, product/amount/term validation, DSR estimate, and audit events.
