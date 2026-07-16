@@ -47,6 +47,9 @@ Java-backed routes currently implemented:
 - `POST /api/v1/integrations/mobile-money/callback`
 - `GET /api/v1/integrations/mobile-money/callbacks`
 - `GET /api/v1/notifications/deliveries`
+- `GET /api/v1/governance-meetings`
+- `POST /api/v1/governance-meetings`
+- `POST /api/v1/governance-meetings/:id/resolutions`
 - `GET /api/v1/loans`
 - `POST /api/v1/loans`
 - `PATCH /api/v1/loans/:id/status`

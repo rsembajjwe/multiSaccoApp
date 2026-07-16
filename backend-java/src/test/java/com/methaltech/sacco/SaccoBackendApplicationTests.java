@@ -1381,6 +1381,113 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void governanceMeetingsAndResolutionsAreTenantScoped() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String title = "Board Risk Review " + System.currentTimeMillis();
+
+		mockMvc.perform(get("/api/v1/governance-meetings")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+				.andExpect(jsonPath("$.data[0].openResolutions", greaterThanOrEqualTo(1)));
+
+		MvcResult createdMeeting = mockMvc.perform(post("/api/v1/governance-meetings")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "title": "%s",
+								  "meetingType": "board",
+								  "scheduledAt": "2026-08-20T09:00:00Z",
+								  "minutes": "Review risk dashboard and controls."
+								}
+								""".formatted(title)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.title", is(title)))
+				.andExpect(jsonPath("$.data.meetingType", is("board")))
+				.andExpect(jsonPath("$.data.openResolutions", is(0)))
+				.andReturn();
+		String meetingId = objectMapper.readTree(createdMeeting.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(post("/api/v1/governance-meetings/" + meetingId + "/resolutions")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "title": "Strengthen arrears review",
+								  "decision": "Management to submit weekly arrears movement reports.",
+								  "dueDate": "2026-08-31",
+								  "status": "open"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.meetingId", is(meetingId)))
+				.andExpect(jsonPath("$.data.status", is("open")));
+
+		mockMvc.perform(get("/api/v1/regulatory-report")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.reports[0].openResolutions", greaterThanOrEqualTo(2)));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].resourceType", is("governance_resolution")));
+	}
+
+	@Test
+	void governanceControlsAreEnforced() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/governance-meetings?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/governance-meetings")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "title": "Bad Meeting",
+								  "meetingType": "picnic"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_MEETING_TYPE")));
+
+		mockMvc.perform(post("/api/v1/governance-meetings/missing-meeting/resolutions")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{ "title": "Missing meeting resolution" }
+								"""))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code", is("MEETING_NOT_FOUND")));
+
+		mockMvc.perform(post("/api/v1/governance-meetings/meeting_green_0001/resolutions")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "title": "Bad Status",
+								  "status": "stalled"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_RESOLUTION_STATUS")));
+
+		mockMvc.perform(get("/api/v1/governance-meetings?tenantId=tenant_green")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+	}
+
+	@Test
 	void statementLinesAndReconciliationAreAvailable() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 

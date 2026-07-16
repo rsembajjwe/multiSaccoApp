@@ -3,6 +3,7 @@ package com.methaltech.sacco.accounting;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
+import com.methaltech.sacco.governance.GovernanceResolutionRepository;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.loan.Loan;
 import com.methaltech.sacco.loan.LoanRepaymentRepository;
@@ -40,6 +41,7 @@ class RegulatoryReportController {
     private final StatementLineRepository statementLineRepository;
     private final ExpenseRepository expenseRepository;
     private final AssetRepository assetRepository;
+    private final GovernanceResolutionRepository resolutionRepository;
     private final AuthService authService;
 
     @GetMapping
@@ -140,7 +142,7 @@ class RegulatoryReportController {
                 .unbalancedJournalEntries(0)
                 .reconciliationExceptions(reconciliationExceptions)
                 .openComplaints(0)
-                .openResolutions(0)
+                .openResolutions((int) resolutionRepository.countByTenantIdAndStatusNot(tenantId, "closed"))
                 .complianceStatus(reconciliationExceptions == 0 ? "clear" : "review")
                 .build();
     }
@@ -219,7 +221,7 @@ class RegulatoryReportController {
                 .unbalancedJournalEntries(unbalanced)
                 .reconciliationExceptions(reconciliationExceptions)
                 .openComplaints(0)
-                .openResolutions(0)
+                .openResolutions(reports.stream().mapToInt(RegulatoryTenantReport::getOpenResolutions).sum())
                 .complianceStatus(unbalanced == 0 && reconciliationExceptions == 0 ? "clear" : "review")
                 .build();
     }

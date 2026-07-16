@@ -402,6 +402,7 @@ Progress:
 - Java regulatory reporting added with Lombok-backed response DTOs, tenant/consolidated supervisory summaries, PAR indicator, reconciliation exception totals, and CSV export text.
 - Java mobile-money callbacks added with Flyway `mobile_money_callbacks`, public idempotent provider ingestion, member collection posting, loan repayment posting, statement-line creation, and tenant-scoped callback history.
 - Java notifications added with Flyway `notifications`/`notification_deliveries`, payment notification creation, demo SMS/email delivery records, and tenant-scoped delivery history.
+- Java governance meetings added with Flyway `governance_meetings`/`governance_resolutions`, tenant-scoped meeting/resolution capture, audit events, nested meeting responses, and regulatory open-resolution totals.
 - Java loan applications added with Flyway `loans`, seeded loan files, tenant-scoped `/api/v1/loans`, active-member validation, product/amount/term validation, DSR estimate, and audit events.
 - Java loan decisions added with approve/reject status updates, accepted-guarantor approval control, approval-before-disbursement enforcement, active-loan balance creation, and audit events.
 - Java loan guarantors added with Flyway `loan_guarantors`, staff guarantor requests, duplicate/borrower/capacity controls, member accept/reject decisions, loan guarantor count refresh, and audit events.

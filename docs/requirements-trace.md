@@ -78,6 +78,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java regulatory reporting returns tenant-scoped and platform-consolidated supervisory summaries with CSV export text.
 - Java mobile-money callback endpoints ingest provider payments idempotently, post member collections or loan repayments, create reconciliation statement lines, and expose tenant-scoped callback history.
 - Java notification delivery history records payment notifications with demo SMS/email delivery outcomes and tenant access controls.
+- Java governance meeting endpoints capture tenant meetings and resolutions, write audit events, and feed open-resolution regulatory totals.
 - Java loan applications list tenant loan files and validate active borrowers, product, amount, and repayment term before creating staff-submitted loan requests.
 - Java loan decision endpoints enforce guarantor-required approval and block disbursement until a loan is approved.
 - Java loan guarantor endpoints let staff request guarantors and let members accept or reject requests with duplicate, borrower, and guarantee-capacity controls.
