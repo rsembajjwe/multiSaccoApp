@@ -871,6 +871,132 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberContactsAndBeneficiariesAreListedCreatedAndAudited() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/members/member_green_amina/next-of-kin")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+				.andExpect(jsonPath("$.data[0].memberId", is("member_green_amina")));
+
+		MvcResult createdKin = mockMvc.perform(post("/api/v1/members/member_green_amina/next-of-kin")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Grace Nambi",
+								  "relationship": "Mother",
+								  "phone": "+256703333444",
+								  "address": "Kireka",
+								  "primaryContact": true
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.relationship", is("mother")))
+				.andExpect(jsonPath("$.data.primaryContact", is(true)))
+				.andExpect(jsonPath("$.data.createdByUserId", is("user_green_admin")))
+				.andReturn();
+
+		String kinId = objectMapper.readTree(createdKin.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/members/member_green_amina/beneficiaries")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[0].memberId", is("member_green_amina")));
+
+		MvcResult createdBeneficiary = mockMvc.perform(post("/api/v1/members/member_green_amina/beneficiaries")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Eva Nakato",
+								  "relationship": "Daughter",
+								  "phone": "+256704444555",
+								  "allocationPercent": 40
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.relationship", is("daughter")))
+				.andExpect(jsonPath("$.data.allocationPercent", is(40.0)))
+				.andReturn();
+
+		String beneficiaryId = objectMapper.readTree(createdBeneficiary.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].resourceId", hasItem(beneficiaryId)))
+				.andExpect(jsonPath("$.data[*].resourceId", hasItem(kinId)));
+	}
+
+	@Test
+	void memberContactAndBeneficiaryControlsAreEnforced() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/members/member_lake_peter/next-of-kin")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/members/member_lake_peter/beneficiaries")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Denied Beneficiary",
+								  "relationship": "spouse",
+								  "allocationPercent": 10
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/members/member_green_amina/beneficiaries")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Too Much Allocation",
+								  "relationship": "brother",
+								  "allocationPercent": 41
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("ALLOCATION_EXCEEDED")));
+
+		mockMvc.perform(post("/api/v1/members/member_green_daniel/beneficiaries")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Zero Allocation",
+								  "relationship": "sister",
+								  "allocationPercent": 0
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_ALLOCATION")));
+
+		mockMvc.perform(get("/api/v1/members/member_missing/beneficiaries")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code", is("MEMBER_NOT_FOUND")));
+
+		mockMvc.perform(get("/api/v1/members/member_green_amina/beneficiaries")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].memberId", everyItem(is("member_green_amina"))));
+	}
+
+	@Test
 	void invalidOrDuplicateMemberRegistrationIsRejected() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 

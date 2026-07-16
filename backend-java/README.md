@@ -38,6 +38,7 @@ cd backend-java
 - `/api/v1/audit-events` for authenticated tenant-scoped audit listing and manual audit capture.
 - `/api/v1/branches` for authenticated tenant-scoped branch listing and creation.
 - `/api/v1/members` for authenticated tenant-scoped member listing, registration, detail, and status updates.
+- `/api/v1/members/{memberId}/next-of-kin` and `/api/v1/members/{memberId}/beneficiaries` for tenant-scoped member contacts and beneficiary allocations.
 - `/api/v1/members/{memberId}/documents` for tenant-scoped KYC/document metadata listing and upload.
 - `/api/v1/member-auth/login`, `/api/v1/member-auth/me`, and `/api/v1/member-auth/logout` for member portal sessions and balances.
 - `/api/v1/member-auth/notifications` for authenticated-member-only in-app notification history.

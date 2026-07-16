@@ -31,6 +31,10 @@ Java-backed routes currently implemented:
 - `POST /api/v1/members`
 - `GET /api/v1/members/:id`
 - `PATCH /api/v1/members/:id/status`
+- `GET /api/v1/members/:id/next-of-kin`
+- `POST /api/v1/members/:id/next-of-kin`
+- `GET /api/v1/members/:id/beneficiaries`
+- `POST /api/v1/members/:id/beneficiaries`
 - `GET /api/v1/members/:id/documents`
 - `POST /api/v1/members/:id/documents`
 - `POST /api/v1/member-auth/login`
@@ -143,6 +147,10 @@ All JSON responses should follow one of these shapes:
 | POST | `/members` | Register member. | SACCO staff |
 | GET | `/members/:id` | Get member profile. | Required |
 | PATCH | `/members/:id/status` | Approve, suspend, activate, or exit member. | Authorized approver |
+| GET | `/members/:id/next-of-kin` | List member next-of-kin contacts. | Required |
+| POST | `/members/:id/next-of-kin` | Add a member next-of-kin contact. | SACCO staff |
+| GET | `/members/:id/beneficiaries` | List member beneficiaries and allocations. | Required |
+| POST | `/members/:id/beneficiaries` | Add a member beneficiary allocation. | SACCO staff |
 | GET | `/members/:id/documents` | List member documents. | Required |
 | POST | `/members/:id/documents` | Upload/register member document metadata. | SACCO staff |
 | GET | `/financial-transactions` | List tenant financial transactions. | Required |

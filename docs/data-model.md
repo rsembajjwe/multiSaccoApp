@@ -586,6 +586,33 @@ Governance control rule: meetings, resolutions, and complaints are tenant-scoped
 | storage_key | text | Object storage key. |
 | verification_status | enum | `not_verified`, `pending_verification`, `verified`, `rejected`, `expired`. |
 
+### member_next_of_kin
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Required tenant reference. |
+| member_id | uuid/string | Member reference. |
+| full_name | text | Contact name. |
+| relationship | text | Relationship to member. |
+| phone | text | Contact telephone. |
+| address | text | Optional contact address. |
+| primary_contact | boolean | Whether this is the preferred emergency contact. |
+| created_by_user_id | uuid/string | Staff user who captured the contact. |
+
+### member_beneficiaries
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | Required tenant reference. |
+| member_id | uuid/string | Member reference. |
+| full_name | text | Beneficiary name. |
+| relationship | text | Relationship to member. |
+| phone | text | Optional beneficiary telephone. |
+| allocation_percent | decimal | Percentage allocation, with total allocations capped at 100 per member. |
+| created_by_user_id | uuid/string | Staff user who captured the beneficiary. |
+
 ### approval_workflows
 
 | Field | Type | Notes |

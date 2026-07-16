@@ -9,6 +9,8 @@ import com.methaltech.sacco.tenant.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -54,6 +56,8 @@ class MemberController {
 
     private final MemberRepository memberRepository;
     private final MemberDocumentRepository memberDocumentRepository;
+    private final MemberNextOfKinRepository memberNextOfKinRepository;
+    private final MemberBeneficiaryRepository memberBeneficiaryRepository;
     private final BranchLookup branchLookup;
     private final TenantService tenantService;
     private final AuthService authService;
@@ -63,6 +67,8 @@ class MemberController {
     MemberController(
             MemberRepository memberRepository,
             MemberDocumentRepository memberDocumentRepository,
+            MemberNextOfKinRepository memberNextOfKinRepository,
+            MemberBeneficiaryRepository memberBeneficiaryRepository,
             BranchLookup branchLookup,
             TenantService tenantService,
             AuthService authService,
@@ -70,6 +76,8 @@ class MemberController {
             PasswordHasher passwordHasher) {
         this.memberRepository = memberRepository;
         this.memberDocumentRepository = memberDocumentRepository;
+        this.memberNextOfKinRepository = memberNextOfKinRepository;
+        this.memberBeneficiaryRepository = memberBeneficiaryRepository;
         this.branchLookup = branchLookup;
         this.tenantService = tenantService;
         this.authService = authService;
@@ -168,6 +176,124 @@ class MemberController {
                 .<ResponseEntity<?>>map(member -> {
                     if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
                     return ResponseEntity.ok(ApiResponse.of(MemberResponse.from(member)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @GetMapping("/{memberId}/next-of-kin")
+    ResponseEntity<?> listNextOfKin(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    return ResponseEntity.ok(ApiResponse.of(memberNextOfKinRepository.findByMemberIdOrderByCreatedAtDesc(memberId).stream()
+                            .map(MemberNextOfKinResponse::from)
+                            .toList()));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @PostMapping("/{memberId}/next-of-kin")
+    ResponseEntity<?> createNextOfKin(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @Valid @RequestBody CreateNextOfKinRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    MemberNextOfKin nextOfKin = memberNextOfKinRepository.save(new MemberNextOfKin(
+                            "kin_" + UUID.randomUUID(),
+                            member.getTenantId(),
+                            member.getId(),
+                            body.fullName().trim(),
+                            body.relationship().trim().toLowerCase(),
+                            body.phone().trim(),
+                            blankToDefault(body.address()),
+                            body.primaryContact() != null && body.primaryContact(),
+                            currentSession.user().getId()));
+                    auditService.record(
+                            member.getTenantId(),
+                            currentSession.user(),
+                            "Added next of kin for member " + member.getMembershipNo(),
+                            "member_next_of_kin",
+                            nextOfKin.getId(),
+                            request.getRemoteAddr());
+                    return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MemberNextOfKinResponse.from(nextOfKin)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @GetMapping("/{memberId}/beneficiaries")
+    ResponseEntity<?> listBeneficiaries(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    return ResponseEntity.ok(ApiResponse.of(memberBeneficiaryRepository.findByMemberIdOrderByCreatedAtDesc(memberId).stream()
+                            .map(MemberBeneficiaryResponse::from)
+                            .toList()));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @PostMapping("/{memberId}/beneficiaries")
+    ResponseEntity<?> createBeneficiary(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @Valid @RequestBody CreateBeneficiaryRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        BigDecimal allocationPercent = body.allocationPercent().stripTrailingZeros();
+        if (allocationPercent.compareTo(BigDecimal.ZERO) <= 0 || allocationPercent.compareTo(new BigDecimal("100")) > 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_ALLOCATION", "Beneficiary allocation must be greater than 0 and not exceed 100."));
+        }
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    BigDecimal allocated = memberBeneficiaryRepository.findByMemberIdOrderByCreatedAtDesc(memberId).stream()
+                            .map(MemberBeneficiary::getAllocationPercent)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    if (allocated.add(allocationPercent).compareTo(new BigDecimal("100")) > 0) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "ALLOCATION_EXCEEDED", "Beneficiary allocations cannot exceed 100 percent."));
+                    }
+                    MemberBeneficiary beneficiary = memberBeneficiaryRepository.save(new MemberBeneficiary(
+                            "beneficiary_" + UUID.randomUUID(),
+                            member.getTenantId(),
+                            member.getId(),
+                            body.fullName().trim(),
+                            body.relationship().trim().toLowerCase(),
+                            blankToDefault(body.phone()),
+                            allocationPercent,
+                            currentSession.user().getId()));
+                    auditService.record(
+                            member.getTenantId(),
+                            currentSession.user(),
+                            "Added beneficiary for member " + member.getMembershipNo(),
+                            "member_beneficiary",
+                            beneficiary.getId(),
+                            request.getRemoteAddr());
+                    return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MemberBeneficiaryResponse.from(beneficiary)));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
@@ -325,5 +451,20 @@ class MemberController {
             @NotBlank String documentType,
             @NotBlank String storageKey,
             String verificationStatus) {
+    }
+
+    record CreateNextOfKinRequest(
+            @NotBlank String fullName,
+            @NotBlank String relationship,
+            @NotBlank String phone,
+            String address,
+            Boolean primaryContact) {
+    }
+
+    record CreateBeneficiaryRequest(
+            @NotBlank String fullName,
+            @NotBlank String relationship,
+            String phone,
+            @NotNull BigDecimal allocationPercent) {
     }
 }
