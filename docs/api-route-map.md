@@ -64,6 +64,10 @@ Java-backed routes currently implemented:
 - `POST /api/v1/loans/:id/repayments`
 - `GET /api/v1/member-auth/guarantor-requests`
 - `PATCH /api/v1/member-auth/guarantor-requests/:id/status`
+- `GET /api/v1/approval-workflows`
+- `POST /api/v1/approval-workflows`
+- `GET /api/v1/approval-decisions`
+- `POST /api/v1/approval-decisions`
 
 All API responses include baseline security headers. Public staff login, member login, and mobile-money callback endpoints are rate limited and return `429 RATE_LIMITED` with `Retry-After` when the development limit is exceeded.
 
@@ -240,5 +244,9 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/loans/:id/guarantors`
 - `GET /api/v1/member-auth/guarantor-requests`
 - `PATCH /api/v1/member-auth/guarantor-requests/:id/status`
+- `GET /api/v1/approval-workflows`
+- `POST /api/v1/approval-workflows`
+- `GET /api/v1/approval-decisions`
+- `POST /api/v1/approval-decisions`
 
 The development server uses an in-memory store seeded at startup. PostgreSQL migrations are documented separately and will replace the development store in the next backend step.

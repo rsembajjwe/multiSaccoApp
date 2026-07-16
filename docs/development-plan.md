@@ -410,6 +410,7 @@ Progress:
 - Java loan decisions added with approve/reject status updates, accepted-guarantor approval control, approval-before-disbursement enforcement, active-loan balance creation, and audit events.
 - Java loan guarantors added with Flyway `loan_guarantors`, staff guarantor requests, duplicate/borrower/capacity controls, member accept/reject decisions, loan guarantor count refresh, and audit events.
 - Java loan repayments added with Flyway `loan_repayments`, staff repayment capture, duplicate-reference protection, active-loan and overpayment controls, repayment totals, close-on-full-payment behavior, and audit events.
+- Java approval workflows added with Flyway `approval_workflows`/`approval_decisions`, tenant-scoped workflow setup, approver decision history, rejection/correction reason controls, and audit events.
 
 Recommended stack:
 

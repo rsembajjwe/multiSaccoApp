@@ -2528,6 +2528,149 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.error.code", is("INVALID_GUARANTOR_STATUS")));
 	}
 
+	@Test
+	void approvalWorkflowsAndDecisionsAreTenantScopedAndAudited() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/approval-workflows")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		MvcResult createdWorkflow = mockMvc.perform(post("/api/v1/approval-workflows")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Expense approval test",
+								  "module": "expenses"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.module", is("expenses")))
+				.andExpect(jsonPath("$.data.active", is(true)))
+				.andExpect(jsonPath("$.data.createdByUserId", is("user_green_admin")))
+				.andReturn();
+
+		String workflowId = objectMapper.readTree(createdWorkflow.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(post("/api/v1/approval-decisions")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "workflowId": "%s",
+								  "resourceType": "expense",
+								  "resourceId": "expense_green_0001",
+								  "decision": "approved"
+								}
+								""".formatted(workflowId)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.workflowId", is(workflowId)))
+				.andExpect(jsonPath("$.data.decision", is("approved")))
+				.andExpect(jsonPath("$.data.decidedByUserId", is("user_green_admin")));
+
+		mockMvc.perform(get("/api/v1/approval-decisions?decision=approved")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data[0].resourceId", is("expense_green_0001")))
+				.andExpect(jsonPath("$.data[*].decision", everyItem(is("approved"))));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].resourceType", is("approval_decision")));
+	}
+
+	@Test
+	void approvalControlsAreEnforced() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/approval-workflows?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/approval-workflows")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Unsupported approval",
+								  "module": "bad_module"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_APPROVAL_MODULE")));
+
+		mockMvc.perform(post("/api/v1/approval-decisions")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "workflowId": "workflow_missing",
+								  "resourceType": "loan",
+								  "resourceId": "loan_missing",
+								  "decision": "approved"
+								}
+								"""))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code", is("APPROVAL_WORKFLOW_NOT_FOUND")));
+
+		mockMvc.perform(post("/api/v1/approval-decisions")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "workflowId": "workflow_green_loans",
+								  "resourceType": "loan",
+								  "resourceId": "loan_green_0001",
+								  "decision": "maybe"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_APPROVAL_DECISION")));
+
+		mockMvc.perform(post("/api/v1/approval-decisions")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "workflowId": "workflow_green_loans",
+								  "resourceType": "loan",
+								  "resourceId": "loan_green_0001",
+								  "decision": "rejected"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("APPROVAL_REASON_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/approval-decisions")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "workflowId": "workflow_green_loans",
+								  "resourceType": "loan",
+								  "resourceId": "loan_green_0001",
+								  "decision": "approved"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("WORKFLOW_TENANT_MISMATCH")));
+
+		mockMvc.perform(get("/api/v1/approval-workflows?tenantId=tenant_green")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+	}
+
 	private String loginAndReturnToken() throws Exception {
 		return loginAndReturnToken("admin@platform.local", "Admin@12345");
 	}
