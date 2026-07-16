@@ -32,6 +32,7 @@ cd backend-java
 - `/api/v1/auth/login` for seeded staff users, using PBKDF2 password verification and safe user responses.
 - `/api/v1/auth/me` and `/api/v1/auth/logout` backed by hashed bearer-token sessions.
 - `/api/v1/users` for authenticated tenant-scoped user listing and staff creation.
+- `/api/v1/roles` and `/api/v1/permissions` for seeded permission catalogs, tenant-scoped role listing, and custom role creation.
 - `/api/v1/audit-events` for authenticated tenant-scoped audit listing and manual audit capture.
 - `/api/v1/branches` for authenticated tenant-scoped branch listing and creation.
 - `/api/v1/members` for authenticated tenant-scoped member listing, registration, detail, and status updates.

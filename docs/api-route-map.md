@@ -16,6 +16,9 @@ Java-backed routes currently implemented:
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/users`
 - `POST /api/v1/users`
+- `GET /api/v1/roles`
+- `POST /api/v1/roles`
+- `GET /api/v1/permissions`
 - `GET /api/v1/audit-events`
 - `POST /api/v1/audit-events`
 - `GET /api/v1/branches`
@@ -194,6 +197,7 @@ Implemented in the no-dependency development server:
 - `GET /api/v1/member-auth/notifications`
 - `POST /api/v1/member-auth/logout`
 - `GET /api/v1/roles`
+- `POST /api/v1/roles`
 - `GET /api/v1/permissions`
 - `GET /api/v1/audit-events`
 - `POST /api/v1/audit-events`

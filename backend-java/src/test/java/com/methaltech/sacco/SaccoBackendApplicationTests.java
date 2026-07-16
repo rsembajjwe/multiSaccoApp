@@ -2671,6 +2671,120 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
 	}
 
+	@Test
+	void rolesAndPermissionsAreTenantScopedAndAudited() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/permissions")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(20)))
+				.andExpect(jsonPath("$.data[?(@.id == 'members:view')].module").value("members"))
+				.andExpect(jsonPath("$.data[?(@.id == 'roles:create')].action").value("create"));
+
+		mockMvc.perform(get("/api/v1/roles")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		MvcResult createdRole = mockMvc.perform(post("/api/v1/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Cashier Test",
+								  "permissionIds": ["members:view", "transactions:create", "transactions:create"]
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.name", is("Cashier Test")))
+				.andExpect(jsonPath("$.data.protectedRole", is(false)))
+				.andExpect(jsonPath("$.data.createdByUserId", is("user_green_admin")))
+				.andExpect(jsonPath("$.data.permissionIds.length()", is(2)))
+				.andReturn();
+
+		String roleId = objectMapper.readTree(createdRole.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/roles")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[?(@.id == '%s')].permissionIds.length()".formatted(roleId)).value(2));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].resourceType", is("role")))
+				.andExpect(jsonPath("$.data[0].resourceId", is(roleId)));
+	}
+
+	@Test
+	void roleControlsAreEnforced() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/roles?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "name": "Lake Cross Tenant"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Unknown Permission Role",
+								  "permissionIds": ["members:view", "unknown:permission"]
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("UNKNOWN_PERMISSION")));
+
+		mockMvc.perform(post("/api/v1/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "SACCO Administrator",
+								  "permissionIds": ["roles:view"]
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("ROLE_EXISTS")));
+
+		mockMvc.perform(get("/api/v1/roles?tenantId=tenant_green")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		mockMvc.perform(post("/api/v1/roles")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "name": "Platform Created Test",
+								  "permissionIds": ["reports:view"]
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.permissionIds[0]", is("reports:view")));
+	}
+
 	private String loginAndReturnToken() throws Exception {
 		return loginAndReturnToken("admin@platform.local", "Admin@12345");
 	}

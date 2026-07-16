@@ -67,6 +67,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java auth sessions store hashed bearer tokens and support current-user lookup plus logout revocation.
 - Java user administration enforces tenant-scoped listing and blocks SACCO admins from creating users in another tenant.
 - Java audit events are tenant-scoped and capture manual entries plus automatic user-creation events.
+- Java role and permission endpoints list the platform permission catalog and create tenant-scoped custom roles with validated permission IDs.
 - Java SACCO onboarding supports platform tenant creation/status review and blocks SACCO users from viewing or modifying other tenants.
 - Java branch management lists and creates tenant-scoped branches while blocking cross-tenant branch access.
 - Java member management registers and lists branch-linked members with tenant isolation, balance fields, KYC state, and status updates.
