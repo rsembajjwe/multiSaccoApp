@@ -71,6 +71,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java SACCO onboarding supports platform tenant creation/status review and blocks SACCO users from viewing or modifying other tenants.
 - Java branch management lists and creates tenant-scoped branches while blocking cross-tenant branch access.
 - Java member management registers and lists branch-linked members with tenant isolation, balance fields, KYC state, and status updates.
+- Java member document endpoints store KYC/document metadata per member with tenant isolation, validation, and audit logging.
 - Java member self-service authentication lets active members login and view only their own profile, tenant, branch, and savings/share/welfare balances.
 - Java financial transactions validate tenant, member, branch, type, channel, and amount before maker-checker posting updates member balances.
 - Java accounting foundation exposes the seeded chart of accounts and balanced tenant-scoped journal entries derived from posted Java financial transactions, loan disbursements, and loan repayments.

@@ -393,6 +393,7 @@ Progress:
 - Java SACCO onboarding added with authenticated tenant detail, platform-only tenant creation, platform-only status updates, tenant access checks, and audit events.
 - Java branch management added with Flyway `branches`, seeded branch records, tenant-scoped `/api/v1/branches`, duplicate-code checks, and audit events.
 - Java member management added with Flyway `members`, seeded member balances, tenant-scoped `/api/v1/members`, registration, detail, status updates, and audit events.
+- Java member document metadata added with Flyway `member_documents`, seeded KYC records, member-scoped listing/upload, validation, tenant isolation, and audit events.
 - Java member self-service auth added with Flyway `member_sessions`, member login by membership number/phone/email, balance-aware `/api/v1/member-auth/me`, logout revocation, and member audit events.
 - Java member mobile self-service added with `/api/v1/member-auth/mobile-dashboard` and `/api/v1/member-auth/mobile-loans`, server-confirmed dashboard projection, mobile loan validation, loan notification creation, and member audit events.
 - Java subscription billing added with Flyway `subscription_packages`/`subscriptions`/`subscription_payments`, UGX 5,000/member annual billing up to 250 members with a 100-member minimum, fixed tiers above 250 members, platform-only payment posting, idempotent references, closed-period controls, and balanced subscription payment journals.

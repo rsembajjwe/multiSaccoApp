@@ -690,6 +690,102 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberDocumentsAreListedCreatedAndAudited() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/members/member_green_amina/documents")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+				.andExpect(jsonPath("$.data[0].documentType", is("national_id")))
+				.andExpect(jsonPath("$.data[0].verificationStatus", is("verified")));
+
+		MvcResult createdDocument = mockMvc.perform(post("/api/v1/members/member_green_amina/documents")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "documentType": "signature",
+								  "storageKey": "tenant_green/members/GVS-0001/signature.png"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.documentType", is("signature")))
+				.andExpect(jsonPath("$.data.verificationStatus", is("pending_verification")))
+				.andExpect(jsonPath("$.data.uploadedByUserId", is("user_green_admin")))
+				.andReturn();
+
+		String documentId = objectMapper.readTree(createdDocument.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].resourceType", is("member_document")))
+				.andExpect(jsonPath("$.data[0].resourceId", is(documentId)));
+	}
+
+	@Test
+	void memberDocumentControlsAreEnforced() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/members/member_lake_peter/documents")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/members/member_lake_peter/documents")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "documentType": "photo",
+								  "storageKey": "tenant_lake/members/LFS-0001/photo.jpg"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/members/member_green_amina/documents")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "documentType": "unknown",
+								  "storageKey": "tenant_green/members/GVS-0001/unknown.pdf"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_DOCUMENT_TYPE")));
+
+		mockMvc.perform(post("/api/v1/members/member_green_amina/documents")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "documentType": "photo",
+								  "storageKey": "tenant_green/members/GVS-0001/photo.jpg",
+								  "verificationStatus": "stalled"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_DOCUMENT_STATUS")));
+
+		mockMvc.perform(get("/api/v1/members/member_missing/documents")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code", is("MEMBER_NOT_FOUND")));
+
+		mockMvc.perform(get("/api/v1/members/member_green_amina/documents")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].memberId", everyItem(is("member_green_amina"))));
+	}
+
+	@Test
 	void invalidOrDuplicateMemberRegistrationIsRejected() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 

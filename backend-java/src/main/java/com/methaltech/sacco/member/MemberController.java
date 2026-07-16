@@ -44,8 +44,16 @@ class MemberController {
             "dormant",
             "suspended",
             "exited");
+    private static final Set<String> ALLOWED_DOCUMENT_TYPES = Set.of(
+            "national_id",
+            "photo",
+            "signature",
+            "bylaws",
+            "registration_certificate",
+            "other");
 
     private final MemberRepository memberRepository;
+    private final MemberDocumentRepository memberDocumentRepository;
     private final BranchLookup branchLookup;
     private final TenantService tenantService;
     private final AuthService authService;
@@ -54,12 +62,14 @@ class MemberController {
 
     MemberController(
             MemberRepository memberRepository,
+            MemberDocumentRepository memberDocumentRepository,
             BranchLookup branchLookup,
             TenantService tenantService,
             AuthService authService,
             AuditService auditService,
             PasswordHasher passwordHasher) {
         this.memberRepository = memberRepository;
+        this.memberDocumentRepository = memberDocumentRepository;
         this.branchLookup = branchLookup;
         this.tenantService = tenantService;
         this.authService = authService;
@@ -163,6 +173,68 @@ class MemberController {
                         .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
     }
 
+    @GetMapping("/{memberId}/documents")
+    ResponseEntity<?> listMemberDocuments(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    return ResponseEntity.ok(ApiResponse.of(memberDocumentRepository.findByMemberIdOrderByCreatedAtDesc(memberId).stream()
+                            .map(MemberDocumentResponse::from)
+                            .toList()));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @PostMapping("/{memberId}/documents")
+    ResponseEntity<?> createMemberDocument(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @Valid @RequestBody CreateMemberDocumentRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String documentType = normalizedOrDefault(body.documentType(), "");
+        if (!ALLOWED_DOCUMENT_TYPES.contains(documentType)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_DOCUMENT_TYPE", "Unsupported member document type."));
+        }
+        String verificationStatus = normalizedOrDefault(body.verificationStatus(), "pending_verification");
+        if (!ALLOWED_KYC_STATUSES.contains(verificationStatus)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_DOCUMENT_STATUS", "Unsupported member document status."));
+        }
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    MemberDocument document = memberDocumentRepository.save(new MemberDocument(
+                            "member_document_" + UUID.randomUUID(),
+                            member.getTenantId(),
+                            member.getId(),
+                            documentType,
+                            body.storageKey().trim(),
+                            verificationStatus,
+                            currentSession.user().getId()));
+                    auditService.record(
+                            member.getTenantId(),
+                            currentSession.user(),
+                            "Uploaded " + document.getDocumentType() + " for member " + member.getMembershipNo(),
+                            "member_document",
+                            document.getId(),
+                            request.getRemoteAddr());
+                    return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MemberDocumentResponse.from(document)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
     @PatchMapping("/{memberId}/status")
     ResponseEntity<?> updateMemberStatus(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -247,5 +319,11 @@ class MemberController {
     }
 
     record UpdateMemberStatusRequest(@NotBlank String status) {
+    }
+
+    record CreateMemberDocumentRequest(
+            @NotBlank String documentType,
+            @NotBlank String storageKey,
+            String verificationStatus) {
     }
 }
