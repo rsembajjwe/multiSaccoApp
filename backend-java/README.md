@@ -34,6 +34,7 @@ cd backend-java
 - `/api/v1/users` for authenticated tenant-scoped user listing and staff creation.
 - `/api/v1/audit-events` for authenticated tenant-scoped audit listing and manual audit capture.
 - `/api/v1/branches` for authenticated tenant-scoped branch listing and creation.
+- `/api/v1/members` for authenticated tenant-scoped member listing, registration, detail, and status updates.
 - Baseline security headers on responses.
 - H2 development datasource configured in PostgreSQL compatibility mode.
 - PostgreSQL and Flyway dependencies included for the production database path.

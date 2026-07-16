@@ -14,6 +14,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -445,6 +446,151 @@ class SaccoBackendApplicationTests {
 								  "tenantId": "tenant_lake",
 								  "code": "DENIED",
 								  "name": "Denied Branch"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+	}
+
+	@Test
+	void membersAreListedAndFetchedWithTenantScope() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/members")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(3)))
+				.andExpect(jsonPath("$.data[0].passwordHash").doesNotExist());
+
+		mockMvc.perform(get("/api/v1/members")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		mockMvc.perform(get("/api/v1/members/member_green_amina")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.membershipNo", is("GVS-0001")))
+				.andExpect(jsonPath("$.data.savingsBalance", is(2450000.00)));
+
+		mockMvc.perform(get("/api/v1/members/member_lake_peter")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+	}
+
+	@Test
+	void saccoUserCanRegisterOwnMemberAndAuditIsWritten() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String membershipNo = "GVS-SM-" + System.currentTimeMillis();
+
+		MvcResult createdMember = mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "branchId": "branch_green_main",
+								  "membershipNo": "%s",
+								  "fullName": "Smoke Member",
+								  "phone": "+256700333444",
+								  "email": "smoke-member@example.local",
+								  "nationalId": "CM1234567SMK",
+								  "kycStatus": "verified"
+								}
+								""".formatted(membershipNo)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.membershipNo", is(membershipNo)))
+				.andExpect(jsonPath("$.data.status", is("pending_approval")))
+				.andExpect(jsonPath("$.data.kycStatus", is("verified")))
+				.andExpect(jsonPath("$.data.savingsBalance", is(0)))
+				.andExpect(jsonPath("$.data.passwordHash").doesNotExist())
+				.andReturn();
+
+		String memberId = objectMapper.readTree(createdMember.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].action", is("Registered member " + membershipNo)))
+				.andExpect(jsonPath("$.data[0].resourceType", is("member")))
+				.andExpect(jsonPath("$.data[0].resourceId", is(memberId)));
+	}
+
+	@Test
+	void memberRegistrationAutoGeneratesMembershipNoAndStatusCanBeUpdated() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		MvcResult createdMember = mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "branchId": "branch_green_main",
+								  "fullName": "Generated Number Member",
+								  "memberType": "group",
+								  "phone": "+256700777888"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.membershipNo", startsWith("GVS-")))
+				.andExpect(jsonPath("$.data.memberType", is("group")))
+				.andReturn();
+
+		String memberId = objectMapper.readTree(createdMember.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/members/" + memberId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "active" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("active")));
+	}
+
+	@Test
+	void invalidOrDuplicateMemberRegistrationIsRejected() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "branchId": "branch_lake_main",
+								  "fullName": "Wrong Branch",
+								  "phone": "+256700999000"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_BRANCH")));
+
+		mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "branchId": "branch_green_main",
+								  "membershipNo": "GVS-0001",
+								  "fullName": "Duplicate Member",
+								  "phone": "+256700999001"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("MEMBER_EXISTS")));
+
+		mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "branchId": "branch_lake_main",
+								  "fullName": "Denied Member",
+								  "phone": "+256700999002"
 								}
 								"""))
 				.andExpect(status().isForbidden())

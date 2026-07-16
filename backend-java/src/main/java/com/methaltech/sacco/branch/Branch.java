@@ -8,7 +8,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "branches")
-class Branch {
+public class Branch {
 
     @Id
     private String id;
@@ -52,7 +52,7 @@ class Branch {
         return id;
     }
 
-    String getTenantId() {
+    public String getTenantId() {
         return tenantId;
     }
 

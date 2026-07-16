@@ -85,6 +85,10 @@ GET http://127.0.0.1:8080/api/v1/audit-events
 POST http://127.0.0.1:8080/api/v1/audit-events
 GET http://127.0.0.1:8080/api/v1/branches
 POST http://127.0.0.1:8080/api/v1/branches
+GET http://127.0.0.1:8080/api/v1/members
+POST http://127.0.0.1:8080/api/v1/members
+GET http://127.0.0.1:8080/api/v1/members/{memberId}
+PATCH http://127.0.0.1:8080/api/v1/members/{memberId}/status
 ```
 
 ```powershell
