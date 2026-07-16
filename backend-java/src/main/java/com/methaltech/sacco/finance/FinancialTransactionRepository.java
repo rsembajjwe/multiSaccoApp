@@ -7,4 +7,5 @@ public interface FinancialTransactionRepository extends JpaRepository<FinancialT
     List<FinancialTransaction> findAllByOrderByTenantIdAscCreatedAtDesc();
     List<FinancialTransaction> findByTenantIdOrderByCreatedAtDesc(String tenantId);
     long countByTenantId(String tenantId);
+    boolean existsByTenantIdAndReferenceIgnoreCase(String tenantId, String reference);
 }

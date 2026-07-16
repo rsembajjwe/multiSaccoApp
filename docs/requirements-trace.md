@@ -76,6 +76,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java fixed asset endpoints register tenant assets, block closed-period acquisitions, derive acquisition/depreciation journals, and include asset totals in regulatory reporting.
 - Java reconciliation imports statement lines, blocks imports in closed periods, and reports matched/unmatched cash ledger movements.
 - Java regulatory reporting returns tenant-scoped and platform-consolidated supervisory summaries with CSV export text.
+- Java mobile-money callback endpoints ingest provider payments idempotently, post member collections or loan repayments, create reconciliation statement lines, and expose tenant-scoped callback history.
 - Java loan applications list tenant loan files and validate active borrowers, product, amount, and repayment term before creating staff-submitted loan requests.
 - Java loan decision endpoints enforce guarantor-required approval and block disbursement until a loan is approved.
 - Java loan guarantor endpoints let staff request guarantors and let members accept or reject requests with duplicate, borrower, and guarantee-capacity controls.

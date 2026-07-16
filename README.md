@@ -109,6 +109,8 @@ GET http://127.0.0.1:8080/api/v1/statement-lines
 POST http://127.0.0.1:8080/api/v1/statement-lines
 GET http://127.0.0.1:8080/api/v1/reconciliation
 GET http://127.0.0.1:8080/api/v1/regulatory-report
+POST http://127.0.0.1:8080/api/v1/integrations/mobile-money/callback
+GET http://127.0.0.1:8080/api/v1/integrations/mobile-money/callbacks
 GET http://127.0.0.1:8080/api/v1/loans
 POST http://127.0.0.1:8080/api/v1/loans
 PATCH http://127.0.0.1:8080/api/v1/loans/{loanId}/status

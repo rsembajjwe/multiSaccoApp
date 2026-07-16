@@ -82,6 +82,35 @@ public class FinancialTransaction {
         this.updatedAt = this.createdAt;
     }
 
+    public static FinancialTransaction postedProviderTransaction(
+            String id,
+            String tenantId,
+            String branchId,
+            String memberId,
+            String type,
+            String channel,
+            BigDecimal amount,
+            String reference,
+            String narration,
+            String userId) {
+        FinancialTransaction transaction = new FinancialTransaction(
+                id,
+                tenantId,
+                branchId,
+                memberId,
+                type,
+                channel,
+                amount,
+                reference,
+                narration,
+                userId);
+        transaction.status = "posted";
+        transaction.checkerUserId = userId;
+        transaction.postedAt = transaction.createdAt;
+        transaction.updatedAt = transaction.createdAt;
+        return transaction;
+    }
+
     void post(String checkerUserId) {
         this.status = "posted";
         this.checkerUserId = checkerUserId;

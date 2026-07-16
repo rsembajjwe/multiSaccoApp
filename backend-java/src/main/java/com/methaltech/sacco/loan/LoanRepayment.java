@@ -43,7 +43,7 @@ public class LoanRepayment {
     protected LoanRepayment() {
     }
 
-    LoanRepayment(
+    public LoanRepayment(
             String id,
             String tenantId,
             String loanId,
