@@ -99,6 +99,20 @@ public class Loan {
         this.updatedAt = this.createdAt;
     }
 
+    public static Loan submitted(
+            String id,
+            String tenantId,
+            String memberId,
+            String product,
+            BigDecimal amount,
+            int dsr,
+            int repaymentMonths,
+            String purpose,
+            String channel,
+            String submittedByMemberId) {
+        return new Loan(id, tenantId, memberId, product, amount, dsr, repaymentMonths, purpose, channel, submittedByMemberId);
+    }
+
     void decide(String status, String actorUserId, String reason) {
         this.status = status;
         this.stage = "approved".equals(status) ? "Ready for Disbursement" : "Rejected";

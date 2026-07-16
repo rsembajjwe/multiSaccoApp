@@ -30,6 +30,19 @@ public class NotificationService {
         return notification;
     }
 
+    public Notification notifyLoanApplicationSubmitted(Member member, String product, BigDecimal amount, String loanId) {
+        String message = "Mobile loan application " + product + " for UGX " + amount + " was submitted.";
+        return notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                "loan_application_submitted",
+                "Loan application submitted",
+                message,
+                "loan",
+                loanId));
+    }
+
     private void createDelivery(Notification notification, Member member, String channel, String provider, String recipient, String message) {
         if (recipient == null || recipient.isBlank()) return;
         deliveryRepository.save(new NotificationDelivery(

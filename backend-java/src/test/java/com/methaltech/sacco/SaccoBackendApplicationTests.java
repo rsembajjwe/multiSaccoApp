@@ -826,6 +826,103 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberMobileDashboardAndLoanSubmissionUseServerConfirmedRecords() throws Exception {
+		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+
+		mockMvc.perform(get("/api/v1/member-auth/mobile-dashboard")
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.member.id", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.tenant.id", is("tenant_green")))
+				.andExpect(jsonPath("$.data.branch.id", is("branch_green_main")))
+				.andExpect(jsonPath("$.data.balances.savings", is(2450000.00)))
+				.andExpect(jsonPath("$.data.loans.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.notifications.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.serverConfirmed", is(true)));
+
+		MvcResult mobileLoan = mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "product": "Emergency Loan",
+								  "amount": 450000,
+								  "repaymentMonths": 5,
+								  "purpose": "Mobile medical support"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.channel", is("mobile")))
+				.andExpect(jsonPath("$.data.submittedByMemberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.status", is("submitted")))
+				.andReturn();
+		String loanId = objectMapper.readTree(mobileLoan.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/member-auth/mobile-dashboard")
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.loans[0].id", is(loanId)))
+				.andExpect(jsonPath("$.data.notifications[0].eventType", is("loan_application_submitted")))
+				.andExpect(jsonPath("$.data.lastUpdatedAt", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + loginAndReturnToken("admin@greenvalley.local", "Sacco@12345")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].resourceType", is("loan")))
+				.andExpect(jsonPath("$.data[0].action", startsWith("Submitted mobile loan application")));
+	}
+
+	@Test
+	void memberMobileLoanControlsAreEnforced() throws Exception {
+		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+
+		mockMvc.perform(get("/api/v1/member-auth/mobile-dashboard"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("MEMBER_AUTH_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "product": "Bad Loan",
+								  "amount": 100000,
+								  "repaymentMonths": 5
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_LOAN_PRODUCT")));
+
+		mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "product": "Emergency Loan",
+								  "amount": 0,
+								  "repaymentMonths": 5
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_LOAN_AMOUNT")));
+
+		mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "product": "Emergency Loan",
+								  "amount": 100000,
+								  "repaymentMonths": 61
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_REPAYMENT_PERIOD")));
+	}
+
+	@Test
 	void financialTransactionsAreListedWithTenantScope() throws Exception {
 		String platformToken = loginAndReturnToken();
 		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");

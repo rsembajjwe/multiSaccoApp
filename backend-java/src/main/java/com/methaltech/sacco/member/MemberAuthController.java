@@ -10,7 +10,13 @@ import com.methaltech.sacco.loan.Loan;
 import com.methaltech.sacco.loan.LoanGuarantor;
 import com.methaltech.sacco.loan.LoanGuarantorRepository;
 import com.methaltech.sacco.loan.LoanGuarantorResponse;
+import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.loan.LoanRepository;
+import com.methaltech.sacco.loan.LoanResponse;
+import com.methaltech.sacco.notification.Notification;
+import com.methaltech.sacco.notification.NotificationRepository;
+import com.methaltech.sacco.notification.NotificationResponse;
+import com.methaltech.sacco.notification.NotificationService;
 import com.methaltech.sacco.security.PasswordHasher;
 import com.methaltech.sacco.security.TokenGenerator;
 import com.methaltech.sacco.tenant.TenantResponse;
@@ -18,9 +24,12 @@ import com.methaltech.sacco.tenant.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -39,13 +48,21 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/member-auth")
 class MemberAuthController {
 
+    private static final Set<String> ALLOWED_LOAN_PRODUCTS = Set.of(
+            "Development Loan",
+            "Emergency Loan",
+            "Agriculture Loan",
+            "School Fees Loan");
     private static final Set<String> GUARANTOR_DECISIONS = Set.of("accepted", "rejected");
 
     private final MemberRepository memberRepository;
     private final MemberSessionRepository memberSessionRepository;
     private final LoanRepository loanRepository;
+    private final LoanRepaymentRepository repaymentRepository;
     private final LoanGuarantorRepository guarantorRepository;
     private final ComplaintService complaintService;
+    private final NotificationRepository notificationRepository;
+    private final NotificationService notificationService;
     private final MemberAuthService memberAuthService;
     private final BranchLookup branchLookup;
     private final TenantService tenantService;
@@ -57,8 +74,11 @@ class MemberAuthController {
             MemberRepository memberRepository,
             MemberSessionRepository memberSessionRepository,
             LoanRepository loanRepository,
+            LoanRepaymentRepository repaymentRepository,
             LoanGuarantorRepository guarantorRepository,
             ComplaintService complaintService,
+            NotificationRepository notificationRepository,
+            NotificationService notificationService,
             MemberAuthService memberAuthService,
             BranchLookup branchLookup,
             TenantService tenantService,
@@ -68,8 +88,11 @@ class MemberAuthController {
         this.memberRepository = memberRepository;
         this.memberSessionRepository = memberSessionRepository;
         this.loanRepository = loanRepository;
+        this.repaymentRepository = repaymentRepository;
         this.guarantorRepository = guarantorRepository;
         this.complaintService = complaintService;
+        this.notificationRepository = notificationRepository;
+        this.notificationService = notificationService;
         this.memberAuthService = memberAuthService;
         this.branchLookup = branchLookup;
         this.tenantService = tenantService;
@@ -142,6 +165,98 @@ class MemberAuthController {
         currentSession.session().revoke();
         memberSessionRepository.save(currentSession.session());
         return ResponseEntity.ok(ApiResponse.of(new LogoutResponse(true)));
+    }
+
+    @GetMapping("/mobile-dashboard")
+    ResponseEntity<?> mobileDashboard(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        List<LoanResponse> loans = loanRepository.findByMemberIdOrderByCreatedAtDesc(member.getId())
+                .stream()
+                .map(this::loanResponse)
+                .toList();
+        List<NotificationResponse> notifications = notificationRepository.findByMemberIdOrderByCreatedAtDesc(member.getId())
+                .stream()
+                .limit(5)
+                .map(NotificationResponse::from)
+                .toList();
+        List<LoanGuarantorResponse> pendingGuarantors = guarantorRepository.findByMemberIdAndStatusIn(member.getId(), List.of("pending"))
+                .stream()
+                .map(request -> LoanGuarantorResponse.from(
+                        request,
+                        loanRepository.findById(request.getLoanId()).orElse(null),
+                        guaranteeCapacity(member, request.getId())))
+                .toList();
+        Instant lastUpdatedAt = java.util.stream.Stream.concat(
+                        loans.stream().map(LoanResponse::updatedAt),
+                        notificationRepository.findByMemberIdOrderByCreatedAtDesc(member.getId()).stream().map(Notification::getCreatedAt))
+                .filter(value -> value != null)
+                .max(Comparator.naturalOrder())
+                .orElse(Instant.now());
+
+        return ResponseEntity.ok(ApiResponse.of(new MobileDashboardResponse(
+                MemberResponse.from(member),
+                tenantService.findById(member.getTenantId()).orElse(null),
+                branchLookup.findSummary(member.getBranchId()).orElse(null),
+                Balances.from(member),
+                loans,
+                notifications,
+                pendingGuarantors,
+                lastUpdatedAt,
+                true)));
+    }
+
+    @PostMapping("/mobile-loans")
+    ResponseEntity<?> createMobileLoan(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody MobileLoanRequest body,
+            HttpServletRequest request) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        if (!"active".equals(member.getStatus())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "MEMBER_NOT_ACTIVE", "Only active members can apply for loans."));
+        }
+        String product = body.product().trim();
+        if (!ALLOWED_LOAN_PRODUCTS.contains(product)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_LOAN_PRODUCT", "Unsupported loan product."));
+        }
+        if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_LOAN_AMOUNT", "Loan amount must be greater than zero."));
+        }
+        int repaymentMonths = body.repaymentMonths() == null ? 12 : body.repaymentMonths();
+        if (repaymentMonths < 1 || repaymentMonths > 60) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_PERIOD", "Repayment period must be between 1 and 60 months."));
+        }
+
+        Loan loan = loanRepository.save(Loan.submitted(
+                "loan_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                product,
+                body.amount(),
+                dsr(body.amount(), member.getSavingsBalance()),
+                repaymentMonths,
+                body.purpose() == null ? "" : body.purpose().trim(),
+                "mobile",
+                member.getId()));
+        notificationService.notifyLoanApplicationSubmitted(member, product, body.amount(), loan.getId());
+        auditService.record(
+                member.getTenantId(),
+                (String) null,
+                member.getFullName(),
+                "Submitted mobile loan application for " + member.getMembershipNo(),
+                "loan",
+                loan.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(loanResponse(loan)));
     }
 
     @PostMapping("/mobile-complaints")
@@ -265,6 +380,22 @@ class MemberAuthController {
         return member.getSavingsBalance().multiply(BigDecimal.valueOf(3)).subtract(committed).max(BigDecimal.ZERO);
     }
 
+    private int dsr(BigDecimal amount, BigDecimal savingsBalance) {
+        BigDecimal savingsCapacity = savingsBalance.multiply(BigDecimal.valueOf(3));
+        if (savingsCapacity.compareTo(BigDecimal.ZERO) <= 0) return 65;
+        BigDecimal ratio = amount
+                .divide(savingsCapacity, 6, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(35));
+        return Math.min(65, ratio.setScale(0, RoundingMode.HALF_UP).intValue());
+    }
+
+    private LoanResponse loanResponse(Loan loan) {
+        return LoanResponse.from(
+                loan,
+                repaymentRepository.countByLoanId(loan.getId()),
+                repaymentRepository.totalAmountByLoanId(loan.getId()));
+    }
+
     record LoginRequest(@NotBlank String identifier, @NotBlank String password) {
     }
 
@@ -284,6 +415,18 @@ class MemberAuthController {
             Balances balances) {
     }
 
+    record MobileDashboardResponse(
+            MemberResponse member,
+            TenantResponse tenant,
+            BranchLookup.BranchSummary branch,
+            Balances balances,
+            List<LoanResponse> loans,
+            List<NotificationResponse> notifications,
+            List<LoanGuarantorResponse> pendingGuarantorRequests,
+            Instant lastUpdatedAt,
+            boolean serverConfirmed) {
+    }
+
     record Balances(BigDecimal savings, BigDecimal shares, BigDecimal welfare) {
         static Balances from(Member member) {
             return new Balances(member.getSavingsBalance(), member.getSharesBalance(), member.getWelfareBalance());
@@ -301,5 +444,12 @@ class MemberAuthController {
             @NotBlank String subject,
             String description,
             String priority) {
+    }
+
+    record MobileLoanRequest(
+            @NotBlank String product,
+            @NotNull BigDecimal amount,
+            Integer repaymentMonths,
+            String purpose) {
     }
 }
