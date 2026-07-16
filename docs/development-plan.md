@@ -393,6 +393,7 @@ Progress:
 - Java branch management added with Flyway `branches`, seeded branch records, tenant-scoped `/api/v1/branches`, duplicate-code checks, and audit events.
 - Java member management added with Flyway `members`, seeded member balances, tenant-scoped `/api/v1/members`, registration, detail, status updates, and audit events.
 - Java member self-service auth added with Flyway `member_sessions`, member login by membership number/phone/email, balance-aware `/api/v1/member-auth/me`, logout revocation, and member audit events.
+- Java subscription billing added with Flyway `subscription_packages`/`subscriptions`/`subscription_payments`, UGX 5,000/member annual billing up to 250 members with a 100-member minimum, fixed tiers above 250 members, platform-only payment posting, idempotent references, closed-period controls, and balanced subscription payment journals.
 - Java financial transactions added with Flyway `financial_transactions`, tenant-scoped listing, pending transaction submission, maker-checker posting/rejection, and member balance updates.
 - Java accounting foundation added with Flyway `chart_of_accounts`, seeded accounts, authenticated `/api/v1/chart-of-accounts`, and tenant-scoped balanced `/api/v1/journal-entries` derived from posted Java financial transactions, loan disbursements, and loan repayments.
 - Java accounting periods added with Flyway `accounting_periods`, tenant-scoped listing, close/reopen status changes, audit events, and closed-period checks for financial transaction posting, loan disbursement, and loan repayment.

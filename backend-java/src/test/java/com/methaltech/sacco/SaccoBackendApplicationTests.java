@@ -150,6 +150,144 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void subscriptionsUseMemberBasedBillingAndPaymentsFeedJournals() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String paymentReference = "SUB-SMOKE-" + System.currentTimeMillis();
+
+		mockMvc.perform(get("/api/v1/subscription-packages")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(3)))
+				.andExpect(jsonPath("$.data[0].id", is("starter")))
+				.andExpect(jsonPath("$.data[0].minMembers", is(100)))
+				.andExpect(jsonPath("$.data[0].memberLimit", is(500)));
+
+		mockMvc.perform(get("/api/v1/subscriptions?tenantId=tenant_green")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(1)))
+				.andExpect(jsonPath("$.data[0].tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data[0].memberCount", is(2)))
+				.andExpect(jsonPath("$.data[0].billableMembers", is(100)))
+				.andExpect(jsonPath("$.data[0].tierId", is("per_member")))
+				.andExpect(jsonPath("$.data[0].billingDescription", is("UGX 5,000 per member annually, minimum 100 members")));
+
+		MvcResult payment = mockMvc.perform(post("/api/v1/subscriptions/subscription_lake_starter/payments")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 500000,
+								  "channel": "manual",
+								  "externalReference": "%s",
+								  "receivedAt": "2026-07-16T09:00:00Z"
+								}
+								""".formatted(paymentReference)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.idempotent", is(false)))
+				.andExpect(jsonPath("$.data.subscription.status", is("active")))
+				.andExpect(jsonPath("$.data.payment.tenantId", is("tenant_lake")))
+				.andExpect(jsonPath("$.data.payment.externalReference", is(paymentReference)))
+				.andReturn();
+
+		mockMvc.perform(post("/api/v1/subscriptions/subscription_lake_starter/payments")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 500000,
+								  "channel": "manual",
+								  "externalReference": "%s",
+								  "receivedAt": "2026-07-16T09:00:00Z"
+								}
+								""".formatted(paymentReference)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.idempotent", is(true)));
+
+		String paymentId = objectMapper.readTree(payment.getResponse().getContentAsString()).path("data").path("payment").path("id").asString();
+		MvcResult journals = mockMvc.perform(get("/api/v1/journal-entries?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andReturn();
+		JsonNode journalData = objectMapper.readTree(journals.getResponse().getContentAsString()).path("data");
+		if (!hasJournalReference(journalData, paymentReference, "subscription_payment")) {
+			throw new AssertionError("Subscription payment journal not found: " + paymentId);
+		}
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].resourceType", is("subscription")));
+	}
+
+	@Test
+	void subscriptionControlsAreEnforced() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/subscriptions?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(get("/api/v1/subscriptions")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		mockMvc.perform(post("/api/v1/subscriptions/subscription_green_growth/payments")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{ "amount": 1000 }
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PLATFORM_ADMIN_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/subscriptions/missing-subscription/payments")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{ "amount": 1000 }
+								"""))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code", is("SUBSCRIPTION_NOT_FOUND")));
+
+		mockMvc.perform(post("/api/v1/subscriptions/subscription_green_growth/payments")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{ "amount": 0 }
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_PAYMENT_AMOUNT")));
+
+		mockMvc.perform(post("/api/v1/subscriptions/subscription_green_growth/payments")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 1000,
+								  "channel": "bad_channel"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_PAYMENT_CHANNEL")));
+
+		mockMvc.perform(post("/api/v1/subscriptions/subscription_green_growth/payments")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 1000,
+								  "receivedAt": "2026-06-15T09:00:00Z"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("ACCOUNTING_PERIOD_CLOSED")));
+	}
+
+	@Test
 	void loginReturnsTokenAndSafeUserProfile() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/login")
 						.contentType("application/json")

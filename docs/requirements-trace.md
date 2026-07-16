@@ -21,6 +21,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Server-side tenants, users, and audit events fetched through `/api/v1`.
 - Server-side branch and member onboarding endpoints with tenant isolation.
 - Member document metadata endpoint for KYC/document tracking.
+- Java subscription endpoints expose active packages, recalculate annual billing with the UGX 5,000/member and 100-member minimum rule up to 250 members, preserve the fixed tiers above 250 members, and post platform payments into journals.
 
 ## Represented as design controls
 

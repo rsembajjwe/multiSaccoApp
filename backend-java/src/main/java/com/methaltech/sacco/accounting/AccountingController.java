@@ -10,6 +10,8 @@ import com.methaltech.sacco.loan.Loan;
 import com.methaltech.sacco.loan.LoanRepayment;
 import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.loan.LoanRepository;
+import com.methaltech.sacco.subscription.SubscriptionPayment;
+import com.methaltech.sacco.subscription.SubscriptionPaymentRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -57,6 +59,7 @@ class AccountingController {
     private final FinancialTransactionRepository transactionRepository;
     private final LoanRepository loanRepository;
     private final LoanRepaymentRepository repaymentRepository;
+    private final SubscriptionPaymentRepository subscriptionPaymentRepository;
     private final AuthService authService;
     private final AuditService auditService;
 
@@ -71,6 +74,7 @@ class AccountingController {
             FinancialTransactionRepository transactionRepository,
             LoanRepository loanRepository,
             LoanRepaymentRepository repaymentRepository,
+            SubscriptionPaymentRepository subscriptionPaymentRepository,
             AuthService authService,
             AuditService auditService) {
         this.periodRepository = periodRepository;
@@ -83,6 +87,7 @@ class AccountingController {
         this.transactionRepository = transactionRepository;
         this.loanRepository = loanRepository;
         this.repaymentRepository = repaymentRepository;
+        this.subscriptionPaymentRepository = subscriptionPaymentRepository;
         this.authService = authService;
         this.auditService = auditService;
     }
@@ -169,8 +174,10 @@ class AccountingController {
                         java.util.stream.Stream.concat(
                                 loanRepaymentJournalEntries(tenantId, currentSession, accounts).stream(),
                                 java.util.stream.Stream.concat(
-                                        expenseJournalEntries(tenantId, currentSession, accounts).stream(),
-                                        assetJournalEntries(tenantId, currentSession, accounts).stream())))
+                                        subscriptionPaymentJournalEntries(tenantId, currentSession, accounts).stream(),
+                                        java.util.stream.Stream.concat(
+                                                expenseJournalEntries(tenantId, currentSession, accounts).stream(),
+                                                assetJournalEntries(tenantId, currentSession, accounts).stream()))))
                 .sorted(Comparator.comparing(JournalEntryResponse::postedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                 .toList();
 
@@ -617,6 +624,29 @@ class AccountingController {
                 .toList();
     }
 
+    private List<JournalEntryResponse> subscriptionPaymentJournalEntries(
+            String tenantId,
+            AuthService.CurrentSession currentSession,
+            Map<String, ChartOfAccount> accounts) {
+        List<SubscriptionPayment> payments = authService.isPlatform(currentSession.user()) && tenantId == null
+                ? subscriptionPaymentRepository.findAllByOrderByTenantIdAscReceivedAtDesc()
+                : subscriptionPaymentRepository.findByTenantIdOrderByReceivedAtDesc(tenantId);
+
+        return payments.stream()
+                .map(payment -> journal(
+                        "je_" + payment.getId(),
+                        payment.getTenantId(),
+                        "subscription_payment",
+                        payment.getId(),
+                        payment.getExternalReference(),
+                        "Recorded platform subscription payment",
+                        payment.getReceivedAt(),
+                        List.of(
+                                line("6100", payment.getAmount(), BigDecimal.ZERO, null, accounts),
+                                line(accountForChannel(payment.getChannel()), BigDecimal.ZERO, payment.getAmount(), null, accounts))))
+                .toList();
+    }
+
     private List<JournalEntryResponse> assetJournalEntries(
             String tenantId,
             AuthService.CurrentSession currentSession,
@@ -671,8 +701,10 @@ class AccountingController {
                         java.util.stream.Stream.concat(
                                 loanRepaymentJournalEntries(tenantId, currentSession, accounts).stream(),
                                 java.util.stream.Stream.concat(
-                                        expenseJournalEntries(tenantId, currentSession, accounts).stream(),
-                                        assetJournalEntries(tenantId, currentSession, accounts).stream()))))
+                                        subscriptionPaymentJournalEntries(tenantId, currentSession, accounts).stream(),
+                                        java.util.stream.Stream.concat(
+                                                expenseJournalEntries(tenantId, currentSession, accounts).stream(),
+                                                assetJournalEntries(tenantId, currentSession, accounts).stream())))))
                 .toList();
         List<StatementLine> statementLines = tenantIds.size() == 1
                 ? statementLineRepository.findByTenantIdOrderByStatementDateDescCreatedAtDesc(tenantIds.get(0))
@@ -826,7 +858,7 @@ class AccountingController {
             case "cash" -> "1000";
             case "mobile_money" -> "1020";
             case "payroll_deduction", "payroll" -> "1030";
-            case "bank" -> "1010";
+            case "bank", "manual" -> "1010";
             default -> "1010";
         };
     }

@@ -11,6 +11,7 @@ import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.loan.LoanRepository;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
+import com.methaltech.sacco.subscription.SubscriptionPaymentRepository;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
 import java.math.BigDecimal;
@@ -44,6 +45,7 @@ class RegulatoryReportController {
     private final AssetRepository assetRepository;
     private final ComplaintRepository complaintRepository;
     private final GovernanceResolutionRepository resolutionRepository;
+    private final SubscriptionPaymentRepository subscriptionPaymentRepository;
     private final AuthService authService;
 
     @GetMapping
@@ -120,6 +122,7 @@ class RegulatoryReportController {
                 .size()
                 + (int) loanRepository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream().filter(loan -> loan.getDisbursedAt() != null).count()
                 + repaymentRepository.findAll().stream().filter(repayment -> repayment.getTenantId().equals(tenantId)).toList().size()
+                + subscriptionPaymentRepository.findByTenantIdOrderByReceivedAtDesc(tenantId).size()
                 + expenseRepository.findByTenantIdOrderByExpenseDateDescCreatedAtDesc(tenantId).stream().filter(expense -> "posted".equals(expense.getStatus())).toList().size()
                 + activeAssets.size()
                 + (int) activeAssets.stream().filter(asset -> accumulatedDepreciation(asset).compareTo(BigDecimal.ZERO) > 0).count();
@@ -161,10 +164,14 @@ class RegulatoryReportController {
                                         .filter(loan -> loan.getDisbursedAt() != null)
                                         .map(loan -> "1010|" + loan.getId() + "|" + loan.getAmount().negate())),
                         java.util.stream.Stream.concat(
-                                repaymentRepository.findAll()
-                                        .stream()
-                                        .filter(repayment -> repayment.getTenantId().equals(tenantId))
-                                        .map(repayment -> accountForChannel(repayment.getChannel()) + "|" + repayment.getReference() + "|" + repayment.getAmount()),
+                                java.util.stream.Stream.concat(
+                                        repaymentRepository.findAll()
+                                                .stream()
+                                                .filter(repayment -> repayment.getTenantId().equals(tenantId))
+                                                .map(repayment -> accountForChannel(repayment.getChannel()) + "|" + repayment.getReference() + "|" + repayment.getAmount()),
+                                        subscriptionPaymentRepository.findByTenantIdOrderByReceivedAtDesc(tenantId)
+                                                .stream()
+                                                .map(payment -> accountForChannel(payment.getChannel()) + "|" + payment.getExternalReference() + "|" + payment.getAmount().negate())),
                                 java.util.stream.Stream.concat(
                                         expenseRepository.findByTenantIdOrderByExpenseDateDescCreatedAtDesc(tenantId)
                                                 .stream()
@@ -194,7 +201,7 @@ class RegulatoryReportController {
             case "cash" -> "1000";
             case "mobile_money" -> "1020";
             case "payroll_deduction", "payroll" -> "1030";
-            case "bank" -> "1010";
+            case "bank", "manual" -> "1010";
             default -> "1010";
         };
     }
