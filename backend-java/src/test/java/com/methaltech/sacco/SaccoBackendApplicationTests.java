@@ -849,6 +849,52 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void chartOfAccountsAndJournalEntriesAreAvailable() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/chart-of-accounts")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(17)))
+				.andExpect(jsonPath("$.data[0].code", is("1000")))
+				.andExpect(jsonPath("$.data[0].name", is("Cash on Hand")))
+				.andExpect(jsonPath("$.data[0].normalBalance", is("debit")));
+
+		MvcResult journals = mockMvc.perform(get("/api/v1/journal-entries")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(5)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+				.andExpect(jsonPath("$.data[*].isBalanced", everyItem(is(true))))
+				.andReturn();
+
+		JsonNode journalData = objectMapper.readTree(journals.getResponse().getContentAsString()).path("data");
+		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "financial_transaction"));
+		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "loan_disbursement"));
+		org.junit.jupiter.api.Assertions.assertTrue(hasJournalSource(journalData, "loan_repayment"));
+	}
+
+	@Test
+	void accountingTenantControlsAreEnforced() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/journal-entries?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(get("/api/v1/journal-entries?tenantId=tenant_green")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		mockMvc.perform(get("/api/v1/chart-of-accounts"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("AUTH_REQUIRED")));
+	}
+
+	@Test
 	void loansAreListedWithTenantScope() throws Exception {
 		String platformToken = loginAndReturnToken();
 		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
@@ -1489,6 +1535,15 @@ class SaccoBackendApplicationTests {
 			}
 		}
 		throw new AssertionError("Loan not found in response: " + loanId);
+	}
+
+	private boolean hasJournalSource(JsonNode journalData, String sourceType) {
+		for (JsonNode journal : journalData) {
+			if (sourceType.equals(journal.path("sourceType").asString()) && journal.path("lines").size() >= 2) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 }

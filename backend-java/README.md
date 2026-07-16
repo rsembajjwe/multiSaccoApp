@@ -37,6 +37,7 @@ cd backend-java
 - `/api/v1/members` for authenticated tenant-scoped member listing, registration, detail, and status updates.
 - `/api/v1/member-auth/login`, `/api/v1/member-auth/me`, and `/api/v1/member-auth/logout` for member portal sessions and balances.
 - `/api/v1/financial-transactions` for savings, shares, welfare, and withdrawal posting workflows.
+- `/api/v1/chart-of-accounts` and `/api/v1/journal-entries` for seeded accounting accounts and balanced journals derived from posted Java financial and loan events.
 - `/api/v1/loans` for tenant-scoped loan file listing, staff-submitted applications, decisions, and disbursement.
 - `/api/v1/loans/{loanId}/guarantors` and `/api/v1/member-auth/guarantor-requests` for staff guarantor requests and member accept/reject decisions.
 - `/api/v1/loans/{loanId}/repayments` for staff repayment capture, duplicate reference controls, balance reduction, and loan closure on full payoff.

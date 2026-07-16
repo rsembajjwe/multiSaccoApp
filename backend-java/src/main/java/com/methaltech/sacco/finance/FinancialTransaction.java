@@ -9,7 +9,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "financial_transactions")
-class FinancialTransaction {
+public class FinancialTransaction {
 
     @Id
     private String id;
@@ -96,67 +96,67 @@ class FinancialTransaction {
         this.updatedAt = Instant.now();
     }
 
-    String getId() {
+    public String getId() {
         return id;
     }
 
-    String getTenantId() {
+    public String getTenantId() {
         return tenantId;
     }
 
-    String getBranchId() {
+    public String getBranchId() {
         return branchId;
     }
 
-    String getMemberId() {
+    public String getMemberId() {
         return memberId;
     }
 
-    String getType() {
+    public String getType() {
         return type;
     }
 
-    String getChannel() {
+    public String getChannel() {
         return channel;
     }
 
-    BigDecimal getAmount() {
+    public BigDecimal getAmount() {
         return amount;
     }
 
-    String getStatus() {
+    public String getStatus() {
         return status;
     }
 
-    String getReference() {
+    public String getReference() {
         return reference;
     }
 
-    String getNarration() {
+    public String getNarration() {
         return narration;
     }
 
-    String getMakerUserId() {
+    public String getMakerUserId() {
         return makerUserId;
     }
 
-    String getCheckerUserId() {
+    public String getCheckerUserId() {
         return checkerUserId;
     }
 
-    Instant getPostedAt() {
+    public Instant getPostedAt() {
         return postedAt;
     }
 
-    String getRejectionReason() {
+    public String getRejectionReason() {
         return rejectionReason;
     }
 
-    Instant getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    Instant getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
 }

@@ -9,7 +9,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "loan_repayments")
-class LoanRepayment {
+public class LoanRepayment {
 
     @Id
     private String id;
@@ -66,47 +66,47 @@ class LoanRepayment {
         this.createdAt = this.receivedAt;
     }
 
-    String getId() {
+    public String getId() {
         return id;
     }
 
-    String getTenantId() {
+    public String getTenantId() {
         return tenantId;
     }
 
-    String getLoanId() {
+    public String getLoanId() {
         return loanId;
     }
 
-    String getMemberId() {
+    public String getMemberId() {
         return memberId;
     }
 
-    BigDecimal getAmount() {
+    public BigDecimal getAmount() {
         return amount;
     }
 
-    String getChannel() {
+    public String getChannel() {
         return channel;
     }
 
-    String getReference() {
+    public String getReference() {
         return reference;
     }
 
-    String getNarration() {
+    public String getNarration() {
         return narration;
     }
 
-    String getReceivedByUserId() {
+    public String getReceivedByUserId() {
         return receivedByUserId;
     }
 
-    Instant getReceivedAt() {
+    public Instant getReceivedAt() {
         return receivedAt;
     }
 
-    Instant getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 }

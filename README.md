@@ -95,6 +95,8 @@ POST http://127.0.0.1:8080/api/v1/member-auth/logout
 GET http://127.0.0.1:8080/api/v1/financial-transactions
 POST http://127.0.0.1:8080/api/v1/financial-transactions
 PATCH http://127.0.0.1:8080/api/v1/financial-transactions/{transactionId}/status
+GET http://127.0.0.1:8080/api/v1/chart-of-accounts
+GET http://127.0.0.1:8080/api/v1/journal-entries
 GET http://127.0.0.1:8080/api/v1/loans
 POST http://127.0.0.1:8080/api/v1/loans
 PATCH http://127.0.0.1:8080/api/v1/loans/{loanId}/status

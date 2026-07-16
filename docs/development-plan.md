@@ -394,6 +394,7 @@ Progress:
 - Java member management added with Flyway `members`, seeded member balances, tenant-scoped `/api/v1/members`, registration, detail, status updates, and audit events.
 - Java member self-service auth added with Flyway `member_sessions`, member login by membership number/phone/email, balance-aware `/api/v1/member-auth/me`, logout revocation, and member audit events.
 - Java financial transactions added with Flyway `financial_transactions`, tenant-scoped listing, pending transaction submission, maker-checker posting/rejection, and member balance updates.
+- Java accounting foundation added with Flyway `chart_of_accounts`, seeded accounts, authenticated `/api/v1/chart-of-accounts`, and tenant-scoped balanced `/api/v1/journal-entries` derived from posted Java financial transactions, loan disbursements, and loan repayments.
 - Java loan applications added with Flyway `loans`, seeded loan files, tenant-scoped `/api/v1/loans`, active-member validation, product/amount/term validation, DSR estimate, and audit events.
 - Java loan decisions added with approve/reject status updates, accepted-guarantor approval control, approval-before-disbursement enforcement, active-loan balance creation, and audit events.
 - Java loan guarantors added with Flyway `loan_guarantors`, staff guarantor requests, duplicate/borrower/capacity controls, member accept/reject decisions, loan guarantor count refresh, and audit events.

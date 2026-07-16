@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
-interface LoanRepaymentRepository extends JpaRepository<LoanRepayment, String> {
+public interface LoanRepaymentRepository extends JpaRepository<LoanRepayment, String> {
     List<LoanRepayment> findByLoanIdOrderByReceivedAtDesc(String loanId);
 
     boolean existsByTenantIdAndReferenceIgnoreCase(String tenantId, String reference);
