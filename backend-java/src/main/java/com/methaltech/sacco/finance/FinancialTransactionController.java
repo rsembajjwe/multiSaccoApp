@@ -171,6 +171,21 @@ class FinancialTransactionController {
                         .body(ApiErrorResponse.of(404, "TRANSACTION_NOT_FOUND", "Financial transaction not found.")));
     }
 
+    @PostMapping("/{transactionId}/reversal")
+    ResponseEntity<?> reverseTransaction(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String transactionId,
+            @Valid @RequestBody ReverseTransactionRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return transactionRepository.findById(transactionId)
+                .<ResponseEntity<?>>map(transaction -> reversePostedTransaction(transaction, body.reason(), currentSession, request))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "TRANSACTION_NOT_FOUND", "Financial transaction not found.")));
+    }
+
     @PatchMapping("/{transactionId}/status")
     ResponseEntity<?> updateTransactionStatus(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -253,6 +268,61 @@ class FinancialTransactionController {
         return ResponseEntity.ok(ApiResponse.of(FinancialTransactionResponse.from(saved)));
     }
 
+    private ResponseEntity<?> reversePostedTransaction(
+            FinancialTransaction original,
+            String reason,
+            AuthService.CurrentSession currentSession,
+            HttpServletRequest request) {
+        if (!canAccess(currentSession, original.getTenantId())) return tenantAccessDenied();
+        if (!"posted".equals(original.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "REVERSAL_NOT_AVAILABLE", "Only posted financial transactions can be reversed."));
+        }
+        if (original.getOriginalTransactionId() != null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "REVERSAL_NOT_AVAILABLE", "Reversal transactions cannot be reversed."));
+        }
+        if (transactionRepository.existsByOriginalTransactionId(original.getId())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "TRANSACTION_ALREADY_REVERSED", "This transaction already has a reversal."));
+        }
+        Instant postingDate = Instant.now();
+        if (periodService.isClosed(original.getTenantId(), postingDate)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(
+                            409,
+                            "ACCOUNTING_PERIOD_CLOSED",
+                            "Accounting period " + periodService.periodKey(postingDate) + " is closed."));
+        }
+
+        Member member = memberRepository.findById(original.getMemberId()).orElse(null);
+        if (member == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_MEMBER", "Member does not exist for this tenant."));
+        }
+        if (!member.canReverse(original.getType(), original.getAmount())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "INSUFFICIENT_BALANCE_FOR_REVERSAL", "Member balance is too low to reverse this transaction."));
+        }
+
+        member.applyReversal(original.getType(), original.getAmount());
+        memberRepository.save(member);
+        FinancialTransaction reversal = transactionRepository.save(FinancialTransaction.reversalOf(
+                original,
+                "txn_" + UUID.randomUUID(),
+                original.getReference() + "-REV",
+                reason,
+                currentSession.user().getId()));
+        auditService.record(
+                reversal.getTenantId(),
+                currentSession.user(),
+                "Reversed financial transaction " + original.getReference(),
+                "financial_transaction",
+                reversal.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(FinancialTransactionResponse.from(reversal)));
+    }
+
     private ResponseEntity<?> receiptResponse(FinancialTransaction transaction, AuthService.CurrentSession currentSession) {
         if (!canAccess(currentSession, transaction.getTenantId())) return tenantAccessDenied();
         if (!"posted".equals(transaction.getStatus())) {
@@ -312,5 +382,8 @@ class FinancialTransactionController {
     }
 
     record UpdateTransactionStatusRequest(@NotBlank String status, String reason) {
+    }
+
+    record ReverseTransactionRequest(@NotBlank String reason) {
     }
 }

@@ -31,6 +31,7 @@ Java-backed routes currently implemented:
 - `GET /api/v1/members/import-template`
 - `POST /api/v1/members`
 - `GET /api/v1/members/:id`
+- `GET /api/v1/members/:id/statement`
 - `PATCH /api/v1/members/:id/status`
 - `GET /api/v1/members/:id/next-of-kin`
 - `POST /api/v1/members/:id/next-of-kin`
@@ -45,6 +46,7 @@ Java-backed routes currently implemented:
 - `GET /api/v1/financial-transactions`
 - `POST /api/v1/financial-transactions`
 - `GET /api/v1/financial-transactions/:id/receipt`
+- `POST /api/v1/financial-transactions/:id/reversal`
 - `PATCH /api/v1/financial-transactions/:id/status`
 - `GET /api/v1/chart-of-accounts`
 - `GET /api/v1/journal-entries`
@@ -149,6 +151,7 @@ All JSON responses should follow one of these shapes:
 | GET | `/members/import-template` | Return CSV headers, sample rows, and content for bulk member import. | Required |
 | POST | `/members` | Register member. | SACCO staff |
 | GET | `/members/:id` | Get member profile. | Required |
+| GET | `/members/:id/statement` | Get posted member movements with running savings/share/welfare balances and CSV export text. | Required |
 | PATCH | `/members/:id/status` | Approve, suspend, activate, or exit member. | Authorized approver |
 | GET | `/members/:id/next-of-kin` | List member next-of-kin contacts. | Required |
 | POST | `/members/:id/next-of-kin` | Add a member next-of-kin contact. | SACCO staff |
@@ -159,6 +162,7 @@ All JSON responses should follow one of these shapes:
 | GET | `/financial-transactions` | List tenant financial transactions. | Required |
 | POST | `/financial-transactions` | Submit a pending financial transaction. | SACCO staff |
 | GET | `/financial-transactions/:id/receipt` | Generate a receipt projection for a posted financial transaction. | Required |
+| POST | `/financial-transactions/:id/reversal` | Create a posted reversal that references the original transaction. | Authorized staff |
 | PATCH | `/financial-transactions/:id/status` | Post or reject a pending financial transaction. | Authorized checker |
 | GET | `/accounting-periods` | List tenant accounting periods. | Required |
 | PATCH | `/accounting-periods/:id/status` | Open or close an accounting period. | SACCO staff |

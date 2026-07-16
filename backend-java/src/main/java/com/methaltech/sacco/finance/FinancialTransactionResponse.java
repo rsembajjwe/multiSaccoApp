@@ -18,6 +18,8 @@ record FinancialTransactionResponse(
         String checkerUserId,
         Instant postedAt,
         String rejectionReason,
+        String originalTransactionId,
+        String reversalReason,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -37,6 +39,8 @@ record FinancialTransactionResponse(
                 transaction.getCheckerUserId(),
                 transaction.getPostedAt(),
                 transaction.getRejectionReason(),
+                transaction.getOriginalTransactionId(),
+                transaction.getReversalReason(),
                 transaction.getCreatedAt(),
                 transaction.getUpdatedAt());
     }

@@ -38,6 +38,7 @@ cd backend-java
 - `/api/v1/audit-events` for authenticated tenant-scoped audit listing and manual audit capture.
 - `/api/v1/branches` for authenticated tenant-scoped branch listing and creation.
 - `/api/v1/members` for authenticated tenant-scoped member listing, registration, bulk-import template, detail, and status updates.
+- `/api/v1/members/{memberId}/statement` for posted member movements with running savings, shares, welfare balances, and CSV export text.
 - `/api/v1/members/{memberId}/next-of-kin` and `/api/v1/members/{memberId}/beneficiaries` for tenant-scoped member contacts and beneficiary allocations.
 - `/api/v1/members/{memberId}/documents` for tenant-scoped KYC/document metadata listing and upload.
 - `/api/v1/member-auth/login`, `/api/v1/member-auth/me`, and `/api/v1/member-auth/logout` for member portal sessions and balances.
@@ -46,6 +47,7 @@ cd backend-java
 - `/api/v1/subscription-packages`, `/api/v1/subscriptions`, and `/api/v1/subscriptions/{subscriptionId}/payments` for tiered annual billing, tenant-scoped subscription visibility, platform payment posting, and subscription payment journals.
 - `/api/v1/financial-transactions` for savings, shares, welfare, and withdrawal posting workflows.
 - `/api/v1/financial-transactions/{transactionId}/receipt` for printable receipt details on posted financial transactions.
+- `/api/v1/financial-transactions/{transactionId}/reversal` for posted reversal entries that reference the original transaction and update balances.
 - `/api/v1/chart-of-accounts` and `/api/v1/journal-entries` for seeded accounting accounts and balanced journals derived from posted Java financial and loan events.
 - `/api/v1/accounting-periods` for tenant-scoped period listing, close/reopen controls, and closed-period posting protection.
 - `/api/v1/suppliers` and `/api/v1/expenses` for tenant-scoped supplier setup, posted operating expenses, and balanced expense journals.

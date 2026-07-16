@@ -186,8 +186,12 @@ Subscription billing rule: SACCOs with up to 250 members pay UGX 5,000 per membe
 | checker_user_id | uuid/string | User who approved or rejected the transaction. |
 | posted_at | timestamp | Set only after posting. |
 | rejection_reason | text | Optional reason captured when a transaction is rejected. |
+| original_transaction_id | uuid/string | Original posted transaction when this row is a reversal. |
+| reversal_reason | text | Reason captured for a reversal entry. |
 
 Financial transaction decisions follow maker-checker separation: a transaction can move from `pending_approval` to `posted` or `rejected`, and the maker cannot approve or reject their own transaction.
+
+Reversal control rule: posted transactions are not edited directly. A reversal creates a new posted transaction that references the original transaction, moves member balances in the opposite direction, and is blocked if a reversal already exists.
 
 ## Phase 4 Loan Entities
 

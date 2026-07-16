@@ -1408,6 +1408,57 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.savingsBalance", is(125000.00)))
 				.andExpect(jsonPath("$.data.sharesBalance", is(0.00)))
 				.andExpect(jsonPath("$.data.welfareBalance", is(0.00)));
+
+		mockMvc.perform(get("/api/v1/members/" + memberId + "/statement")
+						.header("Authorization", "Bearer " + makerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.memberId", is(memberId)))
+				.andExpect(jsonPath("$.data.openingBalances.savings", is(0.00)))
+				.andExpect(jsonPath("$.data.closingBalances.savings", is(125000.00)))
+				.andExpect(jsonPath("$.data.lines.length()", is(1)))
+				.andExpect(jsonPath("$.data.lines[0].transactionId", is(transactionId)))
+				.andExpect(jsonPath("$.data.lines[0].savingsMovement", is(125000.00)))
+				.andExpect(jsonPath("$.data.csv", startsWith("membershipNo,memberName,reference")));
+
+		MvcResult reversal = mockMvc.perform(post("/api/v1/financial-transactions/" + transactionId + "/reversal")
+						.header("Authorization", "Bearer " + checkerToken)
+						.contentType("application/json")
+						.content("""
+								{ "reason": "Duplicate opening payment" }
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status", is("posted")))
+				.andExpect(jsonPath("$.data.reference", startsWith("GVS-TX-")))
+				.andExpect(jsonPath("$.data.reference", is(objectMapper.readTree(createdTransaction.getResponse().getContentAsString()).path("data").path("reference").asString() + "-REV")))
+				.andExpect(jsonPath("$.data.originalTransactionId", is(transactionId)))
+				.andExpect(jsonPath("$.data.reversalReason", is("Duplicate opening payment")))
+				.andReturn();
+
+		String reversalId = objectMapper.readTree(reversal.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/members/" + memberId + "/statement")
+						.header("Authorization", "Bearer " + makerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.closingBalances.savings", is(0.00)))
+				.andExpect(jsonPath("$.data.lines.length()", is(2)))
+				.andExpect(jsonPath("$.data.lines[1].transactionId", is(reversalId)))
+				.andExpect(jsonPath("$.data.lines[1].amount", is(-125000.00)))
+				.andExpect(jsonPath("$.data.lines[1].savingsMovement", is(-125000.00)))
+				.andExpect(jsonPath("$.data.lines[1].originalTransactionId", is(transactionId)));
+
+		mockMvc.perform(get("/api/v1/members/" + memberId)
+						.header("Authorization", "Bearer " + makerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.savingsBalance", is(0.00)));
+
+		mockMvc.perform(post("/api/v1/financial-transactions/" + transactionId + "/reversal")
+						.header("Authorization", "Bearer " + checkerToken)
+						.contentType("application/json")
+						.content("""
+								{ "reason": "Second reversal attempt" }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("TRANSACTION_ALREADY_REVERSED")));
 	}
 
 	@Test
@@ -1429,6 +1480,20 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.error.code", is("TRANSACTION_NOT_FOUND")));
+
+		mockMvc.perform(post("/api/v1/financial-transactions/txn_green_0003/reversal")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "reason": "Cannot reverse pending" }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("REVERSAL_NOT_AVAILABLE")));
+
+		mockMvc.perform(get("/api/v1/members/member_green_amina/statement?from=2026-08-01&to=2026-07-01")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_STATEMENT_RANGE")));
 
 		mockMvc.perform(post("/api/v1/financial-transactions")
 						.header("Authorization", "Bearer " + token)

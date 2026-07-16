@@ -118,8 +118,23 @@ public class Member {
         this.updatedAt = Instant.now();
     }
 
+    public void applyReversal(String type, BigDecimal amount) {
+        if ("savings_deposit".equals(type)) this.savingsBalance = this.savingsBalance.subtract(amount);
+        if ("withdrawal".equals(type)) this.savingsBalance = this.savingsBalance.add(amount);
+        if ("share_purchase".equals(type)) this.sharesBalance = this.sharesBalance.subtract(amount);
+        if ("welfare_contribution".equals(type)) this.welfareBalance = this.welfareBalance.subtract(amount);
+        this.updatedAt = Instant.now();
+    }
+
     public boolean hasEnoughSavings(BigDecimal amount) {
         return savingsBalance.compareTo(amount) >= 0;
+    }
+
+    public boolean canReverse(String type, BigDecimal amount) {
+        if ("savings_deposit".equals(type)) return savingsBalance.compareTo(amount) >= 0;
+        if ("share_purchase".equals(type)) return sharesBalance.compareTo(amount) >= 0;
+        if ("welfare_contribution".equals(type)) return welfareBalance.compareTo(amount) >= 0;
+        return true;
     }
 
     public String getId() {

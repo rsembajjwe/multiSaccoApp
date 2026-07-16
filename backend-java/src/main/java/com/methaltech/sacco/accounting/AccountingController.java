@@ -527,17 +527,29 @@ class AccountingController {
                 .filter(transaction -> "posted".equals(transaction.getStatus()))
                 .map(transaction -> {
                     String cashAccount = accountForChannel(transaction.getChannel());
-                    List<JournalLineResponse> lines = "withdrawal".equals(transaction.getType())
-                            ? List.of(
-                                    line("2000", transaction.getAmount(), BigDecimal.ZERO, transaction.getMemberId(), accounts),
-                                    line(cashAccount, BigDecimal.ZERO, transaction.getAmount(), transaction.getMemberId(), accounts))
-                            : List.of(
-                                    line(cashAccount, transaction.getAmount(), BigDecimal.ZERO, transaction.getMemberId(), accounts),
-                                    line(accountForTransactionType(transaction.getType()), BigDecimal.ZERO, transaction.getAmount(), transaction.getMemberId(), accounts));
+                    boolean reversal = transaction.getOriginalTransactionId() != null;
+                    List<JournalLineResponse> lines;
+                    if ("withdrawal".equals(transaction.getType())) {
+                        lines = reversal
+                                ? List.of(
+                                        line(cashAccount, transaction.getAmount(), BigDecimal.ZERO, transaction.getMemberId(), accounts),
+                                        line("2000", BigDecimal.ZERO, transaction.getAmount(), transaction.getMemberId(), accounts))
+                                : List.of(
+                                        line("2000", transaction.getAmount(), BigDecimal.ZERO, transaction.getMemberId(), accounts),
+                                        line(cashAccount, BigDecimal.ZERO, transaction.getAmount(), transaction.getMemberId(), accounts));
+                    } else {
+                        lines = reversal
+                                ? List.of(
+                                        line(accountForTransactionType(transaction.getType()), transaction.getAmount(), BigDecimal.ZERO, transaction.getMemberId(), accounts),
+                                        line(cashAccount, BigDecimal.ZERO, transaction.getAmount(), transaction.getMemberId(), accounts))
+                                : List.of(
+                                        line(cashAccount, transaction.getAmount(), BigDecimal.ZERO, transaction.getMemberId(), accounts),
+                                        line(accountForTransactionType(transaction.getType()), BigDecimal.ZERO, transaction.getAmount(), transaction.getMemberId(), accounts));
+                    }
                     return journal(
                             "je_" + transaction.getId(),
                             transaction.getTenantId(),
-                            "financial_transaction",
+                            reversal ? "financial_transaction_reversal" : "financial_transaction",
                             transaction.getId(),
                             transaction.getReference(),
                             transaction.getNarration() == null || transaction.getNarration().isBlank()

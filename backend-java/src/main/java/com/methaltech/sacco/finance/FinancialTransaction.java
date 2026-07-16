@@ -47,6 +47,12 @@ public class FinancialTransaction {
     @Column(name = "rejection_reason")
     private String rejectionReason;
 
+    @Column(name = "original_transaction_id")
+    private String originalTransactionId;
+
+    @Column(name = "reversal_reason")
+    private String reversalReason;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -108,6 +114,32 @@ public class FinancialTransaction {
         transaction.checkerUserId = userId;
         transaction.postedAt = transaction.createdAt;
         transaction.updatedAt = transaction.createdAt;
+        return transaction;
+    }
+
+    static FinancialTransaction reversalOf(
+            FinancialTransaction original,
+            String id,
+            String reference,
+            String reason,
+            String userId) {
+        FinancialTransaction transaction = new FinancialTransaction(
+                id,
+                original.getTenantId(),
+                original.getBranchId(),
+                original.getMemberId(),
+                original.getType(),
+                original.getChannel(),
+                original.getAmount(),
+                reference,
+                "Reversal of " + original.getReference() + (reason == null || reason.isBlank() ? "" : ": " + reason.trim()),
+                userId);
+        transaction.status = "posted";
+        transaction.checkerUserId = userId;
+        transaction.postedAt = transaction.createdAt;
+        transaction.updatedAt = transaction.createdAt;
+        transaction.originalTransactionId = original.getId();
+        transaction.reversalReason = reason == null ? "" : reason.trim();
         return transaction;
     }
 
@@ -179,6 +211,14 @@ public class FinancialTransaction {
 
     public String getRejectionReason() {
         return rejectionReason;
+    }
+
+    public String getOriginalTransactionId() {
+        return originalTransactionId;
+    }
+
+    public String getReversalReason() {
+        return reversalReason;
     }
 
     public Instant getCreatedAt() {
