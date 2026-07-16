@@ -6,6 +6,7 @@ import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
@@ -30,11 +31,17 @@ class TenantController {
     private static final Set<String> ALLOWED_STATUSES = Set.of("pending_review", "approved", "active", "suspended", "terminated");
 
     private final TenantRepository tenantRepository;
+    private final SaccoProfileRepository saccoProfileRepository;
     private final AuthService authService;
     private final AuditService auditService;
 
-    TenantController(TenantRepository tenantRepository, AuthService authService, AuditService auditService) {
+    TenantController(
+            TenantRepository tenantRepository,
+            SaccoProfileRepository saccoProfileRepository,
+            AuthService authService,
+            AuditService auditService) {
         this.tenantRepository = tenantRepository;
+        this.saccoProfileRepository = saccoProfileRepository;
         this.authService = authService;
         this.auditService = auditService;
     }
@@ -84,6 +91,17 @@ class TenantController {
                 blankToDefault(body.district()),
                 body.licenseExpiry(),
                 blankToDefault(body.packageId())));
+        saccoProfileRepository.save(new SaccoProfile(
+                "profile_" + UUID.randomUUID(),
+                tenant.getId(),
+                tenant.getName(),
+                "",
+                "",
+                tenant.getRegistrationNo(),
+                "",
+                "",
+                "",
+                ""));
 
         auditService.record(
                 tenant.getId(),
@@ -129,6 +147,73 @@ class TenantController {
         return ResponseEntity.ok(ApiResponse.of(TenantResponse.from(savedTenant)));
     }
 
+    @GetMapping("/{tenantId}/profile")
+    ResponseEntity<?> getSaccoProfile(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String tenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!canAccessTenant(currentSession, tenantId)) return tenantAccessDenied("Cannot view another tenant profile.");
+        if (!tenantRepository.existsById(tenantId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "TENANT_NOT_FOUND", "Tenant not found."));
+        }
+
+        return saccoProfileRepository.findByTenantId(tenantId)
+                .<ResponseEntity<?>>map(profile -> ResponseEntity.ok(ApiResponse.of(SaccoProfileResponse.from(profile))))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "SACCO_PROFILE_NOT_FOUND", "SACCO profile not found.")));
+    }
+
+    @PatchMapping("/{tenantId}/profile")
+    ResponseEntity<?> updateSaccoProfile(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String tenantId,
+            @Valid @RequestBody UpdateSaccoProfileRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!canAccessTenant(currentSession, tenantId)) return tenantAccessDenied("Cannot update another tenant profile.");
+
+        Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+        if (tenant == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "TENANT_NOT_FOUND", "Tenant not found."));
+        }
+
+        SaccoProfile profile = saccoProfileRepository.findByTenantId(tenantId)
+                .orElseGet(() -> new SaccoProfile(
+                        "profile_" + UUID.randomUUID(),
+                        tenantId,
+                        tenant.getName(),
+                        "",
+                        "",
+                        tenant.getRegistrationNo(),
+                        "",
+                        "",
+                        "",
+                        ""));
+        profile.update(
+                firstNonBlank(body.legalName(), profile.getLegalName()),
+                updateOptional(body.tin(), profile.getTin()),
+                updateOptional(body.umraLicenseNo(), profile.getUmraLicenseNo()),
+                firstNonBlank(body.cooperativeRegistrationNo(), profile.getCooperativeRegistrationNo()),
+                updateOptional(body.address(), profile.getAddress()),
+                updateOptional(body.email(), profile.getEmail()),
+                updateOptional(body.phone(), profile.getPhone()),
+                updateOptional(body.website(), profile.getWebsite()));
+        SaccoProfile savedProfile = saccoProfileRepository.save(profile);
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Updated SACCO profile " + savedProfile.getLegalName(),
+                "sacco_profile",
+                savedProfile.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(SaccoProfileResponse.from(savedProfile)));
+    }
+
     private boolean canAccessTenant(AuthService.CurrentSession currentSession, String tenantId) {
         return authService.isPlatform(currentSession.user()) || tenantId.equals(currentSession.user().getTenantId());
     }
@@ -147,6 +232,14 @@ class TenantController {
         return value == null || value.isBlank() ? "" : value.trim();
     }
 
+    private String firstNonBlank(String requestedValue, String currentValue) {
+        return requestedValue == null || requestedValue.isBlank() ? currentValue : requestedValue.trim();
+    }
+
+    private String updateOptional(String requestedValue, String currentValue) {
+        return requestedValue == null ? currentValue : requestedValue.trim();
+    }
+
     record CreateTenantRequest(
             @NotBlank String name,
             @NotBlank String abbreviation,
@@ -157,5 +250,16 @@ class TenantController {
     }
 
     record UpdateTenantStatusRequest(@NotBlank String status) {
+    }
+
+    record UpdateSaccoProfileRequest(
+            String legalName,
+            String tin,
+            String umraLicenseNo,
+            String cooperativeRegistrationNo,
+            String address,
+            @Email String email,
+            String phone,
+            String website) {
     }
 }

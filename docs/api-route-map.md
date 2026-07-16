@@ -11,6 +11,8 @@ Java-backed routes currently implemented:
 - `GET /api/v1/tenants/:id`
 - `POST /api/v1/tenants`
 - `PATCH /api/v1/tenants/:id/status`
+- `GET /api/v1/tenants/:id/profile`
+- `PATCH /api/v1/tenants/:id/profile`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/logout`
@@ -103,6 +105,8 @@ All JSON responses should follow one of these shapes:
 | GET | `/tenants/:id` | Get one tenant. | Required |
 | POST | `/tenants` | Submit/create tenant. | Platform admin or public registration flow |
 | PATCH | `/tenants/:id/status` | Approve, activate, suspend, or terminate tenant. | Platform admin |
+| GET | `/tenants/:id/profile` | Get SACCO legal/contact profile. | Required |
+| PATCH | `/tenants/:id/profile` | Update SACCO legal/contact profile. | SACCO admin or platform admin |
 | GET | `/users` | List users in current tenant. | Required |
 | POST | `/users` | Create a user with hashed password. | Admin |
 | POST | `/auth/login` | Authenticate user. | Public |

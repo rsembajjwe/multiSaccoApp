@@ -29,6 +29,7 @@ cd backend-java
 - `/api/v1/health` with the same `{ "data": ... }` API envelope used by the prototype.
 - `/api/v1/tenants` backed by a Flyway migration and seeded tenant records.
 - `/api/v1/tenants/{tenantId}` and `/api/v1/tenants/{tenantId}/status` for authenticated onboarding review.
+- `/api/v1/tenants/{tenantId}/profile` for tenant-scoped SACCO legal/contact profile read and update.
 - `/api/v1/auth/login` for seeded staff users, using PBKDF2 password verification and safe user responses.
 - `/api/v1/auth/me` and `/api/v1/auth/logout` backed by hashed bearer-token sessions.
 - `/api/v1/users` for authenticated tenant-scoped user listing and staff creation.

@@ -107,6 +107,13 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.registrationNo", is(registrationNo)));
 
+		mockMvc.perform(get("/api/v1/tenants/" + tenantId + "/profile")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenantId", is(tenantId)))
+				.andExpect(jsonPath("$.data.legalName", is("Smoke Java SACCO")))
+				.andExpect(jsonPath("$.data.cooperativeRegistrationNo", is(registrationNo)));
+
 		mockMvc.perform(patch("/api/v1/tenants/" + tenantId + "/status")
 						.header("Authorization", "Bearer " + token)
 						.contentType("application/json")
@@ -120,6 +127,82 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[0].action", is("Updated tenant status to approved")));
+	}
+
+	@Test
+	void saccoProfileCanBeReadAndUpdatedWithTenantScope() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/tenants/tenant_green/profile")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.legalName", is("Green Valley Savings and Credit Cooperative Society Limited")))
+				.andExpect(jsonPath("$.data.tin", is("1002456789")))
+				.andExpect(jsonPath("$.data.cooperativeRegistrationNo", is("COOP/GVS/2018/014")));
+
+		mockMvc.perform(patch("/api/v1/tenants/tenant_green/profile")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "legalName": "Green Valley SACCO Cooperative Society",
+								  "tin": "1002456789-UPDATED",
+								  "umraLicenseNo": "UMRA/GVS/2026/999",
+								  "cooperativeRegistrationNo": "COOP/GVS/2018/014",
+								  "address": "Plot 99 Kampala Road",
+								  "email": "registry@greenvalley.example.local",
+								  "phone": "+256700999111",
+								  "website": "https://greenvalley-sacco.example.local"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.legalName", is("Green Valley SACCO Cooperative Society")))
+				.andExpect(jsonPath("$.data.tin", is("1002456789-UPDATED")))
+				.andExpect(jsonPath("$.data.email", is("registry@greenvalley.example.local")));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].resourceType", is("sacco_profile")));
+	}
+
+	@Test
+	void saccoProfileControlsAreEnforced() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/tenants/tenant_lake/profile")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(patch("/api/v1/tenants/tenant_lake/profile")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "legalName": "Denied Lake Profile" }
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(patch("/api/v1/tenants/tenant_green/profile")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "email": "not-an-email" }
+								"""))
+				.andExpect(status().isBadRequest());
+
+		mockMvc.perform(get("/api/v1/tenants/tenant_missing/profile")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code", is("TENANT_NOT_FOUND")));
+
+		mockMvc.perform(get("/api/v1/tenants/tenant_lake/profile")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_lake")));
 	}
 
 	@Test

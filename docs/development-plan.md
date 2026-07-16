@@ -391,6 +391,7 @@ Progress:
 - Java audit foundation added with Flyway `audit_events`, tenant-scoped `/api/v1/audit-events`, and automatic audit entries for user creation.
 - Java role and permission foundation added with Flyway `roles`/`permissions`/`role_permissions`/`user_roles`, seeded platform/SACCO roles, authenticated permission listing, tenant-scoped custom role creation, permission validation, and audit events.
 - Java SACCO onboarding added with authenticated tenant detail, platform-only tenant creation, platform-only status updates, tenant access checks, and audit events.
+- Java SACCO profile management added with Flyway `sacco_profiles`, seeded legal/contact details, tenant-scoped read/update endpoints, validation, and audit events.
 - Java branch management added with Flyway `branches`, seeded branch records, tenant-scoped `/api/v1/branches`, duplicate-code checks, and audit events.
 - Java member management added with Flyway `members`, seeded member balances, tenant-scoped `/api/v1/members`, registration, detail, status updates, and audit events.
 - Java member document metadata added with Flyway `member_documents`, seeded KYC records, member-scoped listing/upload, validation, tenant isolation, and audit events.
