@@ -395,6 +395,7 @@ Progress:
 - Java member self-service auth added with Flyway `member_sessions`, member login by membership number/phone/email, balance-aware `/api/v1/member-auth/me`, logout revocation, and member audit events.
 - Java financial transactions added with Flyway `financial_transactions`, tenant-scoped listing, pending transaction submission, maker-checker posting/rejection, and member balance updates.
 - Java loan applications added with Flyway `loans`, seeded loan files, tenant-scoped `/api/v1/loans`, active-member validation, product/amount/term validation, DSR estimate, and audit events.
+- Java loan decisions added with approve/reject status updates, accepted-guarantor approval control, approval-before-disbursement enforcement, active-loan balance creation, and audit events.
 
 Recommended stack:
 

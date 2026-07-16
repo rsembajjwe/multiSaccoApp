@@ -18,6 +18,8 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -34,6 +36,7 @@ class LoanController {
             "Emergency Loan",
             "Agriculture Loan",
             "School Fees Loan");
+    private static final Set<String> DECISION_STATUSES = Set.of("approved", "rejected");
 
     private final LoanRepository loanRepository;
     private final MemberRepository memberRepository;
@@ -126,6 +129,57 @@ class LoanController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(LoanResponse.from(loan)));
     }
 
+    @PatchMapping("/{loanId}/status")
+    ResponseEntity<?> updateLoanStatus(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId,
+            @Valid @RequestBody UpdateLoanStatusRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String status = body.status().trim();
+        if (!DECISION_STATUSES.contains(status)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_LOAN_STATUS", "Loans can only be approved or rejected from this endpoint."));
+        }
+
+        return loanRepository.findById(loanId)
+                .<ResponseEntity<?>>map(loan -> decideLoan(loan, status, body.reason(), currentSession, request))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
+    }
+
+    @PostMapping("/{loanId}/disburse")
+    ResponseEntity<?> disburseLoan(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return loanRepository.findById(loanId)
+                .<ResponseEntity<?>>map(loan -> {
+                    if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+                    if (!"approved".equals(loan.getStatus())) {
+                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .body(ApiErrorResponse.of(409, "LOAN_NOT_APPROVED", "A loan must be approved before disbursement."));
+                    }
+                    loan.disburse(currentSession.user().getId());
+                    Loan saved = loanRepository.save(loan);
+                    auditService.record(
+                            saved.getTenantId(),
+                            currentSession.user(),
+                            "Disbursed loan",
+                            "loan",
+                            saved.getId(),
+                            request.getRemoteAddr());
+                    return ResponseEntity.ok(ApiResponse.of(LoanResponse.from(saved)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
+    }
+
     private int dsr(BigDecimal amount, BigDecimal savingsBalance) {
         BigDecimal savingsCapacity = savingsBalance.multiply(BigDecimal.valueOf(3));
         if (savingsCapacity.compareTo(BigDecimal.ZERO) <= 0) return 65;
@@ -133,6 +187,34 @@ class LoanController {
                 .divide(savingsCapacity, 6, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(35));
         return Math.min(65, ratio.setScale(0, RoundingMode.HALF_UP).intValue());
+    }
+
+    private ResponseEntity<?> decideLoan(
+            Loan loan,
+            String status,
+            String reason,
+            AuthService.CurrentSession currentSession,
+            HttpServletRequest request) {
+        if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+        if (!Set.of("submitted", "under_review").contains(loan.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "LOAN_ALREADY_DECIDED", "Only submitted or under-review loans can be decided."));
+        }
+        if ("approved".equals(status) && loan.getGuarantors() < 1) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "GUARANTOR_REQUIRED", "At least one accepted guarantor is required before loan approval."));
+        }
+
+        loan.decide(status, currentSession.user().getId(), reason == null ? "" : reason.trim());
+        Loan saved = loanRepository.save(loan);
+        auditService.record(
+                saved.getTenantId(),
+                currentSession.user(),
+                ("approved".equals(status) ? "Approved" : "Rejected") + " loan application",
+                "loan",
+                saved.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(LoanResponse.from(saved)));
     }
 
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
@@ -159,5 +241,8 @@ class LoanController {
             @NotNull BigDecimal amount,
             Integer repaymentMonths,
             String purpose) {
+    }
+
+    record UpdateLoanStatusRequest(@NotBlank String status, String reason) {
     }
 }

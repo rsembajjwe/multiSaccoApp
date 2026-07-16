@@ -98,6 +98,24 @@ class Loan {
         this.updatedAt = this.createdAt;
     }
 
+    void decide(String status, String actorUserId, String reason) {
+        this.status = status;
+        this.stage = "approved".equals(status) ? "Ready for Disbursement" : "Rejected";
+        this.approvedByUserId = "approved".equals(status) ? actorUserId : null;
+        this.approvedAt = "approved".equals(status) ? Instant.now() : null;
+        this.rejectionReason = "rejected".equals(status) ? reason : "";
+        this.updatedAt = Instant.now();
+    }
+
+    void disburse(String actorUserId) {
+        this.status = "active";
+        this.stage = "Disbursed";
+        this.balance = this.amount;
+        this.disbursedByUserId = actorUserId;
+        this.disbursedAt = Instant.now();
+        this.updatedAt = this.disbursedAt;
+    }
+
     String getId() {
         return id;
     }

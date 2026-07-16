@@ -954,6 +954,87 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.error.code", is("INVALID_REPAYMENT_PERIOD")));
 	}
 
+	@Test
+	void guaranteedLoanCanBeApprovedAndDisbursed() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(patch("/api/v1/loans/loan_green_0002/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "approved" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("approved")))
+				.andExpect(jsonPath("$.data.stage", is("Ready for Disbursement")))
+				.andExpect(jsonPath("$.data.approvedByUserId", is("user_green_admin")))
+				.andExpect(jsonPath("$.data.approvedAt", notNullValue()));
+
+		mockMvc.perform(post("/api/v1/loans/loan_green_0002/disburse")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("active")))
+				.andExpect(jsonPath("$.data.stage", is("Disbursed")))
+				.andExpect(jsonPath("$.data.balance", is(800000.00)))
+				.andExpect(jsonPath("$.data.disbursedByUserId", is("user_green_admin")))
+				.andExpect(jsonPath("$.data.disbursedAt", notNullValue()));
+	}
+
+	@Test
+	void loanDecisionControlsAreEnforced() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/loans/loan_green_0002/disburse")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("LOAN_NOT_APPROVED")));
+
+		MvcResult createdLoan = mockMvc.perform(post("/api/v1/loans")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "product": "Emergency Loan",
+								  "amount": 250000,
+								  "repaymentMonths": 4
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andReturn();
+
+		String loanId = objectMapper.readTree(createdLoan.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "approved" }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("GUARANTOR_REQUIRED")));
+
+		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "rejected", "reason": "Capacity too low" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("rejected")))
+				.andExpect(jsonPath("$.data.stage", is("Rejected")))
+				.andExpect(jsonPath("$.data.rejectionReason", is("Capacity too low")));
+
+		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "rejected" }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("LOAN_ALREADY_DECIDED")));
+	}
+
 	private String loginAndReturnToken() throws Exception {
 		return loginAndReturnToken("admin@platform.local", "Admin@12345");
 	}
