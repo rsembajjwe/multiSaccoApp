@@ -44,6 +44,7 @@ Java-backed routes currently implemented:
 - `POST /api/v1/member-auth/logout`
 - `GET /api/v1/financial-transactions`
 - `POST /api/v1/financial-transactions`
+- `GET /api/v1/financial-transactions/:id/receipt`
 - `PATCH /api/v1/financial-transactions/:id/status`
 - `GET /api/v1/chart-of-accounts`
 - `GET /api/v1/journal-entries`
@@ -157,6 +158,7 @@ All JSON responses should follow one of these shapes:
 | POST | `/members/:id/documents` | Upload/register member document metadata. | SACCO staff |
 | GET | `/financial-transactions` | List tenant financial transactions. | Required |
 | POST | `/financial-transactions` | Submit a pending financial transaction. | SACCO staff |
+| GET | `/financial-transactions/:id/receipt` | Generate a receipt projection for a posted financial transaction. | Required |
 | PATCH | `/financial-transactions/:id/status` | Post or reject a pending financial transaction. | Authorized checker |
 | GET | `/accounting-periods` | List tenant accounting periods. | Required |
 | PATCH | `/accounting-periods/:id/status` | Open or close an accounting period. | SACCO staff |

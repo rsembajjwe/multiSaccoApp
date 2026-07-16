@@ -79,6 +79,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java member self-service authentication lets active members login and view only their own profile, tenant, branch, and savings/share/welfare balances.
 - Java member notification listing returns authenticated-member-only in-app notification history for the member portal and mobile app.
 - Java financial transactions validate tenant, member, branch, type, channel, and amount before maker-checker posting updates member balances.
+- Java financial transaction receipts expose posted-only printable receipt details with SACCO, branch, member, amount, reference, and posting metadata.
 - Java accounting foundation exposes the seeded chart of accounts and balanced tenant-scoped journal entries derived from posted Java financial transactions, loan disbursements, and loan repayments.
 - Java accounting periods can be listed, closed, and reopened, with closed periods blocking Java financial transaction posting, loan disbursement, and loan repayment.
 - Java supplier and expense endpoints create tenant-scoped suppliers, post operating expenses, block closed-period expenses, and feed expense journals and regulatory totals.

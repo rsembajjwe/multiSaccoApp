@@ -45,6 +45,7 @@ cd backend-java
 - `/api/v1/member-auth/mobile-dashboard` and `/api/v1/member-auth/mobile-loans` for server-confirmed member mobile balances, loans, notifications, pending guarantor requests, and mobile loan applications.
 - `/api/v1/subscription-packages`, `/api/v1/subscriptions`, and `/api/v1/subscriptions/{subscriptionId}/payments` for tiered annual billing, tenant-scoped subscription visibility, platform payment posting, and subscription payment journals.
 - `/api/v1/financial-transactions` for savings, shares, welfare, and withdrawal posting workflows.
+- `/api/v1/financial-transactions/{transactionId}/receipt` for printable receipt details on posted financial transactions.
 - `/api/v1/chart-of-accounts` and `/api/v1/journal-entries` for seeded accounting accounts and balanced journals derived from posted Java financial and loan events.
 - `/api/v1/accounting-periods` for tenant-scoped period listing, close/reopen controls, and closed-period posting protection.
 - `/api/v1/suppliers` and `/api/v1/expenses` for tenant-scoped supplier setup, posted operating expenses, and balanced expense journals.

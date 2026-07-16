@@ -3,11 +3,13 @@ package com.methaltech.sacco.finance;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.accounting.AccountingPeriodService;
+import com.methaltech.sacco.branch.Branch;
 import com.methaltech.sacco.branch.BranchRepository;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
+import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -156,6 +158,19 @@ class FinancialTransactionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(FinancialTransactionResponse.from(transaction)));
     }
 
+    @GetMapping("/{transactionId}/receipt")
+    ResponseEntity<?> getReceipt(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String transactionId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return transactionRepository.findById(transactionId)
+                .<ResponseEntity<?>>map(transaction -> receiptResponse(transaction, currentSession))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "TRANSACTION_NOT_FOUND", "Financial transaction not found.")));
+    }
+
     @PatchMapping("/{transactionId}/status")
     ResponseEntity<?> updateTransactionStatus(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -236,6 +251,29 @@ class FinancialTransactionController {
                 saved.getId(),
                 request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(FinancialTransactionResponse.from(saved)));
+    }
+
+    private ResponseEntity<?> receiptResponse(FinancialTransaction transaction, AuthService.CurrentSession currentSession) {
+        if (!canAccess(currentSession, transaction.getTenantId())) return tenantAccessDenied();
+        if (!"posted".equals(transaction.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "RECEIPT_NOT_AVAILABLE", "Receipts are only available for posted transactions."));
+        }
+
+        TenantResponse tenant = tenantService.findById(transaction.getTenantId()).orElse(null);
+        Branch branch = branchRepository.findById(transaction.getBranchId()).orElse(null);
+        Member member = memberRepository.findById(transaction.getMemberId()).orElse(null);
+        if (tenant == null || branch == null || member == null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "RECEIPT_DATA_MISSING", "Receipt source data is incomplete."));
+        }
+
+        return ResponseEntity.ok(ApiResponse.of(FinancialTransactionReceiptResponse.from(
+                transaction,
+                tenant,
+                branch,
+                member,
+                Instant.now())));
     }
 
     private String referenceForTenant(String tenantId) {

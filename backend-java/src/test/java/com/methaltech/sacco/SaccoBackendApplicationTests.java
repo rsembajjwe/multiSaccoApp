@@ -1387,6 +1387,21 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.checkerUserId", notNullValue()))
 				.andExpect(jsonPath("$.data.postedAt", notNullValue()));
 
+		mockMvc.perform(get("/api/v1/financial-transactions/" + transactionId + "/receipt")
+						.header("Authorization", "Bearer " + makerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.receiptNo", startsWith("RCT-GVS-TX-")))
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.tenantName", is("Green Valley SACCO")))
+				.andExpect(jsonPath("$.data.branchName", is("Mukono Main")))
+				.andExpect(jsonPath("$.data.memberId", is(memberId)))
+				.andExpect(jsonPath("$.data.membershipNo", is(membershipNo)))
+				.andExpect(jsonPath("$.data.transactionId", is(transactionId)))
+				.andExpect(jsonPath("$.data.amount", is(125000.00)))
+				.andExpect(jsonPath("$.data.postedByUserId", notNullValue()))
+				.andExpect(jsonPath("$.data.issuedAt", notNullValue()))
+				.andExpect(jsonPath("$.data.printableText", startsWith("Green Valley SACCO")));
+
 		mockMvc.perform(get("/api/v1/members/" + memberId)
 				.header("Authorization", "Bearer " + makerToken))
 				.andExpect(status().isOk())
@@ -1398,6 +1413,22 @@ class SaccoBackendApplicationTests {
 	@Test
 	void invalidFinancialTransactionsAreRejected() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/financial-transactions/txn_green_0001/receipt")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.receiptNo", is("RCT-GVS-TX-0001")))
+				.andExpect(jsonPath("$.data.memberName", is("Amina Nakitende")));
+
+		mockMvc.perform(get("/api/v1/financial-transactions/txn_green_0003/receipt")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("RECEIPT_NOT_AVAILABLE")));
+
+		mockMvc.perform(get("/api/v1/financial-transactions/txn_missing/receipt")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code", is("TRANSACTION_NOT_FOUND")));
 
 		mockMvc.perform(post("/api/v1/financial-transactions")
 						.header("Authorization", "Bearer " + token)
