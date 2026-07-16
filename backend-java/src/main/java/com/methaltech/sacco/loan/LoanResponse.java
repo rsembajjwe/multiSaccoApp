@@ -31,6 +31,10 @@ public record LoanResponse(
         Instant updatedAt) {
 
     public static LoanResponse from(Loan loan) {
+        return from(loan, 0, BigDecimal.ZERO);
+    }
+
+    public static LoanResponse from(Loan loan, int repayments, BigDecimal repaymentTotal) {
         return new LoanResponse(
                 loan.getId(),
                 loan.getTenantId(),
@@ -43,8 +47,8 @@ public record LoanResponse(
                 loan.getGuarantors(),
                 0,
                 0,
-                0,
-                BigDecimal.ZERO,
+                repayments,
+                repaymentTotal,
                 loan.getDsr(),
                 loan.getRepaymentMonths(),
                 loan.getPurpose(),

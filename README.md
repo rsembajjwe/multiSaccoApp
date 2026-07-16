@@ -101,6 +101,8 @@ PATCH http://127.0.0.1:8080/api/v1/loans/{loanId}/status
 POST http://127.0.0.1:8080/api/v1/loans/{loanId}/disburse
 GET http://127.0.0.1:8080/api/v1/loans/{loanId}/guarantors
 POST http://127.0.0.1:8080/api/v1/loans/{loanId}/guarantors
+GET http://127.0.0.1:8080/api/v1/loans/{loanId}/repayments
+POST http://127.0.0.1:8080/api/v1/loans/{loanId}/repayments
 GET http://127.0.0.1:8080/api/v1/member-auth/guarantor-requests
 PATCH http://127.0.0.1:8080/api/v1/member-auth/guarantor-requests/{guarantorId}/status
 ```

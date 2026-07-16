@@ -39,6 +39,7 @@ cd backend-java
 - `/api/v1/financial-transactions` for savings, shares, welfare, and withdrawal posting workflows.
 - `/api/v1/loans` for tenant-scoped loan file listing, staff-submitted applications, decisions, and disbursement.
 - `/api/v1/loans/{loanId}/guarantors` and `/api/v1/member-auth/guarantor-requests` for staff guarantor requests and member accept/reject decisions.
+- `/api/v1/loans/{loanId}/repayments` for staff repayment capture, duplicate reference controls, balance reduction, and loan closure on full payoff.
 - Baseline security headers on responses.
 - H2 development datasource configured in PostgreSQL compatibility mode.
 - PostgreSQL and Flyway dependencies included for the production database path.

@@ -73,6 +73,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java loan applications list tenant loan files and validate active borrowers, product, amount, and repayment term before creating staff-submitted loan requests.
 - Java loan decision endpoints enforce guarantor-required approval and block disbursement until a loan is approved.
 - Java loan guarantor endpoints let staff request guarantors and let members accept or reject requests with duplicate, borrower, and guarantee-capacity controls.
+- Java loan repayment endpoints record staff repayments against active loans, reject duplicate references and overpayments, reduce outstanding balance, and close fully repaid loans.
 
 ## Recommended backend modules for the next build
 

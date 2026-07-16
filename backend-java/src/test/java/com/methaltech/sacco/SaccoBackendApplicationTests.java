@@ -1036,6 +1036,131 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void loanRepaymentsReduceBalanceAndCloseLoan() throws Exception {
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String loanId = createApprovedAndDisbursedLoan(staffToken, 200000);
+
+		mockMvc.perform(post("/api/v1/loans/" + loanId + "/repayments")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 125000,
+								  "channel": "cash",
+								  "reference": "LR-TEST-001",
+								  "narration": "Counter repayment"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.loanId", is(loanId)))
+				.andExpect(jsonPath("$.data.amount", is(125000)))
+				.andExpect(jsonPath("$.data.reference", is("LR-TEST-001")))
+				.andExpect(jsonPath("$.data.receivedByUserId", is("user_green_admin")))
+				.andExpect(jsonPath("$.data.receivedAt", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/loans/" + loanId + "/repayments")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(1)))
+				.andExpect(jsonPath("$.data[0].reference", is("LR-TEST-001")));
+
+		mockMvc.perform(post("/api/v1/loans/" + loanId + "/repayments")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 75000,
+								  "channel": "mobile_money",
+								  "reference": "LR-TEST-002"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.amount", is(75000)));
+
+		MvcResult loans = mockMvc.perform(get("/api/v1/loans")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andReturn();
+
+		JsonNode closedLoan = loanFromList(loans, loanId);
+		org.junit.jupiter.api.Assertions.assertEquals("closed", closedLoan.path("status").asString());
+		org.junit.jupiter.api.Assertions.assertEquals("Closed", closedLoan.path("stage").asString());
+		org.junit.jupiter.api.Assertions.assertEquals(0.0, closedLoan.path("balance").asDouble(), 0.01);
+		org.junit.jupiter.api.Assertions.assertEquals(2, closedLoan.path("repayments").asInt());
+		org.junit.jupiter.api.Assertions.assertEquals(200000.0, closedLoan.path("repaymentTotal").asDouble(), 0.01);
+	}
+
+	@Test
+	void loanRepaymentControlsAreEnforced() throws Exception {
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String loanId = createApprovedAndDisbursedLoan(staffToken, 150000);
+
+		mockMvc.perform(post("/api/v1/loans/" + loanId + "/repayments")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 50000,
+								  "channel": "cash",
+								  "reference": "LR-TEST-CTRL-001"
+								}
+								"""))
+				.andExpect(status().isCreated());
+
+		mockMvc.perform(post("/api/v1/loans/" + loanId + "/repayments")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 25000,
+								  "channel": "cash",
+								  "reference": "LR-TEST-CTRL-001"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("DUPLICATE_REPAYMENT_REFERENCE")));
+
+		mockMvc.perform(post("/api/v1/loans/" + loanId + "/repayments")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 999999,
+								  "channel": "cash",
+								  "reference": "LR-TEST-CTRL-002"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("REPAYMENT_EXCEEDS_BALANCE")));
+
+		mockMvc.perform(post("/api/v1/loans/" + loanId + "/repayments")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 0,
+								  "channel": "cash",
+								  "reference": "LR-TEST-CTRL-003"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_REPAYMENT_AMOUNT")));
+
+		mockMvc.perform(post("/api/v1/loans/loan_green_0002/repayments")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 50000,
+								  "channel": "cash",
+								  "reference": "LR-TEST-CTRL-004"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("LOAN_NOT_ACTIVE")));
+	}
+
+	@Test
 	void staffCanRequestGuarantorAndMemberCanAccept() throws Exception {
 		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 
@@ -1300,6 +1425,70 @@ class SaccoBackendApplicationTests {
 
 		JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
 		return root.path("data").path("token").asString();
+	}
+
+	private String createApprovedAndDisbursedLoan(String staffToken, int amount) throws Exception {
+		MvcResult createdLoan = mockMvc.perform(post("/api/v1/loans")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "product": "Emergency Loan",
+								  "amount": %d,
+								  "repaymentMonths": 4
+								}
+								""".formatted(amount)))
+				.andExpect(status().isCreated())
+				.andReturn();
+
+		String loanId = objectMapper.readTree(createdLoan.getResponse().getContentAsString()).path("data").path("id").asString();
+		MvcResult guarantor = mockMvc.perform(post("/api/v1/loans/" + loanId + "/guarantors")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_daniel",
+								  "guaranteedAmount": 100000
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andReturn();
+
+		String guarantorId = objectMapper.readTree(guarantor.getResponse().getContentAsString()).path("data").path("id").asString();
+		String memberToken = memberLoginAndReturnToken("GVS-0002", "Member@12345");
+
+		mockMvc.perform(patch("/api/v1/member-auth/guarantor-requests/" + guarantorId + "/status")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "accepted" }
+								"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "approved" }
+								"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(post("/api/v1/loans/" + loanId + "/disburse")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk());
+
+		return loanId;
+	}
+
+	private JsonNode loanFromList(MvcResult loans, String loanId) throws Exception {
+		JsonNode data = objectMapper.readTree(loans.getResponse().getContentAsString()).path("data");
+		for (JsonNode loan : data) {
+			if (loanId.equals(loan.path("id").asString())) {
+				return loan;
+			}
+		}
+		throw new AssertionError("Loan not found in response: " + loanId);
 	}
 
 }

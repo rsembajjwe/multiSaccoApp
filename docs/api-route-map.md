@@ -36,6 +36,8 @@ Java-backed routes currently implemented:
 - `POST /api/v1/loans/:id/disburse`
 - `GET /api/v1/loans/:id/guarantors`
 - `POST /api/v1/loans/:id/guarantors`
+- `GET /api/v1/loans/:id/repayments`
+- `POST /api/v1/loans/:id/repayments`
 - `GET /api/v1/member-auth/guarantor-requests`
 - `PATCH /api/v1/member-auth/guarantor-requests/:id/status`
 

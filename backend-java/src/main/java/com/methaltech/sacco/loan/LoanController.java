@@ -37,9 +37,11 @@ class LoanController {
             "Agriculture Loan",
             "School Fees Loan");
     private static final Set<String> DECISION_STATUSES = Set.of("approved", "rejected");
+    private static final Set<String> REPAYMENT_CHANNELS = Set.of("cash", "bank", "mobile_money", "payroll");
 
     private final LoanRepository loanRepository;
     private final LoanGuarantorRepository guarantorRepository;
+    private final LoanRepaymentRepository repaymentRepository;
     private final MemberRepository memberRepository;
     private final AuthService authService;
     private final AuditService auditService;
@@ -47,11 +49,13 @@ class LoanController {
     LoanController(
             LoanRepository loanRepository,
             LoanGuarantorRepository guarantorRepository,
+            LoanRepaymentRepository repaymentRepository,
             MemberRepository memberRepository,
             AuthService authService,
             AuditService auditService) {
         this.loanRepository = loanRepository;
         this.guarantorRepository = guarantorRepository;
+        this.repaymentRepository = repaymentRepository;
         this.memberRepository = memberRepository;
         this.authService = authService;
         this.auditService = auditService;
@@ -71,7 +75,7 @@ class LoanController {
                 ? loanRepository.findAllByOrderByTenantIdAscCreatedAtDesc()
                 : loanRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
 
-        return ResponseEntity.ok(ApiResponse.of(loans.stream().map(LoanResponse::from).toList()));
+        return ResponseEntity.ok(ApiResponse.of(loans.stream().map(this::loanResponse).toList()));
     }
 
     @PostMapping
@@ -129,7 +133,7 @@ class LoanController {
                 loan.getId(),
                 request.getRemoteAddr());
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(LoanResponse.from(loan)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(loanResponse(loan)));
     }
 
     @PatchMapping("/{loanId}/status")
@@ -211,8 +215,42 @@ class LoanController {
                             "loan",
                             saved.getId(),
                             request.getRemoteAddr());
-                    return ResponseEntity.ok(ApiResponse.of(LoanResponse.from(saved)));
+                    return ResponseEntity.ok(ApiResponse.of(loanResponse(saved)));
                 })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
+    }
+
+    @GetMapping("/{loanId}/repayments")
+    ResponseEntity<?> listRepayments(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return loanRepository.findById(loanId)
+                .<ResponseEntity<?>>map(loan -> {
+                    if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+                    return ResponseEntity.ok(ApiResponse.of(repaymentRepository.findByLoanIdOrderByReceivedAtDesc(loanId)
+                            .stream()
+                            .map(LoanRepaymentResponse::from)
+                            .toList()));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
+    }
+
+    @PostMapping("/{loanId}/repayments")
+    ResponseEntity<?> createRepayment(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId,
+            @Valid @RequestBody CreateRepaymentRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return loanRepository.findById(loanId)
+                .<ResponseEntity<?>>map(loan -> createRepayment(loan, body, currentSession, request))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
     }
@@ -251,7 +289,7 @@ class LoanController {
                 "loan",
                 saved.getId(),
                 request.getRemoteAddr());
-        return ResponseEntity.ok(ApiResponse.of(LoanResponse.from(saved)));
+        return ResponseEntity.ok(ApiResponse.of(loanResponse(saved)));
     }
 
     private ResponseEntity<?> createGuarantor(
@@ -315,6 +353,60 @@ class LoanController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(LoanGuarantorResponse.from(requestRecord)));
     }
 
+    private ResponseEntity<?> createRepayment(
+            Loan loan,
+            CreateRepaymentRequest body,
+            AuthService.CurrentSession currentSession,
+            HttpServletRequest request) {
+        if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+        if (!"active".equals(loan.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "LOAN_NOT_ACTIVE", "Only active loans can receive repayments."));
+        }
+        if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_AMOUNT", "Repayment amount must be greater than zero."));
+        }
+        if (body.amount().compareTo(loan.getBalance()) > 0) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "REPAYMENT_EXCEEDS_BALANCE", "Repayment amount cannot exceed the outstanding loan balance."));
+        }
+
+        String channel = body.channel() == null ? "cash" : body.channel().trim();
+        if (!REPAYMENT_CHANNELS.contains(channel)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_CHANNEL", "Unsupported repayment channel."));
+        }
+        String reference = body.reference().trim();
+        if (repaymentRepository.existsByTenantIdAndReferenceIgnoreCase(loan.getTenantId(), reference)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "DUPLICATE_REPAYMENT_REFERENCE", "Repayment reference already exists for this SACCO."));
+        }
+
+        LoanRepayment repayment = repaymentRepository.save(new LoanRepayment(
+                "repayment_" + UUID.randomUUID(),
+                loan.getTenantId(),
+                loan.getId(),
+                loan.getMemberId(),
+                body.amount(),
+                channel,
+                reference,
+                body.narration() == null ? "" : body.narration().trim(),
+                currentSession.user().getId()));
+        loan.recordRepayment(repayment.getAmount());
+        loanRepository.save(loan);
+
+        auditService.record(
+                loan.getTenantId(),
+                currentSession.user(),
+                "Recorded loan repayment",
+                "loan_repayment",
+                repayment.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(LoanRepaymentResponse.from(repayment)));
+    }
+
     BigDecimal guaranteeCapacity(Member member, String excludedGuarantorId) {
         BigDecimal committed = guarantorRepository
                 .findByMemberIdAndStatusIn(member.getId(), List.of("pending", "accepted"))
@@ -324,6 +416,13 @@ class LoanController {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal capacity = member.getSavingsBalance().multiply(BigDecimal.valueOf(3)).subtract(committed);
         return capacity.max(BigDecimal.ZERO);
+    }
+
+    private LoanResponse loanResponse(Loan loan) {
+        return LoanResponse.from(
+                loan,
+                repaymentRepository.countByLoanId(loan.getId()),
+                repaymentRepository.totalAmountByLoanId(loan.getId()));
     }
 
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
@@ -356,5 +455,12 @@ class LoanController {
     }
 
     record CreateGuarantorRequest(@NotBlank String memberId, BigDecimal guaranteedAmount) {
+    }
+
+    record CreateRepaymentRequest(
+            @NotNull BigDecimal amount,
+            String channel,
+            @NotBlank String reference,
+            String narration) {
     }
 }
