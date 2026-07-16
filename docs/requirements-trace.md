@@ -72,6 +72,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java financial transactions validate tenant, member, branch, type, channel, and amount before maker-checker posting updates member balances.
 - Java loan applications list tenant loan files and validate active borrowers, product, amount, and repayment term before creating staff-submitted loan requests.
 - Java loan decision endpoints enforce guarantor-required approval and block disbursement until a loan is approved.
+- Java loan guarantor endpoints let staff request guarantors and let members accept or reject requests with duplicate, borrower, and guarantee-capacity controls.
 
 ## Recommended backend modules for the next build
 

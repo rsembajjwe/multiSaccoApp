@@ -6,10 +6,11 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Set;
 
 @Entity
 @Table(name = "loans")
-class Loan {
+public class Loan {
 
     @Id
     private String id;
@@ -116,87 +117,95 @@ class Loan {
         this.updatedAt = this.disbursedAt;
     }
 
-    String getId() {
+    public void refreshGuarantors(int acceptedGuarantors) {
+        this.guarantors = acceptedGuarantors;
+        if (acceptedGuarantors > 0 && Set.of("submitted", "under_review").contains(this.status)) {
+            this.stage = "Loan Committee";
+        }
+        this.updatedAt = Instant.now();
+    }
+
+    public String getId() {
         return id;
     }
 
-    String getTenantId() {
+    public String getTenantId() {
         return tenantId;
     }
 
-    String getMemberId() {
+    public String getMemberId() {
         return memberId;
     }
 
-    String getProduct() {
+    public String getProduct() {
         return product;
     }
 
-    BigDecimal getAmount() {
+    public BigDecimal getAmount() {
         return amount;
     }
 
-    BigDecimal getBalance() {
+    public BigDecimal getBalance() {
         return balance;
     }
 
-    String getStatus() {
+    public String getStatus() {
         return status;
     }
 
-    String getStage() {
+    public String getStage() {
         return stage;
     }
 
-    int getGuarantors() {
+    public int getGuarantors() {
         return guarantors;
     }
 
-    int getDsr() {
+    public int getDsr() {
         return dsr;
     }
 
-    int getRepaymentMonths() {
+    public int getRepaymentMonths() {
         return repaymentMonths;
     }
 
-    String getPurpose() {
+    public String getPurpose() {
         return purpose;
     }
 
-    String getChannel() {
+    public String getChannel() {
         return channel;
     }
 
-    String getSubmittedByMemberId() {
+    public String getSubmittedByMemberId() {
         return submittedByMemberId;
     }
 
-    String getApprovedByUserId() {
+    public String getApprovedByUserId() {
         return approvedByUserId;
     }
 
-    Instant getApprovedAt() {
+    public Instant getApprovedAt() {
         return approvedAt;
     }
 
-    String getDisbursedByUserId() {
+    public String getDisbursedByUserId() {
         return disbursedByUserId;
     }
 
-    Instant getDisbursedAt() {
+    public Instant getDisbursedAt() {
         return disbursedAt;
     }
 
-    String getRejectionReason() {
+    public String getRejectionReason() {
         return rejectionReason;
     }
 
-    Instant getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 
-    Instant getUpdatedAt() {
+    public Instant getUpdatedAt() {
         return updatedAt;
     }
 }

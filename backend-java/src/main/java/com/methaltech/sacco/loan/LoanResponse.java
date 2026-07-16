@@ -3,7 +3,7 @@ package com.methaltech.sacco.loan;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-record LoanResponse(
+public record LoanResponse(
         String id,
         String tenantId,
         String memberId,
@@ -30,7 +30,7 @@ record LoanResponse(
         Instant createdAt,
         Instant updatedAt) {
 
-    static LoanResponse from(Loan loan) {
+    public static LoanResponse from(Loan loan) {
         return new LoanResponse(
                 loan.getId(),
                 loan.getTenantId(),

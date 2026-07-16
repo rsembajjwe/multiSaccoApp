@@ -39,16 +39,19 @@ class LoanController {
     private static final Set<String> DECISION_STATUSES = Set.of("approved", "rejected");
 
     private final LoanRepository loanRepository;
+    private final LoanGuarantorRepository guarantorRepository;
     private final MemberRepository memberRepository;
     private final AuthService authService;
     private final AuditService auditService;
 
     LoanController(
             LoanRepository loanRepository,
+            LoanGuarantorRepository guarantorRepository,
             MemberRepository memberRepository,
             AuthService authService,
             AuditService auditService) {
         this.loanRepository = loanRepository;
+        this.guarantorRepository = guarantorRepository;
         this.memberRepository = memberRepository;
         this.authService = authService;
         this.auditService = auditService;
@@ -150,6 +153,40 @@ class LoanController {
                         .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
     }
 
+    @GetMapping("/{loanId}/guarantors")
+    ResponseEntity<?> listGuarantors(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return loanRepository.findById(loanId)
+                .<ResponseEntity<?>>map(loan -> {
+                    if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+                    return ResponseEntity.ok(ApiResponse.of(guarantorRepository.findByLoanIdOrderByCreatedAtDesc(loanId)
+                            .stream()
+                            .map(LoanGuarantorResponse::from)
+                            .toList()));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
+    }
+
+    @PostMapping("/{loanId}/guarantors")
+    ResponseEntity<?> createGuarantor(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId,
+            @Valid @RequestBody CreateGuarantorRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return loanRepository.findById(loanId)
+                .<ResponseEntity<?>>map(loan -> createGuarantor(loan, body, currentSession, request))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
+    }
+
     @PostMapping("/{loanId}/disburse")
     ResponseEntity<?> disburseLoan(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -217,6 +254,78 @@ class LoanController {
         return ResponseEntity.ok(ApiResponse.of(LoanResponse.from(saved)));
     }
 
+    private ResponseEntity<?> createGuarantor(
+            Loan loan,
+            CreateGuarantorRequest body,
+            AuthService.CurrentSession currentSession,
+            HttpServletRequest request) {
+        if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+
+        Member guarantor = memberRepository.findById(body.memberId().trim())
+                .filter(candidate -> candidate.getTenantId().equals(loan.getTenantId()))
+                .orElse(null);
+        if (guarantor == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_GUARANTOR", "Guarantor member does not exist for this tenant."));
+        }
+        if (!"active".equals(guarantor.getStatus())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "GUARANTOR_NOT_ACTIVE", "Only active members can guarantee a loan."));
+        }
+        if (guarantor.getId().equals(loan.getMemberId())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "BORROWER_CANNOT_GUARANTEE", "A borrower cannot guarantee their own loan."));
+        }
+        if (guarantorRepository.existsByLoanIdAndMemberIdAndStatusNot(loan.getId(), guarantor.getId(), "rejected")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "GUARANTOR_ALREADY_REQUESTED", "This guarantor already has an active request for the loan."));
+        }
+
+        BigDecimal amount = body.guaranteedAmount() == null
+                ? loan.getAmount().divide(BigDecimal.valueOf(2), 0, RoundingMode.CEILING)
+                : body.guaranteedAmount();
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_GUARANTEE_AMOUNT", "Guarantee amount must be greater than zero."));
+        }
+        BigDecimal capacity = guaranteeCapacity(guarantor, null);
+        if (amount.compareTo(capacity) > 0) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Requested guarantee exceeds the member's available guarantee capacity."));
+        }
+
+        LoanGuarantor requestRecord = guarantorRepository.save(new LoanGuarantor(
+                "guarantor_" + UUID.randomUUID(),
+                loan.getTenantId(),
+                loan.getId(),
+                guarantor.getId(),
+                amount,
+                currentSession.user().getId()));
+        loan.refreshGuarantors((int) guarantorRepository.countByLoanIdAndStatus(loan.getId(), "accepted"));
+        loanRepository.save(loan);
+
+        auditService.record(
+                loan.getTenantId(),
+                currentSession.user(),
+                "Requested loan guarantor " + guarantor.getMembershipNo(),
+                "loan_guarantor",
+                requestRecord.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(LoanGuarantorResponse.from(requestRecord)));
+    }
+
+    BigDecimal guaranteeCapacity(Member member, String excludedGuarantorId) {
+        BigDecimal committed = guarantorRepository
+                .findByMemberIdAndStatusIn(member.getId(), List.of("pending", "accepted"))
+                .stream()
+                .filter(request -> excludedGuarantorId == null || !request.getId().equals(excludedGuarantorId))
+                .map(LoanGuarantor::getGuaranteedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal capacity = member.getSavingsBalance().multiply(BigDecimal.valueOf(3)).subtract(committed);
+        return capacity.max(BigDecimal.ZERO);
+    }
+
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
         String tenantId = requestedTenantId == null || requestedTenantId.isBlank()
                 ? currentSession.user().getTenantId()
@@ -244,5 +353,8 @@ class LoanController {
     }
 
     record UpdateLoanStatusRequest(@NotBlank String status, String reason) {
+    }
+
+    record CreateGuarantorRequest(@NotBlank String memberId, BigDecimal guaranteedAmount) {
     }
 }

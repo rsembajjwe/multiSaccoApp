@@ -34,6 +34,10 @@ Java-backed routes currently implemented:
 - `POST /api/v1/loans`
 - `PATCH /api/v1/loans/:id/status`
 - `POST /api/v1/loans/:id/disburse`
+- `GET /api/v1/loans/:id/guarantors`
+- `POST /api/v1/loans/:id/guarantors`
+- `GET /api/v1/member-auth/guarantor-requests`
+- `PATCH /api/v1/member-auth/guarantor-requests/:id/status`
 
 All API responses include baseline security headers. Public staff login, member login, and mobile-money callback endpoints are rate limited and return `429 RATE_LIMITED` with `Retry-After` when the development limit is exceeded.
 

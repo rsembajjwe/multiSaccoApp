@@ -3,6 +3,11 @@ package com.methaltech.sacco.member;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
+import com.methaltech.sacco.loan.Loan;
+import com.methaltech.sacco.loan.LoanGuarantor;
+import com.methaltech.sacco.loan.LoanGuarantorRepository;
+import com.methaltech.sacco.loan.LoanGuarantorResponse;
+import com.methaltech.sacco.loan.LoanRepository;
 import com.methaltech.sacco.security.PasswordHasher;
 import com.methaltech.sacco.security.TokenGenerator;
 import com.methaltech.sacco.tenant.TenantResponse;
@@ -13,10 +18,14 @@ import jakarta.validation.constraints.NotBlank;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -27,8 +36,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/member-auth")
 class MemberAuthController {
 
+    private static final Set<String> GUARANTOR_DECISIONS = Set.of("accepted", "rejected");
+
     private final MemberRepository memberRepository;
     private final MemberSessionRepository memberSessionRepository;
+    private final LoanRepository loanRepository;
+    private final LoanGuarantorRepository guarantorRepository;
     private final MemberAuthService memberAuthService;
     private final BranchLookup branchLookup;
     private final TenantService tenantService;
@@ -39,6 +52,8 @@ class MemberAuthController {
     MemberAuthController(
             MemberRepository memberRepository,
             MemberSessionRepository memberSessionRepository,
+            LoanRepository loanRepository,
+            LoanGuarantorRepository guarantorRepository,
             MemberAuthService memberAuthService,
             BranchLookup branchLookup,
             TenantService tenantService,
@@ -47,6 +62,8 @@ class MemberAuthController {
             TokenGenerator tokenGenerator) {
         this.memberRepository = memberRepository;
         this.memberSessionRepository = memberSessionRepository;
+        this.loanRepository = loanRepository;
+        this.guarantorRepository = guarantorRepository;
         this.memberAuthService = memberAuthService;
         this.branchLookup = branchLookup;
         this.tenantService = tenantService;
@@ -121,6 +138,90 @@ class MemberAuthController {
         return ResponseEntity.ok(ApiResponse.of(new LogoutResponse(true)));
     }
 
+    @GetMapping("/guarantor-requests")
+    ResponseEntity<?> listGuarantorRequests(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        return ResponseEntity.ok(ApiResponse.of(guarantorRepository.findByMemberIdOrderByCreatedAtDesc(member.getId())
+                .stream()
+                .map(request -> LoanGuarantorResponse.from(
+                        request,
+                        loanRepository.findById(request.getLoanId()).orElse(null),
+                        guaranteeCapacity(member, request.getId())))
+                .toList()));
+    }
+
+    @PatchMapping("/guarantor-requests/{guarantorId}/status")
+    ResponseEntity<?> updateGuarantorRequest(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String guarantorId,
+            @Valid @RequestBody UpdateGuarantorStatusRequest body,
+            HttpServletRequest request) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        String status = body.status().trim();
+        if (!GUARANTOR_DECISIONS.contains(status)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_GUARANTOR_STATUS", "Guarantor requests can only be accepted or rejected."));
+        }
+
+        Member member = currentSession.member();
+        return guarantorRepository.findById(guarantorId)
+                .<ResponseEntity<?>>map(guarantor -> decideGuarantor(guarantor, member, status, request))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "GUARANTOR_REQUEST_NOT_FOUND", "Guarantor request not found.")));
+    }
+
+    private ResponseEntity<?> decideGuarantor(
+            LoanGuarantor guarantor,
+            Member member,
+            String status,
+            HttpServletRequest request) {
+        if (!guarantor.getMemberId().equals(member.getId())) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "GUARANTOR_REQUEST_NOT_FOUND", "Guarantor request not found."));
+        }
+        if (!"pending".equals(guarantor.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "GUARANTOR_ALREADY_DECIDED", "Only pending guarantor requests can be decided."));
+        }
+        if ("accepted".equals(status) && guarantor.getGuaranteedAmount().compareTo(guaranteeCapacity(member, guarantor.getId())) > 0) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Guarantee exceeds your available guarantee capacity."));
+        }
+
+        guarantor.decide(status);
+        LoanGuarantor saved = guarantorRepository.save(guarantor);
+        Loan loan = loanRepository.findById(saved.getLoanId()).orElse(null);
+        if (loan != null) {
+            loan.refreshGuarantors((int) guarantorRepository.countByLoanIdAndStatus(loan.getId(), "accepted"));
+            loanRepository.save(loan);
+        }
+        auditService.record(
+                saved.getTenantId(),
+                (String) null,
+                member.getFullName(),
+                ("accepted".equals(status) ? "Accepted" : "Rejected") + " loan guarantee request",
+                "loan_guarantor",
+                saved.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(LoanGuarantorResponse.from(saved, loan, guaranteeCapacity(member, saved.getId()))));
+    }
+
+    private BigDecimal guaranteeCapacity(Member member, String excludedGuarantorId) {
+        BigDecimal committed = guarantorRepository
+                .findByMemberIdAndStatusIn(member.getId(), List.of("pending", "accepted"))
+                .stream()
+                .filter(item -> excludedGuarantorId == null || !item.getId().equals(excludedGuarantorId))
+                .map(LoanGuarantor::getGuaranteedAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return member.getSavingsBalance().multiply(BigDecimal.valueOf(3)).subtract(committed).max(BigDecimal.ZERO);
+    }
+
     record LoginRequest(@NotBlank String identifier, @NotBlank String password) {
     }
 
@@ -147,5 +248,8 @@ class MemberAuthController {
     }
 
     record LogoutResponse(boolean loggedOut) {
+    }
+
+    record UpdateGuarantorStatusRequest(@NotBlank String status) {
     }
 }
