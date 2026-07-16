@@ -19,6 +19,7 @@ import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -2985,6 +2986,117 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
 				.andExpect(jsonPath("$.data.permissionIds[0]", is("reports:view")));
+	}
+
+	@Test
+	void userRolesCanBeAssignedWithinTenantAndAudited() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String email = "loans-assignment-" + System.currentTimeMillis() + "@greenvalley.local";
+
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Loans Assignment Test",
+								  "email": "%s",
+								  "phone": "+256700777444",
+								  "password": "Member@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isCreated())
+				.andReturn();
+
+		String userId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/users/" + userId + "/roles")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.userId", is(userId)))
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.roleIds.length()", is(0)));
+
+		mockMvc.perform(put("/api/v1/users/" + userId + "/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_green_loans_officer", "role_green_loans_officer"]
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.userId", is(userId)))
+				.andExpect(jsonPath("$.data.roleIds.length()", is(1)))
+				.andExpect(jsonPath("$.data.roleIds[0]", is("role_green_loans_officer")));
+
+		mockMvc.perform(get("/api/v1/users/" + userId + "/roles")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.roleIds[0]", is("role_green_loans_officer")));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].action", is("Updated roles for user " + email)))
+				.andExpect(jsonPath("$.data[0].resourceType", is("user")))
+				.andExpect(jsonPath("$.data[0].resourceId", is(userId)));
+	}
+
+	@Test
+	void userRoleAssignmentControlsAreEnforced() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/users/user_platform_admin/roles")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(put("/api/v1/users/user_green_admin/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": []
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("ROLE_REQUIRED")));
+
+		mockMvc.perform(put("/api/v1/users/user_green_admin/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_missing"]
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("UNKNOWN_ROLE")));
+
+		mockMvc.perform(put("/api/v1/users/user_green_admin/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_platform_admin"]
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("ROLE_TENANT_MISMATCH")));
+
+		mockMvc.perform(put("/api/v1/users/user_green_admin/roles")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_green_admin", "role_green_loans_officer"]
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.roleIds.length()", is(2)))
+				.andExpect(jsonPath("$.data.roleIds", hasItem("role_green_admin")))
+				.andExpect(jsonPath("$.data.roleIds", hasItem("role_green_loans_officer")));
 	}
 
 	private String loginAndReturnToken() throws Exception {

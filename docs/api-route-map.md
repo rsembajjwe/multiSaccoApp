@@ -18,6 +18,8 @@ Java-backed routes currently implemented:
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/users`
 - `POST /api/v1/users`
+- `GET /api/v1/users/:id/roles`
+- `PUT /api/v1/users/:id/roles`
 - `GET /api/v1/roles`
 - `POST /api/v1/roles`
 - `GET /api/v1/permissions`
@@ -110,6 +112,8 @@ All JSON responses should follow one of these shapes:
 | PATCH | `/tenants/:id/profile` | Update SACCO legal/contact profile. | SACCO admin or platform admin |
 | GET | `/users` | List users in current tenant. | Required |
 | POST | `/users` | Create a user with hashed password. | Admin |
+| GET | `/users/:id/roles` | List assigned roles for a staff user. | Admin |
+| PUT | `/users/:id/roles` | Replace assigned roles for a staff user. | Admin |
 | POST | `/auth/login` | Authenticate user. | Public |
 | POST | `/auth/logout` | End current session. | Required |
 | GET | `/auth/me` | Get current authenticated user. | Required |
