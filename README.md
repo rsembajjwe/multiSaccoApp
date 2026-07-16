@@ -83,6 +83,8 @@ GET http://127.0.0.1:8080/api/v1/users
 POST http://127.0.0.1:8080/api/v1/users
 GET http://127.0.0.1:8080/api/v1/audit-events
 POST http://127.0.0.1:8080/api/v1/audit-events
+GET http://127.0.0.1:8080/api/v1/branches
+POST http://127.0.0.1:8080/api/v1/branches
 ```
 
 ```powershell

@@ -363,6 +363,94 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data[0].resourceId", is(userId)));
 	}
 
+	@Test
+	void branchesAreListedWithTenantScope() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/branches")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(3)));
+
+		mockMvc.perform(get("/api/v1/branches")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		mockMvc.perform(get("/api/v1/branches?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+	}
+
+	@Test
+	void saccoUserCanCreateOwnBranchAndAuditIsWritten() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String code = "SM" + System.currentTimeMillis();
+
+		MvcResult createdBranch = mockMvc.perform(post("/api/v1/branches")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "code": "%s",
+								  "name": "Smoke Branch",
+								  "address": "Smoke Road"
+								}
+								""".formatted(code)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.code", is(code)))
+				.andExpect(jsonPath("$.data.status", is("active")))
+				.andReturn();
+
+		String branchId = objectMapper.readTree(createdBranch.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].action", is("Created branch " + code)))
+				.andExpect(jsonPath("$.data[0].resourceType", is("branch")))
+				.andExpect(jsonPath("$.data[0].resourceId", is(branchId)));
+	}
+
+	@Test
+	void duplicateBranchCodeIsRejected() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/branches")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "code": "GV001",
+								  "name": "Duplicate Main"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_EXISTS")));
+	}
+
+	@Test
+	void saccoUserCannotCreateBranchInAnotherTenant() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/branches")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "code": "DENIED",
+								  "name": "Denied Branch"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+	}
+
 	private String loginAndReturnToken() throws Exception {
 		return loginAndReturnToken("admin@platform.local", "Admin@12345");
 	}
