@@ -2,6 +2,7 @@ package com.methaltech.sacco.loan;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.accounting.AccountingPeriodService;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.member.Member;
@@ -45,6 +46,7 @@ class LoanController {
     private final MemberRepository memberRepository;
     private final AuthService authService;
     private final AuditService auditService;
+    private final AccountingPeriodService periodService;
 
     LoanController(
             LoanRepository loanRepository,
@@ -52,13 +54,15 @@ class LoanController {
             LoanRepaymentRepository repaymentRepository,
             MemberRepository memberRepository,
             AuthService authService,
-            AuditService auditService) {
+            AuditService auditService,
+            AccountingPeriodService periodService) {
         this.loanRepository = loanRepository;
         this.guarantorRepository = guarantorRepository;
         this.repaymentRepository = repaymentRepository;
         this.memberRepository = memberRepository;
         this.authService = authService;
         this.auditService = auditService;
+        this.periodService = periodService;
     }
 
     @GetMapping
@@ -205,6 +209,9 @@ class LoanController {
                     if (!"approved".equals(loan.getStatus())) {
                         return ResponseEntity.status(HttpStatus.CONFLICT)
                                 .body(ApiErrorResponse.of(409, "LOAN_NOT_APPROVED", "A loan must be approved before disbursement."));
+                    }
+                    if (periodService.isClosed(loan.getTenantId(), null)) {
+                        return accountingPeriodClosed();
                     }
                     loan.disburse(currentSession.user().getId());
                     Loan saved = loanRepository.save(loan);
@@ -363,6 +370,9 @@ class LoanController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "LOAN_NOT_ACTIVE", "Only active loans can receive repayments."));
         }
+        if (periodService.isClosed(loan.getTenantId(), null)) {
+            return accountingPeriodClosed();
+        }
         if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_AMOUNT", "Repayment amount must be greater than zero."));
@@ -440,6 +450,11 @@ class LoanController {
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access loans for another tenant."));
+    }
+
+    private ResponseEntity<ApiErrorResponse> accountingPeriodClosed() {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(409, "ACCOUNTING_PERIOD_CLOSED", "Accounting period " + periodService.periodKey(null) + " is closed."));
     }
 
     record CreateLoanRequest(

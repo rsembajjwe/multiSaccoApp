@@ -32,6 +32,8 @@ Java-backed routes currently implemented:
 - `PATCH /api/v1/financial-transactions/:id/status`
 - `GET /api/v1/chart-of-accounts`
 - `GET /api/v1/journal-entries`
+- `GET /api/v1/accounting-periods`
+- `PATCH /api/v1/accounting-periods/:id/status`
 - `GET /api/v1/loans`
 - `POST /api/v1/loans`
 - `PATCH /api/v1/loans/:id/status`

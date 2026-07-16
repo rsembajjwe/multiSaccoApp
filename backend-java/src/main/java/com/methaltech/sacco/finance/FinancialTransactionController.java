@@ -2,6 +2,7 @@ package com.methaltech.sacco.finance;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.accounting.AccountingPeriodService;
 import com.methaltech.sacco.branch.BranchRepository;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
@@ -50,6 +51,7 @@ class FinancialTransactionController {
     private final TenantService tenantService;
     private final AuthService authService;
     private final AuditService auditService;
+    private final AccountingPeriodService periodService;
 
     FinancialTransactionController(
             FinancialTransactionRepository transactionRepository,
@@ -57,13 +59,15 @@ class FinancialTransactionController {
             BranchRepository branchRepository,
             TenantService tenantService,
             AuthService authService,
-            AuditService auditService) {
+            AuditService auditService,
+            AccountingPeriodService periodService) {
         this.transactionRepository = transactionRepository;
         this.memberRepository = memberRepository;
         this.branchRepository = branchRepository;
         this.tenantService = tenantService;
         this.authService = authService;
         this.auditService = auditService;
+        this.periodService = periodService;
     }
 
     @GetMapping
@@ -198,6 +202,13 @@ class FinancialTransactionController {
         }
 
         if ("posted".equals(status)) {
+            if (periodService.isClosed(transaction.getTenantId(), null)) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(
+                                409,
+                                "ACCOUNTING_PERIOD_CLOSED",
+                                "Accounting period " + periodService.periodKey(null) + " is closed."));
+            }
             Member member = memberRepository.findById(transaction.getMemberId()).orElse(null);
             if (member == null) {
                 return ResponseEntity.badRequest()

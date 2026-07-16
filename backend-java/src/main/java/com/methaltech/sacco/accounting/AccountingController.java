@@ -4,19 +4,27 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.finance.FinancialTransaction;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
+import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.loan.Loan;
 import com.methaltech.sacco.loan.LoanRepayment;
 import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.loan.LoanRepository;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,23 +34,81 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 class AccountingController {
 
+    private static final Set<String> PERIOD_STATUSES = Set.of("open", "closed");
+
+    private final AccountingPeriodRepository periodRepository;
     private final ChartOfAccountRepository chartRepository;
     private final FinancialTransactionRepository transactionRepository;
     private final LoanRepository loanRepository;
     private final LoanRepaymentRepository repaymentRepository;
     private final AuthService authService;
+    private final AuditService auditService;
 
     AccountingController(
+            AccountingPeriodRepository periodRepository,
             ChartOfAccountRepository chartRepository,
             FinancialTransactionRepository transactionRepository,
             LoanRepository loanRepository,
             LoanRepaymentRepository repaymentRepository,
-            AuthService authService) {
+            AuthService authService,
+            AuditService auditService) {
+        this.periodRepository = periodRepository;
         this.chartRepository = chartRepository;
         this.transactionRepository = transactionRepository;
         this.loanRepository = loanRepository;
         this.repaymentRepository = repaymentRepository;
         this.authService = authService;
+        this.auditService = auditService;
+    }
+
+    @GetMapping("/accounting-periods")
+    ResponseEntity<?> listAccountingPeriods(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+
+        List<AccountingPeriod> periods = authService.isPlatform(currentSession.user()) && requestedTenantId == null
+                ? periodRepository.findAllByOrderByTenantIdAscPeriodDesc()
+                : periodRepository.findByTenantIdOrderByPeriodDesc(tenantId);
+
+        return ResponseEntity.ok(ApiResponse.of(periods.stream().map(AccountingPeriodResponse::from).toList()));
+    }
+
+    @PatchMapping("/accounting-periods/{periodId}/status")
+    ResponseEntity<?> updateAccountingPeriodStatus(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String periodId,
+            @Valid @RequestBody UpdateAccountingPeriodStatusRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String status = body.status().trim();
+        if (!PERIOD_STATUSES.contains(status)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_ACCOUNTING_PERIOD_STATUS", "Accounting period can only be open or closed."));
+        }
+
+        return periodRepository.findById(periodId)
+                .<ResponseEntity<?>>map(period -> {
+                    if (!canAccess(currentSession, period.getTenantId())) return tenantAccessDenied();
+                    period.updateStatus(status, currentSession.user().getId());
+                    AccountingPeriod saved = periodRepository.save(period);
+                    auditService.record(
+                            saved.getTenantId(),
+                            currentSession.user(),
+                            ("closed".equals(status) ? "Closed" : "Reopened") + " accounting period " + saved.getPeriod(),
+                            "accounting_period",
+                            saved.getId(),
+                            request.getRemoteAddr());
+                    return ResponseEntity.ok(ApiResponse.of(AccountingPeriodResponse.from(saved)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "ACCOUNTING_PERIOD_NOT_FOUND", "Accounting period not found.")));
     }
 
     @GetMapping("/chart-of-accounts")
@@ -235,8 +301,15 @@ class AccountingController {
         return tenantId;
     }
 
+    private boolean canAccess(AuthService.CurrentSession currentSession, String tenantId) {
+        return authService.isPlatform(currentSession.user()) || tenantId.equals(currentSession.user().getTenantId());
+    }
+
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access accounting data for another tenant."));
+    }
+
+    record UpdateAccountingPeriodStatusRequest(@NotBlank String status) {
     }
 }

@@ -895,6 +895,114 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void accountingPeriodsCanBeListedAndUpdated() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/accounting-periods")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		mockMvc.perform(patch("/api/v1/accounting-periods/period_green_2026_07/status")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "closed" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("closed")))
+				.andExpect(jsonPath("$.data.closedByUserId", is("user_green_admin")))
+				.andExpect(jsonPath("$.data.closedAt", notNullValue()));
+
+		mockMvc.perform(patch("/api/v1/accounting-periods/period_green_2026_07/status")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "open" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("open")))
+				.andExpect(jsonPath("$.data.closedByUserId").doesNotExist())
+				.andExpect(jsonPath("$.data.closedAt").doesNotExist());
+	}
+
+	@Test
+	void closedAccountingPeriodsBlockFinancialPosting() throws Exception {
+		String makerToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String checkerToken = loginAndReturnToken();
+
+		MvcResult transaction = mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + makerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "type": "savings_deposit",
+								  "channel": "cash",
+								  "amount": 20000,
+								  "narration": "Closed period test"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String transactionId = objectMapper.readTree(transaction.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/accounting-periods/period_green_2026_07/status")
+						.header("Authorization", "Bearer " + makerToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "closed" }
+								"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(patch("/api/v1/financial-transactions/" + transactionId + "/status")
+						.header("Authorization", "Bearer " + checkerToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "posted" }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("ACCOUNTING_PERIOD_CLOSED")));
+
+		mockMvc.perform(patch("/api/v1/accounting-periods/period_green_2026_07/status")
+						.header("Authorization", "Bearer " + makerToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "open" }
+								"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(patch("/api/v1/financial-transactions/" + transactionId + "/status")
+						.header("Authorization", "Bearer " + checkerToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "posted" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("posted")));
+	}
+
+	@Test
+	void accountingPeriodControlsAreEnforced() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/accounting-periods?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(patch("/api/v1/accounting-periods/period_green_2026_07/status")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "archived" }
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_ACCOUNTING_PERIOD_STATUS")));
+	}
+
+	@Test
 	void loansAreListedWithTenantScope() throws Exception {
 		String platformToken = loginAndReturnToken();
 		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
