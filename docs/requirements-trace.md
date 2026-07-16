@@ -72,6 +72,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java financial transactions validate tenant, member, branch, type, channel, and amount before maker-checker posting updates member balances.
 - Java accounting foundation exposes the seeded chart of accounts and balanced tenant-scoped journal entries derived from posted Java financial transactions, loan disbursements, and loan repayments.
 - Java accounting periods can be listed, closed, and reopened, with closed periods blocking Java financial transaction posting, loan disbursement, and loan repayment.
+- Java reconciliation imports statement lines, blocks imports in closed periods, and reports matched/unmatched cash ledger movements.
 - Java loan applications list tenant loan files and validate active borrowers, product, amount, and repayment term before creating staff-submitted loan requests.
 - Java loan decision endpoints enforce guarantor-required approval and block disbursement until a loan is approved.
 - Java loan guarantor endpoints let staff request guarantors and let members accept or reject requests with duplicate, borrower, and guarantee-capacity controls.

@@ -13,6 +13,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -210,8 +211,9 @@ class LoanController {
                         return ResponseEntity.status(HttpStatus.CONFLICT)
                                 .body(ApiErrorResponse.of(409, "LOAN_NOT_APPROVED", "A loan must be approved before disbursement."));
                     }
-                    if (periodService.isClosed(loan.getTenantId(), null)) {
-                        return accountingPeriodClosed();
+                    Instant postingDate = Instant.now();
+                    if (periodService.isClosed(loan.getTenantId(), postingDate)) {
+                        return accountingPeriodClosed(postingDate);
                     }
                     loan.disburse(currentSession.user().getId());
                     Loan saved = loanRepository.save(loan);
@@ -370,8 +372,9 @@ class LoanController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "LOAN_NOT_ACTIVE", "Only active loans can receive repayments."));
         }
-        if (periodService.isClosed(loan.getTenantId(), null)) {
-            return accountingPeriodClosed();
+        Instant postingDate = Instant.now();
+        if (periodService.isClosed(loan.getTenantId(), postingDate)) {
+            return accountingPeriodClosed(postingDate);
         }
         if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
@@ -452,9 +455,9 @@ class LoanController {
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access loans for another tenant."));
     }
 
-    private ResponseEntity<ApiErrorResponse> accountingPeriodClosed() {
+    private ResponseEntity<ApiErrorResponse> accountingPeriodClosed(Instant postingDate) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiErrorResponse.of(409, "ACCOUNTING_PERIOD_CLOSED", "Accounting period " + periodService.periodKey(null) + " is closed."));
+                .body(ApiErrorResponse.of(409, "ACCOUNTING_PERIOD_CLOSED", "Accounting period " + periodService.periodKey(postingDate) + " is closed."));
     }
 
     record CreateLoanRequest(

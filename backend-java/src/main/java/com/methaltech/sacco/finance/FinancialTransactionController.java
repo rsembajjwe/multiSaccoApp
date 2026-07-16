@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -202,12 +203,13 @@ class FinancialTransactionController {
         }
 
         if ("posted".equals(status)) {
-            if (periodService.isClosed(transaction.getTenantId(), null)) {
+            Instant postingDate = Instant.now();
+            if (periodService.isClosed(transaction.getTenantId(), postingDate)) {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
                         .body(ApiErrorResponse.of(
                                 409,
                                 "ACCOUNTING_PERIOD_CLOSED",
-                                "Accounting period " + periodService.periodKey(null) + " is closed."));
+                                "Accounting period " + periodService.periodKey(postingDate) + " is closed."));
             }
             Member member = memberRepository.findById(transaction.getMemberId()).orElse(null);
             if (member == null) {

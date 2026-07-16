@@ -13,16 +13,21 @@ import com.methaltech.sacco.loan.LoanRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -35,9 +40,13 @@ import org.springframework.web.bind.annotation.RestController;
 class AccountingController {
 
     private static final Set<String> PERIOD_STATUSES = Set.of("open", "closed");
+    private static final Set<String> STATEMENT_CHANNELS = Set.of("cash", "bank", "mobile_money", "payroll_deduction");
+    private static final Set<String> CASH_ACCOUNTS = Set.of("1000", "1010", "1020", "1030");
 
     private final AccountingPeriodRepository periodRepository;
+    private final AccountingPeriodService periodService;
     private final ChartOfAccountRepository chartRepository;
+    private final StatementLineRepository statementLineRepository;
     private final FinancialTransactionRepository transactionRepository;
     private final LoanRepository loanRepository;
     private final LoanRepaymentRepository repaymentRepository;
@@ -46,14 +55,18 @@ class AccountingController {
 
     AccountingController(
             AccountingPeriodRepository periodRepository,
+            AccountingPeriodService periodService,
             ChartOfAccountRepository chartRepository,
+            StatementLineRepository statementLineRepository,
             FinancialTransactionRepository transactionRepository,
             LoanRepository loanRepository,
             LoanRepaymentRepository repaymentRepository,
             AuthService authService,
             AuditService auditService) {
         this.periodRepository = periodRepository;
+        this.periodService = periodService;
         this.chartRepository = chartRepository;
+        this.statementLineRepository = statementLineRepository;
         this.transactionRepository = transactionRepository;
         this.loanRepository = loanRepository;
         this.repaymentRepository = repaymentRepository;
@@ -147,6 +160,93 @@ class AccountingController {
         return ResponseEntity.ok(ApiResponse.of(entries));
     }
 
+    @GetMapping("/statement-lines")
+    ResponseEntity<?> listStatementLines(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+
+        List<StatementLine> lines = authService.isPlatform(currentSession.user()) && requestedTenantId == null
+                ? statementLineRepository.findAllByOrderByTenantIdAscStatementDateDescCreatedAtDesc()
+                : statementLineRepository.findByTenantIdOrderByStatementDateDescCreatedAtDesc(tenantId);
+
+        return ResponseEntity.ok(ApiResponse.of(lines.stream().map(StatementLineResponse::from).toList()));
+    }
+
+    @PostMapping("/statement-lines")
+    ResponseEntity<?> createStatementLine(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody CreateStatementLineRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, body.tenantId());
+        if (tenantId == null) return tenantAccessDenied();
+
+        String channel = body.channel().trim();
+        if (!STATEMENT_CHANNELS.contains(channel)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_STATEMENT_CHANNEL", "Unsupported statement channel."));
+        }
+        if (body.amount().compareTo(BigDecimal.ZERO) == 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_STATEMENT_AMOUNT", "Statement amount cannot be zero."));
+        }
+
+        String externalReference = body.externalReference().trim();
+        if (statementLineRepository.existsByTenantIdAndExternalReferenceIgnoreCase(tenantId, externalReference)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "STATEMENT_LINE_EXISTS", "A statement line with that reference already exists for this tenant."));
+        }
+
+        LocalDate statementDate = body.statementDate() == null ? LocalDate.now() : body.statementDate();
+        if (periodService.isClosed(tenantId, statementDate)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "ACCOUNTING_PERIOD_CLOSED", "Accounting period " + periodService.periodKey(statementDate) + " is closed."));
+        }
+
+        StatementLine line = statementLineRepository.save(new StatementLine(
+                "statement_" + UUID.randomUUID(),
+                tenantId,
+                accountForChannel(channel),
+                channel,
+                body.amount(),
+                externalReference,
+                body.description() == null ? "" : body.description().trim(),
+                statementDate,
+                currentSession.user().getId()));
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Imported statement line " + line.getExternalReference(),
+                "statement_line",
+                line.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(StatementLineResponse.from(line)));
+    }
+
+    @GetMapping("/reconciliation")
+    ResponseEntity<?> getReconciliation(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+
+        List<String> tenantIds = authService.isPlatform(currentSession.user()) && requestedTenantId == null
+                ? statementLineRepository.findAll().stream().map(StatementLine::getTenantId).distinct().toList()
+                : List.of(tenantId);
+        return ResponseEntity.ok(ApiResponse.of(reconciliationForTenants(tenantIds, currentSession)));
+    }
+
     private List<JournalEntryResponse> transactionJournalEntries(
             String tenantId,
             AuthService.CurrentSession currentSession,
@@ -230,6 +330,99 @@ class AccountingController {
                 .toList();
     }
 
+    private ReconciliationResponse reconciliationForTenants(List<String> tenantIds, AuthService.CurrentSession currentSession) {
+        Map<String, ChartOfAccount> accounts = chartRepository.findAllByOrderByCodeAsc()
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(ChartOfAccount::getCode, account -> account));
+        List<JournalEntryResponse> entries = tenantIds.stream()
+                .flatMap(tenantId -> java.util.stream.Stream.concat(
+                        java.util.stream.Stream.concat(
+                                transactionJournalEntries(tenantId, currentSession, accounts).stream(),
+                                loanDisbursementJournalEntries(tenantId, currentSession, accounts).stream()),
+                        loanRepaymentJournalEntries(tenantId, currentSession, accounts).stream()))
+                .toList();
+        List<StatementLine> statementLines = tenantIds.size() == 1
+                ? statementLineRepository.findByTenantIdOrderByStatementDateDescCreatedAtDesc(tenantIds.get(0))
+                : statementLineRepository.findAllByOrderByTenantIdAscStatementDateDescCreatedAtDesc()
+                        .stream()
+                        .filter(line -> tenantIds.contains(line.getTenantId()))
+                        .toList();
+        List<LedgerLineResponse> ledgerLines = cashLedgerLines(entries);
+        List<ReconciliationResponse.ReconciliationMatch> matches = new java.util.ArrayList<>();
+        Set<String> matchedStatementIds = new HashSet<>();
+        Set<String> matchedLedgerIds = new HashSet<>();
+
+        for (StatementLine statementLine : statementLines) {
+            LedgerLineResponse match = ledgerLines.stream()
+                    .filter(ledgerLine -> !matchedLedgerIds.contains(ledgerLine.id()))
+                    .filter(ledgerLine -> ledgerLine.tenantId().equals(statementLine.getTenantId()))
+                    .filter(ledgerLine -> ledgerLine.accountCode().equals(statementLine.getAccountCode()))
+                    .filter(ledgerLine -> ledgerLine.reference().equals(statementLine.getExternalReference()))
+                    .filter(ledgerLine -> ledgerLine.amount().compareTo(statementLine.getAmount()) == 0)
+                    .findFirst()
+                    .orElse(null);
+            if (match == null) continue;
+            matchedStatementIds.add(statementLine.getId());
+            matchedLedgerIds.add(match.id());
+            matches.add(new ReconciliationResponse.ReconciliationMatch(StatementLineResponse.from(statementLine), match));
+        }
+
+        List<StatementLineResponse> unmatchedStatementLines = statementLines.stream()
+                .filter(line -> !matchedStatementIds.contains(line.getId()))
+                .map(StatementLineResponse::from)
+                .toList();
+        List<LedgerLineResponse> unmatchedLedgerLines = ledgerLines.stream()
+                .filter(line -> !matchedLedgerIds.contains(line.id()))
+                .toList();
+
+        BigDecimal matchedAmount = matches.stream()
+                .map(match -> match.statementLine().amount().abs())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal unmatchedStatementAmount = unmatchedStatementLines.stream()
+                .map(line -> line.amount().abs())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal unmatchedLedgerAmount = unmatchedLedgerLines.stream()
+                .map(line -> line.amount().abs())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return new ReconciliationResponse(
+                new ReconciliationResponse.ReconciliationSummary(
+                        statementLines.size(),
+                        ledgerLines.size(),
+                        matches.size(),
+                        unmatchedStatementLines.size(),
+                        unmatchedLedgerLines.size(),
+                        matchedAmount,
+                        unmatchedStatementAmount,
+                        unmatchedLedgerAmount),
+                matches,
+                unmatchedStatementLines,
+                unmatchedLedgerLines);
+    }
+
+    private List<LedgerLineResponse> cashLedgerLines(List<JournalEntryResponse> entries) {
+        List<LedgerLineResponse> lines = new java.util.ArrayList<>();
+        for (JournalEntryResponse entry : entries) {
+            for (int i = 0; i < entry.lines().size(); i++) {
+                JournalLineResponse line = entry.lines().get(i);
+                if (!CASH_ACCOUNTS.contains(line.accountCode())) continue;
+                lines.add(new LedgerLineResponse(
+                        entry.id() + "_" + i,
+                        entry.tenantId(),
+                        entry.id(),
+                        entry.sourceType(),
+                        entry.sourceId(),
+                        entry.reference(),
+                        entry.description(),
+                        entry.postedAt(),
+                        line.accountCode(),
+                        line.accountName(),
+                        line.debit().subtract(line.credit())));
+            }
+        }
+        return lines;
+    }
+
     private JournalEntryResponse journal(
             String id,
             String tenantId,
@@ -275,7 +468,7 @@ class AccountingController {
         return switch (channel) {
             case "cash" -> "1000";
             case "mobile_money" -> "1020";
-            case "payroll_deduction" -> "1030";
+            case "payroll_deduction", "payroll" -> "1030";
             case "bank" -> "1010";
             default -> "1010";
         };
@@ -311,5 +504,14 @@ class AccountingController {
     }
 
     record UpdateAccountingPeriodStatusRequest(@NotBlank String status) {
+    }
+
+    record CreateStatementLineRequest(
+            String tenantId,
+            @NotBlank String channel,
+            @NotNull BigDecimal amount,
+            @NotBlank String externalReference,
+            String description,
+            LocalDate statementDate) {
     }
 }

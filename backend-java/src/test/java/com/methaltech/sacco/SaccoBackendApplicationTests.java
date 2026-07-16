@@ -1003,6 +1003,91 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void statementLinesAndReconciliationAreAvailable() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/statement-lines")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(3)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		mockMvc.perform(get("/api/v1/reconciliation")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.summary.statementLines", greaterThanOrEqualTo(3)))
+				.andExpect(jsonPath("$.data.summary.ledgerLines", greaterThanOrEqualTo(4)))
+				.andExpect(jsonPath("$.data.summary.matched", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.summary.unmatchedStatementLines", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.summary.unmatchedLedgerLines", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.matches[0].statementLine.externalReference", is("GVS-TX-0001")));
+	}
+
+	@Test
+	void staffCanImportStatementLineAndControlsAreEnforced() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/statement-lines")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "channel": "bank",
+								  "amount": 125000,
+								  "externalReference": "BANK-TEST-001",
+								  "description": "Manual bank import",
+								  "statementDate": "2026-07-16"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.accountCode", is("1010")))
+				.andExpect(jsonPath("$.data.externalReference", is("BANK-TEST-001")))
+				.andExpect(jsonPath("$.data.importedByUserId", is("user_green_admin")));
+
+		mockMvc.perform(post("/api/v1/statement-lines")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "channel": "bank",
+								  "amount": 125000,
+								  "externalReference": "BANK-TEST-001",
+								  "statementDate": "2026-07-16"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("STATEMENT_LINE_EXISTS")));
+
+		mockMvc.perform(post("/api/v1/statement-lines")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "channel": "bank",
+								  "amount": 10000,
+								  "externalReference": "BANK-CLOSED-001",
+								  "statementDate": "2026-06-15"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("ACCOUNTING_PERIOD_CLOSED")));
+
+		mockMvc.perform(post("/api/v1/statement-lines")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "channel": "bad_channel",
+								  "amount": 10000,
+								  "externalReference": "BAD-STATEMENT-001",
+								  "statementDate": "2026-07-16"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_STATEMENT_CHANNEL")));
+	}
+
+	@Test
 	void loansAreListedWithTenantScope() throws Exception {
 		String platformToken = loginAndReturnToken();
 		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");

@@ -1,6 +1,7 @@
 package com.methaltech.sacco.accounting;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import org.springframework.stereotype.Service;
@@ -23,7 +24,18 @@ public class AccountingPeriodService {
                 .orElse(false);
     }
 
+    public boolean isClosed(String tenantId, LocalDate postingDate) {
+        String periodKey = postingDate == null ? periodKey((Instant) null) : postingDate.toString().substring(0, 7);
+        return periodRepository.findByTenantIdAndPeriod(tenantId, periodKey)
+                .map(period -> "closed".equals(period.getStatus()))
+                .orElse(false);
+    }
+
     public String periodKey(Instant postingDate) {
         return PERIOD_FORMAT.format(postingDate == null ? Instant.now() : postingDate);
+    }
+
+    public String periodKey(LocalDate postingDate) {
+        return postingDate == null ? periodKey((Instant) null) : postingDate.toString().substring(0, 7);
     }
 }
