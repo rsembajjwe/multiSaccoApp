@@ -776,6 +776,7 @@ function renderMembers() {
         <div class="filters">
           <input class="input" id="memberSearch" placeholder="Search members">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
+          ${apiState.user ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import template</button>` : ""}
           <button class="primary-button" data-action="newMember" type="button">Register member</button>
         </div>
       </div>
@@ -1921,6 +1922,7 @@ function bindViewActions() {
         newApprovalDecision: openApprovalDecisionForm,
         newRole: openRoleForm,
         assignUserRoles: openUserRoleAssignmentForm,
+        memberImportTemplate: openMemberImportTemplate,
         memberLogin: openMemberLoginForm,
         memberLogout: memberLogout,
         refreshApi: refreshApiStatus
@@ -2556,6 +2558,40 @@ function openMemberForm() {
     state.currentView = "members";
     render();
   });
+}
+
+async function openMemberImportTemplate() {
+  if (!apiState.user) return;
+  try {
+    const template = await apiRequest(`/members/import-template${apiTenantQuery()}`);
+    const sample = template.sampleRows?.[0] || {};
+    openModal("Member import template", `
+      <div class="grid metrics">
+        ${metric("File", template.filename, template.contentType)}
+        ${metric("Columns", template.headers.length, "required import fields")}
+        ${metric("Tenant", tenantName(template.tenantId), sample.branchId || "No branch")}
+      </div>
+      <div class="table-wrap" style="margin-top:16px">
+        <table>
+          <thead><tr>${template.headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead>
+          <tbody>
+            <tr>${template.headers.map((header) => `<td>${sample[header] || ""}</td>`).join("")}</tr>
+          </tbody>
+        </table>
+      </div>
+      <details style="margin-top:16px" open><summary>CSV template</summary><pre class="notice" style="white-space:pre-wrap">${template.csv}</pre></details>
+    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyMemberImportTemplate" class="primary-button" type="button">Copy CSV</button>`);
+    document.getElementById("copyMemberImportTemplate").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(template.csv);
+        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice">CSV template copied to clipboard.</div>`);
+      } catch {
+        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">Clipboard access was not available. Use the CSV preview text.</div>`);
+      }
+    });
+  } catch (error) {
+    openModal("Member import template", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
 }
 
 async function openMemberProfile(memberId) {

@@ -342,6 +342,20 @@ try {
   const status = await api("PATCH", `/members/${member.data.id}/status`, { status: "active" }, saccoToken);
   assert(status.data.status === "active", "Member status should update");
 
+  const importTemplate = await api("GET", "/members/import-template", null, saccoToken);
+  assert(importTemplate.data.tenantId === "tenant_green", "Member import template should use the authenticated tenant");
+  assert(importTemplate.data.filename === "member-import-template-tenant_green.csv", "Member import template should include tenant filename");
+  assert(importTemplate.data.headers.includes("branchId"), "Member import template should include branchId header");
+  assert(importTemplate.data.sampleRows[0].branchId === branch.data.id || importTemplate.data.sampleRows[0].branchId === "branch_green_main", "Member import template should include a tenant branch");
+  assert(importTemplate.data.csv.startsWith("membershipNo,branchId,fullName"), "Member import template should include CSV content");
+
+  const deniedImportTemplate = await raw("GET", "/members/import-template?tenantId=tenant_lake", null, saccoToken);
+  assert(deniedImportTemplate.status === 403, "SACCO admin should not fetch another tenant import template");
+
+  const lakeImportTemplate = await api("GET", "/members/import-template?tenantId=tenant_lake", null, platformToken);
+  assert(lakeImportTemplate.data.tenantId === "tenant_lake", "Platform admin should fetch tenant-specific import templates");
+  assert(lakeImportTemplate.data.sampleRows[0].branchId === "branch_lake_main", "Import template should use requested tenant branch defaults");
+
   const document = await api("POST", `/members/${member.data.id}/documents`, {
     documentType: "national_id",
     storageKey: `tenant_green/members/${member.data.id}/national-id.pdf`

@@ -181,6 +181,7 @@ export async function handleApi(request, response, url) {
     }
     if (method === "GET" && path === "/branches") return listBranches(response, auth, url);
     if (method === "POST" && path === "/branches") return createBranch(request, response, auth, correlationId);
+    if (method === "GET" && path === "/members/import-template") return getMemberImportTemplate(response, auth, url, correlationId);
     if (method === "GET" && path === "/members") return listMembers(response, auth, url);
     if (method === "POST" && path === "/members") return createMember(request, response, auth, correlationId);
     if (method === "GET" && path.startsWith("/members/") && path.endsWith("/statement")) {
@@ -2117,6 +2118,58 @@ function listMembers(response, auth, url) {
     ? db.members
     : db.members.filter((member) => member.tenantId === tenantId);
   return sendData(response, members);
+}
+
+function getMemberImportTemplate(response, auth, url, correlationId) {
+  const requestedTenantId = url.searchParams.get("tenantId");
+  if (requestedTenantId && !assertTenantAccess(auth, requestedTenantId, response, correlationId)) return;
+  const tenantId = requestedTenant(auth, url);
+  const tenant = db.tenants.find((item) => item.id === tenantId);
+  if (!tenant) return sendError(response, 404, "TENANT_NOT_FOUND", "Tenant not found.", correlationId);
+  const defaultBranch = db.branches.find((branch) => branch.tenantId === tenantId);
+  const nextNumber = db.members.filter((member) => member.tenantId === tenantId).length + 1;
+  const membershipNo = `${tenant.abbreviation || "SACCO"}-${String(nextNumber).padStart(4, "0")}`;
+  const headers = [
+    "membershipNo",
+    "branchId",
+    "fullName",
+    "memberType",
+    "phone",
+    "email",
+    "nationalId",
+    "kycStatus",
+    "joiningDate",
+    "password"
+  ];
+  const sampleRows = [{
+    membershipNo,
+    branchId: defaultBranch?.id || "",
+    fullName: "Sample Member",
+    memberType: "individual",
+    phone: "+256700000000",
+    email: "sample.member@example.local",
+    nationalId: "CM0000000SAMP",
+    kycStatus: "pending_verification",
+    joiningDate: new Date().toISOString().slice(0, 10),
+    password: "Member@12345"
+  }];
+  const csv = [
+    headers.join(","),
+    ...sampleRows.map((row) => headers.map((header) => csvCell(row[header])).join(","))
+  ].join("\n");
+  return sendData(response, {
+    tenantId,
+    filename: `member-import-template-${tenantId}.csv`,
+    contentType: "text/csv",
+    headers,
+    sampleRows,
+    csv
+  });
+}
+
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 async function createMember(request, response, auth, correlationId) {
