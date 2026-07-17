@@ -549,19 +549,24 @@ function render() {
 
 function renderDashboard() {
   const tenant = currentTenant();
-  const members = tenantScoped(state.members);
-  const transactions = tenantScoped(state.transactions);
-  const loans = tenantScoped(state.loans);
-  const approvals = tenantScoped(state.approvals).filter((item) => item.status === "Pending");
+  const usingApi = Boolean(apiState.user);
+  const operations = apiState.operationsStatus || {};
+  const operationCounts = operations.counts || {};
+  const members = usingApi ? apiState.members.map(apiMemberToRow) : tenantScoped(state.members);
+  const transactions = usingApi ? apiState.financialTransactions.map(apiTransactionToRow) : tenantScoped(state.transactions);
+  const loans = usingApi ? apiState.loans.map(apiLoanToRow) : tenantScoped(state.loans);
+  const approvals = usingApi ? apiTransactionApprovalItems() : tenantScoped(state.approvals).filter((item) => item.status === "Pending");
   const deposits = transactions.filter((tx) => tx.status === "Posted").reduce((sum, tx) => sum + tx.amount, 0);
-  const portfolio = loans.reduce((sum, loan) => sum + loan.balance, 0);
+  const portfolio = loans.reduce((sum, loan) => sum + (loan.balance || 0), 0);
+  const activeMembers = usingApi ? (operationCounts.activeMembers || members.filter((m) => m.status === "Active").length) : members.filter((m) => m.status === "Active").length;
+  const alertCount = operations.alerts?.length || 0;
 
   return `
     <div class="grid metrics">
-      ${metric("Registered members", members.length, `${members.filter((m) => m.status === "Active").length} active`)}
-      ${metric("Posted collections", money.format(deposits), "tenant-filtered")}
-      ${metric("Loan portfolio", money.format(portfolio), `${loans.filter((l) => l.status !== "Closed").length} loan files`)}
-      ${metric("Pending approvals", approvals.length, "maker-checker controls")}
+      ${metric("Registered members", usingApi ? (operationCounts.members || members.length) : members.length, `${activeMembers} active`)}
+      ${metric("Posted collections", money.format(deposits), usingApi ? "API-backed postings" : "tenant-filtered")}
+      ${metric("Loan portfolio", money.format(portfolio), `${usingApi ? (operationCounts.openLoans || loans.length) : loans.filter((l) => l.status !== "Closed").length} open loan files`)}
+      ${metric("Pending approvals", usingApi ? (operationCounts.pendingFinancialTransactions || approvals.length) : approvals.length, "maker-checker controls")}
     </div>
 
     <div class="grid two" style="margin-top:16px">
@@ -586,10 +591,10 @@ function renderDashboard() {
       <section class="card">
         <h2>Control alerts</h2>
         <ul class="list">
-          ${alertItem("Licence monitoring", daysTo(tenant.licenseExpiry) < 90 ? "Expiry attention needed" : "Valid", daysTo(tenant.licenseExpiry) < 90 ? "overdue" : "active")}
-          ${alertItem("Tenant isolation", "All tables are filtered by tenant in this demo", "active")}
+          ${usingApi ? alertItem("Operations status", alertCount ? `${alertCount} alert(s)` : "Clear", alertCount ? "pending" : "active") : alertItem("Licence monitoring", daysTo(tenant.licenseExpiry) < 90 ? "Expiry attention needed" : "Valid", daysTo(tenant.licenseExpiry) < 90 ? "overdue" : "active")}
+          ${alertItem("Tenant isolation", usingApi ? `${operations.scope === "platform" ? "Platform scope" : tenantName(operations.scope || currentApiTenantId())}` : "All tables are filtered by tenant in this demo", "active")}
           ${alertItem("Idempotency", "Payment and posting references are unique", "active")}
-          ${alertItem("Audit events", `${state.audit.length} sensitive actions captured`, "trial")}
+          ${alertItem("Audit events", `${usingApi ? apiState.auditEvents.length : state.audit.length} sensitive actions captured`, "trial")}
         </ul>
       </section>
     </div>
@@ -604,10 +609,11 @@ function renderDashboard() {
       </div>
       <div class="grid three">
         ${miniFact("Authenticated user", apiState.user ? apiState.user.fullName : "Not logged in")}
-        ${miniFact("API tenants", String(apiState.tenants.length))}
-        ${miniFact("API members", String(apiState.members.length))}
+        ${miniFact("Operations scope", operations.scope || "Not loaded")}
+        ${miniFact("API members", String(operationCounts.members || apiState.members.length))}
       </div>
       <p class="muted">${apiState.message}</p>
+      ${apiState.user ? `<div class="toolbar" style="margin-top:14px;margin-bottom:0"><button class="secondary-button" data-view-jump="operations" type="button">Open operations center</button><button class="secondary-button" data-action="refreshApi" type="button">Refresh backend data</button></div>` : ""}
     </section>
 
     <section class="card" style="margin-top:16px">
