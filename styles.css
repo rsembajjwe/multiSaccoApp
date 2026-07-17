@@ -315,6 +315,10 @@ h3 {
   margin-bottom: 14px;
 }
 
+.toolbar > div {
+  min-width: 0;
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;
@@ -549,6 +553,11 @@ th {
   border-left: 4px solid var(--gold);
   border-radius: 8px;
   background: #fff8e5;
+  overflow-wrap: anywhere;
+}
+
+pre.notice {
+  overflow: auto;
 }
 
 .notice.error {

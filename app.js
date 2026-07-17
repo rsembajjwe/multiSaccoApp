@@ -478,6 +478,10 @@ function apiSyncNotice(context) {
   return `<div class="notice">${context} is showing local demo data. Login to the API to switch this screen to Java-backed records.</div>`;
 }
 
+function refreshApiButton(label = "Refresh API") {
+  return `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : label}</button>`;
+}
+
 function init() {
   renderTenantSelect();
   renderNav();
@@ -1346,14 +1350,33 @@ function renderApprovals() {
   const activeWorkflowCount = workflows.filter((workflow) => workflow.active).length;
   const workflowModules = new Set(workflows.map((workflow) => workflow.module).filter(Boolean)).size;
   return `
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Approvals data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; maker-checker and workflows</p>
+        </div>
+        <div class="filters">
+          ${apiState.user ? refreshApiButton("Refresh backend data") : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
+          ${apiState.user ? `<button class="primary-button" data-action="newApprovalWorkflow" type="button">New workflow</button>` : ""}
+        </div>
+      </div>
+      ${apiSyncNotice("Approvals screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", source)}
+        ${miniFact("Last sync", apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed")}
+        ${miniFact("Workflow coverage", apiState.user ? workflowModules : "Demo")}
+        ${miniFact("Checker queue", approvals.length)}
+      </div>
+    </section>
     ${apiState.user ? `
-      <section class="card">
+      <section class="card" style="margin-top:16px">
         <div class="toolbar">
           <div>
             <h2>Approval control center</h2>
             <p class="eyebrow">API-backed &middot; maker-checker queue, workflow coverage and decision history</p>
           </div>
-          <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+          ${refreshApiButton()}
         </div>
         <div class="grid metrics">
           ${metric("Pending queue", approvals.length, `${highRiskApprovals} high-risk item(s)`)}
@@ -1367,7 +1390,7 @@ function renderApprovals() {
           ${metric("Queue source", "Backend", apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant")}
         </div>
       </section>
-      <section class="card">
+      <section class="card" style="margin-top:16px">
         <div class="toolbar">
           <div>
             <h2>Approval workflows</h2>
@@ -1389,15 +1412,15 @@ function renderApprovals() {
         </div>
       </section>
     ` : ""}
-    <section class="card" style="margin-top:${apiState.user ? "16px" : "0"}">
+    <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Approval queue</h2>
           <p class="eyebrow">${source} &middot; Committee, board and maker-checker decisions</p>
         </div>
-        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
+        ${apiState.user ? refreshApiButton() : ""}
       </div>
-      ${apiState.user ? `<div class="notice">Pending financial postings shown from the backend for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}.</div>` : ""}
+      ${apiSyncNotice("Approval queue")}
       <ul class="list">
         ${approvals.map((approval) => `
           <li>
@@ -1463,7 +1486,23 @@ function renderReports() {
   const welfare = members.reduce((sum, member) => sum + member.welfare, 0);
   const max = Math.max(savings, shares, welfare, 1);
   return `
-    <div class="grid two">
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Reports data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; accounting, compliance and audit</p>
+        </div>
+        <button class="secondary-button" data-action="apiLogin" type="button">API login</button>
+      </div>
+      ${apiSyncNotice("Reports screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", "Local demo")}
+        ${miniFact("Last sync", "Demo seed")}
+        ${miniFact("Ledger", "Demo summary")}
+        ${miniFact("Audit rows", tenantScoped(state.audit).length)}
+      </div>
+    </section>
+    <div class="grid two" style="margin-top:16px">
       <section class="card">
         <h2>Financial summary</h2>
         <div class="chart">
@@ -1489,7 +1528,7 @@ function renderReports() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <h2>API audit events</h2>
-        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+        ${refreshApiButton()}
       </div>
       ${apiAuditTable(apiState.auditEvents)}
     </section>
@@ -1640,13 +1679,29 @@ function renderApiReports() {
   const tenantLabel = apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant";
 
   return `
-    <section class="card">
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Reports data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; ledger, reconciliation and compliance</p>
+        </div>
+        ${refreshApiButton("Refresh backend data")}
+      </div>
+      ${apiSyncNotice("Reports screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", "Java API")}
+        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
+        ${miniFact("Journal rows", journals.length)}
+        ${miniFact("Reconciliation exceptions", reconciliationExceptions)}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Reports control center</h2>
           <p class="eyebrow">API-backed &middot; financial integrity, reconciliation, compliance and governance for ${tenantLabel}</p>
         </div>
-        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+        ${refreshApiButton()}
       </div>
       <div class="grid metrics">
         ${metric("Ledger integrity", unbalanced === 0 ? "Balanced" : `${unbalanced} issue(s)`, `${journals.length} journal entry(ies)`)}
@@ -1688,7 +1743,7 @@ function renderApiReports() {
           <h2>Accounting ledger</h2>
           <p class="eyebrow">API-backed &middot; Balanced double-entry journals for ${tenantLabel}</p>
         </div>
-        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+        ${refreshApiButton()}
       </div>
       <div class="notice">Journal entries are derived from posted financial transactions, loan disbursements, loan repayments, and subscription payments.</div>
       ${journalTable(journals)}
@@ -1699,7 +1754,7 @@ function renderApiReports() {
           <h2>Accounting periods</h2>
           <p class="eyebrow">Closed periods block ordinary financial postings</p>
         </div>
-        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+        ${refreshApiButton()}
       </div>
       ${accountingPeriodTable(periods)}
     </section>
@@ -1737,7 +1792,7 @@ function renderApiReports() {
           <h2>Reconciliation</h2>
           <p class="eyebrow">Bank, cash, mobile money and payroll statement matching</p>
         </div>
-        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+        ${refreshApiButton()}
       </div>
       <div class="grid metrics">
         ${metric("Matched", reconciliation.summary.matched || 0, `${money.format(reconciliation.summary.matchedAmount || 0)} cleared`)}
@@ -1752,7 +1807,7 @@ function renderApiReports() {
           <h2>Mobile money callbacks</h2>
           <p class="eyebrow">Idempotent provider callback history and posted resources</p>
         </div>
-        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+        ${refreshApiButton()}
       </div>
       <div class="grid metrics">
         ${metric("Callbacks", mobileMoneyCallbacks.length, `${money.format(mobileMoneyCallbacks.reduce((sum, item) => sum + item.amount, 0))} received`)}
@@ -1767,7 +1822,7 @@ function renderApiReports() {
           <p class="eyebrow">Provider outbox and tenant notification templates</p>
         </div>
         <button class="primary-button" data-action="newNotificationTemplate" type="button">New template</button>
-        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+        ${refreshApiButton()}
       </div>
       <div class="grid metrics">
         ${metric("SMS", notificationDeliveries.filter((item) => item.channel === "sms").length, "demo_sms")}
@@ -1784,7 +1839,7 @@ function renderApiReports() {
           <h2>Regulatory report</h2>
           <p class="eyebrow">Export-ready supervisory snapshot for ${tenantLabel}</p>
         </div>
-        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+        ${refreshApiButton()}
       </div>
       <div class="grid metrics">
         ${metric("Members", regulatoryReport.consolidated.memberCount || 0, `${regulatoryReport.consolidated.activeMembers || 0} active`)}

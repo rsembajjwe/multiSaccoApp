@@ -28,6 +28,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Transactions and Loans screens show Java-backed source, last sync time, refresh state, backend error notices, account coverage, and repayment coverage when API integration is active.
 - Approvals screen shows a backend-backed control center for pending queue size, pending value, workflow coverage, decision history, corrections, checker-clear status, and grouped approve/reject actions.
 - Reports screen shows a backend-backed control center for ledger integrity, reconciliation exceptions, compliance status, governance items, accounting periods, operations exceptions, and operating assets.
+- Approvals and Reports screens show Java-backed source, last sync time, refresh state, backend error notices, workflow coverage, checker queue, journal rows, and reconciliation exception indicators when API integration is active.
 - SACCO Registration screen shows a backend-backed onboarding control center for applications, approvals, licence watch, onboarding progress, package coverage, activation gates, and grouped profile/approval actions.
 - Subscriptions screen shows a billing control center for invoice totals, paid/outstanding balances, active subscriptions, billable members, per-member tier usage, fixed-tier usage, and payment access.
 - Seeded API login/logout from the web UI.
