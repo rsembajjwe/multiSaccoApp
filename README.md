@@ -165,6 +165,8 @@ Transactions also shows a backend-backed posting control center with posted, pen
 
 After SACCO API login, the Loans screen reads backend loan files and submits new loan applications to `/api/v1/loans`.
 
+Loans also shows a backend-backed control center with portfolio value, outstanding balance, ready-to-disburse loans, repayments, guarantor-pending counts, and DSR watch indicators.
+
 SACCO staff can request loan guarantors, and members can accept or reject guarantee requests from the Member portal.
 
 SACCO staff can approve guaranteed loan applications and disburse approved loans.

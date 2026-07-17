@@ -1048,8 +1048,38 @@ function welfareClaimActions(claim) {
 function renderLoans() {
   const loans = useApiLoans() ? apiState.loans.map(apiLoanToRow) : tenantScoped(state.loans);
   const source = useApiLoans() ? "API-backed" : "Local demo";
+  const activeLoans = loans.filter((loan) => loan.status === "Active");
+  const submittedLoans = loans.filter((loan) => ["Submitted", "Under Review"].includes(loan.status));
+  const approvedLoans = loans.filter((loan) => loan.status === "Approved");
+  const closedLoans = loans.filter((loan) => loan.status === "Closed");
+  const portfolioValue = loans.reduce((sum, loan) => sum + loan.amount, 0);
+  const outstandingBalance = loans.reduce((sum, loan) => sum + loan.balance, 0);
+  const repaidValue = loans.reduce((sum, loan) => sum + (loan.repaymentTotal || 0), 0);
+  const pendingGuarantors = loans.reduce((sum, loan) => sum + (loan.pendingGuarantors || 0), 0);
+  const highDsrLoans = loans.filter((loan) => Number(loan.dsr || 0) >= 40).length;
+  const averageDsr = loans.length ? Math.round(loans.reduce((sum, loan) => sum + Number(loan.dsr || 0), 0) / loans.length) : 0;
   return `
     <section class="card">
+      <div class="toolbar">
+        <div>
+          <h2>Loan control center</h2>
+          <p class="eyebrow">${source} &middot; applications, guarantors, disbursements and repayments</p>
+        </div>
+        ${apiState.user ? `<button class="secondary-button" data-view-jump="approvals" type="button">Open approvals</button>` : ""}
+      </div>
+      <div class="grid metrics">
+        ${metric("Portfolio value", money.format(portfolioValue), `${loans.length} loan file(s)`)}
+        ${metric("Outstanding", money.format(outstandingBalance), `${activeLoans.length} active loan(s)`)}
+        ${metric("Ready to disburse", approvedLoans.length, "approved and awaiting payout")}
+        ${metric("Repayments", money.format(repaidValue), `${closedLoans.length} closed loan(s)`)}
+      </div>
+      <div class="grid three" style="margin-top:16px">
+        ${metric("Applications", submittedLoans.length, "submitted or under review")}
+        ${metric("Guarantor pending", pendingGuarantors, "member decisions needed")}
+        ${metric("DSR watch", highDsrLoans, `${averageDsr}% average DSR`)}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Loan files</h2>
@@ -1071,7 +1101,7 @@ function renderLoans() {
                 <td>${money.format(loan.balance)}${loan.repaymentTotal ? `<br><small>${money.format(loan.repaymentTotal)} repaid</small>` : ""}</td>
                 <td>${loan.stage}</td>
                 <td>${loan.guarantors}${loan.pendingGuarantors ? `<br><small>${loan.pendingGuarantors} pending</small>` : ""}</td>
-                <td>${loan.dsr}%</td>
+                <td>${loan.dsr}%<br><small>${loanRiskLabel(loan.dsr)}</small></td>
                 <td><span class="status ${statusClass(loan.status)}">${loan.status}</span></td>
                 <td>${apiState.user ? loanActions(loan) : ""}</td>
               </tr>
@@ -1089,11 +1119,20 @@ function loanActions(loan) {
   const canDisburse = status === "approved";
   const canRepay = status === "active";
   return `
-    ${canDecide ? `<button class="secondary-button" data-loan-reject="${loan.id}" type="button">Reject</button><button class="primary-button" data-loan-approve="${loan.id}" type="button">Approve</button>` : ""}
-    ${canDisburse ? `<button class="primary-button" data-loan-disburse="${loan.id}" type="button">Disburse</button>` : ""}
-    ${canRepay ? `<button class="primary-button" data-loan-repay="${loan.id}" type="button">Record repayment</button>` : ""}
-    <button class="secondary-button" data-request-guarantor="${loan.id}" type="button">Request guarantor</button>
+    <div class="filters">
+      ${canDecide ? `<button class="secondary-button" data-loan-reject="${loan.id}" type="button">Reject</button><button class="primary-button" data-loan-approve="${loan.id}" type="button">Approve</button>` : ""}
+      ${canDisburse ? `<button class="primary-button" data-loan-disburse="${loan.id}" type="button">Disburse</button>` : ""}
+      ${canRepay ? `<button class="primary-button" data-loan-repay="${loan.id}" type="button">Record repayment</button>` : ""}
+      <button class="secondary-button" data-request-guarantor="${loan.id}" type="button">Request guarantor</button>
+    </div>
   `;
+}
+
+function loanRiskLabel(dsr) {
+  const value = Number(dsr || 0);
+  if (value >= 45) return "High DSR";
+  if (value >= 35) return "Watch";
+  return "Healthy";
 }
 
 function renderApprovals() {
