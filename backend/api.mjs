@@ -45,6 +45,9 @@ const allowedResolutionStatuses = new Set(["open", "in_progress", "closed"]);
 const allowedComplaintCategories = new Set(["statement", "loan", "savings", "shares", "service", "other"]);
 const allowedComplaintPriorities = new Set(["low", "medium", "high"]);
 const allowedComplaintStatuses = new Set(["open", "in_progress", "resolved", "closed"]);
+const allowedApprovalModules = new Set(["members", "transactions", "loans", "expenses", "assets", "subscriptions", "governance"]);
+const allowedApprovalDecisions = new Set(["pending", "approved", "rejected", "corrections_requested"]);
+const approvalDecisionsRequiringReason = new Set(["rejected", "corrections_requested"]);
 const rateLimitBuckets = new Map();
 const rateLimitPolicies = {
   staffLogin: { max: 5, windowMs: 60_000 },
@@ -130,6 +133,10 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/users") return createUser(request, response, auth, correlationId);
     if (method === "GET" && path === "/roles") return listRoles(response, auth);
     if (method === "GET" && path === "/permissions") return sendData(response, db.permissions);
+    if (method === "GET" && path === "/approval-workflows") return listApprovalWorkflows(response, auth, url, correlationId);
+    if (method === "POST" && path === "/approval-workflows") return createApprovalWorkflow(request, response, auth, correlationId);
+    if (method === "GET" && path === "/approval-decisions") return listApprovalDecisions(response, auth, url, correlationId);
+    if (method === "POST" && path === "/approval-decisions") return createApprovalDecision(request, response, auth, correlationId);
     if (method === "GET" && path === "/audit-events") return listAuditEvents(response, auth);
     if (method === "POST" && path === "/audit-events") return createAudit(request, response, auth, correlationId);
     if (method === "GET" && path === "/accounting-periods") return listAccountingPeriods(response, auth, url);
@@ -609,6 +616,107 @@ async function createUser(request, response, auth, correlationId) {
 function listRoles(response, auth) {
   const roles = db.roles.filter((role) => (isPlatform(auth) ? true : role.tenantId === auth.user.tenantId));
   return sendData(response, roles);
+}
+
+function listApprovalWorkflows(response, auth, url, correlationId) {
+  const requestedTenantId = url.searchParams.get("tenantId");
+  if (requestedTenantId && !assertTenantAccess(auth, requestedTenantId, response, correlationId)) return;
+  const tenantId = requestedTenant(auth, url);
+  const workflows = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.approvalWorkflows
+    : db.approvalWorkflows.filter((workflow) => workflow.tenantId === tenantId);
+  return sendData(response, workflows.sort((a, b) => `${a.tenantId}:${a.module}:${a.name}`.localeCompare(`${b.tenantId}:${b.module}:${b.name}`)));
+}
+
+async function createApprovalWorkflow(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+  const name = String(body.name || "").trim();
+  const module = String(body.module || "").trim();
+  if (!name || !module) return sendError(response, 400, "VALIDATION_ERROR", "Workflow name and module are required.", correlationId);
+  if (!allowedApprovalModules.has(module)) return sendError(response, 400, "INVALID_APPROVAL_MODULE", "Unsupported approval module.", correlationId);
+  if (db.approvalWorkflows.some((workflow) => workflow.tenantId === tenantId && workflow.module === module && workflow.name.toLowerCase() === name.toLowerCase())) {
+    return sendError(response, 409, "APPROVAL_WORKFLOW_EXISTS", "Approval workflow already exists.", correlationId);
+  }
+  const workflow = {
+    id: newId("workflow"),
+    tenantId,
+    name,
+    module,
+    active: body.active === undefined ? true : Boolean(body.active),
+    createdByUserId: auth.user.id,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  db.approvalWorkflows.push(workflow);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Created approval workflow ${workflow.name}`,
+    resourceType: "approval_workflow",
+    resourceId: workflow.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, workflow, 201);
+}
+
+function listApprovalDecisions(response, auth, url, correlationId) {
+  const requestedTenantId = url.searchParams.get("tenantId");
+  if (requestedTenantId && !assertTenantAccess(auth, requestedTenantId, response, correlationId)) return;
+  const decision = url.searchParams.get("decision");
+  if (decision && !allowedApprovalDecisions.has(decision)) {
+    return sendError(response, 400, "INVALID_APPROVAL_DECISION", "Unsupported approval decision.", correlationId);
+  }
+  const tenantId = requestedTenant(auth, url);
+  const decisions = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.approvalDecisions
+    : db.approvalDecisions.filter((item) => item.tenantId === tenantId);
+  const filtered = decision ? decisions.filter((item) => item.decision === decision) : decisions;
+  return sendData(response, filtered.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+}
+
+async function createApprovalDecision(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const decisionValue = String(body.decision || "").trim();
+  if (!allowedApprovalDecisions.has(decisionValue)) {
+    return sendError(response, 400, "INVALID_APPROVAL_DECISION", "Unsupported approval decision.", correlationId);
+  }
+  if (approvalDecisionsRequiringReason.has(decisionValue) && !String(body.reason || "").trim()) {
+    return sendError(response, 400, "APPROVAL_REASON_REQUIRED", "A reason is required for this approval decision.", correlationId);
+  }
+  const workflow = db.approvalWorkflows.find((item) => item.id === String(body.workflowId || "").trim());
+  if (!workflow) return sendError(response, 404, "APPROVAL_WORKFLOW_NOT_FOUND", "Approval workflow not found.", correlationId);
+  if (!assertTenantAccess(auth, workflow.tenantId, response, correlationId)) return;
+  if (body.tenantId && String(body.tenantId).trim() !== workflow.tenantId) {
+    return sendError(response, 400, "WORKFLOW_TENANT_MISMATCH", "Decision tenant must match workflow tenant.", correlationId);
+  }
+  if (!body.resourceType || !body.resourceId) {
+    return sendError(response, 400, "VALIDATION_ERROR", "Resource type and resource id are required.", correlationId);
+  }
+  const decision = {
+    id: newId("approval_decision"),
+    tenantId: workflow.tenantId,
+    workflowId: workflow.id,
+    resourceType: String(body.resourceType).trim(),
+    resourceId: String(body.resourceId).trim(),
+    decision: decisionValue,
+    decidedByUserId: auth.user.id,
+    reason: String(body.reason || "").trim(),
+    createdAt: new Date().toISOString()
+  };
+  db.approvalDecisions.push(decision);
+  createAuditEvent({
+    tenantId: workflow.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Recorded approval decision ${decision.decision} for ${decision.resourceType}`,
+    resourceType: "approval_decision",
+    resourceId: decision.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, decision, 201);
 }
 
 function listAuditEvents(response, auth) {

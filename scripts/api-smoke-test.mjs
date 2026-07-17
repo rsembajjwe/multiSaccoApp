@@ -109,6 +109,52 @@ try {
   const invalidProfileEmail = await raw("PATCH", "/tenants/tenant_green/profile", { email: "not-an-email" }, saccoToken);
   assert(invalidProfileEmail.status === 400, "SACCO profile should reject invalid emails");
 
+  const workflows = await api("GET", "/approval-workflows", null, saccoToken);
+  assert(workflows.data.length >= 2, "SACCO admin should list own approval workflows");
+  assert(workflows.data.every((workflow) => workflow.tenantId === "tenant_green"), "Approval workflows must be tenant-scoped");
+
+  const workflow = await api("POST", "/approval-workflows", {
+    name: `Smoke expense approval ${Date.now()}`,
+    module: "expenses"
+  }, saccoToken);
+  assert(workflow.data.tenantId === "tenant_green", "Approval workflow should be created in authenticated tenant");
+  assert(workflow.data.active === true, "Approval workflow should default active");
+
+  const duplicateWorkflow = await raw("POST", "/approval-workflows", {
+    name: workflow.data.name,
+    module: "expenses"
+  }, saccoToken);
+  assert(duplicateWorkflow.status === 409, "Approval workflow names should be unique per tenant and module");
+
+  const invalidWorkflow = await raw("POST", "/approval-workflows", {
+    name: "Bad workflow",
+    module: "bad_module"
+  }, saccoToken);
+  assert(invalidWorkflow.status === 400, "Approval workflows should reject unsupported modules");
+
+  const rejectedWithoutReason = await raw("POST", "/approval-decisions", {
+    workflowId: workflow.data.id,
+    resourceType: "expense",
+    resourceId: "expense_green_0001",
+    decision: "rejected"
+  }, saccoToken);
+  assert(rejectedWithoutReason.status === 400, "Rejected approval decisions should require a reason");
+
+  const approvalDecision = await api("POST", "/approval-decisions", {
+    workflowId: workflow.data.id,
+    resourceType: "expense",
+    resourceId: "expense_green_0001",
+    decision: "approved"
+  }, saccoToken);
+  assert(approvalDecision.data.workflowId === workflow.data.id, "Approval decision should reference its workflow");
+  assert(approvalDecision.data.decision === "approved", "Approval decision should keep the decision value");
+
+  const approvedDecisions = await api("GET", "/approval-decisions?decision=approved", null, saccoToken);
+  assert(approvedDecisions.data.some((decision) => decision.id === approvalDecision.data.id), "Approval decisions should be filterable");
+
+  const crossTenantWorkflows = await raw("GET", "/approval-workflows?tenantId=tenant_lake", null, saccoToken);
+  assert(crossTenantWorkflows.status === 403, "SACCO admin should not list another tenant approval workflows");
+
   const memberLogin = await api("POST", "/member-auth/login", {
     identifier: "GVS-0001",
     password: "Member@12345"

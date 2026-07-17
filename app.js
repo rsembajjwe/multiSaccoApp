@@ -142,6 +142,8 @@ let apiState = {
   notificationDeliveries: [],
   governanceMeetings: [],
   complaints: [],
+  approvalWorkflows: [],
+  approvalDecisions: [],
   auditEvents: [],
   message: "Checking backend connection..."
 };
@@ -1014,8 +1016,33 @@ function loanActions(loan) {
 
 function renderApprovals() {
   const approvals = apiState.user ? apiTransactionApprovalItems() : tenantScoped(state.approvals);
+  const workflows = apiState.approvalWorkflows || [];
+  const decisions = apiState.approvalDecisions || [];
   const source = apiState.user ? "API-backed" : "Local demo";
   return `
+    ${apiState.user ? `
+      <section class="card">
+        <div class="toolbar">
+          <div>
+            <h2>Approval workflows</h2>
+            <p class="eyebrow">API-backed &middot; rules, modules and decision history</p>
+          </div>
+          <div class="filters">
+            <button class="secondary-button" data-action="newApprovalDecision" type="button">Record decision</button>
+            <button class="primary-button" data-action="newApprovalWorkflow" type="button">New workflow</button>
+          </div>
+        </div>
+        <div class="grid metrics">
+          ${metric("Workflows", workflows.length, `${workflows.filter((workflow) => workflow.active).length} active`)}
+          ${metric("Decisions", decisions.length, `${decisions.filter((decision) => decision.decision === "approved").length} approved`)}
+          ${metric("Corrections", decisions.filter((decision) => decision.decision === "corrections_requested").length, "requiring follow-up")}
+        </div>
+        <div class="grid two" style="margin-top:16px">
+          ${approvalWorkflowTable(workflows)}
+          ${approvalDecisionTable(decisions.slice(0, 8))}
+        </div>
+      </section>
+    ` : ""}
     <section class="card">
       <div class="toolbar">
         <div>
@@ -1040,6 +1067,44 @@ function renderApprovals() {
         `).join("") || `<li><span>No pending approvals for this tenant.</span><span class="status active">Clear</span></li>`}
       </ul>
     </section>
+  `;
+}
+
+function approvalWorkflowTable(workflows) {
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Module</th><th>Status</th></tr></thead>
+        <tbody>
+          ${workflows.map((workflow) => `
+            <tr>
+              <td><strong>${workflow.name}</strong><br><small>${tenantName(workflow.tenantId)}</small></td>
+              <td>${titleCase(workflow.module.replace(/_/g, " "))}</td>
+              <td><span class="status ${workflow.active ? "active" : "pending"}">${workflow.active ? "Active" : "Inactive"}</span></td>
+            </tr>
+          `).join("") || `<tr><td colspan="3">No approval workflows found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function approvalDecisionTable(decisions) {
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Resource</th><th>Decision</th><th>Reason</th></tr></thead>
+        <tbody>
+          ${decisions.map((decision) => `
+            <tr>
+              <td><strong>${titleCase(decision.resourceType.replace(/_/g, " "))}</strong><br><small>${decision.resourceId}</small></td>
+              <td><span class="status ${statusClass(decision.decision)}">${titleCase(decision.decision.replace(/_/g, " "))}</span></td>
+              <td>${decision.reason || "No reason captured"}<br><small>${decision.createdAt?.slice(0, 16).replace("T", " ") || ""}</small></td>
+            </tr>
+          `).join("") || `<tr><td colspan="3">No approval decisions recorded.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -1812,6 +1877,8 @@ function bindViewActions() {
         newAsset: openAssetForm,
         newGovernanceMeeting: openGovernanceMeetingForm,
         newComplaint: openComplaintForm,
+        newApprovalWorkflow: openApprovalWorkflowForm,
+        newApprovalDecision: openApprovalDecisionForm,
         memberLogin: openMemberLoginForm,
         memberLogout: memberLogout,
         refreshApi: refreshApiStatus
@@ -1916,7 +1983,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, suppliers, expenses, assets, governanceMeetings, complaints] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, suppliers, expenses, assets, governanceMeetings, complaints, approvalWorkflows, approvalDecisions] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1941,7 +2008,9 @@ async function refreshApiStatus() {
         apiRequest(`/expenses${apiTenantQuery()}`),
         apiRequest(`/assets${apiTenantQuery()}`),
         apiRequest(`/governance-meetings${apiTenantQuery()}`),
-        apiRequest(`/complaints${apiTenantQuery()}`)
+        apiRequest(`/complaints${apiTenantQuery()}`),
+        apiRequest(`/approval-workflows${apiTenantQuery()}`),
+        apiRequest(`/approval-decisions${apiTenantQuery()}`)
       ]);
       apiState.tenants = tenants;
       apiState.users = users;
@@ -1968,7 +2037,9 @@ async function refreshApiStatus() {
       apiState.assets = assets;
       apiState.governanceMeetings = governanceMeetings;
       apiState.complaints = complaints;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialProducts.length} product(s), ${financialAccounts.length} account(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
+      apiState.approvalWorkflows = approvalWorkflows;
+      apiState.approvalDecisions = approvalDecisions;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialProducts.length} product(s), ${financialAccounts.length} account(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), ${approvalWorkflows.length} workflow(s), ${approvalDecisions.length} decision(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -2200,7 +2271,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -2599,6 +2670,74 @@ async function saveMemberProfileRecord(path, payload, memberId) {
   } catch (error) {
     document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
   }
+}
+
+function openApprovalWorkflowForm() {
+  if (!apiState.user) return;
+  openModal("New approval workflow", `
+    <div class="form-grid">
+      ${field("Workflow name", "approvalWorkflowName", "text", "Expense approval")}
+      <label class="field"><span>Module</span><select id="approvalWorkflowModule" class="select"><option value="members">Members</option><option value="transactions">Transactions</option><option value="loans">Loans</option><option value="expenses">Expenses</option><option value="assets">Assets</option><option value="subscriptions">Subscriptions</option><option value="governance">Governance</option></select></label>
+      <label class="field"><span>Status</span><select id="approvalWorkflowActive" class="select"><option value="true">Active</option><option value="false">Inactive</option></select></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveApprovalWorkflow" class="primary-button" type="button">Save workflow</button>`);
+  document.getElementById("saveApprovalWorkflow").addEventListener("click", async () => {
+    try {
+      await apiRequest("/approval-workflows", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
+          name: value("approvalWorkflowName"),
+          module: value("approvalWorkflowModule"),
+          active: value("approvalWorkflowActive") === "true"
+        })
+      });
+      closeModal();
+      state.currentView = "approvals";
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+function openApprovalDecisionForm() {
+  if (!apiState.user) return;
+  const workflows = apiState.approvalWorkflows || [];
+  if (!workflows.length) {
+    openModal("Record approval decision", `<div class="notice error">Create an approval workflow before recording decisions.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    return;
+  }
+  openModal("Record approval decision", `
+    <div class="form-grid">
+      <label class="field full"><span>Workflow</span><select id="approvalDecisionWorkflow" class="select">${workflows.map((workflow) => `<option value="${workflow.id}">${workflow.name} (${titleCase(workflow.module.replace(/_/g, " "))})</option>`).join("")}</select></label>
+      ${field("Resource type", "approvalDecisionResourceType", "text", "expense")}
+      ${field("Resource ID", "approvalDecisionResourceId", "text", "expense_green_0001")}
+      <label class="field"><span>Decision</span><select id="approvalDecisionValue" class="select"><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="corrections_requested">Corrections Requested</option><option value="pending">Pending</option></select></label>
+      <label class="field full"><span>Reason</span><textarea id="approvalDecisionReason" class="input" rows="3" placeholder="Required for rejected or corrections requested decisions"></textarea></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveApprovalDecision" class="primary-button" type="button">Record decision</button>`);
+  document.getElementById("saveApprovalDecision").addEventListener("click", async () => {
+    const workflow = workflows.find((item) => item.id === value("approvalDecisionWorkflow"));
+    try {
+      await apiRequest("/approval-decisions", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: workflow?.tenantId,
+          workflowId: value("approvalDecisionWorkflow"),
+          resourceType: value("approvalDecisionResourceType"),
+          resourceId: value("approvalDecisionResourceId"),
+          decision: value("approvalDecisionValue"),
+          reason: value("approvalDecisionReason")
+        })
+      });
+      closeModal();
+      state.currentView = "approvals";
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
 }
 
 function openTransactionForm() {

@@ -156,6 +156,51 @@ export const db = {
     { tenantId: "tenant_platform", userId: "user_platform_admin", roleId: "role_platform_admin" },
     { tenantId: "tenant_green", userId: "user_green_admin", roleId: "role_sacco_admin" }
   ],
+  approvalWorkflows: [
+    {
+      id: "workflow_green_loans",
+      tenantId: "tenant_green",
+      name: "Loan committee approval",
+      module: "loans",
+      active: true,
+      createdByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "workflow_green_transactions",
+      tenantId: "tenant_green",
+      name: "Financial posting maker-checker",
+      module: "transactions",
+      active: true,
+      createdByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "workflow_lake_members",
+      tenantId: "tenant_lake",
+      name: "Member onboarding approval",
+      module: "members",
+      active: true,
+      createdByUserId: "user_platform_admin",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  approvalDecisions: [
+    {
+      id: "approval_decision_green_loan_seed",
+      tenantId: "tenant_green",
+      workflowId: "workflow_green_loans",
+      resourceType: "loan",
+      resourceId: "loan_green_0001",
+      decision: "approved",
+      decidedByUserId: "user_green_admin",
+      reason: "",
+      createdAt: now()
+    }
+  ],
   chartOfAccounts: [
     { code: "1000", name: "Cash on Hand", type: "asset", normalBalance: "debit" },
     { code: "1010", name: "Bank Account", type: "asset", normalBalance: "debit" },
