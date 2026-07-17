@@ -47,6 +47,10 @@ Java-backed routes currently implemented:
 - `POST /api/v1/financial-products`
 - `GET /api/v1/financial-accounts`
 - `POST /api/v1/financial-accounts`
+- `GET /api/v1/welfare-claims`
+- `POST /api/v1/welfare-claims`
+- `PATCH /api/v1/welfare-claims/:id/status`
+- `POST /api/v1/welfare-claims/:id/payment`
 - `GET /api/v1/financial-transactions`
 - `POST /api/v1/financial-transactions`
 - `GET /api/v1/financial-transactions/:id/receipt`
@@ -167,6 +171,10 @@ All JSON responses should follow one of these shapes:
 | POST | `/financial-products` | Create a tenant financial product definition. | SACCO staff |
 | GET | `/financial-accounts` | List member accounts linked to savings, shares, and welfare products. | Required |
 | POST | `/financial-accounts` | Open a financial account for an active member and product. | SACCO staff |
+| GET | `/welfare-claims` | List tenant welfare claims. | Required |
+| POST | `/welfare-claims` | Submit a member welfare claim. | SACCO staff |
+| PATCH | `/welfare-claims/:id/status` | Approve or reject a submitted welfare claim. | Authorized approver |
+| POST | `/welfare-claims/:id/payment` | Pay an approved welfare claim and reduce member welfare balance. | SACCO staff |
 | GET | `/financial-transactions` | List tenant financial transactions. | Required |
 | POST | `/financial-transactions` | Submit a pending financial transaction. | SACCO staff |
 | GET | `/financial-transactions/:id/receipt` | Generate a receipt projection for a posted financial transaction. | Required |
@@ -251,6 +259,10 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/financial-products`
 - `GET /api/v1/financial-accounts`
 - `POST /api/v1/financial-accounts`
+- `GET /api/v1/welfare-claims`
+- `POST /api/v1/welfare-claims`
+- `PATCH /api/v1/welfare-claims/:id/status`
+- `POST /api/v1/welfare-claims/:id/payment`
 - `GET /api/v1/financial-transactions`
 - `POST /api/v1/financial-transactions`
 - `PATCH /api/v1/financial-transactions/:id/status`

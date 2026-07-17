@@ -4,6 +4,8 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.finance.FinancialTransaction;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
+import com.methaltech.sacco.finance.WelfareClaim;
+import com.methaltech.sacco.finance.WelfareClaimRepository;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.loan.Loan;
@@ -57,6 +59,7 @@ class AccountingController {
     private final ExpenseRepository expenseRepository;
     private final AssetRepository assetRepository;
     private final FinancialTransactionRepository transactionRepository;
+    private final WelfareClaimRepository welfareClaimRepository;
     private final LoanRepository loanRepository;
     private final LoanRepaymentRepository repaymentRepository;
     private final SubscriptionPaymentRepository subscriptionPaymentRepository;
@@ -72,6 +75,7 @@ class AccountingController {
             ExpenseRepository expenseRepository,
             AssetRepository assetRepository,
             FinancialTransactionRepository transactionRepository,
+            WelfareClaimRepository welfareClaimRepository,
             LoanRepository loanRepository,
             LoanRepaymentRepository repaymentRepository,
             SubscriptionPaymentRepository subscriptionPaymentRepository,
@@ -85,6 +89,7 @@ class AccountingController {
         this.expenseRepository = expenseRepository;
         this.assetRepository = assetRepository;
         this.transactionRepository = transactionRepository;
+        this.welfareClaimRepository = welfareClaimRepository;
         this.loanRepository = loanRepository;
         this.repaymentRepository = repaymentRepository;
         this.subscriptionPaymentRepository = subscriptionPaymentRepository;
@@ -177,7 +182,9 @@ class AccountingController {
                                         subscriptionPaymentJournalEntries(tenantId, currentSession, accounts).stream(),
                                         java.util.stream.Stream.concat(
                                                 expenseJournalEntries(tenantId, currentSession, accounts).stream(),
-                                                assetJournalEntries(tenantId, currentSession, accounts).stream()))))
+                                                java.util.stream.Stream.concat(
+                                                        welfareClaimJournalEntries(tenantId, currentSession, accounts).stream(),
+                                                        assetJournalEntries(tenantId, currentSession, accounts).stream())))))
                 .sorted(Comparator.comparing(JournalEntryResponse::postedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
                 .toList();
 
@@ -656,6 +663,32 @@ class AccountingController {
                         List.of(
                                 line("6100", payment.getAmount(), BigDecimal.ZERO, null, accounts),
                                 line(accountForChannel(payment.getChannel()), BigDecimal.ZERO, payment.getAmount(), null, accounts))))
+                .toList();
+    }
+
+    private List<JournalEntryResponse> welfareClaimJournalEntries(
+            String tenantId,
+            AuthService.CurrentSession currentSession,
+            Map<String, ChartOfAccount> accounts) {
+        List<WelfareClaim> claims = authService.isPlatform(currentSession.user()) && tenantId == null
+                ? welfareClaimRepository.findAllByOrderByTenantIdAscSubmittedAtDesc()
+                : welfareClaimRepository.findByTenantIdOrderBySubmittedAtDesc(tenantId);
+
+        return claims.stream()
+                .filter(claim -> "paid".equals(claim.getStatus()))
+                .map(claim -> journal(
+                        "je_" + claim.getId(),
+                        claim.getTenantId(),
+                        "welfare_claim",
+                        claim.getId(),
+                        claim.getReference(),
+                        claim.getDescription() == null || claim.getDescription().isBlank()
+                                ? "Paid welfare claim"
+                                : claim.getDescription(),
+                        claim.getPaidAt(),
+                        List.of(
+                                line("2200", claim.getAmount(), BigDecimal.ZERO, claim.getMemberId(), accounts),
+                                line(accountForChannel(claim.getChannel()), BigDecimal.ZERO, claim.getAmount(), claim.getMemberId(), accounts))))
                 .toList();
     }
 

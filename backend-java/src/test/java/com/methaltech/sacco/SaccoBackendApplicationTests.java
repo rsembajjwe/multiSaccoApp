@@ -1571,6 +1571,181 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void welfareClaimsAreApprovedPaidAndJournaled() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String reference = "GVS-WCL-SMOKE-" + System.currentTimeMillis();
+
+		mockMvc.perform(get("/api/v1/welfare-claims")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+		MvcResult claim = mockMvc.perform(post("/api/v1/welfare-claims")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_daniel",
+								  "claimType": "medical",
+								  "amount": 10000,
+								  "reference": "%s",
+								  "description": "Clinic support"
+								}
+								""".formatted(reference)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.memberId", is("member_green_daniel")))
+				.andExpect(jsonPath("$.data.membershipNo", is("GVS-0002")))
+				.andExpect(jsonPath("$.data.status", is("submitted")))
+				.andExpect(jsonPath("$.data.reference", is(reference)))
+				.andReturn();
+		String claimId = objectMapper.readTree(claim.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/welfare-claims/" + claimId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "approved" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("approved")))
+				.andExpect(jsonPath("$.data.decidedByUserId", is("user_green_admin")));
+
+		mockMvc.perform(post("/api/v1/welfare-claims/" + claimId + "/payment")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "channel": "cash" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("paid")))
+				.andExpect(jsonPath("$.data.channel", is("cash")))
+				.andExpect(jsonPath("$.data.paidByUserId", is("user_green_admin")))
+				.andExpect(jsonPath("$.data.paidAt", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/members/member_green_daniel")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.welfareBalance", is(85000.00)));
+
+		mockMvc.perform(get("/api/v1/journal-entries")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[?(@.sourceId == '%s')].sourceType".formatted(claimId), hasItem("welfare_claim")))
+				.andExpect(jsonPath("$.data[?(@.sourceId == '%s')].isBalanced".formatted(claimId), hasItem(true)));
+
+		mockMvc.perform(post("/api/v1/welfare-claims/" + claimId + "/payment")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "channel": "cash" }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("WELFARE_CLAIM_NOT_PAYABLE")));
+	}
+
+	@Test
+	void invalidWelfareClaimsAreRejected() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/welfare-claims?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/welfare-claims")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "memberId": "member_lake_peter",
+								  "claimType": "medical",
+								  "amount": 10000
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/welfare-claims")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "claimType": "medical",
+								  "amount": 0
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_WELFARE_CLAIM_AMOUNT")));
+
+		mockMvc.perform(post("/api/v1/welfare-claims")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "claimType": "medical",
+								  "amount": 10000,
+								  "reference": "GVS-WCL-0001"
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("WELFARE_CLAIM_REFERENCE_EXISTS")));
+
+		MvcResult claim = mockMvc.perform(post("/api/v1/welfare-claims")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_daniel",
+								  "claimType": "burial",
+								  "amount": 1000000,
+								  "description": "Too high"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String claimId = objectMapper.readTree(claim.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/welfare-claims/" + claimId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "rejected" }
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("WELFARE_REJECTION_REASON_REQUIRED")));
+
+		mockMvc.perform(patch("/api/v1/welfare-claims/" + claimId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "approved" }
+								"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(post("/api/v1/welfare-claims/" + claimId + "/payment")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "channel": "cash" }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("INSUFFICIENT_WELFARE")));
+
+		mockMvc.perform(post("/api/v1/welfare-claims/" + claimId + "/payment")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "channel": "crypto" }
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_WELFARE_PAYMENT_CHANNEL")));
+	}
+
+	@Test
 	void financialTransactionPostingUsesMakerCheckerAndUpdatesBalances() throws Exception {
 		String makerToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String checkerEmail = "checker-" + System.currentTimeMillis() + "@greenvalley.local";

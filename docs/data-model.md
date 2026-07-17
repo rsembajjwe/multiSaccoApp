@@ -202,6 +202,29 @@ Subscription billing rule: SACCOs with up to 250 members pay UGX 5,000 per membe
 
 Financial account control rule: only active members can open accounts, each member can have only one account per product, and the account type must match the selected product.
 
+### welfare_claims
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| member_id | uuid/string | Claiming member. |
+| claim_type | text | Claim category such as medical, burial, education, or emergency. |
+| amount | decimal | Claim amount. |
+| channel | enum | Payment channel after payment: `cash`, `bank`, or `mobile_money`. |
+| reference | text | Unique per tenant. |
+| description | text | Claim narration. |
+| status | enum | `submitted`, `approved`, `rejected`, `paid`. |
+| submitted_by_user_id | uuid/string | User who captured the claim. |
+| decided_by_user_id | uuid/string | User who approved or rejected it. |
+| paid_by_user_id | uuid/string | User who paid it. |
+| rejection_reason | text | Required when rejected. |
+| submitted_at | timestamp | Submission timestamp. |
+| decided_at | timestamp | Decision timestamp. |
+| paid_at | timestamp | Payment timestamp. |
+
+Welfare claim control rule: only active members can submit claims, only submitted claims can be approved/rejected, only approved claims can be paid, and payment reduces the member welfare balance while posting a balanced welfare claim journal.
+
 ### financial_transactions
 
 | Field | Type | Notes |

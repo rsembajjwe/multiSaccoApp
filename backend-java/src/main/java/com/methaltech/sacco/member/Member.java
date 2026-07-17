@@ -130,6 +130,15 @@ public class Member {
         return savingsBalance.compareTo(amount) >= 0;
     }
 
+    public boolean hasEnoughWelfare(BigDecimal amount) {
+        return welfareBalance.compareTo(amount) >= 0;
+    }
+
+    public void applyWelfareClaimPayment(BigDecimal amount) {
+        this.welfareBalance = this.welfareBalance.subtract(amount);
+        this.updatedAt = Instant.now();
+    }
+
     public boolean canReverse(String type, BigDecimal amount) {
         if ("savings_deposit".equals(type)) return savingsBalance.compareTo(amount) >= 0;
         if ("share_purchase".equals(type)) return sharesBalance.compareTo(amount) >= 0;

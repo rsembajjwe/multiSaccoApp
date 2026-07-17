@@ -47,6 +47,7 @@ cd backend-java
 - `/api/v1/subscription-packages`, `/api/v1/subscriptions`, and `/api/v1/subscriptions/{subscriptionId}/payments` for tiered annual billing, tenant-scoped subscription visibility, platform payment posting, and subscription payment journals.
 - `/api/v1/financial-products` for tenant-scoped savings, shares, and welfare product setup.
 - `/api/v1/financial-accounts` for linking active members to configured savings, shares, and welfare products.
+- `/api/v1/welfare-claims` for welfare claim submission, approval/rejection, payment, balance reduction, and journal projection.
 - `/api/v1/financial-transactions` for savings, shares, welfare, and withdrawal posting workflows.
 - `/api/v1/financial-transactions/{transactionId}/receipt` for printable receipt details on posted financial transactions.
 - `/api/v1/financial-transactions/{transactionId}/reversal` for posted reversal entries that reference the original transaction and update balances.
