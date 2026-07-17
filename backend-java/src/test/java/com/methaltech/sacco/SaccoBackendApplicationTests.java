@@ -2513,6 +2513,107 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void notificationTemplatesAreManagedAndAppliedPerTenant() throws Exception {
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String eventType = "smoke_template_" + System.currentTimeMillis();
+
+		mockMvc.perform(get("/api/v1/notification-templates")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].eventType", hasItem("payment_received")))
+				.andExpect(jsonPath("$.data[*].tenantId", hasItem((String) null)));
+
+		MvcResult createdTemplate = mockMvc.perform(post("/api/v1/notification-templates")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "eventType": "%s",
+								  "channel": "email",
+								  "title": "Smoke notification",
+								  "body": "Smoke notification body"
+								}
+								""".formatted(eventType)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.status", is("active")))
+				.andReturn();
+		String templateId = objectMapper.readTree(createdTemplate.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/notification-templates/" + templateId)
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "title": "Updated smoke notification",
+								  "status": "inactive"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.title", is("Updated smoke notification")))
+				.andExpect(jsonPath("$.data.status", is("inactive")));
+
+		mockMvc.perform(post("/api/v1/notification-templates")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "eventType": "bad template",
+								  "channel": "fax",
+								  "title": "Bad",
+								  "body": "Bad"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("VALIDATION_ERROR")));
+
+		mockMvc.perform(patch("/api/v1/notification-templates/template_payment_received")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("{ \"status\": \"inactive\" }"))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PLATFORM_ADMIN_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/notification-templates?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		String customTitle = "Green Valley loan notice " + System.currentTimeMillis();
+		mockMvc.perform(post("/api/v1/notification-templates")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "eventType": "loan_application_submitted",
+								  "channel": "in_app",
+								  "title": "%s",
+								  "body": "Your custom Green Valley loan notice is ready."
+								}
+								""".formatted(customTitle)))
+				.andExpect(status().isCreated());
+
+		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "product": "Emergency Loan",
+								  "amount": 180000,
+								  "repaymentMonths": 6,
+								  "purpose": "Template smoke test"
+								}
+								"""))
+				.andExpect(status().isCreated());
+
+		mockMvc.perform(get("/api/v1/member-auth/notifications")
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].title", hasItem(customTitle)));
+	}
+
+	@Test
 	void governanceMeetingsAndResolutionsAreTenantScoped() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String title = "Board Risk Review " + System.currentTimeMillis();

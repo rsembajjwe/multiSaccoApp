@@ -12,15 +12,18 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final NotificationDeliveryRepository deliveryRepository;
+    private final NotificationTemplateRepository templateRepository;
 
     public Notification notifyPaymentPosted(Member member, String purpose, BigDecimal amount, String resourceType, String resourceId) {
-        String title = "Payment received";
-        String message = "Your mobile-money " + purpose.replace('_', ' ') + " of " + amount + " was posted.";
+        String eventType = "payment_received";
+        NotificationTemplate template = activeTemplate(member.getTenantId(), eventType);
+        String title = template == null ? "Payment received" : template.getTitle();
+        String message = template == null ? "Your mobile-money " + purpose.replace('_', ' ') + " of " + amount + " was posted." : template.getBody();
         Notification notification = notificationRepository.save(new Notification(
                 "notification_" + UUID.randomUUID(),
                 member.getTenantId(),
                 member.getId(),
-                "payment_received",
+                eventType,
                 title,
                 message,
                 resourceType,
@@ -31,16 +34,25 @@ public class NotificationService {
     }
 
     public Notification notifyLoanApplicationSubmitted(Member member, String product, BigDecimal amount, String loanId) {
-        String message = "Mobile loan application " + product + " for UGX " + amount + " was submitted.";
+        String eventType = "loan_application_submitted";
+        NotificationTemplate template = activeTemplate(member.getTenantId(), eventType);
+        String title = template == null ? "Loan application submitted" : template.getTitle();
+        String message = template == null ? "Mobile loan application " + product + " for UGX " + amount + " was submitted." : template.getBody();
         return notificationRepository.save(new Notification(
                 "notification_" + UUID.randomUUID(),
                 member.getTenantId(),
                 member.getId(),
-                "loan_application_submitted",
-                "Loan application submitted",
+                eventType,
+                title,
                 message,
                 "loan",
                 loanId));
+    }
+
+    private NotificationTemplate activeTemplate(String tenantId, String eventType) {
+        return templateRepository.findFirstByTenantIdAndEventTypeAndStatusOrderByUpdatedAtDesc(tenantId, eventType, "active")
+                .or(() -> templateRepository.findFirstByTenantIdIsNullAndEventTypeAndStatusOrderByUpdatedAtDesc(eventType, "active"))
+                .orElse(null);
     }
 
     private void createDelivery(Notification notification, Member member, String channel, String provider, String recipient, String message) {
