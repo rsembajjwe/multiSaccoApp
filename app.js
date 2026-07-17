@@ -1379,6 +1379,8 @@ function renderOperations() {
   const tenantLabel = status.scope === "platform" ? "Platform-wide" : tenantName(status.scope || currentApiTenantId());
   const criticalAlerts = alerts.filter((alert) => alert.severity === "critical").length;
   const warningAlerts = alerts.filter((alert) => alert.severity === "warning").length;
+  const exceptionCount = Number(counts.callbackExceptions || 0) + Number(counts.deliveryExceptions || 0);
+  const queuePressure = Number(counts.pendingFinancialTransactions || 0) + Number(counts.openComplaints || 0);
   const releaseGates = [
     { label: "Database reachable", ok: status.database?.reachable === true, detail: status.checkedAt ? `checked ${status.checkedAt.slice(0, 16).replace("T", " ")}` : "waiting for API" },
     { label: "No critical operation alerts", ok: criticalAlerts === 0, detail: `${criticalAlerts} critical alert(s)` },
@@ -1386,8 +1388,29 @@ function renderOperations() {
     { label: "Callback exceptions clear", ok: Number(counts.callbackExceptions || 0) === 0, detail: `${counts.callbackExceptions || 0} callback exception(s)` },
     { label: "Delivery exceptions clear", ok: Number(counts.deliveryExceptions || 0) === 0, detail: `${counts.deliveryExceptions || 0} provider exception(s)` }
   ];
+  const healthyGateCount = releaseGates.filter((gate) => gate.ok).length;
 
   return `
+    <section class="card">
+      <div class="toolbar">
+        <div>
+          <h2>Operations command center</h2>
+          <p class="eyebrow">API-backed &middot; release readiness, alerts, queues and runbooks for ${tenantLabel}</p>
+        </div>
+        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("Readiness", `${healthyGateCount}/${releaseGates.length}`, "production gates passing")}
+        ${metric("Alert load", alerts.length, `${criticalAlerts} critical, ${warningAlerts} warning`)}
+        ${metric("Exception load", exceptionCount, "callbacks and provider deliveries")}
+        ${metric("Queue pressure", queuePressure, "pending postings and complaints")}
+      </div>
+      <div class="grid three" style="margin-top:16px">
+        ${metric("Scope", tenantLabel, status.ok ? "API operations status" : "waiting for refresh")}
+        ${metric("Database", status.database?.reachable ? "Reachable" : "Unknown", status.checkedAt ? status.checkedAt.slice(0, 10) : "not checked")}
+        ${metric("Runbooks", 4, "monitoring, deployment, security, technical")}
+      </div>
+    </section>
     <div class="grid metrics">
       ${metric("Scope", tenantLabel, status.ok ? "API operations status" : "waiting for refresh")}
       ${metric("Database", status.database?.reachable ? "Reachable" : "Unknown", status.checkedAt ? status.checkedAt.slice(0, 10) : "not checked")}

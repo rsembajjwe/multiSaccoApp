@@ -18,6 +18,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Reports page with financial summary, compliance snapshot, and audit trail.
 - Backend health check and API session status shown in the web UI.
 - Operations screen shows Java-backed monitoring counts, operational alerts, production readiness gates, and runbook shortcuts.
+- Operations screen shows a backend-backed command center for release readiness, alert load, exception load, queue pressure, API scope, database status, and runbook coverage.
 - Dashboard KPIs switch from local demo data to backend member, transaction, loan, approval, audit, and operations counts after API login.
 - Members screen shows backend member summary KPIs, balance totals, branch coverage, and direct profile/statement actions after API login.
 - Transactions screen shows a backend-backed posting control center with posted, pending, reversed, reversible, rejected, and statement-ready totals plus direct receipt, statement, and reversal actions.

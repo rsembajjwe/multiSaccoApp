@@ -391,6 +391,7 @@ Progress:
 - Reports screen polish added with control-center KPIs for ledger integrity, reconciliation, compliance, governance, accounting periods, operations exceptions, and operating assets.
 - SACCO Registration screen polish added with onboarding-control KPIs for applications, approvals, licence watch, onboarding progress, package coverage, and activation gates.
 - Subscriptions screen polish added with billing-control KPIs for invoice totals, outstanding balances, active subscriptions, billable members, tier usage, and payment access.
+- Operations screen polish added with command-center KPIs for release readiness, alerts, exceptions, queue pressure, API scope, database status, and runbook coverage.
 - Member mobile dashboard endpoint and Member Portal card added, including server-confirmed balances, notifications, loan totals, and last-updated time.
 - Mobile loan application endpoint and Member Portal flow added, allowing members to submit their own loan applications with server confirmation.
 - Offline complaint draft support added for the Member Portal, with local draft save and server sync when online.
