@@ -50,7 +50,7 @@ Run the full project check:
 npm.cmd run check
 ```
 
-This validates JavaScript syntax, mobile foundation contracts, and the Java backend test suite.
+This validates JavaScript syntax, mobile foundation contracts, Java proxy-mode forwarding, and the Java backend test suite.
 
 The GitHub Actions workflow in `.github/workflows/ci.yml` runs the same check on pushes and pull requests to `main`.
 
@@ -65,6 +65,14 @@ Run the prototype API smoke test:
 ```powershell
 npm.cmd run test:api
 ```
+
+Run only the Java proxy-mode check:
+
+```powershell
+node scripts/check-java-proxy-mode.mjs
+```
+
+This starts a mock Java API, runs `server.mjs` with `JAVA_API_BASE`, and verifies `/api/v1` status, headers, authorization, and request-body forwarding.
 
 Run a lightweight load test against a running Java backend:
 

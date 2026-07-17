@@ -46,3 +46,7 @@ Or set a custom Java API base:
 $env:JAVA_API_BASE = "http://127.0.0.1:18080"
 npm.cmd start
 ```
+
+## Automated Proxy Verification
+
+`node scripts/check-java-proxy-mode.mjs` starts a mock Java API and verifies that `server.mjs` forwards `/api/v1` requests, response headers, authorization headers, and JSON request bodies while still applying local security headers. The full `npm.cmd run check` command includes this verification before running the Java backend tests.
