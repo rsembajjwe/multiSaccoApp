@@ -78,6 +78,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java member next-of-kin and beneficiary endpoints store onboarding contacts with tenant isolation, beneficiary allocation caps, and audit logging.
 - Java member self-service authentication lets active members login and view only their own profile, tenant, branch, and savings/share/welfare balances.
 - Java member notification listing returns authenticated-member-only in-app notification history for the member portal and mobile app.
+- Java financial product setup lets SACCOs configure tenant-scoped savings, shares, and welfare products with duplicate-code protection and audit events.
 - Java financial transactions validate tenant, member, branch, type, channel, and amount before maker-checker posting updates member balances.
 - Java financial transaction receipts expose posted-only printable receipt details with SACCO, branch, member, amount, reference, and posting metadata.
 - Java member statements expose posted transaction movements with running savings/share/welfare balances and CSV export text; financial reversals create posted entries that reference originals and update balances without mutating the original transaction.

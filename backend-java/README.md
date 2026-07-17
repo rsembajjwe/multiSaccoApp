@@ -45,6 +45,7 @@ cd backend-java
 - `/api/v1/member-auth/notifications` for authenticated-member-only in-app notification history.
 - `/api/v1/member-auth/mobile-dashboard` and `/api/v1/member-auth/mobile-loans` for server-confirmed member mobile balances, loans, notifications, pending guarantor requests, and mobile loan applications.
 - `/api/v1/subscription-packages`, `/api/v1/subscriptions`, and `/api/v1/subscriptions/{subscriptionId}/payments` for tiered annual billing, tenant-scoped subscription visibility, platform payment posting, and subscription payment journals.
+- `/api/v1/financial-products` for tenant-scoped savings, shares, and welfare product setup.
 - `/api/v1/financial-transactions` for savings, shares, welfare, and withdrawal posting workflows.
 - `/api/v1/financial-transactions/{transactionId}/receipt` for printable receipt details on posted financial transactions.
 - `/api/v1/financial-transactions/{transactionId}/reversal` for posted reversal entries that reference the original transaction and update balances.

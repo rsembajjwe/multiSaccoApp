@@ -1305,6 +1305,118 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void financialProductsAreConfiguredWithTenantScope() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String code = "GVS-SAV-" + System.currentTimeMillis();
+
+		mockMvc.perform(get("/api/v1/financial-products")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(4)))
+				.andExpect(jsonPath("$.data[*].code", hasItem("GVS-SAV-ORD")));
+
+		mockMvc.perform(get("/api/v1/financial-products?type=savings")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+				.andExpect(jsonPath("$.data[*].productType", everyItem(is("savings"))));
+
+		MvcResult createdProduct = mockMvc.perform(post("/api/v1/financial-products")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "productType": "savings",
+								  "code": "%s",
+								  "name": "Youth Savings",
+								  "contributionAmount": 20000,
+								  "minimumBalance": 5000,
+								  "interestRate": 1.5000
+								}
+								""".formatted(code)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.productType", is("savings")))
+				.andExpect(jsonPath("$.data.code", is(code)))
+				.andExpect(jsonPath("$.data.status", is("active")))
+				.andExpect(jsonPath("$.data.contributionAmount", is(20000)))
+				.andReturn();
+
+		String productId = objectMapper.readTree(createdProduct.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(post("/api/v1/financial-products")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "productType": "savings",
+								  "code": "%s",
+								  "name": "Duplicate Youth Savings",
+								  "contributionAmount": 20000,
+								  "minimumBalance": 5000,
+								  "interestRate": 1.5000
+								}
+								""".formatted(code)))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("FINANCIAL_PRODUCT_EXISTS")));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].resourceType", is("financial_product")))
+				.andExpect(jsonPath("$.data[0].resourceId", is(productId)))
+				.andExpect(jsonPath("$.data[0].action", is("Created savings product " + code)));
+	}
+
+	@Test
+	void invalidFinancialProductsAreRejected() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/financial-products?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(get("/api/v1/financial-products?type=loan")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_PRODUCT_TYPE")));
+
+		mockMvc.perform(post("/api/v1/financial-products")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "productType": "savings",
+								  "code": "LFS-CROSS",
+								  "name": "Cross Tenant Savings",
+								  "contributionAmount": 10000,
+								  "minimumBalance": 5000
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/financial-products")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "productType": "welfare",
+								  "code": "GVS-WEL-BAD",
+								  "name": "Bad Welfare",
+								  "contributionAmount": -1,
+								  "minimumBalance": 0
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_PRODUCT_AMOUNT")));
+	}
+
+	@Test
 	void financialTransactionPostingUsesMakerCheckerAndUpdatesBalances() throws Exception {
 		String makerToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String checkerEmail = "checker-" + System.currentTimeMillis() + "@greenvalley.local";

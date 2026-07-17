@@ -168,6 +168,23 @@ Subscription billing rule: SACCOs with up to 250 members pay UGX 5,000 per membe
 
 ## Phase 3 Core Financial Entities
 
+### financial_products
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| product_type | enum | `savings`, `shares`, `welfare`. |
+| code | text | Unique per tenant. |
+| name | text | Product display name. |
+| contribution_amount | decimal | Default contribution/share/welfare amount, if applicable. |
+| minimum_balance | decimal | Minimum savings balance or retained amount, if applicable. |
+| interest_rate | decimal | Optional annual rate for savings products. |
+| status | enum | `active`, reserved for future inactive products. |
+| created_by_user_id | uuid/string | User who configured the product. |
+| created_at | timestamp | Creation timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
 ### financial_transactions
 
 | Field | Type | Notes |
