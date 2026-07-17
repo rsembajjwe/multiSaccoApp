@@ -22,6 +22,7 @@ const allowedBranchStatuses = new Set(["active", "inactive"]);
 const allowedMemberStatuses = new Set(["applicant", "pending_approval", "active", "inactive", "dormant", "suspended", "exited"]);
 const allowedKycStatuses = new Set(["not_verified", "pending_verification", "verified", "rejected", "expired"]);
 const allowedMemberTypes = new Set(["individual", "group", "institutional", "corporate"]);
+const allowedFinancialProductTypes = new Set(["savings", "shares", "welfare"]);
 const allowedTransactionTypes = new Set(["savings_deposit", "share_purchase", "welfare_contribution", "withdrawal"]);
 const allowedTransactionChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedTransactionDecisionStatuses = new Set(["posted", "rejected"]);
@@ -165,6 +166,10 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path.startsWith("/members/") && path.endsWith("/statement")) {
       return getMemberStatement(response, auth, path.split("/")[2], url, correlationId);
     }
+    if (method === "GET" && path === "/financial-products") return listFinancialProducts(response, auth, url, correlationId);
+    if (method === "POST" && path === "/financial-products") return createFinancialProduct(request, response, auth, correlationId);
+    if (method === "GET" && path === "/financial-accounts") return listFinancialAccounts(response, auth, url, correlationId);
+    if (method === "POST" && path === "/financial-accounts") return openFinancialAccount(request, response, auth, correlationId);
     if (method === "GET" && path === "/financial-transactions") return listFinancialTransactions(response, auth, url);
     if (method === "POST" && path === "/financial-transactions") return createFinancialTransaction(request, response, auth, correlationId);
     if (method === "GET" && path.startsWith("/financial-transactions/") && path.endsWith("/receipt")) {
@@ -2177,6 +2182,153 @@ function transactionMovement(transaction) {
     shares: transaction.type === "share_purchase" ? transaction.amount * direction : 0,
     welfare: transaction.type === "welfare_contribution" ? transaction.amount * direction : 0
   };
+}
+
+function listFinancialProducts(response, auth, url, correlationId) {
+  const tenantId = requestedTenant(auth, url);
+  const type = url.searchParams.get("type");
+  if (type && !allowedFinancialProductTypes.has(type)) {
+    return sendError(response, 400, "INVALID_PRODUCT_TYPE", "Product type must be savings, shares, or welfare.", correlationId);
+  }
+  const products = (isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.financialProducts
+    : db.financialProducts.filter((product) => product.tenantId === tenantId))
+    .filter((product) => !type || product.productType === type)
+    .sort((a, b) => `${a.tenantId}:${a.productType}:${a.code}`.localeCompare(`${b.tenantId}:${b.productType}:${b.code}`));
+  return sendData(response, products);
+}
+
+async function createFinancialProduct(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  const productType = String(body.productType || "").toLowerCase();
+  const code = String(body.code || "").trim().toUpperCase();
+  const name = String(body.name || "").trim();
+  const contributionAmount = Number(body.contributionAmount || 0);
+  const minimumBalance = Number(body.minimumBalance || 0);
+  const interestRate = Number(body.interestRate || 0);
+  if (!allowedFinancialProductTypes.has(productType)) return sendError(response, 400, "INVALID_PRODUCT_TYPE", "Product type must be savings, shares, or welfare.", correlationId);
+  if (!code || !name) return sendError(response, 400, "VALIDATION_ERROR", "Product code and name are required.", correlationId);
+  if ([contributionAmount, minimumBalance, interestRate].some((amount) => !Number.isFinite(amount) || amount < 0)) {
+    return sendError(response, 400, "INVALID_PRODUCT_AMOUNT", "Product amounts and rates cannot be negative.", correlationId);
+  }
+  if (db.financialProducts.some((product) => product.tenantId === tenantId && product.code.toLowerCase() === code.toLowerCase())) {
+    return sendError(response, 409, "FINANCIAL_PRODUCT_EXISTS", "A product with that code already exists for this tenant.", correlationId);
+  }
+  const now = new Date().toISOString();
+  const product = {
+    id: newId("product"),
+    tenantId,
+    productType,
+    code,
+    name,
+    contributionAmount,
+    minimumBalance,
+    interestRate,
+    status: "active",
+    createdByUserId: auth.user.id,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.financialProducts.push(product);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Created ${productType} product ${code}`,
+    resourceType: "financial_product",
+    resourceId: product.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, product, 201);
+}
+
+function listFinancialAccounts(response, auth, url, correlationId) {
+  const tenantId = requestedTenant(auth, url);
+  const memberId = url.searchParams.get("memberId");
+  const type = url.searchParams.get("type");
+  if (type && !allowedFinancialProductTypes.has(type)) {
+    return sendError(response, 400, "INVALID_ACCOUNT_TYPE", "Account type must be savings, shares, or welfare.", correlationId);
+  }
+  if (memberId && !db.members.some((member) => member.id === memberId && member.tenantId === tenantId)) {
+    return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found for this tenant.", correlationId);
+  }
+  const accounts = (isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.financialAccounts
+    : db.financialAccounts.filter((account) => account.tenantId === tenantId))
+    .filter((account) => !memberId || account.memberId === memberId)
+    .filter((account) => !type || account.accountType === type)
+    .sort((a, b) => `${a.tenantId}:${a.memberId}:${a.accountType}`.localeCompare(`${b.tenantId}:${b.memberId}:${b.accountType}`));
+  return sendData(response, accounts.map(publicFinancialAccount));
+}
+
+async function openFinancialAccount(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  const member = db.members.find((item) => item.id === String(body.memberId || "") && item.tenantId === tenantId);
+  if (!member) return sendError(response, 400, "INVALID_MEMBER", "Member does not exist for this tenant.", correlationId);
+  if (member.status !== "active") return sendError(response, 409, "MEMBER_NOT_ACTIVE", "Only active members can open financial accounts.", correlationId);
+
+  const product = db.financialProducts.find((item) => item.id === String(body.productId || "") && item.tenantId === tenantId);
+  if (!product) return sendError(response, 400, "INVALID_FINANCIAL_PRODUCT", "Product does not exist for this tenant.", correlationId);
+  const accountType = String(body.accountType || "").toLowerCase();
+  if (!allowedFinancialProductTypes.has(accountType) || accountType !== product.productType) {
+    return sendError(response, 400, "ACCOUNT_PRODUCT_MISMATCH", "Account type must match the financial product type.", correlationId);
+  }
+  if (db.financialAccounts.some((account) => account.memberId === member.id && account.productId === product.id)) {
+    return sendError(response, 409, "FINANCIAL_ACCOUNT_EXISTS", "Member already has an account for this product.", correlationId);
+  }
+  const accountNo = String(body.accountNo || nextFinancialAccountNo(tenantId, accountType)).trim().toUpperCase();
+  if (db.financialAccounts.some((account) => account.tenantId === tenantId && account.accountNo.toLowerCase() === accountNo.toLowerCase())) {
+    return sendError(response, 409, "FINANCIAL_ACCOUNT_NO_EXISTS", "Account number already exists for this tenant.", correlationId);
+  }
+  const now = new Date().toISOString();
+  const account = {
+    id: newId("account"),
+    tenantId,
+    memberId: member.id,
+    productId: product.id,
+    accountType,
+    accountNo,
+    status: "active",
+    openedByUserId: auth.user.id,
+    openedAt: now,
+    updatedAt: now
+  };
+  db.financialAccounts.push(account);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Opened ${accountType} account ${accountNo} for ${member.membershipNo}`,
+    resourceType: "financial_account",
+    resourceId: account.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicFinancialAccount(account), 201);
+}
+
+function publicFinancialAccount(account) {
+  const member = db.members.find((item) => item.id === account.memberId);
+  const product = db.financialProducts.find((item) => item.id === account.productId);
+  return {
+    ...account,
+    membershipNo: member?.membershipNo || null,
+    memberName: member?.fullName || null,
+    productCode: product?.code || null,
+    productName: product?.name || null
+  };
+}
+
+function nextFinancialAccountNo(tenantId, accountType) {
+  const tenant = db.tenants.find((item) => item.id === tenantId);
+  const typePrefix = { savings: "SAV", shares: "SHR", welfare: "WEL" }[accountType] || "ACC";
+  const next = db.financialAccounts.filter((account) => account.tenantId === tenantId && account.accountType === accountType).length + 1;
+  return `${tenant?.abbreviation || "SACCO"}-${typePrefix}-${String(next).padStart(4, "0")}`;
 }
 
 function listWelfareClaims(response, auth, url, correlationId) {

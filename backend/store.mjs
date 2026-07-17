@@ -345,6 +345,88 @@ export const db = {
       createdAt: now()
     }
   ],
+  financialProducts: [
+    {
+      id: "product_green_savings_ordinary",
+      tenantId: "tenant_green",
+      productType: "savings",
+      code: "GVS-SAV-ORD",
+      name: "Ordinary Savings",
+      contributionAmount: 0,
+      minimumBalance: 10000,
+      interestRate: 2.5,
+      status: "active",
+      createdByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "product_green_shares_standard",
+      tenantId: "tenant_green",
+      productType: "shares",
+      code: "GVS-SHR-STD",
+      name: "Member Shares",
+      contributionAmount: 50000,
+      minimumBalance: 0,
+      interestRate: 0,
+      status: "active",
+      createdByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "product_green_welfare_family",
+      tenantId: "tenant_green",
+      productType: "welfare",
+      code: "GVS-WEL-FAM",
+      name: "Family Welfare Fund",
+      contributionAmount: 10000,
+      minimumBalance: 0,
+      interestRate: 0,
+      status: "active",
+      createdByUserId: "user_green_admin",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  financialAccounts: [
+    {
+      id: "account_green_amina_savings",
+      tenantId: "tenant_green",
+      memberId: "member_green_amina",
+      productId: "product_green_savings_ordinary",
+      accountType: "savings",
+      accountNo: "GVS-SAV-0001",
+      status: "active",
+      openedByUserId: "user_green_admin",
+      openedAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "account_green_amina_welfare",
+      tenantId: "tenant_green",
+      memberId: "member_green_amina",
+      productId: "product_green_welfare_family",
+      accountType: "welfare",
+      accountNo: "GVS-WEL-0001",
+      status: "active",
+      openedByUserId: "user_green_admin",
+      openedAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "account_green_daniel_shares",
+      tenantId: "tenant_green",
+      memberId: "member_green_daniel",
+      productId: "product_green_shares_standard",
+      accountType: "shares",
+      accountNo: "GVS-SHR-0001",
+      status: "active",
+      openedByUserId: "user_green_admin",
+      openedAt: now(),
+      updatedAt: now()
+    }
+  ],
   financialTransactions: [
     {
       id: "txn_green_0001",

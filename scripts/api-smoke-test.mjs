@@ -313,6 +313,50 @@ try {
   }, saccoToken);
   assert(invalidTenantLoan.status === 400, "SACCO admin should not create a loan for another tenant member");
 
+  const products = await api("GET", "/financial-products", null, saccoToken);
+  assert(products.data.length >= 3, "SACCO admin should list financial products");
+  assert(products.data.every((product) => product.tenantId === "tenant_green"), "Financial products must be tenant-scoped");
+
+  const product = await api("POST", "/financial-products", {
+    productType: "savings",
+    code: `SMK-SAV-${Date.now().toString().slice(-5)}`,
+    name: "Smoke Savings",
+    contributionAmount: 0,
+    minimumBalance: 10000,
+    interestRate: 1.5
+  }, saccoToken);
+  assert(product.data.id, "Financial product should be created");
+  assert(product.data.productType === "savings", "Financial product should keep its type");
+
+  const duplicateProduct = await raw("POST", "/financial-products", {
+    productType: "savings",
+    code: product.data.code,
+    name: "Duplicate Smoke Savings",
+    contributionAmount: 0,
+    minimumBalance: 0
+  }, saccoToken);
+  assert(duplicateProduct.status === 409, "Financial product codes should be unique per tenant");
+
+  const accounts = await api("GET", "/financial-accounts", null, saccoToken);
+  assert(accounts.data.length >= 3, "SACCO admin should list financial accounts");
+  assert(accounts.data.every((account) => account.tenantId === "tenant_green"), "Financial accounts must be tenant-scoped");
+
+  const account = await api("POST", "/financial-accounts", {
+    memberId: member.data.id,
+    productId: product.data.id,
+    accountType: "savings"
+  }, saccoToken);
+  assert(account.data.id, "Financial account should be opened");
+  assert(account.data.productCode === product.data.code, "Financial account should include product details");
+  assert(account.data.membershipNo === member.data.membershipNo, "Financial account should include member details");
+
+  const duplicateAccount = await raw("POST", "/financial-accounts", {
+    memberId: member.data.id,
+    productId: product.data.id,
+    accountType: "savings"
+  }, saccoToken);
+  assert(duplicateAccount.status === 409, "A member cannot open the same product account twice");
+
   const transactions = await api("GET", "/financial-transactions", null, saccoToken);
   assert(transactions.data.length >= 3, "SACCO admin should list own financial transactions");
   assert(transactions.data.every((transaction) => transaction.tenantId === "tenant_green"), "Financial transaction list must be tenant-scoped");

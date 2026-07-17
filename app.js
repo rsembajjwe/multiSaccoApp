@@ -124,6 +124,8 @@ let apiState = {
   members: [],
   subscriptionPackages: [],
   subscriptions: [],
+  financialProducts: [],
+  financialAccounts: [],
   financialTransactions: [],
   welfareClaims: [],
   loans: [],
@@ -376,6 +378,10 @@ function apiTransactionApprovalItems() {
       risk: transaction.amount > 1000000 ? "High" : "Low",
       source: "API"
     }));
+}
+
+function apiProductTypeLabel(type) {
+  return titleCase(String(type || "").replace(/_/g, " "));
 }
 
 function apiTenantToRow(tenant) {
@@ -784,11 +790,36 @@ function renderMembers() {
 function renderTransactions() {
   const transactions = useApiTransactions() ? apiState.financialTransactions.map(apiTransactionToRow) : tenantScoped(state.transactions);
   const welfareClaims = useApiWelfareClaims() ? apiState.welfareClaims.map(apiWelfareClaimToRow) : [];
+  const products = apiState.financialProducts || [];
+  const accounts = apiState.financialAccounts || [];
   const source = useApiTransactions() ? "API-backed" : "Local demo";
   const pendingClaims = welfareClaims.filter((claim) => claim.status === "Submitted").length;
   const approvedClaims = welfareClaims.filter((claim) => claim.status === "Approved").length;
   const paidClaimTotal = welfareClaims.filter((claim) => claim.status === "Paid").reduce((sum, claim) => sum + claim.amount, 0);
   return `
+    ${apiState.user ? `
+      <section class="card">
+        <div class="toolbar">
+          <div>
+            <h2>Products and accounts</h2>
+            <p class="eyebrow">API-backed &middot; savings, shares and welfare setup</p>
+          </div>
+          <div class="filters">
+            <button class="secondary-button" data-action="newFinancialAccount" type="button">Open account</button>
+            <button class="primary-button" data-action="newFinancialProduct" type="button">New product</button>
+          </div>
+        </div>
+        <div class="grid metrics">
+          ${metric("Products", products.length, `${products.filter((item) => item.status === "active").length} active`)}
+          ${metric("Accounts", accounts.length, `${accounts.filter((item) => item.status === "active").length} active`)}
+          ${metric("Members covered", new Set(accounts.map((item) => item.memberId)).size, "with financial accounts")}
+        </div>
+        <div class="grid two" style="margin-top:16px">
+          ${financialProductTable(products)}
+          ${financialAccountTable(accounts)}
+        </div>
+      </section>
+    ` : ""}
     <section class="card">
       <div class="toolbar">
         <div>
@@ -840,6 +871,48 @@ function renderTransactions() {
         ${welfareClaimTable(welfareClaims)}
       </section>
     ` : ""}
+  `;
+}
+
+function financialProductTable(products) {
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Code</th><th>Product</th><th>Type</th><th>Contribution</th><th>Minimum</th></tr></thead>
+        <tbody>
+          ${products.map((product) => `
+            <tr>
+              <td>${product.code}</td>
+              <td>${product.name}<br><small>${product.status}</small></td>
+              <td>${apiProductTypeLabel(product.productType)}</td>
+              <td>${money.format(product.contributionAmount || 0)}</td>
+              <td>${money.format(product.minimumBalance || 0)}</td>
+            </tr>
+          `).join("") || `<tr><td colspan="5">No products found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function financialAccountTable(accounts) {
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Account</th><th>Member</th><th>Product</th><th>Type</th><th>Status</th></tr></thead>
+        <tbody>
+          ${accounts.map((account) => `
+            <tr>
+              <td>${account.accountNo}</td>
+              <td>${account.memberName || memberName(account.memberId)}<br><small>${account.membershipNo || ""}</small></td>
+              <td>${account.productName || account.productCode}<br><small>${account.productCode || ""}</small></td>
+              <td>${apiProductTypeLabel(account.accountType)}</td>
+              <td><span class="status ${statusClass(account.status)}">${titleCase(account.status)}</span></td>
+            </tr>
+          `).join("") || `<tr><td colspan="5">No accounts found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -1715,6 +1788,8 @@ function bindViewActions() {
         newTenant: openTenantForm,
         newMember: openMemberForm,
         newTransaction: openTransactionForm,
+        newFinancialProduct: openFinancialProductForm,
+        newFinancialAccount: openFinancialAccountForm,
         newWelfareClaim: openWelfareClaimForm,
         newLoan: openLoanForm,
         recordSubscriptionPayment: recordSubscriptionPayment,
@@ -1828,7 +1903,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, suppliers, expenses, assets, governanceMeetings, complaints] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, suppliers, expenses, assets, governanceMeetings, complaints] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1836,6 +1911,8 @@ async function refreshApiStatus() {
         apiRequest(`/members${apiTenantQuery()}`),
         apiRequest("/subscription-packages"),
         apiRequest(`/subscriptions${apiSubscriptionQuery()}`),
+        apiRequest(`/financial-products${apiTenantQuery()}`),
+        apiRequest(`/financial-accounts${apiTenantQuery()}`),
         apiRequest(`/financial-transactions${apiTenantQuery()}`),
         apiRequest(`/welfare-claims${apiTenantQuery()}`),
         apiRequest(`/loans${apiTenantQuery()}`),
@@ -1860,6 +1937,8 @@ async function refreshApiStatus() {
       apiState.members = members;
       apiState.subscriptionPackages = subscriptionPackages;
       apiState.subscriptions = subscriptions;
+      apiState.financialProducts = financialProducts;
+      apiState.financialAccounts = financialAccounts;
       apiState.financialTransactions = financialTransactions;
       apiState.welfareClaims = welfareClaims;
       apiState.loans = loans;
@@ -1876,7 +1955,7 @@ async function refreshApiStatus() {
       apiState.assets = assets;
       apiState.governanceMeetings = governanceMeetings;
       apiState.complaints = complaints;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialProducts.length} product(s), ${financialAccounts.length} account(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -2108,7 +2187,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -2361,6 +2440,85 @@ function openTransactionForm() {
     saveState();
     closeModal();
     render();
+  });
+}
+
+function openFinancialProductForm() {
+  if (!apiState.user) return;
+  openModal("New financial product", `
+    <div class="form-grid">
+      <label class="field"><span>Type</span><select id="productType" class="select"><option value="savings">Savings</option><option value="shares">Shares</option><option value="welfare">Welfare</option></select></label>
+      ${field("Code", "productCode", "text", `PRD-${Date.now().toString().slice(-5)}`)}
+      ${field("Name", "productName", "text", "Member product")}
+      ${field("Contribution amount", "productContribution", "number", "10000")}
+      ${field("Minimum balance", "productMinimum", "number", "0")}
+      ${field("Interest rate %", "productRate", "number", "0")}
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveFinancialProduct" class="primary-button" type="button">Create product</button>`);
+
+  document.getElementById("saveFinancialProduct").addEventListener("click", async () => {
+    try {
+      await apiRequest("/financial-products", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
+          productType: value("productType"),
+          code: value("productCode"),
+          name: value("productName"),
+          contributionAmount: Number(value("productContribution")),
+          minimumBalance: Number(value("productMinimum")),
+          interestRate: Number(value("productRate"))
+        })
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+function openFinancialAccountForm() {
+  if (!apiState.user) return;
+  const activeMembers = apiState.members.map(apiMemberToRow).filter((member) => member.status === "Active");
+  const products = apiState.financialProducts.filter((product) => product.status === "active");
+  if (!activeMembers.length || !products.length) {
+    openModal("Account setup unavailable", `<div class="notice error">At least one active member and one active financial product are required.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    return;
+  }
+  openModal("Open financial account", `
+    <div class="form-grid">
+      <label class="field full"><span>Member</span><select id="accountMember" class="select">${activeMembers.map((member) => `<option value="${member.id}">${member.name} - ${member.no}</option>`).join("")}</select></label>
+      <label class="field full"><span>Product</span><select id="accountProduct" class="select">${products.map((product) => `<option value="${product.id}" data-type="${product.productType}">${product.code} - ${product.name} (${apiProductTypeLabel(product.productType)})</option>`).join("")}</select></label>
+      <label class="field"><span>Account type</span><select id="accountType" class="select"><option value="savings">Savings</option><option value="shares">Shares</option><option value="welfare">Welfare</option></select></label>
+      ${field("Account no. (optional)", "accountNo", "text", "")}
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveFinancialAccount" class="primary-button" type="button">Open account</button>`);
+
+  const syncType = () => {
+    const option = document.getElementById("accountProduct").selectedOptions[0];
+    document.getElementById("accountType").value = option?.dataset.type || "savings";
+  };
+  document.getElementById("accountProduct").addEventListener("change", syncType);
+  syncType();
+
+  document.getElementById("saveFinancialAccount").addEventListener("click", async () => {
+    try {
+      await apiRequest("/financial-accounts", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
+          memberId: value("accountMember"),
+          productId: value("accountProduct"),
+          accountType: value("accountType"),
+          accountNo: value("accountNo") || null
+        })
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
   });
 }
 
