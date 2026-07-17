@@ -215,6 +215,18 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path.startsWith("/members/") && path.endsWith("/documents")) {
       return createMemberDocument(request, response, auth, path.split("/")[2], correlationId);
     }
+    if (method === "GET" && path.startsWith("/members/") && path.endsWith("/next-of-kin")) {
+      return listMemberNextOfKin(response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "POST" && path.startsWith("/members/") && path.endsWith("/next-of-kin")) {
+      return createMemberNextOfKin(request, response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "GET" && path.startsWith("/members/") && path.endsWith("/beneficiaries")) {
+      return listMemberBeneficiaries(response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "POST" && path.startsWith("/members/") && path.endsWith("/beneficiaries")) {
+      return createMemberBeneficiary(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path.startsWith("/members/")) return getMember(response, auth, path.split("/")[2], correlationId);
     if (method === "PATCH" && path.startsWith("/members/") && path.endsWith("/status")) {
       return updateMemberStatus(request, response, auth, path.split("/")[2], correlationId);
@@ -1927,6 +1939,95 @@ async function createMemberDocument(request, response, auth, memberId, correlati
     ipAddress: requestIp(request)
   });
   return sendData(response, document, 201);
+}
+
+function listMemberNextOfKin(response, auth, memberId, correlationId) {
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+  return sendData(response, db.memberNextOfKin.filter((kin) => kin.memberId === memberId).toReversed());
+}
+
+async function createMemberNextOfKin(request, response, auth, memberId, correlationId) {
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+  const body = await readJson(request);
+  if (!body.fullName || !body.relationship || !body.phone) {
+    return sendError(response, 400, "VALIDATION_ERROR", "Full name, relationship, and phone are required.", correlationId);
+  }
+  const nextOfKin = {
+    id: newId("kin"),
+    tenantId: member.tenantId,
+    memberId,
+    fullName: String(body.fullName).trim(),
+    relationship: String(body.relationship).trim().toLowerCase(),
+    phone: String(body.phone).trim(),
+    address: String(body.address || "").trim(),
+    primaryContact: Boolean(body.primaryContact),
+    createdByUserId: auth.user.id,
+    createdAt: new Date().toISOString()
+  };
+  db.memberNextOfKin.push(nextOfKin);
+  createAuditEvent({
+    tenantId: member.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Added next of kin for member ${member.membershipNo}`,
+    resourceType: "member_next_of_kin",
+    resourceId: nextOfKin.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, nextOfKin, 201);
+}
+
+function listMemberBeneficiaries(response, auth, memberId, correlationId) {
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+  return sendData(response, db.memberBeneficiaries.filter((beneficiary) => beneficiary.memberId === memberId).toReversed());
+}
+
+async function createMemberBeneficiary(request, response, auth, memberId, correlationId) {
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+  const body = await readJson(request);
+  const allocationPercent = Number(body.allocationPercent);
+  if (!body.fullName || !body.relationship) {
+    return sendError(response, 400, "VALIDATION_ERROR", "Full name and relationship are required.", correlationId);
+  }
+  if (!Number.isFinite(allocationPercent) || allocationPercent <= 0 || allocationPercent > 100) {
+    return sendError(response, 400, "INVALID_ALLOCATION", "Beneficiary allocation must be greater than 0 and not exceed 100.", correlationId);
+  }
+  const allocated = db.memberBeneficiaries
+    .filter((beneficiary) => beneficiary.memberId === memberId)
+    .reduce((sum, beneficiary) => sum + Number(beneficiary.allocationPercent || 0), 0);
+  if (allocated + allocationPercent > 100) {
+    return sendError(response, 400, "ALLOCATION_EXCEEDED", "Beneficiary allocations cannot exceed 100 percent.", correlationId);
+  }
+  const beneficiary = {
+    id: newId("beneficiary"),
+    tenantId: member.tenantId,
+    memberId,
+    fullName: String(body.fullName).trim(),
+    relationship: String(body.relationship).trim().toLowerCase(),
+    phone: String(body.phone || "").trim(),
+    allocationPercent,
+    createdByUserId: auth.user.id,
+    createdAt: new Date().toISOString()
+  };
+  db.memberBeneficiaries.push(beneficiary);
+  createAuditEvent({
+    tenantId: member.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Added beneficiary for member ${member.membershipNo}`,
+    resourceType: "member_beneficiary",
+    resourceId: beneficiary.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, beneficiary, 201);
 }
 
 function listFinancialTransactions(response, auth, url) {

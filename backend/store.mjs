@@ -345,6 +345,33 @@ export const db = {
       createdAt: now()
     }
   ],
+  memberNextOfKin: [
+    {
+      id: "kin_amina_mary",
+      tenantId: "tenant_green",
+      memberId: "member_green_amina",
+      fullName: "Mary Nakitende",
+      relationship: "mother",
+      phone: "+256703333444",
+      address: "Kireka",
+      primaryContact: true,
+      createdByUserId: "user_green_admin",
+      createdAt: now()
+    }
+  ],
+  memberBeneficiaries: [
+    {
+      id: "beneficiary_amina_eva",
+      tenantId: "tenant_green",
+      memberId: "member_green_amina",
+      fullName: "Eva Nakato",
+      relationship: "daughter",
+      phone: "+256704444555",
+      allocationPercent: 60,
+      createdByUserId: "user_green_admin",
+      createdAt: now()
+    }
+  ],
   financialProducts: [
     {
       id: "product_green_savings_ordinary",

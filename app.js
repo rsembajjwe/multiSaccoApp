@@ -777,9 +777,9 @@ function renderMembers() {
       ${apiState.user ? `<div class="notice">Members shown from the backend for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}.</div>` : `<div class="notice">Login to the API to use server-side member onboarding. The table below is still using local demo data.</div>`}
       <div class="table-wrap">
         <table id="membersTable">
-          <thead><tr><th>Member</th><th>Type</th><th>Branch</th><th>KYC</th><th>Savings</th><th>Shares</th><th>Welfare</th><th>Status</th></tr></thead>
+          <thead><tr><th>Member</th><th>Type</th><th>Branch</th><th>KYC</th><th>Savings</th><th>Shares</th><th>Welfare</th><th>Status</th><th>Action</th></tr></thead>
           <tbody>
-            ${members.map(memberRow).join("")}
+            ${members.map(memberRow).join("") || `<tr><td colspan="9">No members found.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -1682,6 +1682,7 @@ function memberRow(member) {
       <td>${money.format(member.shares)}</td>
       <td>${money.format(member.welfare)}</td>
       <td><span class="status ${statusClass(member.status)}">${member.status}</span></td>
+      <td>${apiState.user ? `<button class="secondary-button" data-member-profile="${member.id}" type="button">Profile</button>` : ""}</td>
     </tr>
   `;
 }
@@ -1770,6 +1771,10 @@ function bindViewActions() {
     button.addEventListener("click", () => openMemberStatement(button.dataset.memberStatement));
   });
 
+  document.querySelectorAll("[data-member-profile]").forEach((button) => {
+    button.addEventListener("click", () => openMemberProfile(button.dataset.memberProfile));
+  });
+
   document.querySelectorAll("[data-period-status]").forEach((button) => {
     button.addEventListener("click", () => updateAccountingPeriodStatus(button.dataset.periodStatus, button.dataset.periodNext));
   });
@@ -1817,6 +1822,9 @@ function bindViewActions() {
       const sourceRows = useApiMembers() ? apiState.members.map(apiMemberToRow) : tenantScoped(state.members);
       const rows = sourceRows.filter((member) => JSON.stringify(member).toLowerCase().includes(term));
       document.querySelector("#membersTable tbody").innerHTML = rows.map(memberRow).join("");
+      document.querySelectorAll("#membersTable [data-member-profile]").forEach((button) => {
+        button.addEventListener("click", () => openMemberProfile(button.dataset.memberProfile));
+      });
     });
   }
 }
@@ -2245,6 +2253,7 @@ memberRow = function renderMemberRow(member) {
       <td>${money.format(member.shares)}</td>
       <td>${money.format(member.welfare)}</td>
       <td><span class="status ${statusClass(member.status)}">${member.status}</span></td>
+      <td>${apiState.user ? `<button class="secondary-button" data-member-profile="${member.id}" type="button">Profile</button>` : ""}</td>
     </tr>
   `;
 };
@@ -2377,6 +2386,166 @@ function openMemberForm() {
     state.currentView = "members";
     render();
   });
+}
+
+async function openMemberProfile(memberId) {
+  if (!apiState.user) return;
+  const member = apiState.members.find((item) => item.id === memberId);
+  if (!member) return;
+  try {
+    const [documents, nextOfKin, beneficiaries] = await Promise.all([
+      apiRequest(`/members/${memberId}/documents`),
+      apiRequest(`/members/${memberId}/next-of-kin`),
+      apiRequest(`/members/${memberId}/beneficiaries`)
+    ]);
+    const allocated = beneficiaries.reduce((sum, beneficiary) => sum + Number(beneficiary.allocationPercent || 0), 0);
+    openModal(`${member.fullName} profile`, `
+      <div class="grid metrics">
+        ${metric("Documents", documents.length, `${documents.filter((document) => document.verificationStatus === "verified").length} verified`)}
+        ${metric("Next of kin", nextOfKin.length, `${nextOfKin.filter((kin) => kin.primaryContact).length} primary`)}
+        ${metric("Beneficiaries", beneficiaries.length, `${allocated}% allocated`)}
+      </div>
+      <div class="grid three" style="margin-top:16px">
+        ${miniFact("Member no.", member.membershipNo)}
+        ${miniFact("Phone", member.phone)}
+        ${miniFact("Branch", branchName(member.branchId))}
+      </div>
+      <div class="grid two" style="margin-top:16px">
+        <section>
+          <div class="toolbar">
+            <h3>KYC documents</h3>
+            <button class="secondary-button" id="addMemberDocument" type="button">Add document</button>
+          </div>
+          ${memberDocumentList(documents)}
+        </section>
+        <section>
+          <div class="toolbar">
+            <h3>Next of kin</h3>
+            <button class="secondary-button" id="addNextOfKin" type="button">Add contact</button>
+          </div>
+          ${memberNextOfKinList(nextOfKin)}
+        </section>
+      </div>
+      <section style="margin-top:16px">
+        <div class="toolbar">
+          <h3>Beneficiaries</h3>
+          <button class="secondary-button" id="addBeneficiary" type="button">Add beneficiary</button>
+        </div>
+        ${memberBeneficiaryList(beneficiaries)}
+      </section>
+    `, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    document.getElementById("addMemberDocument").addEventListener("click", () => openMemberDocumentForm(memberId));
+    document.getElementById("addNextOfKin").addEventListener("click", () => openNextOfKinForm(memberId));
+    document.getElementById("addBeneficiary").addEventListener("click", () => openBeneficiaryForm(memberId));
+  } catch (error) {
+    openModal("Member profile", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
+}
+
+function memberDocumentList(documents) {
+  return `
+    <ul class="list">
+      ${documents.map((document) => `
+        <li>
+          <span><strong>${titleCase(document.documentType.replace(/_/g, " "))}</strong><br><small>${document.storageKey}</small></span>
+          <span class="status ${statusClass(document.verificationStatus)}">${titleCase(document.verificationStatus.replace(/_/g, " "))}</span>
+        </li>
+      `).join("") || `<li><span>No documents uploaded.</span><span class="status pending">KYC</span></li>`}
+    </ul>
+  `;
+}
+
+function memberNextOfKinList(nextOfKin) {
+  return `
+    <ul class="list">
+      ${nextOfKin.map((kin) => `
+        <li>
+          <span><strong>${kin.fullName}</strong><br><small>${titleCase(kin.relationship)} &middot; ${kin.phone}${kin.address ? ` &middot; ${kin.address}` : ""}</small></span>
+          <span class="status ${kin.primaryContact ? "active" : "pending"}">${kin.primaryContact ? "Primary" : "Contact"}</span>
+        </li>
+      `).join("") || `<li><span>No next-of-kin contacts.</span><span class="status pending">Pending</span></li>`}
+    </ul>
+  `;
+}
+
+function memberBeneficiaryList(beneficiaries) {
+  return `
+    <ul class="list">
+      ${beneficiaries.map((beneficiary) => `
+        <li>
+          <span><strong>${beneficiary.fullName}</strong><br><small>${titleCase(beneficiary.relationship)}${beneficiary.phone ? ` &middot; ${beneficiary.phone}` : ""}</small></span>
+          <strong>${beneficiary.allocationPercent}%</strong>
+        </li>
+      `).join("") || `<li><span>No beneficiaries captured.</span><span class="status pending">Pending</span></li>`}
+    </ul>
+  `;
+}
+
+function openMemberDocumentForm(memberId) {
+  openModal("Add KYC document", `
+    <div class="form-grid">
+      <label class="field"><span>Document type</span><select id="profileDocumentType" class="select"><option value="national_id">National ID</option><option value="photo">Photo</option><option value="signature">Signature</option><option value="registration_certificate">Registration certificate</option></select></label>
+      ${field("Storage key", "profileStorageKey", "text", `tenant_green/members/${memberId}/document.pdf`)}
+      <label class="field"><span>Verification status</span><select id="profileDocumentStatus" class="select"><option value="pending_verification">Pending Verification</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveMemberDocument" class="primary-button" type="button">Save document</button>`);
+  document.getElementById("saveMemberDocument").addEventListener("click", async () => {
+    await saveMemberProfileRecord(`/members/${memberId}/documents`, {
+      documentType: value("profileDocumentType"),
+      storageKey: value("profileStorageKey"),
+      verificationStatus: value("profileDocumentStatus")
+    }, memberId);
+  });
+}
+
+function openNextOfKinForm(memberId) {
+  openModal("Add next of kin", `
+    <div class="form-grid">
+      ${field("Full name", "profileKinName", "text", "Grace Nambi")}
+      ${field("Relationship", "profileKinRelationship", "text", "Mother")}
+      ${field("Phone", "profileKinPhone", "tel", "+256703333444")}
+      ${field("Address", "profileKinAddress", "text", "Kireka")}
+      <label class="field"><span>Primary contact</span><select id="profileKinPrimary" class="select"><option value="true">Yes</option><option value="false">No</option></select></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveNextOfKin" class="primary-button" type="button">Save contact</button>`);
+  document.getElementById("saveNextOfKin").addEventListener("click", async () => {
+    await saveMemberProfileRecord(`/members/${memberId}/next-of-kin`, {
+      fullName: value("profileKinName"),
+      relationship: value("profileKinRelationship"),
+      phone: value("profileKinPhone"),
+      address: value("profileKinAddress"),
+      primaryContact: value("profileKinPrimary") === "true"
+    }, memberId);
+  });
+}
+
+function openBeneficiaryForm(memberId) {
+  openModal("Add beneficiary", `
+    <div class="form-grid">
+      ${field("Full name", "profileBeneficiaryName", "text", "Eva Nakato")}
+      ${field("Relationship", "profileBeneficiaryRelationship", "text", "Daughter")}
+      ${field("Phone", "profileBeneficiaryPhone", "tel", "+256704444555")}
+      ${field("Allocation percent", "profileBeneficiaryAllocation", "number", "20")}
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveBeneficiary" class="primary-button" type="button">Save beneficiary</button>`);
+  document.getElementById("saveBeneficiary").addEventListener("click", async () => {
+    await saveMemberProfileRecord(`/members/${memberId}/beneficiaries`, {
+      fullName: value("profileBeneficiaryName"),
+      relationship: value("profileBeneficiaryRelationship"),
+      phone: value("profileBeneficiaryPhone"),
+      allocationPercent: Number(value("profileBeneficiaryAllocation"))
+    }, memberId);
+  });
+}
+
+async function saveMemberProfileRecord(path, payload, memberId) {
+  try {
+    await apiRequest(path, { method: "POST", body: JSON.stringify(payload) });
+    closeModal();
+    await openMemberProfile(memberId);
+  } catch (error) {
+    document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+  }
 }
 
 function openTransactionForm() {

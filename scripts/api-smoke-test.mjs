@@ -229,6 +229,41 @@ try {
   }, saccoToken);
   assert(document.data.id, "Member document metadata should be created");
 
+  const documents = await api("GET", `/members/${member.data.id}/documents`, null, saccoToken);
+  assert(documents.data.some((item) => item.id === document.data.id), "Member documents should be listed");
+
+  const nextOfKin = await api("POST", `/members/${member.data.id}/next-of-kin`, {
+    fullName: "Smoke Kin",
+    relationship: "Spouse",
+    phone: "+256700999888",
+    address: "Smoke address",
+    primaryContact: true
+  }, saccoToken);
+  assert(nextOfKin.data.relationship === "spouse", "Next of kin relationship should be normalized");
+  assert(nextOfKin.data.primaryContact === true, "Next of kin should keep primary contact flag");
+
+  const nextOfKinList = await api("GET", `/members/${member.data.id}/next-of-kin`, null, saccoToken);
+  assert(nextOfKinList.data.some((item) => item.id === nextOfKin.data.id), "Next of kin should be listed");
+
+  const beneficiary = await api("POST", `/members/${member.data.id}/beneficiaries`, {
+    fullName: "Smoke Beneficiary",
+    relationship: "Child",
+    phone: "+256701999888",
+    allocationPercent: 60
+  }, saccoToken);
+  assert(beneficiary.data.relationship === "child", "Beneficiary relationship should be normalized");
+  assert(beneficiary.data.allocationPercent === 60, "Beneficiary allocation should be returned");
+
+  const beneficiaryList = await api("GET", `/members/${member.data.id}/beneficiaries`, null, saccoToken);
+  assert(beneficiaryList.data.some((item) => item.id === beneficiary.data.id), "Beneficiaries should be listed");
+
+  const excessiveBeneficiary = await raw("POST", `/members/${member.data.id}/beneficiaries`, {
+    fullName: "Too Much Smoke",
+    relationship: "Sibling",
+    allocationPercent: 41
+  }, saccoToken);
+  assert(excessiveBeneficiary.status === 400, "Beneficiary allocations should not exceed 100 percent");
+
   const loans = await api("GET", "/loans", null, saccoToken);
   assert(loans.data.length >= 2, "SACCO admin should list own loan files");
   assert(loans.data.every((loan) => loan.tenantId === "tenant_green"), "Loan list must be tenant-scoped");
