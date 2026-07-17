@@ -231,6 +231,7 @@ This is now the first build foundation. A production build should add:
 - [User manual](docs/user-manual.md)
 - [Administrator manual](docs/administrator-manual.md)
 - [Technical manual](docs/technical-manual.md)
+- [Security review checklist](docs/security-review.md)
 - [Android member app foundation](mobile/member_app/README.md)
 
 ## Seed API accounts

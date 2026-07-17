@@ -95,6 +95,8 @@ Implemented controls include:
 - Audit events for sensitive actions.
 - Rate limiting for public login and callback endpoints in the development build.
 
+Use `docs/security-review.md` as the production security release gate. Critical findings must be closed or formally accepted before release.
+
 ## Operations Endpoints
 
 Public health:
@@ -137,14 +139,15 @@ Before a production release:
 
 1. Run `npm.cmd run check`.
 2. Confirm CI is passing on `main`.
-3. Build the Docker backend image.
-4. Confirm `.env` values are production safe.
-5. Run database backup before migration.
-6. Start the stack and confirm `/actuator/health`.
-7. Check `/api/v1/operations/status`.
-8. Run `npm.cmd run load:test` against the target environment or staging clone.
-9. Verify staff login, member login, transaction approval, loan repayment, and reporting workflows.
-10. Confirm backup creation after deployment.
+3. Review `docs/security-review.md` and close or accept any critical findings.
+4. Build the Docker backend image.
+5. Confirm `.env` values are production safe.
+6. Run database backup before migration.
+7. Start the stack and confirm `/actuator/health`.
+8. Check `/api/v1/operations/status`.
+9. Run `npm.cmd run load:test` against the target environment or staging clone.
+10. Verify staff login, member login, transaction approval, loan repayment, and reporting workflows.
+11. Confirm backup creation after deployment.
 
 ## Troubleshooting
 
