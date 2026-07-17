@@ -22,6 +22,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Members screen shows backend member summary KPIs, balance totals, branch coverage, and direct profile/statement actions after API login.
 - Transactions screen shows a backend-backed posting control center with posted, pending, reversed, reversible, rejected, and statement-ready totals plus direct receipt, statement, and reversal actions.
 - Loans screen shows a backend-backed control center with portfolio value, outstanding balance, ready-to-disburse loans, repayments, guarantor-pending counts, DSR watch indicators, and grouped lifecycle actions.
+- Approvals screen shows a backend-backed control center for pending queue size, pending value, workflow coverage, decision history, corrections, checker-clear status, and grouped approve/reject actions.
 - Seeded API login/logout from the web UI.
 - Server-side tenants, users, and audit events fetched through `/api/v1`.
 - Server-side branch and member onboarding endpoints with tenant isolation.

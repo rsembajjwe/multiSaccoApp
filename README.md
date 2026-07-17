@@ -211,6 +211,8 @@ All API and static responses now include baseline security headers, and public l
 
 After API login, the Approvals screen reads pending financial postings and posts or rejects them through `/api/v1/financial-transactions/:id/status`.
 
+Approvals also shows a backend-backed control center for pending queue size, pending value, workflow coverage, decision history, corrections, and checker-clear status.
+
 Members can login from **Member portal** using the seeded account `GVS-0001` / `Member@12345` to view their savings, shares, and welfare balances.
 
 ## Demo roles

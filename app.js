@@ -1140,8 +1140,38 @@ function renderApprovals() {
   const workflows = apiState.approvalWorkflows || [];
   const decisions = apiState.approvalDecisions || [];
   const source = apiState.user ? "API-backed" : "Local demo";
+  const pendingTransactions = apiState.user ? apiState.financialTransactions.filter((transaction) => transaction.status === "pending_approval") : [];
+  const pendingValue = apiState.user
+    ? pendingTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
+    : approvals.length;
+  const highRiskApprovals = approvals.filter((approval) => approval.risk === "High").length;
+  const approvedDecisions = decisions.filter((decision) => decision.decision === "approved").length;
+  const rejectedDecisions = decisions.filter((decision) => decision.decision === "rejected").length;
+  const correctionDecisions = decisions.filter((decision) => decision.decision === "corrections_requested").length;
+  const activeWorkflowCount = workflows.filter((workflow) => workflow.active).length;
+  const workflowModules = new Set(workflows.map((workflow) => workflow.module).filter(Boolean)).size;
   return `
     ${apiState.user ? `
+      <section class="card">
+        <div class="toolbar">
+          <div>
+            <h2>Approval control center</h2>
+            <p class="eyebrow">API-backed &middot; maker-checker queue, workflow coverage and decision history</p>
+          </div>
+          <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+        </div>
+        <div class="grid metrics">
+          ${metric("Pending queue", approvals.length, `${highRiskApprovals} high-risk item(s)`)}
+          ${metric("Pending value", money.format(pendingValue), "financial postings awaiting checker")}
+          ${metric("Active workflows", activeWorkflowCount, `${workflowModules} module(s) covered`)}
+          ${metric("Decision history", decisions.length, `${approvedDecisions} approved, ${rejectedDecisions} rejected`)}
+        </div>
+        <div class="grid three" style="margin-top:16px">
+          ${metric("Corrections", correctionDecisions, "returned for follow-up")}
+          ${metric("Checker clear", approvals.length === 0 ? "Yes" : "No", approvals.length === 0 ? "no pending items" : "review required")}
+          ${metric("Queue source", "Backend", apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant")}
+        </div>
+      </section>
       <section class="card">
         <div class="toolbar">
           <div>
@@ -1164,7 +1194,7 @@ function renderApprovals() {
         </div>
       </section>
     ` : ""}
-    <section class="card">
+    <section class="card" style="margin-top:${apiState.user ? "16px" : "0"}">
       <div class="toolbar">
         <div>
           <h2>Approval queue</h2>
@@ -1180,7 +1210,7 @@ function renderApprovals() {
               <strong>${approval.title}</strong><br>
               <small>${approval.type} requested by ${approval.requester} · risk ${approval.risk}${approval.source ? ` · ${approval.source}` : ""}</small>
             </span>
-            <span>
+            <span class="filters">
               <button class="secondary-button" data-reject="${approval.id}" type="button">Reject</button>
               <button class="primary-button" data-approve="${approval.id}" type="button">Approve</button>
             </span>
