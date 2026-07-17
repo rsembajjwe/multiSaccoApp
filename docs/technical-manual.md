@@ -55,6 +55,14 @@ Run the prototype API smoke test:
 npm.cmd run test:api
 ```
 
+Run a lightweight load test against a running Java backend:
+
+```powershell
+npm.cmd run load:test
+```
+
+The load test defaults to `http://127.0.0.1:8080`, 100 requests, concurrency 10, and a 1,000 ms p95 latency limit. Override values with `LOAD_BASE_URL`, `LOAD_REQUESTS`, `LOAD_CONCURRENCY`, and `LOAD_P95_MS`.
+
 ## Database Migrations
 
 Java migrations live in:
@@ -131,8 +139,9 @@ Before a production release:
 4. Run database backup before migration.
 5. Start the stack and confirm `/actuator/health`.
 6. Check `/api/v1/operations/status`.
-7. Verify staff login, member login, transaction approval, loan repayment, and reporting workflows.
-8. Confirm backup creation after deployment.
+7. Run `npm.cmd run load:test` against the target environment or staging clone.
+8. Verify staff login, member login, transaction approval, loan repayment, and reporting workflows.
+9. Confirm backup creation after deployment.
 
 ## Troubleshooting
 

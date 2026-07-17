@@ -79,6 +79,23 @@ npm.cmd run restore:db -- -BackupPath .\backups\sacco_app-YYYYMMDD-HHMMSS.dump -
 
 Restore is destructive because it runs `pg_restore --clean --if-exists`. Confirm the target environment and backup path before using `-ConfirmRestore`.
 
+## Load Test
+
+After the backend is running, execute the baseline load check:
+
+```powershell
+npm.cmd run load:test
+```
+
+Defaults are 100 requests, concurrency 10, and p95 latency below 1,000 ms against `http://127.0.0.1:8080`. For a larger staging check:
+
+```powershell
+$env:LOAD_REQUESTS = "1000"
+$env:LOAD_CONCURRENCY = "25"
+$env:LOAD_P95_MS = "1500"
+npm.cmd run load:test
+```
+
 ## Stop
 
 ```powershell
