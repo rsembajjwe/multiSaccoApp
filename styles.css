@@ -269,6 +269,10 @@ h3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -278,6 +282,7 @@ h3 {
 }
 
 .metric {
+  min-width: 0;
   min-height: 116px;
 }
 
@@ -289,6 +294,7 @@ h3 {
 .metric strong {
   display: block;
   margin-top: 10px;
+  overflow-wrap: anywhere;
   font-size: 26px;
 }
 
@@ -355,6 +361,11 @@ h3 {
   color: var(--brand-dark);
   border-color: #9fd8ca;
   background: #edf9f5;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .ghost-button {
@@ -551,6 +562,21 @@ th {
   background: #e3f8ef;
 }
 
+.notice.info {
+  border-left-color: var(--blue);
+  background: #e8f0ff;
+}
+
+.integration-panel {
+  box-shadow: none;
+}
+
+.compact-facts {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
 .runbook-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -622,6 +648,7 @@ th {
   .grid.metrics,
   .grid.two,
   .grid.three,
+  .grid.four,
   .shell-status,
   .runbook-grid {
     grid-template-columns: 1fr;

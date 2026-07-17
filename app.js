@@ -150,6 +150,9 @@ let apiState = {
   approvalDecisions: [],
   auditEvents: [],
   operationsStatus: null,
+  loading: false,
+  lastSyncedAt: "",
+  lastError: "",
   message: "Checking backend connection..."
 };
 let memberApiState = {
@@ -444,6 +447,37 @@ function statusClass(status) {
   return String(status).toLowerCase().replace(/\s+/g, "-").replace("pending-payment", "pending").replace("pending-review", "review");
 }
 
+function formatSyncTime(value) {
+  if (!value) return "Not synced";
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function apiSyncState() {
+  if (apiState.loading) return "Refreshing";
+  if (apiState.lastError) return "Needs attention";
+  if (apiState.user) return "Java-backed";
+  if (apiState.health === "online") return "API reachable";
+  return "Demo mode";
+}
+
+function apiSyncNotice(context) {
+  if (apiState.loading) {
+    return `<div class="notice info">${context} is refreshing from the Java API. Current figures will update when the sync finishes.</div>`;
+  }
+  if (apiState.lastError) {
+    return `<div class="notice error">${context} could not refresh from the backend: ${apiState.lastError}</div>`;
+  }
+  if (apiState.user) {
+    return `<div class="notice success">${context} is using Java-backed data for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}. Last sync: ${formatSyncTime(apiState.lastSyncedAt)}.</div>`;
+  }
+  return `<div class="notice">${context} is showing local demo data. Login to the API to switch this screen to Java-backed records.</div>`;
+}
+
 function init() {
   renderTenantSelect();
   renderNav();
@@ -595,6 +629,23 @@ function renderDashboard() {
       ${metric("Pending approvals", usingApi ? (operationCounts.pendingFinancialTransactions || approvals.length) : approvals.length, "maker-checker controls")}
     </div>
 
+    <section class="card integration-panel" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Dashboard data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; Java integration</p>
+        </div>
+        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
+      </div>
+      ${apiSyncNotice("Dashboard")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", usingApi ? "Java API" : "Local demo")}
+        ${miniFact("Operations scope", operations.scope ? (operations.scope === "platform" ? "Platform" : tenantName(operations.scope)) : "Not loaded")}
+        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
+        ${miniFact("Health", apiState.health)}
+      </div>
+    </section>
+
     <div class="grid two" style="margin-top:16px">
       <section class="card">
         <div class="toolbar">
@@ -639,7 +690,7 @@ function renderDashboard() {
         ${miniFact("API members", String(operationCounts.members || apiState.members.length))}
       </div>
       <p class="muted">${apiState.message}</p>
-      ${apiState.user ? `<div class="toolbar" style="margin-top:14px;margin-bottom:0"><button class="secondary-button" data-view-jump="operations" type="button">Open operations center</button><button class="secondary-button" data-action="refreshApi" type="button">Refresh backend data</button></div>` : ""}
+      ${apiState.user ? `<div class="toolbar" style="margin-top:14px;margin-bottom:0"><button class="secondary-button" data-view-jump="operations" type="button">Open operations center</button><button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button></div>` : ""}
     </section>
 
     <section class="card" style="margin-top:16px">
@@ -872,6 +923,8 @@ function renderMembers() {
   const totalShares = members.reduce((sum, member) => sum + (member.shares || 0), 0);
   const totalWelfare = members.reduce((sum, member) => sum + (member.welfare || 0), 0);
   const branchCount = new Set(members.map((member) => member.branchId).filter(Boolean)).size;
+  const membersWithoutBranch = members.filter((member) => !member.branchId).length;
+  const staleMemberLabel = apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed";
   return `
     <div class="grid metrics">
       ${metric("Members", members.length, `${activeMembers} active`)}
@@ -879,6 +932,26 @@ function renderMembers() {
       ${metric("Branch coverage", branchCount, useApiMembers() ? "backend branches represented" : "demo branches represented")}
       ${metric("Member funds", money.format(totalSavings + totalShares + totalWelfare), "savings + shares + welfare")}
     </div>
+
+    <section class="card integration-panel" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Members data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; balances and KYC</p>
+        </div>
+        <div class="filters">
+          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
+          ${apiState.user ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import template</button>` : ""}
+        </div>
+      </div>
+      ${apiSyncNotice("Members screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", source)}
+        ${miniFact("Last sync", staleMemberLabel)}
+        ${miniFact("Unassigned branch", membersWithoutBranch)}
+        ${miniFact("Balance source", useApiMembers() ? "Server fields" : "Demo seed")}
+      </div>
+    </section>
 
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
@@ -903,12 +976,12 @@ function renderMembers() {
         </div>
         <div class="filters">
           <input class="input" id="memberSearch" placeholder="Search members">
-          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
+          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
           ${apiState.user ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import template</button>` : ""}
           <button class="primary-button" data-action="newMember" type="button">Register member</button>
         </div>
       </div>
-      ${apiState.user ? `<div class="notice">Members shown from the backend for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}.</div>` : `<div class="notice">Login to the API to use server-side member onboarding. The table below is still using local demo data.</div>`}
+      ${apiSyncNotice("Member register")}
       <div class="table-wrap">
         <table id="membersTable">
           <thead><tr><th>Member</th><th>Type</th><th>Branch</th><th>KYC</th><th>Savings</th><th>Shares</th><th>Welfare</th><th>Status</th><th>Action</th></tr></thead>
@@ -2536,6 +2609,11 @@ async function refreshMemberStatus() {
 }
 
 async function refreshApiStatus() {
+  apiState.loading = true;
+  apiState.lastError = "";
+  renderApiChrome();
+  if (["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans"].includes(state.currentView)) render();
+
   try {
     const health = await apiRequest("/health");
     apiState.health = health.ok ? "online" : "offline";
@@ -2608,6 +2686,7 @@ async function refreshApiStatus() {
       apiState.complaints = complaints;
       apiState.approvalWorkflows = approvalWorkflows;
       apiState.approvalDecisions = approvalDecisions;
+      apiState.lastSyncedAt = new Date().toISOString();
       apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${roles.length} role(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialProducts.length} product(s), ${financialAccounts.length} account(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${notificationTemplates.length} notification template(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), ${approvalWorkflows.length} workflow(s), ${approvalDecisions.length} decision(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
@@ -2617,7 +2696,10 @@ async function refreshApiStatus() {
       apiState.user = null;
     }
     apiState.health = "offline";
+    apiState.lastError = error.message;
     apiState.message = error.message;
+  } finally {
+    apiState.loading = false;
   }
   renderApiChrome();
   if (["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans"].includes(state.currentView)) render();
@@ -2840,7 +2922,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], notificationTemplates: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], operationsStatus: null, message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], notificationTemplates: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], operationsStatus: null, loading: false, lastSyncedAt: "", lastError: "", message: "Logged out of API session." };
   renderApiChrome();
   render();
 }

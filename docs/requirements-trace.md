@@ -22,6 +22,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - App shell shows tenant context, staff API session, member session, operations scope, and last backend sync across every screen.
 - Dashboard KPIs switch from local demo data to backend member, transaction, loan, approval, audit, and operations counts after API login.
 - Members screen shows backend member summary KPIs, balance totals, branch coverage, and direct profile/statement actions after API login.
+- Dashboard and Members screens show Java-backed source, refresh state, last sync time, and backend error notices when API integration is active.
 - Transactions screen shows a backend-backed posting control center with posted, pending, reversed, reversible, rejected, and statement-ready totals plus direct receipt, statement, and reversal actions.
 - Loans screen shows a backend-backed control center with portfolio value, outstanding balance, ready-to-disburse loans, repayments, guarantor-pending counts, DSR watch indicators, and grouped lifecycle actions.
 - Approvals screen shows a backend-backed control center for pending queue size, pending value, workflow coverage, decision history, corrections, checker-clear status, and grouped approve/reject actions.
