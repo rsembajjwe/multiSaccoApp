@@ -142,6 +142,7 @@ let apiState = {
   assets: [],
   mobileMoneyCallbacks: [],
   notificationDeliveries: [],
+  notificationTemplates: [],
   governanceMeetings: [],
   complaints: [],
   approvalWorkflows: [],
@@ -1161,6 +1162,7 @@ function renderApiReports() {
   const assets = apiState.assets;
   const mobileMoneyCallbacks = apiState.mobileMoneyCallbacks;
   const notificationDeliveries = apiState.notificationDeliveries;
+  const notificationTemplates = apiState.notificationTemplates;
   const reconciliation = apiState.reconciliation || { summary: {}, unmatchedStatementLines: [], unmatchedLedgerLines: [] };
   const regulatoryReport = apiState.regulatoryReport || { reports: [], consolidated: {}, csv: "" };
   const meetings = apiState.governanceMeetings;
@@ -1282,15 +1284,18 @@ function renderApiReports() {
       <div class="toolbar">
         <div>
           <h2>SMS and email deliveries</h2>
-          <p class="eyebrow">Simulated provider outbox for member notifications</p>
+          <p class="eyebrow">Provider outbox and tenant notification templates</p>
         </div>
+        <button class="primary-button" data-action="newNotificationTemplate" type="button">New template</button>
         <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
       </div>
       <div class="grid metrics">
         ${metric("SMS", notificationDeliveries.filter((item) => item.channel === "sms").length, "demo_sms")}
         ${metric("Email", notificationDeliveries.filter((item) => item.channel === "email").length, "demo_email")}
+        ${metric("Templates", notificationTemplates.length, `${notificationTemplates.filter((item) => item.status === "active").length} active`)}
         ${metric("Sent", notificationDeliveries.filter((item) => item.status === "sent").length, "provider-confirmed")}
       </div>
+      ${notificationTemplateTable(notificationTemplates)}
       ${notificationDeliveryTable(notificationDeliveries)}
     </section>
     <section class="card" style="margin-top:16px">
@@ -1479,6 +1484,40 @@ function notificationDeliveryTable(deliveries) {
       </table>
     </div>
   `;
+}
+
+function notificationTemplateTable(templates) {
+  return `
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>Event</th><th>Channel</th><th>Title</th><th>Source</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>
+          ${templates.map((template) => {
+            const manageable = canManageNotificationTemplate(template);
+            return `
+              <tr>
+                <td>${template.eventType}<br><small>${template.id}</small></td>
+                <td>${titleCase(String(template.channel || "").replace(/_/g, " "))}</td>
+                <td><strong>${template.title}</strong><br><small>${template.body}</small></td>
+                <td>${template.tenantId ? tenantName(template.tenantId) : "Global default"}</td>
+                <td><span class="status ${template.status === "active" ? "active" : "pending"}">${titleCase(template.status)}</span></td>
+                <td>
+                  ${manageable ? `<button class="secondary-button" data-template-edit="${template.id}" type="button">Edit</button>
+                  <button class="secondary-button" data-template-toggle="${template.id}" type="button">${template.status === "active" ? "Deactivate" : "Activate"}</button>` : `<span class="pill">Protected</span>`}
+                </td>
+              </tr>
+            `;
+          }).join("") || `<tr><td colspan="6">No notification templates found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function canManageNotificationTemplate(template) {
+  if (!apiState.user) return false;
+  if (apiState.user.tenantId === "tenant_platform") return true;
+  return template.tenantId === apiState.user.tenantId;
 }
 
 function regulatoryReportTable(report) {
@@ -1890,6 +1929,14 @@ function bindViewActions() {
     button.addEventListener("click", () => updateAccountingPeriodStatus(button.dataset.periodStatus, button.dataset.periodNext));
   });
 
+  document.querySelectorAll("[data-template-edit]").forEach((button) => {
+    button.addEventListener("click", () => openNotificationTemplateForm(button.dataset.templateEdit));
+  });
+
+  document.querySelectorAll("[data-template-toggle]").forEach((button) => {
+    button.addEventListener("click", () => toggleNotificationTemplate(button.dataset.templateToggle));
+  });
+
   document.querySelectorAll("[data-guarantor-accept]").forEach((button) => {
     button.addEventListener("click", () => decideGuarantorRequest(button.dataset.guarantorAccept, "accepted"));
   });
@@ -1923,6 +1970,7 @@ function bindViewActions() {
         newRole: openRoleForm,
         assignUserRoles: openUserRoleAssignmentForm,
         memberImportTemplate: openMemberImportTemplate,
+        newNotificationTemplate: () => openNotificationTemplateForm(),
         memberLogin: openMemberLoginForm,
         memberLogout: memberLogout,
         refreshApi: refreshApiStatus
@@ -2027,7 +2075,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, roles, permissions, auditEvents, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, suppliers, expenses, assets, governanceMeetings, complaints, approvalWorkflows, approvalDecisions] = await Promise.all([
+      const [tenants, users, roles, permissions, auditEvents, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, notificationTemplates, suppliers, expenses, assets, governanceMeetings, complaints, approvalWorkflows, approvalDecisions] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest(`/roles${apiTenantQuery()}`),
@@ -2050,6 +2098,7 @@ async function refreshApiStatus() {
         apiRequest(`/regulatory-report${apiTenantQuery()}`),
         apiRequest(`/integrations/mobile-money/callbacks${apiTenantQuery()}`),
         apiRequest(`/notifications/deliveries${apiTenantQuery()}`),
+        apiRequest(`/notification-templates${apiTenantQuery()}`),
         apiRequest(`/suppliers${apiTenantQuery()}`),
         apiRequest(`/expenses${apiTenantQuery()}`),
         apiRequest(`/assets${apiTenantQuery()}`),
@@ -2080,6 +2129,7 @@ async function refreshApiStatus() {
       apiState.regulatoryReport = regulatoryReport;
       apiState.mobileMoneyCallbacks = mobileMoneyCallbacks;
       apiState.notificationDeliveries = notificationDeliveries;
+      apiState.notificationTemplates = notificationTemplates;
       apiState.suppliers = suppliers;
       apiState.expenses = expenses;
       apiState.assets = assets;
@@ -2087,7 +2137,7 @@ async function refreshApiStatus() {
       apiState.complaints = complaints;
       apiState.approvalWorkflows = approvalWorkflows;
       apiState.approvalDecisions = approvalDecisions;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${roles.length} role(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialProducts.length} product(s), ${financialAccounts.length} account(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), ${approvalWorkflows.length} workflow(s), ${approvalDecisions.length} decision(s), and ${auditEvents.length} audit event(s).`;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${roles.length} role(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialProducts.length} product(s), ${financialAccounts.length} account(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${notificationTemplates.length} notification template(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), ${approvalWorkflows.length} workflow(s), ${approvalDecisions.length} decision(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -2319,7 +2369,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], notificationTemplates: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -2877,6 +2927,66 @@ function openUserRoleAssignmentForm() {
       document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
     }
   });
+}
+
+function openNotificationTemplateForm(templateId = "") {
+  if (!apiState.user) return;
+  const template = apiState.notificationTemplates.find((item) => item.id === templateId);
+  if (template && !canManageNotificationTemplate(template)) return;
+  const isEdit = Boolean(template);
+  const defaultTenantId = apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId;
+  const tenantOptions = apiState.user.tenantId === "tenant_platform"
+    ? `<label class="field"><span>Source</span><select id="templateTenant" class="select"><option value="">Global default</option>${apiState.tenants.filter((tenant) => tenant.id !== "tenant_platform").map((tenant) => `<option value="${tenant.id}" ${tenant.id === (template?.tenantId || defaultTenantId) ? "selected" : ""}>${tenant.name}</option>`).join("")}</select></label>`
+    : "";
+  openModal(isEdit ? "Edit notification template" : "New notification template", `
+    <div class="form-grid">
+      ${tenantOptions}
+      ${field("Event type", "templateEventType", "text", template?.eventType || "member_statement_ready")}
+      <label class="field"><span>Channel</span><select id="templateChannel" class="select">
+        ${["in_app", "sms", "email"].map((channel) => `<option value="${channel}" ${channel === (template?.channel || "in_app") ? "selected" : ""}>${titleCase(channel.replace(/_/g, " "))}</option>`).join("")}
+      </select></label>
+      <label class="field"><span>Status</span><select id="templateStatus" class="select">
+        ${["active", "inactive"].map((status) => `<option value="${status}" ${status === (template?.status || "active") ? "selected" : ""}>${titleCase(status)}</option>`).join("")}
+      </select></label>
+      ${field("Title", "templateTitle", "text", template?.title || "Member statement ready")}
+      <label class="field full"><span>Message body</span><textarea id="templateBody" class="input" rows="4">${template?.body || "Your SACCO statement is ready for review."}</textarea></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveNotificationTemplate" class="primary-button" type="button">Save template</button>`);
+
+  document.getElementById("saveNotificationTemplate").addEventListener("click", async () => {
+    try {
+      const payload = {
+        tenantId: apiState.user.tenantId === "tenant_platform" ? (value("templateTenant") || null) : apiState.user.tenantId,
+        eventType: value("templateEventType"),
+        channel: value("templateChannel"),
+        status: value("templateStatus"),
+        title: value("templateTitle"),
+        body: value("templateBody")
+      };
+      await apiRequest(isEdit ? `/notification-templates/${template.id}` : "/notification-templates", {
+        method: isEdit ? "PATCH" : "POST",
+        body: JSON.stringify(payload)
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+async function toggleNotificationTemplate(templateId) {
+  const template = apiState.notificationTemplates.find((item) => item.id === templateId);
+  if (!template || !canManageNotificationTemplate(template)) return;
+  try {
+    await apiRequest(`/notification-templates/${template.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: template.status === "active" ? "inactive" : "active" })
+    });
+    await refreshApiStatus();
+  } catch (error) {
+    openModal("Template update failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
 }
 
 function openTransactionForm() {

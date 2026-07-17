@@ -47,6 +47,8 @@ const allowedComplaintPriorities = new Set(["low", "medium", "high"]);
 const allowedComplaintStatuses = new Set(["open", "in_progress", "resolved", "closed"]);
 const allowedApprovalModules = new Set(["members", "transactions", "loans", "expenses", "assets", "subscriptions", "governance"]);
 const allowedApprovalDecisions = new Set(["pending", "approved", "rejected", "corrections_requested"]);
+const allowedNotificationChannels = new Set(["in_app", "sms", "email"]);
+const allowedNotificationTemplateStatuses = new Set(["active", "inactive"]);
 const approvalDecisionsRequiringReason = new Set(["rejected", "corrections_requested"]);
 const rateLimitBuckets = new Map();
 const rateLimitPolicies = {
@@ -158,6 +160,11 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path === "/regulatory-report") return getRegulatoryReport(response, auth, url);
     if (method === "GET" && path === "/integrations/mobile-money/callbacks") return listMobileMoneyCallbacks(response, auth, url);
     if (method === "GET" && path === "/notifications/deliveries") return listNotificationDeliveries(response, auth, url);
+    if (method === "GET" && path === "/notification-templates") return listNotificationTemplates(response, auth, url, correlationId);
+    if (method === "POST" && path === "/notification-templates") return createNotificationTemplate(request, response, auth, correlationId);
+    if (method === "PATCH" && path.startsWith("/notification-templates/")) {
+      return updateNotificationTemplate(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path === "/suppliers") return listSuppliers(response, auth, url);
     if (method === "POST" && path === "/suppliers") return createSupplier(request, response, auth, correlationId);
     if (method === "GET" && path === "/expenses") return listExpenses(response, auth, url);
@@ -1043,6 +1050,103 @@ function listNotificationDeliveries(response, auth, url) {
   return sendData(response, deliveries.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
 }
 
+function listNotificationTemplates(response, auth, url, correlationId) {
+  const requestedTenantId = url.searchParams.get("tenantId");
+  if (requestedTenantId && !assertTenantAccess(auth, requestedTenantId, response, correlationId)) return;
+  const tenantId = requestedTenant(auth, url);
+  const templates = isPlatform(auth) && !requestedTenantId
+    ? db.notificationTemplates
+    : db.notificationTemplates.filter((template) => template.tenantId === null || template.tenantId === tenantId);
+  return sendData(response, [...templates].sort((a, b) => `${a.tenantId || "global"}:${a.eventType}:${a.channel}`.localeCompare(`${b.tenantId || "global"}:${b.eventType}:${b.channel}`)));
+}
+
+async function createNotificationTemplate(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const requestedTenantId = body.tenantId === null && isPlatform(auth) ? null : String(body.tenantId || auth.user.tenantId);
+  const tenantId = requestedTenantId === null ? null : visibleTenantId(auth, requestedTenantId);
+  if (tenantId !== requestedTenantId) return sendError(response, 403, "TENANT_ACCESS_DENIED", "Cannot create templates for another tenant.", correlationId);
+
+  const eventType = String(body.eventType || "").trim().toLowerCase().replace(/\s+/g, "_");
+  const channel = String(body.channel || "in_app").trim();
+  const title = String(body.title || "").trim();
+  const bodyText = String(body.body || "").trim();
+  const status = String(body.status || "active").trim();
+
+  const error = notificationTemplateValidationError({ eventType, channel, title, body: bodyText, status });
+  if (error) return sendError(response, 400, "VALIDATION_ERROR", error, correlationId);
+  if (db.notificationTemplates.some((template) => template.tenantId === tenantId && template.eventType === eventType && template.channel === channel)) {
+    return sendError(response, 409, "TEMPLATE_EXISTS", "A template already exists for that event type and channel.", correlationId);
+  }
+
+  const timestamp = new Date().toISOString();
+  const template = {
+    id: newId("template"),
+    tenantId,
+    channel,
+    eventType,
+    title,
+    body: bodyText,
+    status,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+  db.notificationTemplates.push(template);
+  createAuditEvent({
+    tenantId: tenantId || auth.user.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Created notification template ${template.eventType}`,
+    resourceType: "notification_template",
+    resourceId: template.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, template, 201);
+}
+
+async function updateNotificationTemplate(request, response, auth, templateId, correlationId) {
+  const template = db.notificationTemplates.find((item) => item.id === templateId);
+  if (!template) return sendError(response, 404, "TEMPLATE_NOT_FOUND", "Notification template not found.", correlationId);
+  if (template.tenantId === null && !isPlatform(auth)) {
+    return sendError(response, 403, "PLATFORM_ADMIN_REQUIRED", "Only platform administrators can update global templates.", correlationId);
+  }
+  if (template.tenantId !== null && !assertTenantAccess(auth, template.tenantId, response, correlationId)) return;
+
+  const body = await readJson(request);
+  const updates = {
+    eventType: body.eventType === undefined ? template.eventType : String(body.eventType || "").trim().toLowerCase().replace(/\s+/g, "_"),
+    channel: body.channel === undefined ? template.channel : String(body.channel || "").trim(),
+    title: body.title === undefined ? template.title : String(body.title || "").trim(),
+    body: body.body === undefined ? template.body : String(body.body || "").trim(),
+    status: body.status === undefined ? template.status : String(body.status || "").trim()
+  };
+  const error = notificationTemplateValidationError(updates);
+  if (error) return sendError(response, 400, "VALIDATION_ERROR", error, correlationId);
+  if (db.notificationTemplates.some((item) => item.id !== template.id && item.tenantId === template.tenantId && item.eventType === updates.eventType && item.channel === updates.channel)) {
+    return sendError(response, 409, "TEMPLATE_EXISTS", "A template already exists for that event type and channel.", correlationId);
+  }
+
+  Object.assign(template, updates, { updatedAt: new Date().toISOString() });
+  createAuditEvent({
+    tenantId: template.tenantId || auth.user.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Updated notification template ${template.eventType}`,
+    resourceType: "notification_template",
+    resourceId: template.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, template);
+}
+
+function notificationTemplateValidationError(template) {
+  if (!template.eventType || !/^[a-z][a-z0-9_]*$/.test(template.eventType)) return "Event type must use lowercase letters, numbers, and underscores.";
+  if (!allowedNotificationChannels.has(template.channel)) return "Unsupported notification channel.";
+  if (!template.title) return "Template title is required.";
+  if (!template.body) return "Template body is required.";
+  if (!allowedNotificationTemplateStatuses.has(template.status)) return "Unsupported template status.";
+  return "";
+}
+
 async function receiveMobileMoneyCallback(request, response, correlationId) {
   const body = await readJson(request);
   const tenantId = String(body.tenantId || "").trim();
@@ -1199,7 +1303,9 @@ function postLoanRepayment({ loan, amount, channel, externalReference, receivedA
 }
 
 function createMemberNotification({ tenantId, memberId, eventType, resourceType, resourceId, body }) {
-  const template = db.notificationTemplates.find((item) => item.eventType === eventType && item.status === "active");
+  const template = db.notificationTemplates
+    .filter((item) => item.eventType === eventType && item.status === "active" && (item.tenantId === tenantId || item.tenantId === null))
+    .sort((a, b) => Number(b.tenantId === tenantId) - Number(a.tenantId === tenantId))[0];
   const member = db.members.find((item) => item.id === memberId);
   const notification = {
     id: newId("notification"),

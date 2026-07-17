@@ -299,6 +299,38 @@ try {
   assert(notificationDeliveries.data.some((delivery) => delivery.channel === "sms" && delivery.status === "sent"), "SACCO admin should see SMS delivery history");
   assert(notificationDeliveries.data.some((delivery) => delivery.channel === "email" && delivery.status === "sent"), "SACCO admin should see email delivery history");
 
+  const notificationTemplates = await api("GET", "/notification-templates", null, saccoToken);
+  assert(notificationTemplates.data.some((template) => template.eventType === "payment_received"), "SACCO admin should see global notification templates");
+
+  const template = await api("POST", "/notification-templates", {
+    eventType: `smoke_event_${Date.now()}`,
+    channel: "email",
+    title: "Smoke notification",
+    body: "Smoke notification body"
+  }, saccoToken);
+  assert(template.data.tenantId === "tenant_green", "New templates should belong to the authenticated SACCO");
+  assert(template.data.status === "active", "New templates should default active");
+
+  const updatedTemplate = await api("PATCH", `/notification-templates/${template.data.id}`, {
+    title: "Updated smoke notification",
+    status: "inactive"
+  }, saccoToken);
+  assert(updatedTemplate.data.title === "Updated smoke notification", "Notification templates should update title");
+  assert(updatedTemplate.data.status === "inactive", "Notification templates should update status");
+
+  const invalidTemplate = await raw("POST", "/notification-templates", {
+    eventType: "bad template",
+    channel: "fax",
+    title: "Bad",
+    body: "Bad"
+  }, saccoToken);
+  assert(invalidTemplate.status === 400, "Notification templates should reject unsupported channels");
+
+  const globalTemplateUpdate = await raw("PATCH", "/notification-templates/template_payment_received", {
+    status: "inactive"
+  }, saccoToken);
+  assert(globalTemplateUpdate.status === 403, "SACCO admin should not update global notification templates");
+
   const saccoSubscriptions = await api("GET", "/subscriptions", null, saccoToken);
   assert(saccoSubscriptions.data.every((subscription) => subscription.tenantId === "tenant_green"), "SACCO subscription list must be tenant-scoped");
 
