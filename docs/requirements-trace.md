@@ -31,6 +31,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Approvals and Reports screens show Java-backed source, last sync time, refresh state, backend error notices, workflow coverage, checker queue, journal rows, and reconciliation exception indicators when API integration is active.
 - SACCO Registration screen shows a backend-backed onboarding control center for applications, approvals, licence watch, onboarding progress, package coverage, activation gates, and grouped profile/approval actions.
 - Subscriptions screen shows a billing control center for invoice totals, paid/outstanding balances, active subscriptions, billable members, per-member tier usage, fixed-tier usage, and payment access.
+- SACCO Registration, Subscriptions, Operations, and Member Portal screens show source, last sync time, loading/error state, approval or payment access, readiness gates, and member self-service sync state where applicable.
 - Seeded API login/logout from the web UI.
 - Server-side tenants, users, and audit events fetched through `/api/v1`.
 - Server-side branch and member onboarding endpoints with tenant isolation.

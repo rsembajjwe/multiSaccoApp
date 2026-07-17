@@ -164,6 +164,9 @@ let memberApiState = {
   mobileDashboard: null,
   guarantorRequests: [],
   notifications: [],
+  loading: false,
+  lastSyncedAt: "",
+  lastError: "",
   message: "Member portal not signed in."
 };
 
@@ -482,6 +485,31 @@ function refreshApiButton(label = "Refresh API") {
   return `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : label}</button>`;
 }
 
+function memberSyncState() {
+  if (memberApiState.loading) return "Refreshing";
+  if (memberApiState.lastError) return "Needs attention";
+  if (memberApiState.member) return "Member API";
+  if (memberApiState.token) return "Re-auth needed";
+  return "Demo mode";
+}
+
+function memberSyncNotice(context) {
+  if (memberApiState.loading) {
+    return `<div class="notice info">${context} is refreshing from the member API. Balances and requests will update when the sync finishes.</div>`;
+  }
+  if (memberApiState.lastError) {
+    return `<div class="notice error">${context} could not refresh from the member API: ${memberApiState.lastError}</div>`;
+  }
+  if (memberApiState.member) {
+    return `<div class="notice success">${context} is using member-authenticated Java API data. Last sync: ${formatSyncTime(memberApiState.lastSyncedAt)}.</div>`;
+  }
+  return `<div class="notice">${context} is showing local demo data. Member login switches balances, loans, notifications, and guarantee requests to the Java API.</div>`;
+}
+
+function memberRefreshButton(label = "Refresh member data") {
+  return `<button class="secondary-button" data-action="refreshMember" type="button" ${memberApiState.loading ? "disabled" : ""}>${memberApiState.loading ? "Refreshing..." : label}</button>`;
+}
+
 function init() {
   renderTenantSelect();
   renderNav();
@@ -769,13 +797,32 @@ function renderRegistrations() {
   const packageCoverage = new Set(tenants.map((tenant) => tenant.packageId).filter(Boolean)).size;
   const districtCoverage = new Set(tenants.map((tenant) => tenant.district).filter(Boolean)).size;
   return `
-    <section class="card">
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>SACCO registration data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; onboarding and tenant approval</p>
+        </div>
+        <div class="filters">
+          ${apiState.user ? refreshApiButton("Refresh backend data") : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
+          ${apiState.user && !canCreateOnApi ? "" : `<button class="primary-button" data-action="newTenant" type="button">New SACCO application</button>`}
+        </div>
+      </div>
+      ${apiSyncNotice("SACCO Registration screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", source)}
+        ${miniFact("Last sync", apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed")}
+        ${miniFact("Approval access", canCreateOnApi ? "Platform" : (apiState.user ? "Tenant view" : "Demo"))}
+        ${miniFact("Activation gate", pendingTenants === 0 ? "Clear" : "Review")}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>SACCO onboarding control center</h2>
           <p class="eyebrow">${source} &middot; applications, licence readiness, packages and tenant activation</p>
         </div>
-        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
+        ${apiState.user ? refreshApiButton() : ""}
       </div>
       <div class="grid metrics">
         ${metric("Applications", tenants.length, `${pendingTenants} pending review`)}
@@ -797,7 +844,7 @@ function renderRegistrations() {
         </div>
         ${apiState.user && !canCreateOnApi ? "" : `<button class="primary-button" data-action="newTenant" type="button">New SACCO application</button>`}
       </div>
-      ${apiState.user ? `<div class="notice">${canCreateOnApi ? "Platform Admin is managing SACCO applications from the backend." : "Your API account can view only its own tenant."}</div>` : `<div class="notice">Login as Platform Admin to create and approve SACCO tenants through the backend.</div>`}
+      ${apiSyncNotice("SACCO applications")}
       <div class="table-wrap">
         <table>
           <thead><tr><th>SACCO</th><th>District</th><th>Licence expiry</th><th>Package</th><th>Status</th><th>Action</th></tr></thead>
@@ -837,7 +884,26 @@ function renderSubscriptions() {
   const fixedTierSubscriptions = billingRows.length - perMemberSubscriptions;
   const billableMembers = billingRows.reduce((sum, billing) => sum + billing.billableMembers, 0);
   return `
-    <section class="card">
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Subscriptions data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; billing and payment activation</p>
+        </div>
+        <div class="filters">
+          ${apiState.user ? refreshApiButton("Refresh backend data") : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
+          ${useApiSubscriptions() && !canRecordApiPayment ? "" : `<button class="primary-button" data-action="recordSubscriptionPayment" type="button">Record payment</button>`}
+        </div>
+      </div>
+      ${apiSyncNotice("Subscriptions screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", source)}
+        ${miniFact("Last sync", apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed")}
+        ${miniFact("Payment access", canRecordApiPayment ? "Platform" : (apiState.user ? "View only" : "Demo"))}
+        ${miniFact("Outstanding", money.format(outstandingTotal))}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Billing control center</h2>
@@ -887,9 +953,9 @@ function renderSubscriptions() {
           <h2>Invoices and payments</h2>
           <p class="eyebrow">${source} &middot; Subscription lifecycle</p>
         </div>
-        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
+        ${apiState.user ? refreshApiButton() : ""}
       </div>
-      ${useApiSubscriptions() ? `<div class="notice">${canRecordApiPayment ? "Platform Admin is managing subscription payments from the backend." : "Your API account can view only its own SACCO subscription."}</div>` : `<div class="notice">Login as Platform Admin to record subscription payments through the backend.</div>`}
+      ${apiSyncNotice("Invoices and payments")}
       <div class="table-wrap">
         <table>
           <thead><tr><th>Invoice</th><th>SACCO</th><th>Package</th><th>Members</th><th>Amount</th><th>Paid</th><th>Expiry</th><th>Status</th></tr></thead>
@@ -904,6 +970,7 @@ function renderSubscriptions() {
 
 function subscriptionRow(sub) {
   const billing = subscriptionBillingDetails(sub);
+  const outstanding = Math.max(0, billing.amount - billing.paid);
   return `
     <tr>
       <td>${sub.invoice}${sub.source ? `<br><small>${sub.source}</small>` : ""}</td>
@@ -911,7 +978,7 @@ function subscriptionRow(sub) {
       <td>${packageName(sub.packageId)}<br><small>${billing.tierLabel}</small></td>
       <td>${billing.memberCount.toLocaleString()} actual<br><small>${billing.billingDescription}</small></td>
       <td>${money.format(billing.amount)}</td>
-      <td>${money.format(billing.paid)}</td>
+      <td>${money.format(billing.paid)}<br><small>${money.format(outstanding)} outstanding</small></td>
       <td>${sub.expiry}</td>
       <td><span class="status ${statusClass(sub.status)}">${sub.status}</span></td>
     </tr>
@@ -1538,15 +1605,21 @@ function renderReports() {
 function renderOperations() {
   if (!apiState.user) {
     return `
-      <section class="card">
+      <section class="card integration-panel">
         <div class="toolbar">
           <div>
-            <h2>Operations center</h2>
-            <p class="eyebrow">Java backend monitoring</p>
+            <h2>Operations data source</h2>
+            <p class="eyebrow">${apiSyncState()} &middot; Java backend monitoring</p>
           </div>
           <button class="primary-button" data-action="apiLogin" type="button">API login</button>
         </div>
-        <div class="notice">Login to the Java API to view tenant-scoped operational counts, alerts, and release-readiness gates.</div>
+        ${apiSyncNotice("Operations screen")}
+        <div class="grid four compact-facts">
+          ${miniFact("Source", "Login required")}
+          ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
+          ${miniFact("Scope", "Not loaded")}
+          ${miniFact("Readiness", "Waiting")}
+        </div>
       </section>
     `;
   }
@@ -1569,13 +1642,29 @@ function renderOperations() {
   const healthyGateCount = releaseGates.filter((gate) => gate.ok).length;
 
   return `
-    <section class="card">
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Operations data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; release readiness and monitoring</p>
+        </div>
+        ${refreshApiButton("Refresh backend data")}
+      </div>
+      ${apiSyncNotice("Operations screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", "Java API")}
+        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
+        ${miniFact("Scope", tenantLabel)}
+        ${miniFact("Readiness", `${healthyGateCount}/${releaseGates.length}`)}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Operations command center</h2>
           <p class="eyebrow">API-backed &middot; release readiness, alerts, queues and runbooks for ${tenantLabel}</p>
         </div>
-        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+        ${refreshApiButton()}
       </div>
       <div class="grid metrics">
         ${metric("Readiness", `${healthyGateCount}/${releaseGates.length}`, "production gates passing")}
@@ -1602,7 +1691,7 @@ function renderOperations() {
           <h2>Operational alerts</h2>
           <p class="eyebrow">Live from /api/v1/operations/status</p>
         </div>
-        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+        ${refreshApiButton()}
       </div>
       ${operationAlerts(alerts)}
     </section>
@@ -2206,16 +2295,34 @@ function renderMemberPortal() {
           <h2>${member.fullName}</h2>
           <p class="eyebrow">${member.membershipNo} &middot; ${memberApiState.tenant?.name || tenantName(member.tenantId)}</p>
         </div>
-        <button class="secondary-button" data-action="memberLogout" type="button">Logout member</button>
+        <div class="filters">
+          ${memberRefreshButton()}
+          <button class="secondary-button" data-action="memberLogout" type="button">Logout member</button>
+        </div>
       </div>
-      <div class="notice" style="margin-top:16px">${memberApiState.message}</div>
+      <section class="card integration-panel" style="margin-top:16px">
+        <div class="toolbar">
+          <div>
+            <h2>Member portal data source</h2>
+            <p class="eyebrow">${memberSyncState()} &middot; balances, loans and notifications</p>
+          </div>
+          ${memberRefreshButton()}
+        </div>
+        ${memberSyncNotice("Member Portal")}
+        <div class="grid four compact-facts">
+          ${miniFact("Source", "Member API")}
+          ${miniFact("Last sync", formatSyncTime(memberApiState.lastSyncedAt))}
+          ${miniFact("Offline drafts", memberDrafts.length)}
+          ${miniFact("Guarantee queue", pendingGuarantees)}
+        </div>
+      </section>
       <section class="card" style="margin-top:16px">
         <div class="toolbar">
           <div>
             <h2>Member self-service control center</h2>
             <p class="eyebrow">Server-confirmed balances, loans, guarantees, notifications and offline drafts</p>
           </div>
-          <button class="secondary-button" data-action="syncOfflineDrafts" type="button">Sync drafts</button>
+          <button class="secondary-button" data-action="syncOfflineDrafts" type="button" ${memberApiState.loading ? "disabled" : ""}>${memberApiState.loading ? "Refreshing..." : "Sync drafts"}</button>
         </div>
         <div class="grid metrics">
           ${metric("Total balance", money.format(totalBalance), "savings + shares + welfare")}
@@ -2313,7 +2420,18 @@ function renderMemberPortal() {
   }
 
   if (memberApiState.token) {
-    return `<section class="card"><h2>Member portal</h2><p>${memberApiState.message}</p><button class="primary-button" data-action="memberLogin" type="button">Member login</button></section>`;
+    return `
+      <section class="card integration-panel">
+        <div class="toolbar">
+          <div>
+            <h2>Member portal data source</h2>
+            <p class="eyebrow">${memberSyncState()} &middot; member session recovery</p>
+          </div>
+          <button class="primary-button" data-action="memberLogin" type="button">Member login</button>
+        </div>
+        ${memberSyncNotice("Member Portal")}
+      </section>
+    `;
   }
 
   const members = tenantScoped(state.members).filter((member) => member.status === "Active");
@@ -2323,7 +2441,23 @@ function renderMemberPortal() {
   }
   const memberLoans = state.loans.filter((loan) => loan.memberId === member.id);
   return `
-    <div class="grid metrics">
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Member portal data source</h2>
+          <p class="eyebrow">${memberSyncState()} &middot; self-service preview</p>
+        </div>
+        <button class="primary-button" data-action="memberLogin" type="button">Member login</button>
+      </div>
+      ${memberSyncNotice("Member Portal")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", "Local demo")}
+        ${miniFact("Last sync", "Demo seed")}
+        ${miniFact("Offline drafts", offlineDrafts.filter((draft) => draft.memberId === member.id).length)}
+        ${miniFact("Guarantee queue", "Login required")}
+      </div>
+    </section>
+    <div class="grid metrics" style="margin-top:16px">
       ${metric("Savings", money.format(member.savings), "last updated today")}
       ${metric("Shares", money.format(member.shares), "ordinary shares")}
       ${metric("Welfare", money.format(member.welfare), "covered")}
@@ -2607,6 +2741,7 @@ function bindViewActions() {
         apiLogin: openApiLoginForm,
         memberLogin: openMemberLoginForm,
         memberLogout: memberLogout,
+        refreshMember: refreshMemberStatus,
         refreshApi: refreshApiStatus
       };
       actions[button.dataset.action]?.();
@@ -2681,6 +2816,10 @@ async function memberApiRequest(path, options = {}) {
 
 async function refreshMemberStatus() {
   if (!memberApiState.token) return;
+  memberApiState.loading = true;
+  memberApiState.lastError = "";
+  if (state.currentView === "memberPortal") render();
+
   try {
     const [session, mobileDashboard, guarantorRequests, notifications] = await Promise.all([
       memberApiRequest("/member-auth/me"),
@@ -2695,10 +2834,13 @@ async function refreshMemberStatus() {
     memberApiState.mobileDashboard = mobileDashboard;
     memberApiState.guarantorRequests = guarantorRequests;
     memberApiState.notifications = notifications;
+    memberApiState.lastSyncedAt = new Date().toISOString();
     memberApiState.message = `Member portal signed in as ${session.member.fullName}.`;
   } catch (error) {
     localStorage.removeItem(MEMBER_SESSION_KEY);
-    memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, mobileDashboard: null, guarantorRequests: [], notifications: [], message: error.message };
+    memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, mobileDashboard: null, guarantorRequests: [], notifications: [], loading: false, lastSyncedAt: "", lastError: error.message, message: error.message };
+  } finally {
+    memberApiState.loading = false;
   }
   if (state.currentView === "memberPortal") render();
 }
@@ -2851,6 +2993,9 @@ function openMemberLoginForm() {
       memberApiState.mobileDashboard = null;
       memberApiState.guarantorRequests = [];
       memberApiState.notifications = [];
+      memberApiState.loading = false;
+      memberApiState.lastSyncedAt = "";
+      memberApiState.lastError = "";
       localStorage.setItem(MEMBER_SESSION_KEY, data.token);
       closeModal();
       state.currentView = "memberPortal";
@@ -3029,7 +3174,7 @@ async function memberLogout() {
     // Local logout should still clear the client member session if the server has restarted.
   }
   localStorage.removeItem(MEMBER_SESSION_KEY);
-  memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, mobileDashboard: null, guarantorRequests: [], notifications: [], message: "Logged out of member portal." };
+  memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, mobileDashboard: null, guarantorRequests: [], notifications: [], loading: false, lastSyncedAt: "", lastError: "", message: "Logged out of member portal." };
   render();
 }
 
