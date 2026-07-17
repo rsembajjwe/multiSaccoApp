@@ -131,7 +131,14 @@ export async function handleApi(request, response, url) {
 
     if (method === "GET" && path === "/users") return listUsers(response, auth);
     if (method === "POST" && path === "/users") return createUser(request, response, auth, correlationId);
-    if (method === "GET" && path === "/roles") return listRoles(response, auth);
+    if (method === "GET" && path.startsWith("/users/") && path.endsWith("/roles")) {
+      return listUserRoles(response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "PUT" && path.startsWith("/users/") && path.endsWith("/roles")) {
+      return replaceUserRoles(request, response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "GET" && path === "/roles") return listRoles(response, auth, url, correlationId);
+    if (method === "POST" && path === "/roles") return createRole(request, response, auth, correlationId);
     if (method === "GET" && path === "/permissions") return sendData(response, db.permissions);
     if (method === "GET" && path === "/approval-workflows") return listApprovalWorkflows(response, auth, url, correlationId);
     if (method === "POST" && path === "/approval-workflows") return createApprovalWorkflow(request, response, auth, correlationId);
@@ -613,9 +620,111 @@ async function createUser(request, response, auth, correlationId) {
   return sendData(response, publicUser(user), 201);
 }
 
-function listRoles(response, auth) {
-  const roles = db.roles.filter((role) => (isPlatform(auth) ? true : role.tenantId === auth.user.tenantId));
-  return sendData(response, roles);
+function listRoles(response, auth, url, correlationId) {
+  const requestedTenantId = url.searchParams.get("tenantId");
+  if (requestedTenantId && !assertTenantAccess(auth, requestedTenantId, response, correlationId)) return;
+  const tenantId = requestedTenant(auth, url);
+  const roles = isPlatform(auth) && !requestedTenantId
+    ? db.roles
+    : db.roles.filter((role) => role.tenantId === tenantId);
+  return sendData(response, roles.map(roleResponse).sort((a, b) => `${a.tenantId}:${a.name}`.localeCompare(`${b.tenantId}:${b.name}`)));
+}
+
+function roleResponse(role) {
+  return {
+    ...role,
+    protectedRole: Boolean(role.protected),
+    permissionIds: db.rolePermissions.filter((item) => item.roleId === role.id).map((item) => item.permissionId)
+  };
+}
+
+async function createRole(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const requestedTenantId = String(body.tenantId || auth.user.tenantId);
+  const tenantId = visibleTenantId(auth, requestedTenantId);
+  if (tenantId !== requestedTenantId) {
+    return sendError(response, 403, "TENANT_ACCESS_DENIED", "Cannot access roles for another tenant.", correlationId);
+  }
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+  const name = String(body.name || "").trim();
+  if (!name) return sendError(response, 400, "VALIDATION_ERROR", "Role name is required.", correlationId);
+  if (db.roles.some((role) => role.tenantId === tenantId && role.name.toLowerCase() === name.toLowerCase())) {
+    return sendError(response, 409, "ROLE_EXISTS", "A role with that name already exists in this tenant.", correlationId);
+  }
+  const permissionIds = uniqueStrings(body.permissionIds || []);
+  const unknown = permissionIds.filter((permissionId) => !db.permissions.some((permission) => permission.id === permissionId));
+  if (unknown.length) return sendError(response, 400, "UNKNOWN_PERMISSION", "One or more permissions are unknown.", correlationId);
+
+  const role = {
+    id: newId("role"),
+    tenantId,
+    name,
+    protected: false,
+    createdByUserId: auth.user.id,
+    createdAt: new Date().toISOString()
+  };
+  db.roles.push(role);
+  db.rolePermissions.push(...permissionIds.map((permissionId) => ({ roleId: role.id, permissionId })));
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Created role ${role.name}`,
+    resourceType: "role",
+    resourceId: role.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, roleResponse(role), 201);
+}
+
+function listUserRoles(response, auth, userId, correlationId) {
+  const user = db.users.find((item) => item.id === userId);
+  if (!user) return sendError(response, 404, "USER_NOT_FOUND", "User was not found.", correlationId);
+  if (!assertTenantAccess(auth, user.tenantId, response, correlationId)) return;
+  return sendData(response, userRoleAssignment(user));
+}
+
+async function replaceUserRoles(request, response, auth, userId, correlationId) {
+  const user = db.users.find((item) => item.id === userId);
+  if (!user) return sendError(response, 404, "USER_NOT_FOUND", "User was not found.", correlationId);
+  if (!assertTenantAccess(auth, user.tenantId, response, correlationId)) return;
+  const body = await readJson(request);
+  const roleIds = uniqueStrings(body.roleIds || []);
+  if (!roleIds.length) return sendError(response, 400, "ROLE_REQUIRED", "Assign at least one role to the user.", correlationId);
+  const roles = roleIds.map((roleId) => db.roles.find((role) => role.id === roleId));
+  if (roles.some((role) => !role)) return sendError(response, 400, "UNKNOWN_ROLE", "One or more roles are unknown.", correlationId);
+  if (roles.some((role) => role.tenantId !== user.tenantId)) {
+    return sendError(response, 400, "ROLE_TENANT_MISMATCH", "Roles must belong to the same tenant as the user.", correlationId);
+  }
+  db.userRoles = db.userRoles.filter((assignment) => assignment.userId !== user.id);
+  db.userRoles.push(...roleIds.map((roleId) => ({ tenantId: user.tenantId, userId: user.id, roleId })));
+  createAuditEvent({
+    tenantId: user.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Updated roles for user ${user.email}`,
+    resourceType: "user",
+    resourceId: user.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, userRoleAssignment(user));
+}
+
+function userRoleAssignment(user) {
+  return {
+    userId: user.id,
+    tenantId: user.tenantId,
+    roleIds: db.userRoles.filter((assignment) => assignment.userId === user.id).map((assignment) => assignment.roleId).sort()
+  };
+}
+
+function uniqueStrings(values) {
+  const unique = [];
+  for (const value of values) {
+    const normalized = String(value || "").trim();
+    if (normalized && !unique.includes(normalized)) unique.push(normalized);
+  }
+  return unique;
 }
 
 function listApprovalWorkflows(response, auth, url, correlationId) {

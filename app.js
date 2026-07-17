@@ -120,6 +120,8 @@ let apiState = {
   token: localStorage.getItem(API_SESSION_KEY) || "",
   tenants: [],
   users: [],
+  roles: [],
+  permissions: [],
   branches: [],
   members: [],
   subscriptionPackages: [],
@@ -1162,6 +1164,8 @@ function renderApiReports() {
   const regulatoryReport = apiState.regulatoryReport || { reports: [], consolidated: {}, csv: "" };
   const meetings = apiState.governanceMeetings;
   const complaints = apiState.complaints;
+  const roles = apiState.roles || [];
+  const permissions = apiState.permissions || [];
   const debitTotal = journals.reduce((sum, entry) => sum + entry.debitTotal, 0);
   const creditTotal = journals.reduce((sum, entry) => sum + entry.creditTotal, 0);
   const unbalanced = journals.filter((entry) => !entry.isBalanced).length;
@@ -1179,6 +1183,22 @@ function renderApiReports() {
       ${metric("Credits", money.format(creditTotal), "must equal debits")}
       ${metric("Cash position", money.format(cashPosition), "cash, bank, mobile money, payroll")}
     </div>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Access control</h2>
+          <p class="eyebrow">Roles, permission sets and staff assignments for ${tenantLabel}</p>
+        </div>
+        <button class="secondary-button" data-action="assignUserRoles" type="button">Assign roles</button>
+        <button class="primary-button" data-action="newRole" type="button">New role</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("Roles", roles.length, `${roles.filter((role) => role.protectedRole || role.protected).length} protected`)}
+        ${metric("Permissions", permissions.length, "catalogued actions")}
+        ${metric("Staff users", apiState.users.length, "assignable accounts")}
+      </div>
+      ${roleTable(roles)}
+    </section>
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
@@ -1329,6 +1349,26 @@ function renderApiReports() {
       <h2>API audit events</h2>
       ${apiAuditTable(apiState.auditEvents)}
     </section>
+  `;
+}
+
+function roleTable(roles) {
+  return `
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>Role</th><th>Tenant</th><th>Permissions</th><th>Status</th></tr></thead>
+        <tbody>
+          ${roles.map((role) => `
+            <tr>
+              <td><strong>${role.name}</strong><br><small>${role.id}</small></td>
+              <td>${tenantName(role.tenantId)}</td>
+              <td>${(role.permissionIds || []).slice(0, 4).join(", ") || "No permissions"}${(role.permissionIds || []).length > 4 ? ` +${role.permissionIds.length - 4} more` : ""}</td>
+              <td><span class="status ${(role.protectedRole || role.protected) ? "active" : "pending"}">${(role.protectedRole || role.protected) ? "Protected" : "Custom"}</span></td>
+            </tr>
+          `).join("") || `<tr><td colspan="4">No roles found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -1879,6 +1919,8 @@ function bindViewActions() {
         newComplaint: openComplaintForm,
         newApprovalWorkflow: openApprovalWorkflowForm,
         newApprovalDecision: openApprovalDecisionForm,
+        newRole: openRoleForm,
+        assignUserRoles: openUserRoleAssignmentForm,
         memberLogin: openMemberLoginForm,
         memberLogout: memberLogout,
         refreshApi: refreshApiStatus
@@ -1983,9 +2025,11 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, suppliers, expenses, assets, governanceMeetings, complaints, approvalWorkflows, approvalDecisions] = await Promise.all([
+      const [tenants, users, roles, permissions, auditEvents, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, suppliers, expenses, assets, governanceMeetings, complaints, approvalWorkflows, approvalDecisions] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
+        apiRequest(`/roles${apiTenantQuery()}`),
+        apiRequest("/permissions"),
         apiRequest("/audit-events"),
         apiRequest(`/branches${apiTenantQuery()}`),
         apiRequest(`/members${apiTenantQuery()}`),
@@ -2014,6 +2058,8 @@ async function refreshApiStatus() {
       ]);
       apiState.tenants = tenants;
       apiState.users = users;
+      apiState.roles = roles;
+      apiState.permissions = permissions;
       apiState.auditEvents = auditEvents;
       apiState.branches = branches;
       apiState.members = members;
@@ -2039,7 +2085,7 @@ async function refreshApiStatus() {
       apiState.complaints = complaints;
       apiState.approvalWorkflows = approvalWorkflows;
       apiState.approvalDecisions = approvalDecisions;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialProducts.length} product(s), ${financialAccounts.length} account(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), ${approvalWorkflows.length} workflow(s), ${approvalDecisions.length} decision(s), and ${auditEvents.length} audit event(s).`;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${roles.length} role(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialProducts.length} product(s), ${financialAccounts.length} account(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), ${approvalWorkflows.length} workflow(s), ${approvalDecisions.length} decision(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -2271,7 +2317,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -2733,6 +2779,63 @@ function openApprovalDecisionForm() {
       });
       closeModal();
       state.currentView = "approvals";
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+function openRoleForm() {
+  if (!apiState.user) return;
+  const permissions = apiState.permissions || [];
+  openModal("New role", `
+    <div class="form-grid">
+      ${field("Role name", "roleName", "text", "Cashier")}
+      <label class="field full"><span>Permissions</span><select id="rolePermissions" class="select" multiple size="8">${permissions.map((permission) => `<option value="${permission.id}">${permission.id} - ${permission.description || permission.module}</option>`).join("")}</select></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveRole" class="primary-button" type="button">Save role</button>`);
+  document.getElementById("saveRole").addEventListener("click", async () => {
+    try {
+      await apiRequest("/roles", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
+          name: value("roleName"),
+          permissionIds: selectedValues("rolePermissions")
+        })
+      });
+      closeModal();
+      state.currentView = "reports";
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+function openUserRoleAssignmentForm() {
+  if (!apiState.user) return;
+  const users = apiState.users || [];
+  const roles = apiState.roles || [];
+  if (!users.length || !roles.length) {
+    openModal("Assign roles", `<div class="notice error">Users and roles must be loaded before assignment.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    return;
+  }
+  openModal("Assign roles", `
+    <div class="form-grid">
+      <label class="field full"><span>User</span><select id="roleUser" class="select">${users.map((user) => `<option value="${user.id}">${user.fullName} (${user.email})</option>`).join("")}</select></label>
+      <label class="field full"><span>Roles</span><select id="assignedRoles" class="select" multiple size="6">${roles.map((role) => `<option value="${role.id}">${role.name}</option>`).join("")}</select></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveUserRoles" class="primary-button" type="button">Save assignments</button>`);
+  document.getElementById("saveUserRoles").addEventListener("click", async () => {
+    try {
+      await apiRequest(`/users/${value("roleUser")}/roles`, {
+        method: "PUT",
+        body: JSON.stringify({ roleIds: selectedValues("assignedRoles") })
+      });
+      closeModal();
+      state.currentView = "reports";
       await refreshApiStatus();
     } catch (error) {
       document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
@@ -3495,6 +3598,10 @@ function field(label, id, type, val) {
 
 function value(id) {
   return document.getElementById(id).value.trim();
+}
+
+function selectedValues(id) {
+  return Array.from(document.getElementById(id).selectedOptions).map((option) => option.value);
 }
 
 init();

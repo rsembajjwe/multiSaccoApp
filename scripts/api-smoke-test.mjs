@@ -109,6 +109,54 @@ try {
   const invalidProfileEmail = await raw("PATCH", "/tenants/tenant_green/profile", { email: "not-an-email" }, saccoToken);
   assert(invalidProfileEmail.status === 400, "SACCO profile should reject invalid emails");
 
+  const permissions = await api("GET", "/permissions", null, saccoToken);
+  assert(permissions.data.length >= 20, "Permission catalog should include the core modules");
+  assert(permissions.data.some((permission) => permission.id === "roles:create"), "Permission catalog should include role creation");
+
+  const roles = await api("GET", "/roles", null, saccoToken);
+  assert(roles.data.length >= 2, "SACCO admin should list own roles");
+  assert(roles.data.every((role) => role.tenantId === "tenant_green"), "Roles must be tenant-scoped");
+
+  const customRole = await api("POST", "/roles", {
+    name: `Smoke Cashier ${Date.now()}`,
+    permissionIds: ["members:view", "transactions:create", "transactions:create"]
+  }, saccoToken);
+  assert(customRole.data.tenantId === "tenant_green", "Custom role should be created in authenticated tenant");
+  assert(customRole.data.permissionIds.length === 2, "Custom role should deduplicate permissions");
+
+  const duplicateRole = await raw("POST", "/roles", {
+    name: customRole.data.name,
+    permissionIds: ["members:view"]
+  }, saccoToken);
+  assert(duplicateRole.status === 409, "Role names should be unique per tenant");
+
+  const unknownPermissionRole = await raw("POST", "/roles", {
+    name: `Unknown Permission ${Date.now()}`,
+    permissionIds: ["members:view", "unknown:permission"]
+  }, saccoToken);
+  assert(unknownPermissionRole.status === 400, "Roles should reject unknown permissions");
+
+  const crossTenantRole = await raw("POST", "/roles", {
+    tenantId: "tenant_lake",
+    name: "Cross Tenant Role"
+  }, saccoToken);
+  assert(crossTenantRole.status === 403, "SACCO admin should not create another tenant role");
+
+  const initialAssignment = await api("GET", `/users/${user.data.id}/roles`, null, saccoToken);
+  assert(initialAssignment.data.userId === user.data.id, "User role assignment should identify the user");
+
+  const assignedRoles = await api("PUT", `/users/${user.data.id}/roles`, {
+    roleIds: [customRole.data.id, customRole.data.id]
+  }, saccoToken);
+  assert(assignedRoles.data.roleIds.length === 1, "User role assignment should deduplicate roles");
+  assert(assignedRoles.data.roleIds[0] === customRole.data.id, "User role assignment should store the selected role");
+
+  const emptyAssignment = await raw("PUT", `/users/${user.data.id}/roles`, { roleIds: [] }, saccoToken);
+  assert(emptyAssignment.status === 400, "User role assignment should require at least one role");
+
+  const crossTenantAssignment = await raw("PUT", `/users/${user.data.id}/roles`, { roleIds: ["role_platform_admin"] }, saccoToken);
+  assert(crossTenantAssignment.status === 400, "User role assignment should reject cross-tenant roles");
+
   const workflows = await api("GET", "/approval-workflows", null, saccoToken);
   assert(workflows.data.length >= 2, "SACCO admin should list own approval workflows");
   assert(workflows.data.every((workflow) => workflow.tenantId === "tenant_green"), "Approval workflows must be tenant-scoped");

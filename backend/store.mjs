@@ -144,17 +144,52 @@ export const db = {
   ],
   roles: [
     { id: "role_platform_admin", tenantId: "tenant_platform", name: "Super Administrator", protected: true },
-    { id: "role_sacco_admin", tenantId: "tenant_green", name: "SACCO Administrator", protected: true }
+    { id: "role_green_admin", tenantId: "tenant_green", name: "SACCO Administrator", protected: true, createdByUserId: "user_platform_admin" },
+    { id: "role_green_loans_officer", tenantId: "tenant_green", name: "Loans Officer", protected: false, createdByUserId: "user_green_admin" }
   ],
   permissions: [
     { id: "tenants:view", module: "Tenant Management", action: "view", description: "View tenants" },
     { id: "tenants:approve", module: "Tenant Management", action: "approve", description: "Approve or update tenant status" },
     { id: "users:create", module: "Identity", action: "create", description: "Create users" },
+    { id: "users:view", module: "Identity", action: "view", description: "View users" },
+    { id: "roles:view", module: "Identity", action: "view", description: "View roles" },
+    { id: "roles:create", module: "Identity", action: "create", description: "Create roles" },
+    { id: "members:view", module: "Member Management", action: "view", description: "View members" },
+    { id: "members:create", module: "Member Management", action: "create", description: "Create members" },
+    { id: "transactions:view", module: "Finance", action: "view", description: "View transactions" },
+    { id: "transactions:create", module: "Finance", action: "create", description: "Create transactions" },
+    { id: "loans:view", module: "Credit", action: "view", description: "View loans" },
+    { id: "loans:create", module: "Credit", action: "create", description: "Create loan applications" },
+    { id: "loans:approve", module: "Credit", action: "approve", description: "Approve loans" },
+    { id: "loans:disburse", module: "Credit", action: "disburse", description: "Disburse loans" },
+    { id: "expenses:view", module: "Accounting", action: "view", description: "View expenses" },
+    { id: "expenses:create", module: "Accounting", action: "create", description: "Create expenses" },
+    { id: "assets:view", module: "Accounting", action: "view", description: "View assets" },
+    { id: "assets:create", module: "Accounting", action: "create", description: "Create assets" },
+    { id: "subscriptions:view", module: "Subscriptions", action: "view", description: "View subscriptions" },
+    { id: "subscriptions:pay", module: "Subscriptions", action: "pay", description: "Record subscription payments" },
+    { id: "governance:view", module: "Governance", action: "view", description: "View governance records" },
+    { id: "governance:create", module: "Governance", action: "create", description: "Create governance records" },
+    { id: "complaints:view", module: "Complaints", action: "view", description: "View complaints" },
+    { id: "complaints:update", module: "Complaints", action: "update", description: "Update complaints" },
+    { id: "reports:view", module: "Reports", action: "view", description: "View reports" },
     { id: "audit:view", module: "Audit", action: "view", description: "View audit events" }
   ],
   userRoles: [
     { tenantId: "tenant_platform", userId: "user_platform_admin", roleId: "role_platform_admin" },
-    { tenantId: "tenant_green", userId: "user_green_admin", roleId: "role_sacco_admin" }
+    { tenantId: "tenant_green", userId: "user_green_admin", roleId: "role_green_admin" }
+  ],
+  rolePermissions: [
+    { roleId: "role_platform_admin", permissionId: "tenants:view" },
+    { roleId: "role_platform_admin", permissionId: "tenants:approve" },
+    { roleId: "role_platform_admin", permissionId: "users:create" },
+    { roleId: "role_platform_admin", permissionId: "roles:create" },
+    { roleId: "role_green_admin", permissionId: "members:view" },
+    { roleId: "role_green_admin", permissionId: "members:create" },
+    { roleId: "role_green_admin", permissionId: "transactions:create" },
+    { roleId: "role_green_admin", permissionId: "reports:view" },
+    { roleId: "role_green_loans_officer", permissionId: "loans:view" },
+    { roleId: "role_green_loans_officer", permissionId: "loans:approve" }
   ],
   approvalWorkflows: [
     {
