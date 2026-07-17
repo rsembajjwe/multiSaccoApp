@@ -45,6 +45,8 @@ Java-backed routes currently implemented:
 - `POST /api/v1/member-auth/logout`
 - `GET /api/v1/financial-products`
 - `POST /api/v1/financial-products`
+- `GET /api/v1/financial-accounts`
+- `POST /api/v1/financial-accounts`
 - `GET /api/v1/financial-transactions`
 - `POST /api/v1/financial-transactions`
 - `GET /api/v1/financial-transactions/:id/receipt`
@@ -163,6 +165,8 @@ All JSON responses should follow one of these shapes:
 | POST | `/members/:id/documents` | Upload/register member document metadata. | SACCO staff |
 | GET | `/financial-products` | List tenant savings, shares, and welfare product definitions. | Required |
 | POST | `/financial-products` | Create a tenant financial product definition. | SACCO staff |
+| GET | `/financial-accounts` | List member accounts linked to savings, shares, and welfare products. | Required |
+| POST | `/financial-accounts` | Open a financial account for an active member and product. | SACCO staff |
 | GET | `/financial-transactions` | List tenant financial transactions. | Required |
 | POST | `/financial-transactions` | Submit a pending financial transaction. | SACCO staff |
 | GET | `/financial-transactions/:id/receipt` | Generate a receipt projection for a posted financial transaction. | Required |
@@ -245,6 +249,8 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/members/:id/documents`
 - `GET /api/v1/financial-products`
 - `POST /api/v1/financial-products`
+- `GET /api/v1/financial-accounts`
+- `POST /api/v1/financial-accounts`
 - `GET /api/v1/financial-transactions`
 - `POST /api/v1/financial-transactions`
 - `PATCH /api/v1/financial-transactions/:id/status`

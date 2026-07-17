@@ -185,6 +185,23 @@ Subscription billing rule: SACCOs with up to 250 members pay UGX 5,000 per membe
 | created_at | timestamp | Creation timestamp. |
 | updated_at | timestamp | Last update timestamp. |
 
+### financial_accounts
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | uuid/string | Primary key. |
+| tenant_id | uuid/string | SACCO tenant reference. |
+| member_id | uuid/string | Member who owns the account. |
+| product_id | uuid/string | Savings, shares, or welfare product. |
+| account_type | enum | `savings`, `shares`, `welfare`; must match the product type. |
+| account_no | text | Unique per tenant. |
+| status | enum | `active`, reserved for future dormancy/closure controls. |
+| opened_by_user_id | uuid/string | User who opened the account. |
+| opened_at | timestamp | Account opening timestamp. |
+| updated_at | timestamp | Last update timestamp. |
+
+Financial account control rule: only active members can open accounts, each member can have only one account per product, and the account type must match the selected product.
+
 ### financial_transactions
 
 | Field | Type | Notes |
