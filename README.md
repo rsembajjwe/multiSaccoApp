@@ -228,6 +228,9 @@ This is now the first build foundation. A production build should add:
 - [API route map](docs/api-route-map.md)
 - [Deployment guide](docs/deployment.md)
 - [Monitoring guide](docs/monitoring.md)
+- [User manual](docs/user-manual.md)
+- [Administrator manual](docs/administrator-manual.md)
+- [Technical manual](docs/technical-manual.md)
 - [Android member app foundation](mobile/member_app/README.md)
 
 ## Seed API accounts

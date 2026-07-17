@@ -71,6 +71,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java backend deployment path includes a PostgreSQL production profile, Dockerfile, Docker Compose stack, environment template, and deployment/backup guide.
 - PostgreSQL backup and restore scripts provide repeatable Docker Compose database backup operations with ignored local backup artifacts and explicit restore confirmation.
 - Java operations status endpoint exposes authenticated platform/tenant monitoring counts, database reachability, and alert indicators with tenant isolation.
+- User, administrator, and technical manuals document staff/member workflows, platform administration, operational monitoring, backup/restore, validation, release, and troubleshooting procedures.
 - Java audit events are tenant-scoped and capture manual entries plus automatic user-creation events.
 - Java role and permission endpoints list the platform permission catalog and create tenant-scoped custom roles with validated permission IDs.
 - Java user role assignment lists and replaces staff roles with tenant isolation, role-tenant validation, and audit logging.
