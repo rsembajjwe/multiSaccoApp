@@ -66,16 +66,18 @@ Flyway runs automatically on backend startup. Do not edit an applied migration i
 Create a database backup:
 
 ```powershell
-docker compose exec postgres pg_dump -U $env:POSTGRES_USER -d $env:POSTGRES_DB -Fc -f /tmp/sacco_app.dump
-docker compose cp postgres:/tmp/sacco_app.dump .\sacco_app.dump
+npm.cmd run backup:db
 ```
 
-Restore into a clean database:
+By default, backups are written to `backups/` and are ignored by git.
+
+Restore from a backup:
 
 ```powershell
-docker compose cp .\sacco_app.dump postgres:/tmp/sacco_app.dump
-docker compose exec postgres pg_restore -U $env:POSTGRES_USER -d $env:POSTGRES_DB --clean --if-exists /tmp/sacco_app.dump
+npm.cmd run restore:db -- -BackupPath .\backups\sacco_app-YYYYMMDD-HHMMSS.dump -ConfirmRestore
 ```
+
+Restore is destructive because it runs `pg_restore --clean --if-exists`. Confirm the target environment and backup path before using `-ConfirmRestore`.
 
 ## Stop
 

@@ -69,6 +69,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java MFA endpoints let privileged staff enable MFA, require a one-time challenge before issuing bearer sessions, hash challenge codes at rest, and reject invalid or reused challenges.
 - Java user administration enforces tenant-scoped listing and blocks SACCO admins from creating users in another tenant.
 - Java backend deployment path includes a PostgreSQL production profile, Dockerfile, Docker Compose stack, environment template, and deployment/backup guide.
+- PostgreSQL backup and restore scripts provide repeatable Docker Compose database backup operations with ignored local backup artifacts and explicit restore confirmation.
 - Java operations status endpoint exposes authenticated platform/tenant monitoring counts, database reachability, and alert indicators with tenant isolation.
 - Java audit events are tenant-scoped and capture manual entries plus automatic user-creation events.
 - Java role and permission endpoints list the platform permission catalog and create tenant-scoped custom roles with validated permission IDs.

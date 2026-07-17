@@ -9,6 +9,8 @@
     "test:api": "node scripts/api-smoke-test.mjs",
     "java:test": "cd backend-java && mvnw.cmd test",
     "java:start": "cd backend-java && mvnw.cmd spring-boot:run",
-    "deploy:backend": "docker compose up --build"
+    "deploy:backend": "docker compose up --build",
+    "backup:db": "powershell -ExecutionPolicy Bypass -File scripts/backup-postgres.ps1",
+    "restore:db": "powershell -ExecutionPolicy Bypass -File scripts/restore-postgres.ps1"
   }
 }
