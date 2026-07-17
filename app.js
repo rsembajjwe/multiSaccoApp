@@ -680,8 +680,35 @@ function renderRegistrations() {
     : state.tenants.filter((tenant) => tenant.id !== "platform");
   const source = useApiTenants() ? "API-backed" : "Local demo";
   const canCreateOnApi = apiState.user?.tenantId === "tenant_platform";
+  const approvedTenants = tenants.filter((tenant) => tenant.status === "Approved").length;
+  const pendingTenants = tenants.filter((tenant) => tenant.status === "Pending Review").length;
+  const suspendedTenants = tenants.filter((tenant) => tenant.status === "Suspended").length;
+  const expiringTenants = tenants.filter((tenant) => daysTo(tenant.licenseExpiry) <= 60).length;
+  const averageOnboarding = tenants.length ? Math.round(tenants.reduce((sum, tenant) => sum + (tenant.onboarding || 0), 0) / tenants.length) : 0;
+  const packageCoverage = new Set(tenants.map((tenant) => tenant.packageId).filter(Boolean)).size;
+  const districtCoverage = new Set(tenants.map((tenant) => tenant.district).filter(Boolean)).size;
   return `
     <section class="card">
+      <div class="toolbar">
+        <div>
+          <h2>SACCO onboarding control center</h2>
+          <p class="eyebrow">${source} &middot; applications, licence readiness, packages and tenant activation</p>
+        </div>
+        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
+      </div>
+      <div class="grid metrics">
+        ${metric("Applications", tenants.length, `${pendingTenants} pending review`)}
+        ${metric("Approved", approvedTenants, `${suspendedTenants} suspended`)}
+        ${metric("Licence watch", expiringTenants, "expiring within 60 days")}
+        ${metric("Onboarding", `${averageOnboarding}%`, `${districtCoverage} district(s) covered`)}
+      </div>
+      <div class="grid three" style="margin-top:16px">
+        ${metric("Package coverage", packageCoverage, "subscription tiers in use")}
+        ${metric("Backend source", useApiTenants() ? "Live" : "Demo", canCreateOnApi ? "platform approvals enabled" : "tenant-limited view")}
+        ${metric("Activation gate", pendingTenants === 0 ? "Clear" : "Review", pendingTenants === 0 ? "no pending applications" : "applications need decision")}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>SACCO applications</h2>
@@ -701,10 +728,10 @@ function renderRegistrations() {
                 <td>${tenant.licenseExpiry}<br><small>${daysTo(tenant.licenseExpiry)} days remaining</small></td>
                 <td>${packageName(tenant.packageId)}</td>
                 <td><span class="status ${statusClass(tenant.status)}">${tenant.status}</span></td>
-                <td>
+                <td><div class="filters">
                   ${apiState.user ? `<button class="secondary-button" data-tenant-profile="${tenant.id}" type="button">Profile</button>` : ""}
                   ${apiState.user && !canCreateOnApi ? "" : `<button class="secondary-button" data-approve-tenant="${tenant.id}" type="button">Approve</button>`}
-                </td>
+                </div></td>
               </tr>
             `).join("") || `<tr><td colspan="6">No SACCO applications found.</td></tr>`}
           </tbody>

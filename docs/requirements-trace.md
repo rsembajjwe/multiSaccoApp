@@ -24,6 +24,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Loans screen shows a backend-backed control center with portfolio value, outstanding balance, ready-to-disburse loans, repayments, guarantor-pending counts, DSR watch indicators, and grouped lifecycle actions.
 - Approvals screen shows a backend-backed control center for pending queue size, pending value, workflow coverage, decision history, corrections, checker-clear status, and grouped approve/reject actions.
 - Reports screen shows a backend-backed control center for ledger integrity, reconciliation exceptions, compliance status, governance items, accounting periods, operations exceptions, and operating assets.
+- SACCO Registration screen shows a backend-backed onboarding control center for applications, approvals, licence watch, onboarding progress, package coverage, activation gates, and grouped profile/approval actions.
 - Seeded API login/logout from the web UI.
 - Server-side tenants, users, and audit events fetched through `/api/v1`.
 - Server-side branch and member onboarding endpoints with tenant isolation.

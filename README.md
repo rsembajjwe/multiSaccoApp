@@ -157,6 +157,8 @@ After API login, the Members screen reads backend branches and members and posts
 
 After Platform Admin API login, the SACCO Registration screen reads backend tenants and posts new SACCO applications to `/api/v1/tenants`.
 
+SACCO Registration also shows a backend-backed onboarding control center for applications, approvals, licence watch, onboarding progress, package coverage, and activation gates.
+
 After Platform Admin API login, the Subscriptions screen reads backend packages/invoices and records subscription payments through `/api/v1/subscriptions/:id/payments`.
 
 After SACCO API login, the Transactions screen reads backend financial postings and submits new pending transactions to `/api/v1/financial-transactions`.
