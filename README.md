@@ -161,6 +161,8 @@ SACCO Registration also shows a backend-backed onboarding control center for app
 
 After Platform Admin API login, the Subscriptions screen reads backend packages/invoices and records subscription payments through `/api/v1/subscriptions/:id/payments`.
 
+Subscriptions also shows a billing control center for invoice totals, paid/outstanding balances, active subscriptions, billable members, per-member tier usage, fixed-tier usage, and payment access.
+
 After SACCO API login, the Transactions screen reads backend financial postings and submits new pending transactions to `/api/v1/financial-transactions`.
 
 Transactions also shows a backend-backed posting control center with posted, pending, reversed, reversible, rejected, and statement-ready totals plus direct receipt, statement, and reversal actions.

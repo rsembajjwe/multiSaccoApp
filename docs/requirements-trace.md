@@ -25,6 +25,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Approvals screen shows a backend-backed control center for pending queue size, pending value, workflow coverage, decision history, corrections, checker-clear status, and grouped approve/reject actions.
 - Reports screen shows a backend-backed control center for ledger integrity, reconciliation exceptions, compliance status, governance items, accounting periods, operations exceptions, and operating assets.
 - SACCO Registration screen shows a backend-backed onboarding control center for applications, approvals, licence watch, onboarding progress, package coverage, activation gates, and grouped profile/approval actions.
+- Subscriptions screen shows a billing control center for invoice totals, paid/outstanding balances, active subscriptions, billable members, per-member tier usage, fixed-tier usage, and payment access.
 - Seeded API login/logout from the web UI.
 - Server-side tenants, users, and audit events fetched through `/api/v1`.
 - Server-side branch and member onboarding endpoints with tenant isolation.

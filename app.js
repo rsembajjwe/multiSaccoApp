@@ -746,8 +746,37 @@ function renderSubscriptions() {
   const subscriptions = useApiSubscriptions() ? apiState.subscriptions.map(apiSubscriptionToRow) : state.subscriptions;
   const canRecordApiPayment = apiState.user?.tenantId === "tenant_platform";
   const source = useApiSubscriptions() ? "API-backed" : "Local demo";
+  const billingRows = subscriptions.map((subscription) => subscriptionBillingDetails(subscription));
+  const invoiceTotal = billingRows.reduce((sum, billing) => sum + billing.amount, 0);
+  const paidTotal = billingRows.reduce((sum, billing) => sum + billing.paid, 0);
+  const outstandingTotal = Math.max(0, invoiceTotal - paidTotal);
+  const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === "Active").length;
+  const pendingSubscriptions = subscriptions.filter((subscription) => subscription.status !== "Active").length;
+  const perMemberSubscriptions = billingRows.filter((billing) => billing.tierId === "per_member").length;
+  const fixedTierSubscriptions = billingRows.length - perMemberSubscriptions;
+  const billableMembers = billingRows.reduce((sum, billing) => sum + billing.billableMembers, 0);
   return `
-    <div class="grid three">
+    <section class="card">
+      <div class="toolbar">
+        <div>
+          <h2>Billing control center</h2>
+          <p class="eyebrow">${source} &middot; invoices, payments, member counts and annual subscription tiers</p>
+        </div>
+        ${useApiSubscriptions() && !canRecordApiPayment ? "" : `<button class="primary-button" data-action="recordSubscriptionPayment" type="button">Record payment</button>`}
+      </div>
+      <div class="grid metrics">
+        ${metric("Invoice total", money.format(invoiceTotal), `${subscriptions.length} subscription invoice(s)`)}
+        ${metric("Paid", money.format(paidTotal), `${money.format(outstandingTotal)} outstanding`)}
+        ${metric("Active", activeSubscriptions, `${pendingSubscriptions} pending or inactive`)}
+        ${metric("Billable members", billableMembers, `${MINIMUM_BILLABLE_MEMBERS} member minimum applies`)}
+      </div>
+      <div class="grid three" style="margin-top:16px">
+        ${metric("Per-member tier", perMemberSubscriptions, `${money.format(SUBSCRIPTION_UNIT_PRICE)} per member up to 250`)}
+        ${metric("Fixed tiers", fixedTierSubscriptions, "251-500, 501-2,500, 2,501-10,000")}
+        ${metric("Payment access", canRecordApiPayment ? "Platform" : (apiState.user ? "View only" : "Demo"), canRecordApiPayment ? "backend payment posting enabled" : (apiState.user ? "tenant subscription view" : "local payment demo"))}
+      </div>
+    </section>
+    <div class="grid three" style="margin-top:16px">
       <section class="card">
         <h2>100-250 members</h2>
         <p><strong>${money.format(SUBSCRIPTION_UNIT_PRICE)}</strong> per member / year</p>
@@ -777,7 +806,7 @@ function renderSubscriptions() {
           <h2>Invoices and payments</h2>
           <p class="eyebrow">${source} · Subscription lifecycle</p>
         </div>
-        ${useApiSubscriptions() && !canRecordApiPayment ? "" : `<button class="primary-button" data-action="recordSubscriptionPayment" type="button">Record payment</button>`}
+        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
       </div>
       ${useApiSubscriptions() ? `<div class="notice">${canRecordApiPayment ? "Platform Admin is managing subscription payments from the backend." : "Your API account can view only its own SACCO subscription."}</div>` : `<div class="notice">Login as Platform Admin to record subscription payments through the backend.</div>`}
       <div class="table-wrap">
