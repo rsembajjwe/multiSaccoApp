@@ -74,7 +74,7 @@ http://127.0.0.1:8080/actuator/health
 npm.cmd run check
 ```
 
-This checks the JavaScript syntax for the app and local server.
+This checks the JavaScript syntax for the app and local server, validates mobile contracts, and runs the Java backend tests. GitHub Actions runs this same check on pushes and pull requests to `main`.
 
 ```powershell
 npm.cmd run java:test

@@ -73,6 +73,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java operations status endpoint exposes authenticated platform/tenant monitoring counts, database reachability, and alert indicators with tenant isolation.
 - User, administrator, and technical manuals document staff/member workflows, platform administration, operational monitoring, backup/restore, validation, release, and troubleshooting procedures.
 - Load-test script verifies Java health and authenticated operations endpoints with configurable request count, concurrency, and p95 latency target.
+- GitHub Actions CI runs JavaScript syntax, mobile contract, and Java backend tests on pushes and pull requests to `main`.
 - Java audit events are tenant-scoped and capture manual entries plus automatic user-creation events.
 - Java role and permission endpoints list the platform permission catalog and create tenant-scoped custom roles with validated permission IDs.
 - Java user role assignment lists and replaces staff roles with tenant isolation, role-tenant validation, and audit logging.
