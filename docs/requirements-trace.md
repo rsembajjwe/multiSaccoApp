@@ -68,6 +68,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java password reset endpoints issue hashed, expiring reset tokens, rotate staff passwords, mark tokens used, revoke active sessions, and audit reset activity.
 - Java MFA endpoints let privileged staff enable MFA, require a one-time challenge before issuing bearer sessions, hash challenge codes at rest, and reject invalid or reused challenges.
 - Java user administration enforces tenant-scoped listing and blocks SACCO admins from creating users in another tenant.
+- Java backend deployment path includes a PostgreSQL production profile, Dockerfile, Docker Compose stack, environment template, and deployment/backup guide.
 - Java audit events are tenant-scoped and capture manual entries plus automatic user-creation events.
 - Java role and permission endpoints list the platform permission catalog and create tenant-scoped custom roles with validated permission IDs.
 - Java user role assignment lists and replaces staff roles with tenant isolation, role-tenant validation, and audit logging.

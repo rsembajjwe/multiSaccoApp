@@ -55,6 +55,19 @@ If port `8080` is already used locally, run from `backend-java` with:
 .\mvnw.cmd spring-boot:run -Dspring-boot.run.arguments=--server.port=18080
 ```
 
+Run the Java backend with PostgreSQL through Docker Compose:
+
+```powershell
+Copy-Item deploy\backend.env.example .env
+npm.cmd run deploy:backend
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8080/actuator/health
+```
+
 ## Developer checks
 
 ```powershell
@@ -213,6 +226,7 @@ This is now the first build foundation. A production build should add:
 - [Requirements trace](docs/requirements-trace.md)
 - [Data model](docs/data-model.md)
 - [API route map](docs/api-route-map.md)
+- [Deployment guide](docs/deployment.md)
 - [Android member app foundation](mobile/member_app/README.md)
 
 ## Seed API accounts
