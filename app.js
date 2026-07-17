@@ -697,7 +697,7 @@ function renderDashboard() {
       <div class="toolbar">
         <div>
           <h2>Android member app</h2>
-          <p class="eyebrow">Flutter foundation · mobile/member_app</p>
+          <p class="eyebrow">Flutter foundation &middot; mobile/member_app</p>
         </div>
         <button class="secondary-button" data-view-jump="memberPortal" type="button">Open member portal</button>
       </div>
@@ -789,7 +789,7 @@ function renderRegistrations() {
       <div class="toolbar">
         <div>
           <h2>SACCO applications</h2>
-          <p class="eyebrow">${source} · Self-registration, compliance checks and approval history</p>
+          <p class="eyebrow">${source} &middot; Self-registration, compliance checks and approval history</p>
         </div>
         ${apiState.user && !canCreateOnApi ? "" : `<button class="primary-button" data-action="newTenant" type="button">New SACCO application</button>`}
       </div>
@@ -800,7 +800,7 @@ function renderRegistrations() {
           <tbody>
             ${tenants.map((tenant) => `
               <tr>
-                <td><strong>${tenant.name}</strong><br><span class="pill">${tenant.registrationNo}${tenant.source ? ` · ${tenant.source}` : ""}</span></td>
+                <td><strong>${tenant.name}</strong><br><span class="pill">${tenant.registrationNo}${tenant.source ? ` &middot; ${tenant.source}` : ""}</span></td>
                 <td>${tenant.district}</td>
                 <td>${tenant.licenseExpiry}<br><small>${daysTo(tenant.licenseExpiry)} days remaining</small></td>
                 <td>${packageName(tenant.packageId)}</td>
@@ -881,7 +881,7 @@ function renderSubscriptions() {
       <div class="toolbar">
         <div>
           <h2>Invoices and payments</h2>
-          <p class="eyebrow">${source} · Subscription lifecycle</p>
+          <p class="eyebrow">${source} &middot; Subscription lifecycle</p>
         </div>
         ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
       </div>
@@ -972,7 +972,7 @@ function renderMembers() {
       <div class="toolbar">
         <div>
           <h2>Member register</h2>
-          <p class="eyebrow">${source} · KYC, status, balances and branch access</p>
+          <p class="eyebrow">${source} &middot; KYC, status, balances and branch access</p>
         </div>
         <div class="filters">
           <input class="input" id="memberSearch" placeholder="Search members">
@@ -1014,9 +1014,29 @@ function renderTransactions() {
   const pendingClaims = welfareClaims.filter((claim) => claim.status === "Submitted").length;
   const approvedClaims = welfareClaims.filter((claim) => claim.status === "Approved").length;
   const paidClaimTotal = welfareClaims.filter((claim) => claim.status === "Paid").reduce((sum, claim) => sum + claim.amount, 0);
+  const accountCoverage = new Set(accounts.map((item) => item.memberId).filter(Boolean)).size;
   return `
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Transactions data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; postings, accounts and welfare</p>
+        </div>
+        <div class="filters">
+          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
+          <button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>
+        </div>
+      </div>
+      ${apiSyncNotice("Transactions screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", source)}
+        ${miniFact("Last sync", apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed")}
+        ${miniFact("Products", useApiTransactions() ? products.length : "Demo")}
+        ${miniFact("Account coverage", useApiTransactions() ? accountCoverage : distinctMembers)}
+      </div>
+    </section>
     ${apiState.user ? `
-      <section class="card">
+      <section class="card" style="margin-top:16px">
         <div class="toolbar">
           <div>
             <h2>Products and accounts</h2>
@@ -1030,7 +1050,7 @@ function renderTransactions() {
         <div class="grid metrics">
           ${metric("Products", products.length, `${products.filter((item) => item.status === "active").length} active`)}
           ${metric("Accounts", accounts.length, `${accounts.filter((item) => item.status === "active").length} active`)}
-          ${metric("Members covered", new Set(accounts.map((item) => item.memberId)).size, "with financial accounts")}
+          ${metric("Members covered", accountCoverage, "with financial accounts")}
         </div>
         <div class="grid two" style="margin-top:16px">
           ${financialProductTable(products)}
@@ -1038,7 +1058,7 @@ function renderTransactions() {
         </div>
       </section>
     ` : ""}
-    <section class="card" style="margin-top:${apiState.user ? "16px" : "0"}">
+    <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Posting control center</h2>
@@ -1062,12 +1082,12 @@ function renderTransactions() {
       <div class="toolbar">
         <div>
           <h2>Financial postings</h2>
-          <p class="eyebrow">${source} · Fixed precision amounts, references, maker-checker and reversals</p>
+          <p class="eyebrow">${source} &middot; Fixed precision amounts, references, maker-checker and reversals</p>
         </div>
-        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
+        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
         <button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>
       </div>
-      ${apiState.user ? `<div class="notice">Transactions shown from the backend for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}.</div>` : `<div class="notice">Login to the API to post server-side financial transactions. The table below is local demo data.</div>`}
+      ${apiSyncNotice("Financial postings table")}
       <div class="table-wrap">
         <table>
           <thead><tr><th>Reference</th><th>Member</th><th>Type</th><th>Channel</th><th>Amount</th><th>Maker</th><th>Checker</th><th>Status</th><th>Action</th></tr></thead>
@@ -1097,7 +1117,7 @@ function renderTransactions() {
             <p class="eyebrow">API-backed &middot; member support, approvals, payouts and welfare fund journals</p>
           </div>
           <div class="filters">
-            <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+            <button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>
             <button class="primary-button" data-action="newWelfareClaim" type="button">New claim</button>
           </div>
         </div>
@@ -1213,8 +1233,28 @@ function renderLoans() {
   const pendingGuarantors = loans.reduce((sum, loan) => sum + (loan.pendingGuarantors || 0), 0);
   const highDsrLoans = loans.filter((loan) => Number(loan.dsr || 0) >= 40).length;
   const averageDsr = loans.length ? Math.round(loans.reduce((sum, loan) => sum + Number(loan.dsr || 0), 0) / loans.length) : 0;
+  const repaymentCoverage = loans.filter((loan) => Number(loan.repaymentTotal || 0) > 0).length;
   return `
-    <section class="card">
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Loans data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; portfolio, guarantors and repayments</p>
+        </div>
+        <div class="filters">
+          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
+          <button class="primary-button" data-action="newLoan" type="button">New loan application</button>
+        </div>
+      </div>
+      ${apiSyncNotice("Loans screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", source)}
+        ${miniFact("Last sync", apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed")}
+        ${miniFact("Repayment coverage", repaymentCoverage)}
+        ${miniFact("Average DSR", `${averageDsr}%`)}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Loan control center</h2>
@@ -1238,12 +1278,12 @@ function renderLoans() {
       <div class="toolbar">
         <div>
           <h2>Loan files</h2>
-          <p class="eyebrow">${source} · Applications, appraisal, guarantors and portfolio risk</p>
+          <p class="eyebrow">${source} &middot; Applications, appraisal, guarantors and portfolio risk</p>
         </div>
-        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
+        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
         <button class="primary-button" data-action="newLoan" type="button">New loan application</button>
       </div>
-      ${apiState.user ? `<div class="notice">Loan files shown from the backend for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}.</div>` : `<div class="notice">Login to the API to create server-side loan applications. The table below is local demo data.</div>`}
+      ${apiSyncNotice("Loan files list")}
       <div class="table-wrap">
         <table>
           <thead><tr><th>Applicant</th><th>Product</th><th>Amount</th><th>Balance</th><th>Stage</th><th>Guarantors</th><th>DSR</th><th>Status</th><th>Action</th></tr></thead>
@@ -1353,7 +1393,7 @@ function renderApprovals() {
       <div class="toolbar">
         <div>
           <h2>Approval queue</h2>
-          <p class="eyebrow">${source} · Committee, board and maker-checker decisions</p>
+          <p class="eyebrow">${source} &middot; Committee, board and maker-checker decisions</p>
         </div>
         ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>` : ""}
       </div>
@@ -1363,7 +1403,7 @@ function renderApprovals() {
           <li>
             <span>
               <strong>${approval.title}</strong><br>
-              <small>${approval.type} requested by ${approval.requester} · risk ${approval.risk}${approval.source ? ` · ${approval.source}` : ""}</small>
+              <small>${approval.type} requested by ${approval.requester} &middot; risk ${approval.risk}${approval.source ? ` &middot; ${approval.source}` : ""}</small>
             </span>
             <span class="filters">
               <button class="secondary-button" data-reject="${approval.id}" type="button">Reject</button>
@@ -1646,7 +1686,7 @@ function renderApiReports() {
       <div class="toolbar">
         <div>
           <h2>Accounting ledger</h2>
-          <p class="eyebrow">API-backed · Balanced double-entry journals for ${tenantLabel}</p>
+          <p class="eyebrow">API-backed &middot; Balanced double-entry journals for ${tenantLabel}</p>
         </div>
         <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
       </div>
@@ -1996,7 +2036,7 @@ function governanceMeetingList(meetings) {
           <li>
             <span>
               <strong>${meeting.title}</strong><br>
-              <small>${titleCase(meeting.meetingType.replace(/_/g, " "))} · ${meeting.scheduledAt?.slice(0, 10) || ""} · ${titleCase(meeting.status)}</small>
+              <small>${titleCase(meeting.meetingType.replace(/_/g, " "))} &middot; ${meeting.scheduledAt?.slice(0, 10) || ""} &middot; ${titleCase(meeting.status)}</small>
               ${(meeting.resolutions || []).map((resolution) => `<br><small>${resolution.status === "closed" ? "Closed" : "Open"} resolution: ${resolution.title}</small>`).join("")}
             </span>
             <span><span class="status ${statusClass(meeting.status)}">${meeting.openResolutions || 0} open</span></span>
@@ -2016,7 +2056,7 @@ function complaintList(complaints) {
           <li>
             <span>
               <strong>${complaint.subject}</strong><br>
-              <small>${titleCase(complaint.category)} · ${titleCase(complaint.priority)} priority${complaint.member ? ` · ${complaint.member.fullName}` : ""}</small>
+              <small>${titleCase(complaint.category)} &middot; ${titleCase(complaint.priority)} priority${complaint.member ? ` &middot; ${complaint.member.fullName}` : ""}</small>
             </span>
             <span><span class="status ${statusClass(complaint.status)}">${titleCase(complaint.status.replace(/_/g, " "))}</span></span>
           </li>
@@ -2081,7 +2121,7 @@ function journalTable(entries) {
             <tr>
               <td>${entry.postedAt?.slice(0, 10) || ""}</td>
               <td>${entry.reference}<br><small>${titleCase(entry.sourceType.replace(/_/g, " "))}</small></td>
-              <td>${entry.description}<br><small>${entry.lines.map((line) => `${line.accountCode} ${line.accountName}: Dr ${money.format(line.debit)} / Cr ${money.format(line.credit)}`).join(" · ")}</small></td>
+              <td>${entry.description}<br><small>${entry.lines.map((line) => `${line.accountCode} ${line.accountName}: Dr ${money.format(line.debit)} / Cr ${money.format(line.credit)}`).join(" &middot; ")}</small></td>
               <td>${money.format(entry.debitTotal)}</td>
               <td>${money.format(entry.creditTotal)}</td>
               <td><span class="status ${entry.isBalanced ? "active" : "pending"}">${entry.isBalanced ? "Balanced" : "Review"}</span></td>
@@ -2109,7 +2149,7 @@ function renderMemberPortal() {
       <div class="toolbar">
         <div>
           <h2>${member.fullName}</h2>
-          <p class="eyebrow">${member.membershipNo} · ${memberApiState.tenant?.name || tenantName(member.tenantId)}</p>
+          <p class="eyebrow">${member.membershipNo} &middot; ${memberApiState.tenant?.name || tenantName(member.tenantId)}</p>
         </div>
         <button class="secondary-button" data-action="memberLogout" type="button">Logout member</button>
       </div>
@@ -2178,7 +2218,7 @@ function renderMemberPortal() {
         <ul class="list" style="margin-top:16px">
           ${memberDrafts.map((draft) => `
             <li>
-              <span><strong>${draft.subject}</strong><br><small>${titleCase(draft.category)} · saved ${draft.createdAt.slice(0, 16).replace("T", " ")}</small></span>
+              <span><strong>${draft.subject}</strong><br><small>${titleCase(draft.category)} &middot; saved ${draft.createdAt.slice(0, 16).replace("T", " ")}</small></span>
               <span class="status pending">Draft</span>
             </li>
           `).join("") || `<li><span>No offline drafts saved.</span><span class="status active">Synced</span></li>`}
@@ -2191,7 +2231,7 @@ function renderMemberPortal() {
             <li>
               <span>
                 <strong>${request.loan?.product || "Loan request"} for ${request.borrower?.fullName || "Borrower"}</strong><br>
-                <small>${money.format(request.guaranteedAmount)} · ${titleCase(request.status.replace(/_/g, " "))} · capacity ${money.format(request.capacity || 0)}</small>
+                <small>${money.format(request.guaranteedAmount)} &middot; ${titleCase(request.status.replace(/_/g, " "))} &middot; capacity ${money.format(request.capacity || 0)}</small>
               </span>
               <span class="filters">
                 ${request.status === "pending" ? `<button class="secondary-button" data-guarantor-reject="${request.id}" type="button">Reject</button><button class="primary-button" data-guarantor-accept="${request.id}" type="button">Accept</button>` : `<span class="status ${statusClass(request.status)}">${titleCase(request.status)}</span>`}
@@ -2359,7 +2399,7 @@ function bar(label, value, max) {
 function memberRow(member) {
   return `
     <tr>
-      <td><strong>${member.name}</strong><br><small>${member.no} · ${member.phone}</small></td>
+      <td><strong>${member.name}</strong><br><small>${member.no} &middot; ${member.phone}</small></td>
       <td>${member.type}</td>
       <td>${member.kyc}</td>
       <td>${money.format(member.savings)}</td>
@@ -2975,7 +3015,7 @@ memberRow = function renderMemberRow(member) {
     : "";
   return `
     <tr>
-      <td><strong>${member.name}</strong><br><small>${member.no} · ${member.phone}${member.source ? ` · ${member.source}` : ""}</small></td>
+      <td><strong>${member.name}</strong><br><small>${member.no} &middot; ${member.phone}${member.source ? ` &middot; ${member.source}` : ""}</small></td>
       <td>${member.type}</td>
       <td>${member.branchName || branchName(member.branchId)}</td>
       <td>${member.kyc}</td>
@@ -3942,7 +3982,7 @@ function openGuarantorRequestForm(loanId) {
   }
   openModal("Request guarantor", `
     <div class="form-grid">
-      <label class="field full"><span>Guarantor</span><select id="guarantorMember" class="select">${candidates.map((member) => `<option value="${member.id}">${member.name} · ${member.no}</option>`).join("")}</select></label>
+      <label class="field full"><span>Guarantor</span><select id="guarantorMember" class="select">${candidates.map((member) => `<option value="${member.id}">${member.name} &middot; ${member.no}</option>`).join("")}</select></label>
       ${field("Guaranteed amount", "guaranteedAmount", "number", String(Math.ceil(loan.amount / 2)))}
     </div>
   `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveGuarantorRequest" class="primary-button" type="button">Send request</button>`);
@@ -4129,7 +4169,7 @@ function openComplaintForm() {
       ${field("Subject", "complaintSubject", "text", "Member service follow-up")}
       <label class="field"><span>Category</span><select id="complaintCategory" class="select"><option value="statement">Statement</option><option value="loan">Loan</option><option value="savings">Savings</option><option value="shares">Shares</option><option value="service">Service</option><option value="other">Other</option></select></label>
       <label class="field"><span>Priority</span><select id="complaintPriority" class="select"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option></select></label>
-      <label class="field"><span>Member</span><select id="complaintMember" class="select"><option value="">No member linked</option>${activeMembers.map((member) => `<option value="${member.id}">${member.name} · ${member.no}</option>`).join("")}</select></label>
+      <label class="field"><span>Member</span><select id="complaintMember" class="select"><option value="">No member linked</option>${activeMembers.map((member) => `<option value="${member.id}">${member.name} &middot; ${member.no}</option>`).join("")}</select></label>
       <label class="field full"><span>Description</span><textarea id="complaintDescription" class="input" rows="3">Complaint captured for governance follow-up.</textarea></label>
     </div>
   `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveComplaint" class="primary-button" type="button">Save complaint</button>`);

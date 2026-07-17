@@ -442,6 +442,7 @@ Progress:
 - Java backend parity audit added, and `server.mjs` can proxy `/api/v1` to Spring Boot via `JAVA_API_BASE` or `npm.cmd run start:java-api`.
 - Java proxy-mode verification added with a mock upstream API to confirm forwarded `/api/v1` status, headers, authorization, request bodies, and local security headers during `npm.cmd run check`.
 - Dashboard and Members UI integration polish added with Java-backed source panels, refresh/loading/error states, last-sync indicators, backend member balance notices, and improved metric wrapping.
+- Transactions and Loans UI integration polish added with Java-backed source panels, sync freshness, backend error notices, loading-aware refresh controls, account coverage, repayment coverage, and cleaner money-movement headings.
 
 Recommended stack:
 
