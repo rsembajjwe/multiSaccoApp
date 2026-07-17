@@ -16,6 +16,7 @@ import java.security.SecureRandom;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,6 +41,8 @@ class AuthController {
     private final PasswordHasher passwordHasher;
     private final TokenGenerator tokenGenerator;
     private final TenantService tenantService;
+    private final LoginAttemptService loginAttemptService;
+    private final DemoCredentialPolicy demoCredentialPolicy;
 
     AuthController(
             UserRepository userRepository,
@@ -52,7 +55,9 @@ class AuthController {
             AuditService auditService,
             PasswordHasher passwordHasher,
             TokenGenerator tokenGenerator,
-            TenantService tenantService) {
+            TenantService tenantService,
+            LoginAttemptService loginAttemptService,
+            DemoCredentialPolicy demoCredentialPolicy) {
         this.userRepository = userRepository;
         this.authSessionRepository = authSessionRepository;
         this.passwordResetRequestRepository = passwordResetRequestRepository;
@@ -64,20 +69,32 @@ class AuthController {
         this.passwordHasher = passwordHasher;
         this.tokenGenerator = tokenGenerator;
         this.tenantService = tenantService;
+        this.loginAttemptService = loginAttemptService;
+        this.demoCredentialPolicy = demoCredentialPolicy;
     }
 
     @PostMapping("/login")
-    ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
-        User user = userRepository.findByEmailIgnoreCase(request.email().trim())
+    ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
+        String email = request.email().trim();
+        String rateLimitKey = "staff:" + servletRequest.getRemoteAddr();
+        if (loginAttemptService.isLimited(rateLimitKey)) return rateLimited(rateLimitKey);
+        if (!demoCredentialPolicy.staffLoginAllowed(email)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "DEMO_LOGIN_DISABLED", "Seeded demo staff accounts are disabled outside the development/demo profile."));
+        }
+
+        User user = userRepository.findByEmailIgnoreCase(email)
                 .filter(candidate -> "active".equals(candidate.getStatus()))
                 .filter(candidate -> passwordHasher.matches(request.password(), candidate.getPasswordSalt(), candidate.getPasswordHash()))
                 .orElse(null);
 
         if (user == null) {
+            loginAttemptService.recordFailure(rateLimitKey);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiErrorResponse.of(401, "AUTH_INVALID", "Invalid email or password."));
         }
 
+        loginAttemptService.clear(rateLimitKey);
         if (user.isMfaEnabled()) {
             String code = mfaCode();
             MfaChallenge challenge = mfaChallengeRepository.save(new MfaChallenge(
@@ -87,7 +104,12 @@ class AuthController {
                     tokenGenerator.hashToken(code),
                     Instant.now().plus(Duration.ofMinutes(5))));
             return ResponseEntity.status(HttpStatus.ACCEPTED)
-                    .body(ApiResponse.of(new MfaRequiredResponse(true, challenge.getId(), "demo_app", code, challenge.getExpiresAt())));
+                    .body(ApiResponse.of(new MfaRequiredResponse(
+                            true,
+                            challenge.getId(),
+                            "demo_app",
+                            demoCredentialPolicy.demoLoginsEnabled() ? code : null,
+                            challenge.getExpiresAt())));
         }
 
         return ResponseEntity.ok(ApiResponse.of(loginResponseFor(user)));
@@ -174,6 +196,12 @@ class AuthController {
         return String.format("%06d", secureRandom.nextInt(1_000_000));
     }
 
+    private ResponseEntity<ApiErrorResponse> rateLimited(String key) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(loginAttemptService.retryAfterSeconds(key)))
+                .body(ApiErrorResponse.of(429, "LOGIN_RATE_LIMITED", "Too many failed login attempts. Try again later."));
+    }
+
     @GetMapping("/me")
     ResponseEntity<?> me(@RequestHeader(name = "Authorization", required = false) String authorization) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
@@ -220,7 +248,8 @@ class AuthController {
                     request.getRemoteAddr());
         }
 
-        return ResponseEntity.ok(ApiResponse.of(new PasswordResetRequestResponse(true, resetToken, resetToken == null ? null : expiresAt)));
+        String responseToken = demoCredentialPolicy.demoLoginsEnabled() ? resetToken : null;
+        return ResponseEntity.ok(ApiResponse.of(new PasswordResetRequestResponse(true, responseToken, responseToken == null ? null : expiresAt)));
     }
 
     @PostMapping("/password-reset/confirm")

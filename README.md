@@ -87,6 +87,19 @@ npm.cmd run check
 This checks the JavaScript syntax for the app and local server, validates mobile contracts, verifies Java proxy-mode forwarding with a mock upstream API, and runs the Java backend tests. GitHub Actions runs this same check on pushes and pull requests to `main`.
 
 ```powershell
+npm.cmd run postgres:check
+```
+
+This starts an isolated Docker Compose stack on PostgreSQL, applies Flyway migrations, smoke-tests login, tenants, members, transactions, loans, reports, and then runs the security hardening checks against the Java API.
+
+```powershell
+npm.cmd run security:check
+npm.cmd run ui:check
+```
+
+`security:check` expects a running API and uses `API_BASE_URL` when set. `ui:check` protects the Java-backed source, loading, error, and last-sync panels across the main screens.
+
+```powershell
 npm.cmd run java:test
 ```
 
@@ -159,6 +172,15 @@ npm.cmd run test:api
 ```
 
 This starts the development server on a test port and verifies the Phase 1 API foundation.
+
+To run the same smoke test against a running Java backend:
+
+```powershell
+$env:API_BASE_URL = "http://127.0.0.1:8080/api/v1"
+$env:SKIP_RATE_LIMIT_TEST = "1"
+npm.cmd run test:api
+Remove-Item Env:\API_BASE_URL, Env:\SKIP_RATE_LIMIT_TEST
+```
 
 The API smoke test now also covers Phase 2 branch and member onboarding endpoints.
 

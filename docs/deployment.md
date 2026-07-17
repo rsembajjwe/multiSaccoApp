@@ -17,6 +17,8 @@ Copy-Item deploy\backend.env.example .env
 
 Edit `.env` and set a strong `POSTGRES_PASSWORD`.
 
+Keep `SACCO_DEMO_LOGINS_ENABLED=false` outside development/demo verification. The production Spring profile defaults seeded staff/member demo logins to disabled unless this environment variable is explicitly enabled.
+
 Start PostgreSQL and the Java backend:
 
 ```powershell
@@ -56,10 +58,21 @@ Compose derives these from:
 - `POSTGRES_PASSWORD`
 - `POSTGRES_PORT`
 - `BACKEND_PORT`
+- `SACCO_DEMO_LOGINS_ENABLED`
+- `SACCO_AUTH_RATE_LIMIT_MAX_FAILURES`
+- `SACCO_AUTH_RATE_LIMIT_WINDOW_SECONDS`
 
 ## Migrations
 
 Flyway runs automatically on backend startup. Do not edit an applied migration in production; add a new `VNN__description.sql` migration instead.
+
+For a local PostgreSQL verification run:
+
+```powershell
+npm.cmd run postgres:check
+```
+
+The script uses an isolated Compose project, alternate ports `15432` and `18080`, and a throwaway database volume. It confirms `flyway_schema_history`, runs the API smoke test against the Java backend, then runs the security hardening checks.
 
 ## Backup
 

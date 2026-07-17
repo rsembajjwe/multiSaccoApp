@@ -6,6 +6,8 @@ import com.methaltech.sacco.complaint.Complaint;
 import com.methaltech.sacco.complaint.ComplaintResponse;
 import com.methaltech.sacco.complaint.ComplaintService;
 import com.methaltech.sacco.identity.AuditService;
+import com.methaltech.sacco.identity.DemoCredentialPolicy;
+import com.methaltech.sacco.identity.LoginAttemptService;
 import com.methaltech.sacco.loan.Loan;
 import com.methaltech.sacco.loan.LoanGuarantor;
 import com.methaltech.sacco.loan.LoanGuarantorRepository;
@@ -34,6 +36,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -69,6 +72,8 @@ class MemberAuthController {
     private final AuditService auditService;
     private final PasswordHasher passwordHasher;
     private final TokenGenerator tokenGenerator;
+    private final LoginAttemptService loginAttemptService;
+    private final DemoCredentialPolicy demoCredentialPolicy;
 
     MemberAuthController(
             MemberRepository memberRepository,
@@ -84,7 +89,9 @@ class MemberAuthController {
             TenantService tenantService,
             AuditService auditService,
             PasswordHasher passwordHasher,
-            TokenGenerator tokenGenerator) {
+            TokenGenerator tokenGenerator,
+            LoginAttemptService loginAttemptService,
+            DemoCredentialPolicy demoCredentialPolicy) {
         this.memberRepository = memberRepository;
         this.memberSessionRepository = memberSessionRepository;
         this.loanRepository = loanRepository;
@@ -99,11 +106,20 @@ class MemberAuthController {
         this.auditService = auditService;
         this.passwordHasher = passwordHasher;
         this.tokenGenerator = tokenGenerator;
+        this.loginAttemptService = loginAttemptService;
+        this.demoCredentialPolicy = demoCredentialPolicy;
     }
 
     @PostMapping("/login")
     ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         String identifier = request.identifier().trim();
+        String rateLimitKey = "member:" + servletRequest.getRemoteAddr();
+        if (loginAttemptService.isLimited(rateLimitKey)) return rateLimited(rateLimitKey);
+        if (!demoCredentialPolicy.memberLoginAllowed(identifier)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "DEMO_LOGIN_DISABLED", "Seeded demo member accounts are disabled outside the development/demo profile."));
+        }
+
         Member member = memberRepository
                 .findFirstByMembershipNoIgnoreCaseOrPhoneIgnoreCaseOrEmailIgnoreCase(identifier, identifier, identifier)
                 .filter(candidate -> "active".equals(candidate.getStatus()))
@@ -111,6 +127,7 @@ class MemberAuthController {
                 .orElse(null);
 
         if (member == null) {
+            loginAttemptService.recordFailure(rateLimitKey);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiErrorResponse.of(
                             401,
@@ -118,6 +135,7 @@ class MemberAuthController {
                             "Invalid member credentials or inactive member account."));
         }
 
+        loginAttemptService.clear(rateLimitKey);
         String token = tokenGenerator.createToken();
         MemberSession session = memberSessionRepository.save(new MemberSession(
                 "member_session_" + UUID.randomUUID(),
@@ -142,6 +160,12 @@ class MemberAuthController {
                 branchLookup.findSummary(member.getBranchId()).orElse(null),
                 Balances.from(member),
                 session.getExpiresAt())));
+    }
+
+    private ResponseEntity<ApiErrorResponse> rateLimited(String key) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(loginAttemptService.retryAfterSeconds(key)))
+                .body(ApiErrorResponse.of(429, "LOGIN_RATE_LIMITED", "Too many failed login attempts. Try again later."));
     }
 
     @GetMapping("/me")

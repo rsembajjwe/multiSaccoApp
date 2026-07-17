@@ -1,19 +1,22 @@
 import { spawn } from "node:child_process";
 
-const port = 5199;
-const baseUrl = `http://127.0.0.1:${port}/api/v1`;
+const externalBaseUrl = process.env.API_BASE_URL?.replace(/\/$/, "");
+const port = Number(process.env.API_SMOKE_PORT || 5199);
+const baseUrl = externalBaseUrl || `http://127.0.0.1:${port}/api/v1`;
 
-const server = spawn(process.execPath, ["server.mjs"], {
-  cwd: new URL("..", import.meta.url),
-  env: { ...process.env, PORT: String(port) },
-  stdio: ["ignore", "pipe", "pipe"]
-});
+const server = externalBaseUrl
+  ? null
+  : spawn(process.execPath, ["server.mjs"], {
+      cwd: new URL("..", import.meta.url),
+      env: { ...process.env, PORT: String(port) },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
 
 let output = "";
-server.stdout.on("data", (chunk) => {
+server?.stdout.on("data", (chunk) => {
   output += chunk.toString();
 });
-server.stderr.on("data", (chunk) => {
+server?.stderr.on("data", (chunk) => {
   output += chunk.toString();
 });
 
@@ -830,28 +833,31 @@ try {
   const complaints = await api("GET", "/complaints", null, saccoToken);
   assert(complaints.data.every((item) => item.tenantId === "tenant_green"), "Complaints must be tenant-scoped");
 
-  let rateLimitedLogin = null;
-  for (let index = 0; index < 8; index += 1) {
-    const response = await raw("POST", "/auth/login", {
-      email: `bad-login-${index}@example.local`,
-      password: "wrong-password"
-    });
-    if (response.status === 429) {
-      rateLimitedLogin = response;
-      break;
+  if (process.env.SKIP_RATE_LIMIT_TEST !== "1") {
+    let rateLimitedLogin = null;
+    for (let index = 0; index < 8; index += 1) {
+      const response = await raw("POST", "/auth/login", {
+        email: `bad-login-${index}@example.local`,
+        password: "wrong-password"
+      });
+      if (response.status === 429) {
+        rateLimitedLogin = response;
+        break;
+      }
     }
+    assert(rateLimitedLogin?.status === 429, "Repeated login failures should be rate limited");
+    assert(rateLimitedLogin.headers.get("retry-after"), "Rate-limited responses should include Retry-After");
   }
-  assert(rateLimitedLogin?.status === 429, "Repeated login failures should be rate limited");
-  assert(rateLimitedLogin.headers.get("retry-after"), "Rate-limited responses should include Retry-After");
 
-  console.log("API smoke test passed");
+  console.log(`API smoke test passed against ${baseUrl}`);
 } finally {
-  server.kill();
+  server?.kill();
 }
 
 async function waitForServer() {
   const started = Date.now();
-  while (Date.now() - started < 8000) {
+  const timeoutMs = Number(process.env.API_SMOKE_WAIT_MS || 8000);
+  while (Date.now() - started < timeoutMs) {
     try {
       const response = await fetch(`${baseUrl}/health`);
       if (response.ok) return;

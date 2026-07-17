@@ -13,6 +13,9 @@ A production release must not proceed unless all critical items are closed or ex
 Required gates:
 
 - `npm.cmd run check` passes locally and in CI.
+- `npm.cmd run postgres:check` passes in a Docker/PostgreSQL environment before production release.
+- `API_BASE_URL=http://host:port/api/v1 npm.cmd run security:check` passes against the release candidate backend.
+- `npm.cmd run ui:check` passes before releasing UI/backend integration polish.
 - Tenant isolation tests pass for staff, member, and platform routes.
 - Permission tests pass for platform-only and SACCO-only actions.
 - Financial calculation tests pass for balances, loans, repayments, reversals, expenses, and subscriptions.
@@ -41,6 +44,24 @@ Checklist:
 - Password reset tokens are hashed, expiring, and single use.
 - MFA challenge codes are hashed and expire.
 - Member sessions cannot call staff-only routes.
+- Failed staff/member login attempts are rate limited and return `Retry-After`.
+- Seeded demo staff/member credentials are disabled by default under the production Spring profile.
+- Password reset and MFA secret material is returned only when demo logins are explicitly enabled.
+
+## Concrete Pass/Fail Checks
+
+| Control | Automated check | Pass condition |
+| --- | --- | --- |
+| PostgreSQL migrations | `npm.cmd run postgres:check` | Java backend starts on PostgreSQL and `flyway_schema_history` shows successful migrations. |
+| API smoke | `npm.cmd run postgres:check` | Login, tenants, members, transactions, loans, reports, operations, subscriptions, and member portal endpoints pass against Java/PostgreSQL. |
+| Headers | `npm.cmd run security:check` | Health/API responses include `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Permissions-Policy`. |
+| Auth required | `npm.cmd run security:check` | Staff-only endpoints return `401` without a bearer token. |
+| Token handling | `npm.cmd run security:check` | Login/me responses hide password hash/salt and logout revokes the token. |
+| Tenant isolation | `npm.cmd run security:check` | SACCO staff cross-tenant profile, operations, and member import requests return `403`. |
+| Member isolation | `npm.cmd run security:check` | Member sessions can read balances/loans/notifications/guarantors but cannot call staff APIs. |
+| Rate limiting | `npm.cmd run security:check` | Repeated failed staff logins return `429` with `Retry-After`. |
+| Demo gating | `npm.cmd run security:check` plus prod properties | `application-prod.properties` defaults `SACCO_DEMO_LOGINS_ENABLED` to `false`. |
+| UI source/sync polish | `npm.cmd run ui:check` | Main screens retain source, last-sync, loading, error, and refresh contract text. |
 
 ## Authorization and Tenant Isolation
 
@@ -100,6 +121,7 @@ Checklist:
 - Local `backups/` are ignored by git.
 - Production database credentials are strong and stored outside source control.
 - Docker deployment uses the production profile and PostgreSQL.
+- Production/demo seed logins are gated with `SACCO_DEMO_LOGINS_ENABLED=false` unless running an explicit demo verification.
 - Backups are encrypted or stored in access-controlled infrastructure outside the project folder.
 - Restore is tested with `-ConfirmRestore` only on approved targets.
 
