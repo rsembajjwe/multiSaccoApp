@@ -214,6 +214,40 @@ h3 {
   gap: 10px;
 }
 
+.shell-status {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 30px 0;
+}
+
+.shell-fact {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+}
+
+.shell-fact small,
+.shell-fact strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-fact small {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.shell-fact strong {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
 .content {
   padding: 30px;
 }
@@ -588,6 +622,7 @@ th {
   .grid.metrics,
   .grid.two,
   .grid.three,
+  .shell-status,
   .runbook-grid {
     grid-template-columns: 1fr;
   }
@@ -595,6 +630,7 @@ th {
 
 @media (max-width: 640px) {
   .topbar,
+  .shell-status,
   .content {
     padding: 18px;
   }

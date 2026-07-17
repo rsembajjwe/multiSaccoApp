@@ -513,6 +513,7 @@ function render() {
   document.getElementById("tenantSelect").value = state.tenantId;
   document.getElementById("sessionRole").textContent = state.tenantId === "platform" ? "Platform Administrator" : "SACCO Administrator";
   renderApiChrome();
+  renderShellStatus();
 
   const titles = {
     dashboard: ["Dashboard", "Command center"],
@@ -545,6 +546,31 @@ function render() {
 
   document.getElementById("app").innerHTML = routes[state.currentView]();
   bindViewActions();
+}
+
+function renderShellStatus() {
+  const shellStatus = document.getElementById("shellStatus");
+  if (!shellStatus) return;
+  const currentTenantName = apiState.user?.tenantId === "tenant_platform" ? tenantName(state.tenantId) : tenantName(apiState.user?.tenantId || state.tenantId);
+  const operationsScope = apiState.operationsStatus?.scope
+    ? (apiState.operationsStatus.scope === "platform" ? "Platform-wide" : tenantName(apiState.operationsStatus.scope))
+    : "Not loaded";
+  const checkedAt = apiState.operationsStatus?.checkedAt
+    ? apiState.operationsStatus.checkedAt.slice(0, 16).replace("T", " ")
+    : "pending";
+  const apiLabel = apiState.user ? `API: ${apiState.user.fullName}` : `API: ${apiState.health || "checking"}`;
+  const memberLabel = memberApiState.member ? `Member: ${memberApiState.member.fullName}` : "Member: signed out";
+  shellStatus.innerHTML = `
+    ${shellFact("Tenant", currentTenantName)}
+    ${shellFact("Staff session", apiLabel)}
+    ${shellFact("Member session", memberLabel)}
+    ${shellFact("Operations scope", operationsScope)}
+    ${shellFact("Backend sync", checkedAt)}
+  `;
+}
+
+function shellFact(label, value) {
+  return `<span class="shell-fact"><small>${label}</small><strong>${value}</strong></span>`;
 }
 
 function renderDashboard() {

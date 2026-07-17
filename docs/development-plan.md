@@ -393,6 +393,7 @@ Progress:
 - Subscriptions screen polish added with billing-control KPIs for invoice totals, outstanding balances, active subscriptions, billable members, tier usage, and payment access.
 - Operations screen polish added with command-center KPIs for release readiness, alerts, exceptions, queue pressure, API scope, database status, and runbook coverage.
 - Member Portal polish added with self-service KPIs for total balance, loan exposure, guarantee decisions, notifications, server status, offline drafts, and member/KYC status.
+- App shell polish added with cross-screen status strip for tenant context, staff API session, member session, operations scope, and backend sync time.
 - Member mobile dashboard endpoint and Member Portal card added, including server-confirmed balances, notifications, loan totals, and last-updated time.
 - Mobile loan application endpoint and Member Portal flow added, allowing members to submit their own loan applications with server confirmation.
 - Offline complaint draft support added for the Member Portal, with local draft save and server sync when online.

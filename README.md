@@ -203,6 +203,8 @@ Operations shows Java-backed monitoring counts, operational alerts, production r
 
 Dashboard KPIs switch to backend member, transaction, loan, approval, audit, and operations counts after API login.
 
+The app shell shows a status strip for tenant context, staff API session, member session, operations scope, and last backend sync across every screen.
+
 Operations shows a backend-backed command center for release readiness, alert load, exception load, queue pressure, API scope, database status, and runbook coverage.
 
 Members shows backend summary KPIs, balance totals, branch coverage, and direct statement/profile actions after API login.
