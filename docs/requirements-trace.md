@@ -65,6 +65,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java tenant foundation exposes seeded SACCO tenants from a Flyway-managed table through `/api/v1/tenants`.
 - Java identity foundation authenticates seeded platform/SACCO administrators through `/api/v1/auth/login` without exposing password hashes or salts.
 - Java auth sessions store hashed bearer tokens and support current-user lookup plus logout revocation.
+- Java password reset endpoints issue hashed, expiring reset tokens, rotate staff passwords, mark tokens used, revoke active sessions, and audit reset activity.
 - Java user administration enforces tenant-scoped listing and blocks SACCO admins from creating users in another tenant.
 - Java audit events are tenant-scoped and capture manual entries plus automatic user-creation events.
 - Java role and permission endpoints list the platform permission catalog and create tenant-scoped custom roles with validated permission IDs.

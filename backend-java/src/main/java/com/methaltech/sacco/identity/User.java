@@ -92,4 +92,9 @@ public class User {
     public Instant getCreatedAt() {
         return createdAt;
     }
+
+    void changePassword(String passwordHash, String passwordSalt) {
+        this.passwordHash = passwordHash;
+        this.passwordSalt = passwordSalt;
+    }
 }

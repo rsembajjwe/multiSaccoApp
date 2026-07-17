@@ -6,6 +6,7 @@ import com.methaltech.sacco.security.PasswordHasher;
 import com.methaltech.sacco.security.TokenGenerator;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -27,7 +28,9 @@ class AuthController {
 
     private final UserRepository userRepository;
     private final AuthSessionRepository authSessionRepository;
+    private final PasswordResetRequestRepository passwordResetRequestRepository;
     private final AuthService authService;
+    private final AuditService auditService;
     private final PasswordHasher passwordHasher;
     private final TokenGenerator tokenGenerator;
     private final TenantService tenantService;
@@ -35,13 +38,17 @@ class AuthController {
     AuthController(
             UserRepository userRepository,
             AuthSessionRepository authSessionRepository,
+            PasswordResetRequestRepository passwordResetRequestRepository,
             AuthService authService,
+            AuditService auditService,
             PasswordHasher passwordHasher,
             TokenGenerator tokenGenerator,
             TenantService tenantService) {
         this.userRepository = userRepository;
         this.authSessionRepository = authSessionRepository;
+        this.passwordResetRequestRepository = passwordResetRequestRepository;
         this.authService = authService;
+        this.auditService = auditService;
         this.passwordHasher = passwordHasher;
         this.tokenGenerator = tokenGenerator;
         this.tenantService = tenantService;
@@ -94,6 +101,75 @@ class AuthController {
         return ResponseEntity.ok(ApiResponse.of(new LogoutResponse(true)));
     }
 
+    @PostMapping("/password-reset/request")
+    ResponseEntity<?> requestPasswordReset(@Valid @RequestBody PasswordResetRequestBody body, HttpServletRequest request) {
+        User user = userRepository.findByEmailIgnoreCase(body.email().trim())
+                .filter(candidate -> "active".equals(candidate.getStatus()))
+                .orElse(null);
+        String resetToken = null;
+        Instant expiresAt = Instant.now().plus(Duration.ofMinutes(30));
+
+        if (user != null) {
+            resetToken = tokenGenerator.createToken();
+            PasswordResetRequest resetRequest = passwordResetRequestRepository.save(new PasswordResetRequest(
+                    "reset_" + UUID.randomUUID(),
+                    user.getTenantId(),
+                    user.getId(),
+                    tokenGenerator.hashToken(resetToken),
+                    expiresAt));
+            auditService.record(
+                    user.getTenantId(),
+                    user,
+                    "Requested password reset",
+                    "password_reset",
+                    resetRequest.getId(),
+                    request.getRemoteAddr());
+        }
+
+        return ResponseEntity.ok(ApiResponse.of(new PasswordResetRequestResponse(true, resetToken, resetToken == null ? null : expiresAt)));
+    }
+
+    @PostMapping("/password-reset/confirm")
+    ResponseEntity<?> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest body, HttpServletRequest request) {
+        if (body.newPassword().length() < 10) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "WEAK_PASSWORD", "New password must be at least 10 characters."));
+        }
+
+        PasswordResetRequest resetRequest = passwordResetRequestRepository
+                .findByTokenHashAndStatusAndExpiresAtAfter(tokenGenerator.hashToken(body.token().trim()), "pending", Instant.now())
+                .orElse(null);
+        if (resetRequest == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiErrorResponse.of(400, "INVALID_RESET_TOKEN", "Password reset token is invalid or expired."));
+        }
+
+        User user = userRepository.findById(resetRequest.getUserId()).orElse(null);
+        if (user == null || !"active".equals(user.getStatus())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiErrorResponse.of(400, "INVALID_RESET_TOKEN", "Password reset token is invalid or expired."));
+        }
+
+        PasswordHasher.PasswordHash passwordHash = passwordHasher.hash(body.newPassword());
+        user.changePassword(passwordHash.hash(), passwordHash.salt());
+        userRepository.save(user);
+        resetRequest.markUsed();
+        passwordResetRequestRepository.save(resetRequest);
+        authSessionRepository.findByUserIdAndRevokedAtIsNull(user.getId()).forEach(session -> {
+            session.revoke();
+            authSessionRepository.save(session);
+        });
+        auditService.record(
+                user.getTenantId(),
+                user,
+                "Confirmed password reset",
+                "password_reset",
+                resetRequest.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(new PasswordResetConfirmResponse(true)));
+    }
+
     record LoginRequest(@Email @NotBlank String email, @NotBlank String password) {
     }
 
@@ -104,6 +180,18 @@ class AuthController {
     }
 
     record LogoutResponse(boolean loggedOut) {
+    }
+
+    record PasswordResetRequestBody(@Email @NotBlank String email) {
+    }
+
+    record PasswordResetRequestResponse(boolean accepted, String resetToken, Instant expiresAt) {
+    }
+
+    record PasswordResetConfirmRequest(@NotBlank String token, @NotBlank String newPassword) {
+    }
+
+    record PasswordResetConfirmResponse(boolean reset) {
     }
 
 }

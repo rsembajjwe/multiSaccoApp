@@ -407,6 +407,98 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void passwordResetRotatesStaffPasswordAndRevokesToken() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String email = "reset-staff-" + System.currentTimeMillis() + "@greenvalley.local";
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "fullName": "Reset Smoke Staff",
+								  "email": "%s",
+								  "password": "Temp@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isCreated());
+		String activeToken = loginAndReturnToken(email, "Temp@12345");
+
+		MvcResult resetRequest = mockMvc.perform(post("/api/v1/auth/password-reset/request")
+						.contentType("application/json")
+						.content("""
+								{
+								  "email": "%s"
+								}
+								""".formatted(email)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.accepted", is(true)))
+				.andExpect(jsonPath("$.data.resetToken", notNullValue()))
+				.andReturn();
+		String resetToken = objectMapper.readTree(resetRequest.getResponse().getContentAsString()).path("data").path("resetToken").asString();
+
+		mockMvc.perform(post("/api/v1/auth/password-reset/confirm")
+						.contentType("application/json")
+						.content("""
+								{
+								  "token": "%s",
+								  "newPassword": "short"
+								}
+								""".formatted(resetToken)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("WEAK_PASSWORD")));
+
+		mockMvc.perform(post("/api/v1/auth/password-reset/confirm")
+						.contentType("application/json")
+						.content("""
+								{
+								  "token": "%s",
+								  "newPassword": "Reset@12345"
+								}
+								""".formatted(resetToken)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.reset", is(true)));
+
+		mockMvc.perform(get("/api/v1/auth/me")
+						.header("Authorization", "Bearer " + activeToken))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("AUTH_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "email": "%s",
+								  "password": "Temp@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("AUTH_INVALID")));
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "email": "%s",
+								  "password": "Reset@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.email", is(email)));
+
+		mockMvc.perform(post("/api/v1/auth/password-reset/confirm")
+						.contentType("application/json")
+						.content("""
+								{
+								  "token": "%s",
+								  "newPassword": "Another@12345"
+								}
+								""".formatted(resetToken)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_RESET_TOKEN")));
+	}
+
+	@Test
 	void currentUserEndpointUsesBearerSessionAndLogoutRevokesIt() throws Exception {
 		String token = loginAndReturnToken();
 
