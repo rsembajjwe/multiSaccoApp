@@ -499,6 +499,117 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void privilegedStaffCanEnableAndVerifyMfaChallenge() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String email = "mfa-admin-" + System.currentTimeMillis() + "@greenvalley.local";
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "fullName": "MFA Admin Staff",
+								  "email": "%s",
+								  "password": "Mfa@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String userId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+		mockMvc.perform(put("/api/v1/users/" + userId + "/roles")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_green_admin"]
+								}
+								"""))
+				.andExpect(status().isOk());
+		String staffToken = loginAndReturnToken(email, "Mfa@12345");
+
+		mockMvc.perform(post("/api/v1/auth/mfa/enable")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.mfaEnabled", is(true)));
+
+		MvcResult challengeResult = mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "email": "%s",
+								  "password": "Mfa@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.data.mfaRequired", is(true)))
+				.andExpect(jsonPath("$.data.challengeId", notNullValue()))
+				.andExpect(jsonPath("$.data.demoCode", notNullValue()))
+				.andExpect(jsonPath("$.data.token").doesNotExist())
+				.andReturn();
+		JsonNode challenge = objectMapper.readTree(challengeResult.getResponse().getContentAsString()).path("data");
+		String challengeId = challenge.path("challengeId").asString();
+		String demoCode = challenge.path("demoCode").asString();
+
+		mockMvc.perform(post("/api/v1/auth/mfa/verify")
+						.contentType("application/json")
+						.content("""
+								{
+								  "challengeId": "%s",
+								  "code": "000000"
+								}
+								""".formatted(challengeId)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("MFA_INVALID")));
+
+		mockMvc.perform(post("/api/v1/auth/mfa/verify")
+						.contentType("application/json")
+						.content("""
+								{
+								  "challengeId": "%s",
+								  "code": "%s"
+								}
+								""".formatted(challengeId, demoCode)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.token", notNullValue()))
+				.andExpect(jsonPath("$.data.user.id", is(userId)));
+
+		mockMvc.perform(post("/api/v1/auth/mfa/verify")
+						.contentType("application/json")
+						.content("""
+								{
+								  "challengeId": "%s",
+								  "code": "%s"
+								}
+								""".formatted(challengeId, demoCode)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("MFA_INVALID")));
+	}
+
+	@Test
+	void nonPrivilegedStaffCannotEnableMfaFromPrivilegedEndpoint() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String email = "plain-staff-" + System.currentTimeMillis() + "@greenvalley.local";
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "fullName": "Plain Staff",
+								  "email": "%s",
+								  "password": "Plain@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isCreated());
+		String token = loginAndReturnToken(email, "Plain@12345");
+
+		mockMvc.perform(post("/api/v1/auth/mfa/enable")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PRIVILEGED_USER_REQUIRED")));
+	}
+
+	@Test
 	void currentUserEndpointUsesBearerSessionAndLogoutRevokesIt() throws Exception {
 		String token = loginAndReturnToken();
 

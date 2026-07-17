@@ -31,6 +31,9 @@ public class User {
 
     private String status;
 
+    @Column(name = "mfa_enabled")
+    private boolean mfaEnabled;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -54,6 +57,7 @@ public class User {
         this.passwordHash = passwordHash;
         this.passwordSalt = passwordSalt;
         this.status = status;
+        this.mfaEnabled = false;
         this.createdAt = Instant.now();
     }
 
@@ -89,6 +93,10 @@ public class User {
         return status;
     }
 
+    public boolean isMfaEnabled() {
+        return mfaEnabled;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -96,5 +104,9 @@ public class User {
     void changePassword(String passwordHash, String passwordSalt) {
         this.passwordHash = passwordHash;
         this.passwordSalt = passwordSalt;
+    }
+
+    void enableMfa() {
+        this.mfaEnabled = true;
     }
 }
