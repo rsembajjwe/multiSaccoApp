@@ -382,6 +382,7 @@ Progress:
 - Phase 7 load-test harness added with configurable request volume, concurrency, and p95 latency threshold.
 - GitHub Actions CI added to run the project verification suite on pushes and pull requests.
 - Security review checklist added to track production release gates and critical finding closure.
+- Operations screen added to surface Java-backed monitoring counts, alerts, release gates, and runbook links in the UI.
 - Member mobile dashboard endpoint and Member Portal card added, including server-confirmed balances, notifications, loan totals, and last-updated time.
 - Mobile loan application endpoint and Member Portal flow added, allowing members to submit their own loan applications with server confirmation.
 - Offline complaint draft support added for the Member Portal, with local draft save and server sync when online.

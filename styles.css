@@ -512,6 +512,40 @@ th {
   background: #ffe1de;
 }
 
+.notice.success {
+  border-left-color: var(--brand);
+  background: #e3f8ef;
+}
+
+.runbook-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.runbook-link {
+  display: grid;
+  gap: 8px;
+  min-height: 104px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  color: var(--ink);
+  background: #fff;
+  text-decoration: none;
+}
+
+.runbook-link:hover {
+  border-color: #9fd8ca;
+  background: #edf9f5;
+}
+
+.runbook-link span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .chart {
   display: grid;
   gap: 10px;
@@ -553,7 +587,8 @@ th {
 
   .grid.metrics,
   .grid.two,
-  .grid.three {
+  .grid.three,
+  .runbook-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -118,6 +118,7 @@ export async function handleApi(request, response, url) {
       return sendData(response, { loggedOut: true });
     }
 
+    if (method === "GET" && path === "/operations/status") return getOperationsStatus(response, auth, url, correlationId);
     if (method === "GET" && path === "/tenants") return listTenants(response, auth);
     if (method === "GET" && path.startsWith("/tenants/") && path.endsWith("/profile")) {
       return getSaccoProfile(response, auth, path.split("/")[2], correlationId);
@@ -445,6 +446,54 @@ function assertTenantAccess(auth, tenantId, response, correlationId) {
 function listTenants(response, auth) {
   const tenants = isPlatform(auth) ? db.tenants : db.tenants.filter((tenant) => tenant.id === auth.user.tenantId);
   return sendData(response, tenants.map(publicTenant));
+}
+
+function getOperationsStatus(response, auth, url, correlationId) {
+  const requestedTenantId = url.searchParams.get("tenantId");
+  if (!isPlatform(auth) && requestedTenantId && requestedTenantId !== auth.user.tenantId) {
+    return sendError(response, 403, "TENANT_ACCESS_DENIED", "Cannot access operations status for another tenant.", correlationId);
+  }
+  const tenantId = isPlatform(auth)
+    ? (requestedTenantId || null)
+    : auth.user.tenantId;
+  const platformWide = isPlatform(auth) && !tenantId;
+  const inScope = (item) => platformWide || item.tenantId === tenantId;
+
+  const counts = {
+    tenants: platformWide ? db.tenants.length : 1,
+    users: db.users.filter(inScope).length,
+    members: db.members.filter(inScope).length,
+    activeMembers: db.members.filter((member) => inScope(member) && member.status === "active").length,
+    pendingFinancialTransactions: db.financialTransactions.filter((transaction) => inScope(transaction) && transaction.status === "pending_approval").length,
+    openLoans: db.loans.filter((loan) => inScope(loan) && !["closed", "rejected"].includes(loan.status)).length,
+    openComplaints: db.complaints.filter((complaint) => inScope(complaint) && !["resolved", "closed"].includes(complaint.status)).length,
+    callbackExceptions: db.mobileMoneyCallbacks.filter((callback) => inScope(callback) && callback.status !== "posted").length,
+    deliveryExceptions: db.notificationDeliveries.filter((delivery) => inScope(delivery) && delivery.status !== "sent").length,
+    closedAccountingPeriods: db.accountingPeriods.filter((period) => inScope(period) && period.status === "closed").length
+  };
+
+  return sendData(response, {
+    ok: true,
+    checkedAt: new Date().toISOString(),
+    scope: platformWide ? "platform" : tenantId,
+    database: { reachable: true },
+    counts,
+    alerts: operationAlerts(counts)
+  });
+}
+
+function operationAlerts(counts) {
+  return [
+    operationAlert("pending_financial_transactions", counts.pendingFinancialTransactions, "warning", "Financial postings are waiting for approval."),
+    operationAlert("open_complaints", counts.openComplaints, "warning", "Member or service complaints are still open."),
+    operationAlert("callback_exceptions", counts.callbackExceptions, "critical", "Mobile-money callbacks need operational review."),
+    operationAlert("delivery_exceptions", counts.deliveryExceptions, "warning", "Notification deliveries need provider follow-up.")
+  ].filter(Boolean);
+}
+
+function operationAlert(code, count, severity, message) {
+  if (!count) return null;
+  return { code, count, severity, message };
 }
 
 function getTenant(response, auth, tenantId, correlationId) {

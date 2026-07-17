@@ -12,6 +12,7 @@ const navItems = [
   ["transactions", "Transactions", "finance"],
   ["loans", "Loans", "credit"],
   ["approvals", "Approvals", "workflow"],
+  ["operations", "Operations", "monitor"],
   ["reports", "Reports", "audit"]
 ];
 
@@ -148,6 +149,7 @@ let apiState = {
   approvalWorkflows: [],
   approvalDecisions: [],
   auditEvents: [],
+  operationsStatus: null,
   message: "Checking backend connection..."
 };
 let memberApiState = {
@@ -217,6 +219,13 @@ function apiTenantQuery() {
 
 function apiSubscriptionQuery() {
   return apiState.user?.tenantId === "tenant_platform" ? "" : apiTenantQuery();
+}
+
+function apiOperationsQuery() {
+  if (apiState.user?.tenantId !== "tenant_platform") return "";
+  if (state.tenantId === "platform") return "";
+  const tenantId = currentApiTenantId();
+  return tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : "";
 }
 
 function useApiMembers() {
@@ -513,6 +522,7 @@ function render() {
     transactions: ["Finance", "Savings, shares and welfare"],
     loans: ["Credit", "Loan processing"],
     approvals: ["Governance", "Approval workflow"],
+    operations: ["Operations", "Monitoring and release readiness"],
     reports: ["Controls", "Reports and audit trail"],
     memberPortal: ["Member Portal", "Self-service account"]
   };
@@ -528,6 +538,7 @@ function render() {
     transactions: renderTransactions,
     loans: renderLoans,
     approvals: renderApprovals,
+    operations: renderOperations,
     reports: renderReports,
     memberPortal: renderMemberPortal
   };
@@ -1150,6 +1161,92 @@ function renderReports() {
         <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
       </div>
       ${apiAuditTable(apiState.auditEvents)}
+    </section>
+  `;
+}
+
+function renderOperations() {
+  if (!apiState.user) {
+    return `
+      <section class="card">
+        <div class="toolbar">
+          <div>
+            <h2>Operations center</h2>
+            <p class="eyebrow">Java backend monitoring</p>
+          </div>
+          <button class="primary-button" data-action="apiLogin" type="button">API login</button>
+        </div>
+        <div class="notice">Login to the Java API to view tenant-scoped operational counts, alerts, and release-readiness gates.</div>
+      </section>
+    `;
+  }
+
+  const status = apiState.operationsStatus || {};
+  const counts = status.counts || {};
+  const alerts = status.alerts || [];
+  const tenantLabel = status.scope === "platform" ? "Platform-wide" : tenantName(status.scope || currentApiTenantId());
+  const criticalAlerts = alerts.filter((alert) => alert.severity === "critical").length;
+  const warningAlerts = alerts.filter((alert) => alert.severity === "warning").length;
+  const releaseGates = [
+    { label: "Database reachable", ok: status.database?.reachable === true, detail: status.checkedAt ? `checked ${status.checkedAt.slice(0, 16).replace("T", " ")}` : "waiting for API" },
+    { label: "No critical operation alerts", ok: criticalAlerts === 0, detail: `${criticalAlerts} critical alert(s)` },
+    { label: "Pending postings monitored", ok: Number(counts.pendingFinancialTransactions || 0) === 0, detail: `${counts.pendingFinancialTransactions || 0} awaiting checker action` },
+    { label: "Callback exceptions clear", ok: Number(counts.callbackExceptions || 0) === 0, detail: `${counts.callbackExceptions || 0} callback exception(s)` },
+    { label: "Delivery exceptions clear", ok: Number(counts.deliveryExceptions || 0) === 0, detail: `${counts.deliveryExceptions || 0} provider exception(s)` }
+  ];
+
+  return `
+    <div class="grid metrics">
+      ${metric("Scope", tenantLabel, status.ok ? "API operations status" : "waiting for refresh")}
+      ${metric("Database", status.database?.reachable ? "Reachable" : "Unknown", status.checkedAt ? status.checkedAt.slice(0, 10) : "not checked")}
+      ${metric("Alerts", alerts.length, `${criticalAlerts} critical, ${warningAlerts} warning`)}
+      ${metric("Active members", counts.activeMembers || 0, `${counts.members || 0} total members`)}
+    </div>
+
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Operational alerts</h2>
+          <p class="eyebrow">Live from /api/v1/operations/status</p>
+        </div>
+        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+      </div>
+      ${operationAlerts(alerts)}
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Production readiness gates</h2>
+          <p class="eyebrow">Release checks surfaced for administrators</p>
+        </div>
+      </div>
+      ${releaseGateList(releaseGates)}
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Operational counts</h2>
+          <p class="eyebrow">Tenant-isolated backend health signals</p>
+        </div>
+      </div>
+      ${operationCountsTable(counts)}
+    </section>
+
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Runbook shortcuts</h2>
+          <p class="eyebrow">Phase 7 hardening artifacts</p>
+        </div>
+      </div>
+      <div class="runbook-grid">
+        ${runbookLink("Monitoring guide", "docs/monitoring.md", "Alert definitions and operations status examples")}
+        ${runbookLink("Deployment guide", "docs/deployment.md", "Docker, backup, restore and load-test commands")}
+        ${runbookLink("Security review", "docs/security-review.md", "Release gates for critical security findings")}
+        ${runbookLink("Technical manual", "docs/technical-manual.md", "Validation, migrations and troubleshooting")}
+      </div>
     </section>
   `;
 }
@@ -1808,6 +1905,79 @@ function alertItem(label, value, cls) {
   return `<li><span>${label}</span><strong class="status ${cls}">${value}</strong></li>`;
 }
 
+function operationAlerts(alerts) {
+  if (!alerts.length) {
+    return `<div class="notice success">No operation alerts for the selected scope.</div>`;
+  }
+  return `
+    <ul class="list">
+      ${alerts.map((alert) => `
+        <li>
+          <span><strong>${titleCase(alert.code.replace(/_/g, " "))}</strong><br><small>${alert.message}</small></span>
+          <strong class="status ${alert.severity === "critical" ? "overdue" : "pending"}">${alert.count} ${alert.severity}</strong>
+        </li>
+      `).join("")}
+    </ul>
+  `;
+}
+
+function releaseGateList(gates) {
+  return `
+    <ul class="list">
+      ${gates.map((gate) => `
+        <li>
+          <span><strong>${gate.label}</strong><br><small>${gate.detail}</small></span>
+          <strong class="status ${gate.ok ? "active" : "pending"}">${gate.ok ? "Ready" : "Review"}</strong>
+        </li>
+      `).join("")}
+    </ul>
+  `;
+}
+
+function operationCountsTable(counts) {
+  const labels = {
+    tenants: "Tenants",
+    users: "Staff users",
+    members: "Members",
+    activeMembers: "Active members",
+    pendingFinancialTransactions: "Pending financial postings",
+    openLoans: "Open loans",
+    openComplaints: "Open complaints",
+    callbackExceptions: "Callback exceptions",
+    deliveryExceptions: "Delivery exceptions",
+    closedAccountingPeriods: "Closed accounting periods"
+  };
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Signal</th><th>Count</th><th>Status</th></tr></thead>
+        <tbody>
+          ${Object.entries(labels).map(([key, label]) => {
+            const value = Number(counts[key] || 0);
+            const needsReview = ["pendingFinancialTransactions", "openComplaints", "callbackExceptions", "deliveryExceptions"].includes(key) && value > 0;
+            return `
+              <tr>
+                <td>${label}</td>
+                <td><strong>${value}</strong></td>
+                <td><span class="status ${needsReview ? "pending" : "active"}">${needsReview ? "Review" : "OK"}</span></td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function runbookLink(title, href, detail) {
+  return `
+    <a class="runbook-link" href="${href}" target="_blank" rel="noreferrer">
+      <strong>${title}</strong>
+      <span>${detail}</span>
+    </a>
+  `;
+}
+
 function bar(label, value, max) {
   return `
     <div class="bar">
@@ -1971,6 +2141,7 @@ function bindViewActions() {
         assignUserRoles: openUserRoleAssignmentForm,
         memberImportTemplate: openMemberImportTemplate,
         newNotificationTemplate: () => openNotificationTemplateForm(),
+        apiLogin: openApiLoginForm,
         memberLogin: openMemberLoginForm,
         memberLogout: memberLogout,
         refreshApi: refreshApiStatus
@@ -2075,12 +2246,13 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, roles, permissions, auditEvents, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, notificationTemplates, suppliers, expenses, assets, governanceMeetings, complaints, approvalWorkflows, approvalDecisions] = await Promise.all([
+      const [tenants, users, roles, permissions, auditEvents, operationsStatus, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, notificationTemplates, suppliers, expenses, assets, governanceMeetings, complaints, approvalWorkflows, approvalDecisions] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest(`/roles${apiTenantQuery()}`),
         apiRequest("/permissions"),
         apiRequest("/audit-events"),
+        apiRequest(`/operations/status${apiOperationsQuery()}`),
         apiRequest(`/branches${apiTenantQuery()}`),
         apiRequest(`/members${apiTenantQuery()}`),
         apiRequest("/subscription-packages"),
@@ -2112,6 +2284,7 @@ async function refreshApiStatus() {
       apiState.roles = roles;
       apiState.permissions = permissions;
       apiState.auditEvents = auditEvents;
+      apiState.operationsStatus = operationsStatus;
       apiState.branches = branches;
       apiState.members = members;
       apiState.subscriptionPackages = subscriptionPackages;
@@ -2149,7 +2322,7 @@ async function refreshApiStatus() {
     apiState.message = error.message;
   }
   renderApiChrome();
-  if (["dashboard", "reports", "members", "registrations", "subscriptions", "transactions", "approvals", "loans"].includes(state.currentView)) render();
+  if (["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans"].includes(state.currentView)) render();
 }
 
 function openApiLoginForm() {
@@ -2369,7 +2542,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], notificationTemplates: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], notificationTemplates: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], operationsStatus: null, message: "Logged out of API session." };
   renderApiChrome();
   render();
 }

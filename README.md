@@ -15,6 +15,7 @@ The production backend path is Java/Spring Boot in `backend-java`. The current N
 - Savings, shares, and welfare transaction posting.
 - Maker-checker approval queue.
 - Loan application and appraisal queue.
+- Java-backed operations center with live health counts, alerts, release gates, and runbook links.
 - Member self-service portal.
 - Member login with balance viewing.
 - Reports, compliance snapshot, and audit trail.
@@ -187,6 +188,8 @@ Reports include mobile-money callback history, and duplicate provider callbacks 
 Members receive in-app notifications for mobile-money collections and loan repayments.
 
 Reports and Dashboard show simulated SMS/email provider deliveries for member notifications.
+
+Operations shows Java-backed monitoring counts, operational alerts, production readiness gates, and direct links to Phase 7 runbooks after API login.
 
 Member Portal includes a mobile dashboard card with server-confirmed balances, last-updated time, loan totals, notifications, and a demo mobile-money payment action.
 

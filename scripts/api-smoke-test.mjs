@@ -37,6 +37,12 @@ try {
   const tenants = await api("GET", "/tenants", null, platformToken);
   assert(tenants.data.length >= 3, "Platform admin should list all seeded tenants");
 
+  const platformOperations = await api("GET", "/operations/status", null, platformToken);
+  assert(platformOperations.data.scope === "platform", "Platform operations status should default to platform scope");
+  assert(platformOperations.data.database.reachable === true, "Operations status should report database reachability");
+  assert(platformOperations.data.counts.tenants >= 3, "Platform operations status should include tenant counts");
+  assert(Array.isArray(platformOperations.data.alerts), "Operations status should include alert objects");
+
   const tenant = await api("POST", "/tenants", {
     name: `Smoke SACCO ${Date.now()}`,
     abbreviation: "SMS",
@@ -102,6 +108,16 @@ try {
 
   const saccoProfile = await api("GET", "/tenants/tenant_green/profile", null, saccoToken);
   assert(saccoProfile.data.tenantId === "tenant_green", "SACCO admin should read own tenant profile");
+
+  const saccoOperations = await api("GET", "/operations/status", null, saccoToken);
+  assert(saccoOperations.data.scope === "tenant_green", "SACCO operations status should use own tenant scope");
+  assert(saccoOperations.data.counts.tenants === 1, "SACCO operations status should expose one tenant");
+
+  const platformGreenOperations = await api("GET", "/operations/status?tenantId=tenant_green", null, platformToken);
+  assert(platformGreenOperations.data.scope === "tenant_green", "Platform operations status should support tenant scoping");
+
+  const crossTenantOperations = await raw("GET", "/operations/status?tenantId=tenant_lake", null, saccoToken);
+  assert(crossTenantOperations.status === 403, "SACCO operations status should reject another tenant scope");
 
   const crossTenantProfile = await raw("GET", "/tenants/tenant_lake/profile", null, saccoToken);
   assert(crossTenantProfile.status === 403, "SACCO admin should not read another tenant profile");

@@ -17,6 +17,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Member portal dashboard for balances, loans, statements, payments, and loan application entry points.
 - Reports page with financial summary, compliance snapshot, and audit trail.
 - Backend health check and API session status shown in the web UI.
+- Operations screen shows Java-backed monitoring counts, operational alerts, production readiness gates, and runbook shortcuts.
 - Seeded API login/logout from the web UI.
 - Server-side tenants, users, and audit events fetched through `/api/v1`.
 - Server-side branch and member onboarding endpoints with tenant isolation.
@@ -71,6 +72,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java backend deployment path includes a PostgreSQL production profile, Dockerfile, Docker Compose stack, environment template, and deployment/backup guide.
 - PostgreSQL backup and restore scripts provide repeatable Docker Compose database backup operations with ignored local backup artifacts and explicit restore confirmation.
 - Java operations status endpoint exposes authenticated platform/tenant monitoring counts, database reachability, and alert indicators with tenant isolation.
+- Operations UI consumes the Java operations status endpoint with platform-wide or tenant-scoped views based on the selected tenant.
 - User, administrator, and technical manuals document staff/member workflows, platform administration, operational monitoring, backup/restore, validation, release, and troubleshooting procedures.
 - Load-test script verifies Java health and authenticated operations endpoints with configurable request count, concurrency, and p95 latency target.
 - GitHub Actions CI runs JavaScript syntax, mobile contract, and Java backend tests on pushes and pull requests to `main`.
