@@ -161,6 +161,8 @@ After Platform Admin API login, the Subscriptions screen reads backend packages/
 
 After SACCO API login, the Transactions screen reads backend financial postings and submits new pending transactions to `/api/v1/financial-transactions`.
 
+Transactions also shows a backend-backed posting control center with posted, pending, reversed, reversible, rejected, and statement-ready totals plus direct receipt, statement, and reversal actions.
+
 After SACCO API login, the Loans screen reads backend loan files and submits new loan applications to `/api/v1/loans`.
 
 SACCO staff can request loan guarantors, and members can accept or reject guarantee requests from the Member portal.

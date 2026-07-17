@@ -385,6 +385,7 @@ Progress:
 - Operations screen added to surface Java-backed monitoring counts, alerts, release gates, and runbook links in the UI.
 - Dashboard polish added so top-level KPIs and controls use backend data after API login.
 - Members screen polish added with backend summary KPIs, balance totals, and profile/statement actions.
+- Transactions screen polish added with posting-control KPIs, reversal visibility, and grouped receipt/statement/reversal actions.
 - Member mobile dashboard endpoint and Member Portal card added, including server-confirmed balances, notifications, loan totals, and last-updated time.
 - Mobile loan application endpoint and Member Portal flow added, allowing members to submit their own loan applications with server confirmation.
 - Offline complaint draft support added for the Member Portal, with local draft save and server sync when online.

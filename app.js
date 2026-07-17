@@ -845,6 +845,17 @@ function renderTransactions() {
   const products = apiState.financialProducts || [];
   const accounts = apiState.financialAccounts || [];
   const source = useApiTransactions() ? "API-backed" : "Local demo";
+  const postedTransactions = transactions.filter((tx) => tx.status === "Posted");
+  const pendingTransactions = transactions.filter((tx) => tx.status === "Pending Approval");
+  const rejectedTransactions = transactions.filter((tx) => tx.status === "Rejected");
+  const reversalTransactions = transactions.filter((tx) => tx.originalTransactionId);
+  const reversedOriginalIds = new Set(reversalTransactions.map((tx) => tx.originalTransactionId));
+  const reversibleTransactions = postedTransactions.filter((tx) => !tx.originalTransactionId && !reversedOriginalIds.has(tx.id));
+  const postedTotal = postedTransactions.filter((tx) => !tx.originalTransactionId).reduce((sum, tx) => sum + tx.amount, 0);
+  const pendingTotal = pendingTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+  const reversalTotal = reversalTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+  const distinctMembers = new Set(transactions.map((tx) => tx.memberId).filter(Boolean)).size;
+  const channelCount = new Set(transactions.map((tx) => tx.channel).filter(Boolean)).size;
   const pendingClaims = welfareClaims.filter((claim) => claim.status === "Submitted").length;
   const approvedClaims = welfareClaims.filter((claim) => claim.status === "Approved").length;
   const paidClaimTotal = welfareClaims.filter((claim) => claim.status === "Paid").reduce((sum, claim) => sum + claim.amount, 0);
@@ -872,7 +883,27 @@ function renderTransactions() {
         </div>
       </section>
     ` : ""}
-    <section class="card">
+    <section class="card" style="margin-top:${apiState.user ? "16px" : "0"}">
+      <div class="toolbar">
+        <div>
+          <h2>Posting control center</h2>
+          <p class="eyebrow">${source} &middot; teller intake, checker queue, receipts, statements and reversals</p>
+        </div>
+        ${apiState.user ? `<button class="secondary-button" data-view-jump="approvals" type="button">Open approvals</button>` : ""}
+      </div>
+      <div class="grid metrics">
+        ${metric("Posted value", money.format(postedTotal), `${postedTransactions.length} posted movement(s)`)}
+        ${metric("Pending value", money.format(pendingTotal), `${pendingTransactions.length} awaiting checker`)}
+        ${metric("Reversed value", money.format(reversalTotal), `${reversalTransactions.length} reversal movement(s)`)}
+        ${metric("Members touched", distinctMembers, `${channelCount} payment channel(s)`)}
+      </div>
+      <div class="grid three" style="margin-top:16px">
+        ${metric("Reversible", reversibleTransactions.length, "posted originals still eligible")}
+        ${metric("Rejected", rejectedTransactions.length, "declined by checker")}
+        ${metric("Statement-ready", postedTransactions.length, "posted rows in member statements")}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Financial postings</h2>
@@ -972,9 +1003,11 @@ function transactionActions(tx) {
   const isPosted = tx.status === "Posted";
   const canReverse = isPosted && !tx.originalTransactionId && !apiState.financialTransactions.some((item) => item.originalTransactionId === tx.id);
   return `
-    <button class="secondary-button" data-member-statement="${tx.memberId}" type="button">Statement</button>
-    ${isPosted ? `<button class="secondary-button" data-transaction-receipt="${tx.id}" type="button">Receipt</button>` : ""}
-    ${canReverse ? `<button class="secondary-button" data-transaction-reversal="${tx.id}" type="button">Reverse</button>` : ""}
+    <div class="filters">
+      <button class="secondary-button" data-member-statement="${tx.memberId}" type="button">Statement</button>
+      ${isPosted ? `<button class="secondary-button" data-transaction-receipt="${tx.id}" type="button">Receipt</button>` : ""}
+      ${canReverse ? `<button class="secondary-button" data-transaction-reversal="${tx.id}" type="button">Reverse</button>` : ""}
+    </div>
   `;
 }
 
