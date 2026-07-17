@@ -2001,6 +2001,11 @@ function renderMemberPortal() {
     const notifications = memberApiState.notifications || [];
     const mobileDashboard = memberApiState.mobileDashboard || {};
     const mobileLoans = mobileDashboard.loans || [];
+    const memberDrafts = offlineDrafts.filter((draft) => draft.memberId === member.id);
+    const totalBalance = (balances.savings || 0) + (balances.shares || 0) + (balances.welfare || 0);
+    const loanBalance = mobileLoans.reduce((sum, loan) => sum + loan.balance, 0);
+    const unreadNotifications = notifications.filter((notification) => notification.status === "unread").length;
+    const pendingGuarantees = memberApiState.guarantorRequests.filter((request) => request.status === "pending").length;
     return `
       <div class="toolbar">
         <div>
@@ -2010,6 +2015,26 @@ function renderMemberPortal() {
         <button class="secondary-button" data-action="memberLogout" type="button">Logout member</button>
       </div>
       <div class="notice" style="margin-top:16px">${memberApiState.message}</div>
+      <section class="card" style="margin-top:16px">
+        <div class="toolbar">
+          <div>
+            <h2>Member self-service control center</h2>
+            <p class="eyebrow">Server-confirmed balances, loans, guarantees, notifications and offline drafts</p>
+          </div>
+          <button class="secondary-button" data-action="syncOfflineDrafts" type="button">Sync drafts</button>
+        </div>
+        <div class="grid metrics">
+          ${metric("Total balance", money.format(totalBalance), "savings + shares + welfare")}
+          ${metric("Loan exposure", money.format(loanBalance), `${mobileLoans.length} loan file(s)`)}
+          ${metric("Guarantees", pendingGuarantees, "pending member decisions")}
+          ${metric("Notifications", unreadNotifications, `${notifications.length} total alert(s)`)}
+        </div>
+        <div class="grid three" style="margin-top:16px">
+          ${metric("Server status", mobileDashboard.serverConfirmed ? "Confirmed" : "Waiting", mobileDashboard.lastUpdatedAt ? `updated ${mobileDashboard.lastUpdatedAt.slice(0, 16).replace("T", " ")}` : "refresh pending")}
+          ${metric("Offline drafts", memberDrafts.length, memberDrafts.length ? "sync when online" : "all synced")}
+          ${metric("Member status", titleCase(member.status.replace(/_/g, " ")), member.kycStatus ? `KYC ${titleCase(member.kycStatus.replace(/_/g, " "))}` : "profile active")}
+        </div>
+      </section>
       <div class="grid metrics" style="margin-top:16px">
         ${metric("Savings", money.format(balances.savings), "posted deposits less withdrawals")}
         ${metric("Shares", money.format(balances.shares), "posted share purchases")}
@@ -2052,7 +2077,7 @@ function renderMemberPortal() {
           ${metric("Confirmation", mobileDashboard.serverConfirmed ? "Server OK" : "Waiting", "critical actions confirmed by API")}
         </div>
         <ul class="list" style="margin-top:16px">
-          ${offlineDrafts.filter((draft) => draft.memberId === member.id).map((draft) => `
+          ${memberDrafts.map((draft) => `
             <li>
               <span><strong>${draft.subject}</strong><br><small>${titleCase(draft.category)} · saved ${draft.createdAt.slice(0, 16).replace("T", " ")}</small></span>
               <span class="status pending">Draft</span>
@@ -2069,7 +2094,7 @@ function renderMemberPortal() {
                 <strong>${request.loan?.product || "Loan request"} for ${request.borrower?.fullName || "Borrower"}</strong><br>
                 <small>${money.format(request.guaranteedAmount)} · ${titleCase(request.status.replace(/_/g, " "))} · capacity ${money.format(request.capacity || 0)}</small>
               </span>
-              <span>
+              <span class="filters">
                 ${request.status === "pending" ? `<button class="secondary-button" data-guarantor-reject="${request.id}" type="button">Reject</button><button class="primary-button" data-guarantor-accept="${request.id}" type="button">Accept</button>` : `<span class="status ${statusClass(request.status)}">${titleCase(request.status)}</span>`}
               </span>
             </li>

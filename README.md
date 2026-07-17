@@ -209,6 +209,8 @@ Members shows backend summary KPIs, balance totals, branch coverage, and direct 
 
 Member Portal includes a mobile dashboard card with server-confirmed balances, last-updated time, loan totals, notifications, and a demo mobile-money payment action.
 
+Member Portal also shows a self-service control center for total balance, loan exposure, guarantee decisions, notifications, server status, offline drafts, and member/KYC status.
+
 Members can submit a mobile loan application from the Member Portal and see the dashboard refresh after server confirmation.
 
 Members can save offline complaint drafts locally and sync them later from the Member Portal.
