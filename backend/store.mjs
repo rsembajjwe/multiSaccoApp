@@ -1010,7 +1010,13 @@ export function publicUser(user) {
 export function publicMember(member) {
   if (!member) return null;
   const { passwordHash, passwordSalt, ...safeMember } = member;
-  return safeMember;
+  const balances = memberBalances(member.id);
+  return {
+    ...safeMember,
+    savingsBalance: balances.savings,
+    sharesBalance: balances.shares,
+    welfareBalance: balances.welfare
+  };
 }
 
 export function publicTenant(tenant) {

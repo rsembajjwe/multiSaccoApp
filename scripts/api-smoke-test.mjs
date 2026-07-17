@@ -389,6 +389,12 @@ try {
 
   const status = await api("PATCH", `/members/${member.data.id}/status`, { status: "active" }, saccoToken);
   assert(status.data.status === "active", "Member status should update");
+  assert(!("passwordHash" in status.data), "Member responses should not expose password hashes");
+  assert("savingsBalance" in status.data, "Member responses should include savings balance");
+
+  const listedMembers = await api("GET", "/members", null, saccoToken);
+  assert(listedMembers.data.every((item) => !("passwordHash" in item)), "Member lists should not expose password hashes");
+  assert(listedMembers.data.some((item) => item.membershipNo === "GVS-0001" && item.savingsBalance > 0), "Member lists should include computed balances");
 
   const importTemplate = await api("GET", "/members/import-template", null, saccoToken);
   assert(importTemplate.data.tenantId === "tenant_green", "Member import template should use the authenticated tenant");

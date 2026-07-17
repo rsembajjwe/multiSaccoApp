@@ -193,6 +193,8 @@ Operations shows Java-backed monitoring counts, operational alerts, production r
 
 Dashboard KPIs switch to backend member, transaction, loan, approval, audit, and operations counts after API login.
 
+Members shows backend summary KPIs, balance totals, branch coverage, and direct statement/profile actions after API login.
+
 Member Portal includes a mobile dashboard card with server-confirmed balances, last-updated time, loan totals, notifications, and a demo mobile-money payment action.
 
 Members can submit a mobile loan application from the Member Portal and see the dashboard refresh after server confirmation.

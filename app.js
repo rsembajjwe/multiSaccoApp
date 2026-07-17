@@ -429,9 +429,9 @@ function apiMemberToRow(member) {
     branchId: member.branchId,
     branchName: apiBranchName(member.branchId),
     kyc: titleCase(member.kycStatus.replace(/_/g, " ")),
-    savings: 0,
-    shares: 0,
-    welfare: 0,
+    savings: Number(member.savingsBalance || 0),
+    shares: Number(member.sharesBalance || 0),
+    welfare: Number(member.welfareBalance || 0),
     source: "API"
   };
 }
@@ -784,8 +784,36 @@ function subscriptionRow(sub) {
 function renderMembers() {
   const members = useApiMembers() ? apiState.members.map(apiMemberToRow) : tenantScoped(state.members);
   const source = useApiMembers() ? "API-backed" : "Local demo";
+  const activeMembers = members.filter((member) => member.status === "Active").length;
+  const verifiedMembers = members.filter((member) => member.kyc === "Verified").length;
+  const totalSavings = members.reduce((sum, member) => sum + (member.savings || 0), 0);
+  const totalShares = members.reduce((sum, member) => sum + (member.shares || 0), 0);
+  const totalWelfare = members.reduce((sum, member) => sum + (member.welfare || 0), 0);
+  const branchCount = new Set(members.map((member) => member.branchId).filter(Boolean)).size;
   return `
-    <section class="card">
+    <div class="grid metrics">
+      ${metric("Members", members.length, `${activeMembers} active`)}
+      ${metric("KYC verified", `${verifiedMembers}/${members.length}`, `${members.length - verifiedMembers} pending or expired`)}
+      ${metric("Branch coverage", branchCount, useApiMembers() ? "backend branches represented" : "demo branches represented")}
+      ${metric("Member funds", money.format(totalSavings + totalShares + totalWelfare), "savings + shares + welfare")}
+    </div>
+
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Member balance snapshot</h2>
+          <p class="eyebrow">${source} &middot; Server-confirmed balances after API login</p>
+        </div>
+        ${apiState.user ? `<button class="secondary-button" data-view-jump="operations" type="button">View operations health</button>` : ""}
+      </div>
+      <div class="grid three">
+        ${metric("Savings", money.format(totalSavings), "member deposit balances")}
+        ${metric("Shares", money.format(totalShares), "member share capital")}
+        ${metric("Welfare", money.format(totalWelfare), "member welfare balances")}
+      </div>
+    </section>
+
+    <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Member register</h2>
@@ -2166,6 +2194,9 @@ function bindViewActions() {
       document.querySelectorAll("#membersTable [data-member-profile]").forEach((button) => {
         button.addEventListener("click", () => openMemberProfile(button.dataset.memberProfile));
       });
+      document.querySelectorAll("#membersTable [data-member-statement]").forEach((button) => {
+        button.addEventListener("click", () => openMemberStatement(button.dataset.memberStatement));
+      });
     });
   }
 }
@@ -2596,6 +2627,9 @@ function branchName(id) {
 }
 
 memberRow = function renderMemberRow(member) {
+  const actions = apiState.user
+    ? `<div class="filters"><button class="secondary-button" data-member-profile="${member.id}" type="button">Profile</button><button class="secondary-button" data-member-statement="${member.id}" type="button">Statement</button></div>`
+    : "";
   return `
     <tr>
       <td><strong>${member.name}</strong><br><small>${member.no} · ${member.phone}${member.source ? ` · ${member.source}` : ""}</small></td>
@@ -2606,7 +2640,7 @@ memberRow = function renderMemberRow(member) {
       <td>${money.format(member.shares)}</td>
       <td>${money.format(member.welfare)}</td>
       <td><span class="status ${statusClass(member.status)}">${member.status}</span></td>
-      <td>${apiState.user ? `<button class="secondary-button" data-member-profile="${member.id}" type="button">Profile</button>` : ""}</td>
+      <td>${actions}</td>
     </tr>
   `;
 };

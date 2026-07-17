@@ -2272,7 +2272,7 @@ function listMembers(response, auth, url) {
   const members = isPlatform(auth) && !url.searchParams.get("tenantId")
     ? db.members
     : db.members.filter((member) => member.tenantId === tenantId);
-  return sendData(response, members);
+  return sendData(response, members.map(publicMember));
 }
 
 function getMemberImportTemplate(response, auth, url, correlationId) {
@@ -2380,14 +2380,14 @@ async function createMember(request, response, auth, correlationId) {
     resourceId: member.id,
     ipAddress: requestIp(request)
   });
-  return sendData(response, member, 201);
+  return sendData(response, publicMember(member), 201);
 }
 
 function getMember(response, auth, memberId, correlationId) {
   const member = db.members.find((item) => item.id === memberId);
   if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
   if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
-  return sendData(response, member);
+  return sendData(response, publicMember(member));
 }
 
 async function updateMemberStatus(request, response, auth, memberId, correlationId) {
@@ -2408,7 +2408,7 @@ async function updateMemberStatus(request, response, auth, memberId, correlation
     resourceId: member.id,
     ipAddress: requestIp(request)
   });
-  return sendData(response, member);
+  return sendData(response, publicMember(member));
 }
 
 function listMemberDocuments(response, auth, memberId, correlationId) {
