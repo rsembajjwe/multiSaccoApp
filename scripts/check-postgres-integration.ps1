@@ -31,7 +31,7 @@ function Invoke-Checked {
   param(
     [Parameter(Mandatory = $true)]
     [string]$Command,
-    [Parameter(ValueFromRemainingArguments = $true)]
+    [Parameter(Mandatory = $true)]
     [string[]]$Arguments
   )
 
@@ -73,25 +73,25 @@ try {
   $env:SACCO_DEMO_LOGINS_ENABLED = "true"
 
   Write-Host "Starting isolated Docker Compose stack: $ProjectName"
-  Invoke-Checked docker compose -p $ProjectName up -d --build postgres backend
+  Invoke-Checked docker @("compose", "-p", $ProjectName, "up", "-d", "--build", "postgres", "backend")
   $composeStarted = $true
 
   Wait-ForBackend
 
   Write-Host "Confirming Flyway schema history in PostgreSQL"
-  Invoke-Checked docker compose -p $ProjectName exec -T postgres psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB -c "select installed_rank, version, script, success from flyway_schema_history order by installed_rank;"
+  Invoke-Checked docker @("compose", "-p", $ProjectName, "exec", "-T", "postgres", "psql", "-U", $env:POSTGRES_USER, "-d", $env:POSTGRES_DB, "-c", "select installed_rank, version, script, success from flyway_schema_history order by installed_rank;")
 
   $env:API_BASE_URL = "http://127.0.0.1:$BackendPort/api/v1"
   $env:API_SMOKE_WAIT_MS = "60000"
   $env:SKIP_RATE_LIMIT_TEST = "1"
 
   Write-Host "Running Java/PostgreSQL API smoke test"
-  Invoke-Checked node scripts/api-smoke-test.mjs
+  Invoke-Checked node @("scripts/api-smoke-test.mjs")
 
   Remove-Item Env:\SKIP_RATE_LIMIT_TEST -ErrorAction SilentlyContinue
 
   Write-Host "Running security hardening checks"
-  Invoke-Checked node scripts/check-security-hardening.mjs
+  Invoke-Checked node @("scripts/check-security-hardening.mjs")
 
   Write-Host "PostgreSQL integration verification passed."
 } finally {

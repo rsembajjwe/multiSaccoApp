@@ -15,7 +15,7 @@ public class NotificationService {
     private final NotificationTemplateRepository templateRepository;
 
     public Notification notifyPaymentPosted(Member member, String purpose, BigDecimal amount, String resourceType, String resourceId) {
-        String eventType = "payment_received";
+        String eventType = "loan_repayment".equals(purpose) ? "loan_repayment_received" : "payment_received";
         NotificationTemplate template = activeTemplate(member.getTenantId(), eventType);
         String title = template == null ? "Payment received" : template.getTitle();
         String message = template == null ? "Your mobile-money " + purpose.replace('_', ' ') + " of " + amount + " was posted." : template.getBody();
@@ -47,6 +47,22 @@ public class NotificationService {
                 message,
                 "loan",
                 loanId));
+    }
+
+    public Notification notifyComplaintSynced(Member member, String complaintId) {
+        String eventType = "complaint_synced";
+        NotificationTemplate template = activeTemplate(member.getTenantId(), eventType);
+        String title = template == null ? "Complaint synced" : template.getTitle();
+        String message = template == null ? "Your offline complaint draft has been synced to the SACCO." : template.getBody();
+        return notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                eventType,
+                title,
+                message,
+                "complaint",
+                complaintId));
     }
 
     private NotificationTemplate activeTemplate(String tenantId, String eventType) {

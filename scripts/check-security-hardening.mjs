@@ -83,7 +83,7 @@ await check("member sessions are isolated from staff APIs", async () => {
   assert(dashboard.data.balances.savings >= 0, "member dashboard did not return balances");
   assert(Array.isArray(dashboard.data.loans), "member dashboard did not return loans");
   assert(Array.isArray(dashboard.data.notifications), "member dashboard did not return notifications");
-  assert(Array.isArray(dashboard.data.pendingGuarantors), "member dashboard did not return guarantor requests");
+  assert(Array.isArray(dashboard.data.pendingGuarantorRequests), "member dashboard did not return guarantor requests");
   await expectStatus("GET", "/users", null, memberToken, 401);
 });
 

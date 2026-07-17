@@ -3012,7 +3012,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
 				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
-				.andExpect(jsonPath("$.data.channel", is("mobile")))
+				.andExpect(jsonPath("$.data.channel", is("mobile_offline_sync")))
 				.andExpect(jsonPath("$.data.createdByMemberId", is("member_green_amina")));
 
 		mockMvc.perform(get("/api/v1/regulatory-report")

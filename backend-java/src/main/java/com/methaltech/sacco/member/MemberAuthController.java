@@ -320,6 +320,7 @@ class MemberAuthController {
                 body.subject().trim(),
                 body.description() == null ? "" : body.description().trim(),
                 priority);
+        notificationService.notifyComplaintSynced(member, complaint.getId());
         auditService.record(
                 member.getTenantId(),
                 (String) null,

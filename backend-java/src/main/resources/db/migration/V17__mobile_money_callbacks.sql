@@ -6,7 +6,7 @@ CREATE TABLE mobile_money_callbacks (
     amount DECIMAL(18, 2) NOT NULL,
     external_reference VARCHAR(120) NOT NULL,
     provider VARCHAR(80) NOT NULL,
-    provider_payload CLOB,
+    provider_payload TEXT,
     status VARCHAR(32) NOT NULL,
     resource_type VARCHAR(64),
     resource_id VARCHAR(80),

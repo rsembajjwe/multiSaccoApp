@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 public class ComplaintService {
 
     public static final Set<String> CATEGORIES = Set.of("statement", "loan", "savings", "shares", "service", "other");
-    public static final Set<String> CHANNELS = Set.of("branch", "mobile", "phone", "email", "web");
+    public static final Set<String> CHANNELS = Set.of("branch", "mobile", "mobile_offline_sync", "phone", "email", "web");
     public static final Set<String> PRIORITIES = Set.of("low", "medium", "high", "urgent");
     public static final Set<String> STATUSES = Set.of("open", "in_progress", "resolved", "closed");
 
@@ -57,7 +57,7 @@ public class ComplaintService {
                 category,
                 subject,
                 description,
-                "mobile",
+                "mobile_offline_sync",
                 priority,
                 "open",
                 null,
