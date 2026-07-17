@@ -788,10 +788,11 @@ export function memberBalances(memberId) {
   const balances = { savings: 0, shares: 0, welfare: 0 };
   for (const transaction of db.financialTransactions) {
     if (transaction.memberId !== memberId || transaction.status !== "posted") continue;
-    if (transaction.type === "savings_deposit") balances.savings += transaction.amount;
-    if (transaction.type === "withdrawal") balances.savings -= transaction.amount;
-    if (transaction.type === "share_purchase") balances.shares += transaction.amount;
-    if (transaction.type === "welfare_contribution") balances.welfare += transaction.amount;
+    const direction = transaction.originalTransactionId ? -1 : 1;
+    if (transaction.type === "savings_deposit") balances.savings += transaction.amount * direction;
+    if (transaction.type === "withdrawal") balances.savings -= transaction.amount * direction;
+    if (transaction.type === "share_purchase") balances.shares += transaction.amount * direction;
+    if (transaction.type === "welfare_contribution") balances.welfare += transaction.amount * direction;
   }
   for (const claim of db.welfareClaims || []) {
     if (claim.memberId !== memberId || claim.status !== "paid") continue;

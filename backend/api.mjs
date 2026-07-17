@@ -162,8 +162,17 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/branches") return createBranch(request, response, auth, correlationId);
     if (method === "GET" && path === "/members") return listMembers(response, auth, url);
     if (method === "POST" && path === "/members") return createMember(request, response, auth, correlationId);
+    if (method === "GET" && path.startsWith("/members/") && path.endsWith("/statement")) {
+      return getMemberStatement(response, auth, path.split("/")[2], url, correlationId);
+    }
     if (method === "GET" && path === "/financial-transactions") return listFinancialTransactions(response, auth, url);
     if (method === "POST" && path === "/financial-transactions") return createFinancialTransaction(request, response, auth, correlationId);
+    if (method === "GET" && path.startsWith("/financial-transactions/") && path.endsWith("/receipt")) {
+      return getFinancialTransactionReceipt(response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "POST" && path.startsWith("/financial-transactions/") && path.endsWith("/reversal")) {
+      return reverseFinancialTransaction(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path === "/welfare-claims") return listWelfareClaims(response, auth, url, correlationId);
     if (method === "POST" && path === "/welfare-claims") return createWelfareClaim(request, response, auth, correlationId);
     if (method === "PATCH" && path.startsWith("/welfare-claims/") && path.endsWith("/status")) {
@@ -1471,16 +1480,20 @@ function buildJournalEntries() {
 
   for (const transaction of db.financialTransactions.filter((item) => item.status === "posted")) {
     const cashAccount = accountForChannel(transaction.channel);
+    const reversal = Boolean(transaction.originalTransactionId);
     if (transaction.type === "withdrawal") {
       entries.push(journalEntry({
         id: `je_${transaction.id}`,
         tenantId: transaction.tenantId,
-        sourceType: "financial_transaction",
+        sourceType: reversal ? "financial_transaction_reversal" : "financial_transaction",
         sourceId: transaction.id,
         reference: transaction.reference,
         description: transaction.narration || `Posted ${transaction.type.replace(/_/g, " ")}`,
         postedAt: transaction.postedAt || transaction.updatedAt,
-        lines: [
+        lines: reversal ? [
+          journalLine(cashAccount, transaction.amount, 0, transaction.memberId),
+          journalLine("2000", 0, transaction.amount, transaction.memberId)
+        ] : [
           journalLine("2000", transaction.amount, 0, transaction.memberId),
           journalLine(cashAccount, 0, transaction.amount, transaction.memberId)
         ]
@@ -1489,12 +1502,15 @@ function buildJournalEntries() {
       entries.push(journalEntry({
         id: `je_${transaction.id}`,
         tenantId: transaction.tenantId,
-        sourceType: "financial_transaction",
+        sourceType: reversal ? "financial_transaction_reversal" : "financial_transaction",
         sourceId: transaction.id,
         reference: transaction.reference,
         description: transaction.narration || `Posted ${transaction.type.replace(/_/g, " ")}`,
         postedAt: transaction.postedAt || transaction.updatedAt,
-        lines: [
+        lines: reversal ? [
+          journalLine(accountForTransactionType(transaction.type), transaction.amount, 0, transaction.memberId),
+          journalLine(cashAccount, 0, transaction.amount, transaction.memberId)
+        ] : [
           journalLine(cashAccount, transaction.amount, 0, transaction.memberId),
           journalLine(accountForTransactionType(transaction.type), 0, transaction.amount, transaction.memberId)
         ]
@@ -2006,6 +2022,161 @@ async function updateFinancialTransactionStatus(request, response, auth, transac
     ipAddress: requestIp(request)
   });
   return sendData(response, transaction);
+}
+
+function getFinancialTransactionReceipt(response, auth, transactionId, correlationId) {
+  const transaction = db.financialTransactions.find((item) => item.id === transactionId);
+  if (!transaction) return sendError(response, 404, "TRANSACTION_NOT_FOUND", "Financial transaction not found.", correlationId);
+  if (!assertTenantAccess(auth, transaction.tenantId, response, correlationId)) return;
+  if (transaction.status !== "posted") {
+    return sendError(response, 409, "RECEIPT_NOT_AVAILABLE", "Receipts are only available for posted transactions.", correlationId);
+  }
+  const tenant = db.tenants.find((item) => item.id === transaction.tenantId);
+  const branch = db.branches.find((item) => item.id === transaction.branchId);
+  const member = db.members.find((item) => item.id === transaction.memberId);
+  if (!tenant || !branch || !member) {
+    return sendError(response, 409, "RECEIPT_DATA_MISSING", "Receipt source data is incomplete.", correlationId);
+  }
+  const receiptNo = `RCT-${transaction.reference}`;
+  return sendData(response, {
+    receiptNo,
+    tenantId: tenant.id,
+    tenantName: tenant.name,
+    tenantRegistrationNo: tenant.registrationNo,
+    branchId: branch.id,
+    branchName: branch.name,
+    memberId: member.id,
+    membershipNo: member.membershipNo,
+    memberName: member.fullName,
+    transactionId: transaction.id,
+    transactionType: transaction.type,
+    channel: transaction.channel,
+    amount: transaction.amount,
+    reference: transaction.reference,
+    narration: transaction.narration,
+    postedByUserId: transaction.checkerUserId,
+    postedAt: transaction.postedAt,
+    issuedAt: new Date().toISOString(),
+    printableText: `${tenant.name}\nReceipt: ${receiptNo}\nMember: ${member.fullName} (${member.membershipNo})\nBranch: ${branch.name}\nTransaction: ${transaction.type} via ${transaction.channel}\nAmount: UGX ${transaction.amount}\nReference: ${transaction.reference}\nPosted at: ${transaction.postedAt}`
+  });
+}
+
+async function reverseFinancialTransaction(request, response, auth, transactionId, correlationId) {
+  const original = db.financialTransactions.find((item) => item.id === transactionId);
+  if (!original) return sendError(response, 404, "TRANSACTION_NOT_FOUND", "Financial transaction not found.", correlationId);
+  if (!assertTenantAccess(auth, original.tenantId, response, correlationId)) return;
+  if (original.status !== "posted" || original.originalTransactionId) {
+    return sendError(response, 409, "REVERSAL_NOT_AVAILABLE", "Only posted original financial transactions can be reversed.", correlationId);
+  }
+  if (db.financialTransactions.some((item) => item.originalTransactionId === original.id)) {
+    return sendError(response, 409, "TRANSACTION_ALREADY_REVERSED", "This transaction already has a reversal.", correlationId);
+  }
+  const now = new Date().toISOString();
+  if (!assertAccountingPeriodOpen(original.tenantId, now, response, correlationId)) return;
+  const memberBalance = memberBalances(original.memberId);
+  if (original.type === "savings_deposit" && memberBalance.savings < original.amount) {
+    return sendError(response, 409, "INSUFFICIENT_BALANCE_FOR_REVERSAL", "Member savings balance is too low to reverse this transaction.", correlationId);
+  }
+  if (original.type === "share_purchase" && memberBalance.shares < original.amount) {
+    return sendError(response, 409, "INSUFFICIENT_BALANCE_FOR_REVERSAL", "Member shares balance is too low to reverse this transaction.", correlationId);
+  }
+  if (original.type === "welfare_contribution" && memberBalance.welfare < original.amount) {
+    return sendError(response, 409, "INSUFFICIENT_BALANCE_FOR_REVERSAL", "Member welfare balance is too low to reverse this transaction.", correlationId);
+  }
+
+  const body = await readJson(request);
+  const reason = String(body.reason || "").trim();
+  if (!reason) return sendError(response, 400, "REVERSAL_REASON_REQUIRED", "A reversal reason is required.", correlationId);
+  const reversal = {
+    ...original,
+    id: newId("txn"),
+    reference: `${original.reference}-REV`,
+    status: "posted",
+    makerUserId: auth.user.id,
+    checkerUserId: auth.user.id,
+    postedAt: now,
+    rejectionReason: null,
+    originalTransactionId: original.id,
+    reversalReason: reason,
+    createdAt: now,
+    updatedAt: now
+  };
+  db.financialTransactions.push(reversal);
+  createAuditEvent({
+    tenantId: reversal.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Reversed financial transaction ${original.reference}`,
+    resourceType: "financial_transaction",
+    resourceId: reversal.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, reversal, 201);
+}
+
+function getMemberStatement(response, auth, memberId, url, correlationId) {
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+
+  const from = url.searchParams.get("from") || null;
+  const to = url.searchParams.get("to") || null;
+  if (from && to && from > to) {
+    return sendError(response, 400, "INVALID_STATEMENT_RANGE", "Statement start date must be before end date.", correlationId);
+  }
+  const movements = db.financialTransactions
+    .filter((transaction) => transaction.memberId === member.id && transaction.status === "posted")
+    .filter((transaction) => !from || String(transaction.postedAt || transaction.createdAt).slice(0, 10) >= from)
+    .filter((transaction) => !to || String(transaction.postedAt || transaction.createdAt).slice(0, 10) <= to)
+    .sort((a, b) => String(a.postedAt || a.createdAt).localeCompare(String(b.postedAt || b.createdAt)));
+  const balances = { savings: 0, shares: 0, welfare: 0 };
+  const lines = movements.map((transaction) => {
+    const movement = transactionMovement(transaction);
+    balances.savings += movement.savings;
+    balances.shares += movement.shares;
+    balances.welfare += movement.welfare;
+    return {
+      transactionId: transaction.id,
+      reference: transaction.reference,
+      type: transaction.type,
+      channel: transaction.channel,
+      amount: transaction.amount,
+      savingsMovement: movement.savings,
+      sharesMovement: movement.shares,
+      welfareMovement: movement.welfare,
+      savingsBalance: balances.savings,
+      sharesBalance: balances.shares,
+      welfareBalance: balances.welfare,
+      narration: transaction.narration || "",
+      originalTransactionId: transaction.originalTransactionId || null,
+      postedAt: transaction.postedAt
+    };
+  });
+  const csvRows = [
+    "postedAt,reference,type,channel,amount,savingsMovement,sharesMovement,welfareMovement,savingsBalance,sharesBalance,welfareBalance",
+    ...lines.map((line) => [line.postedAt, line.reference, line.type, line.channel, line.amount, line.savingsMovement, line.sharesMovement, line.welfareMovement, line.savingsBalance, line.sharesBalance, line.welfareBalance].join(","))
+  ];
+  return sendData(response, {
+    tenantId: member.tenantId,
+    memberId: member.id,
+    membershipNo: member.membershipNo,
+    memberName: member.fullName,
+    from,
+    to,
+    openingBalances: { savings: 0, shares: 0, welfare: 0 },
+    closingBalances: { ...balances },
+    lines,
+    csv: csvRows.join("\n")
+  });
+}
+
+function transactionMovement(transaction) {
+  const direction = transaction.originalTransactionId ? -1 : 1;
+  return {
+    savings: transaction.type === "savings_deposit" ? transaction.amount * direction : transaction.type === "withdrawal" ? -transaction.amount * direction : 0,
+    shares: transaction.type === "share_purchase" ? transaction.amount * direction : 0,
+    welfare: transaction.type === "welfare_contribution" ? transaction.amount * direction : 0
+  };
 }
 
 function listWelfareClaims(response, auth, url, correlationId) {

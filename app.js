@@ -316,6 +316,9 @@ function apiTransactionToRow(transaction) {
     date: transaction.createdAt?.slice(0, 10) || "",
     maker: apiState.users.find((user) => user.id === transaction.makerUserId)?.fullName || "Maker",
     checker: transaction.checkerUserId ? (apiState.users.find((user) => user.id === transaction.checkerUserId)?.fullName || "Checker") : "",
+    postedAt: transaction.postedAt,
+    originalTransactionId: transaction.originalTransactionId,
+    reversalReason: transaction.reversalReason,
     source: "API"
   };
 }
@@ -798,11 +801,11 @@ function renderTransactions() {
       ${apiState.user ? `<div class="notice">Transactions shown from the backend for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}.</div>` : `<div class="notice">Login to the API to post server-side financial transactions. The table below is local demo data.</div>`}
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Reference</th><th>Member</th><th>Type</th><th>Channel</th><th>Amount</th><th>Maker</th><th>Checker</th><th>Status</th></tr></thead>
+          <thead><tr><th>Reference</th><th>Member</th><th>Type</th><th>Channel</th><th>Amount</th><th>Maker</th><th>Checker</th><th>Status</th><th>Action</th></tr></thead>
           <tbody>
             ${transactions.map((tx) => `
               <tr>
-                <td>${tx.ref}${tx.source ? `<br><small>${tx.source}</small>` : `<br><small>${tx.date}</small>`}</td>
+                <td>${tx.ref}${tx.source ? `<br><small>${tx.source}${tx.originalTransactionId ? " reversal" : ""}</small>` : `<br><small>${tx.date}</small>`}</td>
                 <td>${memberName(tx.memberId)}</td>
                 <td>${tx.type}</td>
                 <td>${tx.channel}</td>
@@ -810,8 +813,9 @@ function renderTransactions() {
                 <td>${tx.maker}</td>
                 <td>${tx.checker || "Pending"}</td>
                 <td><span class="status ${statusClass(tx.status)}">${tx.status}</span></td>
+                <td>${apiState.user ? transactionActions(tx) : ""}</td>
               </tr>
-            `).join("")}
+            `).join("") || `<tr><td colspan="9">No financial postings found.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -836,6 +840,16 @@ function renderTransactions() {
         ${welfareClaimTable(welfareClaims)}
       </section>
     ` : ""}
+  `;
+}
+
+function transactionActions(tx) {
+  const isPosted = tx.status === "Posted";
+  const canReverse = isPosted && !tx.originalTransactionId && !apiState.financialTransactions.some((item) => item.originalTransactionId === tx.id);
+  return `
+    <button class="secondary-button" data-member-statement="${tx.memberId}" type="button">Statement</button>
+    ${isPosted ? `<button class="secondary-button" data-transaction-receipt="${tx.id}" type="button">Receipt</button>` : ""}
+    ${canReverse ? `<button class="secondary-button" data-transaction-reversal="${tx.id}" type="button">Reverse</button>` : ""}
   `;
 }
 
@@ -1671,6 +1685,18 @@ function bindViewActions() {
     button.addEventListener("click", () => openWelfareClaimPaymentForm(button.dataset.welfarePay));
   });
 
+  document.querySelectorAll("[data-transaction-receipt]").forEach((button) => {
+    button.addEventListener("click", () => openTransactionReceipt(button.dataset.transactionReceipt));
+  });
+
+  document.querySelectorAll("[data-transaction-reversal]").forEach((button) => {
+    button.addEventListener("click", () => openTransactionReversalForm(button.dataset.transactionReversal));
+  });
+
+  document.querySelectorAll("[data-member-statement]").forEach((button) => {
+    button.addEventListener("click", () => openMemberStatement(button.dataset.memberStatement));
+  });
+
   document.querySelectorAll("[data-period-status]").forEach((button) => {
     button.addEventListener("click", () => updateAccountingPeriodStatus(button.dataset.periodStatus, button.dataset.periodNext));
   });
@@ -2375,6 +2401,90 @@ function openWelfareClaimForm() {
       document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
     }
   });
+}
+
+async function openTransactionReceipt(transactionId) {
+  try {
+    const receipt = await apiRequest(`/financial-transactions/${transactionId}/receipt`);
+    openModal("Transaction receipt", `
+      <div class="grid metrics">
+        ${metric("Receipt", receipt.receiptNo, receipt.reference)}
+        ${metric("Member", receipt.memberName, receipt.membershipNo)}
+        ${metric("Amount", money.format(receipt.amount), titleCase(receipt.transactionType.replace(/_/g, " ")))}
+      </div>
+      <div class="table-wrap" style="margin-top:16px">
+        <table>
+          <tbody>
+            <tr><th>SACCO</th><td>${receipt.tenantName}</td></tr>
+            <tr><th>Branch</th><td>${receipt.branchName}</td></tr>
+            <tr><th>Channel</th><td>${titleCase(receipt.channel.replace(/_/g, " "))}</td></tr>
+            <tr><th>Posted at</th><td>${receipt.postedAt || ""}</td></tr>
+            <tr><th>Narration</th><td>${receipt.narration || ""}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <pre class="notice" style="white-space:pre-wrap;margin-top:16px">${receipt.printableText || ""}</pre>
+    `, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  } catch (error) {
+    openModal("Receipt unavailable", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
+}
+
+function openTransactionReversalForm(transactionId) {
+  const transaction = apiState.financialTransactions.find((item) => item.id === transactionId);
+  if (!transaction) return;
+  openModal("Reverse transaction", `
+    <div class="notice">This creates a posted reversal for ${transaction.reference}; the original transaction remains unchanged for audit history.</div>
+    <label class="field full" style="margin-top:14px"><span>Reason</span><textarea id="reversalReason" class="input" rows="3">Duplicate or incorrect posting corrected by staff review.</textarea></label>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="confirmTransactionReversal" class="primary-button" type="button">Create reversal</button>`);
+
+  document.getElementById("confirmTransactionReversal").addEventListener("click", async () => {
+    try {
+      await apiRequest(`/financial-transactions/${transactionId}/reversal`, {
+        method: "POST",
+        body: JSON.stringify({ reason: value("reversalReason") })
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+async function openMemberStatement(memberId) {
+  try {
+    const statement = await apiRequest(`/members/${memberId}/statement`);
+    openModal("Member statement", `
+      <div class="grid metrics">
+        ${metric("Member", statement.memberName, statement.membershipNo)}
+        ${metric("Savings", money.format(statement.closingBalances.savings), "closing balance")}
+        ${metric("Shares", money.format(statement.closingBalances.shares), "closing balance")}
+        ${metric("Welfare", money.format(statement.closingBalances.welfare), "closing balance")}
+      </div>
+      <div class="table-wrap" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Date</th><th>Reference</th><th>Type</th><th>Amount</th><th>Savings</th><th>Shares</th><th>Welfare</th></tr></thead>
+          <tbody>
+            ${statement.lines.map((line) => `
+              <tr>
+                <td>${line.postedAt?.slice(0, 10) || ""}</td>
+                <td>${line.reference}${line.originalTransactionId ? `<br><small>Reversal</small>` : ""}</td>
+                <td>${titleCase(line.type.replace(/_/g, " "))}</td>
+                <td>${money.format(line.amount)}</td>
+                <td>${money.format(line.savingsBalance)}</td>
+                <td>${money.format(line.sharesBalance)}</td>
+                <td>${money.format(line.welfareBalance)}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="7">No posted movements found.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <details style="margin-top:16px"><summary>CSV export text</summary><pre class="notice" style="white-space:pre-wrap">${statement.csv || ""}</pre></details>
+    `, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  } catch (error) {
+    openModal("Statement unavailable", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
 }
 
 async function decideWelfareClaim(id, status) {

@@ -344,6 +344,27 @@ try {
   assert(rejectedTransaction.data.status === "rejected", "Checker should reject a pending financial transaction");
   assert(rejectedTransaction.data.rejectionReason === "Smoke test rejection", "Rejected transaction should record the reason");
 
+  const receipt = await api("GET", `/financial-transactions/${postedTransaction.data.id}/receipt`, null, saccoToken);
+  assert(receipt.data.receiptNo === `RCT-${postedTransaction.data.reference}`, "Posted transaction receipt should use the transaction reference");
+  assert(receipt.data.printableText.includes(receipt.data.memberName), "Receipt should include printable member details");
+
+  const statementBeforeReversal = await api("GET", `/members/${postedTransaction.data.memberId}/statement`, null, saccoToken);
+  assert(statementBeforeReversal.data.lines.some((line) => line.transactionId === postedTransaction.data.id), "Member statement should include the posted transaction");
+
+  const reversal = await api("POST", `/financial-transactions/${postedTransaction.data.id}/reversal`, {
+    reason: "Smoke reversal correction"
+  }, saccoToken);
+  assert(reversal.data.status === "posted", "Reversal should be posted immediately");
+  assert(reversal.data.originalTransactionId === postedTransaction.data.id, "Reversal should reference the original transaction");
+
+  const statementAfterReversal = await api("GET", `/members/${postedTransaction.data.memberId}/statement`, null, saccoToken);
+  assert(statementAfterReversal.data.lines.some((line) => line.transactionId === reversal.data.id && line.originalTransactionId === postedTransaction.data.id), "Member statement should include the reversal movement");
+
+  const duplicateReversal = await raw("POST", `/financial-transactions/${postedTransaction.data.id}/reversal`, {
+    reason: "Second smoke reversal correction"
+  }, saccoToken);
+  assert(duplicateReversal.status === 409, "A transaction should not be reversed twice");
+
   const invalidTenantTransaction = await raw("POST", "/financial-transactions", {
     memberId: "member_lake_peter",
     branchId: "branch_lake_main",
