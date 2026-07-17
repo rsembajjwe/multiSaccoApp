@@ -227,6 +227,7 @@ This is now the first build foundation. A production build should add:
 - [Data model](docs/data-model.md)
 - [API route map](docs/api-route-map.md)
 - [Deployment guide](docs/deployment.md)
+- [Monitoring guide](docs/monitoring.md)
 - [Android member app foundation](mobile/member_app/README.md)
 
 ## Seed API accounts

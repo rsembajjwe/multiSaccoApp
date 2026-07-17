@@ -50,6 +50,34 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void operationsStatusReportsPlatformAndTenantSignals() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(get("/api/v1/operations/status")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.ok", is(true)))
+				.andExpect(jsonPath("$.data.scope", is("platform")))
+				.andExpect(jsonPath("$.data.database.reachable", is(true)))
+				.andExpect(jsonPath("$.data.counts.tenants", greaterThanOrEqualTo(3)))
+				.andExpect(jsonPath("$.data.counts.members", greaterThanOrEqualTo(3)))
+				.andExpect(jsonPath("$.data.alerts.length()", greaterThanOrEqualTo(1)));
+
+		mockMvc.perform(get("/api/v1/operations/status")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.scope", is("tenant_green")))
+				.andExpect(jsonPath("$.data.counts.tenants", is(1)))
+				.andExpect(jsonPath("$.data.counts.members", greaterThanOrEqualTo(2)));
+
+		mockMvc.perform(get("/api/v1/operations/status?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+	}
+
+	@Test
 	void tenantsEndpointReturnsSeededTenants() throws Exception {
 		String token = loginAndReturnToken();
 

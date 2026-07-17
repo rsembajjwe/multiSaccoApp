@@ -120,6 +120,7 @@ All JSON responses should follow one of these shapes:
 | Method | Route | Purpose | Auth |
 | --- | --- | --- | --- |
 | GET | `/health` | Service health check. | Public |
+| GET | `/operations/status` | Operational health counts and alert indicators. | Required |
 | GET | `/tenants` | List tenants visible to current user. | Required |
 | GET | `/tenants/:id` | Get one tenant. | Required |
 | POST | `/tenants` | Submit/create tenant. | Platform admin or public registration flow |
