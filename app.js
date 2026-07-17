@@ -680,6 +680,7 @@ function renderRegistrations() {
                 <td>${packageName(tenant.packageId)}</td>
                 <td><span class="status ${statusClass(tenant.status)}">${tenant.status}</span></td>
                 <td>
+                  ${apiState.user ? `<button class="secondary-button" data-tenant-profile="${tenant.id}" type="button">Profile</button>` : ""}
                   ${apiState.user && !canCreateOnApi ? "" : `<button class="secondary-button" data-approve-tenant="${tenant.id}" type="button">Approve</button>`}
                 </td>
               </tr>
@@ -1719,6 +1720,10 @@ function bindViewActions() {
     button.addEventListener("click", () => approveTenant(button.dataset.approveTenant));
   });
 
+  document.querySelectorAll("[data-tenant-profile]").forEach((button) => {
+    button.addEventListener("click", () => openSaccoProfile(button.dataset.tenantProfile));
+  });
+
   document.querySelectorAll("[data-approve]").forEach((button) => {
     button.addEventListener("click", () => resolveApproval(button.dataset.approve, "Approved"));
   });
@@ -2318,6 +2323,54 @@ function openTenantForm() {
     closeModal();
     render();
   });
+}
+
+async function openSaccoProfile(tenantId) {
+  if (!apiState.user) return;
+  try {
+    const tenant = apiState.tenants.find((item) => item.id === tenantId);
+    const profile = await apiRequest(`/tenants/${tenantId}/profile`);
+    openModal(`${tenant?.name || profile.legalName} profile`, `
+      <div class="grid metrics">
+        ${metric("Legal name", profile.legalName, profile.cooperativeRegistrationNo || "Registration pending")}
+        ${metric("UMRA licence", profile.umraLicenseNo || "Not captured", profile.tin ? `TIN ${profile.tin}` : "Tax details pending")}
+        ${metric("Contact", profile.phone || "No phone", profile.email || "No email")}
+      </div>
+      <div class="form-grid" style="margin-top:16px">
+        ${field("Legal name", "saccoProfileLegalName", "text", profile.legalName || tenant?.name || "")}
+        ${field("TIN", "saccoProfileTin", "text", profile.tin || "")}
+        ${field("UMRA licence no.", "saccoProfileUmra", "text", profile.umraLicenseNo || "")}
+        ${field("Cooperative registration no.", "saccoProfileCoop", "text", profile.cooperativeRegistrationNo || tenant?.registrationNo || "")}
+        ${field("Address", "saccoProfileAddress", "text", profile.address || "")}
+        ${field("Email", "saccoProfileEmail", "email", profile.email || "")}
+        ${field("Phone", "saccoProfilePhone", "tel", profile.phone || "")}
+        ${field("Website", "saccoProfileWebsite", "url", profile.website || "")}
+      </div>
+    `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveSaccoProfile" class="primary-button" type="button">Save profile</button>`);
+    document.getElementById("saveSaccoProfile").addEventListener("click", async () => {
+      try {
+        await apiRequest(`/tenants/${tenantId}/profile`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            legalName: value("saccoProfileLegalName"),
+            tin: value("saccoProfileTin"),
+            umraLicenseNo: value("saccoProfileUmra"),
+            cooperativeRegistrationNo: value("saccoProfileCoop"),
+            address: value("saccoProfileAddress"),
+            email: value("saccoProfileEmail"),
+            phone: value("saccoProfilePhone"),
+            website: value("saccoProfileWebsite")
+          })
+        });
+        closeModal();
+        await refreshApiStatus();
+      } catch (error) {
+        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+      }
+    });
+  } catch (error) {
+    openModal("SACCO profile", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
 }
 
 function openMemberForm() {

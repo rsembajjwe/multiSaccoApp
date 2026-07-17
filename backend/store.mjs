@@ -74,6 +74,50 @@ export const db = {
       updatedAt: now()
     }
   ],
+  saccoProfiles: [
+    {
+      id: "profile_platform",
+      tenantId: "tenant_platform",
+      legalName: "Platform Administration",
+      tin: "",
+      umraLicenseNo: "",
+      cooperativeRegistrationNo: "PLATFORM-001",
+      address: "Kampala",
+      email: "support@multisacco.local",
+      phone: "+256700000001",
+      website: "https://multisacco.local",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "profile_green",
+      tenantId: "tenant_green",
+      legalName: "Green Valley SACCO Limited",
+      tin: "1001234567",
+      umraLicenseNo: "UMRA-GVS-2026",
+      cooperativeRegistrationNo: "COOP-UG-2389",
+      address: "Mukono Main Road",
+      email: "info@greenvalley.local",
+      phone: "+256701234000",
+      website: "https://greenvalley.local",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "profile_lake",
+      tenantId: "tenant_lake",
+      legalName: "Lake Farmers SACCO Limited",
+      tin: "1007654321",
+      umraLicenseNo: "",
+      cooperativeRegistrationNo: "COOP-UG-8112",
+      address: "Jinja Main Road",
+      email: "info@lakefarmers.local",
+      phone: "+256704111000",
+      website: "",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
   users: [
     {
       id: "user_platform_admin",

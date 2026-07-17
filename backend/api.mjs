@@ -114,6 +114,12 @@ export async function handleApi(request, response, url) {
     }
 
     if (method === "GET" && path === "/tenants") return listTenants(response, auth);
+    if (method === "GET" && path.startsWith("/tenants/") && path.endsWith("/profile")) {
+      return getSaccoProfile(response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "PATCH" && path.startsWith("/tenants/") && path.endsWith("/profile")) {
+      return updateSaccoProfile(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path.startsWith("/tenants/")) return getTenant(response, auth, path.split("/")[2], correlationId);
     if (method === "POST" && path === "/tenants") return createTenant(request, response, auth, correlationId);
     if (method === "PATCH" && path.startsWith("/tenants/") && path.endsWith("/status")) {
@@ -446,6 +452,20 @@ async function createTenant(request, response, auth, correlationId) {
     updatedAt: new Date().toISOString()
   };
   db.tenants.push(tenant);
+  db.saccoProfiles.push({
+    id: newId("profile"),
+    tenantId: tenant.id,
+    legalName: tenant.name,
+    tin: "",
+    umraLicenseNo: "",
+    cooperativeRegistrationNo: tenant.registrationNo,
+    address: "",
+    email: "",
+    phone: "",
+    website: "",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
   createAuditEvent({
     tenantId: tenant.id,
     actorUserId: auth.user.id,
@@ -477,6 +497,70 @@ async function updateTenantStatus(request, response, auth, tenantId, correlation
     ipAddress: requestIp(request)
   });
   return sendData(response, tenant);
+}
+
+function getSaccoProfile(response, auth, tenantId, correlationId) {
+  const tenant = db.tenants.find((item) => item.id === tenantId);
+  if (!tenant) return sendError(response, 404, "TENANT_NOT_FOUND", "Tenant not found.", correlationId);
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+  const profile = db.saccoProfiles.find((item) => item.tenantId === tenantId);
+  if (!profile) return sendError(response, 404, "SACCO_PROFILE_NOT_FOUND", "SACCO profile not found.", correlationId);
+  return sendData(response, profile);
+}
+
+async function updateSaccoProfile(request, response, auth, tenantId, correlationId) {
+  const tenant = db.tenants.find((item) => item.id === tenantId);
+  if (!tenant) return sendError(response, 404, "TENANT_NOT_FOUND", "Tenant not found.", correlationId);
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+  const body = await readJson(request);
+  if (body.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(body.email))) {
+    return sendError(response, 400, "VALIDATION_ERROR", "Email must be a well-formed email address.", correlationId);
+  }
+
+  let profile = db.saccoProfiles.find((item) => item.tenantId === tenantId);
+  if (!profile) {
+    profile = {
+      id: newId("profile"),
+      tenantId,
+      legalName: tenant.name,
+      tin: "",
+      umraLicenseNo: "",
+      cooperativeRegistrationNo: tenant.registrationNo,
+      address: "",
+      email: "",
+      phone: "",
+      website: "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.saccoProfiles.push(profile);
+  }
+
+  const assignOptional = (key) => {
+    if (body[key] !== undefined) profile[key] = String(body[key]).trim();
+  };
+  if (body.legalName && String(body.legalName).trim()) profile.legalName = String(body.legalName).trim();
+  if (body.cooperativeRegistrationNo && String(body.cooperativeRegistrationNo).trim()) {
+    profile.cooperativeRegistrationNo = String(body.cooperativeRegistrationNo).trim();
+  }
+  assignOptional("tin");
+  assignOptional("umraLicenseNo");
+  assignOptional("address");
+  assignOptional("email");
+  assignOptional("phone");
+  assignOptional("website");
+  profile.updatedAt = new Date().toISOString();
+
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Updated SACCO profile ${profile.legalName}`,
+    resourceType: "sacco_profile",
+    resourceId: profile.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, profile);
 }
 
 function listUsers(response, auth) {

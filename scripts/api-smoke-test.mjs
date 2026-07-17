@@ -51,6 +51,22 @@ try {
   const approvedTenant = await api("PATCH", `/tenants/${tenant.data.id}/status`, { status: "approved" }, platformToken);
   assert(approvedTenant.data.status === "approved", "Tenant status should update to approved");
 
+  const createdTenantProfile = await api("GET", `/tenants/${tenant.data.id}/profile`, null, platformToken);
+  assert(createdTenantProfile.data.legalName === tenant.data.name, "New tenants should receive a default SACCO profile");
+
+  const updatedTenantProfile = await api("PATCH", `/tenants/${tenant.data.id}/profile`, {
+    legalName: `${tenant.data.name} Limited`,
+    tin: "1009998887",
+    umraLicenseNo: "UMRA-SMOKE-2026",
+    cooperativeRegistrationNo: tenant.data.registrationNo,
+    address: "Smoke test address",
+    email: "profile-smoke@example.local",
+    phone: "+256700222333",
+    website: "https://profile-smoke.example.local"
+  }, platformToken);
+  assert(updatedTenantProfile.data.umraLicenseNo === "UMRA-SMOKE-2026", "SACCO profile should update licence details");
+  assert(updatedTenantProfile.data.email === "profile-smoke@example.local", "SACCO profile should update contact details");
+
   const packages = await api("GET", "/subscription-packages", null, platformToken);
   assert(packages.data.length >= 3, "Subscription packages should be listed");
   assert(packages.data.some((pkg) => pkg.price === 1200000 && pkg.members === 500), "Starter fixed tier should be retained for 251-500 members");
@@ -83,6 +99,15 @@ try {
     password: "Sacco@12345"
   });
   const saccoToken = saccoLogin.data.token;
+
+  const saccoProfile = await api("GET", "/tenants/tenant_green/profile", null, saccoToken);
+  assert(saccoProfile.data.tenantId === "tenant_green", "SACCO admin should read own tenant profile");
+
+  const crossTenantProfile = await raw("GET", "/tenants/tenant_lake/profile", null, saccoToken);
+  assert(crossTenantProfile.status === 403, "SACCO admin should not read another tenant profile");
+
+  const invalidProfileEmail = await raw("PATCH", "/tenants/tenant_green/profile", { email: "not-an-email" }, saccoToken);
+  assert(invalidProfileEmail.status === 400, "SACCO profile should reject invalid emails");
 
   const memberLogin = await api("POST", "/member-auth/login", {
     identifier: "GVS-0001",
