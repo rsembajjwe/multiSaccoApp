@@ -74,6 +74,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Android member app foundation documents Flutter entrypoint, emulator API base URL, seed login, and required mobile API endpoints.
 - API/static responses include baseline security headers, and public login/callback endpoints include development rate limiting.
 - Java/Spring Boot backend skeleton added with the `/api/v1/health` envelope, security headers, H2 development datasource, and PostgreSQL/Flyway production dependencies.
+- Java backend parity audit confirms the UI route surface is covered, and the local web server can proxy `/api/v1` to Spring Boot with `JAVA_API_BASE`.
 - Java tenant foundation exposes seeded SACCO tenants from a Flyway-managed table through `/api/v1/tenants`.
 - Java identity foundation authenticates seeded platform/SACCO administrators through `/api/v1/auth/login` without exposing password hashes or salts.
 - Java auth sessions store hashed bearer tokens and support current-user lookup plus logout revocation.

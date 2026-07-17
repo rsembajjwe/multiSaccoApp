@@ -26,6 +26,15 @@ Java backend:
 npm.cmd run java:start
 ```
 
+Frontend proxied to the Java backend:
+
+```powershell
+npm.cmd run java:start
+npm.cmd run start:java-api
+```
+
+When `JAVA_API_BASE` is set, `server.mjs` forwards `/api/v1/*` requests to Spring Boot and still serves the frontend locally. See `docs/java-backend-parity-audit.md` for the route parity checkpoint.
+
 Production-like Docker stack:
 
 ```powershell

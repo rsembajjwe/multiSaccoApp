@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
+    "start:java-api": "set JAVA_API_BASE=http://127.0.0.1:8080&& node server.mjs",
     "check": "node --check app.js && node --check server.mjs && node --check backend/api.mjs && node --check backend/http.mjs && node --check backend/security.mjs && node --check backend/store.mjs && node --check scripts/api-smoke-test.mjs && node --check scripts/load-test.mjs && node scripts/check-mobile-foundation.mjs && npm.cmd run java:test",
     "test:api": "node scripts/api-smoke-test.mjs",
     "java:test": "cd backend-java && mvnw.cmd test",

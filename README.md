@@ -2,7 +2,7 @@
 
 A SACCO Management Platform for Uganda described in the requirements document.
 
-The production backend path is Java/Spring Boot in `backend-java`. The current Node server remains as a working prototype bridge while the Java API is built out endpoint by endpoint.
+The production backend path is Java/Spring Boot in `backend-java`. The current Node server remains as a working prototype bridge, and it can now proxy `/api/v1` traffic to the Java backend with `JAVA_API_BASE`.
 
 ## What is included
 
@@ -49,6 +49,15 @@ Then open:
 ```text
 http://127.0.0.1:8080/api/v1/health
 ```
+
+Run the frontend against the Java backend instead of the Node prototype bridge:
+
+```powershell
+npm.cmd run java:start
+npm.cmd run start:java-api
+```
+
+This keeps the app at `http://127.0.0.1:5173` while proxying `/api/v1/*` requests to `http://127.0.0.1:8080`.
 
 If port `8080` is already used locally, run from `backend-java` with:
 
