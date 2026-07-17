@@ -396,6 +396,44 @@ export const db = {
       postedAt: null,
       createdAt: now(),
       updatedAt: now()
+    },
+    {
+      id: "txn_green_0004",
+      tenantId: "tenant_green",
+      branchId: "branch_green_main",
+      memberId: "member_green_amina",
+      type: "welfare_contribution",
+      channel: "cash",
+      amount: 100000,
+      status: "posted",
+      reference: "GVS-TX-0004",
+      narration: "Seeded welfare contribution",
+      makerUserId: "user_green_admin",
+      checkerUserId: "user_green_admin",
+      postedAt: "2026-07-14T12:10:00.000Z",
+      createdAt: now(),
+      updatedAt: now()
+    }
+  ],
+  welfareClaims: [
+    {
+      id: "welfare_claim_green_0001",
+      tenantId: "tenant_green",
+      memberId: "member_green_amina",
+      claimType: "medical",
+      amount: 50000,
+      channel: null,
+      reference: "GVS-WCL-0001",
+      description: "Medical support reimbursement",
+      status: "approved",
+      submittedByUserId: "user_green_admin",
+      decidedByUserId: "user_green_admin",
+      paidByUserId: null,
+      rejectionReason: null,
+      submittedAt: "2026-07-02T09:00:00.000Z",
+      decidedAt: "2026-07-02T10:00:00.000Z",
+      paidAt: null,
+      updatedAt: "2026-07-02T10:00:00.000Z"
     }
   ],
   loans: [
@@ -754,6 +792,10 @@ export function memberBalances(memberId) {
     if (transaction.type === "withdrawal") balances.savings -= transaction.amount;
     if (transaction.type === "share_purchase") balances.shares += transaction.amount;
     if (transaction.type === "welfare_contribution") balances.welfare += transaction.amount;
+  }
+  for (const claim of db.welfareClaims || []) {
+    if (claim.memberId !== memberId || claim.status !== "paid") continue;
+    balances.welfare -= claim.amount;
   }
   return balances;
 }

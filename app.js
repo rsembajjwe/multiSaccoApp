@@ -125,6 +125,7 @@ let apiState = {
   subscriptionPackages: [],
   subscriptions: [],
   financialTransactions: [],
+  welfareClaims: [],
   loans: [],
   accountingPeriods: [],
   chartOfAccounts: [],
@@ -227,6 +228,10 @@ function useApiTransactions() {
   return Boolean(apiState.user);
 }
 
+function useApiWelfareClaims() {
+  return Boolean(apiState.user);
+}
+
 function useApiLoans() {
   return Boolean(apiState.user);
 }
@@ -311,6 +316,27 @@ function apiTransactionToRow(transaction) {
     date: transaction.createdAt?.slice(0, 10) || "",
     maker: apiState.users.find((user) => user.id === transaction.makerUserId)?.fullName || "Maker",
     checker: transaction.checkerUserId ? (apiState.users.find((user) => user.id === transaction.checkerUserId)?.fullName || "Checker") : "",
+    source: "API"
+  };
+}
+
+function apiWelfareClaimToRow(claim) {
+  return {
+    id: claim.id,
+    tenantId: claim.tenantId,
+    memberId: claim.memberId,
+    memberName: claim.memberName || memberName(claim.memberId),
+    membershipNo: claim.membershipNo || "",
+    claimType: titleCase(String(claim.claimType || "").replace(/_/g, " ")),
+    amount: claim.amount,
+    channel: claim.channel ? titleCase(claim.channel.replace(/_/g, " ")) : "Pending",
+    reference: claim.reference,
+    description: claim.description || "",
+    status: titleCase(String(claim.status || "").replace(/_/g, " ")),
+    submittedAt: claim.submittedAt?.slice(0, 10) || "",
+    decidedAt: claim.decidedAt?.slice(0, 10) || "",
+    paidAt: claim.paidAt?.slice(0, 10) || "",
+    rejectionReason: claim.rejectionReason || "",
     source: "API"
   };
 }
@@ -754,7 +780,11 @@ function renderMembers() {
 
 function renderTransactions() {
   const transactions = useApiTransactions() ? apiState.financialTransactions.map(apiTransactionToRow) : tenantScoped(state.transactions);
+  const welfareClaims = useApiWelfareClaims() ? apiState.welfareClaims.map(apiWelfareClaimToRow) : [];
   const source = useApiTransactions() ? "API-backed" : "Local demo";
+  const pendingClaims = welfareClaims.filter((claim) => claim.status === "Submitted").length;
+  const approvedClaims = welfareClaims.filter((claim) => claim.status === "Approved").length;
+  const paidClaimTotal = welfareClaims.filter((claim) => claim.status === "Paid").reduce((sum, claim) => sum + claim.amount, 0);
   return `
     <section class="card">
       <div class="toolbar">
@@ -786,7 +816,61 @@ function renderTransactions() {
         </table>
       </div>
     </section>
+    ${apiState.user ? `
+      <section class="card" style="margin-top:16px">
+        <div class="toolbar">
+          <div>
+            <h2>Welfare claims</h2>
+            <p class="eyebrow">API-backed &middot; member support, approvals, payouts and welfare fund journals</p>
+          </div>
+          <div class="filters">
+            <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+            <button class="primary-button" data-action="newWelfareClaim" type="button">New claim</button>
+          </div>
+        </div>
+        <div class="grid metrics">
+          ${metric("Submitted", pendingClaims, "awaiting decision")}
+          ${metric("Approved", approvedClaims, "ready for payment")}
+          ${metric("Paid", money.format(paidClaimTotal), "welfare support released")}
+        </div>
+        ${welfareClaimTable(welfareClaims)}
+      </section>
+    ` : ""}
   `;
+}
+
+function welfareClaimTable(claims) {
+  return `
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>Reference</th><th>Member</th><th>Type</th><th>Amount</th><th>Channel</th><th>Status</th><th>Timeline</th><th>Action</th></tr></thead>
+        <tbody>
+          ${claims.map((claim) => `
+            <tr>
+              <td>${claim.reference}<br><small>${claim.source}</small></td>
+              <td>${claim.memberName}<br><small>${claim.membershipNo}</small></td>
+              <td>${claim.claimType}<br><small>${claim.description || claim.rejectionReason || ""}</small></td>
+              <td>${money.format(claim.amount)}</td>
+              <td>${claim.channel}</td>
+              <td><span class="status ${statusClass(claim.status)}">${claim.status}</span></td>
+              <td>Submitted ${claim.submittedAt || "-"}${claim.paidAt ? `<br><small>Paid ${claim.paidAt}</small>` : ""}</td>
+              <td>${welfareClaimActions(claim)}</td>
+            </tr>
+          `).join("") || `<tr><td colspan="8">No welfare claims found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function welfareClaimActions(claim) {
+  if (claim.status === "Submitted") {
+    return `<button class="secondary-button" data-welfare-reject="${claim.id}" type="button">Reject</button><button class="primary-button" data-welfare-approve="${claim.id}" type="button">Approve</button>`;
+  }
+  if (claim.status === "Approved") {
+    return `<button class="primary-button" data-welfare-pay="${claim.id}" type="button">Pay</button>`;
+  }
+  return "";
 }
 
 function renderLoans() {
@@ -1575,6 +1659,18 @@ function bindViewActions() {
     button.addEventListener("click", () => openLoanRepaymentForm(button.dataset.loanRepay));
   });
 
+  document.querySelectorAll("[data-welfare-approve]").forEach((button) => {
+    button.addEventListener("click", () => decideWelfareClaim(button.dataset.welfareApprove, "approved"));
+  });
+
+  document.querySelectorAll("[data-welfare-reject]").forEach((button) => {
+    button.addEventListener("click", () => rejectWelfareClaim(button.dataset.welfareReject));
+  });
+
+  document.querySelectorAll("[data-welfare-pay]").forEach((button) => {
+    button.addEventListener("click", () => openWelfareClaimPaymentForm(button.dataset.welfarePay));
+  });
+
   document.querySelectorAll("[data-period-status]").forEach((button) => {
     button.addEventListener("click", () => updateAccountingPeriodStatus(button.dataset.periodStatus, button.dataset.periodNext));
   });
@@ -1593,6 +1689,7 @@ function bindViewActions() {
         newTenant: openTenantForm,
         newMember: openMemberForm,
         newTransaction: openTransactionForm,
+        newWelfareClaim: openWelfareClaimForm,
         newLoan: openLoanForm,
         recordSubscriptionPayment: recordSubscriptionPayment,
         simulateMobileMoneyCallback: simulateMobileMoneyCallback,
@@ -1705,7 +1802,7 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
-      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, suppliers, expenses, assets, governanceMeetings, complaints] = await Promise.all([
+      const [tenants, users, auditEvents, branches, members, subscriptionPackages, subscriptions, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, suppliers, expenses, assets, governanceMeetings, complaints] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
         apiRequest("/audit-events"),
@@ -1714,6 +1811,7 @@ async function refreshApiStatus() {
         apiRequest("/subscription-packages"),
         apiRequest(`/subscriptions${apiSubscriptionQuery()}`),
         apiRequest(`/financial-transactions${apiTenantQuery()}`),
+        apiRequest(`/welfare-claims${apiTenantQuery()}`),
         apiRequest(`/loans${apiTenantQuery()}`),
         apiRequest(`/accounting-periods${apiTenantQuery()}`),
         apiRequest("/chart-of-accounts"),
@@ -1737,6 +1835,7 @@ async function refreshApiStatus() {
       apiState.subscriptionPackages = subscriptionPackages;
       apiState.subscriptions = subscriptions;
       apiState.financialTransactions = financialTransactions;
+      apiState.welfareClaims = welfareClaims;
       apiState.loans = loans;
       apiState.accountingPeriods = accountingPeriods;
       apiState.chartOfAccounts = chartOfAccounts;
@@ -1751,7 +1850,7 @@ async function refreshApiStatus() {
       apiState.assets = assets;
       apiState.governanceMeetings = governanceMeetings;
       apiState.complaints = complaints;
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
@@ -1983,7 +2082,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], auditEvents: [], message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
@@ -2236,6 +2335,103 @@ function openTransactionForm() {
     saveState();
     closeModal();
     render();
+  });
+}
+
+function openWelfareClaimForm() {
+  if (!apiState.user) return;
+  const members = apiState.members.map(apiMemberToRow).filter((member) => member.status === "Active");
+  if (!members.length) {
+    openModal("No active members", `<div class="notice error">No active member is available for a welfare claim.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    return;
+  }
+  openModal("New welfare claim", `
+    <div class="form-grid">
+      <label class="field full"><span>Member</span><select id="welfareMember" class="select">${members.map((member) => `<option value="${member.id}">${member.name} - ${member.no}</option>`).join("")}</select></label>
+      <label class="field"><span>Claim type</span><select id="welfareClaimType" class="select"><option value="medical">Medical</option><option value="bereavement">Bereavement</option><option value="emergency">Emergency</option><option value="education">Education</option><option value="other">Other</option></select></label>
+      ${field("Amount", "welfareAmount", "number", "50000")}
+      ${field("Reference", "welfareReference", "text", `WCL-UI-${Date.now()}`)}
+      <label class="field full"><span>Description</span><textarea id="welfareDescription" class="input" rows="3">Member welfare support request.</textarea></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveWelfareClaim" class="primary-button" type="button">Submit claim</button>`);
+
+  document.getElementById("saveWelfareClaim").addEventListener("click", async () => {
+    try {
+      await apiRequest("/welfare-claims", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
+          memberId: value("welfareMember"),
+          claimType: value("welfareClaimType"),
+          amount: Number(value("welfareAmount")),
+          reference: value("welfareReference"),
+          description: value("welfareDescription")
+        })
+      });
+      closeModal();
+      state.currentView = "transactions";
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+async function decideWelfareClaim(id, status) {
+  try {
+    await apiRequest(`/welfare-claims/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+    await refreshApiStatus();
+  } catch (error) {
+    openModal("Welfare decision failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
+}
+
+function rejectWelfareClaim(id) {
+  openModal("Reject welfare claim", `
+    <label class="field full"><span>Reason</span><textarea id="welfareRejectReason" class="input" rows="3">Rejected after welfare committee review.</textarea></label>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="confirmWelfareReject" class="primary-button" type="button">Reject claim</button>`);
+
+  document.getElementById("confirmWelfareReject").addEventListener("click", async () => {
+    try {
+      await apiRequest(`/welfare-claims/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "rejected",
+          reason: value("welfareRejectReason")
+        })
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
+function openWelfareClaimPaymentForm(id) {
+  const claim = apiState.welfareClaims.find((item) => item.id === id);
+  if (!claim) return;
+  openModal("Pay welfare claim", `
+    <div class="notice">Pay ${money.format(claim.amount)} to ${claim.memberName || memberName(claim.memberId)} for ${claim.reference}.</div>
+    <div class="form-grid" style="margin-top:14px">
+      <label class="field"><span>Payment channel</span><select id="welfarePaymentChannel" class="select"><option value="cash">Cash</option><option value="bank">Bank</option><option value="mobile_money">Mobile Money</option></select></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="confirmWelfarePayment" class="primary-button" type="button">Pay claim</button>`);
+
+  document.getElementById("confirmWelfarePayment").addEventListener("click", async () => {
+    try {
+      await apiRequest(`/welfare-claims/${id}/payment`, {
+        method: "POST",
+        body: JSON.stringify({ channel: value("welfarePaymentChannel") })
+      });
+      closeModal();
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
   });
 }
 

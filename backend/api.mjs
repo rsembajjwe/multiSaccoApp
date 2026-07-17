@@ -25,6 +25,8 @@ const allowedMemberTypes = new Set(["individual", "group", "institutional", "cor
 const allowedTransactionTypes = new Set(["savings_deposit", "share_purchase", "welfare_contribution", "withdrawal"]);
 const allowedTransactionChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedTransactionDecisionStatuses = new Set(["posted", "rejected"]);
+const allowedWelfareClaimDecisionStatuses = new Set(["approved", "rejected"]);
+const allowedWelfareClaimPaymentChannels = new Set(["mobile_money", "cash", "bank"]);
 const allowedStatementChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedAccountingPeriodStatuses = new Set(["open", "closed"]);
 const allowedExpenseChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
@@ -162,6 +164,14 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/members") return createMember(request, response, auth, correlationId);
     if (method === "GET" && path === "/financial-transactions") return listFinancialTransactions(response, auth, url);
     if (method === "POST" && path === "/financial-transactions") return createFinancialTransaction(request, response, auth, correlationId);
+    if (method === "GET" && path === "/welfare-claims") return listWelfareClaims(response, auth, url, correlationId);
+    if (method === "POST" && path === "/welfare-claims") return createWelfareClaim(request, response, auth, correlationId);
+    if (method === "PATCH" && path.startsWith("/welfare-claims/") && path.endsWith("/status")) {
+      return updateWelfareClaimStatus(request, response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "POST" && path.startsWith("/welfare-claims/") && path.endsWith("/payment")) {
+      return payWelfareClaim(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path === "/loans") return listLoans(response, auth, url);
     if (method === "POST" && path === "/loans") return createLoan(request, response, auth, correlationId);
     if (method === "PATCH" && path.startsWith("/loans/") && path.endsWith("/status")) {
@@ -1556,6 +1566,22 @@ function buildJournalEntries() {
     }));
   }
 
+  for (const claim of db.welfareClaims.filter((item) => item.status === "paid")) {
+    entries.push(journalEntry({
+      id: `je_${claim.id}`,
+      tenantId: claim.tenantId,
+      sourceType: "welfare_claim",
+      sourceId: claim.id,
+      reference: claim.reference,
+      description: claim.description || "Paid welfare claim",
+      postedAt: claim.paidAt,
+      lines: [
+        journalLine("2200", claim.amount, 0, claim.memberId),
+        journalLine(accountForChannel(claim.channel), 0, claim.amount, claim.memberId)
+      ]
+    }));
+  }
+
   for (const asset of db.assets.filter((item) => item.status === "active")) {
     entries.push(journalEntry({
       id: `je_acquisition_${asset.id}`,
@@ -1980,6 +2006,155 @@ async function updateFinancialTransactionStatus(request, response, auth, transac
     ipAddress: requestIp(request)
   });
   return sendData(response, transaction);
+}
+
+function listWelfareClaims(response, auth, url, correlationId) {
+  const tenantId = requestedTenant(auth, url);
+  const memberId = url.searchParams.get("memberId");
+  if (memberId) {
+    const member = db.members.find((item) => item.id === memberId && item.tenantId === tenantId);
+    if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  }
+  const claims = (isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.welfareClaims
+    : db.welfareClaims.filter((claim) => claim.tenantId === tenantId))
+    .filter((claim) => !memberId || claim.memberId === memberId)
+    .sort((a, b) => String(b.submittedAt).localeCompare(String(a.submittedAt)));
+  return sendData(response, claims.map(publicWelfareClaim));
+}
+
+async function createWelfareClaim(request, response, auth, correlationId) {
+  const body = await readJson(request);
+  const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+
+  const memberId = String(body.memberId || "");
+  const member = db.members.find((item) => item.id === memberId && item.tenantId === tenantId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (member.status !== "active") return sendError(response, 409, "MEMBER_NOT_ACTIVE", "Only active members can receive welfare claims.", correlationId);
+
+  const amount = Number(body.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return sendError(response, 400, "INVALID_WELFARE_CLAIM_AMOUNT", "Claim amount must be greater than zero.", correlationId);
+
+  const count = db.welfareClaims.filter((claim) => claim.tenantId === tenantId).length + 1;
+  const tenant = db.tenants.find((item) => item.id === tenantId);
+  const reference = String(body.reference || `${tenant?.abbreviation || "SACCO"}-WCL-${String(count).padStart(4, "0")}`).trim();
+  if (db.welfareClaims.some((claim) => claim.tenantId === tenantId && claim.reference.toLowerCase() === reference.toLowerCase())) {
+    return sendError(response, 409, "WELFARE_CLAIM_REFERENCE_EXISTS", "A welfare claim with that reference already exists.", correlationId);
+  }
+
+  const now = new Date().toISOString();
+  const claim = {
+    id: newId("welfare_claim"),
+    tenantId,
+    memberId,
+    claimType: String(body.claimType || "other"),
+    amount,
+    channel: null,
+    reference,
+    description: String(body.description || ""),
+    status: "submitted",
+    submittedByUserId: auth.user.id,
+    decidedByUserId: null,
+    paidByUserId: null,
+    rejectionReason: null,
+    submittedAt: now,
+    decidedAt: null,
+    paidAt: null,
+    updatedAt: now
+  };
+  db.welfareClaims.push(claim);
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Submitted welfare claim ${claim.reference}`,
+    resourceType: "welfare_claim",
+    resourceId: claim.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicWelfareClaim(claim), 201);
+}
+
+async function updateWelfareClaimStatus(request, response, auth, claimId, correlationId) {
+  const claim = db.welfareClaims.find((item) => item.id === claimId);
+  if (!claim) return sendError(response, 404, "WELFARE_CLAIM_NOT_FOUND", "Welfare claim not found.", correlationId);
+  if (!assertTenantAccess(auth, claim.tenantId, response, correlationId)) return;
+
+  const body = await readJson(request);
+  const status = String(body.status || "");
+  if (!allowedWelfareClaimDecisionStatuses.has(status)) {
+    return sendError(response, 400, "INVALID_WELFARE_CLAIM_STATUS", "Unsupported welfare claim status.", correlationId);
+  }
+  if (claim.status !== "submitted") {
+    return sendError(response, 409, "WELFARE_CLAIM_ALREADY_DECIDED", "Only submitted welfare claims can be decided.", correlationId);
+  }
+  const reason = String(body.reason || "").trim();
+  if (status === "rejected" && !reason) {
+    return sendError(response, 400, "WELFARE_REJECTION_REASON_REQUIRED", "A rejection reason is required.", correlationId);
+  }
+
+  const now = new Date().toISOString();
+  claim.status = status;
+  claim.decidedByUserId = auth.user.id;
+  claim.rejectionReason = status === "rejected" ? reason : null;
+  claim.decidedAt = now;
+  claim.updatedAt = now;
+  createAuditEvent({
+    tenantId: claim.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `${status === "approved" ? "Approved" : "Rejected"} welfare claim ${claim.reference}`,
+    resourceType: "welfare_claim",
+    resourceId: claim.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicWelfareClaim(claim));
+}
+
+async function payWelfareClaim(request, response, auth, claimId, correlationId) {
+  const claim = db.welfareClaims.find((item) => item.id === claimId);
+  if (!claim) return sendError(response, 404, "WELFARE_CLAIM_NOT_FOUND", "Welfare claim not found.", correlationId);
+  if (!assertTenantAccess(auth, claim.tenantId, response, correlationId)) return;
+  if (claim.status !== "approved") {
+    return sendError(response, 409, "WELFARE_CLAIM_NOT_PAYABLE", "Only approved welfare claims can be paid.", correlationId);
+  }
+
+  const body = await readJson(request);
+  const channel = String(body.channel || "cash");
+  if (!allowedWelfareClaimPaymentChannels.has(channel)) {
+    return sendError(response, 400, "INVALID_WELFARE_PAYMENT_CHANNEL", "Unsupported welfare payment channel.", correlationId);
+  }
+  const now = new Date().toISOString();
+  if (!assertAccountingPeriodOpen(claim.tenantId, now, response, correlationId)) return;
+  if (memberBalances(claim.memberId).welfare < claim.amount) {
+    return sendError(response, 409, "INSUFFICIENT_WELFARE", "Member welfare balance is insufficient for this claim.", correlationId);
+  }
+
+  claim.status = "paid";
+  claim.channel = channel;
+  claim.paidByUserId = auth.user.id;
+  claim.paidAt = now;
+  claim.updatedAt = now;
+  createAuditEvent({
+    tenantId: claim.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Paid welfare claim ${claim.reference}`,
+    resourceType: "welfare_claim",
+    resourceId: claim.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicWelfareClaim(claim));
+}
+
+function publicWelfareClaim(claim) {
+  const member = db.members.find((item) => item.id === claim.memberId);
+  return {
+    ...claim,
+    membershipNo: member?.membershipNo || "",
+    memberName: member?.fullName || "Unknown member"
+  };
 }
 
 function listLoans(response, auth, url) {
