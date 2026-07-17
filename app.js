@@ -1405,6 +1405,15 @@ function renderApiReports() {
   const debitTotal = journals.reduce((sum, entry) => sum + entry.debitTotal, 0);
   const creditTotal = journals.reduce((sum, entry) => sum + entry.creditTotal, 0);
   const unbalanced = journals.filter((entry) => !entry.isBalanced).length;
+  const reconciliationExceptions = (reconciliation.summary.unmatchedStatementLines || 0) + (reconciliation.summary.unmatchedLedgerLines || 0);
+  const openPeriods = periods.filter((period) => period.status === "open").length;
+  const closedPeriods = periods.filter((period) => period.status === "closed").length;
+  const openGovernanceItems = meetings.reduce((sum, meeting) => sum + (meeting.openResolutions || 0), 0)
+    + complaints.filter((complaint) => !["resolved", "closed"].includes(complaint.status)).length;
+  const deliveryExceptions = notificationDeliveries.filter((item) => item.status !== "sent").length;
+  const callbackExceptions = mobileMoneyCallbacks.filter((item) => item.status !== "posted").length;
+  const expenseTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const assetNetBookValue = assets.reduce((sum, asset) => sum + asset.netBookValue, 0);
   const cashPosition = journals.reduce((sum, entry) => {
     return sum + entry.lines
       .filter((line) => ["1000", "1010", "1020", "1030"].includes(line.accountCode))
@@ -1413,6 +1422,26 @@ function renderApiReports() {
   const tenantLabel = apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant";
 
   return `
+    <section class="card">
+      <div class="toolbar">
+        <div>
+          <h2>Reports control center</h2>
+          <p class="eyebrow">API-backed &middot; financial integrity, reconciliation, compliance and governance for ${tenantLabel}</p>
+        </div>
+        <button class="secondary-button" data-action="refreshApi" type="button">Refresh API</button>
+      </div>
+      <div class="grid metrics">
+        ${metric("Ledger integrity", unbalanced === 0 ? "Balanced" : `${unbalanced} issue(s)`, `${journals.length} journal entry(ies)`)}
+        ${metric("Reconciliation", reconciliationExceptions, `${money.format((reconciliation.summary.unmatchedStatementAmount || 0) + (reconciliation.summary.unmatchedLedgerAmount || 0))} exception value`)}
+        ${metric("Compliance", titleCase((regulatoryReport.consolidated.complianceStatus || "review").replace(/_/g, " ")), `${regulatoryReport.consolidated.reconciliationExceptions || 0} regulatory exception(s)`)}
+        ${metric("Governance", openGovernanceItems, "open resolutions and complaints")}
+      </div>
+      <div class="grid three" style="margin-top:16px">
+        ${metric("Accounting periods", `${openPeriods}/${periods.length}`, `${closedPeriods} closed`)}
+        ${metric("Operations exceptions", callbackExceptions + deliveryExceptions, `${callbackExceptions} callback, ${deliveryExceptions} delivery`)}
+        ${metric("Operating assets", money.format(assetNetBookValue), `${money.format(expenseTotal)} expenses posted`)}
+      </div>
+    </section>
     <div class="grid metrics">
       ${metric("Journal entries", journals.length, `${unbalanced} unbalanced`)}
       ${metric("Debits", money.format(debitTotal), "derived from posted events")}

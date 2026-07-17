@@ -175,6 +175,8 @@ SACCO staff can record repayments on active loans, with balances reduced by the 
 
 After API login, the Reports screen reads the backend chart of accounts and balanced journal entries.
 
+Reports also shows a backend-backed control center for ledger integrity, reconciliation exceptions, compliance status, governance items, accounting periods, operations exceptions, and operating assets.
+
 Reports also show reconciliation results for imported bank, cash, mobile-money, and payroll statement lines.
 
 Reports include governance meetings, open resolutions, and member/service complaints from the backend.

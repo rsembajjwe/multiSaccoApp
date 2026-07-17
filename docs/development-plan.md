@@ -388,6 +388,7 @@ Progress:
 - Transactions screen polish added with posting-control KPIs, reversal visibility, and grouped receipt/statement/reversal actions.
 - Loans screen polish added with portfolio-control KPIs, DSR watch indicators, guarantor visibility, and grouped lifecycle actions.
 - Approvals screen polish added with queue-control KPIs, workflow coverage, decision history, corrections, and grouped approve/reject actions.
+- Reports screen polish added with control-center KPIs for ledger integrity, reconciliation, compliance, governance, accounting periods, operations exceptions, and operating assets.
 - Member mobile dashboard endpoint and Member Portal card added, including server-confirmed balances, notifications, loan totals, and last-updated time.
 - Mobile loan application endpoint and Member Portal flow added, allowing members to submit their own loan applications with server confirmation.
 - Offline complaint draft support added for the Member Portal, with local draft save and server sync when online.
