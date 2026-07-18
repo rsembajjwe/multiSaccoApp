@@ -21,6 +21,8 @@ import com.methaltech.sacco.notification.NotificationResponse;
 import com.methaltech.sacco.notification.NotificationService;
 import com.methaltech.sacco.security.PasswordHasher;
 import com.methaltech.sacco.security.TokenGenerator;
+import com.methaltech.sacco.tenant.Tenant;
+import com.methaltech.sacco.tenant.TenantRepository;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -68,6 +70,7 @@ class MemberAuthController {
     private final NotificationService notificationService;
     private final MemberAuthService memberAuthService;
     private final BranchLookup branchLookup;
+    private final TenantRepository tenantRepository;
     private final TenantService tenantService;
     private final AuditService auditService;
     private final PasswordHasher passwordHasher;
@@ -86,6 +89,7 @@ class MemberAuthController {
             NotificationService notificationService,
             MemberAuthService memberAuthService,
             BranchLookup branchLookup,
+            TenantRepository tenantRepository,
             TenantService tenantService,
             AuditService auditService,
             PasswordHasher passwordHasher,
@@ -102,6 +106,7 @@ class MemberAuthController {
         this.notificationService = notificationService;
         this.memberAuthService = memberAuthService;
         this.branchLookup = branchLookup;
+        this.tenantRepository = tenantRepository;
         this.tenantService = tenantService;
         this.auditService = auditService;
         this.passwordHasher = passwordHasher;
@@ -113,15 +118,20 @@ class MemberAuthController {
     @PostMapping("/login")
     ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         String identifier = request.identifier().trim();
-        String rateLimitKey = "member:" + servletRequest.getRemoteAddr();
+        Tenant requestedTenant = resolveTenant(request.saccoCode());
+        if (request.saccoCode() != null && !request.saccoCode().isBlank() && requestedTenant == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiErrorResponse.of(401, "INVALID_MEMBER_CREDENTIALS", "Invalid SACCO code, username, or password."));
+        }
+
+        String rateLimitKey = "member:" + servletRequest.getRemoteAddr() + ":" + (requestedTenant == null ? "legacy" : requestedTenant.getId());
         if (loginAttemptService.isLimited(rateLimitKey)) return rateLimited(rateLimitKey);
         if (!demoCredentialPolicy.memberLoginAllowed(identifier)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "DEMO_LOGIN_DISABLED", "Seeded demo member accounts are disabled outside the development/demo profile."));
         }
 
-        Member member = memberRepository
-                .findFirstByMembershipNoIgnoreCaseOrPhoneIgnoreCaseOrEmailIgnoreCase(identifier, identifier, identifier)
+        Member member = findLoginMember(requestedTenant, identifier)
                 .filter(candidate -> "active".equals(candidate.getStatus()))
                 .filter(candidate -> passwordHasher.matches(request.password(), candidate.getPasswordSalt(), candidate.getPasswordHash()))
                 .orElse(null);
@@ -160,6 +170,28 @@ class MemberAuthController {
                 branchLookup.findSummary(member.getBranchId()).orElse(null),
                 Balances.from(member),
                 session.getExpiresAt())));
+    }
+
+    private Tenant resolveTenant(String saccoCode) {
+        if (saccoCode == null || saccoCode.isBlank()) return null;
+        String code = saccoCode.trim();
+        if ("platform".equalsIgnoreCase(code)) return tenantRepository.findById("tenant_platform").orElse(null);
+        return tenantRepository.findByAbbreviationIgnoreCase(code)
+                .or(() -> tenantRepository.findByRegistrationNoIgnoreCase(code))
+                .orElse(null);
+    }
+
+    private java.util.Optional<Member> findLoginMember(Tenant tenant, String identifier) {
+        if (tenant == null) {
+            return memberRepository.findFirstByMembershipNoIgnoreCaseOrPhoneIgnoreCaseOrEmailIgnoreCase(identifier, identifier, identifier);
+        }
+        return memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCaseOrTenantIdAndPhoneIgnoreCaseOrTenantIdAndEmailIgnoreCase(
+                tenant.getId(),
+                identifier,
+                tenant.getId(),
+                identifier,
+                tenant.getId(),
+                identifier);
     }
 
     private ResponseEntity<ApiErrorResponse> rateLimited(String key) {
@@ -432,7 +464,7 @@ class MemberAuthController {
                 repaymentRepository.totalAmountByLoanId(loan.getId()));
     }
 
-    record LoginRequest(@NotBlank String identifier, @NotBlank String password) {
+    record LoginRequest(String saccoCode, @NotBlank String identifier, @NotBlank String password) {
     }
 
     record LoginResponse(

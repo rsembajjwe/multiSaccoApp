@@ -732,6 +732,7 @@ pre.notice {
 
 .login-brand p,
 .login-option p,
+.login-form p,
 .login-option small {
   color: var(--muted);
   line-height: 1.45;
@@ -753,7 +754,8 @@ pre.notice {
   gap: 16px;
 }
 
-.login-option {
+.login-option,
+.login-form {
   display: grid;
   gap: 12px;
   align-content: start;
@@ -764,13 +766,24 @@ pre.notice {
   box-shadow: var(--shadow);
 }
 
-.login-option h3 {
+.login-form {
+  max-width: 720px;
+}
+
+.login-option h3,
+.login-form h3 {
   margin-bottom: 0;
   font-size: 19px;
 }
 
-.login-option button {
+.login-option button,
+.login-actions {
   width: fit-content;
+}
+
+.login-form small {
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .chart {

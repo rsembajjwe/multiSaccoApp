@@ -122,11 +122,10 @@ async function saccoStaffUat(page) {
 
 async function memberPortalUat(page) {
   const member = uatData?.created?.member;
-  await page.locator("#memberPortalBtn").click();
-  await page.locator("#memberLoginSubmit").waitFor({ state: "visible" });
-  await page.locator("#memberIdentifier").fill(member?.membershipNo || "GVS-0001");
-  await page.locator("#memberPassword").fill(member?.password || "Member@12345");
-  await page.locator("#memberLoginSubmit").click();
+  await page.locator("#loginSaccoCode").fill("GVS");
+  await page.locator("#loginUsername").fill(member?.membershipNo || "GVS-0001");
+  await page.locator("#loginPassword").fill(member?.password || "Member@12345");
+  await page.locator("#loginSubmit").click();
   await waitForSettledUi(page);
 
   for (const marker of [
@@ -152,11 +151,10 @@ async function memberPortalUat(page) {
 }
 
 async function staffLogin(page, email, password, label) {
-  await page.getByRole("button", { name: /Staff login|API login/ }).first().click();
-  await page.locator("#apiSaccoCode").fill(email.includes("platform") ? "PLATFORM" : "GVS");
-  await page.locator("#apiUsername").fill(email);
-  await page.locator("#apiPassword").fill(password);
-  await page.locator("#apiLoginSubmit").click();
+  await page.locator("#loginSaccoCode").fill(email.includes("platform") ? "PLATFORM" : "GVS");
+  await page.locator("#loginUsername").fill(email);
+  await page.locator("#loginPassword").fill(password);
+  await page.locator("#loginSubmit").click();
   await expectText(page, "API:", `${label} API badge`);
   await expectText(page, "Java-backed", `${label} Java-backed state`);
   await waitForSettledUi(page);

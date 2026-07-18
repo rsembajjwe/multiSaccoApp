@@ -108,11 +108,10 @@ async function clearSession(page) {
 }
 
 async function staffLogin(page) {
-  await page.getByRole("button", { name: /Staff login|API login/ }).first().click();
-  await page.locator("#apiSaccoCode").fill(process.env.UI_STAFF_SACCO_CODE || "PLATFORM");
-  await page.locator("#apiUsername").fill(process.env.UI_STAFF_USERNAME || process.env.UI_STAFF_EMAIL || "admin@platform.local");
-  await page.locator("#apiPassword").fill(process.env.UI_STAFF_PASSWORD || "Admin@12345");
-  await page.locator("#apiLoginSubmit").click();
+  await page.locator("#loginSaccoCode").fill(process.env.UI_STAFF_SACCO_CODE || "PLATFORM");
+  await page.locator("#loginUsername").fill(process.env.UI_STAFF_USERNAME || process.env.UI_STAFF_EMAIL || "admin@platform.local");
+  await page.locator("#loginPassword").fill(process.env.UI_STAFF_PASSWORD || "Admin@12345");
+  await page.locator("#loginSubmit").click();
   await expectText(page, "API:", "staff API badge");
   await expectText(page, "Java-backed", "staff Java-backed source state");
   await expectText(page, "Last sync", "staff last sync marker");
@@ -155,11 +154,10 @@ async function waitForSettledUi(page) {
 }
 
 async function memberLogin(page) {
-  await page.locator("#memberPortalBtn").click();
-  await page.locator("#memberLoginSubmit").waitFor({ state: "visible" });
-  await page.locator("#memberIdentifier").fill(process.env.UI_MEMBER_IDENTIFIER || "GVS-0001");
-  await page.locator("#memberPassword").fill(process.env.UI_MEMBER_PASSWORD || "Member@12345");
-  await page.locator("#memberLoginSubmit").click();
+  await page.locator("#loginSaccoCode").fill(process.env.UI_MEMBER_SACCO_CODE || "GVS");
+  await page.locator("#loginUsername").fill(process.env.UI_MEMBER_IDENTIFIER || "GVS-0001");
+  await page.locator("#loginPassword").fill(process.env.UI_MEMBER_PASSWORD || "Member@12345");
+  await page.locator("#loginSubmit").click();
   await waitForSettledUi(page);
 }
 

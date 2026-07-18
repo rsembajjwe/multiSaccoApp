@@ -778,26 +778,42 @@ function renderLoginScreen() {
           <p>Multi-SACCO operations, member self-service, billing, finance, loans and oversight.</p>
         </div>
       </div>
-      <div class="login-grid">
-        <article class="login-option">
-          <span class="pill">Staff</span>
-          <h3>Platform and SACCO administration</h3>
-          <p>Enter the SACCO code, username, and password for platform administrators, SACCO admins, treasurers, secretaries and chairpersons.</p>
-          <button class="primary-button" data-action="apiLogin" type="button">Staff login</button>
-          <small>Use code PLATFORM for platform administration. SACCOs use their assigned code, for example GVS.</small>
-        </article>
-        <article class="login-option">
-          <span class="pill">Member</span>
-          <h3>Member self-service</h3>
-          <p>Members can view balances, loans, notifications, guarantee requests and offline drafts.</p>
-          <button class="secondary-button" data-action="memberLogin" type="button">Member login</button>
-          <small>Use your membership number, phone, or email. Seeded demo members are disabled outside development/demo mode.</small>
-        </article>
-      </div>
+      <form id="primaryLoginForm" class="login-form">
+        <div>
+          <span class="pill">Secure access</span>
+          <h3>Login</h3>
+          <p>Code identifies the SACCO or platform administration area. Username and password identify whether the account is a member, treasurer, secretary, chairperson, SACCO admin, or platform admin.</p>
+        </div>
+        <div class="form-grid">
+          ${field("Code", "loginSaccoCode", "text", "")}
+          ${field("Username", "loginUsername", "text", "")}
+          ${field("Password", "loginPassword", "password", "")}
+        </div>
+        <div id="loginError" class="notice error" hidden></div>
+        <div class="login-actions">
+          <button id="loginSubmit" class="primary-button" type="submit">Login</button>
+        </div>
+        <small>Use code PLATFORM for platform administration. SACCOs use their assigned code. Members use the same SACCO code plus their membership number, phone, or email.</small>
+      </form>
       ${apiState.lastError ? `<div class="notice error">${apiState.lastError}</div>` : ""}
     </section>
   `;
+  bindPrimaryLoginForm();
   bindViewActions();
+}
+
+function bindPrimaryLoginForm() {
+  const form = document.getElementById("primaryLoginForm");
+  if (!form) return;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await loginWithCodeUsernamePassword(
+            value("loginSaccoCode"),
+            value("loginUsername"),
+            value("loginPassword"),
+            document.getElementById("loginError"),
+            document.getElementById("loginSubmit"));
+  });
 }
 
 function renderShellStatus() {
@@ -3340,26 +3356,8 @@ function openApiLoginForm() {
 
   document.getElementById("apiLoginSubmit").addEventListener("click", async () => {
     try {
-      const data = await apiRequest("/auth/login", {
-        method: "POST",
-        headers: {},
-        body: JSON.stringify({
-          saccoCode: value("apiSaccoCode"),
-          username: value("apiUsername"),
-          password: value("apiPassword")
-        })
-      });
-      apiState.token = data.token;
-      apiState.user = data.user;
-      apiState.roleIds = data.roleIds || [];
-      apiState.roleNames = data.roleNames || [];
-      apiState.permissionIds = data.permissionIds || [];
-      localStorage.setItem(API_SESSION_KEY, data.token);
+      await loginStaffWithCode(value("apiSaccoCode"), value("apiUsername"), value("apiPassword"));
       closeModal();
-      state.workspace = workspaceForStaff(data.user, apiState.roleNames, apiState.permissionIds);
-      ensureWorkspaceTenant();
-      state.currentView = currentWorkspace().defaultView;
-      saveState();
       await refreshApiStatus();
     } catch (error) {
       document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
@@ -3369,8 +3367,9 @@ function openApiLoginForm() {
 
 function openMemberLoginForm() {
   openModal("Member login", `
-    <div class="notice">Use your membership number, phone, or email. Seeded demo member accounts are disabled outside the development/demo profile.</div>
+    <div class="notice">Enter your SACCO code plus your membership number, phone, or email. Seeded demo member accounts are disabled outside the development/demo profile.</div>
     <div class="form-grid" style="margin-top:14px">
+      ${field("SACCO code", "memberSaccoCode", "text", "")}
       ${field("Membership no., phone, or email", "memberIdentifier", "text", "")}
       ${field("Password", "memberPassword", "password", "")}
     </div>
@@ -3378,33 +3377,103 @@ function openMemberLoginForm() {
 
   document.getElementById("memberLoginSubmit").addEventListener("click", async () => {
     try {
-      const data = await memberApiRequest("/member-auth/login", {
-        method: "POST",
-        headers: {},
-        body: JSON.stringify({ identifier: value("memberIdentifier"), password: value("memberPassword") })
-      });
-      memberApiState.token = data.token;
-      memberApiState.member = data.member;
-      memberApiState.tenant = data.tenant;
-      memberApiState.branch = data.branch;
-      memberApiState.balances = data.balances;
-      memberApiState.mobileDashboard = null;
-      memberApiState.guarantorRequests = [];
-      memberApiState.notifications = [];
-      memberApiState.loading = false;
-      memberApiState.lastSyncedAt = "";
-      memberApiState.lastError = "";
-      localStorage.setItem(MEMBER_SESSION_KEY, data.token);
+      await loginMemberWithCode(value("memberSaccoCode"), value("memberIdentifier"), value("memberPassword"));
       closeModal();
-      state.workspace = "member";
-      ensureWorkspaceTenant();
-      state.currentView = "memberPortal";
       await refreshMemberStatus();
       render();
     } catch (error) {
       document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
     }
   });
+}
+
+async function loginWithCodeUsernamePassword(saccoCode, username, password, errorTarget, submitButton) {
+  if (!saccoCode || !username || !password) {
+    showLoginError(errorTarget, "Code, username, and password are required.");
+    return;
+  }
+  showLoginError(errorTarget, "");
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Checking...";
+  }
+  try {
+    await loginStaffWithCode(saccoCode, username, password);
+    await refreshApiStatus();
+    return;
+  } catch (staffError) {
+    try {
+      await loginMemberWithCode(saccoCode, username, password);
+      await refreshMemberStatus();
+      render();
+      return;
+    } catch (memberError) {
+      showLoginError(errorTarget, "Invalid code, username, or password.");
+      apiState.lastError = staffError.message || memberError.message;
+    }
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = "Login";
+    }
+  }
+}
+
+async function loginStaffWithCode(saccoCode, username, password) {
+  const data = await apiRequest("/auth/login", {
+    method: "POST",
+    headers: {},
+    body: JSON.stringify({ saccoCode, username, password })
+  });
+  apiState.token = data.token;
+  apiState.user = data.user;
+  apiState.roleIds = data.roleIds || [];
+  apiState.roleNames = data.roleNames || [];
+  apiState.permissionIds = data.permissionIds || [];
+  memberApiState.token = "";
+  memberApiState.member = null;
+  localStorage.setItem(API_SESSION_KEY, data.token);
+  localStorage.removeItem(MEMBER_SESSION_KEY);
+  state.workspace = workspaceForStaff(data.user, apiState.roleNames, apiState.permissionIds);
+  ensureWorkspaceTenant();
+  state.currentView = currentWorkspace().defaultView;
+  saveState();
+}
+
+async function loginMemberWithCode(saccoCode, username, password) {
+  const data = await memberApiRequest("/member-auth/login", {
+    method: "POST",
+    headers: {},
+    body: JSON.stringify({ saccoCode, identifier: username, password })
+  });
+  memberApiState.token = data.token;
+  memberApiState.member = data.member;
+  memberApiState.tenant = data.tenant;
+  memberApiState.branch = data.branch;
+  memberApiState.balances = data.balances;
+  memberApiState.mobileDashboard = null;
+  memberApiState.guarantorRequests = [];
+  memberApiState.notifications = [];
+  memberApiState.loading = false;
+  memberApiState.lastSyncedAt = "";
+  memberApiState.lastError = "";
+  apiState.token = "";
+  apiState.user = null;
+  apiState.roleIds = [];
+  apiState.roleNames = [];
+  apiState.permissionIds = [];
+  localStorage.setItem(MEMBER_SESSION_KEY, data.token);
+  localStorage.removeItem(API_SESSION_KEY);
+  state.workspace = "member";
+  ensureWorkspaceTenant();
+  state.currentView = "memberPortal";
+  saveState();
+}
+
+function showLoginError(target, message) {
+  if (!target) return;
+  target.textContent = message;
+  target.hidden = !message;
 }
 
 async function simulateMobileMoneyCallback() {

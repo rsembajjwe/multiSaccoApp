@@ -10,6 +10,13 @@ public interface MemberRepository extends JpaRepository<Member, String> {
     long countByTenantId(String tenantId);
     boolean existsByTenantIdAndMembershipNoIgnoreCase(String tenantId, String membershipNo);
     Optional<Member> findFirstByTenantIdAndMembershipNoIgnoreCase(String tenantId, String membershipNo);
+    Optional<Member> findFirstByTenantIdAndMembershipNoIgnoreCaseOrTenantIdAndPhoneIgnoreCaseOrTenantIdAndEmailIgnoreCase(
+            String membershipTenantId,
+            String membershipNo,
+            String phoneTenantId,
+            String phone,
+            String emailTenantId,
+            String email);
     Optional<Member> findFirstByMembershipNoIgnoreCaseOrPhoneIgnoreCaseOrEmailIgnoreCase(
             String membershipNo,
             String phone,

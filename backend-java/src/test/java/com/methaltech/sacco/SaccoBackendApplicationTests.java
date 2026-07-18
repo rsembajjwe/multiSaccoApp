@@ -2290,6 +2290,34 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberLoginUsesSaccoCodeScope() throws Exception {
+		mockMvc.perform(post("/api/v1/member-auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "GVS",
+								  "identifier": "GVS-0001",
+								  "password": "Member@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenant.id", is("tenant_green")))
+				.andExpect(jsonPath("$.data.member.membershipNo", is("GVS-0001")));
+
+		mockMvc.perform(post("/api/v1/member-auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "LFS",
+								  "identifier": "GVS-0001",
+								  "password": "Member@12345"
+								}
+								"""))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("INVALID_MEMBER_CREDENTIALS")));
+	}
+
+	@Test
 	void memberLoginRejectsBadPasswordOrInactiveMember() throws Exception {
 		mockMvc.perform(post("/api/v1/member-auth/login")
 						.contentType("application/json")

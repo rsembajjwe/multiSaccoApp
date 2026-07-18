@@ -143,7 +143,7 @@ All JSON responses should follow one of these shapes:
 | POST | `/auth/login` | Authenticate staff with `saccoCode`, `username`, and `password`; legacy `email` plus `password` remains accepted for automation. | Public |
 | POST | `/auth/logout` | End current session. | Required |
 | GET | `/auth/me` | Get current authenticated user. | Required |
-| POST | `/member-auth/login` | Authenticate a member with membership number, phone, or email. | Public |
+| POST | `/member-auth/login` | Authenticate a member with `saccoCode`, `identifier`, and `password`; identifier may be membership number, phone, or email. | Public |
 | GET | `/member-auth/me` | Get current member profile, tenant, branch, and balances. | Member |
 | GET | `/member-auth/mobile-dashboard` | Get mobile app dashboard balances, loans, notifications, and last update time. | Member |
 | POST | `/member-auth/mobile-loans` | Submit a loan application from the member mobile channel. | Member |
