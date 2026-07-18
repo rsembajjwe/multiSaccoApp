@@ -46,6 +46,11 @@ try {
   await expectNoVisibleText(page, "Dashboard data source", "debug source panel hidden");
   await logout(page);
 
+  await assertRoleDashboard(page, "PLATFORM", "operations@platform.local", "Operations@12345", "Platform Operations", ["Platform Operations Officer", "Operating SACCOs", "Open support tickets"]);
+  await assertRoleDashboard(page, "PLATFORM", "billing@platform.local", "Billing@12345", "Platform Billing", ["Platform Billing Officer", "Active subscriptions", "Pending payments"]);
+  await assertRoleDashboard(page, "PLATFORM", "compliance@platform.local", "Compliance@12345", "Platform Compliance", ["Platform Compliance Officer", "Audit events", "Tenant approval oversight"]);
+  await assertRoleDashboard(page, "PLATFORM", "support@platform.local", "Support@12345", "Platform Support", ["Platform Support Officer", "Open complaints", "Tenant support list"]);
+
   await staffLogin(page, "GVS", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Role filtered"]);
   await assertScreen(page, "members", ["Member list", "Member registration form sections"]);
@@ -60,6 +65,10 @@ try {
   await assertScreen(page, "reconciliation", ["Bank and mobile-money matching", "Provider callbacks"]);
   await assertScreen(page, "settings", ["Branch setup", "Financial product setup"]);
   await logout(page);
+
+  await assertRoleDashboard(page, "GVS", "chairperson@greenvalley.local", "Chair@12345", "SACCO Chairperson", ["SACCO Chairperson", "Loans awaiting approval", "Chairperson approval queue"]);
+  await assertRoleDashboard(page, "GVS", "treasurer@greenvalley.local", "Treasurer@12345", "SACCO Treasurer", ["SACCO Treasurer", "Pending finance approvals", "Mobile-money callbacks"]);
+  await assertRoleDashboard(page, "GVS", "secretary@greenvalley.local", "Secretary@12345", "SACCO Secretary", ["SACCO Secretary", "Pending KYC", "Member follow-up list"]);
 
   await memberLogin(page);
   for (const marker of [
@@ -155,6 +164,32 @@ async function assertScreen(page, viewId, markers) {
     await expectText(page, marker, `${viewId} marker ${marker}`);
   }
   console.log(`PASS ${viewId}`);
+}
+
+async function assertRoleDashboard(page, code, username, password, label, markers) {
+  if (!(await canLogin(code, username, password))) {
+    console.log(`SKIP ${label} dashboard: running backend does not have this demo account loaded`);
+    return;
+  }
+  await staffLogin(page, code, username, password, label);
+  for (const marker of markers) {
+    await expectText(page, marker, `${label} dashboard marker ${marker}`);
+  }
+  console.log(`PASS ${label} dashboard`);
+  await logout(page);
+}
+
+async function canLogin(code, username, password) {
+  try {
+    const response = await fetch(`${uiBaseUrl}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ saccoCode: code, username, password })
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function navigateTo(page, viewId) {

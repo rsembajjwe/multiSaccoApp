@@ -380,11 +380,18 @@ function renderView(view) {
 }
 
 function platformDashboard() {
+  const role = roleKind();
+  if (role === "operations") return platformOperationsDashboard();
+  if (role === "billing") return platformBillingDashboard();
+  if (role === "compliance") return platformComplianceDashboard();
+  if (role === "support") return platformSupportDashboard();
   const tenants = dataRows("tenants").filter((tenant) => tenant.id !== "tenant_platform");
   const subs = dataRows("subscriptions");
   const members = dataRows("members");
   const transactions = dataRows("transactions");
+  const users = platformUsers();
   return `
+    ${dashboardIntro("Platform Super Admin", "Full ownership view for SACCO activation, subscriptions, platform users and system risk.")}
     <div class="dashboard-grid">
       ${summary("Total SACCOs", tenants.length, "All registered tenants", "Open applications")}
       ${summary("Active SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Operational tenants", "View accounts")}
@@ -394,7 +401,7 @@ function platformDashboard() {
       ${summary("Total subscription revenue", money.format(sum(subs, "amount")), "Current records", "Open billing")}
       ${summary("Pending support tickets", dataRows("complaints").filter((c) => !["closed", "resolved"].includes(normal(c.status))).length, "Support workload", "Open")}
       ${summary("Failed payment transactions", transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", "Investigate")}
-      ${summary("Active platform users", dataRows("roles").length || state.roleNames.length, "Administrators and roles", "Manage access")}
+      ${summary("Active platform users", users.filter((user) => normal(user.status) === "active").length || users.length, "Administrators and roles", "Manage access")}
     </div>
     <div class="split-layout">
       ${chartCard("SACCO registrations by month", ["Jan", "Feb", "Mar", "Apr", "May", "Jun"], [2, 3, 4, 5, 7, tenants.length || 3])}
@@ -407,11 +414,83 @@ function platformDashboard() {
   `;
 }
 
+function platformOperationsDashboard() {
+  const tenants = tenantRows();
+  const complaints = openComplaints();
+  return `
+    ${dashboardIntro("Platform Operations Officer", "Monitor service health, onboarding queues, callbacks, incidents and tenant operational status.")}
+    <div class="dashboard-grid">
+      ${summary("Operating SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Live tenants", "Monitor")}
+      ${summary("Pending onboarding", pendingTenants().length, "Applications needing follow-up", "Open queue")}
+      ${summary("Open support tickets", complaints.length, "Operational workload", "Assign")}
+      ${summary("Failed callbacks", dataRows("mobileMoneyCallbacks").filter((row) => normal(row.status).includes("failed")).length, "Provider exceptions", "Retry")}
+      ${summary("System alerts", operationAlerts().length, "Health checks", "Open")}
+    </div>
+    <div class="grid two">
+      ${recordTable("Operations command center", operationAlerts(), ["title", "provider", "severity", "status", "checkedAt"])}
+      ${recordTable("Open support tickets", complaints, ["id", "memberName", "category", "subject", "priority", "status"])}
+    </div>
+  `;
+}
+
+function platformBillingDashboard() {
+  const subs = dataRows("subscriptions");
+  return `
+    ${dashboardIntro("Platform Billing Officer", "Control subscriptions, invoices, payment access and SACCO operating eligibility.")}
+    <div class="dashboard-grid">
+      ${summary("Active subscriptions", subs.filter((row) => normal(row.status) === "active").length, "Allowed to operate", "Review")}
+      ${summary("Pending payments", subs.filter((row) => normal(row.paymentStatus || row.status).includes("pending")).length, "Awaiting confirmation", "Record")}
+      ${summary("Expired subscriptions", subs.filter((row) => normal(row.status).includes("expired")).length, "Access risk", "Renew")}
+      ${summary("Subscription revenue", money.format(sum(subs, "amount")), "Current records", "Export")}
+      ${summary("Billable SACCOs", tenantRows().length, "Registered tenants", "Open")}
+    </div>
+    ${recordTable("Subscription list", subs, ["tenantName", "packageName", "billingPeriod", "expiryDate", "amount", "memberCount", "status"])}
+    ${recordTable("SACCO billing access", tenantRows(), ["name", "district", "memberCount", "status"])}
+  `;
+}
+
+function platformComplianceDashboard() {
+  return `
+    ${dashboardIntro("Platform Compliance Officer", "Oversight view for tenant approvals, audit events, reports and operating exceptions.")}
+    <div class="dashboard-grid">
+      ${summary("Pending registrations", pendingTenants().length, "Approval oversight", "Review")}
+      ${summary("Audit events", dataRows("auditEvents").length, "Sensitive actions", "Inspect")}
+      ${summary("Open complaints", openComplaints().length, "Compliance cases", "Open")}
+      ${summary("Operations alerts", operationAlerts().length, "System exceptions", "Review")}
+      ${summary("Regulatory report", state.data.regulatoryReport ? "Ready" : "Pending", "Export readiness", "Open")}
+    </div>
+    <div class="grid two">
+      ${recordTable("Audit log", dataRows("auditEvents"), ["createdAt", "actor", "role", "tenantName", "action", "module", "result"])}
+      ${recordTable("Tenant approval oversight", tenantRows(), ["name", "district", "contactPerson", "memberCount", "status"])}
+    </div>
+  `;
+}
+
+function platformSupportDashboard() {
+  return `
+    ${dashboardIntro("Platform Support Officer", "Help SACCOs resolve member, onboarding and operating issues without platform administration rights.")}
+    <div class="dashboard-grid">
+      ${summary("Open complaints", openComplaints().length, "Support queue", "Open")}
+      ${summary("Visible SACCOs", tenantRows().length, "Tenant support context", "View")}
+      ${summary("Visible members", dataRows("members").length, "Read-only support", "Search")}
+      ${summary("Pending onboarding", pendingTenants().length, "Applicant follow-up", "Assist")}
+      ${summary("Notifications", dataRows("notifications").length, "Recent messages", "Open")}
+    </div>
+    <div class="grid two">
+      ${recordTable("Open support tickets", openComplaints(), ["id", "memberName", "category", "subject", "assignedOfficer", "priority", "status"])}
+      ${recordTable("Tenant support list", tenantRows(), ["name", "district", "contactPerson", "phone", "status"])}
+    </div>
+  `;
+}
+
 function saccoDashboard() {
+  const role = roleKind();
+  if (role === "chairperson") return saccoChairpersonDashboard();
+  if (role === "treasurer") return saccoTreasurerDashboard();
+  if (role === "secretary") return saccoSecretaryDashboard();
   const members = dataRows("members");
   const transactions = dataRows("transactions");
   const loans = dataRows("loans");
-  const role = roleKind();
   const roleCopy = {
     admin: "Full SACCO performance, new members, approvals, subscription status, branch activity and system alerts.",
     chairperson: "Loan portfolio, final approvals, arrears, governance meetings, high-value transactions and operational risks.",
@@ -423,10 +502,7 @@ function saccoDashboard() {
     auditor: "Read-only financial summary, approvals, reversals, user activity and audit exceptions."
   };
   return `
-    <div class="role-banner">
-      <div><p class="eyebrow">${roleLabel()}</p><h2>${roleCopy[role] || roleCopy.admin}</h2></div>
-      <span class="status active">Role filtered</span>
-    </div>
+    ${dashboardIntro(roleLabel(), roleCopy[role] || roleCopy.admin)}
     <div class="dashboard-grid">
       ${summary("Total members", members.length, "Membership register", "Open members")}
       ${summary("Active members", members.filter((m) => normal(m.status) === "active").length, "Can transact", "Review")}
@@ -440,6 +516,62 @@ function saccoDashboard() {
     <div class="grid two">
       ${recordTable("Recent transactions", transactions, ["reference", "memberName", "type", "amount", "status"])}
       ${recordTable("Loan work queue", loans, ["applicationNo", "memberName", "product", "requestedAmount", "status"])}
+    </div>
+  `;
+}
+
+function saccoChairpersonDashboard() {
+  const loans = dataRows("loans");
+  const transactions = dataRows("transactions");
+  return `
+    ${dashboardIntro("SACCO Chairperson", "Oversight dashboard for approvals, portfolio health, governance actions and high-value exceptions.")}
+    <div class="dashboard-grid">
+      ${summary("Total members", dataRows("members").length, "SACCO membership", "Open")}
+      ${summary("Outstanding loans", money.format(sum(loans, "outstandingBalance", "balance")), "Portfolio exposure", "Review")}
+      ${summary("Loans awaiting approval", loans.filter((row) => normal(row.status).includes("review") || normal(row.stage).includes("approval")).length, "Chairperson queue", "Decide")}
+      ${summary("Pending transactions", pendingTransactions().length, "High-value controls", "Review")}
+      ${summary("Open complaints", openComplaints().length, "Member issues", "Open")}
+    </div>
+    <div class="grid two">
+      ${recordTable("Chairperson approval queue", [...pendingTransactions(), ...loans], ["reference", "applicationNo", "memberName", "type", "requestedAmount", "amount", "status"])}
+      ${recordTable("Recent transactions", transactions, ["reference", "memberName", "type", "amount", "status"])}
+    </div>
+  `;
+}
+
+function saccoTreasurerDashboard() {
+  const transactions = dataRows("transactions");
+  const callbacks = dataRows("mobileMoneyCallbacks");
+  return `
+    ${dashboardIntro("SACCO Treasurer", "Cash, collections, withdrawals, reconciliation and finance approvals for daily control.")}
+    <div class="dashboard-grid">
+      ${summary("Total savings", money.format(sum(dataRows("members"), "savingsBalance", "savings")), "Member deposits", "Statements")}
+      ${summary("Collections", money.format(sum(transactions.filter((row) => Number(row.credit || 0) > 0), "credit", "amount")), "Posted inflows", "Open")}
+      ${summary("Withdrawals", money.format(sum(transactions.filter((row) => Number(row.debit || 0) > 0), "debit", "amount")), "Posted outflows", "Review")}
+      ${summary("Pending finance approvals", pendingTransactions().length, "Maker-checker", "Approve")}
+      ${summary("Provider callbacks", callbacks.length, "Mobile money", "Reconcile")}
+    </div>
+    <div class="grid two">
+      ${recordTable("Finance approval queue", pendingTransactions(), ["reference", "memberName", "type", "amount", "channel", "status"])}
+      ${recordTable("Mobile-money callbacks", callbacks, ["externalReference", "provider", "purpose", "amount", "status", "receivedAt"])}
+    </div>
+  `;
+}
+
+function saccoSecretaryDashboard() {
+  const members = dataRows("members");
+  return `
+    ${dashboardIntro("SACCO Secretary", "Membership, KYC, records, complaints and governance follow-up for the SACCO office.")}
+    <div class="dashboard-grid">
+      ${summary("Total members", members.length, "Member register", "Open")}
+      ${summary("Pending KYC", members.filter((row) => normal(row.kycStatus).includes("pending") || normal(row.status).includes("pending")).length, "Needs verification", "Review")}
+      ${summary("Open complaints", openComplaints().length, "Member support", "Assign")}
+      ${summary("Branches", dataRows("branches").length, "Service points", "View")}
+      ${summary("Notifications", dataRows("notifications").length, "Member communication", "Open")}
+    </div>
+    <div class="grid two">
+      ${recordTable("Member follow-up list", members, ["membershipNo", "fullName", "phone", "branchName", "kycStatus", "status"])}
+      ${recordTable("Complaint follow-up", openComplaints(), ["id", "memberName", "category", "subject", "priority", "status"])}
     </div>
   `;
 }
@@ -735,6 +867,15 @@ function renderMemberView(view) {
   if (view === "complaints") return `${formPreview("Member complaint", ["Save draft", "Submit complaint", "Category", "Subject", "Message", "Attachments", "Track status"])}${recordTable("My complaints", state.memberData.complaints, ["id", "category", "subject", "priority", "status"])}`;
   if (view === "statements") return `${filterToolbar("Filter by date and account", "Download PDF", "Download Excel")}${recordTable("Member statement", dash.statementLines || [], ["reference", "description", "debit", "credit", "runningBalance"])}`;
   return moduleBlueprint(view);
+}
+
+function dashboardIntro(title, copy) {
+  return `
+    <div class="role-banner">
+      <div><p class="eyebrow">${escapeHtml(title)}</p><h2>${escapeHtml(copy)}</h2></div>
+      <span class="status active">Role filtered</span>
+    </div>
+  `;
 }
 
 function summary(label, value, detail, action) {
@@ -1037,6 +1178,26 @@ function runtimeNotice() {
 function dataRows(key) {
   const value = state.data[key];
   return Array.isArray(value) ? value : [];
+}
+
+function tenantRows() {
+  return dataRows("tenants").filter((tenant) => tenant.id !== "tenant_platform");
+}
+
+function pendingTenants() {
+  return tenantRows().filter((tenant) => normal(tenant.status).includes("pending") || normal(tenant.status).includes("review"));
+}
+
+function platformUsers() {
+  return dataRows("users").filter((user) => user.tenantId === "tenant_platform");
+}
+
+function openComplaints() {
+  return dataRows("complaints").filter((complaint) => !["closed", "resolved", "cancelled"].includes(normal(complaint.status)));
+}
+
+function pendingTransactions() {
+  return dataRows("transactions").filter((transaction) => normal(transaction.status).includes("pending") || normal(transaction.stage).includes("approval"));
 }
 
 function productsByType(type) {
