@@ -846,7 +846,27 @@ function usersView() {
 }
 
 function auditView() {
-  return recordTable("Audit log", dataRows("auditEvents"), ["createdAt", "actor", "role", "tenantName", "action", "module", "recordReference", "result"]);
+  const rows = dataRows("auditEvents").map((event) => ({
+    ...event,
+    tenantName: tenantName(event.tenantId),
+    actor: event.actorName || userName(event.actorUserId),
+    module: event.resourceType || event.module || "system",
+    recordReference: event.resourceId || event.recordReference || event.recordId || "",
+    riskLevel: auditRiskLevel(event),
+    result: event.result || "Recorded"
+  }));
+  const sensitive = rows.filter((event) => event.riskLevel !== "Normal");
+  return `
+    <div class="dashboard-grid">
+      ${summary("Audit events", rows.length, "Immutable activity trail", "Inspect")}
+      ${summary("Sensitive events", sensitive.length, "Approvals, access and reversals", "Review")}
+      ${summary("Tenants affected", uniqueCount(rows, "tenantId"), "Across visible SACCOs", "Filter")}
+      ${summary("Actors", uniqueCount(rows, "actorUserId"), "Users and system actions", "Trace")}
+    </div>
+    ${filterToolbar("Search audit logs by SACCO, actor, action, module, IP address or record ID", "Export audit log", "Print report")}
+    ${recordTable("Sensitive audit queue", sensitive, ["createdAt", "tenantName", "actor", "action", "module", "recordReference", "ipAddress", "riskLevel"])}
+    ${recordTable(isPlatform() ? "Platform audit trail" : "SACCO audit trail", rows, ["createdAt", "tenantName", "actor", "action", "module", "recordReference", "ipAddress", "result"])}
+  `;
 }
 
 function moduleBlueprint(view) {
@@ -2795,6 +2815,13 @@ function tenantName(tenantId) {
 function userName(userId) {
   const user = dataRows("users").find((item) => item.id === userId);
   return user ? user.fullName || user.email || user.username || user.id : userId || "Unassigned";
+}
+
+function auditRiskLevel(event) {
+  const text = normal(`${event.action || ""} ${event.resourceType || ""} ${event.module || ""}`);
+  if (["password", "role", "permission", "session", "reversal", "disbursed", "suspended", "terminated"].some((word) => text.includes(word))) return "High";
+  if (["approved", "rejected", "status", "payment", "template", "complaint", "loan"].some((word) => text.includes(word))) return "Review";
+  return "Normal";
 }
 
 function productsByType(type) {

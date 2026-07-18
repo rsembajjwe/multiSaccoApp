@@ -47,6 +47,7 @@ try {
   await assertScreen(page, "sacco-accounts", ["SACCO account health", "Active accounts", "Without subscription"]);
   await assertScreen(page, "operations", ["Operations command center", "Payment monitoring"]);
   await assertScreen(page, "reports", ["Report catalogue", "Subscriptions", "Audit"]);
+  await assertScreen(page, "audit", ["Platform audit trail", "Sensitive audit queue", "Audit events"]);
   await assertScreen(page, "users", ["Platform administrators only", "Permission matrix"]);
   await assertPlatformUserCreation(page);
   await assertScreen(page, "complaints", ["Platform support desk", "Support ticket capture", "Open complaints"]);

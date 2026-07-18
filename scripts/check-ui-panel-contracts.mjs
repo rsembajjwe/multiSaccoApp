@@ -71,6 +71,9 @@ const contracts = [
   "Notification template editor",
   "Create template",
   "Save template",
+  "Platform audit trail",
+  "Sensitive audit queue",
+  "Audit events",
   "SERVER-CONFIRMED BALANCES",
   "pendingGuarantors",
   "notifications"
