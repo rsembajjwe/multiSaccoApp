@@ -459,6 +459,7 @@ Progress:
 - Phase 2 loan book import added for Java-backed active/closed migrated loans with dry-run validation, repayment schedule checks, duplicate-open-loan protection, Loans UI controls, and import guide coverage.
 - Phase 2 repayment history import added for migrated loans with dry-run validation, duplicate-reference checks, paid-to-date limits, Loans UI controls, and import guide coverage.
 - Phase 2 Excel workbook templates added for all import flows with generated `.xlsx` files and header checks against Java backend constants.
+- Phase 2 migration evidence reconciliation added with tenant-scoped member, loan, and audit CSV/Markdown report generation from the Java API.
 
 Recommended stack:
 

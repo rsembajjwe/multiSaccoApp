@@ -43,7 +43,7 @@ These items are the main gap between the current build and live SACCO operation.
 | P1 | Backups | Backup, restore, and isolated restore-rehearsal scripts exist; encrypted scheduling and release evidence remain operational setup tasks. | Restore evidence is recorded for each release candidate. |
 | P1 | CI/CD | GitHub Actions now runs local verification on Windows and a Docker/PostgreSQL production-readiness gate with browser regression on Ubuntu. | Main branch cannot be promoted if the release suite fails. |
 | P2 | UAT | UAT scripts, seeded test data, browser UAT, release evidence, and findings templates now cover platform admin, SACCO staff, and member portal acceptance paths. | Signed UAT findings are closed or explicitly accepted. |
-| P2 | Data migration | Member, profile metadata, opening balance, loan book, and repayment history imports now include CSV/Excel templates, dry-run validation, all-or-nothing Java-backed creation/posting, UI paste flows, and import guide coverage; file/object-storage reconciliation remains. | Pilot SACCO data imports without manual database edits. |
+| P2 | Data migration | Member, profile metadata, opening balance, loan book, and repayment history imports now include CSV/Excel templates, dry-run validation, all-or-nothing Java-backed creation/posting, UI paste flows, import guide coverage, and migration evidence reports; external file/object-storage reconciliation remains operational setup. | Pilot SACCO data imports without manual database edits. |
 
 ## Recommended Next Sprint
 
@@ -51,7 +51,7 @@ Focus the next sprint on turning the high-risk items into tests and enforcement.
 
 1. Run hosted staging handoff using `docs/staging-handoff-checklist.md` and `docs/release-evidence-template.md`.
 2. Execute pilot UAT scripts and close or accept findings using `docs/uat-findings-template.md`.
-3. Match imported repayment history and KYC document metadata to statement/object-storage evidence.
+3. Run migration evidence packs for pilot SACCOs and attach any external KYC file/object-storage proof.
 4. Connect monitoring alerts and encrypted backup schedules in the staging hosting environment.
 5. Provider sandbox credentials and callback-signature test fixtures.
 

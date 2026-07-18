@@ -297,6 +297,41 @@ Record these values in the release evidence pack before pilot onboarding:
 - Total rows, created rows, skipped rows, and validation errors.
 - Confirmation that no cross-tenant branch IDs were accepted.
 
+## Migration Evidence Reconciliation
+
+After running pilot imports, generate a tenant-scoped evidence pack from the Java API:
+
+```powershell
+$env:API_BASE_URL = "http://127.0.0.1:8080/api/v1"
+$env:MIGRATION_TENANT_ID = "tenant_green"
+$env:MIGRATION_ADMIN_EMAIL = "admin@platform.local"
+$env:MIGRATION_ADMIN_PASSWORD = "Admin@12345"
+npm.cmd run migration:evidence
+```
+
+Optional settings:
+
+- `MIGRATION_EVIDENCE_DIR` changes the output directory. Default: `reports/migration-evidence`.
+- `MIGRATION_EVIDENCE_FILES_ROOT` checks KYC document storage keys against a local/object-store mounted folder.
+- `MIGRATION_EVIDENCE_STRICT=true` exits with failure when reconciliation has `FAIL` checks.
+
+The script writes:
+
+- `summary.md` with pass/warn/fail checks.
+- `members.csv` with member balances, KYC metadata, document counts, next-of-kin counts, and beneficiary allocation totals.
+- `loans.csv` with loan paid-to-date capacity versus repayment history totals.
+- `audit.csv` with import audit coverage by resource type.
+
+The reconciliation flags:
+
+- Member balances that do not match posted transaction movements.
+- Members with balances but no opening-balance-style transaction evidence.
+- Verified KYC members without verified document metadata.
+- KYC document metadata whose storage key cannot be checked or is missing when a file root is supplied.
+- Beneficiary allocations above `100%` or partial allocations that need confirmation.
+- Migrated loans where imported repayment history exceeds paid-to-date capacity.
+- Missing import audit events.
+
 ## Opening Balance Import Flow
 
 Use opening balances after member records exist and before live posting starts.
