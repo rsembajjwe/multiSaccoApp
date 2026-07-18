@@ -201,7 +201,8 @@ function emptyMemberData() {
     notifications: [],
     pendingGuarantors: [],
     complaints: [],
-    drafts: []
+    drafts: [],
+    sessionExpiresAt: ""
   };
 }
 
@@ -293,6 +294,7 @@ async function restoreMember() {
     state.member = session.member;
     state.tenant = session.tenant;
     state.memberData.balances = session.balances;
+    state.memberData.sessionExpiresAt = session.expiresAt || "";
     await refreshMember();
   } catch {
     localStorage.removeItem(MEMBER_TOKEN_KEY);
@@ -1710,9 +1712,159 @@ function renderMemberView(view) {
   if (view === "loans") return recordTable("Member loans", state.memberData.loans, ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"]);
   if (view === "guarantor-requests") return recordTable("Guarantor requests", state.memberData.pendingGuarantors, ["memberName", "product", "guaranteedAmount", "capacity", "status"]);
   if (view === "notifications") return recordTable("Notifications", state.memberData.notifications, ["title", "message", "channel", "status", "createdAt"]);
-  if (view === "complaints") return `${formPreview("Member complaint", ["Save draft", "Submit complaint", "Category", "Subject", "Message", "Attachments", "Track status"])}${recordTable("My complaints", state.memberData.complaints, ["id", "category", "subject", "priority", "status"])}`;
-  if (view === "statements") return `${filterToolbar("Filter by date and account", "Download PDF", "Download Excel")}${recordTable("Member statement", dash.statementLines || [], ["reference", "description", "debit", "credit", "runningBalance"])}`;
+  if (view === "complaints") return memberComplaintsView();
+  if (view === "statements") return memberStatementsView(dash, balances);
+  if (view === "receipts") return memberReceiptsView(dash);
+  if (view === "profile") return memberProfileView(balances);
+  if (view === "security") return memberSecurityView();
   return moduleBlueprint(view);
+}
+
+function memberStatementsView(dash, balances) {
+  const lines = memberStatementLines(dash);
+  return `
+    <div class="dashboard-grid">
+      ${summary("Statement lines", lines.length, "Posted member ledger activity", "Review")}
+      ${summary("Savings balance", money.format(balances.savings || 0), "Server-confirmed balance", "Download")}
+      ${summary("Share balance", money.format(balances.shares || 0), "Server-confirmed balance", "Download")}
+      ${summary("Welfare balance", money.format(balances.welfare || 0), "Server-confirmed balance", "Download")}
+    </div>
+    ${filterToolbar("Filter by reference, account, channel, narration or date", "Download PDF", "Download Excel")}
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member statement readiness</h2>
+          <p>Balances and statement lines are refreshed from the Java member API.</p>
+        </div>
+        <span class="status active">Server-confirmed</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Member", state.member?.membershipNo)}
+        ${mini("SACCO", contextName())}
+        ${mini("Last sync", state.lastSync || "Pending")}
+        ${mini("Opening balance", money.format(lines[0]?.runningBalance || 0))}
+        ${mini("Closing balance", money.format(lines.at(-1)?.runningBalance || Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0)))}
+        ${mini("Export formats", "PDF / Excel")}
+      </div>
+    </section>
+    ${recordTable("Member statement", lines, ["reference", "description", "debit", "credit", "runningBalance", "postedAt"])}
+  `;
+}
+
+function memberReceiptsView(dash) {
+  const receipts = memberStatementLines(dash)
+    .filter((line) => line.reference && (Number(line.credit || 0) > 0 || Number(line.debit || 0) > 0))
+    .map((line) => ({
+      ...line,
+      receiptNo: `RCT-${line.reference}`,
+      receiptStatus: "Available",
+      amount: Number(line.credit || 0) || Number(line.debit || 0)
+    }));
+  return `
+    <div class="dashboard-grid">
+      ${summary("Receipts", receipts.length, "Posted transactions with evidence", "View")}
+      ${summary("Total received", money.format(sum(receipts.filter((row) => Number(row.credit || 0) > 0), "credit")), "Deposits and repayments", "Export")}
+      ${summary("Withdrawals", money.format(sum(receipts.filter((row) => Number(row.debit || 0) > 0), "debit")), "Cash-out evidence", "Review")}
+      ${summary("Receipt status", receipts.length ? "Available" : "Pending", "Only posted transactions", "Refresh")}
+    </div>
+    ${filterToolbar("Search receipts by number, reference, narration or date", "Download receipt", "Print")}
+    ${recordTable("Member receipts", receipts, ["receiptNo", "reference", "description", "amount", "receiptStatus", "postedAt"])}
+  `;
+}
+
+function memberComplaintsView() {
+  const complaints = state.memberData.complaints || [];
+  const open = complaints.filter((row) => !["closed", "resolved"].includes(normal(row.status)));
+  return `
+    <div class="dashboard-grid">
+      ${summary("My complaints", complaints.length, "Submitted support cases", "Track")}
+      ${summary("Open cases", open.length, "Awaiting action", "Follow up")}
+      ${summary("Resolved cases", complaints.length - open.length, "Closed support history", "Review")}
+      ${summary("Offline drafts", state.memberData.drafts.length, "Saved before sync", "Sync")}
+    </div>
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member complaint center</h2>
+          <p>Submit service issues, save offline drafts, sync to the SACCO support desk and track status.</p>
+        </div>
+        <span class="status ${open.length ? "pending" : "active"}">${open.length ? "Follow-up active" : "No open cases"}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Member", state.member?.membershipNo)}
+        ${mini("SACCO", contextName())}
+        ${mini("Sync state", state.lastError ? "Retry needed" : "Ready")}
+        ${mini("Attachments", "Supported")}
+        ${mini("Priority", "Low / Medium / High")}
+        ${mini("Tracking", "Status history")}
+      </div>
+    </section>
+    ${formPreview("Member complaint", ["Save draft", "Submit complaint", "Category", "Subject", "Message", "Attachments", "Track status"])}
+    ${recordTable("My complaints", complaints, ["id", "category", "subject", "priority", "status", "createdAt"])}
+  `;
+}
+
+function memberProfileView(balances) {
+  const member = state.member || {};
+  return `
+    <div class="dashboard-grid">
+      ${summary("Membership No", member.membershipNo || "-", "Unique SACCO member identity", "Copy")}
+      ${summary("Member status", labelize(member.status || "pending"), "Operating access", "Review")}
+      ${summary("KYC status", labelize(member.kycStatus || "pending"), "Profile verification", "Open")}
+      ${summary("Total balance", money.format(Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0)), "Savings, shares and welfare", "View")}
+    </div>
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member profile and KYC</h2>
+          <p>Personal details shown here come from the Java member session and SACCO KYC record.</p>
+        </div>
+        <span class="status ${normal(member.kycStatus) === "approved" ? "active" : "pending"}">${labelize(member.kycStatus || "pending")}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Full name", member.fullName)}
+        ${mini("Member type", labelize(member.memberType || "member"))}
+        ${mini("Phone", member.phone)}
+        ${mini("Email", member.email)}
+        ${mini("National ID", member.nationalId)}
+        ${mini("Joining date", member.joiningDate)}
+      </div>
+    </section>
+    <div class="grid two">
+      ${recordTable("Profile contacts", [member], ["fullName", "membershipNo", "phone", "email", "nationalId", "status"])}
+      ${recordTable("Balance summary", [{ account: "Savings", balance: balances.savings || 0 }, { account: "Shares", balance: balances.shares || 0 }, { account: "Welfare", balance: balances.welfare || 0 }], ["account", "balance"])}
+    </div>
+  `;
+}
+
+function memberSecurityView() {
+  const expiresAt = state.memberData.sessionExpiresAt || state.memberData.dashboard?.sessionExpiresAt || "Current browser session";
+  return `
+    <div class="dashboard-grid">
+      ${summary("Session", state.token ? "Active" : "Signed out", "Bearer token stored on this device", "Review")}
+      ${summary("Login code", contextCode(), "Required with username and password", "Confirm")}
+      ${summary("Password", "Protected", "Never displayed by Tereka Online", "Change")}
+      ${summary("Demo access", SHOW_DEMO_TOOLS ? "Visible" : "Hidden", "Disabled outside dev/demo", "Audit")}
+    </div>
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member security center</h2>
+          <p>Review login requirements, device session state and account safety reminders.</p>
+        </div>
+        <span class="status active">Protected</span>
+      </div>
+      <div class="source-grid">
+        ${mini("SACCO code", contextCode())}
+        ${mini("Username", state.member?.membershipNo || state.member?.email || state.member?.phone)}
+        ${mini("Session expiry", expiresAt)}
+        ${mini("Token storage", "Local device")}
+        ${mini("Password reset", "Staff-assisted")}
+        ${mini("Last sync", state.lastSync || "Pending")}
+      </div>
+    </section>
+    ${tabsCard("Security actions", ["Change password request", "Logout current device", "Report suspicious access", "Update phone/email", "Review login code"])}
+  `;
 }
 
 function dashboardIntro(title, copy) {
@@ -2479,6 +2631,7 @@ async function login(code, username, password) {
     state.member = member.member;
     state.tenant = member.tenant;
     state.memberData.balances = member.balances;
+    state.memberData.sessionExpiresAt = member.expiresAt || "";
     localStorage.setItem(MEMBER_TOKEN_KEY, member.token);
     localStorage.removeItem(STAFF_TOKEN_KEY);
     state.currentView = "home";
@@ -3945,6 +4098,23 @@ function roleLabel() {
 
 function contextName() {
   return state.tenant?.name || (isPlatform() ? "Platform Administration" : state.user?.tenantName) || "Tereka Online";
+}
+
+function contextCode() {
+  return state.tenant?.abbreviation || state.tenant?.registrationNo || state.tenant?.code || "GVS";
+}
+
+function memberStatementLines(dash) {
+  const source = dash.statementLines || dash.recentTransactions || [];
+  return source.map((line) => ({
+    ...line,
+    reference: line.reference || line.transactionReference || line.id,
+    description: line.description || line.narration || line.type || "Member transaction",
+    debit: line.debit ?? (Number(line.amount || 0) < 0 ? Math.abs(Number(line.amount || 0)) : 0),
+    credit: line.credit ?? (Number(line.amount || 0) > 0 ? Number(line.amount || 0) : 0),
+    runningBalance: line.runningBalance ?? Number(line.savingsBalance || 0) + Number(line.sharesBalance || 0) + Number(line.welfareBalance || 0),
+    postedAt: line.postedAt || line.createdAt || line.date || ""
+  }));
 }
 
 function initials(name) {

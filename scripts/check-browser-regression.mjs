@@ -97,6 +97,11 @@ try {
   ]) {
     await expectText(page, marker, `member portal marker ${marker}`);
   }
+  await assertScreen(page, "statements", ["Member statement readiness", "Member statement", "Server-confirmed"]);
+  await assertScreen(page, "receipts", ["Member receipts", "Receipt status", "Download receipt"]);
+  await assertScreen(page, "complaints", ["Member complaint center", "My complaints", "Offline drafts"]);
+  await assertScreen(page, "profile", ["Member profile and KYC", "Profile contacts", "Balance summary"]);
+  await assertScreen(page, "security", ["Member security center", "SACCO code", "Security actions"]);
 
   console.log(`Browser regression checks passed against ${uiBaseUrl}`);
 } finally {
