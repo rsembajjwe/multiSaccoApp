@@ -429,15 +429,15 @@ function platformDashboard() {
   const users = platformUsers();
   return `
     <div class="dashboard-grid">
-      ${summary("Total SACCOs", tenants.length, "All registered tenants", "Open applications")}
-      ${summary("Active SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Operational tenants", "View accounts")}
-      ${summary("Pending registrations", tenants.filter((t) => normal(t.status).includes("pending")).length, "Reviewer queue", "Review")}
-      ${summary("Expired subscriptions", subs.filter((s) => normal(s.status).includes("expired")).length, "Billing risk", "Renew")}
-      ${summary("Total platform members", members.length, "Across visible SACCOs", "Open members")}
-      ${summary("Total subscription revenue", money.format(sum(subs, "amount")), "Current records", "Open billing")}
-      ${summary("Pending support tickets", dataRows("complaints").filter((c) => !["closed", "resolved"].includes(normal(c.status))).length, "Support workload", "Open")}
-      ${summary("Failed payment transactions", transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", "Investigate")}
-      ${summary("Active platform users", users.filter((user) => normal(user.status) === "active").length || users.length, "Administrators and roles", "Manage access")}
+      ${summaryLink("Total SACCOs", tenants.length, "All registered tenants", "Open applications", "sacco-applications")}
+      ${summaryLink("Active SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Operational tenants", "View accounts", "sacco-accounts")}
+      ${summaryLink("Pending registrations", tenants.filter((t) => normal(t.status).includes("pending")).length, "Reviewer queue", "Review", "sacco-applications")}
+      ${summaryLink("Expired subscriptions", subs.filter((s) => normal(s.status).includes("expired")).length, "Billing risk", "Renew", "subscriptions")}
+      ${summaryLink("Total platform members", members.length, "Across visible SACCOs", "Open members", "members")}
+      ${summaryLink("Total subscription revenue", money.format(sum(subs, "amount")), "Current records", "Open billing", "subscriptions")}
+      ${summaryLink("Pending support tickets", dataRows("complaints").filter((c) => !["closed", "resolved"].includes(normal(c.status))).length, "Support workload", "Open", "complaints")}
+      ${summaryLink("Failed payment transactions", transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", "Investigate", "operations")}
+      ${summaryLink("Active platform users", users.filter((user) => normal(user.status) === "active").length || users.length, "Administrators and roles", "Manage access", "users")}
     </div>
     <div class="split-layout">
       ${chartCard("SACCO registrations by month", ["Jan", "Feb", "Mar", "Apr", "May", "Jun"], [2, 3, 4, 5, 7, tenants.length || 3])}
@@ -946,6 +946,10 @@ function dashboardIntro(title, copy) {
 
 function summary(label, value, detail, action) {
   return `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small>${detail}</small><button type="button">${action}</button></article>`;
+}
+
+function summaryLink(label, value, detail, action, view) {
+  return `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small>${detail}</small><button type="button" data-summary-view="${escapeHtml(view)}">${action}</button></article>`;
 }
 
 function mini(label, value) {
@@ -2176,6 +2180,12 @@ function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       state.currentView = button.dataset.view;
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-summary-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.currentView = button.dataset.summaryView;
       renderShell();
     });
   });

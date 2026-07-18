@@ -39,6 +39,7 @@ try {
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
   await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
   await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
+  await assertPlatformDashboardCardNavigation(page);
   await assertScreen(page, "sacco-applications", ["SACCO application list", "Public SACCO registration wizard"]);
   await assertSaccoApplicationReview(page);
   await assertScreen(page, "subscriptions", ["Subscription list", "Subscription package configuration"]);
@@ -183,6 +184,13 @@ async function assertRoleDashboard(page, code, username, password, label, marker
   }
   console.log(`PASS ${label} dashboard`);
   await logout(page);
+}
+
+async function assertPlatformDashboardCardNavigation(page) {
+  await page.locator("[data-summary-view='subscriptions']").first().click();
+  await expectText(page, "Subscription list", "Platform dashboard subscription card navigation");
+  await navigateTo(page, "dashboard");
+  console.log("PASS Platform dashboard card navigation");
 }
 
 async function assertPlatformUserCreation(page) {
