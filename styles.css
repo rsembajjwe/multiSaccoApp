@@ -463,6 +463,11 @@ textarea {
   background: #cff4e3;
 }
 
+.nav-link.active span,
+.nav-link:hover span {
+  color: #10231f;
+}
+
 .nav-link.active small,
 .nav-link:hover small {
   color: #38524a;
