@@ -113,6 +113,30 @@ public class Loan {
         return new Loan(id, tenantId, memberId, product, amount, dsr, repaymentMonths, purpose, channel, submittedByMemberId);
     }
 
+    public static Loan importedBookLoan(
+            String id,
+            String tenantId,
+            String memberId,
+            String product,
+            BigDecimal amount,
+            BigDecimal balance,
+            int dsr,
+            int repaymentMonths,
+            String purpose,
+            String importedByUserId,
+            Instant disbursedAt) {
+        Loan loan = new Loan(id, tenantId, memberId, product, amount, dsr, repaymentMonths, purpose, "migration", null);
+        loan.balance = balance;
+        loan.status = balance.compareTo(BigDecimal.ZERO) == 0 ? "closed" : "active";
+        loan.stage = balance.compareTo(BigDecimal.ZERO) == 0 ? "Migrated Closed" : "Migrated Active";
+        loan.approvedByUserId = importedByUserId;
+        loan.approvedAt = disbursedAt;
+        loan.disbursedByUserId = importedByUserId;
+        loan.disbursedAt = disbursedAt;
+        loan.updatedAt = disbursedAt == null ? Instant.now() : disbursedAt;
+        return loan;
+    }
+
     void decide(String status, String actorUserId, String reason) {
         this.status = status;
         this.stage = "approved".equals(status) ? "Ready for Disbursement" : "Rejected";

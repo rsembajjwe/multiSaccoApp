@@ -455,6 +455,7 @@ Progress:
 - Release evidence and UAT findings templates added for release-candidate command evidence, load-test results, role sign-off, defect ownership, retest tracking, and approval decisions.
 - Phase 2 started with Java-backed member import validation and creation, tenant/branch-safe duplicate checks, Members UI paste/validate/import controls, and a pilot data import guide.
 - Phase 2 opening balance import added for Java-backed savings/share/welfare starting balances with dry-run validation, all-or-nothing posted transactions, member statement impact, Transactions UI controls, and import guide coverage.
+- Phase 2 loan book import added for Java-backed active/closed migrated loans with dry-run validation, repayment schedule checks, duplicate-open-loan protection, Loans UI controls, and import guide coverage.
 
 Recommended stack:
 

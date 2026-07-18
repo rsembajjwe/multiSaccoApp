@@ -1681,6 +1681,160 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void loanBookImportTemplatesValidatesAndCreatesMigratedLoans() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String runId = String.valueOf(System.currentTimeMillis());
+		String membershipNo = "LN-" + runId;
+		String tenantId = createTenantForImport(platformToken, "COOP-LN-" + runId);
+		String branchId = createBranchForImport(platformToken, tenantId);
+		String memberId = createImportedMember(platformToken, tenantId, branchId, membershipNo, "+256700888101");
+
+		mockMvc.perform(patch("/api/v1/members/" + memberId + "/status")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "active" }
+								"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/v1/loans/import-template?tenantId=" + tenantId)
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenantId", is(tenantId)))
+				.andExpect(jsonPath("$.data.headers", hasItem("outstandingBalance")))
+				.andExpect(jsonPath("$.data.sampleRows[0].membershipNo", is(membershipNo)))
+				.andExpect(jsonPath("$.data.csv", startsWith("membershipNo,product,originalAmount")));
+
+		mockMvc.perform(post("/api/v1/loans/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": true,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "product": "Development Loan",
+								      "originalAmount": "1200000",
+								      "outstandingBalance": "900000",
+								      "repaymentMonths": "12",
+								      "remainingMonths": "9",
+								      "monthlyInstallment": "100000",
+								      "disbursedDate": "2026-04-18",
+								      "status": "active",
+								      "purpose": "Migrated dairy equipment loan"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.valid", is(true)))
+				.andExpect(jsonPath("$.data.createdCount", is(0)));
+
+		mockMvc.perform(post("/api/v1/loans/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "product": "Development Loan",
+								      "originalAmount": "1200000",
+								      "outstandingBalance": "900000",
+								      "repaymentMonths": "12",
+								      "remainingMonths": "9",
+								      "monthlyInstallment": "100000",
+								      "disbursedDate": "2026-04-18",
+								      "status": "active",
+								      "purpose": "Migrated dairy equipment loan"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.valid", is(true)))
+				.andExpect(jsonPath("$.data.createdCount", is(1)))
+				.andExpect(jsonPath("$.data.createdLoans[0].status", is("active")))
+				.andExpect(jsonPath("$.data.createdLoans[0].stage", is("Migrated Active")))
+				.andExpect(jsonPath("$.data.createdLoans[0].amount", is(1200000)))
+				.andExpect(jsonPath("$.data.createdLoans[0].balance", is(900000)));
+
+		mockMvc.perform(get("/api/v1/loans?tenantId=" + tenantId)
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(1)))
+				.andExpect(jsonPath("$.data[0].memberId", is(memberId)))
+				.andExpect(jsonPath("$.data[0].channel", is("migration")))
+				.andExpect(jsonPath("$.data[0].disbursedAt", is("2026-04-18T00:00:00Z")));
+	}
+
+	@Test
+	void loanBookImportRejectsInvalidRowsWithoutCreatingLoans() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String runId = String.valueOf(System.currentTimeMillis());
+		String membershipNo = "LN-BAD-" + runId;
+		String tenantId = createTenantForImport(platformToken, "COOP-LN-BAD-" + runId);
+		String branchId = createBranchForImport(platformToken, tenantId);
+		createImportedMember(platformToken, tenantId, branchId, membershipNo, "+256700888201");
+
+		mockMvc.perform(post("/api/v1/loans/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "product": "Unsupported Loan",
+								      "originalAmount": "100000",
+								      "outstandingBalance": "150000",
+								      "repaymentMonths": "0",
+								      "remainingMonths": "9",
+								      "monthlyInstallment": "1000",
+								      "disbursedDate": "not-a-date",
+								      "status": "active"
+								    },
+								    {
+								      "membershipNo": "%s",
+								      "product": "Unsupported Loan",
+								      "originalAmount": "100000",
+								      "outstandingBalance": "100000",
+								      "repaymentMonths": "12",
+								      "remainingMonths": "12",
+								      "monthlyInstallment": "1",
+								      "disbursedDate": "2026-04-18",
+								      "status": "closed"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, membershipNo)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.valid", is(false)))
+				.andExpect(jsonPath("$.data.createdCount", is(0)))
+				.andExpect(jsonPath("$.data.skippedCount", is(2)))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("MEMBER_NOT_ACTIVE")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_LOAN_PRODUCT")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("BALANCE_EXCEEDS_AMOUNT")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_REPAYMENT_PERIOD")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_REMAINING_PERIOD")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_DATE")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("DUPLICATE_IN_FILE")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("SCHEDULE_UNDERFUNDED")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("CLOSED_LOAN_HAS_BALANCE")));
+
+		mockMvc.perform(get("/api/v1/loans?tenantId=" + tenantId)
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(0)));
+	}
+
+	@Test
 	void activeMemberCanLoginViewProfileAndLogout() throws Exception {
 		MvcResult login = mockMvc.perform(post("/api/v1/member-auth/login")
 						.contentType("application/json")
@@ -5118,6 +5272,30 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andReturn();
 		return objectMapper.readTree(createdBranch.getResponse().getContentAsString()).path("data").path("id").asString();
+	}
+
+	private String createImportedMember(String token, String tenantId, String branchId, String membershipNo, String phone) throws Exception {
+		MvcResult importedMember = mockMvc.perform(post("/api/v1/members/import")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "branchId": "%s",
+								      "fullName": "Import Helper Member",
+								      "phone": "%s",
+								      "password": "Member@12345"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, branchId, phone)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		return objectMapper.readTree(importedMember.getResponse().getContentAsString()).path("data").path("createdMembers").path(0).path("id").asString();
 	}
 
 }

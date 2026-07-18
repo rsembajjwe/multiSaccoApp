@@ -65,6 +65,72 @@ Content-Type: application/json
 }
 ```
 
+## Loan Book Import Flow
+
+Use loan book import after members are active and opening balances have been validated.
+
+1. Open Loans.
+2. Select `Loan book import`.
+3. Copy or edit the CSV template.
+4. Run `Validate`.
+5. Run `Import` only after validation passes.
+6. Confirm the imported loans appear as `active` or `closed`.
+
+Loan book validation checks:
+
+- The member exists in the selected SACCO and is active.
+- The product is one of the configured loan products.
+- Original amount is greater than zero.
+- Outstanding balance is not negative and does not exceed original amount.
+- Repayment period is between 1 and 60 months.
+- Remaining months are not greater than repayment months.
+- Monthly installment times remaining months covers outstanding balance.
+- Closed loans have zero outstanding balance.
+
+## Loan Book Columns
+
+| Column | Rule |
+| --- | --- |
+| `membershipNo` | Required, must belong to an active member in the selected SACCO. |
+| `product` | Required. Allowed: `Development Loan`, `Emergency Loan`, `Agriculture Loan`, `School Fees Loan`. |
+| `originalAmount` | Required numeric amount greater than `0`. |
+| `outstandingBalance` | Required numeric amount between `0` and original amount. |
+| `repaymentMonths` | Required whole number from `1` to `60`. |
+| `remainingMonths` | Required whole number from `0` to repayment months. |
+| `monthlyInstallment` | Required when remaining months are greater than `0`. |
+| `disbursedDate` | Optional `YYYY-MM-DD`; defaults to current date. |
+| `status` | `active` or `closed`. |
+| `purpose` | Optional migration note or loan purpose. |
+
+Validate or import loan book rows:
+
+```http
+POST /api/v1/loans/import
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+```json
+{
+  "tenantId": "tenant_green",
+  "dryRun": true,
+  "rows": [
+    {
+      "membershipNo": "GVS-0100",
+      "product": "Development Loan",
+      "originalAmount": "1200000",
+      "outstandingBalance": "900000",
+      "repaymentMonths": "12",
+      "remainingMonths": "9",
+      "monthlyInstallment": "100000",
+      "disbursedDate": "2026-04-18",
+      "status": "active",
+      "purpose": "Migrated dairy equipment loan"
+    }
+  ]
+}
+```
+
 `dryRun=true` validates without saving. `dryRun=false` saves the whole batch only when every row is valid.
 
 ## Validation Evidence
@@ -136,6 +202,6 @@ Content-Type: application/json
 ## Next Import Slices
 
 - Opening balance import UI/API is implemented; next hardening is accounting journal evidence for each posted opening balance.
-- Loan book import with repayment schedule validation.
+- Loan book import UI/API is implemented; next hardening is repayment history import for partially paid loans.
 - Contact, next-of-kin, beneficiary, and KYC document metadata import.
 - Spreadsheet `.xlsx` helper that exports the same CSV columns.

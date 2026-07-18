@@ -1318,6 +1318,7 @@ function renderLoans() {
         </div>
         <div class="filters">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
+          ${apiState.user ? `<button class="secondary-button" data-action="loanBookImport" type="button">Loan book import</button>` : ""}
           <button class="primary-button" data-action="newLoan" type="button">New loan application</button>
         </div>
       </div>
@@ -1355,8 +1356,11 @@ function renderLoans() {
           <h2>Loan files</h2>
           <p class="eyebrow">${source} &middot; Applications, appraisal, guarantors and portfolio risk</p>
         </div>
-        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
-        <button class="primary-button" data-action="newLoan" type="button">New loan application</button>
+        <div class="filters">
+          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
+          ${apiState.user ? `<button class="secondary-button" data-action="loanBookImport" type="button">Loan book import</button>` : ""}
+          <button class="primary-button" data-action="newLoan" type="button">New loan application</button>
+        </div>
       </div>
       ${apiSyncNotice("Loan files list")}
       <div class="table-wrap">
@@ -2742,6 +2746,7 @@ function bindViewActions() {
         assignUserRoles: openUserRoleAssignmentForm,
         memberImportTemplate: openMemberImportTemplate,
         openingBalanceImport: openOpeningBalanceImport,
+        loanBookImport: openLoanBookImport,
         newNotificationTemplate: () => openNotificationTemplateForm(),
         apiLogin: openApiLoginForm,
         memberLogin: openMemberLoginForm,
@@ -3533,6 +3538,78 @@ function renderOpeningBalanceImportResult(result) {
     <div class="grid three compact-facts" style="margin-top:12px">
       ${miniFact("Rows", result.totalRows)}
       ${miniFact("Posted", result.createdCount)}
+      ${miniFact("Skipped", result.skippedCount)}
+    </div>
+    ${rows ? `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Row</th><th>Field</th><th>Code</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+  `;
+}
+
+async function openLoanBookImport() {
+  if (!apiState.user) return;
+  try {
+    const template = await apiRequest(`/loans/import-template${apiTenantQuery()}`);
+    const sample = template.sampleRows?.[0] || {};
+    openModal("Loan book import", `
+      <div class="grid metrics">
+        ${metric("File", template.filename, template.contentType)}
+        ${metric("Columns", template.headers.length, "loan book fields")}
+        ${metric("Tenant", tenantName(template.tenantId), sample.membershipNo || "No member")}
+      </div>
+      <label class="field full" style="margin-top:16px">
+        <span>CSV rows</span>
+        <textarea id="loanBookImportCsv" class="input" rows="8">${template.csv}</textarea>
+      </label>
+      <div id="loanBookImportResult" style="margin-top:16px"></div>
+    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyLoanBookImportTemplate" class="secondary-button" type="button">Copy CSV</button><button id="validateLoanBookImport" class="secondary-button" type="button">Validate</button><button id="runLoanBookImport" class="primary-button" type="button">Import</button>`);
+    document.getElementById("copyLoanBookImportTemplate").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(template.csv);
+        document.getElementById("loanBookImportResult").innerHTML = `<div class="notice">CSV template copied to clipboard.</div>`;
+      } catch {
+        document.getElementById("loanBookImportResult").innerHTML = `<div class="notice error">Clipboard access was not available. Use the CSV text.</div>`;
+      }
+    });
+    document.getElementById("validateLoanBookImport").addEventListener("click", () => submitLoanBookImport(template.tenantId, true));
+    document.getElementById("runLoanBookImport").addEventListener("click", () => submitLoanBookImport(template.tenantId, false));
+  } catch (error) {
+    openModal("Loan book import", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
+}
+
+async function submitLoanBookImport(tenantId, dryRun) {
+  const result = document.getElementById("loanBookImportResult");
+  try {
+    const rows = parseMemberImportCsv(value("loanBookImportCsv"));
+    result.innerHTML = `<div class="notice">${dryRun ? "Validating" : "Importing"} ${rows.length} loan row(s)...</div>`;
+    const response = await apiRequest("/loans/import", {
+      method: "POST",
+      body: JSON.stringify({ tenantId, dryRun, rows })
+    });
+    result.innerHTML = renderLoanBookImportResult(response);
+    if (!dryRun && response.valid) await refreshApiStatus();
+  } catch (error) {
+    result.innerHTML = `<div class="notice error">${error.message}</div>`;
+  }
+}
+
+function renderLoanBookImportResult(result) {
+  const stateClass = result.valid ? "notice" : "notice error";
+  const rows = result.errors?.map((error) => `
+    <tr>
+      <td>${error.row}</td>
+      <td>${error.field}</td>
+      <td>${error.code}</td>
+      <td>${error.message}</td>
+    </tr>
+  `).join("") || "";
+  return `
+    <div class="${stateClass}">
+      ${result.valid ? "Loan book validation passed." : "Loan book validation failed."}
+      ${result.createdCount ? ` Imported ${result.createdCount} loan record(s).` : ""}
+    </div>
+    <div class="grid three compact-facts" style="margin-top:12px">
+      ${miniFact("Rows", result.totalRows)}
+      ${miniFact("Imported", result.createdCount)}
       ${miniFact("Skipped", result.skippedCount)}
     </div>
     ${rows ? `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Row</th><th>Field</th><th>Code</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}

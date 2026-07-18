@@ -14,11 +14,18 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,6 +47,18 @@ class LoanController {
             "School Fees Loan");
     private static final Set<String> DECISION_STATUSES = Set.of("approved", "rejected");
     private static final Set<String> REPAYMENT_CHANNELS = Set.of("cash", "bank", "mobile_money", "payroll");
+    private static final Set<String> IMPORT_STATUSES = Set.of("active", "closed");
+    private static final List<String> LOAN_IMPORT_HEADERS = List.of(
+            "membershipNo",
+            "product",
+            "originalAmount",
+            "outstandingBalance",
+            "repaymentMonths",
+            "remainingMonths",
+            "monthlyInstallment",
+            "disbursedDate",
+            "status",
+            "purpose");
 
     private final LoanRepository loanRepository;
     private final LoanGuarantorRepository guarantorRepository;
@@ -145,6 +164,124 @@ class LoanController {
                 request.getRemoteAddr());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(loanResponse(loan)));
+    }
+
+    @GetMapping("/import-template")
+    ResponseEntity<?> loanImportTemplate(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:create")) {
+            return authService.permissionRequired("loans:create");
+        }
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+
+        Member sampleMember = memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId).stream().findFirst().orElse(null);
+        LoanImportRow sample = new LoanImportRow(
+                sampleMember == null ? "" : sampleMember.getMembershipNo(),
+                "Development Loan",
+                "1000000",
+                "750000",
+                "12",
+                "9",
+                "83334",
+                LocalDate.now().minusMonths(3).toString(),
+                "active",
+                "Migrated pilot loan book");
+        List<LoanImportRow> sampleRows = List.of(sample);
+
+        return ResponseEntity.ok(ApiResponse.of(new LoanImportTemplateResponse(
+                tenantId,
+                "loan-book-import-template-" + tenantId + ".csv",
+                "text/csv",
+                LOAN_IMPORT_HEADERS,
+                sampleRows,
+                loanImportCsvTemplate(sampleRows))));
+    }
+
+    @PostMapping("/import")
+    @Transactional
+    ResponseEntity<?> importLoans(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody LoanImportRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:approve")) {
+            return authService.permissionRequired("loans:approve");
+        }
+
+        String tenantId = tenantScope(currentSession, body.tenantId());
+        if (tenantId == null) return tenantAccessDenied();
+
+        List<LoanImportRow> rows = body.rows() == null ? List.of() : body.rows();
+        boolean dryRun = body.dryRun() == null || body.dryRun();
+        List<LoanImportError> errors = validateLoanImportRows(tenantId, rows);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.of(new LoanImportResult(
+                    tenantId,
+                    dryRun,
+                    false,
+                    rows.size(),
+                    0,
+                    rows.size(),
+                    errors,
+                    List.of())));
+        }
+
+        if (dryRun) {
+            return ResponseEntity.ok(ApiResponse.of(new LoanImportResult(
+                    tenantId,
+                    true,
+                    true,
+                    rows.size(),
+                    0,
+                    0,
+                    List.of(),
+                    List.of())));
+        }
+
+        List<Loan> createdLoans = new ArrayList<>();
+        for (LoanImportRow row : rows) {
+            Member member = memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCase(tenantId, row.membershipNo().trim())
+                    .orElseThrow();
+            BigDecimal originalAmount = amount(row.originalAmount());
+            BigDecimal outstandingBalance = amount(row.outstandingBalance());
+            Loan loan = loanRepository.save(Loan.importedBookLoan(
+                    "loan_" + UUID.randomUUID(),
+                    tenantId,
+                    member.getId(),
+                    row.product().trim(),
+                    originalAmount,
+                    outstandingBalance,
+                    dsr(originalAmount, member.getSavingsBalance()),
+                    integer(row.repaymentMonths()),
+                    blankToDefault(row.purpose()),
+                    currentSession.user().getId(),
+                    loanDisbursedAt(row)));
+            createdLoans.add(loan);
+        }
+
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Imported " + createdLoans.size() + " loan book records",
+                "loan_import",
+                tenantId,
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(new LoanImportResult(
+                tenantId,
+                false,
+                true,
+                rows.size(),
+                createdLoans.size(),
+                0,
+                List.of(),
+                createdLoans.stream().map(this::loanResponse).toList())));
     }
 
     @PatchMapping("/{loanId}/status")
@@ -444,6 +581,174 @@ class LoanController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(LoanRepaymentResponse.from(repayment)));
     }
 
+    private List<LoanImportError> validateLoanImportRows(String tenantId, List<LoanImportRow> rows) {
+        List<LoanImportError> errors = new ArrayList<>();
+        if (rows.isEmpty()) {
+            errors.add(new LoanImportError(0, "rows", "IMPORT_EMPTY", "At least one loan row is required."));
+            return errors;
+        }
+        if (rows.size() > 500) {
+            errors.add(new LoanImportError(0, "rows", "IMPORT_TOO_LARGE", "A single loan import cannot exceed 500 rows."));
+            return errors;
+        }
+
+        Set<String> seenKeys = new HashSet<>();
+        for (int index = 0; index < rows.size(); index++) {
+            int rowNumber = index + 1;
+            LoanImportRow row = rows.get(index);
+            Member member = validateLoanImportMember(tenantId, rowNumber, row, errors);
+            String product = row.product() == null ? "" : row.product().trim();
+            if (!ALLOWED_PRODUCTS.contains(product)) {
+                errors.add(new LoanImportError(rowNumber, "product", "INVALID_LOAN_PRODUCT", "Unsupported loan product."));
+            }
+
+            BigDecimal originalAmount = validatedAmount(rowNumber, "originalAmount", row.originalAmount(), errors);
+            BigDecimal outstandingBalance = validatedAmount(rowNumber, "outstandingBalance", row.outstandingBalance(), errors);
+            if (originalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                errors.add(new LoanImportError(rowNumber, "originalAmount", "INVALID_LOAN_AMOUNT", "Original loan amount must be greater than zero."));
+            }
+            if (outstandingBalance.compareTo(originalAmount) > 0) {
+                errors.add(new LoanImportError(rowNumber, "outstandingBalance", "BALANCE_EXCEEDS_AMOUNT", "Outstanding balance cannot exceed original amount."));
+            }
+
+            int repaymentMonths = validatedInteger(rowNumber, "repaymentMonths", row.repaymentMonths(), errors);
+            if (repaymentMonths < 1 || repaymentMonths > 60) {
+                errors.add(new LoanImportError(rowNumber, "repaymentMonths", "INVALID_REPAYMENT_PERIOD", "Repayment period must be between 1 and 60 months."));
+            }
+            int remainingMonths = validatedInteger(rowNumber, "remainingMonths", row.remainingMonths(), errors);
+            if (remainingMonths < 0 || remainingMonths > repaymentMonths) {
+                errors.add(new LoanImportError(rowNumber, "remainingMonths", "INVALID_REMAINING_PERIOD", "Remaining months must be between 0 and repayment months."));
+            }
+            BigDecimal monthlyInstallment = validatedAmount(rowNumber, "monthlyInstallment", row.monthlyInstallment(), errors);
+            if (remainingMonths > 0 && monthlyInstallment.compareTo(BigDecimal.ZERO) <= 0) {
+                errors.add(new LoanImportError(rowNumber, "monthlyInstallment", "INVALID_INSTALLMENT", "Monthly installment is required when remaining months are greater than zero."));
+            }
+            if (remainingMonths > 0 && monthlyInstallment.multiply(BigDecimal.valueOf(remainingMonths)).compareTo(outstandingBalance) < 0) {
+                errors.add(new LoanImportError(rowNumber, "monthlyInstallment", "SCHEDULE_UNDERFUNDED", "Monthly installment times remaining months must cover outstanding balance."));
+            }
+
+            String status = normalizedOrDefault(row.status(), "active");
+            if (!IMPORT_STATUSES.contains(status)) {
+                errors.add(new LoanImportError(rowNumber, "status", "INVALID_LOAN_STATUS", "Imported loan status must be active or closed."));
+            }
+            if ("active".equals(status) && outstandingBalance.compareTo(BigDecimal.ZERO) <= 0) {
+                errors.add(new LoanImportError(rowNumber, "outstandingBalance", "ACTIVE_LOAN_NEEDS_BALANCE", "Active imported loans must have outstanding balance."));
+            }
+            if ("closed".equals(status) && outstandingBalance.compareTo(BigDecimal.ZERO) != 0) {
+                errors.add(new LoanImportError(rowNumber, "outstandingBalance", "CLOSED_LOAN_HAS_BALANCE", "Closed imported loans must have zero outstanding balance."));
+            }
+
+            if (row.disbursedDate() != null && !row.disbursedDate().isBlank()) {
+                try {
+                    LocalDate.parse(row.disbursedDate().trim());
+                } catch (DateTimeParseException error) {
+                    errors.add(new LoanImportError(rowNumber, "disbursedDate", "INVALID_DATE", "Disbursed date must use YYYY-MM-DD format."));
+                }
+            }
+
+            if (member != null && !product.isBlank() && originalAmount.compareTo(BigDecimal.ZERO) > 0) {
+                String importKey = (member.getId() + "|" + product + "|" + originalAmount.stripTrailingZeros().toPlainString()).toUpperCase(Locale.ROOT);
+                if (!seenKeys.add(importKey)) {
+                    errors.add(new LoanImportError(rowNumber, "membershipNo", "DUPLICATE_IN_FILE", "Loan row duplicates a member/product/amount in this import."));
+                }
+                if (loanRepository.existsByTenantIdAndMemberIdAndProductAndAmountAndStatusIn(
+                        tenantId,
+                        member.getId(),
+                        product,
+                        originalAmount,
+                        List.of("submitted", "under_review", "approved", "active"))) {
+                    errors.add(new LoanImportError(rowNumber, "membershipNo", "LOAN_EXISTS", "An open loan with the same member, product, and amount already exists."));
+                }
+            }
+        }
+        return errors;
+    }
+
+    private Member validateLoanImportMember(String tenantId, int rowNumber, LoanImportRow row, List<LoanImportError> errors) {
+        if (row.membershipNo() == null || row.membershipNo().isBlank()) {
+            errors.add(new LoanImportError(rowNumber, "membershipNo", "REQUIRED", "Membership number is required."));
+            return null;
+        }
+        Member member = memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCase(tenantId, row.membershipNo().trim()).orElse(null);
+        if (member == null) {
+            errors.add(new LoanImportError(rowNumber, "membershipNo", "INVALID_MEMBER", "Member does not exist for this tenant."));
+            return null;
+        }
+        if (!"active".equals(member.getStatus())) {
+            errors.add(new LoanImportError(rowNumber, "membershipNo", "MEMBER_NOT_ACTIVE", "Imported loans require an active member."));
+        }
+        return member;
+    }
+
+    private BigDecimal validatedAmount(int rowNumber, String field, String value, List<LoanImportError> errors) {
+        try {
+            BigDecimal amount = amount(value);
+            if (amount.compareTo(BigDecimal.ZERO) < 0) {
+                errors.add(new LoanImportError(rowNumber, field, "NEGATIVE_AMOUNT", "Loan import amount cannot be negative."));
+            }
+            return amount;
+        } catch (NumberFormatException error) {
+            errors.add(new LoanImportError(rowNumber, field, "INVALID_AMOUNT", "Loan import amount must be numeric."));
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private int validatedInteger(int rowNumber, String field, String value, List<LoanImportError> errors) {
+        try {
+            return integer(value);
+        } catch (NumberFormatException error) {
+            errors.add(new LoanImportError(rowNumber, field, "INVALID_NUMBER", "Value must be a whole number."));
+            return 0;
+        }
+    }
+
+    private BigDecimal amount(String value) {
+        return value == null || value.isBlank() ? BigDecimal.ZERO : new BigDecimal(value.trim());
+    }
+
+    private int integer(String value) {
+        return value == null || value.isBlank() ? 0 : Integer.parseInt(value.trim());
+    }
+
+    private Instant loanDisbursedAt(LoanImportRow row) {
+        LocalDate date = row.disbursedDate() == null || row.disbursedDate().isBlank()
+                ? LocalDate.now()
+                : LocalDate.parse(row.disbursedDate().trim());
+        return date.atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
+
+    private String normalizedOrDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String blankToDefault(String value) {
+        return value == null || value.isBlank() ? "" : value.trim();
+    }
+
+    private String loanImportCsvTemplate(List<LoanImportRow> sampleRows) {
+        String header = String.join(",", LOAN_IMPORT_HEADERS);
+        List<String> rows = sampleRows.stream()
+                .map(row -> String.join(",",
+                        csv(row.membershipNo()),
+                        csv(row.product()),
+                        csv(row.originalAmount()),
+                        csv(row.outstandingBalance()),
+                        csv(row.repaymentMonths()),
+                        csv(row.remainingMonths()),
+                        csv(row.monthlyInstallment()),
+                        csv(row.disbursedDate()),
+                        csv(row.status()),
+                        csv(row.purpose())))
+                .toList();
+        return header + "\n" + String.join("\n", rows) + "\n";
+    }
+
+    private String csv(String value) {
+        if (value == null) return "";
+        if (!value.contains(",") && !value.contains("\"") && !value.contains("\n")) return value;
+        return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+
     BigDecimal guaranteeCapacity(Member member, String excludedGuarantorId) {
         BigDecimal committed = guarantorRepository
                 .findByMemberIdAndStatusIn(member.getId(), List.of("pending", "accepted"))
@@ -504,5 +809,51 @@ class LoanController {
             String channel,
             @NotBlank String reference,
             String narration) {
+    }
+
+    record LoanImportTemplateResponse(
+            String tenantId,
+            String filename,
+            String contentType,
+            List<String> headers,
+            List<LoanImportRow> sampleRows,
+            String csv) {
+    }
+
+    record LoanImportRequest(
+            String tenantId,
+            Boolean dryRun,
+            List<LoanImportRow> rows) {
+    }
+
+    record LoanImportRow(
+            String membershipNo,
+            String product,
+            String originalAmount,
+            String outstandingBalance,
+            String repaymentMonths,
+            String remainingMonths,
+            String monthlyInstallment,
+            String disbursedDate,
+            String status,
+            String purpose) {
+    }
+
+    record LoanImportError(
+            int row,
+            String field,
+            String code,
+            String message) {
+    }
+
+    record LoanImportResult(
+            String tenantId,
+            boolean dryRun,
+            boolean valid,
+            int totalRows,
+            int createdCount,
+            int skippedCount,
+            List<LoanImportError> errors,
+            List<LoanResponse> createdLoans) {
     }
 }

@@ -84,6 +84,8 @@ Java-backed routes currently implemented:
 - `PATCH /api/v1/complaints/:id/status`
 - `POST /api/v1/member-auth/mobile-complaints`
 - `GET /api/v1/loans`
+- `GET /api/v1/loans/import-template`
+- `POST /api/v1/loans/import`
 - `POST /api/v1/loans`
 - `PATCH /api/v1/loans/:id/status`
 - `POST /api/v1/loans/:id/disburse`
@@ -211,6 +213,8 @@ All JSON responses should follow one of these shapes:
 | POST | `/complaints` | Capture a complaint. | SACCO staff |
 | PATCH | `/complaints/:id/status` | Update complaint status and resolution notes. | SACCO staff |
 | GET | `/loans` | List tenant loan applications and files. | Required |
+| GET | `/loans/import-template` | Return CSV headers, sample rows, and content for loan book import. | Required |
+| POST | `/loans/import` | Validate or create all-or-nothing migrated active/closed loan book records. | Authorized checker |
 | POST | `/loans` | Submit a loan application for an active member. | SACCO staff |
 | PATCH | `/loans/:id/status` | Approve or reject a loan application. | Authorized approver |
 | POST | `/loans/:id/disburse` | Disburse an approved loan. | Authorized disbursement officer |
@@ -297,6 +301,8 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/complaints`
 - `PATCH /api/v1/complaints/:id/status`
 - `GET /api/v1/loans`
+- `GET /api/v1/loans/import-template`
+- `POST /api/v1/loans/import`
 - `POST /api/v1/loans`
 - `PATCH /api/v1/loans/:id/status`
 - `POST /api/v1/loans/:id/disburse`
