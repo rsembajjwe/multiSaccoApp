@@ -122,7 +122,7 @@ async function staffLogin(page) {
 async function assertStaffScreens(page) {
   const screens = [
     { id: "dashboard", nav: "Dashboard", heading: "Dashboard data source", markers: ["Java-backed", "Operations scope", "Refresh backend data"] },
-    { id: "registrations", nav: "SACCO Registration", heading: "SACCO registration data source", markers: ["Java-backed", "Last sync", "Tenant approval"] },
+    { id: "registrations", nav: "SACCO Registration", heading: "SACCO registration data source", markers: ["Java-backed", "Last sync", "Tenant approval", "SACCO application review", "Applications", "Review queue", "Packages"] },
     { id: "subscriptions", nav: "Subscriptions", heading: "Subscriptions data source", markers: ["Java-backed", "Last sync", "Billable members"] },
     { id: "members", nav: "Members", heading: "Members data source", markers: ["Java-backed", "Server fields", "Import members", "Profile metadata"] },
     { id: "operations", nav: "Operations", heading: "Operations data source", markers: ["Java-backed", "Last sync", "Operations command center"] },

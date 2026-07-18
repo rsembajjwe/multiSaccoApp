@@ -1356,9 +1356,8 @@ function renderRegistrations() {
   const approvedTenants = tenants.filter((tenant) => tenant.status === "Approved").length;
   const pendingTenants = tenants.filter((tenant) => tenant.status === "Pending Review").length;
   const suspendedTenants = tenants.filter((tenant) => tenant.status === "Suspended").length;
+  const activeTab = state.registrationTab || "applications";
   const expiringTenants = tenants.filter((tenant) => daysTo(tenant.licenseExpiry) <= 60).length;
-  const averageOnboarding = tenants.length ? Math.round(tenants.reduce((sum, tenant) => sum + (tenant.onboarding || 0), 0) / tenants.length) : 0;
-  const packageCoverage = new Set(tenants.map((tenant) => tenant.packageId).filter(Boolean)).size;
   const districtCoverage = new Set(tenants.map((tenant) => tenant.district).filter(Boolean)).size;
   return `
     <section class="card integration-panel">
@@ -1383,53 +1382,131 @@ function renderRegistrations() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>SACCO onboarding control center</h2>
-          <p class="eyebrow">${source} &middot; applications, licence readiness, packages and tenant activation</p>
+          <h2>SACCO application review</h2>
+          <p class="eyebrow">${source} &middot; searchable onboarding queue, review workflow and activation status</p>
         </div>
-        ${apiState.user ? refreshApiButton() : ""}
+        <div class="filters">
+          ${registrationTabButton("applications", "Applications", activeTab)}
+          ${registrationTabButton("review", "Review queue", activeTab)}
+          ${registrationTabButton("packages", "Packages", activeTab)}
+        </div>
       </div>
       <div class="grid metrics">
         ${metric("Applications", tenants.length, `${pendingTenants} pending review`)}
         ${metric("Approved", approvedTenants, `${suspendedTenants} suspended`)}
         ${metric("Licence watch", expiringTenants, "expiring within 60 days")}
-        ${metric("Onboarding", `${averageOnboarding}%`, `${districtCoverage} district(s) covered`)}
+        ${metric("District coverage", districtCoverage, "registered districts")}
       </div>
-      <div class="grid three" style="margin-top:16px">
-        ${metric("Package coverage", packageCoverage, "subscription tiers in use")}
-        ${metric("Backend source", useApiTenants() ? "Live" : "Demo", canCreateOnApi ? "platform approvals enabled" : "tenant-limited view")}
-        ${metric("Activation gate", pendingTenants === 0 ? "Clear" : "Review", pendingTenants === 0 ? "no pending applications" : "applications need decision")}
-      </div>
+      ${renderRegistrationTab(activeTab, tenants, canCreateOnApi)}
     </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>SACCO applications</h2>
-          <p class="eyebrow">${source} &middot; Self-registration, compliance checks and approval history</p>
-        </div>
-        ${apiState.user && !canCreateOnApi ? "" : `<button class="primary-button" data-action="newTenant" type="button">New SACCO application</button>`}
+  `;
+}
+
+function registrationTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-registration-tab="${id}" type="button">${label}</button>`;
+}
+
+function renderRegistrationTab(activeTab, tenants, canCreateOnApi) {
+  if (activeTab === "review") return registrationReviewQueue(tenants, canCreateOnApi);
+  if (activeTab === "packages") return registrationPackageSummary(tenants);
+  return registrationApplicationList(tenants, canCreateOnApi);
+}
+
+function registrationApplicationList(tenants, canCreateOnApi) {
+  return `
+    <div class="toolbar" style="margin-top:16px">
+      <div class="filters">
+        <input class="input" id="registrationSearch" placeholder="Search SACCO, district, package, status">
+        <select class="select" id="registrationStatusFilter">
+          <option value="">All statuses</option>
+          <option value="Pending Review">Pending Review</option>
+          <option value="Approved">Approved</option>
+          <option value="Suspended">Suspended</option>
+          <option value="Active">Active</option>
+        </select>
       </div>
-      ${apiSyncNotice("SACCO applications")}
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>SACCO</th><th>District</th><th>Licence expiry</th><th>Package</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody>
-            ${tenants.map((tenant) => `
-              <tr>
-                <td><strong>${tenant.name}</strong><br><span class="pill">${tenant.registrationNo}${tenant.source ? ` &middot; ${tenant.source}` : ""}</span></td>
-                <td>${tenant.district}</td>
-                <td>${tenant.licenseExpiry}<br><small>${daysTo(tenant.licenseExpiry)} days remaining</small></td>
-                <td>${packageName(tenant.packageId)}</td>
-                <td><span class="status ${statusClass(tenant.status)}">${tenant.status}</span></td>
-                <td><div class="filters">
-                  ${apiState.user ? `<button class="secondary-button" data-tenant-profile="${tenant.id}" type="button">Profile</button>` : ""}
-                  ${apiState.user && !canCreateOnApi ? "" : `<button class="secondary-button" data-approve-tenant="${tenant.id}" type="button">Approve</button>`}
-                </div></td>
-              </tr>
-            `).join("") || `<tr><td colspan="6">No SACCO applications found.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    </section>
+      ${canCreateOnApi ? `<button class="primary-button" data-action="newTenant" type="button">New SACCO application</button>` : `<span class="pill">View only</span>`}
+    </div>
+    ${apiSyncNotice("SACCO applications")}
+    <div id="registrationList">
+      ${registrationApplicationRows(tenants, canCreateOnApi)}
+    </div>
+  `;
+}
+
+function registrationApplicationRows(tenants, canCreateOnApi) {
+  return `
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>Application</th><th>SACCO</th><th>Contact</th><th>Package</th><th>Review status</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${tenants.map((tenant) => `
+            <tr>
+              <td>${tenant.registrationNo}<br><small>Submitted ${tenant.source ? "via Java API" : "from demo"}</small></td>
+              <td><strong>${tenant.name}</strong><br><small>${tenant.district} &middot; ${tenant.onboarding || 0}% complete</small></td>
+              <td>${tenant.contactName || "Authorized contact pending"}<br><small>${tenant.phone || "Telephone not captured"}</small></td>
+              <td>${packageName(tenant.packageId)}<br><small>${tenant.members || tenant.memberCount || "Member count pending"} members</small></td>
+              <td><span class="status ${statusClass(tenant.status)}">${tenant.status}</span><br><small>Licence: ${tenant.licenseExpiry}</small></td>
+              <td><div class="filters">
+                ${apiState.user ? `<button class="secondary-button" data-tenant-profile="${tenant.id}" type="button">View</button>` : ""}
+                ${apiState.user ? `<button class="secondary-button" data-tenant-review="${tenant.id}" type="button">Details</button>` : ""}
+                ${canCreateOnApi ? `<button class="secondary-button" data-approve-tenant="${tenant.id}" type="button">Approve</button>` : ""}
+              </div></td>
+            </tr>
+          `).join("") || `<tr><td colspan="6">No SACCO applications found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function registrationReviewQueue(tenants, canCreateOnApi) {
+  const queue = tenants.filter((tenant) => tenant.status !== "Approved");
+  return `
+    <div class="grid two" style="margin-top:16px">
+      ${queue.map((tenant) => `
+        <article class="card">
+          <div class="toolbar">
+            <div>
+              <h3>${tenant.name}</h3>
+              <p class="eyebrow">${tenant.registrationNo} &middot; ${tenant.district}</p>
+            </div>
+            <span class="status ${statusClass(tenant.status)}">${tenant.status}</span>
+          </div>
+          <div class="grid two compact-facts" style="margin-top:12px">
+            ${miniFact("Package", packageName(tenant.packageId))}
+            ${miniFact("Onboarding", `${tenant.onboarding || 0}%`)}
+            ${miniFact("Licence expiry", tenant.licenseExpiry)}
+            ${miniFact("Reviewer", tenant.reviewer || "Unassigned")}
+          </div>
+          <div class="toolbar" style="margin-top:14px;margin-bottom:0">
+            <button class="secondary-button" data-tenant-review="${tenant.id}" type="button">Review details</button>
+            ${canCreateOnApi ? `<button class="primary-button" data-approve-tenant="${tenant.id}" type="button">Approve</button>` : ""}
+          </div>
+        </article>
+      `).join("") || `<div class="notice">No applications require review.</div>`}
+    </div>
+  `;
+}
+
+function registrationPackageSummary(tenants) {
+  const packageIds = [...new Set(tenants.map((tenant) => tenant.packageId).filter(Boolean))];
+  return `
+    <div class="grid three" style="margin-top:16px">
+      ${packageIds.map((packageId) => {
+        const rows = tenants.filter((tenant) => tenant.packageId === packageId);
+        return `
+          <article class="card">
+            <h3>${packageName(packageId)}</h3>
+            <p class="eyebrow">${rows.length} SACCO application(s)</p>
+            <div class="grid two compact-facts" style="margin-top:12px">
+              ${miniFact("Approved", rows.filter((tenant) => tenant.status === "Approved").length)}
+              ${miniFact("Pending", rows.filter((tenant) => tenant.status !== "Approved").length)}
+            </div>
+          </article>
+        `;
+      }).join("") || `<div class="notice">No package selections found.</div>`}
+    </div>
   `;
 }
 
@@ -3635,6 +3712,18 @@ function bindViewActions() {
     });
   });
 
+  document.querySelectorAll("[data-registration-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.registrationTab = button.dataset.registrationTab;
+      saveState();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-tenant-review]").forEach((button) => {
+    button.addEventListener("click", () => openTenantReview(button.dataset.tenantReview));
+  });
+
   document.querySelectorAll("[data-approve]").forEach((button) => {
     button.addEventListener("click", () => resolveApproval(button.dataset.approve, "Approved"));
   });
@@ -3768,6 +3857,36 @@ function bindViewActions() {
       });
     });
   }
+
+  const registrationSearch = document.getElementById("registrationSearch");
+  const registrationStatusFilter = document.getElementById("registrationStatusFilter");
+  if (registrationSearch || registrationStatusFilter) {
+    const updateRegistrationList = () => {
+      const term = (registrationSearch?.value || "").toLowerCase();
+      const status = registrationStatusFilter?.value || "";
+      const tenants = (useApiTenants()
+        ? apiState.tenants.filter((tenant) => tenant.id !== "tenant_platform").map(apiTenantToRow)
+        : state.tenants.filter((tenant) => tenant.id !== "platform"))
+        .filter((tenant) => !status || tenant.status === status)
+        .filter((tenant) => JSON.stringify(tenant).toLowerCase().includes(term));
+      document.getElementById("registrationList").innerHTML = registrationApplicationRows(tenants, !apiState.user || hasPermission("tenants:manage"));
+      bindRegistrationRowActions();
+    };
+    registrationSearch?.addEventListener("input", updateRegistrationList);
+    registrationStatusFilter?.addEventListener("change", updateRegistrationList);
+  }
+}
+
+function bindRegistrationRowActions() {
+  document.querySelectorAll("[data-tenant-profile]").forEach((button) => {
+    button.addEventListener("click", () => openSaccoProfile(button.dataset.tenantProfile));
+  });
+  document.querySelectorAll("[data-tenant-review]").forEach((button) => {
+    button.addEventListener("click", () => openTenantReview(button.dataset.tenantReview));
+  });
+  document.querySelectorAll("[data-approve-tenant]").forEach((button) => {
+    button.addEventListener("click", () => approveTenant(button.dataset.approveTenant));
+  });
 }
 
 function openModal(title, body, footer) {
@@ -4431,6 +4550,50 @@ async function openSaccoProfile(tenantId) {
   } catch (error) {
     openModal("SACCO profile", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
   }
+}
+
+function openTenantReview(tenantId) {
+  const tenant = (useApiTenants()
+    ? apiState.tenants.filter((item) => item.id !== "tenant_platform").map(apiTenantToRow)
+    : state.tenants.filter((item) => item.id !== "platform"))
+    .find((item) => item.id === tenantId);
+  if (!tenant) {
+    openModal("Application details", `<div class="notice error">SACCO application was not found.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    return;
+  }
+  openModal(`${tenant.name} application`, `
+    <div class="grid metrics">
+      ${metric("Status", tenant.status, "current review state")}
+      ${metric("Onboarding", `${tenant.onboarding || 0}%`, "submitted readiness")}
+      ${metric("Package", packageName(tenant.packageId), "selected subscription")}
+    </div>
+    <div class="filters" style="margin-top:16px">
+      <span class="pill">Overview</span>
+      <span class="pill">SACCO Details</span>
+      <span class="pill">Officials</span>
+      <span class="pill">Documents</span>
+      <span class="pill">Subscription</span>
+      <span class="pill">Review Notes</span>
+      <span class="pill">Audit Trail</span>
+    </div>
+    <div class="grid two" style="margin-top:16px">
+      <div class="notice">
+        <strong>Application summary</strong><br>
+        Registration: ${tenant.registrationNo}<br>
+        District: ${tenant.district}<br>
+        Licence expiry: ${tenant.licenseExpiry}<br>
+        Reviewer: ${tenant.reviewer || "Unassigned"}
+      </div>
+      <div class="notice">
+        <strong>Pending actions</strong><br>
+        Verify registration certificate, UMRA licence, officials, package selection and subscription readiness before approval.
+      </div>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Close</button>${hasPermission("tenants:manage") ? `<button id="approveReviewedTenant" class="primary-button" type="button">Approve application</button>` : ""}`);
+  document.getElementById("approveReviewedTenant")?.addEventListener("click", async () => {
+    closeModal();
+    await approveTenant(tenant.id);
+  });
 }
 
 function openMemberForm() {
