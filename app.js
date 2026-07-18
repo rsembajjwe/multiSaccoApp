@@ -980,6 +980,7 @@ function shellFact(label, value) {
 }
 
 function renderDashboard() {
+  if (apiState.user?.tenantId === "tenant_platform") return renderPlatformDashboard();
   const tenant = currentTenant();
   const usingApi = Boolean(apiState.user);
   const operations = apiState.operationsStatus || {};
@@ -1121,6 +1122,123 @@ function renderDashboard() {
       </div>
       ${auditTable(tenantScoped(state.audit).slice(0, 5))}
     </section>
+  `;
+}
+
+function renderPlatformDashboard() {
+  const operations = apiState.operationsStatus || {};
+  const counts = operations.counts || {};
+  const tenants = (apiState.tenants || []).filter((tenant) => tenant.id !== "tenant_platform");
+  const subscriptions = apiState.subscriptions || [];
+  const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === "active").length;
+  const pendingApprovals = Number(counts.pendingFinancialTransactions || 0) + Number(counts.pendingLoans || 0);
+  const openComplaints = Number(counts.openComplaints || 0);
+  const alertCount = operations.alerts?.length || 0;
+  const activeTab = state.platformDashboardTab || "overview";
+  return `
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Dashboard data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; Java-backed platform command center</p>
+        </div>
+        ${refreshApiButton("Refresh backend data")}
+      </div>
+      ${apiSyncNotice("Dashboard")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", "Java API")}
+        ${miniFact("Operations scope", operations.scope ? (operations.scope === "platform" ? "Platform" : tenantName(operations.scope)) : "Not loaded")}
+        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
+        ${miniFact("Health", apiState.health)}
+      </div>
+    </section>
+
+    <div class="grid metrics" style="margin-top:16px">
+      ${metric("SACCOs", tenants.length, `${tenants.filter((tenant) => tenant.status === "active").length} active`)}
+      ${metric("Subscriptions", activeSubscriptions, `${subscriptions.length} total`)}
+      ${metric("Pending work", pendingApprovals, "approvals and loan decisions")}
+      ${metric("Open complaints", openComplaints, alertCount ? `${alertCount} alert(s)` : "operations clear")}
+    </div>
+
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Platform dashboard</h2>
+          <p class="eyebrow">Compact platform administration view</p>
+        </div>
+        <div class="filters">
+          ${platformDashboardTabButton("overview", "Overview", activeTab)}
+          ${platformDashboardTabButton("saccos", "SACCOs", activeTab)}
+          ${platformDashboardTabButton("system", "System", activeTab)}
+          ${platformDashboardTabButton("activity", "Activity", activeTab)}
+        </div>
+      </div>
+      ${renderPlatformDashboardTab(activeTab, tenants, subscriptions, operations)}
+    </section>
+  `;
+}
+
+function platformDashboardTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-platform-dashboard-tab="${id}" type="button">${label}</button>`;
+}
+
+function renderPlatformDashboardTab(activeTab, tenants, subscriptions, operations) {
+  if (activeTab === "saccos") {
+    const pendingTenants = tenants.filter((tenant) => ["pending_review", "pending", "trial"].includes(String(tenant.status).toLowerCase()));
+    return `
+      <div class="grid three" style="margin-top:16px">
+        ${metric("Registered SACCOs", tenants.length, "platform tenants")}
+        ${metric("Needs approval", pendingTenants.length, "onboarding queue")}
+        ${metric("Active subscriptions", subscriptions.filter((subscription) => subscription.status === "active").length, "billing access")}
+      </div>
+      <div class="toolbar" style="margin-top:16px;margin-bottom:0">
+        <button class="secondary-button" data-view-jump="registrations" type="button">Open SACCO registration</button>
+        <button class="secondary-button" data-view-jump="subscriptions" type="button">Open subscriptions</button>
+      </div>
+    `;
+  }
+  if (activeTab === "system") {
+    return `
+      <div class="grid three" style="margin-top:16px">
+        ${metric("API health", titleCase(apiState.health || "checking"), "Java backend")}
+        ${metric("Alerts", operations.alerts?.length || 0, "operations status")}
+        ${metric("Audit events", apiState.auditEvents.length, "sensitive actions")}
+      </div>
+      <div class="toolbar" style="margin-top:16px;margin-bottom:0">
+        <button class="secondary-button" data-view-jump="operations" type="button">Open operations</button>
+        <button class="secondary-button" data-view-jump="reports" type="button">Open reports</button>
+      </div>
+    `;
+  }
+  if (activeTab === "activity") {
+    return `
+      <div class="grid two" style="margin-top:16px">
+        <div>
+          <h3>Control alerts</h3>
+          <ul class="list">
+            ${alertItem("Operations status", operations.alerts?.length ? `${operations.alerts.length} alert(s)` : "Clear", operations.alerts?.length ? "pending" : "active")}
+            ${alertItem("Tenant isolation", "Platform-scoped API session", "active")}
+            ${alertItem("Audit trail", `${apiState.auditEvents.length} event(s) loaded`, "trial")}
+          </ul>
+        </div>
+        <div>
+          <h3>Recent audit</h3>
+          ${apiAuditTable(apiState.auditEvents.slice(0, 5))}
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="grid three" style="margin-top:16px">
+      ${metric("Members", apiState.members.length, "across selected scope")}
+      ${metric("Transactions", apiState.financialTransactions.length, "Java-backed records")}
+      ${metric("Loans", apiState.loans.length, "credit portfolio")}
+    </div>
+    <div class="toolbar" style="margin-top:16px;margin-bottom:0">
+      <button class="secondary-button" data-view-jump="usersRoles" type="button">Platform users</button>
+      <button class="secondary-button" data-view-jump="operations" type="button">Operations center</button>
+      <button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>
+    </div>
   `;
 }
 
@@ -3399,6 +3517,14 @@ function bindViewActions() {
   document.querySelectorAll("[data-platform-users-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.platformUsersTab = button.dataset.platformUsersTab;
+      saveState();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-platform-dashboard-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.platformDashboardTab = button.dataset.platformDashboardTab;
       saveState();
       render();
     });
