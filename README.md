@@ -1,6 +1,6 @@
-# SACCO Management Platform
+# Tereka Online
 
-A SACCO Management Platform for Uganda described in the requirements document.
+A multi-SACCO operating platform for Uganda described in the requirements document.
 
 The production backend path is Java/Spring Boot in `backend-java`. The current Node server remains as a working prototype bridge, and it can now proxy `/api/v1` traffic to the Java backend with `JAVA_API_BASE`.
 
