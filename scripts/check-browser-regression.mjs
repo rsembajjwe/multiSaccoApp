@@ -43,6 +43,7 @@ try {
   await assertScreen(page, "operations", ["Operations command center", "Payment monitoring"]);
   await assertScreen(page, "reports", ["Report catalogue", "Membership", "Audit"]);
   await assertScreen(page, "users", ["Platform administrators only", "Permission matrix"]);
+  await assertPlatformUserCreation(page);
   await expectNoVisibleText(page, "Dashboard data source", "debug source panel hidden");
   await logout(page);
 
@@ -179,6 +180,22 @@ async function assertRoleDashboard(page, code, username, password, label, marker
   await logout(page);
 }
 
+async function assertPlatformUserCreation(page) {
+  const stamp = Date.now();
+  const fullName = `Browser Platform User ${stamp}`;
+  await expectText(page, "Add platform user", "platform add-user panel");
+  await page.locator("#newUserFullName").fill(fullName);
+  await page.locator("#newUserEmail").fill(`browser.platform.${stamp}@tereka.local`);
+  await page.locator("#newUserPhone").fill("+256700009999");
+  await page.locator("#newUserPassword").fill("TempPass@12345");
+  await page.locator("#newUserRoleId").selectOption({ label: "Platform Support Officer" }).catch(async () => {
+    await page.locator("#newUserRoleId").selectOption({ index: 0 });
+  });
+  await page.locator("#addUserForm button[type='submit']").click();
+  await expectText(page, fullName, "created platform user visible");
+  console.log("PASS platform user creation");
+}
+
 async function canLogin(code, username, password) {
   try {
     const response = await fetch(`${uiBaseUrl}/api/v1/auth/login`, {
@@ -199,7 +216,8 @@ async function navigateTo(page, viewId) {
 }
 
 async function logout(page) {
-  await page.locator("[data-action='logout']").click();
+  await clearSession(page);
+  await page.goto(uiBaseUrl, { waitUntil: "domcontentloaded" });
   await page.locator("#loginForm").waitFor({ state: "attached" });
 }
 

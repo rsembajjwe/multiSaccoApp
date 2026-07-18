@@ -35,6 +35,8 @@ const state = {
   loading: false,
   lastSync: "",
   lastError: "",
+  userFormMessage: "",
+  userFormError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -695,11 +697,13 @@ function notificationsView() {
 function usersView() {
   const platformOnly = isPlatform();
   const users = platformOnly ? dataRows("users").filter((user) => user.tenantId === "tenant_platform") : dataRows("users");
+  const canCreate = hasPermission("users:create") || hasPermission("roles:create");
   return `
     <div class="role-banner">
       <div><p class="eyebrow">Users and Roles</p><h2>${platformOnly ? "Platform administrators only. SACCO members are not platform users." : "SACCO staff access for this tenant."}</h2></div>
-      ${hasPermission("roles:create") ? `<button class="button primary" type="button">Add user</button>` : `<span class="status pending">View only</span>`}
+      ${canCreate ? `<span class="status active">Super Admin</span>` : `<span class="status pending">View only</span>`}
     </div>
+    ${canCreate ? addUserPanel(platformOnly) : ""}
     ${recordTable("User list", users, ["fullName", "username", "email", "phone", "role", "branchName", "lastLogin", "status"])}
     ${permissionMatrix()}
   `;
@@ -936,6 +940,48 @@ function formPreview(title, fields) {
   return `<section class="panel"><h2>${title}</h2><div class="form-grid">${fields.map((item) => `<label><span>${item}</span><input placeholder="${item}"></label>`).join("")}</div><div class="form-actions"><button class="button secondary" type="button">Save draft</button><button class="button primary" type="button">Submit</button></div></section>`;
 }
 
+function addUserPanel(platformOnly) {
+  const roles = userRoleOptions(platformOnly);
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Add platform user</h2>
+          <p>Create a platform administrator and assign the role that controls their views.</p>
+        </div>
+      </div>
+      ${state.userFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.userFormMessage)}</strong></div>` : ""}
+      ${state.userFormError ? `<div class="notice warning"><strong>Could not create user.</strong><span>${escapeHtml(state.userFormError)}</span></div>` : ""}
+      <form id="addUserForm" class="form-grid">
+        <input type="hidden" id="newUserTenantId" value="${platformOnly ? "tenant_platform" : escapeHtml(state.user?.tenantId || "")}">
+        <label><span>Full name</span><input id="newUserFullName" required placeholder="e.g. Platform Support Officer"></label>
+        <label><span>Email / username</span><input id="newUserEmail" type="email" required placeholder="name@tereka.online"></label>
+        <label><span>Phone</span><input id="newUserPhone" placeholder="+256..."></label>
+        <label><span>Temporary password</span><input id="newUserPassword" type="password" required minlength="10" placeholder="At least 10 characters"></label>
+        <label><span>Role</span><select id="newUserRoleId" required>${roles.map((role) => `<option value="${escapeHtml(role.id)}">${escapeHtml(role.name)}</option>`).join("")}</select></label>
+        <div class="form-actions inline">
+          <button class="button primary" type="submit">Create user</button>
+          <button class="button secondary" type="button" data-action="refresh">Refresh list</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function userRoleOptions(platformOnly) {
+  const tenantId = platformOnly ? "tenant_platform" : state.user?.tenantId;
+  const roles = dataRows("roles").filter((role) => role.tenantId === tenantId);
+  const preferred = platformOnly ? [
+    "Platform Super Admin",
+    "Platform Operations Officer",
+    "Platform Billing Officer",
+    "Platform Compliance Officer",
+    "Platform Support Officer"
+  ] : [];
+  const filtered = preferred.length ? roles.filter((role) => preferred.includes(role.name)) : roles;
+  return filtered.length ? filtered : [{ id: platformOnly ? "role_platform_support_officer" : "", name: platformOnly ? "Platform Support Officer" : "Default staff role" }];
+}
+
 function packageCards() {
   const packages = dataRows("subscriptionPackages");
   return `<section class="panel"><h2>Subscription package configuration</h2><div class="package-grid">${(packages.length ? packages : fallbackPackages()).map((pkg) => `<article><h3>${pkg.name}</h3><strong>${money.format(pkg.price || pkg.amount || 0)}</strong><p>${pkg.maxMembers || pkg.members || "Configured"} members / ${pkg.maxBranches || pkg.branches || "Configured"} branches</p><span>${pkg.modules || "Included modules, SMS, storage and support level"}</span><button class="button secondary" type="button">Configure</button></article>`).join("")}</div></section>`;
@@ -1064,6 +1110,50 @@ async function refreshMember() {
   renderShell();
 }
 
+async function createUserFromForm(event) {
+  event.preventDefault();
+  state.userFormMessage = "";
+  state.userFormError = "";
+  const submit = event.currentTarget.querySelector("button[type='submit']");
+  if (submit) {
+    submit.disabled = true;
+    submit.textContent = "Creating...";
+  }
+  try {
+    const roleId = value("newUserRoleId");
+    const created = await api("/users", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: value("newUserTenantId"),
+        fullName: value("newUserFullName"),
+        email: value("newUserEmail"),
+        phone: value("newUserPhone"),
+        password: value("newUserPassword")
+      })
+    });
+    if (roleId) {
+      try {
+        await api(`/users/${encodeURIComponent(created.id)}/roles`, {
+          method: "PUT",
+          body: JSON.stringify({ roleIds: [roleId] })
+        });
+      } catch (roleError) {
+        state.userFormError = `User was created, but role assignment needs review: ${roleError.message}`;
+      }
+    }
+    state.userFormMessage = state.userFormError ? `Created ${created.fullName || created.email}.` : `Created ${created.fullName || created.email} and assigned role.`;
+    await refreshAll();
+  } catch (error) {
+    state.userFormError = error.message;
+    renderShell();
+  } finally {
+    if (submit) {
+      submit.disabled = false;
+      submit.textContent = "Create user";
+    }
+  }
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -1137,6 +1227,7 @@ function bindEvents() {
       renderShell();
     });
   });
+  document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
   document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
@@ -1163,6 +1254,8 @@ async function logout() {
     roleNames: [],
     permissionIds: [],
     currentView: "dashboard",
+    userFormMessage: "",
+    userFormError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });
