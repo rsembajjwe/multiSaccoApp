@@ -1515,15 +1515,22 @@ function renderSubscriptions() {
   const subscriptions = useApiSubscriptions() ? apiState.subscriptions.map(apiSubscriptionToRow) : state.subscriptions;
   const canRecordApiPayment = !apiState.user || hasPermission("subscriptions:manage");
   const source = useApiSubscriptions() ? "API-backed" : "Local demo";
+  const activeTab = state.subscriptionTab || "overview";
   const billingRows = subscriptions.map((subscription) => subscriptionBillingDetails(subscription));
   const invoiceTotal = billingRows.reduce((sum, billing) => sum + billing.amount, 0);
   const paidTotal = billingRows.reduce((sum, billing) => sum + billing.paid, 0);
   const outstandingTotal = Math.max(0, invoiceTotal - paidTotal);
   const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === "Active").length;
-  const pendingSubscriptions = subscriptions.filter((subscription) => subscription.status !== "Active").length;
-  const perMemberSubscriptions = billingRows.filter((billing) => billing.tierId === "per_member").length;
-  const fixedTierSubscriptions = billingRows.length - perMemberSubscriptions;
+  const expiringSubscriptions = subscriptions.filter((subscription) => {
+    const days = daysTo(subscription.expiry);
+    return days >= 0 && days <= 30;
+  }).length;
+  const expiredSubscriptions = subscriptions.filter((subscription) => daysTo(subscription.expiry) < 0).length;
+  const pendingPayments = billingRows.filter((billing) => billing.paid < billing.amount).length;
   const billableMembers = billingRows.reduce((sum, billing) => sum + billing.billableMembers, 0);
+  const packageDistribution = packages
+    .map((pkg) => `${pkg.name}: ${subscriptions.filter((subscription) => subscription.packageId === pkg.id).length}`)
+    .join(" | ") || "No packages";
   return `
     <section class="card integration-panel">
       <div class="toolbar">
@@ -1547,69 +1554,163 @@ function renderSubscriptions() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Billing control center</h2>
-          <p class="eyebrow">${source} &middot; invoices, payments, member counts and annual subscription tiers</p>
+          <h2>Subscription management</h2>
+          <p class="eyebrow">${source} &middot; onboarding activation, invoices, payments and package control</p>
         </div>
-        ${useApiSubscriptions() && !canRecordApiPayment ? "" : `<button class="primary-button" data-action="recordSubscriptionPayment" type="button">Record payment</button>`}
+        <div class="filters">
+          ${subscriptionTabButton("overview", "Overview", activeTab)}
+          ${subscriptionTabButton("invoices", "Invoices", activeTab)}
+          ${subscriptionTabButton("payments", "Payments", activeTab)}
+          ${subscriptionTabButton("packages", "Packages", activeTab)}
+        </div>
       </div>
       <div class="grid metrics">
         ${metric("Invoice total", money.format(invoiceTotal), `${subscriptions.length} subscription invoice(s)`)}
         ${metric("Paid", money.format(paidTotal), `${money.format(outstandingTotal)} outstanding`)}
-        ${metric("Active", activeSubscriptions, `${pendingSubscriptions} pending or inactive`)}
+        ${metric("Active SACCOs", activeSubscriptions, `${expiringSubscriptions} expiring within 30 days`)}
         ${metric("Billable members", billableMembers, `${MINIMUM_BILLABLE_MEMBERS} member minimum applies`)}
       </div>
-      <div class="grid three" style="margin-top:16px">
-        ${metric("Per-member tier", perMemberSubscriptions, `${money.format(SUBSCRIPTION_UNIT_PRICE)} per member up to 250`)}
-        ${metric("Fixed tiers", fixedTierSubscriptions, "251-500, 501-2,500, 2,501-10,000")}
-        ${metric("Payment access", canRecordApiPayment ? "Platform" : (apiState.user ? "View only" : "Demo"), canRecordApiPayment ? "backend payment posting enabled" : (apiState.user ? "tenant subscription view" : "local payment demo"))}
-      </div>
+      ${renderSubscriptionTab(activeTab, packages, subscriptions, billingRows, {
+        source,
+        canRecordApiPayment,
+        invoiceTotal,
+        paidTotal,
+        outstandingTotal,
+        activeSubscriptions,
+        expiringSubscriptions,
+        expiredSubscriptions,
+        pendingPayments,
+        billableMembers,
+        packageDistribution
+      })}
     </section>
+  `;
+}
+
+function subscriptionTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-subscription-tab="${id}" type="button">${label}</button>`;
+}
+
+function renderSubscriptionTab(activeTab, packages, subscriptions, billingRows, summary) {
+  if (activeTab === "invoices") return renderSubscriptionInvoices(subscriptions, summary);
+  if (activeTab === "payments") return renderSubscriptionPayments(subscriptions, billingRows, summary);
+  if (activeTab === "packages") return renderSubscriptionPackages(packages, subscriptions, summary);
+  return renderSubscriptionOverview(subscriptions, summary);
+}
+
+function renderSubscriptionOverview(subscriptions, summary) {
+  return `
+    <div class="grid four compact-facts" style="margin-top:16px">
+      ${miniFact("Expiring soon", summary.expiringSubscriptions)}
+      ${miniFact("Expired", summary.expiredSubscriptions)}
+      ${miniFact("Pending payments", summary.pendingPayments)}
+      ${miniFact("Packages", summary.packageDistribution)}
+    </div>
+    <div class="notice" style="margin-top:16px">
+      <strong>Activation gate:</strong> a SACCO should only operate when its tenant approval and subscription payment are both active.
+      ${summary.canRecordApiPayment ? "Billing officers can record confirmed payments from this screen." : "This user can review subscription state only."}
+    </div>
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>SACCO</th><th>Package</th><th>Billing period</th><th>Payment status</th><th>Subscription status</th><th>Action</th></tr></thead>
+        <tbody>
+          ${subscriptions.map((subscription) => subscriptionSummaryRow(subscription, summary)).join("") || `<tr><td colspan="6">No subscriptions found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderSubscriptionInvoices(subscriptions, summary) {
+  return `
+    <div class="toolbar" style="margin-top:16px">
+      <div>
+        <h3>Invoices and receipts</h3>
+        <p class="eyebrow">${summary.source} &middot; invoice register and receipt evidence</p>
+      </div>
+      ${apiState.user ? refreshApiButton() : ""}
+    </div>
+    ${apiSyncNotice("Invoices and payments")}
+    <div class="table-wrap" style="margin-top:12px">
+      <table>
+        <thead><tr><th>Invoice</th><th>SACCO</th><th>Package / billing</th><th>Members / branches</th><th>Amount</th><th>Payment</th><th>Expiry</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${subscriptions.map((subscription) => subscriptionInvoiceRow(subscription, summary)).join("") || `<tr><td colspan="8">No subscriptions found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderSubscriptionPayments(subscriptions, billingRows, summary) {
+  const outstandingRows = subscriptions.filter((subscription) => {
+    const billing = subscriptionBillingDetails(subscription);
+    return billing.paid < billing.amount;
+  });
+  return `
+    <div class="grid three compact-facts" style="margin-top:16px">
+      ${miniFact("Collected", money.format(summary.paidTotal))}
+      ${miniFact("Outstanding", money.format(summary.outstandingTotal))}
+      ${miniFact("Payment access", summary.canRecordApiPayment ? "Record enabled" : "View only")}
+    </div>
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>SACCO</th><th>Invoice</th><th>Expected</th><th>Paid</th><th>Outstanding</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>
+          ${outstandingRows.map((subscription) => subscriptionPaymentRow(subscription, summary)).join("") || `<tr><td colspan="7">No outstanding subscription payments.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderSubscriptionPackages(packages, subscriptions, summary) {
+  return `
+    <div class="notice" style="margin-top:16px">
+      <strong>Package configuration:</strong> Super Admin owns tier changes. Billing and Operations can use this view for package coverage and onboarding checks.
+    </div>
     <div class="grid three" style="margin-top:16px">
-      <section class="card">
-        <h2>100-250 members</h2>
+      <article class="notice">
+        <h3>100-250 members</h3>
         <p><strong>${money.format(SUBSCRIPTION_UNIT_PRICE)}</strong> per member / year</p>
         <ul class="list">
           <li><span>Minimum billable members</span><strong>${MINIMUM_BILLABLE_MEMBERS}</strong></li>
           <li><span>Minimum annual invoice</span><strong>${money.format(MINIMUM_BILLABLE_MEMBERS * SUBSCRIPTION_UNIT_PRICE)}</strong></li>
           <li><span>Applies up to</span><strong>250 members</strong></li>
         </ul>
-      </section>
+      </article>
       ${packages.map((pkg) => `
-        <section class="card">
-          <h2>${pkg.name}</h2>
+        <article class="notice">
+          <h3>${pkg.name}</h3>
           <p><strong>${money.format(pkg.price)}</strong> per year</p>
           <ul class="list">
             <li><span>Billing band</span><strong>${pkg.tierLabel || `Up to ${pkg.members.toLocaleString()}`}</strong></li>
             <li><span>Member limit</span><strong>${pkg.members.toLocaleString()}</strong></li>
             <li><span>Users</span><strong>${pkg.users}</strong></li>
             <li><span>Branches</span><strong>${pkg.branches}</strong></li>
-            <li><span>Modules</span><strong>${pkg.modules}</strong></li>
+            <li><span>Subscribed SACCOs</span><strong>${subscriptions.filter((subscription) => subscription.packageId === pkg.id).length}</strong></li>
           </ul>
-        </section>
+        </article>
       `).join("")}
     </div>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Invoices and payments</h2>
-          <p class="eyebrow">${source} &middot; Subscription lifecycle</p>
-        </div>
-        ${apiState.user ? refreshApiButton() : ""}
-      </div>
-      ${apiSyncNotice("Invoices and payments")}
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Invoice</th><th>SACCO</th><th>Package</th><th>Members</th><th>Amount</th><th>Paid</th><th>Expiry</th><th>Status</th></tr></thead>
-          <tbody>
-            ${subscriptions.map(subscriptionRow).join("") || `<tr><td colspan="8">No subscriptions found.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    </section>
   `;
 }
 
-function subscriptionRow(sub) {
+function subscriptionSummaryRow(sub, summary) {
+  const billing = subscriptionBillingDetails(sub);
+  return `
+    <tr>
+      <td>${tenantName(sub.tenantId)}${sub.source ? `<br><small>${sub.source}</small>` : ""}</td>
+      <td>${packageName(sub.packageId)}<br><small>${billing.tierLabel}</small></td>
+      <td>Annual<br><small>Expires ${sub.expiry}</small></td>
+      <td><span class="status ${statusClass(subscriptionPaymentStatus(billing))}">${subscriptionPaymentStatus(billing)}</span></td>
+      <td><span class="status ${statusClass(sub.status)}">${sub.status}</span></td>
+      <td><button class="secondary-button" data-subscription-view="${sub.id}" type="button">View</button></td>
+    </tr>
+  `;
+}
+
+function subscriptionInvoiceRow(sub, summary) {
   const billing = subscriptionBillingDetails(sub);
   const outstanding = Math.max(0, billing.amount - billing.paid);
   return `
@@ -1617,13 +1718,105 @@ function subscriptionRow(sub) {
       <td>${sub.invoice}${sub.source ? `<br><small>${sub.source}</small>` : ""}</td>
       <td>${tenantName(sub.tenantId)}</td>
       <td>${packageName(sub.packageId)}<br><small>${billing.tierLabel}</small></td>
-      <td>${billing.memberCount.toLocaleString()} actual<br><small>${billing.billingDescription}</small></td>
+      <td>${billing.memberCount.toLocaleString()} members<br><small>${billing.billableMembers.toLocaleString()} billable</small></td>
       <td>${money.format(billing.amount)}</td>
-      <td>${money.format(billing.paid)}<br><small>${money.format(outstanding)} outstanding</small></td>
+      <td><span class="status ${statusClass(subscriptionPaymentStatus(billing))}">${subscriptionPaymentStatus(billing)}</span><br><small>${money.format(billing.paid)} paid, ${money.format(outstanding)} due</small></td>
       <td>${sub.expiry}</td>
-      <td><span class="status ${statusClass(sub.status)}">${sub.status}</span></td>
+      <td class="row-actions">
+        <button class="secondary-button" data-subscription-document="invoice" data-subscription-id="${sub.id}" type="button">Invoice</button>
+        <button class="secondary-button" data-subscription-document="receipt" data-subscription-id="${sub.id}" type="button">Receipt</button>
+        ${summary.canRecordApiPayment && outstanding > 0 ? `<button class="primary-button" data-subscription-pay="${sub.id}" type="button">Record payment</button>` : ""}
+      </td>
     </tr>
   `;
+}
+
+function subscriptionPaymentRow(sub, summary) {
+  const billing = subscriptionBillingDetails(sub);
+  const outstanding = Math.max(0, billing.amount - billing.paid);
+  return `
+    <tr>
+      <td>${tenantName(sub.tenantId)}</td>
+      <td>${sub.invoice}</td>
+      <td>${money.format(billing.amount)}</td>
+      <td>${money.format(billing.paid)}</td>
+      <td>${money.format(outstanding)}</td>
+      <td><span class="status ${statusClass(subscriptionPaymentStatus(billing))}">${subscriptionPaymentStatus(billing)}</span></td>
+      <td>${summary.canRecordApiPayment ? `<button class="primary-button" data-subscription-pay="${sub.id}" type="button">Record payment</button>` : `<span class="pill">View only</span>`}</td>
+    </tr>
+  `;
+}
+
+function subscriptionPaymentStatus(billing) {
+  if (billing.paid >= billing.amount) return "Paid";
+  if (billing.paid > 0) return "Partially Paid";
+  return "Unpaid";
+}
+
+function subscriptionRows() {
+  return useApiSubscriptions() ? apiState.subscriptions.map(apiSubscriptionToRow) : state.subscriptions;
+}
+
+function findSubscriptionRow(subscriptionId) {
+  return subscriptionRows().find((subscription) => subscription.id === subscriptionId);
+}
+
+function openSubscriptionDetails(subscriptionId) {
+  const subscription = findSubscriptionRow(subscriptionId);
+  if (!subscription) return;
+  const billing = subscriptionBillingDetails(subscription);
+  const outstanding = Math.max(0, billing.amount - billing.paid);
+  openModal("Subscription details", `
+    <div class="grid two compact-facts">
+      ${miniFact("SACCO", tenantName(subscription.tenantId))}
+      ${miniFact("Package", packageName(subscription.packageId))}
+      ${miniFact("Invoice", subscription.invoice)}
+      ${miniFact("Expiry", subscription.expiry)}
+    </div>
+    <div class="grid three" style="margin-top:16px">
+      ${metric("Members covered", billing.memberCount.toLocaleString(), `${billing.billableMembers.toLocaleString()} billable members`)}
+      ${metric("Invoice amount", money.format(billing.amount), billing.billingDescription)}
+      ${metric("Outstanding", money.format(outstanding), subscriptionPaymentStatus(billing))}
+    </div>
+    <div class="notice" style="margin-top:16px">
+      <strong>Approval and payment state:</strong> tenant activation, invoice payment, and subscription status must all be valid before production access is enabled.
+    </div>
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>Tab</th><th>Operational evidence</th></tr></thead>
+        <tbody>
+          <tr><td>Overview</td><td>${tenantName(subscription.tenantId)} is on ${packageName(subscription.packageId)} with status ${subscription.status}.</td></tr>
+          <tr><td>Payments</td><td>${money.format(billing.paid)} collected and ${money.format(outstanding)} outstanding.</td></tr>
+          <tr><td>Invoice</td><td>${subscription.invoice} covers ${billing.tierLabel} for the annual cycle.</td></tr>
+          <tr><td>Audit Trail</td><td>${subscription.source || "Demo"} subscription source, last sync ${apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed"}.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Close</button>${outstanding > 0 && (!apiState.user || hasPermission("subscriptions:manage")) ? `<button class="primary-button" id="modalSubscriptionPayment" type="button">Record payment</button>` : ""}`);
+
+  document.getElementById("modalSubscriptionPayment")?.addEventListener("click", () => recordSubscriptionPayment(subscriptionId));
+}
+
+function openSubscriptionDocument(subscriptionId, documentType) {
+  const subscription = findSubscriptionRow(subscriptionId);
+  if (!subscription) return;
+  const billing = subscriptionBillingDetails(subscription);
+  const outstanding = Math.max(0, billing.amount - billing.paid);
+  const title = documentType === "receipt" ? "Receipt preview" : "Invoice preview";
+  openModal(title, `
+    <div class="notice">
+      <strong>${documentType === "receipt" ? "Receipt" : "Invoice"} ${subscription.invoice}</strong><br>
+      ${tenantName(subscription.tenantId)} &middot; ${packageName(subscription.packageId)} &middot; ${billing.tierLabel}
+    </div>
+    <ul class="list" style="margin-top:16px">
+      <li><span>Billing period</span><strong>Annual cycle ending ${subscription.expiry}</strong></li>
+      <li><span>Members covered</span><strong>${billing.billableMembers.toLocaleString()}</strong></li>
+      <li><span>Invoice amount</span><strong>${money.format(billing.amount)}</strong></li>
+      <li><span>Paid</span><strong>${money.format(billing.paid)}</strong></li>
+      <li><span>Outstanding</span><strong>${money.format(outstanding)}</strong></li>
+      <li><span>Payment status</span><strong>${subscriptionPaymentStatus(billing)}</strong></li>
+    </ul>
+  `, `<button class="secondary-button" value="cancel" type="submit">Close</button>`);
 }
 
 function renderMembers() {
@@ -3718,6 +3911,26 @@ function bindViewActions() {
       saveState();
       render();
     });
+  });
+
+  document.querySelectorAll("[data-subscription-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.subscriptionTab = button.dataset.subscriptionTab;
+      saveState();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-subscription-view]").forEach((button) => {
+    button.addEventListener("click", () => openSubscriptionDetails(button.dataset.subscriptionView));
+  });
+
+  document.querySelectorAll("[data-subscription-document]").forEach((button) => {
+    button.addEventListener("click", () => openSubscriptionDocument(button.dataset.subscriptionId, button.dataset.subscriptionDocument));
+  });
+
+  document.querySelectorAll("[data-subscription-pay]").forEach((button) => {
+    button.addEventListener("click", () => recordSubscriptionPayment(button.dataset.subscriptionPay));
   });
 
   document.querySelectorAll("[data-tenant-review]").forEach((button) => {
@@ -6115,9 +6328,11 @@ function openLoanRepaymentForm(loanId) {
   });
 }
 
-async function recordSubscriptionPayment() {
+async function recordSubscriptionPayment(subscriptionId = "") {
   if (apiState.user?.tenantId === "tenant_platform") {
-    const pending = apiState.subscriptions.find((sub) => sub.status !== "active") || apiState.subscriptions[0];
+    const pending = apiState.subscriptions.find((sub) => sub.id === subscriptionId)
+      || apiState.subscriptions.find((sub) => sub.status !== "active" || Number(sub.paid || 0) < Number(sub.amount || 0))
+      || apiState.subscriptions[0];
     if (!pending) return;
     try {
       await apiRequest(`/subscriptions/${pending.id}/payments`, {
@@ -6128,6 +6343,7 @@ async function recordSubscriptionPayment() {
           externalReference: `UI-PAY-${Date.now()}`
         })
       });
+      closeModal();
       await refreshApiStatus();
     } catch (error) {
       openModal("Payment failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
@@ -6135,7 +6351,10 @@ async function recordSubscriptionPayment() {
     return;
   }
 
-  const pending = state.subscriptions.find((sub) => sub.status !== "Active") || state.subscriptions[0];
+  const pending = state.subscriptions.find((sub) => sub.id === subscriptionId)
+    || state.subscriptions.find((sub) => sub.status !== "Active" || Number(sub.paid || 0) < Number(sub.amount || 0))
+    || state.subscriptions[0];
+  if (!pending) return;
   const billing = subscriptionBillingDetails(pending);
   pending.memberCount = billing.memberCount;
   pending.billableMembers = billing.billableMembers;
@@ -6146,6 +6365,7 @@ async function recordSubscriptionPayment() {
   pending.expiry = "2027-07-15";
   addAudit("platform", "Finance Officer", `Recorded subscription payment ${pending.invoice}`);
   saveState();
+  closeModal();
   render();
 }
 
