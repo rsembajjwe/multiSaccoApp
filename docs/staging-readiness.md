@@ -26,7 +26,7 @@ A build can be called staging-ready only when every required gate passes.
 | Staging handoff checklist | `docs/staging-handoff-checklist.md` | Environment, secrets, release gates, operations, UAT accounts, and decision evidence are recorded. | Required before staging handoff |
 | Release evidence pack | `docs/release-evidence-template.md` | Command results, environment evidence, UAT sign-off, load-test numbers, and release decision are recorded. | Ready for use |
 | UAT findings tracker | `docs/uat-findings-template.md` | Findings have severity, owner, status, retest result, and acceptance notes. | Ready for use |
-| Backup restore rehearsal | `npm.cmd run backup:rehearse` | Backup file restores cleanly on an isolated non-production database. | Ready |
+| Backup restore rehearsal | `npm.cmd run backup:rehearse` | Backup file restores cleanly on an isolated non-production database. | Passed on 2026-07-18 |
 
 ## Remaining Work to Reach Production
 

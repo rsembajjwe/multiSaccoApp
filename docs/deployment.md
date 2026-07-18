@@ -123,6 +123,8 @@ npm.cmd run backup:rehearse
 
 Record the generated backup path and pass/fail result in the release evidence. The rehearsal uses a separate Compose project and removes its volume when it finishes.
 
+Latest local backup rehearsal evidence: `npm.cmd run backup:rehearse` passed on `2026-07-18`. The isolated rehearsal database created a marker table/row, wrote `backups\rehearsals\sacco_app_backup_rehearsal-20260718-105007.dump`, dropped the table, restored the dump successfully, and removed the disposable Compose stack and volume.
+
 ## Load Test
 
 After the backend is running, execute the baseline load check:
