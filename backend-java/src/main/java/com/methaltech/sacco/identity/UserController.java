@@ -84,6 +84,10 @@ class UserController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot create a user in another tenant."));
         }
+        if (tenantId.equals("tenant_platform") && !hasRole(currentSession.user(), "Platform Super Admin")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "PLATFORM_SUPER_ADMIN_REQUIRED", "Only the Platform Super Admin can create platform users."));
+        }
 
         String email = request.email().trim().toLowerCase();
         if (userRepository.existsByTenantIdAndEmailIgnoreCase(tenantId, email)) {
@@ -130,6 +134,10 @@ class UserController {
                     .body(ApiErrorResponse.of(404, "USER_NOT_FOUND", "User was not found."));
         }
         if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
+        if (targetUser.getTenantId().equals("tenant_platform") && !hasRole(currentSession.user(), "Platform Super Admin")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "PLATFORM_SUPER_ADMIN_REQUIRED", "Only the Platform Super Admin can update platform user roles."));
+        }
 
         return ResponseEntity.ok(ApiResponse.of(assignmentResponse(targetUser)));
     }
@@ -212,6 +220,15 @@ class UserController {
 
     private boolean canAccessUser(AuthService.CurrentSession currentSession, User targetUser) {
         return authService.isPlatform(currentSession.user()) || targetUser.getTenantId().equals(currentSession.user().getTenantId());
+    }
+
+    private boolean hasRole(User user, String roleName) {
+        List<String> roleIds = userRoleRepository.findByIdUserId(user.getId()).stream()
+                .map(userRole -> userRole.getId().getRoleId())
+                .toList();
+        if (roleIds.isEmpty()) return false;
+        return roleRepository.findAllById(roleIds).stream()
+                .anyMatch(role -> role.getName().equalsIgnoreCase(roleName));
     }
 
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {

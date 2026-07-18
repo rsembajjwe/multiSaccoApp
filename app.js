@@ -703,6 +703,12 @@ function isPlatformFullAdmin() {
   return roles.includes("platform administrator") || roles.includes("platform super admin");
 }
 
+function isPlatformSuperAdmin() {
+  if (apiState.user?.tenantId !== "tenant_platform") return false;
+  const roles = (apiState.roleNames || []).join(" ").toLowerCase();
+  return roles.includes("platform super admin");
+}
+
 function init() {
   renderTenantSelect();
   renderWorkspaceSelect();
@@ -2088,7 +2094,8 @@ function renderUsersRoles() {
   const platformUsers = users.filter((user) => user.tenantId === "tenant_platform");
   const roles = apiState.roles || [];
   const permissions = apiState.permissions || [];
-  const canManageRoles = hasPermission("roles:create");
+  const canAddPlatformUsers = isPlatformSuperAdmin() && hasPermission("users:create");
+  const canManageRoles = isPlatformSuperAdmin() && hasPermission("roles:create");
   const tenantLabel = apiState.user?.tenantId === "tenant_platform" ? "platform scope" : tenantName(currentApiTenantId());
   return `
     <section class="card integration-panel">
@@ -2113,6 +2120,7 @@ function renderUsersRoles() {
           <h2>Platform users management</h2>
           <p class="eyebrow">Platform administration only &middot; SACCO staff and SACCO members are managed in their own SACCO views</p>
         </div>
+        ${canAddPlatformUsers ? `<button class="primary-button" data-action="newPlatformUser" type="button">Add platform user</button>` : ""}
         ${canManageRoles ? `<button class="secondary-button" data-action="assignUserRoles" type="button">Assign roles</button>
         <button class="primary-button" data-action="newRole" type="button">New role</button>` : `<span class="pill">View only</span>`}
       </div>
@@ -3412,6 +3420,7 @@ function bindViewActions() {
         newComplaint: openComplaintForm,
         newApprovalWorkflow: openApprovalWorkflowForm,
         newApprovalDecision: openApprovalDecisionForm,
+        newPlatformUser: openPlatformUserForm,
         newRole: openRoleForm,
         assignUserRoles: openUserRoleAssignmentForm,
         memberImportTemplate: openMemberImportTemplate,
@@ -4851,10 +4860,59 @@ function openRoleForm() {
   });
 }
 
+function openPlatformUserForm() {
+  if (!isPlatformSuperAdmin() || !hasPermission("users:create")) {
+    openModal("Add platform user", `<div class="notice error">Only the Platform Super Admin can add platform users.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    return;
+  }
+  const platformRoles = (apiState.roles || []).filter((role) => role.tenantId === "tenant_platform");
+  if (!platformRoles.length) {
+    openModal("Add platform user", `<div class="notice error">Platform roles must be loaded before adding a platform user.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    return;
+  }
+  openModal("Add platform user", `
+    <div class="notice">This creates a Tereka Online platform administrator only. SACCO staff are created from their SACCO administration area.</div>
+    <div class="form-grid" style="margin-top:14px">
+      ${field("Full name", "platformUserFullName", "text", "Platform Support Officer")}
+      ${field("Email / username", "platformUserEmail", "email", "new.platform.user@tereka.local")}
+      ${field("Phone", "platformUserPhone", "tel", "+256700000010")}
+      ${field("Temporary password", "platformUserPassword", "password", "ChangeMe@12345")}
+      <label class="field full"><span>Platform role</span><select id="platformUserRole" class="select">${platformRoles.map((role) => `<option value="${role.id}">${role.name}</option>`).join("")}</select></label>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="savePlatformUser" class="primary-button" type="button">Add platform user</button>`);
+  document.getElementById("savePlatformUser").addEventListener("click", async () => {
+    try {
+      const user = await apiRequest("/users", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: "tenant_platform",
+          fullName: value("platformUserFullName"),
+          email: value("platformUserEmail"),
+          phone: value("platformUserPhone"),
+          password: value("platformUserPassword")
+        })
+      });
+      await apiRequest(`/users/${encodeURIComponent(user.id)}/roles`, {
+        method: "PUT",
+        body: JSON.stringify({ roleIds: [value("platformUserRole")] })
+      });
+      closeModal();
+      state.currentView = "usersRoles";
+      await refreshApiStatus();
+    } catch (error) {
+      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
+    }
+  });
+}
+
 function openUserRoleAssignmentForm() {
   if (!apiState.user) return;
-  const users = apiState.users || [];
-  const roles = apiState.roles || [];
+  const users = apiState.user?.tenantId === "tenant_platform"
+    ? (apiState.users || []).filter((user) => user.tenantId === "tenant_platform")
+    : (apiState.users || []);
+  const roles = apiState.user?.tenantId === "tenant_platform"
+    ? (apiState.roles || []).filter((role) => role.tenantId === "tenant_platform")
+    : (apiState.roles || []);
   if (!users.length || !roles.length) {
     openModal("Assign roles", `<div class="notice error">Users and roles must be loaded before assignment.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
     return;

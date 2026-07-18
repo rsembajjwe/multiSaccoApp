@@ -899,6 +899,88 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void platformSuperAdminCanCreatePlatformUsers() throws Exception {
+		String token = loginAndReturnToken();
+		String email = "platform-created-" + System.currentTimeMillis() + "@tereka.local";
+
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_platform",
+								  "fullName": "Created Platform Support",
+								  "email": "%s",
+								  "phone": "+256700111333",
+								  "password": "Platform@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_platform")))
+				.andExpect(jsonPath("$.data.email", is(email)))
+				.andExpect(jsonPath("$.data.passwordHash").doesNotExist())
+				.andReturn();
+		String userId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(put("/api/v1/users/" + userId + "/roles")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_platform_support_officer"]
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.roleIds", hasItem("role_platform_support_officer")));
+	}
+
+	@Test
+	void nonSuperPlatformAdminCannotCreatePlatformUsers() throws Exception {
+		String superAdminToken = loginAndReturnToken();
+		String legacyEmail = "platform-legacy-" + System.currentTimeMillis() + "@tereka.local";
+
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + superAdminToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_platform",
+								  "fullName": "Legacy Platform Administrator",
+								  "email": "%s",
+								  "phone": "+256700111444",
+								  "password": "Legacy@12345"
+								}
+								""".formatted(legacyEmail)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String legacyUserId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+		mockMvc.perform(put("/api/v1/users/" + legacyUserId + "/roles")
+						.header("Authorization", "Bearer " + superAdminToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_platform_admin"]
+								}
+								"""))
+				.andExpect(status().isOk());
+
+		String legacyToken = loginAndReturnToken(legacyEmail, "Legacy@12345");
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + legacyToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_platform",
+								  "fullName": "Blocked Platform User",
+								  "email": "blocked-platform-%s@tereka.local",
+								  "password": "Blocked@12345"
+								}
+								""".formatted(System.currentTimeMillis())))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PLATFORM_SUPER_ADMIN_REQUIRED")));
+	}
+
+	@Test
 	void duplicateUserEmailInTenantIsRejected() throws Exception {
 		String token = loginAndReturnToken();
 
