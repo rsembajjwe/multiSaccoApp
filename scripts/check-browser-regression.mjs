@@ -170,7 +170,12 @@ async function assertSaccoRoleDashboards(page) {
     {
       label: "Secretary",
       credentials: { code: "GVS", username: "secretary@greenvalley.local", password: "Secretary@12345" },
-      markers: ["Secretary dashboard", "Members", "Governance", "Complaints", "Member records, KYC"]
+      markers: ["Secretary dashboard", "Members", "Governance", "Complaints", "Member records, KYC"],
+      screens: [
+        { id: "members", heading: "Members data source", markers: ["Secretary member records", "Secretary oversight", "Oversight", "Balances", "Register"] },
+        { id: "approvals", heading: "Approvals data source", markers: ["Secretary review queue", "Secretary review focus", "Checker queue"] },
+        { id: "reports", heading: "Reports data source", markers: ["Secretary board reports", "Secretary board report focus", "Governance", "Compliance"] }
+      ]
     },
     {
       label: "Chairperson",

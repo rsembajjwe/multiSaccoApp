@@ -1866,6 +1866,11 @@ function renderMembers() {
   const canCreateMembers = hasPermission("members:create");
   const activeTab = state.membersTab || "oversight";
   const tenantCount = new Set(members.map((member) => member.tenantId).filter(Boolean)).size;
+  const isSecretary = state.workspace === "secretary";
+  const membersTitle = isSecretary ? "Secretary member records" : "Platform member oversight";
+  const membersSubtitle = isSecretary
+    ? `${source} &middot; member register, KYC, branch coverage, complaints and board-pack readiness`
+    : `${source} &middot; cross-SACCO member health, KYC, balances and support visibility`;
   return `
     ${workspaceOverview()}
     <div class="grid metrics">
@@ -1899,8 +1904,8 @@ function renderMembers() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Platform member oversight</h2>
-          <p class="eyebrow">${source} &middot; cross-SACCO member health, KYC, balances and support visibility</p>
+          <h2>${membersTitle}</h2>
+          <p class="eyebrow">${membersSubtitle}</p>
         </div>
         <div class="filters">
           ${membersTabButton("oversight", "Oversight", activeTab)}
@@ -1915,7 +1920,7 @@ function renderMembers() {
         ${metric("Welfare", money.format(totalWelfare), "member welfare balances")}
         ${metric("SACCO coverage", tenantCount, state.workspace === "platformAdmin" ? "tenant member scope" : "current SACCO")}
       </div>
-      ${renderMembersTab(activeTab, members, { source, canCreateMembers, activeMembers, verifiedMembers, branchCount, membersWithoutBranch })}
+      ${renderMembersTab(activeTab, members, { source, canCreateMembers, activeMembers, verifiedMembers, branchCount, membersWithoutBranch, isSecretary })}
     </section>
   `;
 }
@@ -1931,7 +1936,7 @@ function renderMembersTab(activeTab, members, summary) {
     const totalWelfare = members.reduce((sum, member) => sum + (member.welfare || 0), 0);
     return `
       <div class="notice" style="margin-top:16px">
-        <strong>Balance oversight:</strong> platform users review server-confirmed totals and open member statements without changing SACCO teller records.
+        <strong>${summary.isSecretary ? "Secretary balance context" : "Balance oversight"}:</strong> ${summary.isSecretary ? "review member balance context for statements, complaints and board packs without posting finance entries." : "platform users review server-confirmed totals and open member statements without changing SACCO teller records."}
       </div>
       <div class="grid three" style="margin-top:16px">
         ${metric("Savings", money.format(totalSavings), "server field totals")}
@@ -1943,7 +1948,7 @@ function renderMembersTab(activeTab, members, summary) {
   if (activeTab === "register") {
     return `
       <div class="notice" style="margin-top:16px">
-        <strong>Member register:</strong> search across member records, inspect profiles, and open statements. SACCO staff handle day-to-day registration unless this user has member creation permission.
+        <strong>${summary.isSecretary ? "Secretary member register" : "Member register"}:</strong> ${summary.isSecretary ? "search member files, follow KYC gaps, inspect profiles, and prepare board records." : "search across member records, inspect profiles, and open statements. SACCO staff handle day-to-day registration unless this user has member creation permission."}
       </div>
       <div class="toolbar">
         <div>
@@ -1971,7 +1976,7 @@ function renderMembersTab(activeTab, members, summary) {
   }
   return `
     <div class="notice" style="margin-top:16px">
-      <strong>Platform oversight:</strong> this view is for member health, KYC exceptions, branch coverage, and support context across subscribing SACCOs.
+      <strong>${summary.isSecretary ? "Secretary oversight" : "Platform oversight"}:</strong> ${summary.isSecretary ? "this view is for member health, KYC exceptions, branch coverage, complaint context and board-pack preparation." : "this view is for member health, KYC exceptions, branch coverage, and support context across subscribing SACCOs."}
     </div>
     <div class="grid four compact-facts" style="margin-top:16px">
       ${miniFact("Active members", summary.activeMembers)}
@@ -2418,9 +2423,12 @@ function renderApprovals() {
   const activeWorkflowCount = workflows.filter((workflow) => workflow.active).length;
   const workflowModules = new Set(workflows.map((workflow) => workflow.module).filter(Boolean)).size;
   const isTreasurer = state.workspace === "treasurer";
-  const approvalTitle = isTreasurer ? "Treasurer approval queue" : "Approval control center";
+  const isSecretary = state.workspace === "secretary";
+  const approvalTitle = isTreasurer ? "Treasurer approval queue" : isSecretary ? "Secretary review queue" : "Approval control center";
   const approvalSubtitle = isTreasurer
     ? "API-backed &middot; finance checker queue, posting decisions, corrections and reversal approvals"
+    : isSecretary
+      ? "API-backed &middot; member records, KYC updates, governance items and board-pack review"
     : "API-backed &middot; maker-checker queue, workflow coverage and decision history";
   return `
     <section class="card integration-panel">
@@ -2463,7 +2471,7 @@ function renderApprovals() {
           ${metric("Queue source", "Backend", apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant")}
         </div>
         <div class="notice" style="margin-top:16px">
-          <strong>${isTreasurer ? "Treasurer checker focus" : "Approval focus"}:</strong> ${isTreasurer ? "confirm valid financial postings, return corrections, and keep the finance approval queue clean." : "review pending items against configured maker-checker workflows."}
+          <strong>${isTreasurer ? "Treasurer checker focus" : isSecretary ? "Secretary review focus" : "Approval focus"}:</strong> ${isTreasurer ? "confirm valid financial postings, return corrections, and keep the finance approval queue clean." : isSecretary ? "confirm member-record evidence, track KYC or governance items, and prepare clean decision notes." : "review pending items against configured maker-checker workflows."}
         </div>
       </section>
       <section class="card" style="margin-top:16px">
@@ -3012,9 +3020,12 @@ function renderApiReports() {
   const tenantLabel = apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant";
   const activeTab = state.reportsTab || "compliance";
   const isTreasurer = state.workspace === "treasurer";
-  const reportsTitle = isTreasurer ? "Treasurer finance reports" : "Reports control center";
+  const isSecretary = state.workspace === "secretary";
+  const reportsTitle = isTreasurer ? "Treasurer finance reports" : isSecretary ? "Secretary board reports" : "Reports control center";
   const reportsSubtitle = isTreasurer
     ? `API-backed &middot; ledger integrity, reconciliation, cash position, expenses and callback evidence for ${tenantLabel}`
+    : isSecretary
+      ? `API-backed &middot; member records, KYC readiness, complaints, meetings, resolutions and board packs for ${tenantLabel}`
     : `API-backed &middot; financial integrity, reconciliation, compliance and governance for ${tenantLabel}`;
   const canManageAccess = hasPermission("roles:create") || hasPermission("users:create");
 
@@ -3070,7 +3081,8 @@ function renderApiReports() {
         permissions,
         auditEvents: apiState.auditEvents,
         regulatoryReport,
-        isTreasurer
+        isTreasurer,
+        isSecretary
       })}
       <div class="grid three" style="margin-top:16px">
         ${metric("Accounting periods", `${openPeriods}/${periods.length}`, `${closedPeriods} closed`)}
@@ -3279,7 +3291,7 @@ function renderReportsTabSummary(activeTab, model) {
   if (activeTab === "governance") {
     return `
       <div class="notice" style="margin-top:16px">
-        <strong>Governance report focus:</strong> track meetings, open resolutions, complaints and support evidence for oversight reviews.
+        <strong>${model.isSecretary ? "Secretary governance focus" : "Governance report focus"}:</strong> ${model.isSecretary ? "prepare board packs from meetings, open resolutions, complaints and member-record follow-up." : "track meetings, open resolutions, complaints and support evidence for oversight reviews."}
       </div>
       <div class="grid three compact-facts" style="margin-top:16px">
         ${miniFact("Meetings", model.meetings.length)}
@@ -3305,7 +3317,7 @@ function renderReportsTabSummary(activeTab, model) {
   }
   return `
     <div class="notice" style="margin-top:16px">
-      <strong>${model.isTreasurer ? "Treasurer finance report focus" : "Compliance report focus"}:</strong> ${model.isTreasurer ? `cash position, reconciliation exceptions, posted journals and finance evidence for ${model.tenantLabel}.` : `export-ready supervisory view covering reconciliation, PAR indicators, member totals and compliance exceptions for ${model.tenantLabel}.`}
+      <strong>${model.isTreasurer ? "Treasurer finance report focus" : model.isSecretary ? "Secretary board report focus" : "Compliance report focus"}:</strong> ${model.isTreasurer ? `cash position, reconciliation exceptions, posted journals and finance evidence for ${model.tenantLabel}.` : model.isSecretary ? `member totals, KYC readiness, complaints and governance evidence for ${model.tenantLabel}.` : `export-ready supervisory view covering reconciliation, PAR indicators, member totals and compliance exceptions for ${model.tenantLabel}.`}
     </div>
   `;
 }
