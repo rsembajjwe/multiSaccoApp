@@ -59,6 +59,7 @@ try {
   await assertScreen(page, "members", ["Member list", "Member registration"]);
   await assertMemberRegistrationAndKyc(page);
   await assertScreen(page, "transactions", ["Transaction list", "New transaction screen"]);
+  await assertTransactionWorkflow(page);
   await assertScreen(page, "savings", ["Savings product list", "Savings accounts"]);
   await assertScreen(page, "shares", ["Share product list", "Share register"]);
   await assertScreen(page, "welfare", ["Welfare product list", "Welfare claims"]);
@@ -238,6 +239,18 @@ async function assertMemberRegistrationAndKyc(page) {
   await expectText(page, "Approve member", "member approve action");
   await expectText(page, "Save KYC decision", "member KYC save action");
   console.log("PASS member registration and KYC");
+}
+
+async function assertTransactionWorkflow(page) {
+  await page.locator("#newTransactionAmount").fill("15000");
+  await page.locator("#newTransactionNarration").fill("Browser regression savings deposit");
+  await page.locator("#transactionForm button[type='submit']").click();
+  await expectText(page, "Submitted transaction", "transaction submitted");
+  await page.locator("[data-row-action='transaction-detail']").first().click();
+  await expectText(page, "Transaction detail and reversal", "transaction detail panel");
+  await expectText(page, "Approve/post transaction", "transaction approve action");
+  await expectText(page, "Reverse posted transaction", "transaction reverse action");
+  console.log("PASS transaction workflow");
 }
 
 async function canLogin(code, username, password) {

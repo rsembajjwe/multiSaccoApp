@@ -60,6 +60,12 @@ const state = {
   selectedMemberDocuments: [],
   selectedMemberMessage: "",
   selectedMemberError: "",
+  transactionFormMessage: "",
+  transactionFormError: "",
+  selectedTransactionId: "",
+  selectedTransactionReceipt: null,
+  selectedTransactionMessage: "",
+  selectedTransactionError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -643,10 +649,18 @@ function membersView() {
 }
 
 function transactionsView() {
+  const rows = dataRows("transactions").map((transaction) => ({
+    ...transaction,
+    memberName: memberName(transaction.memberId),
+    action: "transaction-detail",
+    actionLabel: "Review",
+    actionId: transaction.id
+  }));
   return `
     ${filterToolbar("Search by reference, member, channel, status, amount or user", "New transaction", "Print receipt")}
-    ${recordTable("Transaction list", dataRows("transactions"), ["reference", "postedAt", "memberName", "type", "channel", "debit", "credit", "amount", "status"])}
-    ${formPreview("New transaction screen", ["Member search", "Member summary", "Transaction type", "Account", "Amount", "Payment method", "Reference", "Narration", "Charge preview", "Expected balance after transaction"])}
+    ${transactionFormPanel()}
+    ${transactionDetailPanel(rows)}
+    ${recordTable("Transaction list", rows, ["reference", "postedAt", "memberName", "type", "channel", "amount", "originalTransactionId", "status"])}
   `;
 }
 
@@ -1267,6 +1281,76 @@ function kycStatusOptions() {
   ];
 }
 
+function transactionFormPanel() {
+  const canCreate = hasPermission("transactions:create");
+  const members = dataRows("members");
+  const branches = dataRows("branches");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>New transaction screen</h2>
+          <p>Submit savings, shares, welfare or withdrawal transactions for approval.</p>
+        </div>
+      </div>
+      ${state.transactionFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.transactionFormMessage)}</strong></div>` : ""}
+      ${state.transactionFormError ? `<div class="notice warning"><strong>Transaction failed.</strong><span>${escapeHtml(state.transactionFormError)}</span></div>` : ""}
+      <form id="transactionForm" class="form-grid">
+        <input type="hidden" id="newTransactionTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
+        <label><span>Member</span><select id="newTransactionMemberId" ${canCreate ? "" : "disabled"}>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
+        <label><span>Branch</span><select id="newTransactionBranchId" ${canCreate ? "" : "disabled"}><option value="">Use member branch</option>${branches.map((branch) => `<option value="${escapeHtml(branch.id)}">${escapeHtml(branch.name || branch.code)}</option>`).join("")}</select></label>
+        <label><span>Transaction type</span><select id="newTransactionType" ${canCreate ? "" : "disabled"}><option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="withdrawal">Withdrawal</option></select></label>
+        <label><span>Payment channel</span><select id="newTransactionChannel" ${canCreate ? "" : "disabled"}><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option><option value="payroll_deduction">Payroll deduction</option></select></label>
+        <label><span>Amount</span><input id="newTransactionAmount" type="number" min="1" step="1" required value="10000" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Narration</span><input id="newTransactionNarration" placeholder="Reason or receipt note" ${canCreate ? "" : "disabled"}></label>
+        <div class="form-actions inline">${canCreate ? `<button class="button primary" type="submit">Submit transaction</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function transactionDetailPanel(rows) {
+  const transaction = rows.find((item) => item.id === state.selectedTransactionId);
+  if (!transaction) return "";
+  const canApprove = hasPermission("transactions:approve");
+  return `
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Transaction detail and reversal</h2>
+          <p>${escapeHtml(transaction.reference || transaction.id)} - ${escapeHtml(transaction.type || "")}</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-transaction-detail">Close</button>
+      </div>
+      ${state.selectedTransactionMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedTransactionMessage)}</strong></div>` : ""}
+      ${state.selectedTransactionError ? `<div class="notice warning"><strong>Transaction action failed.</strong><span>${escapeHtml(state.selectedTransactionError)}</span></div>` : ""}
+      <div class="source-grid">
+        ${mini("Member", transaction.memberName || transaction.memberId)}
+        ${mini("Amount", money.format(transaction.amount || 0))}
+        ${mini("Status", transaction.status)}
+        ${mini("Channel", transaction.channel)}
+        ${mini("Posted at", transaction.postedAt)}
+        ${mini("Original transaction", transaction.originalTransactionId)}
+        ${mini("Reversal reason", transaction.reversalReason)}
+        ${mini("Rejection reason", transaction.rejectionReason)}
+      </div>
+      <form id="transactionDecisionForm" class="form-grid single">
+        <input type="hidden" id="selectedTransactionId" value="${escapeHtml(transaction.id)}">
+        <label><span>Decision / reversal reason</span><input id="transactionDecisionReason" placeholder="Required for rejection or reversal" ${canApprove ? "" : "disabled"}></label>
+        <div class="form-actions">
+          ${canApprove ? `
+            <button class="button secondary" type="button" data-transaction-action="post">Approve/post transaction</button>
+            <button class="button ghost" type="button" data-transaction-action="reject">Reject transaction</button>
+            <button class="button secondary" type="button" data-transaction-action="receipt">Load receipt</button>
+            <button class="button ghost" type="button" data-transaction-action="reverse">Reverse posted transaction</button>
+          ` : `<span class="status pending">View only</span>`}
+        </div>
+      </form>
+      ${state.selectedTransactionReceipt ? `<section class="receipt-box"><h3>Receipt preview</h3><pre>${escapeHtml(state.selectedTransactionReceipt.printableText || "")}</pre></section>` : ""}
+    </section>
+  `;
+}
+
 function userRoleOptions(platformOnly) {
   const tenantId = platformOnly ? "tenant_platform" : state.user?.tenantId;
   const roles = dataRows("roles").filter((role) => role.tenantId === tenantId);
@@ -1711,6 +1795,74 @@ function runMemberDecision(action) {
   saveMemberDecision(memberId, value("selectedMemberStatus"), value("selectedMemberKycStatus"));
 }
 
+async function createTransactionFromForm(event) {
+  event.preventDefault();
+  state.transactionFormMessage = "";
+  state.transactionFormError = "";
+  try {
+    const transaction = await api("/financial-transactions", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: value("newTransactionTenantId"),
+        branchId: value("newTransactionBranchId"),
+        memberId: value("newTransactionMemberId"),
+        type: value("newTransactionType"),
+        channel: value("newTransactionChannel"),
+        amount: Number(value("newTransactionAmount")),
+        narration: value("newTransactionNarration")
+      })
+    });
+    state.transactionFormMessage = `Submitted transaction ${transaction.reference} for approval.`;
+    await refreshAll();
+  } catch (error) {
+    state.transactionFormError = error.message;
+    renderShell();
+  }
+}
+
+function openTransactionDetail(transactionId) {
+  state.selectedTransactionId = transactionId;
+  state.selectedTransactionReceipt = null;
+  state.selectedTransactionMessage = "";
+  state.selectedTransactionError = "";
+  renderShell();
+}
+
+async function runTransactionAction(action) {
+  const transactionId = value("selectedTransactionId") || state.selectedTransactionId;
+  if (!transactionId) return;
+  state.selectedTransactionMessage = "";
+  state.selectedTransactionError = "";
+  state.selectedTransactionReceipt = action === "receipt" ? state.selectedTransactionReceipt : null;
+  try {
+    if (action === "receipt") {
+      state.selectedTransactionReceipt = await api(`/financial-transactions/${encodeURIComponent(transactionId)}/receipt`);
+      state.selectedTransactionMessage = "Receipt loaded.";
+    } else if (action === "reverse") {
+      const reversal = await api(`/financial-transactions/${encodeURIComponent(transactionId)}/reversal`, {
+        method: "POST",
+        body: JSON.stringify({ reason: value("transactionDecisionReason") || "Reversal requested from Tereka Online" })
+      });
+      state.selectedTransactionId = reversal.id;
+      state.selectedTransactionMessage = `Reversal created: ${reversal.reference}.`;
+      await refreshAll();
+    } else {
+      const status = action === "post" ? "posted" : "rejected";
+      const transaction = await api(`/financial-transactions/${encodeURIComponent(transactionId)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, reason: value("transactionDecisionReason") || "Reviewed in Tereka Online" })
+      });
+      state.selectedTransactionId = transaction.id;
+      state.selectedTransactionMessage = `Transaction ${transaction.reference} ${status}.`;
+      await refreshAll();
+    }
+    renderShell();
+  } catch (error) {
+    state.selectedTransactionError = error.message;
+    renderShell();
+  }
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -1796,6 +1948,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='member-detail']").forEach((button) => {
     button.addEventListener("click", () => openMemberDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='transaction-detail']").forEach((button) => {
+    button.addEventListener("click", () => openTransactionDetail(button.dataset.rowId));
+  });
   document.querySelector("[data-action='close-user-detail']")?.addEventListener("click", () => {
     state.selectedUserId = "";
     state.selectedUserRoles = [];
@@ -1828,9 +1983,17 @@ function bindEvents() {
     state.selectedMemberError = "";
     renderShell();
   });
+  document.querySelector("[data-action='close-transaction-detail']")?.addEventListener("click", () => {
+    state.selectedTransactionId = "";
+    state.selectedTransactionReceipt = null;
+    state.selectedTransactionMessage = "";
+    state.selectedTransactionError = "";
+    renderShell();
+  });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
   document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
+  document.querySelector("#transactionForm")?.addEventListener("submit", createTransactionFromForm);
   document.querySelector("#memberStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     runMemberDecision("custom");
@@ -1851,6 +2014,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-member-decision]").forEach((button) => {
     button.addEventListener("click", () => runMemberDecision(button.dataset.memberDecision));
+  });
+  document.querySelectorAll("[data-transaction-action]").forEach((button) => {
+    button.addEventListener("click", () => runTransactionAction(button.dataset.transactionAction));
   });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
@@ -1902,6 +2068,12 @@ async function logout() {
     selectedMemberDocuments: [],
     selectedMemberMessage: "",
     selectedMemberError: "",
+    transactionFormMessage: "",
+    transactionFormError: "",
+    selectedTransactionId: "",
+    selectedTransactionReceipt: null,
+    selectedTransactionMessage: "",
+    selectedTransactionError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });
@@ -1937,6 +2109,11 @@ function openComplaints() {
 
 function pendingTransactions() {
   return dataRows("transactions").filter((transaction) => normal(transaction.status).includes("pending") || normal(transaction.stage).includes("approval"));
+}
+
+function memberName(memberId) {
+  const member = dataRows("members").find((item) => item.id === memberId);
+  return member ? `${member.membershipNo} - ${member.fullName}` : memberId;
 }
 
 function productsByType(type) {
