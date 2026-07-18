@@ -16,6 +16,14 @@
   --surface: #ffffff;
   --background: #f5f8f6;
   --shadow: 0 14px 34px rgba(20, 40, 31, 0.08);
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-page: 28px;
+  --text-hero: 36px;
+  --text-metric: 22px;
 }
 
 * {
@@ -28,6 +36,8 @@ body {
   color: var(--ink);
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
+  font-size: var(--text-md);
+  line-height: 1.45;
 }
 
 button,
@@ -127,15 +137,15 @@ button {
 .login-hero h1 {
   max-width: 520px;
   margin: 0;
-  font-size: 44px;
-  line-height: 1.05;
+  font-size: var(--text-hero);
+  line-height: 1.12;
 }
 
 .hero-copy {
   max-width: 560px;
   color: #d9ece5;
-  font-size: 18px;
-  line-height: 1.55;
+  font-size: var(--text-lg);
+  line-height: 1.5;
 }
 
 .trust-list {
@@ -172,6 +182,7 @@ button {
   padding: 0 14px;
   color: #fff;
   background: transparent;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
@@ -191,6 +202,12 @@ button {
   margin: 0;
 }
 
+.form-heading h2,
+.panel h2 {
+  font-size: var(--text-xl);
+  line-height: 1.25;
+}
+
 .form-heading p,
 .page-header p,
 .panel p,
@@ -204,7 +221,7 @@ small {
 .eyebrow {
   margin: 0 0 6px;
   color: var(--green-700);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -226,7 +243,7 @@ label {
 
 label span {
   color: #42534b;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
@@ -239,6 +256,7 @@ textarea {
   border-radius: 8px;
   padding: 9px 11px;
   background: #fff;
+  font-size: var(--text-md);
 }
 
 .password-row {
@@ -253,6 +271,7 @@ textarea {
   border-radius: 8px;
   color: var(--green-800);
   background: #eef9f5;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -276,6 +295,7 @@ textarea {
   border-radius: 8px;
   border: 1px solid transparent;
   padding: 0 14px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -301,6 +321,7 @@ textarea {
   border-radius: 8px;
   border-left: 4px solid var(--blue-600);
   background: var(--blue-100);
+  font-size: var(--text-md);
 }
 
 .alert.error {
@@ -322,7 +343,7 @@ textarea {
 
 .demo-panel span {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .demo-picker {
@@ -354,7 +375,7 @@ textarea {
   padding: 0;
   color: var(--green-800);
   background: transparent;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -441,11 +462,11 @@ textarea {
 }
 
 .nav-link span {
-  font-size: 15px;
+  font-size: var(--text-md);
 }
 
 .nav-link small {
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1.35;
 }
 
@@ -492,7 +513,7 @@ textarea {
 
 .breadcrumbs {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .topbar-actions,
@@ -538,7 +559,8 @@ textarea {
 }
 
 .page-header h1 {
-  font-size: 29px;
+  font-size: var(--text-page);
+  line-height: 1.2;
   letter-spacing: 0;
 }
 
@@ -555,7 +577,7 @@ textarea {
 }
 
 .source-panel h2 {
-  font-size: 21px;
+  font-size: var(--text-xl);
 }
 
 .source-grid {
@@ -575,14 +597,14 @@ textarea {
 
 .mini-fact span {
   color: var(--green-700);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 800;
   text-transform: uppercase;
 }
 
 .mini-fact strong {
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .content-area {
@@ -608,12 +630,13 @@ textarea {
 
 .summary-card span {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .summary-card strong {
   overflow-wrap: anywhere;
-  font-size: 23px;
+  font-size: var(--text-metric);
+  line-height: 1.18;
 }
 
 .summary-card small {
@@ -626,6 +649,7 @@ textarea {
   padding: 0;
   color: var(--green-800);
   background: transparent;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -655,6 +679,7 @@ table {
   width: 100%;
   min-width: 760px;
   border-collapse: collapse;
+  font-size: var(--text-sm);
 }
 
 th,
@@ -667,7 +692,7 @@ td {
 
 th {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
 }
 
@@ -677,7 +702,7 @@ th {
   align-items: center;
   border-radius: 999px;
   padding: 2px 9px;
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 800;
 }
 
@@ -789,6 +814,7 @@ th {
 
 .tabs button {
   color: var(--green-800);
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -849,7 +875,7 @@ th {
 .footer {
   padding: 10px 24px 24px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .mobile-only {
