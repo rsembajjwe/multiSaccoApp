@@ -62,6 +62,10 @@ const contracts = [
   "Operations command center",
   "Report catalogue",
   "Permission matrix",
+  "Platform support desk",
+  "Support ticket capture",
+  "Complaint review",
+  "Save complaint status",
   "SERVER-CONFIRMED BALANCES",
   "pendingGuarantors",
   "notifications"

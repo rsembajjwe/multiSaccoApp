@@ -73,6 +73,11 @@ const state = {
   selectedLoanRepayments: [],
   selectedLoanMessage: "",
   selectedLoanError: "",
+  complaintFormMessage: "",
+  complaintFormError: "",
+  selectedComplaintId: "",
+  selectedComplaintMessage: "",
+  selectedComplaintError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -766,9 +771,27 @@ function reportsView() {
 }
 
 function complaintsView() {
+  const rows = dataRows("complaints").map((complaint) => ({
+    ...complaint,
+    tenantName: tenantName(complaint.tenantId),
+    memberName: complaint.memberId ? memberName(complaint.memberId) : "SACCO-level case",
+    assignedOfficer: userName(complaint.assignedUserId),
+    action: "complaint-detail",
+    actionLabel: "Review",
+    actionId: complaint.id
+  }));
+  const open = rows.filter((row) => !["closed", "resolved"].includes(normal(row.status)));
   return `
-    ${filterToolbar("Search complaints by member, category, priority, status or due date", "New complaint", "Assign officer")}
-    ${recordTable("Complaint list", dataRows("complaints"), ["id", "memberName", "category", "subject", "assignedOfficer", "priority", "status", "dueDate"])}
+    <div class="dashboard-grid">
+      ${summary("Open complaints", open.length, "Support workload", "Assign")}
+      ${summary("Urgent complaints", rows.filter((row) => normal(row.priority) === "urgent").length, "Needs same-day action", "Escalate")}
+      ${summary("In progress", rows.filter((row) => normal(row.status) === "in_progress").length, "Being handled", "Track")}
+      ${summary("Resolved", rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", "Review")}
+    </div>
+    ${filterToolbar("Search complaints by SACCO, member, category, priority, status or officer", "New complaint", "Assign officer")}
+    ${complaintCapturePanel()}
+    ${complaintDetailPanel(rows)}
+    ${recordTable(isPlatform() ? "Platform support desk" : "Complaint list", rows, ["tenantName", "memberName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
   `;
 }
 
@@ -1492,6 +1515,85 @@ function loanProductOptions() {
   return ["Development Loan", "Emergency Loan"];
 }
 
+function complaintCapturePanel() {
+  const canManage = hasPermission("complaints:manage");
+  const tenants = tenantRows();
+  const tenantId = isPlatform() ? tenants[0]?.id || "" : state.user?.tenantId || "";
+  const members = dataRows("members").filter((member) => !tenantId || member.tenantId === tenantId || !isPlatform());
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Support ticket capture</h2>
+          <p>Create a Java-backed complaint for a SACCO or a specific member.</p>
+        </div>
+      </div>
+      ${state.complaintFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.complaintFormMessage)}</strong></div>` : ""}
+      ${state.complaintFormError ? `<div class="notice warning"><strong>Complaint capture failed.</strong><span>${escapeHtml(state.complaintFormError)}</span></div>` : ""}
+      <form id="complaintForm" class="form-grid">
+        <label><span>SACCO</span><select id="newComplaintTenantId" ${isPlatform() && canManage ? "" : "disabled"}>${tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${tenant.id === tenantId ? "selected" : ""}>${escapeHtml(tenant.abbreviation || tenant.code || tenant.name)} - ${escapeHtml(tenant.name || tenant.id)}</option>`).join("")}</select></label>
+        <label><span>Member</span><select id="newComplaintMemberId" ${canManage ? "" : "disabled"}><option value="">SACCO-level case</option>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
+        <label><span>Category</span><select id="newComplaintCategory" ${canManage ? "" : "disabled"}>${complaintCategoryOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
+        <label><span>Priority</span><select id="newComplaintPriority" ${canManage ? "" : "disabled"}><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option><option value="low">Low</option></select></label>
+        <label><span>Channel</span><select id="newComplaintChannel" ${canManage ? "" : "disabled"}><option value="branch">Branch</option><option value="phone">Phone</option><option value="email">Email</option><option value="web">Web</option><option value="mobile">Mobile</option></select></label>
+        <label><span>Subject</span><input id="newComplaintSubject" required placeholder="Short complaint title" ${canManage ? "" : "disabled"}></label>
+        <label class="wide"><span>Description</span><textarea id="newComplaintDescription" placeholder="What happened, when, and what action is expected" ${canManage ? "" : "disabled"}></textarea></label>
+        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">Create support ticket</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function complaintDetailPanel(rows) {
+  const complaint = rows.find((item) => item.id === state.selectedComplaintId);
+  if (!complaint) return "";
+  const canManage = hasPermission("complaints:manage");
+  return `
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Complaint review</h2>
+          <p>${escapeHtml(complaint.subject || complaint.id)} - ${escapeHtml(complaint.tenantName || complaint.tenantId || "")}</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-complaint-detail">Close</button>
+      </div>
+      ${state.selectedComplaintMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedComplaintMessage)}</strong></div>` : ""}
+      ${state.selectedComplaintError ? `<div class="notice warning"><strong>Complaint update failed.</strong><span>${escapeHtml(state.selectedComplaintError)}</span></div>` : ""}
+      <div class="source-grid">
+        ${mini("SACCO", complaint.tenantName || complaint.tenantId)}
+        ${mini("Member", complaint.memberName)}
+        ${mini("Category", labelize(complaint.category))}
+        ${mini("Priority", complaint.priority)}
+        ${mini("Status", complaint.status)}
+        ${mini("Channel", complaint.channel)}
+        ${mini("Assigned officer", complaint.assignedOfficer)}
+        ${mini("Created", complaint.createdAt)}
+      </div>
+      <form id="complaintStatusForm" class="form-grid single">
+        <input type="hidden" id="selectedComplaintId" value="${escapeHtml(complaint.id)}">
+        <label><span>Status</span><select id="selectedComplaintStatus" ${canManage ? "" : "disabled"}>${complaintStatusOptions().map((status) => `<option value="${escapeHtml(status)}" ${status === complaint.status ? "selected" : ""}>${labelize(status)}</option>`).join("")}</select></label>
+        <label><span>Resolution notes</span><textarea id="selectedComplaintNotes" placeholder="Action taken, follow-up notes, or closure reason" ${canManage ? "" : "disabled"}>${escapeHtml(complaint.resolutionNotes || "")}</textarea></label>
+        <div class="form-actions">
+          ${canManage ? `
+            <button class="button primary" type="submit">Save complaint status</button>
+            <button class="button secondary" type="button" data-complaint-status="in_progress">Mark in progress</button>
+            <button class="button secondary" type="button" data-complaint-status="resolved">Resolve</button>
+            <button class="button ghost" type="button" data-complaint-status="closed">Close</button>
+          ` : `<span class="status pending">View only</span>`}
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function complaintCategoryOptions() {
+  return ["statement", "loan", "savings", "shares", "service", "other"];
+}
+
+function complaintStatusOptions() {
+  return ["open", "in_progress", "resolved", "closed"];
+}
+
 function userRoleOptions(platformOnly) {
   const tenantId = platformOnly ? "tenant_platform" : state.user?.tenantId;
   const roles = dataRows("roles").filter((role) => role.tenantId === tenantId);
@@ -2136,6 +2238,68 @@ async function recordLoanRepayment(event) {
   }
 }
 
+async function createComplaintFromForm(event) {
+  event.preventDefault();
+  state.complaintFormMessage = "";
+  state.complaintFormError = "";
+  try {
+    const complaint = await api("/complaints", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: value("newComplaintTenantId") || state.user?.tenantId,
+        memberId: value("newComplaintMemberId"),
+        category: value("newComplaintCategory"),
+        subject: value("newComplaintSubject"),
+        description: value("newComplaintDescription"),
+        channel: value("newComplaintChannel"),
+        priority: value("newComplaintPriority")
+      })
+    });
+    state.complaintFormMessage = `Created support ticket ${complaint.id}.`;
+    state.selectedComplaintId = complaint.id;
+    await refreshAll();
+    state.selectedComplaintId = complaint.id;
+    state.complaintFormMessage = `Created support ticket ${complaint.id}.`;
+    renderShell();
+  } catch (error) {
+    state.complaintFormError = error.message;
+    renderShell();
+  }
+}
+
+function openComplaintDetail(complaintId) {
+  state.selectedComplaintId = complaintId;
+  state.selectedComplaintMessage = "";
+  state.selectedComplaintError = "";
+  renderShell();
+}
+
+async function saveComplaintStatus(status = null) {
+  const complaintId = value("selectedComplaintId") || state.selectedComplaintId;
+  if (!complaintId) return;
+  const nextStatus = status || value("selectedComplaintStatus");
+  state.selectedComplaintMessage = "";
+  state.selectedComplaintError = "";
+  try {
+    const complaint = await api(`/complaints/${encodeURIComponent(complaintId)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: nextStatus,
+        resolutionNotes: value("selectedComplaintNotes") || "Updated in Tereka Online"
+      })
+    });
+    state.selectedComplaintMessage = `Complaint ${complaint.id} updated to ${labelize(complaint.status)}.`;
+    const message = state.selectedComplaintMessage;
+    await refreshAll();
+    state.selectedComplaintId = complaint.id;
+    state.selectedComplaintMessage = message;
+    renderShell();
+  } catch (error) {
+    state.selectedComplaintError = error.message;
+    renderShell();
+  }
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -2233,6 +2397,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='loan-detail']").forEach((button) => {
     button.addEventListener("click", () => openLoanDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='complaint-detail']").forEach((button) => {
+    button.addEventListener("click", () => openComplaintDetail(button.dataset.rowId));
+  });
   document.querySelector("[data-action='close-user-detail']")?.addEventListener("click", () => {
     state.selectedUserId = "";
     state.selectedUserRoles = [];
@@ -2280,6 +2447,12 @@ function bindEvents() {
     state.selectedLoanError = "";
     renderShell();
   });
+  document.querySelector("[data-action='close-complaint-detail']")?.addEventListener("click", () => {
+    state.selectedComplaintId = "";
+    state.selectedComplaintMessage = "";
+    state.selectedComplaintError = "";
+    renderShell();
+  });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
   document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
@@ -2287,6 +2460,11 @@ function bindEvents() {
   document.querySelector("#loanApplicationForm")?.addEventListener("submit", createLoanFromForm);
   document.querySelector("#loanGuarantorForm")?.addEventListener("submit", addLoanGuarantor);
   document.querySelector("#loanRepaymentForm")?.addEventListener("submit", recordLoanRepayment);
+  document.querySelector("#complaintForm")?.addEventListener("submit", createComplaintFromForm);
+  document.querySelector("#complaintStatusForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveComplaintStatus();
+  });
   document.querySelector("#memberStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     runMemberDecision("custom");
@@ -2313,6 +2491,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-loan-action]").forEach((button) => {
     button.addEventListener("click", () => runLoanAction(button.dataset.loanAction));
+  });
+  document.querySelectorAll("[data-complaint-status]").forEach((button) => {
+    button.addEventListener("click", () => saveComplaintStatus(button.dataset.complaintStatus));
   });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
@@ -2377,6 +2558,11 @@ async function logout() {
     selectedLoanRepayments: [],
     selectedLoanMessage: "",
     selectedLoanError: "",
+    complaintFormMessage: "",
+    complaintFormError: "",
+    selectedComplaintId: "",
+    selectedComplaintMessage: "",
+    selectedComplaintError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });
@@ -2432,6 +2618,16 @@ function pendingTransactions() {
 function memberName(memberId) {
   const member = dataRows("members").find((item) => item.id === memberId);
   return member ? `${member.membershipNo} - ${member.fullName}` : memberId;
+}
+
+function tenantName(tenantId) {
+  const tenant = dataRows("tenants").find((item) => item.id === tenantId);
+  return tenant ? tenant.name || tenant.legalName || tenant.abbreviation || tenant.id : tenantId;
+}
+
+function userName(userId) {
+  const user = dataRows("users").find((item) => item.id === userId);
+  return user ? user.fullName || user.email || user.username || user.id : userId || "Unassigned";
 }
 
 function productsByType(type) {
