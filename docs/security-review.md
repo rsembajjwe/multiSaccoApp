@@ -58,6 +58,7 @@ Checklist:
 | Auth required | `npm.cmd run security:check` | Staff-only endpoints return `401` without a bearer token. |
 | Token handling | `npm.cmd run security:check` | Login/me responses hide password hash/salt and logout revokes the token. |
 | Tenant isolation | `npm.cmd run security:check` | SACCO staff cross-tenant profile, operations, and member import requests return `403`. |
+| Tenant isolation regressions | `npm.cmd run java:test` | Staff, platform, audit, document, subscription, report, operation, and member-portal paths are tenant-scoped. |
 | Member isolation | `npm.cmd run security:check` | Member sessions can read balances/loans/notifications/guarantors but cannot call staff APIs. |
 | Assigned permissions | `npm.cmd run java:test` | Users without assigned role permissions receive `403 PERMISSION_REQUIRED` on protected tenant, user, and role endpoints. |
 | Financial permissions | `npm.cmd run java:test` | Loans-only staff can access loan views but receive `403 PERMISSION_REQUIRED` on financial transaction and accounting endpoints. |

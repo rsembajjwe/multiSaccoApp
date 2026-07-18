@@ -32,7 +32,7 @@ These items are the main gap between the current build and live SACCO operation.
 | Priority | Area | Work needed | Done when |
 | --- | --- | --- | --- |
 | P0 | Authorization | Endpoint-level permission checks now cover tenant/user/role administration, finance/accounting, reports, loans, approvals, operations, notifications, governance, and complaints. | Permission tests prove blocked actions return `403` and allowed actions still pass. |
-| P0 | Tenant isolation | Add regression tests for cross-tenant members, loans, transactions, subscriptions, reports, documents, and operations. | Tenant isolation tests run in CI and fail on missing `tenant_id` controls. |
+| P0 | Tenant isolation | Regression tests now cover cross-tenant staff, platform, member, loan, transaction, subscription, report, document, operation, audit, and member-portal access paths. | Tenant isolation tests run in CI and fail on missing `tenant_id` controls. |
 | P0 | Financial correctness | Expand tests for reversals, statement balances, loan repayments, closed periods, expenses, assets, and subscription billing tiers. | Calculations are verified against expected ledger/balance outcomes. |
 | P0 | Secrets and deployment | Define staging and production environment variables, rotate demo passwords, require strong database credentials, and document HTTPS/reverse-proxy setup. | Deployment guide has a tested staging path with no secrets in source control. |
 | P1 | Provider integrations | Replace simulated SMS/email/mobile-money flows with provider adapters and callback signature verification. | Provider sandbox tests prove callbacks are authenticated and idempotent. |
@@ -46,11 +46,11 @@ These items are the main gap between the current build and live SACCO operation.
 
 Focus the next sprint on turning the high-risk items into tests and enforcement.
 
-1. Tenant-isolation regression tests for staff, platform, and member routes.
-2. Financial calculation tests for statements, reversals, loans, subscriptions, and closed periods.
-3. Staging environment/secrets guide with a tested `.env` example and deployment checklist.
-4. Provider integration interfaces for SMS, email, and mobile money, with demo adapters kept behind development configuration.
-5. CI release gating for Java tests, PostgreSQL verification, security checks, and browser regression.
+1. Financial calculation tests for statements, reversals, loans, subscriptions, and closed periods.
+2. Staging environment/secrets guide with a tested `.env` example and deployment checklist.
+3. Provider integration interfaces for SMS, email, and mobile money, with demo adapters kept behind development configuration.
+4. CI release gating for Java tests, PostgreSQL verification, security checks, and browser regression.
+5. UAT scripts for platform admin, SACCO staff, and member acceptance testing.
 
 ## Release Candidate Checklist
 

@@ -3590,6 +3590,16 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data[0].loan", notNullValue()))
 				.andExpect(jsonPath("$.data[0].capacity", notNullValue()));
 
+		String otherMemberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		mockMvc.perform(patch("/api/v1/member-auth/guarantor-requests/" + guarantorId + "/status")
+						.header("Authorization", "Bearer " + otherMemberToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "accepted" }
+								"""))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code", is("GUARANTOR_REQUEST_NOT_FOUND")));
+
 		mockMvc.perform(patch("/api/v1/member-auth/guarantor-requests/" + guarantorId + "/status")
 						.header("Authorization", "Bearer " + memberToken)
 						.contentType("application/json")
@@ -3957,6 +3967,68 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[0].resourceType", is("role")))
 				.andExpect(jsonPath("$.data[0].resourceId", is(roleId)));
+	}
+
+	@Test
+	void auditEventsAreTenantScopedForStaffAndPlatformUsers() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+		String greenAction = "Green audit isolation " + System.currentTimeMillis();
+		String lakeAction = "Lake platform audit isolation " + System.currentTimeMillis();
+
+		mockMvc.perform(post("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "action": "Cross tenant audit attempt",
+								  "resourceType": "tenant",
+								  "resourceId": "tenant_lake"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "action": "%s",
+								  "resourceType": "tenant",
+								  "resourceId": "tenant_green"
+								}
+								""".formatted(greenAction)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.action", is(greenAction)));
+
+		mockMvc.perform(post("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "action": "%s",
+								  "resourceType": "tenant",
+								  "resourceId": "tenant_lake"
+								}
+								""".formatted(lakeAction)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_lake")))
+				.andExpect(jsonPath("$.data.action", is(lakeAction)));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+				.andExpect(jsonPath("$.data[*].action", hasItem(greenAction)));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].action", hasItem(lakeAction)));
 	}
 
 	@Test
