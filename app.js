@@ -2259,6 +2259,11 @@ function renderLoans() {
   const repaymentCoverage = loans.filter((loan) => Number(loan.repaymentTotal || 0) > 0).length;
   const activeTab = state.loansTab || "portfolio";
   const canCreateLoans = !apiState.user || hasPermission("loans:create");
+  const isChairperson = state.workspace === "chairperson";
+  const loansTitle = isChairperson ? "Chairperson loan oversight" : "Platform loan oversight";
+  const loansSubtitle = isChairperson
+    ? `${source} &middot; board decisions, portfolio risk, guarantor readiness, disbursement readiness and repayment exposure`
+    : `${source} &middot; portfolio risk, applications, guarantors, disbursements and repayments`;
   return `
     <section class="card integration-panel">
       <div class="toolbar">
@@ -2284,8 +2289,8 @@ function renderLoans() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Platform loan oversight</h2>
-          <p class="eyebrow">${source} &middot; portfolio risk, applications, guarantors, disbursements and repayments</p>
+          <h2>${loansTitle}</h2>
+          <p class="eyebrow">${loansSubtitle}</p>
         </div>
         <div class="filters">
           ${loansTabButton("portfolio", "Portfolio", activeTab)}
@@ -2306,7 +2311,7 @@ function renderLoans() {
         ${metric("Guarantor pending", pendingGuarantors, "member decisions needed")}
         ${metric("DSR watch", highDsrLoans, `${averageDsr}% average DSR`)}
       </div>
-      ${renderLoansTabSummary(activeTab, loans, { activeLoans, submittedLoans, approvedLoans, closedLoans, pendingGuarantors, highDsrLoans, averageDsr, repaidValue })}
+      ${renderLoansTabSummary(activeTab, loans, { activeLoans, submittedLoans, approvedLoans, closedLoans, pendingGuarantors, highDsrLoans, averageDsr, repaidValue, isChairperson })}
     </section>
     ${activeTab === "files" ? `<section class="card" style="margin-top:16px">
       <div class="toolbar">
@@ -2354,7 +2359,7 @@ function renderLoansTabSummary(activeTab, loans, summary) {
   if (activeTab === "guarantors") {
     return `
       <div class="notice" style="margin-top:16px">
-        <strong>Guarantor oversight:</strong> monitor pending guarantor requests and loans where member consent may block appraisal.
+        <strong>${summary.isChairperson ? "Chairperson guarantor oversight" : "Guarantor oversight"}:</strong> monitor pending guarantor requests and loans where member consent may block appraisal.
       </div>
       <div class="grid three" style="margin-top:16px">
         ${metric("Pending guarantors", summary.pendingGuarantors, "member decisions needed")}
@@ -2366,7 +2371,7 @@ function renderLoansTabSummary(activeTab, loans, summary) {
   if (activeTab === "repayments") {
     return `
       <div class="notice" style="margin-top:16px">
-        <strong>Repayment oversight:</strong> track repayment coverage and active balances before SACCO portfolio reviews.
+        <strong>${summary.isChairperson ? "Chairperson repayment oversight" : "Repayment oversight"}:</strong> track repayment coverage and active balances before SACCO portfolio reviews.
       </div>
       <div class="grid three" style="margin-top:16px">
         ${metric("Repaid value", money.format(summary.repaidValue), "repayment history")}
@@ -2376,11 +2381,11 @@ function renderLoansTabSummary(activeTab, loans, summary) {
     `;
   }
   if (activeTab === "files") {
-    return `<div class="notice" style="margin-top:16px"><strong>Loan files:</strong> inspect applications, appraisal stage, DSR, guarantors, approvals and repayment actions.</div>`;
+    return `<div class="notice" style="margin-top:16px"><strong>${summary.isChairperson ? "Chairperson loan files" : "Loan files"}:</strong> inspect applications, appraisal stage, DSR, guarantors, approvals and repayment actions.</div>`;
   }
   return `
     <div class="notice" style="margin-top:16px">
-      <strong>Portfolio oversight:</strong> platform users watch portfolio quality, approval bottlenecks, DSR risk, and disbursement readiness across SACCOs.
+      <strong>${summary.isChairperson ? "Chairperson portfolio oversight" : "Portfolio oversight"}:</strong> ${summary.isChairperson ? "watch portfolio quality, approval bottlenecks, DSR risk, guarantor readiness and disbursement decisions before board approval." : "platform users watch portfolio quality, approval bottlenecks, DSR risk, and disbursement readiness across SACCOs."}
     </div>
   `;
 }
@@ -2424,11 +2429,14 @@ function renderApprovals() {
   const workflowModules = new Set(workflows.map((workflow) => workflow.module).filter(Boolean)).size;
   const isTreasurer = state.workspace === "treasurer";
   const isSecretary = state.workspace === "secretary";
-  const approvalTitle = isTreasurer ? "Treasurer approval queue" : isSecretary ? "Secretary review queue" : "Approval control center";
+  const isChairperson = state.workspace === "chairperson";
+  const approvalTitle = isTreasurer ? "Treasurer approval queue" : isSecretary ? "Secretary review queue" : isChairperson ? "Chairperson decision queue" : "Approval control center";
   const approvalSubtitle = isTreasurer
     ? "API-backed &middot; finance checker queue, posting decisions, corrections and reversal approvals"
     : isSecretary
       ? "API-backed &middot; member records, KYC updates, governance items and board-pack review"
+      : isChairperson
+        ? "API-backed &middot; loan decisions, board approvals, high-risk items and operating exceptions"
     : "API-backed &middot; maker-checker queue, workflow coverage and decision history";
   return `
     <section class="card integration-panel">
@@ -2471,7 +2479,7 @@ function renderApprovals() {
           ${metric("Queue source", "Backend", apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant")}
         </div>
         <div class="notice" style="margin-top:16px">
-          <strong>${isTreasurer ? "Treasurer checker focus" : isSecretary ? "Secretary review focus" : "Approval focus"}:</strong> ${isTreasurer ? "confirm valid financial postings, return corrections, and keep the finance approval queue clean." : isSecretary ? "confirm member-record evidence, track KYC or governance items, and prepare clean decision notes." : "review pending items against configured maker-checker workflows."}
+          <strong>${isTreasurer ? "Treasurer checker focus" : isSecretary ? "Secretary review focus" : isChairperson ? "Chairperson decision focus" : "Approval focus"}:</strong> ${isTreasurer ? "confirm valid financial postings, return corrections, and keep the finance approval queue clean." : isSecretary ? "confirm member-record evidence, track KYC or governance items, and prepare clean decision notes." : isChairperson ? "prioritize loan decisions, high-risk approvals and board-sensitive exceptions with clear decision notes." : "review pending items against configured maker-checker workflows."}
         </div>
       </section>
       <section class="card" style="margin-top:16px">
@@ -2652,9 +2660,12 @@ function renderOperations() {
   const queuePressure = Number(counts.pendingFinancialTransactions || 0) + Number(counts.openComplaints || 0);
   const activeTab = state.operationsTab || "overview";
   const isTreasurer = state.workspace === "treasurer";
-  const operationsTitle = isTreasurer ? "Treasurer operations health" : "Operations command center";
+  const isChairperson = state.workspace === "chairperson";
+  const operationsTitle = isTreasurer ? "Treasurer operations health" : isChairperson ? "Chairperson operations oversight" : "Operations command center";
   const operationsSubtitle = isTreasurer
     ? `API-backed &middot; finance exceptions, callback alerts, pending postings and reconciliation readiness for ${tenantLabel}`
+    : isChairperson
+      ? `API-backed &middot; board-sensitive alerts, operating exceptions, readiness gates and risk queues for ${tenantLabel}`
     : `API-backed &middot; release readiness, alerts, queues and runbooks for ${tenantLabel}`;
   const releaseGates = [
     { label: "Database reachable", ok: status.database?.reachable === true, detail: status.checkedAt ? `checked ${status.checkedAt.slice(0, 16).replace("T", " ")}` : "waiting for API" },
@@ -2703,7 +2714,7 @@ function renderOperations() {
         ${metric("Exception load", exceptionCount, "callbacks and provider deliveries")}
         ${metric("Queue pressure", queuePressure, "pending postings and complaints")}
       </div>
-      ${renderOperationsTab(activeTab, { status, counts, alerts, tenantLabel, releaseGates, healthyGateCount, criticalAlerts, warningAlerts, exceptionCount, queuePressure, isTreasurer })}
+      ${renderOperationsTab(activeTab, { status, counts, alerts, tenantLabel, releaseGates, healthyGateCount, criticalAlerts, warningAlerts, exceptionCount, queuePressure, isTreasurer, isChairperson })}
     </section>
   `;
 }
@@ -2769,7 +2780,7 @@ function renderOperationsTab(activeTab, model) {
       ${metric("Runbooks", 4, "monitoring, deployment, security, technical")}
     </div>
     <div class="notice" style="margin-top:16px">
-      <strong>${model.isTreasurer ? "Treasurer operations focus" : "Operations focus"}:</strong> ${model.isTreasurer ? "monitor callback exceptions, pending postings, delivery exceptions and reconciliation blockers before finance reports are finalized." : "monitor alerts, release gates, exception queues and support hand-offs before a SACCO is allowed to run production activity."}
+      <strong>${model.isTreasurer ? "Treasurer operations focus" : model.isChairperson ? "Chairperson operations focus" : "Operations focus"}:</strong> ${model.isTreasurer ? "monitor callback exceptions, pending postings, delivery exceptions and reconciliation blockers before finance reports are finalized." : model.isChairperson ? "watch critical alerts, unresolved queues, readiness gates and audit-sensitive exceptions before board decisions." : "monitor alerts, release gates, exception queues and support hand-offs before a SACCO is allowed to run production activity."}
     </div>
   `;
 }
@@ -3021,11 +3032,14 @@ function renderApiReports() {
   const activeTab = state.reportsTab || "compliance";
   const isTreasurer = state.workspace === "treasurer";
   const isSecretary = state.workspace === "secretary";
-  const reportsTitle = isTreasurer ? "Treasurer finance reports" : isSecretary ? "Secretary board reports" : "Reports control center";
+  const isChairperson = state.workspace === "chairperson";
+  const reportsTitle = isTreasurer ? "Treasurer finance reports" : isSecretary ? "Secretary board reports" : isChairperson ? "Chairperson board reports" : "Reports control center";
   const reportsSubtitle = isTreasurer
     ? `API-backed &middot; ledger integrity, reconciliation, cash position, expenses and callback evidence for ${tenantLabel}`
     : isSecretary
       ? `API-backed &middot; member records, KYC readiness, complaints, meetings, resolutions and board packs for ${tenantLabel}`
+      : isChairperson
+        ? `API-backed &middot; loan portfolio, compliance, governance, approvals, risk and operating exceptions for ${tenantLabel}`
     : `API-backed &middot; financial integrity, reconciliation, compliance and governance for ${tenantLabel}`;
   const canManageAccess = hasPermission("roles:create") || hasPermission("users:create");
 
@@ -3082,7 +3096,8 @@ function renderApiReports() {
         auditEvents: apiState.auditEvents,
         regulatoryReport,
         isTreasurer,
-        isSecretary
+        isSecretary,
+        isChairperson
       })}
       <div class="grid three" style="margin-top:16px">
         ${metric("Accounting periods", `${openPeriods}/${periods.length}`, `${closedPeriods} closed`)}
@@ -3291,7 +3306,7 @@ function renderReportsTabSummary(activeTab, model) {
   if (activeTab === "governance") {
     return `
       <div class="notice" style="margin-top:16px">
-        <strong>${model.isSecretary ? "Secretary governance focus" : "Governance report focus"}:</strong> ${model.isSecretary ? "prepare board packs from meetings, open resolutions, complaints and member-record follow-up." : "track meetings, open resolutions, complaints and support evidence for oversight reviews."}
+        <strong>${model.isSecretary ? "Secretary governance focus" : model.isChairperson ? "Chairperson governance focus" : "Governance report focus"}:</strong> ${model.isSecretary ? "prepare board packs from meetings, open resolutions, complaints and member-record follow-up." : model.isChairperson ? "review meetings, open resolutions, complaints and board-sensitive follow-up before decisions." : "track meetings, open resolutions, complaints and support evidence for oversight reviews."}
       </div>
       <div class="grid three compact-facts" style="margin-top:16px">
         ${miniFact("Meetings", model.meetings.length)}
@@ -3317,7 +3332,7 @@ function renderReportsTabSummary(activeTab, model) {
   }
   return `
     <div class="notice" style="margin-top:16px">
-      <strong>${model.isTreasurer ? "Treasurer finance report focus" : model.isSecretary ? "Secretary board report focus" : "Compliance report focus"}:</strong> ${model.isTreasurer ? `cash position, reconciliation exceptions, posted journals and finance evidence for ${model.tenantLabel}.` : model.isSecretary ? `member totals, KYC readiness, complaints and governance evidence for ${model.tenantLabel}.` : `export-ready supervisory view covering reconciliation, PAR indicators, member totals and compliance exceptions for ${model.tenantLabel}.`}
+      <strong>${model.isTreasurer ? "Treasurer finance report focus" : model.isSecretary ? "Secretary board report focus" : model.isChairperson ? "Chairperson risk report focus" : "Compliance report focus"}:</strong> ${model.isTreasurer ? `cash position, reconciliation exceptions, posted journals and finance evidence for ${model.tenantLabel}.` : model.isSecretary ? `member totals, KYC readiness, complaints and governance evidence for ${model.tenantLabel}.` : model.isChairperson ? `loan portfolio, PAR indicators, approval exceptions, governance items and operational risk for ${model.tenantLabel}.` : `export-ready supervisory view covering reconciliation, PAR indicators, member totals and compliance exceptions for ${model.tenantLabel}.`}
     </div>
   `;
 }

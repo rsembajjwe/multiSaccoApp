@@ -180,7 +180,13 @@ async function assertSaccoRoleDashboards(page) {
     {
       label: "Chairperson",
       credentials: { code: "GVS", username: "chairperson@greenvalley.local", password: "Chair@12345" },
-      markers: ["Chairperson dashboard", "Oversight", "Loans", "Decisions", "Risk"]
+      markers: ["Chairperson dashboard", "Oversight", "Loans", "Decisions", "Risk"],
+      screens: [
+        { id: "loans", heading: "Loans data source", markers: ["Chairperson loan oversight", "Chairperson portfolio oversight", "Portfolio", "Loan files", "Guarantors", "Repayments"] },
+        { id: "approvals", heading: "Approvals data source", markers: ["Chairperson decision queue", "Chairperson decision focus", "Pending queue"] },
+        { id: "reports", heading: "Reports data source", markers: ["Chairperson board reports", "Chairperson risk report focus", "Governance", "Compliance"] },
+        { id: "operations", heading: "Operations data source", markers: ["Chairperson operations oversight", "Chairperson operations focus", "Queues"] }
+      ]
     }
   ];
 
