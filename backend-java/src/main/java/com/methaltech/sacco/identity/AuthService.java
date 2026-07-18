@@ -13,11 +13,20 @@ public class AuthService {
     private final UserRepository userRepository;
     private final AuthSessionRepository authSessionRepository;
     private final TokenGenerator tokenGenerator;
+    private final UserRoleRepository userRoleRepository;
+    private final RolePermissionRepository rolePermissionRepository;
 
-    AuthService(UserRepository userRepository, AuthSessionRepository authSessionRepository, TokenGenerator tokenGenerator) {
+    AuthService(
+            UserRepository userRepository,
+            AuthSessionRepository authSessionRepository,
+            TokenGenerator tokenGenerator,
+            UserRoleRepository userRoleRepository,
+            RolePermissionRepository rolePermissionRepository) {
         this.userRepository = userRepository;
         this.authSessionRepository = authSessionRepository;
         this.tokenGenerator = tokenGenerator;
+        this.userRoleRepository = userRoleRepository;
+        this.rolePermissionRepository = rolePermissionRepository;
     }
 
     public CurrentSession currentSession(String authorization) {
@@ -38,6 +47,24 @@ public class AuthService {
 
     public boolean isPlatform(User user) {
         return "tenant_platform".equals(user.getTenantId());
+    }
+
+    public boolean hasPermission(User user, String permissionId) {
+        if (user == null || permissionId == null || permissionId.isBlank()) return false;
+        var roleIds = userRoleRepository.findByIdUserId(user.getId()).stream()
+                .map(userRole -> userRole.getId().getRoleId())
+                .toList();
+        if (roleIds.isEmpty()) return false;
+        return rolePermissionRepository.findByIdRoleIdIn(roleIds).stream()
+                .anyMatch(rolePermission -> permissionId.equals(rolePermission.getId().getPermissionId()));
+    }
+
+    public ResponseEntity<ApiErrorResponse> permissionRequired(String permissionId) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(
+                        403,
+                        "PERMISSION_REQUIRED",
+                        "The authenticated user needs permission " + permissionId + "."));
     }
 
     private String bearerToken(String authorization) {

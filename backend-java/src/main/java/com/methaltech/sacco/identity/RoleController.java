@@ -37,6 +37,9 @@ class RoleController {
     ResponseEntity<?> listPermissions(@RequestHeader(name = "Authorization", required = false) String authorization) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "roles:view")) {
+            return authService.permissionRequired("roles:view");
+        }
 
         return ResponseEntity.ok(ApiResponse.of(permissionRepository.findAllByOrderByModuleAscActionAsc().stream()
                 .map(PermissionResponse::from)
@@ -49,6 +52,9 @@ class RoleController {
             @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "roles:view")) {
+            return authService.permissionRequired("roles:view");
+        }
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null && !authService.isPlatform(currentSession.user())) return tenantAccessDenied();
@@ -66,6 +72,9 @@ class RoleController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "roles:create")) {
+            return authService.permissionRequired("roles:create");
+        }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();

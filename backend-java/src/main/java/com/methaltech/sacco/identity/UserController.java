@@ -54,6 +54,9 @@ class UserController {
     ResponseEntity<?> listUsers(@RequestHeader(name = "Authorization", required = false) String authorization) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:view")) {
+            return authService.permissionRequired("users:view");
+        }
 
         List<User> users = authService.isPlatform(currentSession.user())
                 ? userRepository.findAllByOrderByFullNameAsc()
@@ -69,6 +72,9 @@ class UserController {
             HttpServletRequest httpRequest) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
 
         String tenantId = request.tenantId() == null || request.tenantId().isBlank()
                 ? currentSession.user().getTenantId()
@@ -114,6 +120,9 @@ class UserController {
             @PathVariable String userId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:view")) {
+            return authService.permissionRequired("users:view");
+        }
 
         User targetUser = userRepository.findById(userId).orElse(null);
         if (targetUser == null) {
@@ -134,6 +143,9 @@ class UserController {
             HttpServletRequest httpRequest) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
 
         User targetUser = userRepository.findById(userId).orElse(null);
         if (targetUser == null) {

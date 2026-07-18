@@ -17,7 +17,7 @@ Required gates:
 - `API_BASE_URL=http://host:port/api/v1 npm.cmd run security:check` passes against the release candidate backend.
 - `npm.cmd run ui:check` passes before releasing UI/backend integration polish.
 - Tenant isolation tests pass for staff, member, and platform routes.
-- Permission tests pass for platform-only and SACCO-only actions.
+- Permission tests pass for assigned role permissions, platform-only actions, and SACCO-only actions.
 - Financial calculation tests pass for balances, loans, repayments, reversals, expenses, and subscriptions.
 - Public endpoints are limited to health, login, member login, mobile-money callback, and static assets.
 - Privileged staff MFA is available and tested.
@@ -59,6 +59,7 @@ Checklist:
 | Token handling | `npm.cmd run security:check` | Login/me responses hide password hash/salt and logout revokes the token. |
 | Tenant isolation | `npm.cmd run security:check` | SACCO staff cross-tenant profile, operations, and member import requests return `403`. |
 | Member isolation | `npm.cmd run security:check` | Member sessions can read balances/loans/notifications/guarantors but cannot call staff APIs. |
+| Assigned permissions | `npm.cmd run java:test` | Users without assigned role permissions receive `403 PERMISSION_REQUIRED` on protected tenant, user, and role endpoints. |
 | Rate limiting | `npm.cmd run security:check` | Repeated failed staff logins return `429` with `Retry-After`. |
 | Demo gating | `npm.cmd run security:check` plus prod properties | `application-prod.properties` defaults `SACCO_DEMO_LOGINS_ENABLED` to `false`. |
 | UI source/sync polish | `npm.cmd run ui:check` | Main screens retain source, last-sync, loading, error, and refresh contract text. |

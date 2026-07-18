@@ -50,6 +50,9 @@ class TenantController {
     ResponseEntity<?> listTenants(@RequestHeader(name = "Authorization", required = false) String authorization) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "tenants:view")) {
+            return authService.permissionRequired("tenants:view");
+        }
 
         List<Tenant> tenants = authService.isPlatform(currentSession.user())
                 ? tenantRepository.findAllByOrderByNameAsc()
@@ -66,6 +69,9 @@ class TenantController {
             @PathVariable String tenantId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "tenants:view")) {
+            return authService.permissionRequired("tenants:view");
+        }
         if (!canAccessTenant(currentSession, tenantId)) return tenantAccessDenied("Cannot view another tenant.");
 
         return tenantRepository.findById(tenantId)
@@ -81,6 +87,9 @@ class TenantController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return authService.permissionRequired("tenants:manage");
+        }
         if (!authService.isPlatform(currentSession.user())) return platformRequired("Only platform administrators can create tenants here.");
 
         Tenant tenant = tenantRepository.save(new Tenant(
@@ -122,6 +131,9 @@ class TenantController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return authService.permissionRequired("tenants:manage");
+        }
         if (!authService.isPlatform(currentSession.user())) return platformRequired("Only platform administrators can update tenant status.");
         if (!ALLOWED_STATUSES.contains(body.status())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -153,6 +165,9 @@ class TenantController {
             @PathVariable String tenantId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "tenants:view")) {
+            return authService.permissionRequired("tenants:view");
+        }
         if (!canAccessTenant(currentSession, tenantId)) return tenantAccessDenied("Cannot view another tenant profile.");
         if (!tenantRepository.existsById(tenantId)) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -173,6 +188,9 @@ class TenantController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return authService.permissionRequired("tenants:manage");
+        }
         if (!canAccessTenant(currentSession, tenantId)) return tenantAccessDenied("Cannot update another tenant profile.");
 
         Tenant tenant = tenantRepository.findById(tenantId).orElse(null);

@@ -4125,6 +4125,54 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.roleIds", hasItem("role_green_loans_officer")));
 	}
 
+	@Test
+	void endpointsRequireAssignedPermissions() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String email = "no-permission-" + System.currentTimeMillis() + "@greenvalley.local";
+
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "No Permission Staff",
+								  "email": "%s",
+								  "phone": "+256700123888",
+								  "password": "Plain@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isCreated());
+		String noPermissionToken = loginAndReturnToken(email, "Plain@12345");
+
+		mockMvc.perform(get("/api/v1/users")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + noPermissionToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Denied Staff",
+								  "email": "denied-%s@greenvalley.local",
+								  "password": "Plain@12345"
+								}
+								""".formatted(System.currentTimeMillis())))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/roles")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/tenants")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+	}
+
 	private String loginAndReturnToken() throws Exception {
 		return loginAndReturnToken("admin@platform.local", "Admin@12345");
 	}
