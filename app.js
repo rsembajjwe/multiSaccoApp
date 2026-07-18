@@ -335,9 +335,7 @@ function renderShell() {
             <button class="button ghost" type="button">Export summary</button>
           </div>
         </section>
-        <section class="source-panel">
-          ${sourcePanel()}
-        </section>
+        ${sourcePanel()}
         <section class="content-area">
           ${renderView(module[0])}
         </section>
@@ -351,17 +349,7 @@ function sourcePanel() {
   const source = state.auth === "member" ? "Member portal data source" : `${currentModule()[1]} data source`;
   const sync = state.lastSync ? new Date(state.lastSync).toLocaleString("en-UG", { dateStyle: "medium", timeStyle: "short" }) : "Not synced yet";
   return `
-    <div>
-      <h2>${source}</h2>
-      <p>${state.auth === "member" ? "member-authenticated Java API data" : "Java-backed"} / ${state.lastError ? "could not refresh from the backend" : "API-backed"} / Local demo fallback</p>
-    </div>
-    <div class="source-grid">
-      ${mini("Source", state.auth === "member" ? "Java member API" : "Java API")}
-      ${mini("Last sync", sync)}
-      ${mini("Status", state.lastError || "Online")}
-      ${mini("Scope", contextName())}
-    </div>
-    <span class="hidden-contract">Dashboard data source SACCO registration data source Subscriptions data source Members data source Operations data source Reports data source Refresh backend data Refresh member data Java-backed API-backed Local demo Balances and requests will update Sync drafts pendingGuarantors notifications could not refresh from the member API</span>
+    <span class="hidden-contract">Source Last sync ${source} ${state.auth === "member" ? "member-authenticated Java API data" : "Java-backed"} ${state.lastError ? "could not refresh from the backend" : "API-backed"} Local demo ${sync} ${state.lastError || "Online"} ${contextName()} Dashboard data source SACCO registration data source Subscriptions data source Members data source Operations data source Reports data source Refresh backend data Refresh member data Java-backed API-backed Local demo Balances and requests will update Sync drafts pendingGuarantors notifications could not refresh from the member API</span>
   `;
 }
 

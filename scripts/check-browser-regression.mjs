@@ -166,7 +166,7 @@ async function expectText(page, text, label) {
   const deadline = Date.now() + timeoutMs;
   const expected = text.toLowerCase();
   while (Date.now() < deadline) {
-    const bodyText = await page.locator("body").innerText();
+    const bodyText = await page.locator("body").evaluate((body) => body.textContent || "");
     if (bodyText.toLowerCase().includes(expected)) {
       console.log(`PASS ${label}`);
       return;
