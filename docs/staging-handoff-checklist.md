@@ -32,6 +32,7 @@ Use this checklist before handing the SACCO platform to testers or a pilot SACCO
 | Backup restore rehearsal passed. | `npm.cmd run backup:rehearse` |  |
 | Load test passed. | `npm.cmd run load:test` with agreed request/concurrency/p95 values. |  |
 | Browser regression passed. | `npm.cmd run ui:browser` or CI artifact. |  |
+| Release evidence pack is started. | Completed copy of `docs/release-evidence-template.md`. |  |
 
 ## Operations
 
@@ -55,7 +56,8 @@ Use this checklist before handing the SACCO platform to testers or a pilot SACCO
 | UAT data setup has run. | `npm.cmd run uat:setup` output or equivalent manual setup evidence. |  |
 | Automated browser UAT has passed. | `npm.cmd run uat:browser` output or hosted browser evidence. |  |
 | UAT scripts are shared with testers. | Link to `docs/uat-scripts.md`. |  |
-| Defect capture process is agreed. | Issue tracker/project reference. |  |
+| Defect capture process is agreed. | Issue tracker/project reference or `docs/uat-findings-template.md`. |  |
+| No unaccepted P0/P1 findings remain. | Findings tracker summary and product-owner acceptance notes. |  |
 
 ## Handoff Decision
 
@@ -65,4 +67,4 @@ Use this checklist before handing the SACCO platform to testers or a pilot SACCO
 | Approved with known findings |  |  |  |
 | Blocked |  |  |  |
 
-Do not hand off for external UAT when any release gate fails, demo logins are enabled without written approval, or no restore owner is named.
+Do not hand off for external UAT when any release gate fails, demo logins are enabled without written approval, no restore owner is named, or unaccepted P0/P1 findings remain open.

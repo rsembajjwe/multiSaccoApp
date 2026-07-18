@@ -7,8 +7,8 @@ This plan turns the current project completeness assessment into concrete releas
 | Track | Current readiness | Status |
 | --- | ---: | --- |
 | MVP functionality | 75-80% | Java-backed core workflows exist for onboarding, members, transactions, loans, reports, operations, subscriptions, and member self-service. |
-| Staging readiness | 65-70% | PostgreSQL/Flyway, API smoke tests, security checks, UI contract checks, and browser regression are automated locally. |
-| Production launch readiness | 55-60% | Core controls exist, but real integrations, stronger permissions, deployment secrets, monitoring, backups, and UAT still need completion. |
+| Staging readiness | 72-78% | PostgreSQL/Flyway, API smoke tests, security checks, UI contract checks, browser regression, browser UAT, handoff checklist, and evidence templates are ready for a hosted run. |
+| Production launch readiness | 60-65% | Core controls and release evidence path exist, but real providers, hosted secrets, monitoring, backup scheduling, data migration, and signed UAT still need completion. |
 
 ## Staging Entry Gates
 
@@ -24,6 +24,8 @@ A build can be called staging-ready only when every required gate passes.
 | Browser UAT smoke test | `npm.cmd run uat:browser` plus `docs/uat-scripts.md` | Platform admin, SACCO staff, and member portal scripts pass or have accepted findings. | Ready for hosted run |
 | Staging environment secrets | `docs/staging-environment.md` plus staging host secret store | Database password, rate-limit settings, API base URL, and demo-login flag are environment-managed. | Ready for handoff |
 | Staging handoff checklist | `docs/staging-handoff-checklist.md` | Environment, secrets, release gates, operations, UAT accounts, and decision evidence are recorded. | Required before staging handoff |
+| Release evidence pack | `docs/release-evidence-template.md` | Command results, environment evidence, UAT sign-off, load-test numbers, and release decision are recorded. | Ready for use |
+| UAT findings tracker | `docs/uat-findings-template.md` | Findings have severity, owner, status, retest result, and acceptance notes. | Ready for use |
 | Backup restore rehearsal | `npm.cmd run backup:rehearse` | Backup file restores cleanly on an isolated non-production database. | Ready |
 
 ## Remaining Work to Reach Production
@@ -40,15 +42,15 @@ These items are the main gap between the current build and live SACCO operation.
 | P1 | Monitoring | Operations runbook now defines health, database, callback, pending posting, notification, complaint, and backup rehearsal alert checks. | Alert routing is connected to the hosting/operations platform. |
 | P1 | Backups | Backup, restore, and isolated restore-rehearsal scripts exist; encrypted scheduling and release evidence remain operational setup tasks. | Restore evidence is recorded for each release candidate. |
 | P1 | CI/CD | GitHub Actions now runs local verification on Windows and a Docker/PostgreSQL production-readiness gate with browser regression on Ubuntu. | Main branch cannot be promoted if the release suite fails. |
-| P2 | UAT | UAT scripts now cover platform admin, SACCO staff, and member portal acceptance paths. | Signed UAT findings are closed or explicitly accepted. |
+| P2 | UAT | UAT scripts, seeded test data, browser UAT, release evidence, and findings templates now cover platform admin, SACCO staff, and member portal acceptance paths. | Signed UAT findings are closed or explicitly accepted. |
 | P2 | Data migration | Define import templates and validation for onboarding a real SACCO from spreadsheets. | Pilot SACCO data imports without manual database edits. |
 
 ## Recommended Next Sprint
 
 Focus the next sprint on turning the high-risk items into tests and enforcement.
 
-1. Provider-specific SMS/email/mobile-money adapters with callback signature verification.
-2. Run hosted staging handoff using `docs/staging-handoff-checklist.md`.
+1. Run hosted staging handoff using `docs/staging-handoff-checklist.md` and `docs/release-evidence-template.md`.
+2. Execute pilot UAT scripts and close or accept findings using `docs/uat-findings-template.md`.
 3. Data import templates and validation for pilot SACCO onboarding.
 4. Connect monitoring alerts and encrypted backup schedules in the staging hosting environment.
 5. Provider sandbox credentials and callback-signature test fixtures.
@@ -64,5 +66,6 @@ Use this checklist before tagging a staging or production release.
 - Demo logins are disabled outside explicit demo verification.
 - Database backup and restore have been rehearsed on a non-production copy.
 - Browser UAT and manual UAT scripts cover Dashboard, SACCO Registration, Subscriptions, Members, Transactions, Loans, Approvals, Reports, Operations, and Member Portal.
+- Release evidence and findings tracker are completed for the release candidate.
 - Staging secrets are stored outside git.
 - Deployment owner confirms HTTPS, CORS origin, backup schedule, and monitoring destinations.

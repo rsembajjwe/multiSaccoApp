@@ -452,6 +452,7 @@ Progress:
 - Phase 1 staging handoff started with platform admin, SACCO staff, and member portal UAT scripts plus a staging handoff checklist covering environment, secrets, release gates, operations, UAT accounts, and approval evidence.
 - UAT data setup script added to create a fresh Java-backed tester dataset with branch, staff user, member login, posted balances, pending approval, reversal candidate, loan, guarantor request, member mobile loan, complaint sync, subscription review, and operations snapshot.
 - Automated browser UAT script added to seed data, open the Java-backed UI, and verify platform admin, SACCO staff, and member portal acceptance markers.
+- Release evidence and UAT findings templates added for release-candidate command evidence, load-test results, role sign-off, defect ownership, retest tracking, and approval decisions.
 
 Recommended stack:
 

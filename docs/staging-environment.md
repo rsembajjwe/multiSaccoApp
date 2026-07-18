@@ -81,6 +81,7 @@ npm.cmd run uat:browser
 - Record the successful `npm.cmd run ready:check` output or CI artifact for the release candidate.
 - Complete `docs/staging-handoff-checklist.md` before sharing the environment with testers.
 - Run `docs/uat-scripts.md` for platform admin, SACCO staff, and member portal sign-off.
+- Complete `docs/release-evidence-template.md` and track UAT defects with `docs/uat-findings-template.md`.
 
 ## Pre-Handoff Evidence
 
@@ -92,11 +93,14 @@ Attach or record:
 - `npm.cmd run check` result.
 - `npm.cmd run ready:check` result.
 - `npm.cmd run backup:rehearse` result.
+- `npm.cmd run load:test` request/concurrency/p95 result.
 - Confirmation that `SACCO_DEMO_LOGINS_ENABLED=false`.
 - Completed staging handoff checklist.
+- Completed release evidence pack.
 - UAT data setup output.
 - Automated browser UAT output.
 - UAT script result for each role.
+- Findings tracker summary with no unaccepted P0/P1 findings.
 
 ## Rollback
 

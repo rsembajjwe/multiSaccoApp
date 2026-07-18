@@ -4,6 +4,8 @@ Use these scripts for staging acceptance testing before a hosted demo, pilot onb
 
 Record each result as `Pass`, `Fail`, or `Accepted with finding`. Failed items must include the defect link, owner, and retest date.
 
+Use `docs/uat-findings-template.md` to track failed steps and attach the final role sign-off summary to `docs/release-evidence-template.md`.
+
 ## Test Evidence
 
 Capture this evidence for every UAT session:
