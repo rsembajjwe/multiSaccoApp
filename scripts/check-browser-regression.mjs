@@ -124,8 +124,11 @@ async function assertStaffScreens(page) {
     { id: "dashboard", nav: "Dashboard", heading: "Dashboard data source", markers: ["Java-backed", "Operations scope", "Refresh backend data"] },
     { id: "registrations", nav: "SACCO Registration", heading: "SACCO registration data source", markers: ["Java-backed", "Last sync", "Tenant approval", "SACCO application review", "Applications", "Review queue", "Packages"] },
     { id: "subscriptions", nav: "Subscriptions", heading: "Subscriptions data source", markers: ["Java-backed", "Last sync", "Billable members", "Subscription management", "Overview", "Invoices", "Payments", "Packages", "Activation gate"] },
-    { id: "members", nav: "Members", heading: "Members data source", markers: ["Java-backed", "Server fields", "Import members", "Profile metadata"] },
+    { id: "members", nav: "Members", heading: "Members data source", markers: ["Java-backed", "Server fields", "Import members", "Profile metadata", "Platform member oversight", "Oversight", "Balances", "Register", "Platform oversight"] },
+    { id: "transactions", nav: "Transactions", heading: "Transactions data source", markers: ["Java-backed", "Platform transaction oversight", "Postings", "Products and accounts", "Welfare", "Statement-ready"] },
+    { id: "loans", nav: "Loans", heading: "Loans data source", markers: ["Java-backed", "Platform loan oversight", "Portfolio", "Loan files", "Guarantors", "Repayments", "Portfolio oversight"] },
     { id: "operations", nav: "Operations", heading: "Operations data source", markers: ["Java-backed", "Last sync", "Operations command center", "Overview", "Alerts", "Readiness", "Queues", "Runbooks", "Operations focus"] },
+    { id: "reports", nav: "Reports", heading: "Reports data source", markers: ["Java API", "Reports control center", "Compliance", "Ledger", "Operations", "Governance", "Access", "Audit", "Compliance report focus"] },
     { id: "usersRoles", nav: "Platform Users", heading: "Platform users management data source", markers: ["Java API", "Platform users management", "Assigned roles"] },
     { id: "notifications", nav: "Notifications", heading: "Notifications data source", markers: ["Java API", "Provider outbox", "Templates", "Exceptions", "Notification control center"] },
     { id: "complaints", nav: "Complaints", heading: "Complaints data source", markers: ["Java API", "Support queue", "Open complaints", "Queue", "Escalations", "Closed", "Open complaint workflow"] }

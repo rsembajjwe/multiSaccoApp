@@ -1831,6 +1831,8 @@ function renderMembers() {
   const membersWithoutBranch = members.filter((member) => !member.branchId).length;
   const staleMemberLabel = apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed";
   const canCreateMembers = hasPermission("members:create");
+  const activeTab = state.membersTab || "oversight";
+  const tenantCount = new Set(members.map((member) => member.tenantId).filter(Boolean)).size;
   return `
     ${workspaceOverview()}
     <div class="grid metrics">
@@ -1864,30 +1866,63 @@ function renderMembers() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Member balance snapshot</h2>
-          <p class="eyebrow">${source} &middot; Server-confirmed balances after API login</p>
+          <h2>Platform member oversight</h2>
+          <p class="eyebrow">${source} &middot; cross-SACCO member health, KYC, balances and support visibility</p>
         </div>
-        ${apiState.user ? `<button class="secondary-button" data-view-jump="operations" type="button">View operations health</button>` : ""}
+        <div class="filters">
+          ${membersTabButton("oversight", "Oversight", activeTab)}
+          ${membersTabButton("balances", "Balances", activeTab)}
+          ${membersTabButton("register", "Register", activeTab)}
+          ${apiState.user ? `<button class="secondary-button" data-view-jump="operations" type="button">View operations health</button>` : ""}
+        </div>
       </div>
-      <div class="grid three">
+      <div class="grid four">
         ${metric("Savings", money.format(totalSavings), "member deposit balances")}
         ${metric("Shares", money.format(totalShares), "member share capital")}
         ${metric("Welfare", money.format(totalWelfare), "member welfare balances")}
+        ${metric("SACCO coverage", tenantCount, state.workspace === "platformAdmin" ? "tenant member scope" : "current SACCO")}
       </div>
+      ${renderMembersTab(activeTab, members, { source, canCreateMembers, activeMembers, verifiedMembers, branchCount, membersWithoutBranch })}
     </section>
+  `;
+}
 
-    <section class="card" style="margin-top:16px">
+function membersTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-members-tab="${id}" type="button">${label}</button>`;
+}
+
+function renderMembersTab(activeTab, members, summary) {
+  if (activeTab === "balances") {
+    const totalSavings = members.reduce((sum, member) => sum + (member.savings || 0), 0);
+    const totalShares = members.reduce((sum, member) => sum + (member.shares || 0), 0);
+    const totalWelfare = members.reduce((sum, member) => sum + (member.welfare || 0), 0);
+    return `
+      <div class="notice" style="margin-top:16px">
+        <strong>Balance oversight:</strong> platform users review server-confirmed totals and open member statements without changing SACCO teller records.
+      </div>
+      <div class="grid three" style="margin-top:16px">
+        ${metric("Savings", money.format(totalSavings), "server field totals")}
+        ${metric("Shares", money.format(totalShares), "share capital totals")}
+        ${metric("Welfare", money.format(totalWelfare), "welfare balances")}
+      </div>
+    `;
+  }
+  if (activeTab === "register") {
+    return `
+      <div class="notice" style="margin-top:16px">
+        <strong>Member register:</strong> search across member records, inspect profiles, and open statements. SACCO staff handle day-to-day registration unless this user has member creation permission.
+      </div>
       <div class="toolbar">
         <div>
           <h2>Member register</h2>
-          <p class="eyebrow">${source} &middot; KYC, status, balances and branch access</p>
+          <p class="eyebrow">${summary.source} &middot; KYC, status, balances and branch access</p>
         </div>
         <div class="filters">
           <input class="input" id="memberSearch" placeholder="Search members">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
-          ${apiState.user && canCreateMembers ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>` : ""}
-          ${apiState.user && canCreateMembers ? `<button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>` : ""}
-          ${canCreateMembers ? `<button class="primary-button" data-action="newMember" type="button">Register member</button>` : `<span class="pill">View only</span>`}
+          ${apiState.user && summary.canCreateMembers ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>` : ""}
+          ${apiState.user && summary.canCreateMembers ? `<button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>` : ""}
+          ${summary.canCreateMembers ? `<button class="primary-button" data-action="newMember" type="button">Register member</button>` : `<span class="pill">View only</span>`}
         </div>
       </div>
       ${apiSyncNotice("Member register")}
@@ -1899,7 +1934,18 @@ function renderMembers() {
           </tbody>
         </table>
       </div>
-    </section>
+    `;
+  }
+  return `
+    <div class="notice" style="margin-top:16px">
+      <strong>Platform oversight:</strong> this view is for member health, KYC exceptions, branch coverage, and support context across subscribing SACCOs.
+    </div>
+    <div class="grid four compact-facts" style="margin-top:16px">
+      ${miniFact("Active members", summary.activeMembers)}
+      ${miniFact("KYC verified", `${summary.verifiedMembers}/${members.length}`)}
+      ${miniFact("Branch coverage", summary.branchCount)}
+      ${miniFact("Unassigned branch", summary.membersWithoutBranch)}
+    </div>
   `;
 }
 
@@ -1924,6 +1970,9 @@ function renderTransactions() {
   const approvedClaims = welfareClaims.filter((claim) => claim.status === "Approved").length;
   const paidClaimTotal = welfareClaims.filter((claim) => claim.status === "Paid").reduce((sum, claim) => sum + claim.amount, 0);
   const accountCoverage = new Set(accounts.map((item) => item.memberId).filter(Boolean)).size;
+  const activeTab = state.transactionsTab || "postings";
+  const canPostTransactions = !apiState.user || hasPermission("transactions:create");
+  const canManageProducts = !apiState.user || hasPermission("financial-products:manage") || hasPermission("transactions:create");
   return `
     <section class="card integration-panel">
       <div class="toolbar">
@@ -1934,7 +1983,7 @@ function renderTransactions() {
         <div class="filters">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
           ${apiState.user ? `<button class="secondary-button" data-action="openingBalanceImport" type="button">Opening balances</button>` : ""}
-          <button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>
+          ${canPostTransactions ? `<button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>` : `<span class="pill">View only</span>`}
         </div>
       </div>
       ${apiSyncNotice("Transactions screen")}
@@ -1946,6 +1995,7 @@ function renderTransactions() {
       </div>
     </section>
     ${apiState.user ? `
+    ${activeTab === "accounts" ? `
       <section class="card" style="margin-top:16px">
         <div class="toolbar">
           <div>
@@ -1953,8 +2003,8 @@ function renderTransactions() {
             <p class="eyebrow">API-backed &middot; savings, shares and welfare setup</p>
           </div>
           <div class="filters">
-            <button class="secondary-button" data-action="newFinancialAccount" type="button">Open account</button>
-            <button class="primary-button" data-action="newFinancialProduct" type="button">New product</button>
+            ${canManageProducts ? `<button class="secondary-button" data-action="newFinancialAccount" type="button">Open account</button>
+            <button class="primary-button" data-action="newFinancialProduct" type="button">New product</button>` : `<span class="pill">View only</span>`}
           </div>
         </div>
         <div class="grid metrics">
@@ -1967,14 +2017,19 @@ function renderTransactions() {
           ${financialAccountTable(accounts)}
         </div>
       </section>
-    ` : ""}
+    ` : ""}` : ""}
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Posting control center</h2>
-          <p class="eyebrow">${source} &middot; teller intake, checker queue, receipts, statements and reversals</p>
+          <h2>Platform transaction oversight</h2>
+          <p class="eyebrow">${source} &middot; teller intake, checker queue, receipts, statements, reversals and welfare</p>
         </div>
-        ${apiState.user ? `<button class="secondary-button" data-view-jump="approvals" type="button">Open approvals</button>` : ""}
+        <div class="filters">
+          ${transactionsTabButton("postings", "Postings", activeTab)}
+          ${transactionsTabButton("accounts", "Products and accounts", activeTab)}
+          ${transactionsTabButton("welfare", "Welfare", activeTab)}
+          ${apiState.user ? `<button class="secondary-button" data-view-jump="approvals" type="button">Open approvals</button>` : ""}
+        </div>
       </div>
       <div class="grid metrics">
         ${metric("Posted value", money.format(postedTotal), `${postedTransactions.length} posted movement(s)`)}
@@ -1987,8 +2042,11 @@ function renderTransactions() {
         ${metric("Rejected", rejectedTransactions.length, "declined by checker")}
         ${metric("Statement-ready", postedTransactions.length, "posted rows in member statements")}
       </div>
+      <div class="notice" style="margin-top:16px">
+        <strong>Platform oversight:</strong> platform users monitor financial flow and exceptions; SACCO treasurers handle normal posting unless the role explicitly allows posting.
+      </div>
     </section>
-    <section class="card" style="margin-top:16px">
+    ${activeTab === "postings" ? `<section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Financial postings</h2>
@@ -1997,7 +2055,7 @@ function renderTransactions() {
         <div class="filters">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
           ${apiState.user ? `<button class="secondary-button" data-action="openingBalanceImport" type="button">Opening balances</button>` : ""}
-          <button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>
+          ${canPostTransactions ? `<button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>` : `<span class="pill">View only</span>`}
         </div>
       </div>
       ${apiSyncNotice("Financial postings table")}
@@ -2021,8 +2079,9 @@ function renderTransactions() {
           </tbody>
         </table>
       </div>
-    </section>
+    </section>` : ""}
     ${apiState.user ? `
+      ${activeTab === "welfare" ? `
       <section class="card" style="margin-top:16px">
         <div class="toolbar">
           <div>
@@ -2041,8 +2100,13 @@ function renderTransactions() {
         </div>
         ${welfareClaimTable(welfareClaims)}
       </section>
+      ` : ""}
     ` : ""}
   `;
+}
+
+function transactionsTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-transactions-tab="${id}" type="button">${label}</button>`;
 }
 
 function financialProductTable(products) {
@@ -2147,6 +2211,8 @@ function renderLoans() {
   const highDsrLoans = loans.filter((loan) => Number(loan.dsr || 0) >= 40).length;
   const averageDsr = loans.length ? Math.round(loans.reduce((sum, loan) => sum + Number(loan.dsr || 0), 0) / loans.length) : 0;
   const repaymentCoverage = loans.filter((loan) => Number(loan.repaymentTotal || 0) > 0).length;
+  const activeTab = state.loansTab || "portfolio";
+  const canCreateLoans = !apiState.user || hasPermission("loans:create");
   return `
     <section class="card integration-panel">
       <div class="toolbar">
@@ -2158,7 +2224,7 @@ function renderLoans() {
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
           ${apiState.user ? `<button class="secondary-button" data-action="loanBookImport" type="button">Loan book import</button>` : ""}
           ${apiState.user ? `<button class="secondary-button" data-action="repaymentHistoryImport" type="button">Repayment history</button>` : ""}
-          <button class="primary-button" data-action="newLoan" type="button">New loan application</button>
+          ${canCreateLoans ? `<button class="primary-button" data-action="newLoan" type="button">New loan application</button>` : `<span class="pill">View only</span>`}
         </div>
       </div>
       ${apiSyncNotice("Loans screen")}
@@ -2172,10 +2238,16 @@ function renderLoans() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Loan control center</h2>
-          <p class="eyebrow">${source} &middot; applications, guarantors, disbursements and repayments</p>
+          <h2>Platform loan oversight</h2>
+          <p class="eyebrow">${source} &middot; portfolio risk, applications, guarantors, disbursements and repayments</p>
         </div>
-        ${apiState.user ? `<button class="secondary-button" data-view-jump="approvals" type="button">Open approvals</button>` : ""}
+        <div class="filters">
+          ${loansTabButton("portfolio", "Portfolio", activeTab)}
+          ${loansTabButton("files", "Loan files", activeTab)}
+          ${loansTabButton("guarantors", "Guarantors", activeTab)}
+          ${loansTabButton("repayments", "Repayments", activeTab)}
+          ${apiState.user ? `<button class="secondary-button" data-view-jump="approvals" type="button">Open approvals</button>` : ""}
+        </div>
       </div>
       <div class="grid metrics">
         ${metric("Portfolio value", money.format(portfolioValue), `${loans.length} loan file(s)`)}
@@ -2188,8 +2260,9 @@ function renderLoans() {
         ${metric("Guarantor pending", pendingGuarantors, "member decisions needed")}
         ${metric("DSR watch", highDsrLoans, `${averageDsr}% average DSR`)}
       </div>
+      ${renderLoansTabSummary(activeTab, loans, { activeLoans, submittedLoans, approvedLoans, closedLoans, pendingGuarantors, highDsrLoans, averageDsr, repaidValue })}
     </section>
-    <section class="card" style="margin-top:16px">
+    ${activeTab === "files" ? `<section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Loan files</h2>
@@ -2199,7 +2272,7 @@ function renderLoans() {
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
           ${apiState.user ? `<button class="secondary-button" data-action="loanBookImport" type="button">Loan book import</button>` : ""}
           ${apiState.user ? `<button class="secondary-button" data-action="repaymentHistoryImport" type="button">Repayment history</button>` : ""}
-          <button class="primary-button" data-action="newLoan" type="button">New loan application</button>
+          ${canCreateLoans ? `<button class="primary-button" data-action="newLoan" type="button">New loan application</button>` : `<span class="pill">View only</span>`}
         </div>
       </div>
       ${apiSyncNotice("Loan files list")}
@@ -2223,7 +2296,46 @@ function renderLoans() {
           </tbody>
         </table>
       </div>
-    </section>
+    </section>` : ""}
+  `;
+}
+
+function loansTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-loans-tab="${id}" type="button">${label}</button>`;
+}
+
+function renderLoansTabSummary(activeTab, loans, summary) {
+  if (activeTab === "guarantors") {
+    return `
+      <div class="notice" style="margin-top:16px">
+        <strong>Guarantor oversight:</strong> monitor pending guarantor requests and loans where member consent may block appraisal.
+      </div>
+      <div class="grid three" style="margin-top:16px">
+        ${metric("Pending guarantors", summary.pendingGuarantors, "member decisions needed")}
+        ${metric("Affected loan files", loans.filter((loan) => Number(loan.pendingGuarantors || 0) > 0).length, "awaiting guarantees")}
+        ${metric("Applications", summary.submittedLoans.length, "under review")}
+      </div>
+    `;
+  }
+  if (activeTab === "repayments") {
+    return `
+      <div class="notice" style="margin-top:16px">
+        <strong>Repayment oversight:</strong> track repayment coverage and active balances before SACCO portfolio reviews.
+      </div>
+      <div class="grid three" style="margin-top:16px">
+        ${metric("Repaid value", money.format(summary.repaidValue), "repayment history")}
+        ${metric("Loans with repayments", loans.filter((loan) => Number(loan.repaymentTotal || 0) > 0).length, "coverage")}
+        ${metric("Closed loans", summary.closedLoans.length, "completed files")}
+      </div>
+    `;
+  }
+  if (activeTab === "files") {
+    return `<div class="notice" style="margin-top:16px"><strong>Loan files:</strong> inspect applications, appraisal stage, DSR, guarantors, approvals and repayment actions.</div>`;
+  }
+  return `
+    <div class="notice" style="margin-top:16px">
+      <strong>Portfolio oversight:</strong> platform users watch portfolio quality, approval bottlenecks, DSR risk, and disbursement readiness across SACCOs.
+    </div>
   `;
 }
 
@@ -2844,6 +2956,7 @@ function renderApiReports() {
       .reduce((lineSum, line) => lineSum + line.debit - line.credit, 0);
   }, 0);
   const tenantLabel = apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant";
+  const activeTab = state.reportsTab || "compliance";
 
   return `
     <section class="card integration-panel">
@@ -2868,7 +2981,15 @@ function renderApiReports() {
           <h2>Reports control center</h2>
           <p class="eyebrow">API-backed &middot; financial integrity, reconciliation, compliance and governance for ${tenantLabel}</p>
         </div>
-        ${refreshApiButton()}
+        <div class="filters">
+          ${reportsTabButton("compliance", "Compliance", activeTab)}
+          ${reportsTabButton("ledger", "Ledger", activeTab)}
+          ${reportsTabButton("operations", "Operations", activeTab)}
+          ${reportsTabButton("governance", "Governance", activeTab)}
+          ${reportsTabButton("access", "Access", activeTab)}
+          ${reportsTabButton("audit", "Audit", activeTab)}
+          ${refreshApiButton()}
+        </div>
       </div>
       <div class="grid metrics">
         ${metric("Ledger integrity", unbalanced === 0 ? "Balanced" : `${unbalanced} issue(s)`, `${journals.length} journal entry(ies)`)}
@@ -2876,6 +2997,20 @@ function renderApiReports() {
         ${metric("Compliance", titleCase((regulatoryReport.consolidated.complianceStatus || "review").replace(/_/g, " ")), `${regulatoryReport.consolidated.reconciliationExceptions || 0} regulatory exception(s)`)}
         ${metric("Governance", openGovernanceItems, "open resolutions and complaints")}
       </div>
+      ${renderReportsTabSummary(activeTab, {
+        tenantLabel,
+        journals,
+        periods,
+        reconciliationExceptions,
+        callbackExceptions,
+        deliveryExceptions,
+        meetings,
+        complaints,
+        roles,
+        permissions,
+        auditEvents: apiState.auditEvents,
+        regulatoryReport
+      })}
       <div class="grid three" style="margin-top:16px">
         ${metric("Accounting periods", `${openPeriods}/${periods.length}`, `${closedPeriods} closed`)}
         ${metric("Operations exceptions", callbackExceptions + deliveryExceptions, `${callbackExceptions} callback, ${deliveryExceptions} delivery`)}
@@ -3057,6 +3192,60 @@ function renderApiReports() {
       <h2>API audit events</h2>
       ${apiAuditTable(apiState.auditEvents)}
     </section>
+  `;
+}
+
+function reportsTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-reports-tab="${id}" type="button">${label}</button>`;
+}
+
+function renderReportsTabSummary(activeTab, model) {
+  if (activeTab === "ledger") {
+    return `<div class="notice" style="margin-top:16px"><strong>Ledger report focus:</strong> review journal integrity, accounting periods, chart of accounts, expenses and assets for ${model.tenantLabel}.</div>`;
+  }
+  if (activeTab === "operations") {
+    return `
+      <div class="notice" style="margin-top:16px">
+        <strong>Operations report focus:</strong> reconcile mobile-money callbacks, provider delivery exceptions and backend exception queues.
+      </div>
+      <div class="grid three compact-facts" style="margin-top:16px">
+        ${miniFact("Callback exceptions", model.callbackExceptions)}
+        ${miniFact("Delivery exceptions", model.deliveryExceptions)}
+        ${miniFact("Audit events", model.auditEvents.length)}
+      </div>
+    `;
+  }
+  if (activeTab === "governance") {
+    return `
+      <div class="notice" style="margin-top:16px">
+        <strong>Governance report focus:</strong> track meetings, open resolutions, complaints and support evidence for oversight reviews.
+      </div>
+      <div class="grid three compact-facts" style="margin-top:16px">
+        ${miniFact("Meetings", model.meetings.length)}
+        ${miniFact("Open complaints", model.complaints.filter((complaint) => !["resolved", "closed"].includes(complaint.status)).length)}
+        ${miniFact("High priority", model.complaints.filter((complaint) => complaint.priority === "high").length)}
+      </div>
+    `;
+  }
+  if (activeTab === "access") {
+    return `
+      <div class="notice" style="margin-top:16px">
+        <strong>Access report focus:</strong> review role coverage, protected permissions and staff access assignments.
+      </div>
+      <div class="grid three compact-facts" style="margin-top:16px">
+        ${miniFact("Roles", model.roles.length)}
+        ${miniFact("Permissions", model.permissions.length)}
+        ${miniFact("Protected roles", model.roles.filter((role) => role.protectedRole || role.protected).length)}
+      </div>
+    `;
+  }
+  if (activeTab === "audit") {
+    return `<div class="notice" style="margin-top:16px"><strong>Audit report focus:</strong> verify API audit events, approval decisions, role changes and sensitive operational actions.</div>`;
+  }
+  return `
+    <div class="notice" style="margin-top:16px">
+      <strong>Compliance report focus:</strong> export-ready supervisory view covering reconciliation, PAR indicators, member totals and compliance exceptions for ${model.tenantLabel}.
+    </div>
   `;
 }
 
@@ -4041,6 +4230,38 @@ function bindViewActions() {
   document.querySelectorAll("[data-complaints-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.complaintsTab = button.dataset.complaintsTab;
+      saveState();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-members-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.membersTab = button.dataset.membersTab;
+      saveState();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-transactions-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.transactionsTab = button.dataset.transactionsTab;
+      saveState();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-loans-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.loansTab = button.dataset.loansTab;
+      saveState();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-reports-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.reportsTab = button.dataset.reportsTab;
       saveState();
       render();
     });
