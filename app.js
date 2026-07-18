@@ -1190,18 +1190,67 @@ function accountingView() {
 function reconciliationView() {
   const callbacks = dataRows("mobileMoneyCallbacks");
   const reconciliation = state.data.reconciliation || {};
+  const summaryData = reconciliation.summary || {};
   const matches = Array.isArray(reconciliation.matches) ? reconciliation.matches : [];
-  const unmatched = Array.isArray(reconciliation.unmatched) ? reconciliation.unmatched : callbacks.filter((row) => !normal(row.status).includes("posted"));
+  const unmatchedStatementLines = Array.isArray(reconciliation.unmatchedStatementLines) ? reconciliation.unmatchedStatementLines : [];
+  const unmatchedLedgerLines = Array.isArray(reconciliation.unmatchedLedgerLines) ? reconciliation.unmatchedLedgerLines : [];
+  const callbackExceptions = callbacks.filter((row) => !normal(row.status).includes("posted") || row.duplicate);
   return `
     <div class="dashboard-grid">
       ${summary("Provider callbacks", callbacks.length, "Mobile money events", "Open")}
-      ${summary("Matched records", matches.length, "Bank/API matched", "Review")}
-      ${summary("Unmatched records", unmatched.length, "Needs action", "Investigate")}
-      ${summary("Duplicate callbacks", callbacks.filter((row) => row.duplicate).length, "Provider exceptions", "Resolve")}
+      ${summary("Matched records", summaryData.matched ?? matches.length, money.format(summaryData.matchedAmount || 0), "Review")}
+      ${summary("Unmatched statement lines", summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length, money.format(summaryData.unmatchedStatementAmount || 0), "Investigate")}
+      ${summary("Unmatched ledger lines", summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length, money.format(summaryData.unmatchedLedgerAmount || 0), "Investigate")}
+      ${summary("Callback exceptions", callbackExceptions.length, "Failed or duplicate provider events", "Resolve")}
     </div>
-    ${recordTable("Bank and mobile-money matching", matches.length ? matches : callbacks, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"])}
-    ${recordTable("Unmatched reconciliation items", unmatched, ["externalReference", "provider", "amount", "status", "receivedAt"])}
+    ${reconciliationControlPanel(summaryData)}
+    <div class="grid two">
+      ${recordTable("Bank and mobile-money matching", reconciliationMatchRows(matches), ["externalReference", "statementAmount", "ledgerAmount", "accountCode", "sourceType", "postedAt"])}
+      ${recordTable("Provider callback exceptions", callbackExceptions, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"])}
+    </div>
+    <div class="grid two">
+      ${recordTable("Unmatched bank statement lines", unmatchedStatementLines, ["externalReference", "accountCode", "channel", "amount", "description", "statementDate"])}
+      ${recordTable("Unmatched ledger lines", unmatchedLedgerLines, ["reference", "accountCode", "accountName", "sourceType", "amount", "postedAt"])}
+    </div>
+    ${recordTable("Provider callbacks", callbacks, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"])}
   `;
+}
+
+function reconciliationControlPanel(summaryData) {
+  const statementTotal = Number(summaryData.statementLines || 0);
+  const ledgerTotal = Number(summaryData.ledgerLines || 0);
+  const matched = Number(summaryData.matched || 0);
+  const coverage = Math.round((matched / Math.max(statementTotal, ledgerTotal, 1)) * 100);
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Reconciliation command center</h2>
+          <p>Review backend-matched bank statement lines against cash ledger lines before period close.</p>
+        </div>
+        <span class="status ${coverage >= 90 ? "active" : "pending"}">${coverage}% matched</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Statement lines", statementTotal)}
+        ${mini("Cash ledger lines", ledgerTotal)}
+        ${mini("Matched lines", matched)}
+        ${mini("Unmatched statement amount", money.format(summaryData.unmatchedStatementAmount || 0))}
+        ${mini("Unmatched ledger amount", money.format(summaryData.unmatchedLedgerAmount || 0))}
+        ${mini("Matched amount", money.format(summaryData.matchedAmount || 0))}
+      </div>
+    </section>
+  `;
+}
+
+function reconciliationMatchRows(matches) {
+  return (matches || []).map((match) => ({
+    externalReference: match.statementLine?.externalReference || match.ledgerLine?.reference,
+    statementAmount: match.statementLine?.amount,
+    ledgerAmount: match.ledgerLine?.amount,
+    accountCode: match.statementLine?.accountCode || match.ledgerLine?.accountCode,
+    sourceType: match.ledgerLine?.sourceType,
+    postedAt: match.ledgerLine?.postedAt || match.statementLine?.statementDate
+  }));
 }
 
 function settingsView() {

@@ -74,7 +74,7 @@ try {
   await assertScreen(page, "guarantors", ["Guarantor requests"]);
   await assertScreen(page, "approvals", ["Approval queue"]);
   await assertScreen(page, "accounting", ["Chart of accounts", "Expense capture", "Fixed asset register", "Unbalanced journals"]);
-  await assertScreen(page, "reconciliation", ["Bank and mobile-money matching", "Provider callbacks"]);
+  await assertScreen(page, "reconciliation", ["Reconciliation command center", "Bank and mobile-money matching", "Unmatched ledger lines", "Provider callback exceptions"]);
   await assertScreen(page, "settings", ["Branch setup", "Financial product setup"]);
   await logout(page);
 
