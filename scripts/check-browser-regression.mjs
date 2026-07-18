@@ -99,7 +99,9 @@ try {
   }
   await assertScreen(page, "accounts", ["Member account overview", "Member account balances", "Server-confirmed"]);
   await assertScreen(page, "loans", ["Mobile loan application", "Submit loan application", "Member loans"]);
+  await assertMemberLoanSubmission(page);
   await assertScreen(page, "payments", ["Member payment center", "Java-backed posting", "Post payment"]);
+  await assertMemberPaymentPosting(page);
   await assertScreen(page, "statements", ["Member statement readiness", "Member statement", "Server-confirmed"]);
   await assertScreen(page, "receipts", ["Member receipts", "Receipt status", "Download receipt"]);
   await assertScreen(page, "complaints", ["Member complaint center", "My complaints", "Offline drafts"]);
@@ -281,6 +283,36 @@ async function assertTransactionWorkflow(page) {
   await expectText(page, "Approve/post transaction", "transaction approve action");
   await expectText(page, "Reverse posted transaction", "transaction reverse action");
   console.log("PASS transaction workflow");
+}
+
+async function assertMemberLoanSubmission(page) {
+  const stamp = Date.now();
+  await navigateTo(page, "loans");
+  await page.locator("#memberLoanProduct").selectOption("Emergency Loan").catch(async () => {
+    await page.locator("#memberLoanProduct").selectOption({ index: 0 });
+  });
+  await page.locator("#memberLoanAmount").fill(String(100000 + Number(String(stamp).slice(-5))));
+  await page.locator("#memberLoanMonths").fill("6");
+  await page.locator("#memberLoanPurpose").fill(`Browser regression member loan ${stamp}`);
+  await page.locator("#memberLoanForm button[type='submit']").click();
+  await expectText(page, "Submitted loan application", "member loan submitted");
+  await expectText(page, "Member loans", "member loan table refreshed");
+  console.log("PASS member loan action");
+}
+
+async function assertMemberPaymentPosting(page) {
+  const stamp = Date.now();
+  const reference = `MM-BROWSER-${stamp}`;
+  await navigateTo(page, "payments");
+  await page.locator("#memberPaymentPurpose").selectOption("savings_deposit");
+  await page.locator("#memberPaymentAmount").fill("5000");
+  await page.locator("#memberPaymentProvider").selectOption({ index: 0 });
+  await page.locator("#memberPaymentReference").fill(reference);
+  await page.locator("#memberPaymentForm button[type='submit']").click();
+  await expectText(page, "Payment posted", "member payment posted");
+  await navigateTo(page, "accounts");
+  await expectText(page, "Member account balances", "member balances visible after payment");
+  console.log("PASS member payment action");
 }
 
 async function canLogin(code, username, password) {
