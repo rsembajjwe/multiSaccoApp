@@ -43,6 +43,29 @@ button {
   min-height: 100vh;
 }
 
+.app-shell.login-mode {
+  display: block;
+  background: radial-gradient(circle at 14% 20%, rgba(184, 243, 221, 0.6), transparent 32%),
+    linear-gradient(135deg, #f4f8f6 0%, #ffffff 48%, #eef8f3 100%);
+}
+
+.app-shell.login-mode .sidebar,
+.app-shell.login-mode .topbar,
+.app-shell.login-mode .shell-status {
+  display: none;
+}
+
+.app-shell.login-mode .main {
+  min-height: 100vh;
+}
+
+.app-shell.login-mode .content {
+  min-height: 100vh;
+  display: grid;
+  align-items: center;
+  padding: 32px;
+}
+
 .sidebar {
   position: sticky;
   top: 0;
@@ -688,7 +711,6 @@ pre.notice {
 }
 
 .login-screen {
-  min-height: calc(100vh - 190px);
   display: grid;
   align-content: center;
   gap: 18px;

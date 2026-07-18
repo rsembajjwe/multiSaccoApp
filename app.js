@@ -696,6 +696,7 @@ function render() {
     renderLoginScreen();
     return;
   }
+  setLoginMode(false);
   ensureWorkspaceTenant();
   renderNav();
   document.querySelectorAll(".nav-item").forEach((button) => {
@@ -744,7 +745,12 @@ function render() {
   bindViewActions();
 }
 
+function setLoginMode(enabled) {
+  document.querySelector(".app-shell")?.classList.toggle("login-mode", enabled);
+}
+
 function renderLoginScreen() {
+  setLoginMode(true);
   renderApiChrome();
   document.getElementById("sessionRole").textContent = "Signed out";
   document.getElementById("tenantSelect").value = state.tenantId;
@@ -757,13 +763,7 @@ function renderLoginScreen() {
   document.getElementById("globalSearchBtn").hidden = true;
   document.getElementById("memberPortalBtn").hidden = true;
   document.getElementById("newMemberBtn").hidden = true;
-  document.getElementById("shellStatus").innerHTML = `
-    ${shellFact("Application", "Tereka Online")}
-    ${shellFact("Staff session", "Signed out")}
-    ${shellFact("Member session", "Signed out")}
-    ${shellFact("Backend", apiState.health || "checking")}
-    ${shellFact("Mode", apiState.health === "online" ? "Java API ready" : "Waiting for API")}
-  `;
+  document.getElementById("shellStatus").innerHTML = "";
   document.getElementById("app").innerHTML = `
     <section class="login-screen">
       <div class="login-brand">
