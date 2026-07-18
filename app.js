@@ -1,7 +1,7 @@
 const API_BASE = "/api/v1";
 const STAFF_TOKEN_KEY = "tereka-staff-token";
 const MEMBER_TOKEN_KEY = "tereka-member-token";
-const UI_BUILD_VERSION = "Document redesign 2026-07-18";
+const SHOW_DEMO_TOOLS = new URLSearchParams(window.location.search).has("demo");
 
 const money = new Intl.NumberFormat("en-UG", {
   style: "currency",
@@ -234,7 +234,7 @@ function renderLogin() {
         <p class="hero-copy">A secure, low-bandwidth SACCO operating platform for Uganda. One login directs each user to the correct platform, SACCO or member portal.</p>
         <div class="trust-list">
           <span>Role-based access</span>
-          <span>Java-backed data</span>
+          <span>Secure approvals</span>
           <span>UGX financial clarity</span>
         </div>
         <div class="login-links">
@@ -264,7 +264,7 @@ function renderLogin() {
           <div id="loginError" class="alert error" hidden></div>
           <button id="loginButton" class="button primary" type="submit">Login</button>
         </form>
-        <section class="demo-panel">
+        ${SHOW_DEMO_TOOLS ? `<section class="demo-panel">
           <div>
             <strong>Demo access</strong>
             <span>Choose a role to fill the login fields.</span>
@@ -275,13 +275,12 @@ function renderLogin() {
             </select>
             <button class="button secondary" type="button" data-action="fill-demo">Fill demo</button>
           </div>
-        </section>
+        </section>` : ""}
         <div class="login-footer-links">
           <button type="button">Privacy policy</button>
           <button type="button">Terms and conditions</button>
           <button type="button">Maintenance notices</button>
         </div>
-        <p class="fine-print">Seeded demo member accounts are disabled outside the development/demo profile.</p>
       </section>
     </main>
   `);
@@ -331,26 +330,17 @@ function renderShell() {
             <p>${module[2]}</p>
           </div>
           <div class="page-actions">
-            ${state.auth === "member" ? `<button class="button secondary" data-action="refresh-member" type="button">Refresh member data</button>` : `<button class="button secondary" data-action="refresh" type="button">Refresh backend data</button>`}
+            ${state.auth === "member" ? `<button class="button secondary" data-action="refresh-member" type="button">Refresh</button>` : `<button class="button secondary" data-action="refresh" type="button">Refresh</button>`}
             <button class="button ghost" type="button">Export summary</button>
           </div>
         </section>
-        ${sourcePanel()}
         <section class="content-area">
           ${renderView(module[0])}
         </section>
-        <footer class="footer">Tereka Online / ${UI_BUILD_VERSION} / Uganda Shillings, local dates, role-based access</footer>
+        <footer class="footer">Tereka Online</footer>
       </main>
     </div>
   `);
-}
-
-function sourcePanel() {
-  const source = state.auth === "member" ? "Member portal data source" : `${currentModule()[1]} data source`;
-  const sync = state.lastSync ? new Date(state.lastSync).toLocaleString("en-UG", { dateStyle: "medium", timeStyle: "short" }) : "Not synced yet";
-  return `
-    <span class="hidden-contract">Source Last sync ${source} ${state.auth === "member" ? "member-authenticated Java API data" : "Java-backed"} ${state.lastError ? "could not refresh from the backend" : "API-backed"} Local demo ${sync} ${state.lastError || "Online"} ${contextName()} Dashboard data source SACCO registration data source Subscriptions data source Members data source Operations data source Reports data source Refresh backend data Refresh member data Java-backed API-backed Local demo Balances and requests will update Sync drafts pendingGuarantors notifications could not refresh from the member API</span>
-  `;
 }
 
 function renderView(view) {
@@ -525,6 +515,14 @@ function operationsView() {
 function reportsView() {
   const groups = ["Membership", "Savings", "Shares", "Welfare", "Loans", "Transactions", "Accounting", "Reconciliation", "Governance", "Compliance", "Audit", "Subscriptions"];
   return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Report catalogue</h2>
+          <p>Grouped reports with filters, preview, export, print and scheduling support.</p>
+        </div>
+      </div>
+    </section>
     <div class="report-grid">
       ${groups.map((group) => `<article class="report-card"><h3>${group}</h3><p>${group} report catalogue, filters, preview table, totals, exports and scheduled report support.</p><button class="button secondary" type="button">Open</button></article>`).join("")}
     </div>
@@ -621,7 +619,7 @@ function chartCard(title, labels, values) {
 }
 
 function activityPanel(title, rows) {
-  return `<section class="panel"><h2>${title}</h2><ul class="activity-list">${rows.map((row) => `<li><strong>${row[0] || "Record"}</strong><span>${row[1] || ""}</span><em>${row[2] || "Pending"}</em></li>`).join("") || `<li><strong>No records yet</strong><span>Refresh backend data</span><em>Empty</em></li>`}</ul></section>`;
+  return `<section class="panel"><h2>${title}</h2><ul class="activity-list">${rows.map((row) => `<li><strong>${row[0] || "Record"}</strong><span>${row[1] || ""}</span><em>${row[2] || "Pending"}</em></li>`).join("") || `<li><strong>No records yet</strong><span>Refresh the page to try again.</span><em>Empty</em></li>`}</ul></section>`;
 }
 
 function recordTable(title, rows, columns) {
@@ -680,7 +678,7 @@ function emptyState(title, detail) {
 }
 
 function renderLoading(message) {
-  setHtml(`<main class="loading-screen"><div class="loader"></div><h1>${message}</h1><p>Loading state / Java-backed / API-backed / Last sync</p></main>`);
+  setHtml(`<main class="loading-screen"><div class="loader"></div><h1>${message}</h1><p>Please wait while Tereka Online prepares your workspace.</p></main>`);
 }
 
 async function login(code, username, password) {

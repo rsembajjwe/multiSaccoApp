@@ -34,28 +34,28 @@ try {
   await expectText(page, "Login to your portal", "login-first screen");
   await expectText(page, "Register SACCO", "public SACCO registration link");
   await expectText(page, "Forgot password", "forgot password link");
+  await expectNoVisibleText(page, "Demo access", "demo tools hidden by default");
 
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
-  await assertScreen(page, "dashboard", ["Dashboard data source", "Total SACCOs", "Active platform users", "Recent SACCO applications"]);
-  await assertScreen(page, "sacco-applications", ["SACCO Registration data source", "SACCO application list", "Public SACCO registration wizard"]);
-  await assertScreen(page, "subscriptions", ["Subscriptions data source", "Subscription list", "Subscription package configuration"]);
-  await assertScreen(page, "operations", ["Operations data source", "Operations command center", "Payment monitoring"]);
-  await assertScreen(page, "reports", ["Reports data source", "Report catalogue", "Membership", "Audit"]);
-  await assertScreen(page, "users", ["Users and Roles data source", "Platform administrators only", "Permission matrix"]);
+  await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
+  await assertScreen(page, "sacco-applications", ["SACCO application list", "Public SACCO registration wizard"]);
+  await assertScreen(page, "subscriptions", ["Subscription list", "Subscription package configuration"]);
+  await assertScreen(page, "operations", ["Operations command center", "Payment monitoring"]);
+  await assertScreen(page, "reports", ["Report catalogue", "Membership", "Audit"]);
+  await assertScreen(page, "users", ["Platform administrators only", "Permission matrix"]);
+  await expectNoVisibleText(page, "Dashboard data source", "debug source panel hidden");
   await logout(page);
 
   await staffLogin(page, "GVS", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
-  await assertScreen(page, "dashboard", ["Dashboard data source", "Total members", "Total savings", "Role filtered"]);
-  await assertScreen(page, "members", ["Members data source", "Member list", "Member registration form sections"]);
-  await assertScreen(page, "transactions", ["Transactions data source", "Transaction list", "New transaction screen"]);
-  await assertScreen(page, "loans", ["Loans data source", "Loan application list", "Loan details tabs"]);
-  await assertScreen(page, "approvals", ["Approvals data source", "Approval queue"]);
+  await assertScreen(page, "dashboard", ["Total members", "Total savings", "Role filtered"]);
+  await assertScreen(page, "members", ["Member list", "Member registration form sections"]);
+  await assertScreen(page, "transactions", ["Transaction list", "New transaction screen"]);
+  await assertScreen(page, "loans", ["Loan application list", "Loan details tabs"]);
+  await assertScreen(page, "approvals", ["Approval queue"]);
   await logout(page);
 
   await memberLogin(page);
   for (const marker of [
-    "Member portal data source",
-    "member-authenticated Java API data",
     "SERVER-CONFIRMED BALANCES",
     "Total balance",
     "Loans",
@@ -131,8 +131,7 @@ async function staffLogin(page, code, username, password, label) {
   await page.locator("#password").fill(password);
   await page.locator("#loginButton").click();
   await page.locator(".app-shell").waitFor({ state: "attached" });
-  await expectText(page, "Java-backed", `${label} Java-backed source state`);
-  await expectText(page, "Last sync", `${label} last sync marker`);
+  await expectText(page, label.includes("Platform") ? "Platform Administration Portal" : "SACCO Administration Portal", `${label} portal shell`);
 }
 
 async function memberLogin(page) {
@@ -175,6 +174,14 @@ async function expectText(page, text, label) {
   }
   const bodyText = await page.locator("body").innerText();
   throw new Error(`${label} did not render expected text: ${text}. Body excerpt: ${bodyText.slice(0, 700)}`);
+}
+
+async function expectNoVisibleText(page, text, label) {
+  const bodyText = await page.locator("body").innerText();
+  if (bodyText.toLowerCase().includes(text.toLowerCase())) {
+    throw new Error(`${label} should not be visible: ${text}`);
+  }
+  console.log(`PASS ${label}`);
 }
 
 function delay(ms) {

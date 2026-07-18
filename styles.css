@@ -41,10 +41,6 @@ button {
   cursor: pointer;
 }
 
-.hidden-contract {
-  display: none;
-}
-
 .login-page {
   background: linear-gradient(180deg, #f7fbf9 0%, #eef6f2 100%);
 }

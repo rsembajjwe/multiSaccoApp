@@ -3,24 +3,25 @@ import { readFileSync } from "node:fs";
 const app = readFileSync("app.js", "utf8");
 
 const contracts = [
-  "Dashboard data source",
-  "SACCO registration data source",
-  "Subscriptions data source",
-  "Members data source",
-  "Operations data source",
-  "Reports data source",
-  "Member portal data source",
-  "Source",
-  "Last sync",
-  "Refresh backend data",
-  "Refresh member data",
-  "Java-backed",
-  "API-backed",
-  "Local demo",
-  "could not refresh from the backend",
-  "could not refresh from the member API",
-  "Balances and requests will update",
-  "Sync drafts",
+  "Login to your portal",
+  "Register SACCO",
+  "Forgot password",
+  "Platform Administration Portal",
+  "SACCO Administration Portal",
+  "Member Self-Service Portal",
+  "Refresh",
+  "Export summary",
+  "Total SACCOs",
+  "SACCO application list",
+  "Subscription list",
+  "Member list",
+  "Transaction list",
+  "Loan application list",
+  "Approval queue",
+  "Operations command center",
+  "Report catalogue",
+  "Permission matrix",
+  "SERVER-CONFIRMED BALANCES",
   "pendingGuarantors",
   "notifications"
 ];
@@ -31,4 +32,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`UI panel contract check passed (${contracts.length} source/sync markers).`);
+console.log(`UI production contract check passed (${contracts.length} markers).`);
