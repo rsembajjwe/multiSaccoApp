@@ -39,6 +39,7 @@ try {
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
   await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
   await assertScreen(page, "sacco-applications", ["SACCO application list", "Public SACCO registration wizard"]);
+  await assertSaccoApplicationReview(page);
   await assertScreen(page, "subscriptions", ["Subscription list", "Subscription package configuration"]);
   await assertScreen(page, "operations", ["Operations command center", "Payment monitoring"]);
   await assertScreen(page, "reports", ["Report catalogue", "Membership", "Audit"]);
@@ -201,6 +202,15 @@ async function assertPlatformUserCreation(page) {
   await page.locator("#userRoleForm button[type='submit']").click();
   await expectAnyText(page, ["Role assignment saved", "Role update failed"], "platform user role assignment response");
   console.log("PASS platform user creation");
+}
+
+async function assertSaccoApplicationReview(page) {
+  await page.locator("[data-row-action='tenant-detail']").first().click();
+  await expectText(page, "SACCO application review", "SACCO application detail panel");
+  await expectText(page, "Approval decision", "SACCO approval decision");
+  await expectText(page, "Save decision", "SACCO save decision action");
+  await expectText(page, "Request changes", "SACCO request changes action");
+  console.log("PASS SACCO application review");
 }
 
 async function canLogin(code, username, password) {

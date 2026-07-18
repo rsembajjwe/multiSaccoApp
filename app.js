@@ -42,6 +42,11 @@ const state = {
   selectedUserLoading: false,
   selectedUserMessage: "",
   selectedUserError: "",
+  selectedTenantId: "",
+  selectedTenant: null,
+  selectedTenantProfile: null,
+  selectedTenantMessage: "",
+  selectedTenantError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -584,9 +589,11 @@ function saccoSecretaryDashboard() {
 }
 
 function saccoApplications() {
+  const applications = tenantRows().map((tenant) => ({ ...tenant, action: "tenant-detail", actionLabel: "Review", actionId: tenant.id }));
   return `
     ${filterToolbar("Search applications by SACCO, district, contact or status", "Assign reviewer", "Export applications")}
-    ${recordTable("SACCO application list", dataRows("tenants").filter((t) => t.id !== "tenant_platform"), ["id", "name", "district", "contactPerson", "memberCount", "status"])}
+    ${tenantDetailPanel()}
+    ${recordTable("SACCO application list", applications, ["id", "name", "district", "registrationNo", "licenseExpiry", "onboarding", "status"])}
     ${wizardCard("Public SACCO registration wizard", ["SACCO Information", "Location and Contact", "Authorized Contact", "Leadership Details", "Document Upload", "Subscription Package", "Review and Submit"])}
   `;
 }
@@ -1020,6 +1027,72 @@ function userDetailPanel(users, canManageRoles) {
   `;
 }
 
+function tenantDetailPanel() {
+  const tenant = state.selectedTenant || tenantRows().find((item) => item.id === state.selectedTenantId);
+  if (!tenant) return "";
+  const profile = state.selectedTenantProfile || {};
+  const canManage = hasPermission("tenants:manage");
+  return `
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>SACCO application review</h2>
+          <p>${escapeHtml(tenant.name || "Selected SACCO")} - code ${escapeHtml(tenant.abbreviation || tenant.id || "")}</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-tenant-detail">Close</button>
+      </div>
+      ${state.selectedTenantMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedTenantMessage)}</strong></div>` : ""}
+      ${state.selectedTenantError ? `<div class="notice warning"><strong>Application update failed.</strong><span>${escapeHtml(state.selectedTenantError)}</span></div>` : ""}
+      <div class="source-grid">
+        ${mini("Activation state", tenantStatusLabel(tenant.status))}
+        ${mini("SACCO code", tenant.abbreviation)}
+        ${mini("District", tenant.district)}
+        ${mini("Registration", tenant.registrationNo)}
+        ${mini("License expiry", tenant.licenseExpiry)}
+        ${mini("Onboarding", `${tenant.onboarding || 0}%`)}
+        ${mini("Email", profile.email)}
+        ${mini("Phone", profile.phone)}
+      </div>
+      <div class="grid two">
+        ${recordTable("Registration profile", [profile], ["legalName", "tin", "umraLicenseNo", "cooperativeRegistrationNo", "address", "website"])}
+        ${recordTable("Approval history", dataRows("auditEvents").filter((event) => event.recordReference === tenant.id || event.recordId === tenant.id), ["createdAt", "actor", "action", "module", "result"])}
+      </div>
+      <form id="tenantStatusForm" class="form-grid single">
+        <input type="hidden" id="selectedTenantId" value="${escapeHtml(tenant.id)}">
+        <label>
+          <span>Approval decision</span>
+          <select id="selectedTenantStatus" ${canManage ? "" : "disabled"}>
+            ${tenantStatusOptions().map((option) => `<option value="${option.value}" ${option.value === tenant.status ? "selected" : ""}>${option.label}</option>`).join("")}
+          </select>
+        </label>
+        <div class="form-actions">
+          ${canManage ? `
+            <button class="button primary" type="submit">Save decision</button>
+            <button class="button secondary" type="button" data-tenant-status="approved">Approve</button>
+            <button class="button secondary" type="button" data-tenant-status="active">Activate</button>
+            <button class="button secondary" type="button" data-tenant-status="pending_review">Request changes</button>
+            <button class="button ghost" type="button" data-tenant-status="terminated">Reject</button>
+          ` : `<span class="status pending">View only</span>`}
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function tenantStatusOptions() {
+  return [
+    { value: "pending_review", label: "Pending review / request changes" },
+    { value: "approved", label: "Approved" },
+    { value: "active", label: "Active / operating" },
+    { value: "suspended", label: "Suspended" },
+    { value: "terminated", label: "Rejected / terminated" }
+  ];
+}
+
+function tenantStatusLabel(status) {
+  return tenantStatusOptions().find((option) => option.value === status)?.label || status || "Pending";
+}
+
 function userRoleOptions(platformOnly) {
   const tenantId = platformOnly ? "tenant_platform" : state.user?.tenantId;
   const roles = dataRows("roles").filter((role) => role.tenantId === tenantId);
@@ -1248,6 +1321,50 @@ async function saveSelectedUserRole(event) {
   }
 }
 
+async function openTenantDetail(tenantId) {
+  state.selectedTenantId = tenantId;
+  state.selectedTenant = null;
+  state.selectedTenantProfile = null;
+  state.selectedTenantMessage = "";
+  state.selectedTenantError = "";
+  renderShell();
+  try {
+    const [tenant, profile] = await Promise.all([
+      api(`/tenants/${encodeURIComponent(tenantId)}`),
+      optionalApi(`/tenants/${encodeURIComponent(tenantId)}/profile`, null)
+    ]);
+    state.selectedTenant = tenant;
+    state.selectedTenantProfile = profile || {};
+  } catch (error) {
+    state.selectedTenantError = error.message;
+  }
+  renderShell();
+}
+
+async function saveTenantStatus(status) {
+  const tenantId = value("selectedTenantId") || state.selectedTenantId;
+  if (!tenantId || !status) return;
+  state.selectedTenantMessage = "";
+  state.selectedTenantError = "";
+  try {
+    const tenant = await api(`/tenants/${encodeURIComponent(tenantId)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+    state.selectedTenant = tenant;
+    state.selectedTenantId = tenant.id;
+    state.selectedTenantMessage = `SACCO status updated to ${tenantStatusLabel(tenant.status)}.`;
+    await refreshAll();
+    state.selectedTenant = tenant;
+    state.selectedTenantId = tenant.id;
+    state.selectedTenantMessage = `SACCO status updated to ${tenantStatusLabel(tenant.status)}.`;
+    renderShell();
+  } catch (error) {
+    state.selectedTenantError = error.message;
+    renderShell();
+  }
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -1324,6 +1441,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='user-detail']").forEach((button) => {
     button.addEventListener("click", () => openUserDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='tenant-detail']").forEach((button) => {
+    button.addEventListener("click", () => openTenantDetail(button.dataset.rowId));
+  });
   document.querySelector("[data-action='close-user-detail']")?.addEventListener("click", () => {
     state.selectedUserId = "";
     state.selectedUserRoles = [];
@@ -1331,8 +1451,23 @@ function bindEvents() {
     state.selectedUserError = "";
     renderShell();
   });
+  document.querySelector("[data-action='close-tenant-detail']")?.addEventListener("click", () => {
+    state.selectedTenantId = "";
+    state.selectedTenant = null;
+    state.selectedTenantProfile = null;
+    state.selectedTenantMessage = "";
+    state.selectedTenantError = "";
+    renderShell();
+  });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
   document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
+  document.querySelector("#tenantStatusForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveTenantStatus(value("selectedTenantStatus"));
+  });
+  document.querySelectorAll("[data-tenant-status]").forEach((button) => {
+    button.addEventListener("click", () => saveTenantStatus(button.dataset.tenantStatus));
+  });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
   document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
@@ -1365,6 +1500,11 @@ async function logout() {
     selectedUserRoles: [],
     selectedUserMessage: "",
     selectedUserError: "",
+    selectedTenantId: "",
+    selectedTenant: null,
+    selectedTenantProfile: null,
+    selectedTenantMessage: "",
+    selectedTenantError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });
