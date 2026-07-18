@@ -56,7 +56,8 @@ try {
 
   await staffLogin(page, "GVS", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Role filtered"]);
-  await assertScreen(page, "members", ["Member list", "Member registration form sections"]);
+  await assertScreen(page, "members", ["Member list", "Member registration"]);
+  await assertMemberRegistrationAndKyc(page);
   await assertScreen(page, "transactions", ["Transaction list", "New transaction screen"]);
   await assertScreen(page, "savings", ["Savings product list", "Savings accounts"]);
   await assertScreen(page, "shares", ["Share product list", "Share register"]);
@@ -221,6 +222,22 @@ async function assertSubscriptionControl(page) {
   await expectText(page, "Record payment", "subscription record payment action");
   await expectText(page, "Renew full year", "subscription renew action");
   console.log("PASS subscription control");
+}
+
+async function assertMemberRegistrationAndKyc(page) {
+  const stamp = Date.now();
+  const fullName = `Browser Member ${stamp}`;
+  await page.locator("#newMemberFullName").fill(fullName);
+  await page.locator("#newMemberPhone").fill(`+2567${String(stamp).slice(-8)}`);
+  await page.locator("#newMemberEmail").fill(`browser.member.${stamp}@tereka.local`);
+  await page.locator("#newMemberNationalId").fill(`CM${String(stamp).slice(-10)}`);
+  await page.locator("#memberRegistrationForm button[type='submit']").click();
+  await expectText(page, fullName, "created member visible");
+  await page.locator("tr", { hasText: fullName }).locator("[data-row-action='member-detail']").click();
+  await expectText(page, "Member detail and KYC approval", "member detail panel");
+  await expectText(page, "Approve member", "member approve action");
+  await expectText(page, "Save KYC decision", "member KYC save action");
+  console.log("PASS member registration and KYC");
 }
 
 async function canLogin(code, username, password) {

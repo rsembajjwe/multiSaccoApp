@@ -50,6 +50,16 @@ const state = {
   selectedSubscriptionId: "",
   selectedSubscriptionMessage: "",
   selectedSubscriptionError: "",
+  memberFormMessage: "",
+  memberFormError: "",
+  selectedMemberId: "",
+  selectedMember: null,
+  selectedMemberStatement: null,
+  selectedMemberNextOfKin: [],
+  selectedMemberBeneficiaries: [],
+  selectedMemberDocuments: [],
+  selectedMemberMessage: "",
+  selectedMemberError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -623,10 +633,12 @@ function saccoAccounts() {
 }
 
 function membersView() {
+  const rows = dataRows("members").map((member) => ({ ...member, action: "member-detail", actionLabel: "Review", actionId: member.id }));
   return `
     ${filterToolbar("Search by member number, name, phone, branch, KYC or status", "Register member", "Download statement")}
-    ${recordTable("Member list", dataRows("members"), ["membershipNo", "fullName", "phone", "branchName", "savingsBalance", "loanBalance", "kycStatus", "status"])}
-    ${tabsCard("Member registration form sections", ["Personal Information", "Contact Information", "Address", "Employment or Business", "Identification", "Next of Kin", "Beneficiaries", "Membership Details", "Bank and Mobile Money", "Documents", "Review"])}
+    ${memberRegistrationPanel()}
+    ${memberDetailPanel()}
+    ${recordTable("Member list", rows, ["membershipNo", "fullName", "phone", "email", "nationalId", "savingsBalance", "sharesBalance", "welfareBalance", "kycStatus", "status"])}
   `;
 }
 
@@ -1152,6 +1164,109 @@ function subscriptionAccessLabel(subscription, tenant) {
   return subscription.status || tenant.status || "Pending";
 }
 
+function memberRegistrationPanel() {
+  const branches = dataRows("branches");
+  const defaultBranch = branches[0]?.id || "";
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member registration</h2>
+          <p>Create a member profile, login credential and KYC starting state.</p>
+        </div>
+      </div>
+      ${state.memberFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberFormMessage)}</strong></div>` : ""}
+      ${state.memberFormError ? `<div class="notice warning"><strong>Member registration failed.</strong><span>${escapeHtml(state.memberFormError)}</span></div>` : ""}
+      <form id="memberRegistrationForm" class="form-grid">
+        <input type="hidden" id="newMemberTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
+        <label><span>Membership number</span><input id="newMemberNo" placeholder="Auto if blank"></label>
+        <label><span>Branch</span><select id="newMemberBranchId">${branches.map((branch) => `<option value="${escapeHtml(branch.id)}" ${branch.id === defaultBranch ? "selected" : ""}>${escapeHtml(branch.name || branch.code)}</option>`).join("")}</select></label>
+        <label><span>Full name</span><input id="newMemberFullName" required placeholder="Member full name"></label>
+        <label><span>Member type</span><select id="newMemberType"><option value="individual">Individual</option><option value="group">Group</option><option value="institutional">Institutional</option><option value="corporate">Corporate</option></select></label>
+        <label><span>Phone</span><input id="newMemberPhone" required placeholder="+256..."></label>
+        <label><span>Email</span><input id="newMemberEmail" type="email" placeholder="member@example.com"></label>
+        <label><span>National ID</span><input id="newMemberNationalId" placeholder="CM..."></label>
+        <label><span>Temporary password</span><input id="newMemberPassword" type="password" value="Member@12345"></label>
+        <label><span>KYC status</span><select id="newMemberKycStatus"><option value="pending_verification">Pending verification</option><option value="not_verified">Not verified</option><option value="verified">Verified</option></select></label>
+        <label><span>Joining date</span><input id="newMemberJoiningDate" type="date" value="${new Date().toISOString().slice(0, 10)}"></label>
+        <div class="form-actions inline"><button class="button primary" type="submit">Create member</button></div>
+      </form>
+    </section>
+  `;
+}
+
+function memberDetailPanel() {
+  const member = state.selectedMember || dataRows("members").find((item) => item.id === state.selectedMemberId);
+  if (!member) return "";
+  const canManage = hasPermission("members:approve") || roleKind() === "admin" || roleKind() === "secretary";
+  return `
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member detail and KYC approval</h2>
+          <p>${escapeHtml(member.membershipNo || "")} - ${escapeHtml(member.fullName || "")}</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-member-detail">Close</button>
+      </div>
+      ${state.selectedMemberMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedMemberMessage)}</strong></div>` : ""}
+      ${state.selectedMemberError ? `<div class="notice warning"><strong>Member update failed.</strong><span>${escapeHtml(state.selectedMemberError)}</span></div>` : ""}
+      <div class="source-grid">
+        ${mini("Status", member.status)}
+        ${mini("KYC", member.kycStatus)}
+        ${mini("Savings", money.format(member.savingsBalance || 0))}
+        ${mini("Shares", money.format(member.sharesBalance || 0))}
+        ${mini("Welfare", money.format(member.welfareBalance || 0))}
+        ${mini("Phone", member.phone)}
+        ${mini("Email", member.email)}
+        ${mini("National ID", member.nationalId)}
+      </div>
+      <form id="memberStatusForm" class="form-grid single">
+        <input type="hidden" id="selectedMemberId" value="${escapeHtml(member.id)}">
+        <label><span>Member status</span><select id="selectedMemberStatus" ${canManage ? "" : "disabled"}>${memberStatusOptions().map((status) => `<option value="${status.value}" ${status.value === member.status ? "selected" : ""}>${status.label}</option>`).join("")}</select></label>
+        <label><span>KYC decision</span><select id="selectedMemberKycStatus" ${canManage ? "" : "disabled"}>${kycStatusOptions().map((status) => `<option value="${status.value}" ${status.value === member.kycStatus ? "selected" : ""}>${status.label}</option>`).join("")}</select></label>
+        <div class="form-actions">
+          ${canManage ? `
+            <button class="button primary" type="submit">Save KYC decision</button>
+            <button class="button secondary" type="button" data-member-decision="approve">Approve member</button>
+            <button class="button secondary" type="button" data-member-decision="changes">Request changes</button>
+            <button class="button ghost" type="button" data-member-decision="suspend">Suspend member</button>
+          ` : `<span class="status pending">View only</span>`}
+        </div>
+      </form>
+      <div class="grid two">
+        ${recordTable("Member documents", state.selectedMemberDocuments, ["documentType", "storageKey", "verificationStatus", "createdAt"])}
+        ${recordTable("Next of kin", state.selectedMemberNextOfKin, ["fullName", "relationship", "phone", "address", "primaryContact"])}
+      </div>
+      <div class="grid two">
+        ${recordTable("Beneficiaries", state.selectedMemberBeneficiaries, ["fullName", "relationship", "phone", "allocationPercent"])}
+        ${recordTable("Member statement", state.selectedMemberStatement?.lines || [], ["reference", "type", "channel", "amount", "savingsBalance", "sharesBalance", "welfareBalance", "postedAt"])}
+      </div>
+    </section>
+  `;
+}
+
+function memberStatusOptions() {
+  return [
+    { value: "applicant", label: "Applicant" },
+    { value: "pending_approval", label: "Pending approval" },
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+    { value: "dormant", label: "Dormant" },
+    { value: "suspended", label: "Suspended" },
+    { value: "exited", label: "Exited" }
+  ];
+}
+
+function kycStatusOptions() {
+  return [
+    { value: "not_verified", label: "Not verified" },
+    { value: "pending_verification", label: "Pending verification" },
+    { value: "verified", label: "Verified" },
+    { value: "rejected", label: "Rejected" },
+    { value: "expired", label: "Expired" }
+  ];
+}
+
 function userRoleOptions(platformOnly) {
   const tenantId = platformOnly ? "tenant_platform" : state.user?.tenantId;
   const roles = dataRows("roles").filter((role) => role.tenantId === tenantId);
@@ -1487,6 +1602,115 @@ async function runSubscriptionAction(action) {
   }
 }
 
+async function createMemberFromForm(event) {
+  event.preventDefault();
+  state.memberFormMessage = "";
+  state.memberFormError = "";
+  try {
+    const created = await api("/members", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: value("newMemberTenantId"),
+        branchId: value("newMemberBranchId"),
+        membershipNo: value("newMemberNo"),
+        fullName: value("newMemberFullName"),
+        memberType: value("newMemberType"),
+        phone: value("newMemberPhone"),
+        email: value("newMemberEmail"),
+        nationalId: value("newMemberNationalId"),
+        password: value("newMemberPassword") || "Member@12345",
+        kycStatus: value("newMemberKycStatus"),
+        joiningDate: value("newMemberJoiningDate")
+      })
+    });
+    state.memberFormMessage = `Created member ${created.membershipNo} - ${created.fullName}.`;
+    await refreshAll();
+  } catch (error) {
+    state.memberFormError = error.message;
+    renderShell();
+  }
+}
+
+async function openMemberDetail(memberId) {
+  state.selectedMemberId = memberId;
+  state.selectedMember = null;
+  state.selectedMemberStatement = null;
+  state.selectedMemberNextOfKin = [];
+  state.selectedMemberBeneficiaries = [];
+  state.selectedMemberDocuments = [];
+  state.selectedMemberMessage = "";
+  state.selectedMemberError = "";
+  renderShell();
+  try {
+    const [member, statement, nextOfKin, beneficiaries, documents] = await Promise.all([
+      api(`/members/${encodeURIComponent(memberId)}`),
+      optionalApi(`/members/${encodeURIComponent(memberId)}/statement`, null),
+      optionalApi(`/members/${encodeURIComponent(memberId)}/next-of-kin`, []),
+      optionalApi(`/members/${encodeURIComponent(memberId)}/beneficiaries`, []),
+      optionalApi(`/members/${encodeURIComponent(memberId)}/documents`, [])
+    ]);
+    state.selectedMember = member;
+    state.selectedMemberStatement = statement;
+    state.selectedMemberNextOfKin = nextOfKin || [];
+    state.selectedMemberBeneficiaries = beneficiaries || [];
+    state.selectedMemberDocuments = documents || [];
+  } catch (error) {
+    state.selectedMemberError = error.message;
+  }
+  renderShell();
+}
+
+async function saveMemberDecision(memberId, memberStatus, kycStatus) {
+  state.selectedMemberMessage = "";
+  state.selectedMemberError = "";
+  try {
+    let member = await api(`/members/${encodeURIComponent(memberId)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: memberStatus })
+    });
+    if (kycStatus) {
+      await api("/members/metadata-import", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: member.tenantId,
+          dryRun: false,
+          rows: [{ recordType: "kyc_status", membershipNo: member.membershipNo, kycStatus }]
+        })
+      });
+      member = await api(`/members/${encodeURIComponent(memberId)}`);
+    }
+    state.selectedMember = member;
+    state.selectedMemberId = member.id;
+    state.selectedMemberMessage = `Member updated: ${member.status}, KYC ${member.kycStatus}.`;
+    await refreshAll();
+    state.selectedMember = member;
+    state.selectedMemberId = member.id;
+    state.selectedMemberMessage = `Member updated: ${member.status}, KYC ${member.kycStatus}.`;
+    renderShell();
+  } catch (error) {
+    state.selectedMemberError = error.message;
+    renderShell();
+  }
+}
+
+function runMemberDecision(action) {
+  const memberId = value("selectedMemberId") || state.selectedMemberId;
+  if (!memberId) return;
+  if (action === "approve") {
+    saveMemberDecision(memberId, "active", "verified");
+    return;
+  }
+  if (action === "changes") {
+    saveMemberDecision(memberId, "pending_approval", "pending_verification");
+    return;
+  }
+  if (action === "suspend") {
+    saveMemberDecision(memberId, "suspended", state.selectedMember?.kycStatus || value("selectedMemberKycStatus"));
+    return;
+  }
+  saveMemberDecision(memberId, value("selectedMemberStatus"), value("selectedMemberKycStatus"));
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -1569,6 +1793,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='subscription-detail']").forEach((button) => {
     button.addEventListener("click", () => openSubscriptionDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='member-detail']").forEach((button) => {
+    button.addEventListener("click", () => openMemberDetail(button.dataset.rowId));
+  });
   document.querySelector("[data-action='close-user-detail']")?.addEventListener("click", () => {
     state.selectedUserId = "";
     state.selectedUserRoles = [];
@@ -1590,8 +1817,24 @@ function bindEvents() {
     state.selectedSubscriptionError = "";
     renderShell();
   });
+  document.querySelector("[data-action='close-member-detail']")?.addEventListener("click", () => {
+    state.selectedMemberId = "";
+    state.selectedMember = null;
+    state.selectedMemberStatement = null;
+    state.selectedMemberNextOfKin = [];
+    state.selectedMemberBeneficiaries = [];
+    state.selectedMemberDocuments = [];
+    state.selectedMemberMessage = "";
+    state.selectedMemberError = "";
+    renderShell();
+  });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
   document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
+  document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
+  document.querySelector("#memberStatusForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    runMemberDecision("custom");
+  });
   document.querySelector("#tenantStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     saveTenantStatus(value("selectedTenantStatus"));
@@ -1605,6 +1848,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-subscription-action]").forEach((button) => {
     button.addEventListener("click", () => runSubscriptionAction(button.dataset.subscriptionAction));
+  });
+  document.querySelectorAll("[data-member-decision]").forEach((button) => {
+    button.addEventListener("click", () => runMemberDecision(button.dataset.memberDecision));
   });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
@@ -1646,6 +1892,16 @@ async function logout() {
     selectedSubscriptionId: "",
     selectedSubscriptionMessage: "",
     selectedSubscriptionError: "",
+    memberFormMessage: "",
+    memberFormError: "",
+    selectedMemberId: "",
+    selectedMember: null,
+    selectedMemberStatement: null,
+    selectedMemberNextOfKin: [],
+    selectedMemberBeneficiaries: [],
+    selectedMemberDocuments: [],
+    selectedMemberMessage: "",
+    selectedMemberError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });
