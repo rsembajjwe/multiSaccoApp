@@ -63,7 +63,9 @@ const workspaceProfiles = {
 };
 
 const navPermissions = {
+  dashboard: "dashboard:view",
   registrations: "tenants:view",
+  subscriptions: "subscriptions:view",
   members: "members:view",
   transactions: "transactions:view",
   loans: "loans:view",

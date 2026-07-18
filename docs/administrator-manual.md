@@ -54,6 +54,28 @@ Administrators should apply these controls:
 
 Role and permission changes are tenant-scoped and audited.
 
+### Protected Role Matrix
+
+The default seed includes protected roles for platform oversight and SACCO operations. These roles give a safe starting point before creating SACCO-specific custom roles.
+
+| Role | Scope | Main views |
+|---|---|---|
+| Platform Super Admin | Platform | Dashboard, SACCO Registration, Subscriptions, Members, Transactions, Loans, Approvals, Operations, Reports, Users/Roles |
+| Platform Operations Officer | Platform | Dashboard, SACCO Registration view, Members view, Transactions view, Loans view, Approvals view, Operations, Reports, Notifications, Complaints |
+| Platform Billing Officer | Platform | Dashboard, SACCO Registration view, Subscriptions, Billing reports, Operations |
+| Platform Compliance Officer | Platform | Dashboard, SACCO Registration view, Transactions view, Loans view, Accounting view, Approvals view, Operations, Reports |
+| Platform Support Officer | Platform | Dashboard, SACCO Registration view, Members view, Operations, Reports, Complaints, Notifications |
+| SACCO Administrator | SACCO | Dashboard, Members, Transactions, Loans, Approvals, Operations, Reports, Users/Roles |
+| Chairperson | SACCO | Dashboard, Loans, Approvals, Reports, Operations, Governance |
+| Treasurer | SACCO | Dashboard, Transactions, Finance approvals, Reports, Operations, Accounting |
+| Secretary | SACCO | Dashboard, Members, Member approvals, Reports, Governance, Complaints |
+| Accountant | SACCO | Dashboard, Transactions, Accounting, Reconciliation, Reports, Operations |
+| Teller / Cashier | SACCO | Dashboard, Member lookup, Transaction capture |
+| Auditor | SACCO | Dashboard, Members view, Transactions view, Loans view, Approvals view, Operations, Reports |
+| Member | SACCO member | Member Portal only |
+
+Members are authenticated through the member portal session, not staff roles. A member can view only their own balances, statements, loans, notifications, guarantor requests, and drafts.
+
 ## Operational Monitoring
 
 Use:

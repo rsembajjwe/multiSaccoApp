@@ -515,6 +515,30 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void recommendedRoleMatrixSeedsExpectedPlatformAndSaccoAccess() throws Exception {
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(get("/api/v1/roles?tenantId=tenant_platform")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[?(@.id == 'role_platform_super_admin')].permissionIds[*]", hasItem("subscriptions:manage")))
+				.andExpect(jsonPath("$.data[?(@.id == 'role_platform_operations_officer')].permissionIds[*]", hasItem("operations:view")))
+				.andExpect(jsonPath("$.data[?(@.id == 'role_platform_billing_officer')].permissionIds[*]", hasItem("subscriptions:view")))
+				.andExpect(jsonPath("$.data[?(@.id == 'role_platform_compliance_officer')].permissionIds[*]", hasItem("accounting:view")))
+				.andExpect(jsonPath("$.data[?(@.id == 'role_platform_support_officer')].permissionIds[*]", hasItem("complaints:view")));
+
+		mockMvc.perform(get("/api/v1/roles?tenantId=tenant_green")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[?(@.id == 'role_green_treasurer')].permissionIds[*]", hasItem("transactions:approve")))
+				.andExpect(jsonPath("$.data[?(@.id == 'role_green_secretary')].permissionIds[*]", hasItem("members:approve")))
+				.andExpect(jsonPath("$.data[?(@.id == 'role_green_chairperson')].permissionIds[*]", hasItem("approvals:decide")))
+				.andExpect(jsonPath("$.data[?(@.id == 'role_green_accountant')].permissionIds[*]", hasItem("accounting:post")))
+				.andExpect(jsonPath("$.data[?(@.id == 'role_green_teller')].permissionIds[*]", hasItem("transactions:create")))
+				.andExpect(jsonPath("$.data[?(@.id == 'role_green_auditor')].permissionIds[*]", hasItem("reports:view")));
+	}
+
+	@Test
 	void loginRejectsBadPassword() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/login")
 						.contentType("application/json")
