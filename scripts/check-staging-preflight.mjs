@@ -145,7 +145,8 @@ function parseEnv(source) {
 
 function assertNotPlaceholder(name, targetFailures) {
   const value = String(values[name] ?? "").trim();
-  if (placeholderValues.has(value.toLowerCase())) {
+  const normalized = value.toLowerCase();
+  if (placeholderValues.has(normalized) || normalized.startsWith("replace_with_")) {
     targetFailures.push(`${name} must be replaced with a real staging value.`);
   }
 }

@@ -1,0 +1,31 @@
+services:
+  postgres:
+    ports: !reset []
+    restart: unless-stopped
+
+  backend:
+    ports: !reset []
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - backend
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-tereka.online}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@tereka.online}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - .:/srv/app:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -21,6 +21,8 @@ Keep `SACCO_DEMO_LOGINS_ENABLED=false` outside development/demo verification. Th
 
 For hosted staging preparation, use [Staging Environment and Secrets Guide](staging-environment.md) and start from `deploy\staging.env.example`. Real staging secrets must stay in the host secret store or an untracked `.env`.
 
+For the low-budget Hetzner CX22 deployment of `tereka.online`, use [Hetzner CX22 Deployment](hetzner-cx22-deployment.md). It runs PostgreSQL, the Java backend, and Caddy on one VPS, with Caddy serving the UI and proxying `/api/v1` to the backend over one HTTPS domain.
+
 Start PostgreSQL and the Java backend:
 
 ```powershell

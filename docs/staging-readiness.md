@@ -49,7 +49,7 @@ These items are the main gap between the current build and live SACCO operation.
 
 Focus the next sprint on turning the high-risk items into tests and enforcement.
 
-1. Run hosted staging handoff using `docs/staging-handoff-checklist.md` and `docs/release-evidence-template.md`.
+1. Run hosted staging handoff using `docs/staging-handoff-checklist.md`, `docs/release-evidence-template.md`, and the Hetzner CX22 runbook in `docs/hetzner-cx22-deployment.md`.
 2. Execute pilot UAT scripts and close or accept findings using `docs/uat-findings-template.md`.
 3. Run migration evidence packs after pilot imports, treat unexplained `FAIL` checks as blockers, and attach any external KYC file/object-storage proof.
 4. Connect monitoring alerts and encrypted backup schedules in the staging hosting environment.
