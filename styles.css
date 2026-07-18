@@ -664,6 +664,13 @@ textarea {
   gap: 12px;
 }
 
+.two-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
 .summary-card {
   min-height: 112px;
   display: grid;
@@ -943,7 +950,8 @@ th {
   .filter-toolbar,
   .source-panel,
   .split-layout,
-  .grid.two {
+  .grid.two,
+  .two-column {
     grid-template-columns: 1fr;
   }
 }

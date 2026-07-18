@@ -83,6 +83,8 @@ const state = {
   selectedTemplateId: "",
   selectedTemplateMessage: "",
   selectedTemplateError: "",
+  branchFormMessage: "",
+  branchFormError: "",
   productFormMessage: "",
   productFormError: "",
   accountFormMessage: "",
@@ -1488,15 +1490,106 @@ function localDateTimeValue() {
 
 function settingsView() {
   if (isPlatform()) return platformSettingsView();
+  const branches = dataRows("branches");
+  const products = dataRows("financialProducts");
+  const accounts = dataRows("financialAccounts");
+  const activeBranches = branches.filter((branch) => normal(branch.status) === "active");
+  const activeProducts = products.filter((product) => normal(product.status) === "active");
+  const productTypes = ["savings", "shares", "welfare"];
+  const missingProducts = productTypes.filter((type) => !products.some((product) => normal(product.productType) === type));
   return `
     <div class="dashboard-grid">
-      ${summary("Branches", dataRows("branches").length, "Tenant service points", "Manage")}
-      ${summary("Financial products", dataRows("financialProducts").length, "Savings, shares, welfare", "Configure")}
-      ${summary("Notification templates", dataRows("notificationTemplates").length, "SMS/email/push content", "Open")}
+      ${summary("Active branches", activeBranches.length, "Service points ready for use", "Manage")}
+      ${summary("Active products", activeProducts.length, "Savings, shares and welfare", "Configure")}
+      ${summary("Product coverage", missingProducts.length ? `${productTypes.length - missingProducts.length}/${productTypes.length}` : "Complete", missingProducts.length ? `Missing ${missingProducts.map(labelize).join(", ")}` : "Core contribution types ready", "Review")}
       ${summary("Roles", dataRows("roles").length, "Access profiles", "Review")}
     </div>
-    ${recordTable("Branch setup", dataRows("branches"), ["code", "name", "address", "status", "createdAt"])}
-    ${recordTable("Financial product setup", dataRows("financialProducts"), ["productType", "code", "name", "contributionAmount", "minimumBalance", "interestRate", "status"])}
+    ${settingsReadinessPanel(branches, products, accounts)}
+    <div class="two-column">
+      ${branchSetupPanel()}
+      ${financialProductSetupPanel()}
+    </div>
+    ${recordTable("Branch setup", branches.map((branch) => ({ ...branch, manager: userName(branch.managerUserId) })), ["code", "name", "manager", "address", "status", "createdAt"])}
+    ${recordTable("Financial product setup", products, ["productType", "code", "name", "contributionAmount", "minimumBalance", "interestRate", "status"])}
+  `;
+}
+
+function settingsReadinessPanel(branches, products, accounts) {
+  const activeBranches = branches.filter((branch) => normal(branch.status) === "active").length;
+  const savingsProducts = products.filter((product) => normal(product.productType) === "savings").length;
+  const sharesProducts = products.filter((product) => normal(product.productType) === "shares").length;
+  const welfareProducts = products.filter((product) => normal(product.productType) === "welfare").length;
+  const inactiveProducts = products.filter((product) => normal(product.status) !== "active").length;
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>SACCO operating settings</h2>
+          <p>Controls used by member onboarding, transactions, product accounts and branch reporting.</p>
+        </div>
+        <span class="status ${activeBranches && savingsProducts && sharesProducts && welfareProducts ? "active" : "pending"}">${activeBranches && savingsProducts && sharesProducts && welfareProducts ? "Ready" : "Setup needed"}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Active branches", activeBranches)}
+        ${mini("Savings products", savingsProducts)}
+        ${mini("Share products", sharesProducts)}
+        ${mini("Welfare products", welfareProducts)}
+        ${mini("Open accounts", accounts.length)}
+        ${mini("Inactive products", inactiveProducts)}
+      </div>
+    </section>
+  `;
+}
+
+function branchSetupPanel() {
+  const canManage = hasPermission("roles:create") || roleKind() === "admin";
+  const tenantId = state.user?.tenantId || state.currentTenantId || "";
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Branch setup</h2>
+          <p>Create service points used by member registration, transactions and reports.</p>
+        </div>
+      </div>
+      ${state.branchFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.branchFormMessage)}</strong></div>` : ""}
+      ${state.branchFormError ? `<div class="notice warning"><strong>Branch setup failed.</strong><span>${escapeHtml(state.branchFormError)}</span></div>` : ""}
+      <form class="form-grid" id="branchSetupForm">
+        <input type="hidden" id="newBranchTenantId" value="${escapeHtml(tenantId)}">
+        <label><span>Branch code</span><input id="newBranchCode" placeholder="HQ" required ${canManage ? "" : "disabled"}></label>
+        <label><span>Branch name</span><input id="newBranchName" placeholder="Main branch" required ${canManage ? "" : "disabled"}></label>
+        <label><span>Address</span><input id="newBranchAddress" placeholder="Town, district or street" ${canManage ? "" : "disabled"}></label>
+        <label><span>Status</span><select id="newBranchStatus" ${canManage ? "" : "disabled"}><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+        <div class="form-actions"><button class="button primary" type="submit" ${canManage ? "" : "disabled"}>Create branch</button></div>
+      </form>
+    </section>
+  `;
+}
+
+function financialProductSetupPanel() {
+  const canManage = hasPermission("transactions:create") || roleKind() === "admin";
+  const tenantId = state.user?.tenantId || state.currentTenantId || "";
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Contribution product setup</h2>
+          <p>Configure the savings, shares and welfare products members can use.</p>
+        </div>
+      </div>
+      ${state.productFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.productFormMessage)}</strong></div>` : ""}
+      ${state.productFormError ? `<div class="notice warning"><strong>Product setup failed.</strong><span>${escapeHtml(state.productFormError)}</span></div>` : ""}
+      <form class="form-grid" data-product-form>
+        <input type="hidden" data-product-field="tenantId" value="${escapeHtml(tenantId)}">
+        <label><span>Product type</span><select data-product-field="productType" ${canManage ? "" : "disabled"}><option value="savings">Savings</option><option value="shares">Shares</option><option value="welfare">Welfare</option></select></label>
+        <label><span>Product code</span><input data-product-field="code" placeholder="SAV-MONTHLY" required ${canManage ? "" : "disabled"}></label>
+        <label><span>Product name</span><input data-product-field="name" placeholder="Monthly savings" required ${canManage ? "" : "disabled"}></label>
+        <label><span>Contribution amount</span><input data-product-field="contributionAmount" type="number" min="0" value="5000" required ${canManage ? "" : "disabled"}></label>
+        <label><span>Minimum balance</span><input data-product-field="minimumBalance" type="number" min="0" value="0" required ${canManage ? "" : "disabled"}></label>
+        <label><span>Interest rate</span><input data-product-field="interestRate" type="number" min="0" step="0.1" value="0" ${canManage ? "" : "disabled"}></label>
+        <div class="form-actions"><button class="button primary" type="submit" ${canManage ? "" : "disabled"}>Create product</button></div>
+      </form>
+    </section>
   `;
 }
 
@@ -2985,6 +3078,31 @@ async function createFinancialProduct(event) {
   }
 }
 
+async function createBranchFromForm(event) {
+  event.preventDefault();
+  state.branchFormMessage = "";
+  state.branchFormError = "";
+  try {
+    const branch = await api("/branches", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: value("newBranchTenantId"),
+        code: value("newBranchCode"),
+        name: value("newBranchName"),
+        address: value("newBranchAddress"),
+        status: value("newBranchStatus")
+      })
+    });
+    state.branchFormMessage = `Created branch ${branch.code} - ${branch.name}.`;
+    await refreshAll();
+    state.branchFormMessage = `Created branch ${branch.code} - ${branch.name}.`;
+    renderShell();
+  } catch (error) {
+    state.branchFormError = error.message;
+    renderShell();
+  }
+}
+
 async function openFinancialAccount(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -3497,6 +3615,7 @@ function bindEvents() {
   });
   document.querySelector("#notificationTemplateForm")?.addEventListener("submit", createNotificationTemplate);
   document.querySelector("#notificationTemplateEditForm")?.addEventListener("submit", saveNotificationTemplate);
+  document.querySelector("#branchSetupForm")?.addEventListener("submit", createBranchFromForm);
   document.querySelectorAll("[data-product-form]").forEach((form) => form.addEventListener("submit", createFinancialProduct));
   document.querySelectorAll("[data-account-form]").forEach((form) => form.addEventListener("submit", openFinancialAccount));
   document.querySelector("#welfareClaimForm")?.addEventListener("submit", submitWelfareClaim);
@@ -3610,6 +3729,8 @@ async function logout() {
     selectedTemplateId: "",
     selectedTemplateMessage: "",
     selectedTemplateError: "",
+    branchFormMessage: "",
+    branchFormError: "",
     productFormMessage: "",
     productFormError: "",
     accountFormMessage: "",
