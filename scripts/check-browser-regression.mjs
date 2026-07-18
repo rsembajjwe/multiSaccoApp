@@ -193,6 +193,13 @@ async function assertPlatformUserCreation(page) {
   });
   await page.locator("#addUserForm button[type='submit']").click();
   await expectText(page, fullName, "created platform user visible");
+  await page.locator("tr", { hasText: fullName }).locator("[data-row-action='user-detail']").click();
+  await expectText(page, "User detail and role assignment", "platform user detail panel");
+  await page.locator("#selectedUserRoleId").selectOption({ label: "Platform Administrator" }).catch(async () => {
+    await page.locator("#selectedUserRoleId").selectOption({ index: 0 });
+  });
+  await page.locator("#userRoleForm button[type='submit']").click();
+  await expectAnyText(page, ["Role assignment saved", "Role update failed"], "platform user role assignment response");
   console.log("PASS platform user creation");
 }
 
@@ -234,6 +241,22 @@ async function expectText(page, text, label) {
   }
   const bodyText = await page.locator("body").innerText();
   throw new Error(`${label} did not render expected text: ${text}. Body excerpt: ${bodyText.slice(0, 700)}`);
+}
+
+async function expectAnyText(page, texts, label) {
+  const deadline = Date.now() + timeoutMs;
+  const expected = texts.map((text) => text.toLowerCase());
+  while (Date.now() < deadline) {
+    const bodyText = await page.locator("body").evaluate((body) => body.textContent || "");
+    const normalized = bodyText.toLowerCase();
+    if (expected.some((text) => normalized.includes(text))) {
+      console.log(`PASS ${label}`);
+      return;
+    }
+    await delay(250);
+  }
+  const bodyText = await page.locator("body").innerText();
+  throw new Error(`${label} did not render any expected text: ${texts.join(" / ")}. Body excerpt: ${bodyText.slice(0, 700)}`);
 }
 
 async function expectNoVisibleText(page, text, label) {

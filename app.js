@@ -37,6 +37,11 @@ const state = {
   lastError: "",
   userFormMessage: "",
   userFormError: "",
+  selectedUserId: "",
+  selectedUserRoles: [],
+  selectedUserLoading: false,
+  selectedUserMessage: "",
+  selectedUserError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -698,13 +703,15 @@ function usersView() {
   const platformOnly = isPlatform();
   const users = platformOnly ? dataRows("users").filter((user) => user.tenantId === "tenant_platform") : dataRows("users");
   const canCreate = hasPermission("users:create") || hasPermission("roles:create");
+  const rows = users.map((user) => ({ ...user, action: "user-detail", actionLabel: "View", actionId: user.id }));
   return `
     <div class="role-banner">
       <div><p class="eyebrow">Users and Roles</p><h2>${platformOnly ? "Platform administrators only. SACCO members are not platform users." : "SACCO staff access for this tenant."}</h2></div>
       ${canCreate ? `<span class="status active">Super Admin</span>` : `<span class="status pending">View only</span>`}
     </div>
     ${canCreate ? addUserPanel(platformOnly) : ""}
-    ${recordTable("User list", users, ["fullName", "username", "email", "phone", "role", "branchName", "lastLogin", "status"])}
+    ${userDetailPanel(users, canCreate)}
+    ${recordTable("User list", rows, ["fullName", "username", "email", "phone", "role", "branchName", "lastLogin", "status"])}
     ${permissionMatrix()}
   `;
 }
@@ -908,12 +915,19 @@ function recordTable(title, rows, columns) {
         <div class="table-wrap">
           <table>
             <thead><tr>${columns.map((column) => `<th>${labelize(column)}</th>`).join("")}<th>Actions</th></tr></thead>
-            <tbody>${filtered.slice(0, 12).map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td><button class="table-action" type="button">View</button></td></tr>`).join("")}</tbody>
+            <tbody>${filtered.slice(0, 12).map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td>${rowAction(row)}</td></tr>`).join("")}</tbody>
           </table>
         </div>
       ` : emptyState("No records found", "Use refresh, adjust filters, or add the first record where your role allows it.")}
     </section>
   `;
+}
+
+function rowAction(row) {
+  if (row.action && row.actionId) {
+    return `<button class="table-action" type="button" data-row-action="${escapeHtml(row.action)}" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "View")}</button>`;
+  }
+  return `<button class="table-action" type="button">View</button>`;
 }
 
 function filterToolbar(placeholder, primary, secondary) {
@@ -962,6 +976,44 @@ function addUserPanel(platformOnly) {
         <div class="form-actions inline">
           <button class="button primary" type="submit">Create user</button>
           <button class="button secondary" type="button" data-action="refresh">Refresh list</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function userDetailPanel(users, canManageRoles) {
+  const selected = users.find((user) => user.id === state.selectedUserId);
+  if (!selected) return "";
+  const roles = userRoleOptions(selected.tenantId === "tenant_platform");
+  const assigned = state.selectedUserRoles[0] || "";
+  return `
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>User detail and role assignment</h2>
+          <p>${escapeHtml(selected.fullName || selected.email)} - ${escapeHtml(selected.email || "No email")}</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-user-detail">Close</button>
+      </div>
+      ${state.selectedUserMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedUserMessage)}</strong></div>` : ""}
+      ${state.selectedUserError ? `<div class="notice warning"><strong>Role update failed.</strong><span>${escapeHtml(state.selectedUserError)}</span></div>` : ""}
+      <div class="source-grid">
+        ${mini("Tenant", selected.tenantId === "tenant_platform" ? "Platform Administration" : selected.tenantId)}
+        ${mini("Status", selected.status)}
+        ${mini("Phone", selected.phone)}
+        ${mini("User ID", selected.id)}
+      </div>
+      <form id="userRoleForm" class="form-grid single">
+        <input type="hidden" id="selectedUserId" value="${escapeHtml(selected.id)}">
+        <label>
+          <span>Assigned platform role</span>
+          <select id="selectedUserRoleId" ${canManageRoles ? "" : "disabled"}>
+            ${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === assigned ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}
+          </select>
+        </label>
+        <div class="form-actions">
+          ${canManageRoles ? `<button class="button primary" type="submit">Save role</button>` : `<span class="status pending">View only</span>`}
         </div>
       </form>
     </section>
@@ -1154,6 +1206,48 @@ async function createUserFromForm(event) {
   }
 }
 
+async function openUserDetail(userId) {
+  state.selectedUserId = userId;
+  state.selectedUserRoles = [];
+  state.selectedUserMessage = "";
+  state.selectedUserError = "";
+  state.selectedUserLoading = true;
+  renderShell();
+  try {
+    const assignment = await api(`/users/${encodeURIComponent(userId)}/roles`);
+    state.selectedUserRoles = assignment.roleIds || [];
+  } catch (error) {
+    state.selectedUserError = error.message;
+  } finally {
+    state.selectedUserLoading = false;
+    renderShell();
+  }
+}
+
+async function saveSelectedUserRole(event) {
+  event.preventDefault();
+  state.selectedUserMessage = "";
+  state.selectedUserError = "";
+  const userId = value("selectedUserId");
+  const roleId = value("selectedUserRoleId");
+  try {
+    const assignment = await api(`/users/${encodeURIComponent(userId)}/roles`, {
+      method: "PUT",
+      body: JSON.stringify({ roleIds: [roleId] })
+    });
+    state.selectedUserRoles = assignment.roleIds || [roleId];
+    state.selectedUserMessage = "Role assignment saved.";
+    await refreshAll();
+    state.selectedUserId = userId;
+    state.selectedUserRoles = assignment.roleIds || [roleId];
+    state.selectedUserMessage = "Role assignment saved.";
+    renderShell();
+  } catch (error) {
+    state.selectedUserError = error.message;
+    renderShell();
+  }
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -1227,7 +1321,18 @@ function bindEvents() {
       renderShell();
     });
   });
+  document.querySelectorAll("[data-row-action='user-detail']").forEach((button) => {
+    button.addEventListener("click", () => openUserDetail(button.dataset.rowId));
+  });
+  document.querySelector("[data-action='close-user-detail']")?.addEventListener("click", () => {
+    state.selectedUserId = "";
+    state.selectedUserRoles = [];
+    state.selectedUserMessage = "";
+    state.selectedUserError = "";
+    renderShell();
+  });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
+  document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
   document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
@@ -1256,6 +1361,10 @@ async function logout() {
     currentView: "dashboard",
     userFormMessage: "",
     userFormError: "",
+    selectedUserId: "",
+    selectedUserRoles: [],
+    selectedUserMessage: "",
+    selectedUserError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });

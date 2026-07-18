@@ -21,6 +21,8 @@ const contracts = [
   "SACCO Secretary",
   "Add platform user",
   "Create user",
+  "User detail and role assignment",
+  "Save role",
   "SACCO application list",
   "Subscription list",
   "Member list",
