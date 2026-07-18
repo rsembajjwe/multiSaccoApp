@@ -60,6 +60,7 @@ Checklist:
 | Tenant isolation | `npm.cmd run security:check` | SACCO staff cross-tenant profile, operations, and member import requests return `403`. |
 | Member isolation | `npm.cmd run security:check` | Member sessions can read balances/loans/notifications/guarantors but cannot call staff APIs. |
 | Assigned permissions | `npm.cmd run java:test` | Users without assigned role permissions receive `403 PERMISSION_REQUIRED` on protected tenant, user, and role endpoints. |
+| Financial permissions | `npm.cmd run java:test` | Loans-only staff can access loan views but receive `403 PERMISSION_REQUIRED` on financial transaction and accounting endpoints. |
 | Rate limiting | `npm.cmd run security:check` | Repeated failed staff logins return `429` with `Retry-After`. |
 | Demo gating | `npm.cmd run security:check` plus prod properties | `application-prod.properties` defaults `SACCO_DEMO_LOGINS_ENABLED` to `false`. |
 | UI source/sync polish | `npm.cmd run ui:check` | Main screens retain source, last-sync, loading, error, and refresh contract text. |

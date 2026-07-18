@@ -1981,7 +1981,7 @@ class SaccoBackendApplicationTests {
 		String makerToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String checkerEmail = "checker-" + System.currentTimeMillis() + "@greenvalley.local";
 
-		mockMvc.perform(post("/api/v1/users")
+		MvcResult createdChecker = mockMvc.perform(post("/api/v1/users")
 						.header("Authorization", "Bearer " + makerToken)
 						.contentType("application/json")
 						.content("""
@@ -1991,7 +1991,18 @@ class SaccoBackendApplicationTests {
 								  "password": "Checker@12345"
 								}
 								""".formatted(checkerEmail)))
-				.andExpect(status().isCreated());
+				.andExpect(status().isCreated())
+				.andReturn();
+		String checkerUserId = objectMapper.readTree(createdChecker.getResponse().getContentAsString()).path("data").path("id").asString();
+		mockMvc.perform(put("/api/v1/users/" + checkerUserId + "/roles")
+						.header("Authorization", "Bearer " + makerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_green_admin"]
+								}
+								"""))
+				.andExpect(status().isOk());
 
 		String checkerToken = loginAndReturnToken(checkerEmail, "Checker@12345");
 		String membershipNo = "GVS-TX-" + System.currentTimeMillis();
@@ -4169,6 +4180,75 @@ class SaccoBackendApplicationTests {
 
 		mockMvc.perform(get("/api/v1/tenants")
 						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/journal-entries")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+	}
+
+	@Test
+	void financeEndpointsRequireFinancePermissions() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String email = "loans-only-" + System.currentTimeMillis() + "@greenvalley.local";
+
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Loans Only Staff",
+								  "email": "%s",
+								  "phone": "+256700321999",
+								  "password": "Plain@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String userId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+		mockMvc.perform(put("/api/v1/users/" + userId + "/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_green_loans_officer"]
+								}
+								"""))
+				.andExpect(status().isOk());
+		String loansOnlyToken = loginAndReturnToken(email, "Plain@12345");
+
+		mockMvc.perform(get("/api/v1/loans")
+						.header("Authorization", "Bearer " + loansOnlyToken))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + loansOnlyToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + loansOnlyToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "type": "savings_deposit",
+								  "channel": "cash",
+								  "amount": 10000
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/accounting-periods")
+						.header("Authorization", "Bearer " + loansOnlyToken))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
 	}

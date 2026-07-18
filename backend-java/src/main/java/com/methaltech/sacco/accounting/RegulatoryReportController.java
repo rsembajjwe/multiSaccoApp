@@ -55,6 +55,9 @@ class RegulatoryReportController {
             @RequestParam(name = "period", required = false) String period) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "reports:view")) {
+            return authService.permissionRequired("reports:view");
+        }
 
         List<TenantResponse> tenants = reportTenants(currentSession, requestedTenantId);
         if (tenants == null) {

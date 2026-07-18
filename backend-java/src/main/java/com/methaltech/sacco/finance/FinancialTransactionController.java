@@ -79,6 +79,9 @@ class FinancialTransactionController {
             @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "transactions:view")) {
+            return authService.permissionRequired("transactions:view");
+        }
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null) return tenantAccessDenied();
@@ -97,6 +100,9 @@ class FinancialTransactionController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "transactions:create")) {
+            return authService.permissionRequired("transactions:create");
+        }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
@@ -164,6 +170,9 @@ class FinancialTransactionController {
             @PathVariable String transactionId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "transactions:view")) {
+            return authService.permissionRequired("transactions:view");
+        }
 
         return transactionRepository.findById(transactionId)
                 .<ResponseEntity<?>>map(transaction -> receiptResponse(transaction, currentSession))
@@ -179,6 +188,9 @@ class FinancialTransactionController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "transactions:approve")) {
+            return authService.permissionRequired("transactions:approve");
+        }
 
         return transactionRepository.findById(transactionId)
                 .<ResponseEntity<?>>map(transaction -> reversePostedTransaction(transaction, body.reason(), currentSession, request))
@@ -194,6 +206,9 @@ class FinancialTransactionController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "transactions:approve")) {
+            return authService.permissionRequired("transactions:approve");
+        }
 
         String status = body.status().trim();
         if (!DECISION_STATUSES.contains(status)) {
