@@ -95,9 +95,12 @@ This starts an isolated Docker Compose stack on PostgreSQL, applies Flyway migra
 ```powershell
 npm.cmd run security:check
 npm.cmd run ui:check
+npm.cmd run ui:browser
 ```
 
 `security:check` expects a running API and uses `API_BASE_URL` when set. `ui:check` protects the Java-backed source, loading, error, and last-sync panels across the main screens.
+
+`ui:browser` runs a Playwright browser regression against the Java-backed UI. It starts the local frontend proxy unless `UI_BASE_URL` is set, expects a Java API at `JAVA_API_BASE` or `http://127.0.0.1:8080`, logs in as the seeded platform admin and member, then verifies Dashboard, SACCO Registration, Subscriptions, Members, Operations, and Member Portal source/sync panels.
 
 ```powershell
 npm.cmd run java:test

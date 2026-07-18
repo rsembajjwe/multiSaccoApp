@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.mjs",
     "start:java-api": "set JAVA_API_BASE=http://127.0.0.1:8080&& node server.mjs",
-    "check": "node --check app.js && node --check server.mjs && node --check backend/api.mjs && node --check backend/http.mjs && node --check backend/security.mjs && node --check backend/store.mjs && node --check scripts/api-smoke-test.mjs && node --check scripts/load-test.mjs && node --check scripts/check-java-proxy-mode.mjs && node --check scripts/check-security-hardening.mjs && node --check scripts/check-ui-panel-contracts.mjs && node scripts/check-mobile-foundation.mjs && node scripts/check-java-proxy-mode.mjs && node scripts/check-ui-panel-contracts.mjs && npm.cmd run java:test",
+    "check": "node --check app.js && node --check server.mjs && node --check backend/api.mjs && node --check backend/http.mjs && node --check backend/security.mjs && node --check backend/store.mjs && node --check scripts/api-smoke-test.mjs && node --check scripts/load-test.mjs && node --check scripts/check-java-proxy-mode.mjs && node --check scripts/check-security-hardening.mjs && node --check scripts/check-ui-panel-contracts.mjs && node --check scripts/check-browser-regression.mjs && node scripts/check-mobile-foundation.mjs && node scripts/check-java-proxy-mode.mjs && node scripts/check-ui-panel-contracts.mjs && npm.cmd run java:test",
     "test:api": "node scripts/api-smoke-test.mjs",
     "java:test": "cd backend-java && mvnw.cmd test",
     "java:start": "cd backend-java && mvnw.cmd spring-boot:run",
@@ -14,8 +14,12 @@
     "postgres:check": "powershell -ExecutionPolicy Bypass -File scripts/check-postgres-integration.ps1",
     "security:check": "node scripts/check-security-hardening.mjs",
     "ui:check": "node scripts/check-ui-panel-contracts.mjs",
+    "ui:browser": "node scripts/check-browser-regression.mjs",
     "backup:db": "powershell -ExecutionPolicy Bypass -File scripts/backup-postgres.ps1",
     "restore:db": "powershell -ExecutionPolicy Bypass -File scripts/restore-postgres.ps1",
     "load:test": "node scripts/load-test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1"
   }
 }

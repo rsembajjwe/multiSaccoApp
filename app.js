@@ -296,11 +296,11 @@ function apiPackageToRow(pkg) {
     id: pkg.id,
     name: pkg.name,
     price: pkg.price,
-    members: pkg.members,
+    members: pkg.memberLimit ?? pkg.members,
     minMembers: pkg.minMembers || MINIMUM_BILLABLE_MEMBERS,
     tierLabel: pkg.tierLabel,
-    users: pkg.users,
-    branches: pkg.branches,
+    users: pkg.userLimit ?? pkg.users,
+    branches: pkg.branchLimit ?? pkg.branches,
     modules: pkg.modules
   };
 }
