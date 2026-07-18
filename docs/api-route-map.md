@@ -57,6 +57,8 @@ Java-backed routes currently implemented:
 - `GET /api/v1/financial-transactions/:id/receipt`
 - `POST /api/v1/financial-transactions/:id/reversal`
 - `PATCH /api/v1/financial-transactions/:id/status`
+- `GET /api/v1/financial-transactions/opening-balances/import-template`
+- `POST /api/v1/financial-transactions/opening-balances/import`
 - `GET /api/v1/chart-of-accounts`
 - `GET /api/v1/journal-entries`
 - `GET /api/v1/accounting-periods`
@@ -183,6 +185,8 @@ All JSON responses should follow one of these shapes:
 | GET | `/financial-transactions/:id/receipt` | Generate a receipt projection for a posted financial transaction. | Required |
 | POST | `/financial-transactions/:id/reversal` | Create a posted reversal that references the original transaction. | Authorized staff |
 | PATCH | `/financial-transactions/:id/status` | Post or reject a pending financial transaction. | Authorized checker |
+| GET | `/financial-transactions/opening-balances/import-template` | Return CSV headers, sample rows, and content for opening balance imports. | Required |
+| POST | `/financial-transactions/opening-balances/import` | Validate or post all-or-nothing opening balance ledger transactions. | Authorized checker |
 | GET | `/accounting-periods` | List tenant accounting periods. | Required |
 | PATCH | `/accounting-periods/:id/status` | Open or close an accounting period. | SACCO staff |
 | GET | `/chart-of-accounts` | List the accounting chart used for journal lines. | Required |

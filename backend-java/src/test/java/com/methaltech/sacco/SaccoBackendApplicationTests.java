@@ -1504,6 +1504,183 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void openingBalanceImportTemplatesValidatesAndPostsLedgerTransactions() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String runId = String.valueOf(System.currentTimeMillis());
+		String membershipNo = "OB-" + runId;
+		String tenantId = createTenantForImport(platformToken, "COOP-OB-" + runId);
+		String branchId = createBranchForImport(platformToken, tenantId);
+
+		mockMvc.perform(post("/api/v1/members/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "branchId": "%s",
+								      "fullName": "Opening Balance Member",
+								      "phone": "+256700777101",
+								      "password": "Member@12345"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, branchId)))
+				.andExpect(status().isCreated());
+
+		mockMvc.perform(get("/api/v1/financial-transactions/opening-balances/import-template?tenantId=" + tenantId)
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenantId", is(tenantId)))
+				.andExpect(jsonPath("$.data.headers", hasItem("savingsBalance")))
+				.andExpect(jsonPath("$.data.sampleRows[0].membershipNo", is(membershipNo)))
+				.andExpect(jsonPath("$.data.csv", startsWith("membershipNo,savingsBalance,sharesBalance")));
+
+		mockMvc.perform(post("/api/v1/financial-transactions/opening-balances/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": true,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "savingsBalance": "100000",
+								      "sharesBalance": "50000",
+								      "welfareBalance": "10000",
+								      "reference": "OB-%s",
+								      "postingDate": "2026-07-18",
+								      "narration": "Opening import test"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, runId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.valid", is(true)))
+				.andExpect(jsonPath("$.data.createdCount", is(0)));
+
+		mockMvc.perform(post("/api/v1/financial-transactions/opening-balances/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "savingsBalance": "100000",
+								      "sharesBalance": "50000",
+								      "welfareBalance": "10000",
+								      "reference": "OB-%s",
+								      "postingDate": "2026-07-18",
+								      "narration": "Opening import test"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, runId)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.valid", is(true)))
+				.andExpect(jsonPath("$.data.createdCount", is(3)))
+				.andExpect(jsonPath("$.data.createdTransactions[*].status", everyItem(is("posted"))))
+				.andExpect(jsonPath("$.data.createdTransactions[*].reference", hasItem("OB-" + runId + "-SAV")));
+
+		MvcResult members = mockMvc.perform(get("/api/v1/members?tenantId=" + tenantId)
+				.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].savingsBalance", is(100000.0)))
+				.andExpect(jsonPath("$.data[0].sharesBalance", is(50000.0)))
+				.andExpect(jsonPath("$.data[0].welfareBalance", is(10000.0)))
+				.andReturn();
+		String memberId = objectMapper.readTree(members.getResponse().getContentAsString()).path("data").path(0).path("id").asString();
+
+		mockMvc.perform(get("/api/v1/members/" + memberId + "/statement")
+				.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.lines.length()", is(3)))
+				.andExpect(jsonPath("$.data.closingBalances.savings", is(100000.0)))
+				.andExpect(jsonPath("$.data.closingBalances.shares", is(50000.0)))
+				.andExpect(jsonPath("$.data.closingBalances.welfare", is(10000.0)));
+	}
+
+	@Test
+	void openingBalanceImportRejectsInvalidRowsWithoutPosting() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String runId = String.valueOf(System.currentTimeMillis());
+		String membershipNo = "OB-BAD-" + runId;
+		String tenantId = createTenantForImport(platformToken, "COOP-OB-BAD-" + runId);
+		String branchId = createBranchForImport(platformToken, tenantId);
+
+		mockMvc.perform(post("/api/v1/members/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "branchId": "%s",
+								      "fullName": "Bad Opening Balance Member",
+								      "phone": "+256700777201",
+								      "password": "Member@12345"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, branchId)))
+				.andExpect(status().isCreated());
+
+		mockMvc.perform(post("/api/v1/financial-transactions/opening-balances/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "savingsBalance": "-1",
+								      "sharesBalance": "not-money",
+								      "welfareBalance": "0",
+								      "reference": "OB-BAD-%s",
+								      "postingDate": "not-a-date"
+								    },
+								    {
+								      "membershipNo": "%s",
+								      "savingsBalance": "0",
+								      "sharesBalance": "0",
+								      "welfareBalance": "0",
+								      "reference": "OB-BAD-%s",
+								      "postingDate": "2026-07-18"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, runId, membershipNo, runId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.valid", is(false)))
+				.andExpect(jsonPath("$.data.createdCount", is(0)))
+				.andExpect(jsonPath("$.data.skippedCount", is(2)))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("NEGATIVE_AMOUNT")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_AMOUNT")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_DATE")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("DUPLICATE_IN_FILE")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("NO_OPENING_BALANCE")));
+
+		mockMvc.perform(get("/api/v1/members?tenantId=" + tenantId)
+				.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].savingsBalance", is(0.0)))
+				.andExpect(jsonPath("$.data[0].sharesBalance", is(0.0)))
+				.andExpect(jsonPath("$.data[0].welfareBalance", is(0.0)));
+	}
+
+	@Test
 	void activeMemberCanLoginViewProfileAndLogout() throws Exception {
 		MvcResult login = mockMvc.perform(post("/api/v1/member-auth/login")
 						.contentType("application/json")
@@ -4905,6 +5082,42 @@ class SaccoBackendApplicationTests {
 			}
 		}
 		throw new AssertionError("Journal not found for reference " + reference + " and source type " + sourceType);
+	}
+
+	private String createTenantForImport(String token, String registrationNo) throws Exception {
+		MvcResult createdTenant = mockMvc.perform(post("/api/v1/tenants")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Import Helper SACCO",
+								  "abbreviation": "IHS",
+								  "registrationNo": "%s",
+								  "district": "Kampala",
+								  "licenseExpiry": "2027-12-31",
+								  "packageId": "starter"
+								}
+								""".formatted(registrationNo)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		return objectMapper.readTree(createdTenant.getResponse().getContentAsString()).path("data").path("id").asString();
+	}
+
+	private String createBranchForImport(String token, String tenantId) throws Exception {
+		MvcResult createdBranch = mockMvc.perform(post("/api/v1/branches")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "code": "MAIN",
+								  "name": "Main Branch",
+								  "address": "Import Road"
+								}
+								""".formatted(tenantId)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		return objectMapper.readTree(createdBranch.getResponse().getContentAsString()).path("data").path("id").asString();
 	}
 
 }

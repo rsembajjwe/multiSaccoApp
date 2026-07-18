@@ -9,6 +9,7 @@ public interface MemberRepository extends JpaRepository<Member, String> {
     List<Member> findByTenantIdOrderByMembershipNoAsc(String tenantId);
     long countByTenantId(String tenantId);
     boolean existsByTenantIdAndMembershipNoIgnoreCase(String tenantId, String membershipNo);
+    Optional<Member> findFirstByTenantIdAndMembershipNoIgnoreCase(String tenantId, String membershipNo);
     Optional<Member> findFirstByMembershipNoIgnoreCaseOrPhoneIgnoreCaseOrEmailIgnoreCase(
             String membershipNo,
             String phone,

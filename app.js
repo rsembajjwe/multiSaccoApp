@@ -1095,6 +1095,7 @@ function renderTransactions() {
         </div>
         <div class="filters">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
+          ${apiState.user ? `<button class="secondary-button" data-action="openingBalanceImport" type="button">Opening balances</button>` : ""}
           <button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>
         </div>
       </div>
@@ -1155,8 +1156,11 @@ function renderTransactions() {
           <h2>Financial postings</h2>
           <p class="eyebrow">${source} &middot; Fixed precision amounts, references, maker-checker and reversals</p>
         </div>
-        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
-        <button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>
+        <div class="filters">
+          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
+          ${apiState.user ? `<button class="secondary-button" data-action="openingBalanceImport" type="button">Opening balances</button>` : ""}
+          <button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>
+        </div>
       </div>
       ${apiSyncNotice("Financial postings table")}
       <div class="table-wrap">
@@ -2737,6 +2741,7 @@ function bindViewActions() {
         newRole: openRoleForm,
         assignUserRoles: openUserRoleAssignmentForm,
         memberImportTemplate: openMemberImportTemplate,
+        openingBalanceImport: openOpeningBalanceImport,
         newNotificationTemplate: () => openNotificationTemplateForm(),
         apiLogin: openApiLoginForm,
         memberLogin: openMemberLoginForm,
@@ -3460,6 +3465,78 @@ async function submitMemberImport(tenantId, dryRun) {
   } catch (error) {
     result.innerHTML = `<div class="notice error">${error.message}</div>`;
   }
+}
+
+async function openOpeningBalanceImport() {
+  if (!apiState.user) return;
+  try {
+    const template = await apiRequest(`/financial-transactions/opening-balances/import-template${apiTenantQuery()}`);
+    const sample = template.sampleRows?.[0] || {};
+    openModal("Opening balances", `
+      <div class="grid metrics">
+        ${metric("File", template.filename, template.contentType)}
+        ${metric("Columns", template.headers.length, "opening balance fields")}
+        ${metric("Tenant", tenantName(template.tenantId), sample.membershipNo || "No member")}
+      </div>
+      <label class="field full" style="margin-top:16px">
+        <span>CSV rows</span>
+        <textarea id="openingBalanceImportCsv" class="input" rows="8">${template.csv}</textarea>
+      </label>
+      <div id="openingBalanceImportResult" style="margin-top:16px"></div>
+    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyOpeningBalanceImportTemplate" class="secondary-button" type="button">Copy CSV</button><button id="validateOpeningBalanceImport" class="secondary-button" type="button">Validate</button><button id="runOpeningBalanceImport" class="primary-button" type="button">Import</button>`);
+    document.getElementById("copyOpeningBalanceImportTemplate").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(template.csv);
+        document.getElementById("openingBalanceImportResult").innerHTML = `<div class="notice">CSV template copied to clipboard.</div>`;
+      } catch {
+        document.getElementById("openingBalanceImportResult").innerHTML = `<div class="notice error">Clipboard access was not available. Use the CSV text.</div>`;
+      }
+    });
+    document.getElementById("validateOpeningBalanceImport").addEventListener("click", () => submitOpeningBalanceImport(template.tenantId, true));
+    document.getElementById("runOpeningBalanceImport").addEventListener("click", () => submitOpeningBalanceImport(template.tenantId, false));
+  } catch (error) {
+    openModal("Opening balances", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
+}
+
+async function submitOpeningBalanceImport(tenantId, dryRun) {
+  const result = document.getElementById("openingBalanceImportResult");
+  try {
+    const rows = parseMemberImportCsv(value("openingBalanceImportCsv"));
+    result.innerHTML = `<div class="notice">${dryRun ? "Validating" : "Importing"} ${rows.length} opening balance row(s)...</div>`;
+    const response = await apiRequest("/financial-transactions/opening-balances/import", {
+      method: "POST",
+      body: JSON.stringify({ tenantId, dryRun, rows })
+    });
+    result.innerHTML = renderOpeningBalanceImportResult(response);
+    if (!dryRun && response.valid) await refreshApiStatus();
+  } catch (error) {
+    result.innerHTML = `<div class="notice error">${error.message}</div>`;
+  }
+}
+
+function renderOpeningBalanceImportResult(result) {
+  const stateClass = result.valid ? "notice" : "notice error";
+  const rows = result.errors?.map((error) => `
+    <tr>
+      <td>${error.row}</td>
+      <td>${error.field}</td>
+      <td>${error.code}</td>
+      <td>${error.message}</td>
+    </tr>
+  `).join("") || "";
+  return `
+    <div class="${stateClass}">
+      ${result.valid ? "Opening balance validation passed." : "Opening balance validation failed."}
+      ${result.createdCount ? ` Posted ${result.createdCount} ledger transaction(s).` : ""}
+    </div>
+    <div class="grid three compact-facts" style="margin-top:12px">
+      ${miniFact("Rows", result.totalRows)}
+      ${miniFact("Posted", result.createdCount)}
+      ${miniFact("Skipped", result.skippedCount)}
+    </div>
+    ${rows ? `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Row</th><th>Field</th><th>Code</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+  `;
 }
 
 function renderMemberImportResult(result) {

@@ -1,6 +1,6 @@
 # Pilot Data Import
 
-Phase 2 starts with member onboarding imports for pilot SACCO setup. The goal is to let staff validate spreadsheet data before saving it, with no manual database edits.
+Phase 2 starts with member onboarding and opening balance imports for pilot SACCO setup. The goal is to let staff validate spreadsheet data before saving it, with no manual database edits.
 
 ## Member Import Flow
 
@@ -76,9 +76,66 @@ Record these values in the release evidence pack before pilot onboarding:
 - Total rows, created rows, skipped rows, and validation errors.
 - Confirmation that no cross-tenant branch IDs were accepted.
 
+## Opening Balance Import Flow
+
+Use opening balances after member records exist and before live posting starts.
+
+1. Open Transactions.
+2. Select `Opening balances`.
+3. Copy or edit the CSV template.
+4. Run `Validate`.
+5. Run `Import` only after validation passes.
+6. Confirm member balances, posted financial transactions, and member statements.
+
+Opening balances are posted as normal financial transactions:
+
+- `savingsBalance` posts as `savings_deposit`.
+- `sharesBalance` posts as `share_purchase`.
+- `welfareBalance` posts as `welfare_contribution`.
+- Zero-value columns are skipped.
+- The whole batch is rejected if any row has validation errors.
+
+## Opening Balance Columns
+
+| Column | Rule |
+| --- | --- |
+| `membershipNo` | Required, must already exist in the selected SACCO tenant, and cannot repeat in the file. |
+| `savingsBalance` | Optional numeric amount; defaults to `0`. |
+| `sharesBalance` | Optional numeric amount; defaults to `0`. |
+| `welfareBalance` | Optional numeric amount; defaults to `0`. |
+| `reference` | Optional base reference; transaction references get `-SAV`, `-SHR`, or `-WEL` suffixes. |
+| `postingDate` | Optional `YYYY-MM-DD`; rejected when the accounting period is closed. |
+| `narration` | Optional narration copied to posted ledger rows. |
+
+Validate or import opening balances:
+
+```http
+POST /api/v1/financial-transactions/opening-balances/import
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+```json
+{
+  "tenantId": "tenant_green",
+  "dryRun": true,
+  "rows": [
+    {
+      "membershipNo": "GVS-0100",
+      "savingsBalance": "100000",
+      "sharesBalance": "50000",
+      "welfareBalance": "10000",
+      "reference": "OB-GVS-0100",
+      "postingDate": "2026-07-18",
+      "narration": "Opening balances from pilot data import"
+    }
+  ]
+}
+```
+
 ## Next Import Slices
 
-- Opening balances import with balanced ledger posting.
+- Opening balance import UI/API is implemented; next hardening is accounting journal evidence for each posted opening balance.
 - Loan book import with repayment schedule validation.
 - Contact, next-of-kin, beneficiary, and KYC document metadata import.
 - Spreadsheet `.xlsx` helper that exports the same CSV columns.

@@ -99,6 +99,21 @@ public class FinancialTransaction {
             String reference,
             String narration,
             String userId) {
+        return postedProviderTransactionAt(id, tenantId, branchId, memberId, type, channel, amount, reference, narration, userId, null);
+    }
+
+    public static FinancialTransaction postedProviderTransactionAt(
+            String id,
+            String tenantId,
+            String branchId,
+            String memberId,
+            String type,
+            String channel,
+            BigDecimal amount,
+            String reference,
+            String narration,
+            String userId,
+            Instant postedAt) {
         FinancialTransaction transaction = new FinancialTransaction(
                 id,
                 tenantId,
@@ -112,8 +127,8 @@ public class FinancialTransaction {
                 userId);
         transaction.status = "posted";
         transaction.checkerUserId = userId;
-        transaction.postedAt = transaction.createdAt;
-        transaction.updatedAt = transaction.createdAt;
+        transaction.postedAt = postedAt == null ? transaction.createdAt : postedAt;
+        transaction.updatedAt = transaction.postedAt;
         return transaction;
     }
 

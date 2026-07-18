@@ -16,12 +16,19 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,6 +54,14 @@ class FinancialTransactionController {
             "bank",
             "payroll_deduction");
     private static final Set<String> DECISION_STATUSES = Set.of("posted", "rejected");
+    private static final List<String> OPENING_BALANCE_IMPORT_HEADERS = List.of(
+            "membershipNo",
+            "savingsBalance",
+            "sharesBalance",
+            "welfareBalance",
+            "reference",
+            "postingDate",
+            "narration");
 
     private final FinancialTransactionRepository transactionRepository;
     private final MemberRepository memberRepository;
@@ -162,6 +177,108 @@ class FinancialTransactionController {
                 request.getRemoteAddr());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(FinancialTransactionResponse.from(transaction)));
+    }
+
+    @GetMapping("/opening-balances/import-template")
+    ResponseEntity<?> openingBalanceImportTemplate(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "transactions:create")) {
+            return authService.permissionRequired("transactions:create");
+        }
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+
+        Member sampleMember = memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId).stream().findFirst().orElse(null);
+        OpeningBalanceImportRow sample = new OpeningBalanceImportRow(
+                sampleMember == null ? "" : sampleMember.getMembershipNo(),
+                "100000",
+                "50000",
+                "10000",
+                sampleMember == null ? "OB-SAMPLE-001" : "OB-" + sampleMember.getMembershipNo(),
+                LocalDate.now().toString(),
+                "Opening balances from approved pilot data import");
+        List<OpeningBalanceImportRow> sampleRows = List.of(sample);
+
+        return ResponseEntity.ok(ApiResponse.of(new OpeningBalanceImportTemplateResponse(
+                tenantId,
+                "opening-balances-import-template-" + tenantId + ".csv",
+                "text/csv",
+                OPENING_BALANCE_IMPORT_HEADERS,
+                sampleRows,
+                openingBalanceCsvTemplate(sampleRows))));
+    }
+
+    @PostMapping("/opening-balances/import")
+    @Transactional
+    ResponseEntity<?> importOpeningBalances(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody OpeningBalanceImportRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "transactions:approve")) {
+            return authService.permissionRequired("transactions:approve");
+        }
+
+        String tenantId = tenantScope(currentSession, body.tenantId());
+        if (tenantId == null) return tenantAccessDenied();
+
+        List<OpeningBalanceImportRow> rows = body.rows() == null ? List.of() : body.rows();
+        boolean dryRun = body.dryRun() == null || body.dryRun();
+        List<OpeningBalanceImportError> errors = validateOpeningBalanceRows(tenantId, rows);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.of(new OpeningBalanceImportResult(
+                    tenantId,
+                    dryRun,
+                    false,
+                    rows.size(),
+                    0,
+                    rows.size(),
+                    errors,
+                    List.of())));
+        }
+
+        if (dryRun) {
+            return ResponseEntity.ok(ApiResponse.of(new OpeningBalanceImportResult(
+                    tenantId,
+                    true,
+                    true,
+                    rows.size(),
+                    0,
+                    0,
+                    List.of(),
+                    List.of())));
+        }
+
+        List<FinancialTransaction> created = new ArrayList<>();
+        for (OpeningBalanceImportRow row : rows) {
+            Member member = memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCase(tenantId, row.membershipNo().trim())
+                    .orElseThrow();
+            created.addAll(postOpeningBalanceTransactions(tenantId, row, member, currentSession.user().getId()));
+            memberRepository.save(member);
+        }
+
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Imported opening balances for " + rows.size() + " members",
+                "opening_balance_import",
+                tenantId,
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(new OpeningBalanceImportResult(
+                tenantId,
+                false,
+                true,
+                rows.size(),
+                created.size(),
+                0,
+                List.of(),
+                created.stream().map(FinancialTransactionResponse::from).toList())));
     }
 
     @GetMapping("/{transactionId}/receipt")
@@ -369,6 +486,167 @@ class FinancialTransactionController {
         return abbreviation + "-TX-" + String.format("%04d", next);
     }
 
+    private List<FinancialTransaction> postOpeningBalanceTransactions(
+            String tenantId,
+            OpeningBalanceImportRow row,
+            Member member,
+            String userId) {
+        List<FinancialTransaction> created = new ArrayList<>();
+        Instant postedAt = openingBalancePostedAt(row);
+        createOpeningBalanceTransaction(created, tenantId, row, member, "savings_deposit", "SAV", amount(row.savingsBalance()), userId, postedAt);
+        createOpeningBalanceTransaction(created, tenantId, row, member, "share_purchase", "SHR", amount(row.sharesBalance()), userId, postedAt);
+        createOpeningBalanceTransaction(created, tenantId, row, member, "welfare_contribution", "WEL", amount(row.welfareBalance()), userId, postedAt);
+        return created;
+    }
+
+    private void createOpeningBalanceTransaction(
+            List<FinancialTransaction> created,
+            String tenantId,
+            OpeningBalanceImportRow row,
+            Member member,
+            String type,
+            String suffix,
+            BigDecimal amount,
+            String userId,
+            Instant postedAt) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) return;
+        member.applyPostedTransaction(type, amount);
+        created.add(transactionRepository.save(FinancialTransaction.postedProviderTransactionAt(
+                "txn_" + UUID.randomUUID(),
+                tenantId,
+                member.getBranchId(),
+                member.getId(),
+                type,
+                "bank",
+                amount,
+                openingBalanceReference(row, suffix),
+                openingBalanceNarration(row, suffix),
+                userId,
+                postedAt)));
+    }
+
+    private List<OpeningBalanceImportError> validateOpeningBalanceRows(String tenantId, List<OpeningBalanceImportRow> rows) {
+        List<OpeningBalanceImportError> errors = new ArrayList<>();
+        if (rows.isEmpty()) {
+            errors.add(new OpeningBalanceImportError(0, "rows", "IMPORT_EMPTY", "At least one opening balance row is required."));
+            return errors;
+        }
+        if (rows.size() > 500) {
+            errors.add(new OpeningBalanceImportError(0, "rows", "IMPORT_TOO_LARGE", "A single opening balance import cannot exceed 500 rows."));
+            return errors;
+        }
+
+        Set<String> seenMembershipNos = new HashSet<>();
+        Set<String> seenReferences = new HashSet<>();
+        for (int index = 0; index < rows.size(); index++) {
+            int rowNumber = index + 1;
+            OpeningBalanceImportRow row = rows.get(index);
+            if (row.membershipNo() == null || row.membershipNo().isBlank()) {
+                errors.add(new OpeningBalanceImportError(rowNumber, "membershipNo", "REQUIRED", "Membership number is required."));
+            } else {
+                String membershipNo = row.membershipNo().trim().toUpperCase(Locale.ROOT);
+                if (!seenMembershipNos.add(membershipNo)) {
+                    errors.add(new OpeningBalanceImportError(rowNumber, "membershipNo", "DUPLICATE_IN_FILE", "Membership number is repeated in this import."));
+                }
+                if (memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCase(tenantId, membershipNo).isEmpty()) {
+                    errors.add(new OpeningBalanceImportError(rowNumber, "membershipNo", "INVALID_MEMBER", "Member does not exist for this tenant."));
+                }
+            }
+
+            BigDecimal savings = validatedAmount(rowNumber, "savingsBalance", row.savingsBalance(), errors);
+            BigDecimal shares = validatedAmount(rowNumber, "sharesBalance", row.sharesBalance(), errors);
+            BigDecimal welfare = validatedAmount(rowNumber, "welfareBalance", row.welfareBalance(), errors);
+            if (savings.add(shares).add(welfare).compareTo(BigDecimal.ZERO) <= 0) {
+                errors.add(new OpeningBalanceImportError(rowNumber, "balances", "NO_OPENING_BALANCE", "At least one opening balance amount must be greater than zero."));
+            }
+
+            for (String suffix : List.of("SAV", "SHR", "WEL")) {
+                String reference = openingBalanceReference(row, suffix);
+                if (!seenReferences.add(reference.toUpperCase(Locale.ROOT))) {
+                    errors.add(new OpeningBalanceImportError(rowNumber, "reference", "DUPLICATE_REFERENCE_IN_FILE", "Opening balance reference is repeated in this import."));
+                }
+                if (transactionRepository.existsByTenantIdAndReferenceIgnoreCase(tenantId, reference)) {
+                    errors.add(new OpeningBalanceImportError(rowNumber, "reference", "REFERENCE_EXISTS", "Opening balance reference already exists."));
+                }
+            }
+
+            if (row.postingDate() != null && !row.postingDate().isBlank()) {
+                try {
+                    Instant postingDate = openingBalancePostedAt(row);
+                    if (periodService.isClosed(tenantId, postingDate)) {
+                        errors.add(new OpeningBalanceImportError(rowNumber, "postingDate", "ACCOUNTING_PERIOD_CLOSED", "Opening balance posting date falls in a closed accounting period."));
+                    }
+                } catch (DateTimeParseException error) {
+                    errors.add(new OpeningBalanceImportError(rowNumber, "postingDate", "INVALID_DATE", "Posting date must use YYYY-MM-DD format."));
+                }
+            }
+        }
+        return errors;
+    }
+
+    private Instant openingBalancePostedAt(OpeningBalanceImportRow row) {
+        LocalDate postingDate = row.postingDate() == null || row.postingDate().isBlank()
+                ? LocalDate.now()
+                : LocalDate.parse(row.postingDate().trim());
+        return postingDate.atStartOfDay(ZoneOffset.UTC).toInstant();
+    }
+
+    private BigDecimal validatedAmount(int rowNumber, String field, String value, List<OpeningBalanceImportError> errors) {
+        try {
+            BigDecimal amount = amount(value);
+            if (amount.compareTo(BigDecimal.ZERO) < 0) {
+                errors.add(new OpeningBalanceImportError(rowNumber, field, "NEGATIVE_AMOUNT", "Opening balance cannot be negative."));
+            }
+            return amount;
+        } catch (NumberFormatException error) {
+            errors.add(new OpeningBalanceImportError(rowNumber, field, "INVALID_AMOUNT", "Opening balance amount must be numeric."));
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private BigDecimal amount(String value) {
+        return value == null || value.isBlank() ? BigDecimal.ZERO : new BigDecimal(value.trim());
+    }
+
+    private String openingBalanceReference(OpeningBalanceImportRow row, String suffix) {
+        String base = row.reference() == null || row.reference().isBlank()
+                ? "OB-" + row.membershipNo().trim().toUpperCase(Locale.ROOT)
+                : row.reference().trim().toUpperCase(Locale.ROOT);
+        return base + "-" + suffix;
+    }
+
+    private String openingBalanceNarration(OpeningBalanceImportRow row, String suffix) {
+        String label = switch (suffix) {
+            case "SAV" -> "savings";
+            case "SHR" -> "shares";
+            default -> "welfare";
+        };
+        return (row.narration() == null || row.narration().isBlank()
+                ? "Opening " + label + " balance"
+                : row.narration().trim() + " - " + label);
+    }
+
+    private String openingBalanceCsvTemplate(List<OpeningBalanceImportRow> sampleRows) {
+        String header = String.join(",", OPENING_BALANCE_IMPORT_HEADERS);
+        List<String> rows = sampleRows.stream()
+                .map(row -> String.join(",",
+                        csv(row.membershipNo()),
+                        csv(row.savingsBalance()),
+                        csv(row.sharesBalance()),
+                        csv(row.welfareBalance()),
+                        csv(row.reference()),
+                        csv(row.postingDate()),
+                        csv(row.narration())))
+                .toList();
+        return header + "\n" + String.join("\n", rows) + "\n";
+    }
+
+    private String csv(String value) {
+        if (value == null) return "";
+        if (!value.contains(",") && !value.contains("\"") && !value.contains("\n")) return value;
+        return "\"" + value.replace("\"", "\"\"") + "\"";
+    }
+
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
         String tenantId = requestedTenantId == null || requestedTenantId.isBlank()
                 ? currentSession.user().getTenantId()
@@ -400,5 +678,48 @@ class FinancialTransactionController {
     }
 
     record ReverseTransactionRequest(@NotBlank String reason) {
+    }
+
+    record OpeningBalanceImportTemplateResponse(
+            String tenantId,
+            String filename,
+            String contentType,
+            List<String> headers,
+            List<OpeningBalanceImportRow> sampleRows,
+            String csv) {
+    }
+
+    record OpeningBalanceImportRequest(
+            String tenantId,
+            Boolean dryRun,
+            List<OpeningBalanceImportRow> rows) {
+    }
+
+    record OpeningBalanceImportRow(
+            String membershipNo,
+            String savingsBalance,
+            String sharesBalance,
+            String welfareBalance,
+            String reference,
+            String postingDate,
+            String narration) {
+    }
+
+    record OpeningBalanceImportError(
+            int row,
+            String field,
+            String code,
+            String message) {
+    }
+
+    record OpeningBalanceImportResult(
+            String tenantId,
+            boolean dryRun,
+            boolean valid,
+            int totalRows,
+            int createdCount,
+            int skippedCount,
+            List<OpeningBalanceImportError> errors,
+            List<FinancialTransactionResponse> createdTransactions) {
     }
 }
