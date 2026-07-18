@@ -97,6 +97,9 @@ try {
   ]) {
     await expectText(page, marker, `member portal marker ${marker}`);
   }
+  await assertScreen(page, "accounts", ["Member account overview", "Member account balances", "Server-confirmed"]);
+  await assertScreen(page, "loans", ["Mobile loan application", "Submit loan application", "Member loans"]);
+  await assertScreen(page, "payments", ["Member payment center", "Java-backed posting", "Post payment"]);
   await assertScreen(page, "statements", ["Member statement readiness", "Member statement", "Server-confirmed"]);
   await assertScreen(page, "receipts", ["Member receipts", "Receipt status", "Download receipt"]);
   await assertScreen(page, "complaints", ["Member complaint center", "My complaints", "Offline drafts"]);

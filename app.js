@@ -89,6 +89,10 @@ const state = {
   productFormError: "",
   accountFormMessage: "",
   accountFormError: "",
+  memberLoanMessage: "",
+  memberLoanError: "",
+  memberPaymentMessage: "",
+  memberPaymentError: "",
   welfareClaimMessage: "",
   welfareClaimError: "",
   selectedWelfareClaimId: "",
@@ -1709,8 +1713,10 @@ function renderMemberView(view) {
       ${recordTable("Recent transactions", dash.recentTransactions || [], ["reference", "description", "debit", "credit", "runningBalance"])}
     `;
   }
-  if (view === "loans") return recordTable("Member loans", state.memberData.loans, ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"]);
+  if (view === "accounts") return memberAccountsView(balances);
+  if (view === "loans") return memberLoansView();
   if (view === "guarantor-requests") return recordTable("Guarantor requests", state.memberData.pendingGuarantors, ["memberName", "product", "guaranteedAmount", "capacity", "status"]);
+  if (view === "payments") return memberPaymentsView();
   if (view === "notifications") return recordTable("Notifications", state.memberData.notifications, ["title", "message", "channel", "status", "createdAt"]);
   if (view === "complaints") return memberComplaintsView();
   if (view === "statements") return memberStatementsView(dash, balances);
@@ -1718,6 +1724,112 @@ function renderMemberView(view) {
   if (view === "profile") return memberProfileView(balances);
   if (view === "security") return memberSecurityView();
   return moduleBlueprint(view);
+}
+
+function memberAccountsView(balances) {
+  const accounts = [
+    { account: "Savings", accountType: "savings", balance: balances.savings || 0, purpose: "Regular member deposits", action: "Deposit" },
+    { account: "Shares", accountType: "shares", balance: balances.shares || 0, purpose: "Share capital contributions", action: "Buy shares" },
+    { account: "Welfare", accountType: "welfare", balance: balances.welfare || 0, purpose: "Welfare fund contributions", action: "Contribute" }
+  ];
+  return `
+    <div class="dashboard-grid">
+      ${summary("Savings", money.format(balances.savings || 0), "Available member deposits", "Deposit")}
+      ${summary("Shares", money.format(balances.shares || 0), "Member share capital", "Buy shares")}
+      ${summary("Welfare", money.format(balances.welfare || 0), "Welfare contribution balance", "Contribute")}
+      ${summary("Total balance", money.format(Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0)), "All member balances", "Statement")}
+    </div>
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member account overview</h2>
+          <p>Savings, shares and welfare balances are confirmed by the Java member API.</p>
+        </div>
+        <span class="status active">Server-confirmed</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Member", state.member?.membershipNo)}
+        ${mini("SACCO", contextName())}
+        ${mini("Account groups", accounts.length)}
+        ${mini("Last sync", state.lastSync || "Pending")}
+        ${mini("Statements", "Available")}
+        ${mini("Receipts", "Posted transactions")}
+      </div>
+    </section>
+    ${recordTable("Member account balances", accounts, ["account", "accountType", "balance", "purpose", "action"])}
+  `;
+}
+
+function memberLoansView() {
+  const loans = state.memberData.loans || [];
+  const activeLoans = loans.filter((loan) => ["active", "approved", "disbursed"].includes(normal(loan.status)));
+  return `
+    <div class="dashboard-grid">
+      ${summary("Loan files", loans.length, "Applications and active loans", "Review")}
+      ${summary("Active loans", activeLoans.length, "Repayment expected", "Pay")}
+      ${summary("Outstanding", money.format(sum(loans, "outstandingBalance", "balance")), "Portfolio balance", "Statement")}
+      ${summary("Guarantee requests", state.memberData.pendingGuarantors.length, "Pending guarantor decisions", "Respond")}
+    </div>
+    ${memberLoanApplicationPanel()}
+    ${recordTable("Member loans", loans, ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"])}
+  `;
+}
+
+function memberLoanApplicationPanel() {
+  const memberActive = normal(state.member?.status) === "active";
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Mobile loan application</h2>
+          <p>Submit a loan request directly to the SACCO credit workflow.</p>
+        </div>
+        <span class="status ${memberActive ? "active" : "pending"}">${memberActive ? "Eligible to submit" : "Member not active"}</span>
+      </div>
+      ${state.memberLoanMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberLoanMessage)}</strong></div>` : ""}
+      ${state.memberLoanError ? `<div class="notice warning"><strong>Loan application failed.</strong><span>${escapeHtml(state.memberLoanError)}</span></div>` : ""}
+      <form id="memberLoanForm" class="form-grid">
+        <label><span>Loan product</span><select id="memberLoanProduct" ${memberActive ? "" : "disabled"}>${loanProductOptions().map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("")}</select></label>
+        <label><span>Amount</span><input id="memberLoanAmount" type="number" min="1" step="1" value="100000" ${memberActive ? "" : "disabled"}></label>
+        <label><span>Repayment months</span><input id="memberLoanMonths" type="number" min="1" max="60" value="12" ${memberActive ? "" : "disabled"}></label>
+        <label class="wide"><span>Purpose</span><textarea id="memberLoanPurpose" placeholder="Business, school fees, farming input, emergency..." ${memberActive ? "" : "disabled"}></textarea></label>
+        <div class="form-actions inline">${memberActive ? `<button class="button primary" type="submit">Submit loan application</button>` : `<span class="status pending">Contact SACCO office</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function memberPaymentsView() {
+  const loans = state.memberData.loans || [];
+  const payableLoans = loans.filter((loan) => ["active", "disbursed"].includes(normal(loan.status)));
+  return `
+    <div class="dashboard-grid">
+      ${summary("Payment options", 4, "Savings, shares, welfare and loans", "Pay")}
+      ${summary("Payable loans", payableLoans.length, "Active loan balances", "Repay")}
+      ${summary("Mobile money", "Enabled", "Provider callback posting", "Use")}
+      ${summary("Receipts", "After posting", "Visible in receipts screen", "Open")}
+    </div>
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member payment center</h2>
+          <p>Post mobile-money payments for deposits, shares, welfare and active loan repayments.</p>
+        </div>
+        <span class="status active">Java-backed posting</span>
+      </div>
+      ${state.memberPaymentMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberPaymentMessage)}</strong></div>` : ""}
+      ${state.memberPaymentError ? `<div class="notice warning"><strong>Payment failed.</strong><span>${escapeHtml(state.memberPaymentError)}</span></div>` : ""}
+      <form id="memberPaymentForm" class="form-grid">
+        <label><span>Payment purpose</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="loan_repayment">Loan repayment</option></select></label>
+        <label><span>Amount</span><input id="memberPaymentAmount" type="number" min="1" step="1" value="5000"></label>
+        <label><span>Provider</span><select id="memberPaymentProvider"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option><option value="demo">Demo provider</option></select></label>
+        <label><span>Reference</span><input id="memberPaymentReference" value="MM-${Date.now()}"></label>
+        <label class="wide"><span>Loan for repayment</span><select id="memberPaymentLoanId"><option value="">Not a loan repayment</option>${payableLoans.map((loan) => `<option value="${escapeHtml(loan.id)}">${escapeHtml(loan.product || loan.applicationNo || loan.id)} - ${money.format(loan.outstandingBalance || loan.balance || 0)}</option>`).join("")}</select></label>
+        <div class="form-actions inline"><button class="button primary" type="submit">Post payment</button></div>
+      </form>
+    </section>
+    ${recordTable("Payable loans", payableLoans, ["product", "outstandingBalance", "nextDueDate", "status"])}
+  `;
 }
 
 function memberStatementsView(dash, balances) {
@@ -3333,6 +3445,63 @@ async function openFinancialAccount(event) {
   }
 }
 
+async function submitMemberLoan(event) {
+  event.preventDefault();
+  state.memberLoanMessage = "";
+  state.memberLoanError = "";
+  try {
+    const loan = await api("/member-auth/mobile-loans", {
+      method: "POST",
+      body: JSON.stringify({
+        product: value("memberLoanProduct"),
+        amount: Number(value("memberLoanAmount")),
+        repaymentMonths: Number(value("memberLoanMonths")),
+        purpose: value("memberLoanPurpose")
+      })
+    });
+    state.memberLoanMessage = `Submitted loan application ${loan.applicationNo || loan.id}.`;
+    await refreshMember();
+    state.memberLoanMessage = `Submitted loan application ${loan.applicationNo || loan.id}.`;
+    renderShell();
+  } catch (error) {
+    state.memberLoanError = error.message;
+    renderShell();
+  }
+}
+
+async function postMemberPayment(event) {
+  event.preventDefault();
+  state.memberPaymentMessage = "";
+  state.memberPaymentError = "";
+  try {
+    const purpose = value("memberPaymentPurpose");
+    const callback = await api("/integrations/mobile-money/callback", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: state.member?.tenantId,
+        memberId: state.member?.id,
+        memberIdentifier: state.member?.membershipNo,
+        loanId: purpose === "loan_repayment" ? value("memberPaymentLoanId") : "",
+        purpose,
+        amount: Number(value("memberPaymentAmount")),
+        externalReference: value("memberPaymentReference"),
+        provider: value("memberPaymentProvider"),
+        providerPayload: {
+          source: "member_portal",
+          member: state.member?.membershipNo
+        }
+      })
+    }, "");
+    state.memberPaymentMessage = `Payment posted: ${callback.externalReference || callback.id}.`;
+    await refreshMember();
+    state.memberPaymentMessage = `Payment posted: ${callback.externalReference || callback.id}.`;
+    renderShell();
+  } catch (error) {
+    state.memberPaymentError = error.message;
+    renderShell();
+  }
+}
+
 async function submitWelfareClaim(event) {
   event.preventDefault();
   state.welfareClaimMessage = "";
@@ -3822,6 +3991,8 @@ function bindEvents() {
   document.querySelector("#branchSetupForm")?.addEventListener("submit", createBranchFromForm);
   document.querySelectorAll("[data-product-form]").forEach((form) => form.addEventListener("submit", createFinancialProduct));
   document.querySelectorAll("[data-account-form]").forEach((form) => form.addEventListener("submit", openFinancialAccount));
+  document.querySelector("#memberLoanForm")?.addEventListener("submit", submitMemberLoan);
+  document.querySelector("#memberPaymentForm")?.addEventListener("submit", postMemberPayment);
   document.querySelector("#welfareClaimForm")?.addEventListener("submit", submitWelfareClaim);
   document.querySelector("#expenseForm")?.addEventListener("submit", postExpense);
   document.querySelector("#assetForm")?.addEventListener("submit", registerAsset);
@@ -3939,6 +4110,10 @@ async function logout() {
     productFormError: "",
     accountFormMessage: "",
     accountFormError: "",
+    memberLoanMessage: "",
+    memberLoanError: "",
+    memberPaymentMessage: "",
+    memberPaymentError: "",
     welfareClaimMessage: "",
     welfareClaimError: "",
     selectedWelfareClaimId: "",
