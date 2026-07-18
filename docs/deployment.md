@@ -79,6 +79,8 @@ npm.cmd run postgres:check
 
 The script uses an isolated Compose project, alternate ports `15432` and `18080`, and a throwaway database volume. It confirms `flyway_schema_history`, runs the API smoke test against the Java backend, then runs the security hardening checks.
 
+Latest local evidence: `npm.cmd run postgres:check` passed on `2026-07-18`, with all `37` Flyway migrations applied successfully in PostgreSQL and the Java/PostgreSQL API smoke plus security hardening checks passing against `http://127.0.0.1:18080/api/v1`.
+
 For a broader local production-readiness pass before a demo or deployment:
 
 ```powershell

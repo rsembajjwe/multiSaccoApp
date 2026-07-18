@@ -26,3 +26,25 @@ PostgreSQL integration verification passed.
 ```
 
 If Docker Desktop is installed but the engine is not running, start Docker Desktop and rerun the command.
+
+## Latest Verified Run
+
+Date: `2026-07-18`
+
+Command:
+
+```powershell
+npm.cmd run postgres:check
+```
+
+Result: `PASS`
+
+Evidence summary:
+
+- Backend health became ready at `http://127.0.0.1:18080/api/v1/health`.
+- Docker pulled `postgres:16-alpine`, built the Java backend image, and started the isolated `saccoapp-postgres-check` stack.
+- PostgreSQL container reached `Healthy`.
+- Flyway applied all `37` migrations successfully in PostgreSQL, from `V1__tenant_foundation.sql` through `V37__operations_governance_notification_permissions.sql`.
+- Java/PostgreSQL API smoke test passed against `http://127.0.0.1:18080/api/v1`.
+- Security hardening checks passed, including demo-login gating, security headers, bearer-token requirements, logout revocation, password-reset enumeration protection, tenant isolation, member/staff session isolation, and login rate limiting.
+- The isolated Docker Compose stack and throwaway PostgreSQL volume were removed after the run.
