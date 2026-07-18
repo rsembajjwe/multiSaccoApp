@@ -231,7 +231,12 @@ function renderLogin() {
             <h1>Save Together. Grow Together.</h1>
           </div>
         </div>
-        <p class="hero-copy">A low-bandwidth, role-based SACCO operating platform for Uganda: platform administration, SACCO administration and member self-service.</p>
+        <p class="hero-copy">A secure, low-bandwidth SACCO operating platform for Uganda. One login directs each user to the correct platform, SACCO or member portal.</p>
+        <div class="trust-list">
+          <span>Role-based access</span>
+          <span>Java-backed data</span>
+          <span>UGX financial clarity</span>
+        </div>
         <div class="login-links">
           <button type="button" data-auth-tab="login">Login</button>
           <button type="button" data-auth-tab="register">Register SACCO</button>
@@ -248,23 +253,34 @@ function renderLogin() {
         <form id="loginForm" class="form-grid single">
           ${field("SACCO or platform code", "code", "text", "PLATFORM", "Use PLATFORM or a SACCO code such as GVS")}
           ${field("Username, email, phone or membership number", "username", "text", "admin@platform.local", "")}
-          ${field("Password", "password", "password", "Admin@12345", "")}
+          <label>
+            <span>Password</span>
+            <div class="password-row">
+              <input id="password" type="password" placeholder="Enter password" autocomplete="current-password">
+              <button type="button" data-action="toggle-password">Show</button>
+            </div>
+          </label>
           <label class="check-row"><input id="remember" type="checkbox" checked> <span>Remember this device</span></label>
           <div id="loginError" class="alert error" hidden></div>
           <button id="loginButton" class="button primary" type="submit">Login</button>
         </form>
-        <details class="demo-panel" open>
-          <summary>Demo accounts</summary>
-          <div class="demo-grid">
-            ${demoAccounts.map((account, index) => `
-              <button class="demo-account" type="button" data-demo="${index}">
-                <strong>${account.label}</strong>
-                <span>${account.portal}</span>
-                <small>${account.code} / ${account.username}</small>
-              </button>
-            `).join("")}
+        <section class="demo-panel">
+          <div>
+            <strong>Demo access</strong>
+            <span>Choose a role to fill the login fields.</span>
           </div>
-        </details>
+          <div class="demo-picker">
+            <select id="demoAccountSelect">
+              ${demoAccounts.map((account, index) => `<option value="${index}">${account.label} - ${account.portal}</option>`).join("")}
+            </select>
+            <button class="button secondary" type="button" data-action="fill-demo">Fill demo</button>
+          </div>
+        </section>
+        <div class="login-footer-links">
+          <button type="button">Privacy policy</button>
+          <button type="button">Terms and conditions</button>
+          <button type="button">Maintenance notices</button>
+        </div>
         <p class="fine-print">Seeded demo member accounts are disabled outside the development/demo profile.</p>
       </section>
     </main>
@@ -821,6 +837,20 @@ function bindEvents() {
       document.getElementById("username").value = account.username;
       document.getElementById("password").value = account.password;
     });
+  });
+  document.querySelector("[data-action='fill-demo']")?.addEventListener("click", () => {
+    const account = demoAccounts[Number(document.getElementById("demoAccountSelect")?.value || 0)];
+    if (!account) return;
+    document.getElementById("code").value = account.code;
+    document.getElementById("username").value = account.username;
+    document.getElementById("password").value = account.password;
+  });
+  document.querySelector("[data-action='toggle-password']")?.addEventListener("click", (event) => {
+    const password = document.getElementById("password");
+    if (!password) return;
+    const showing = password.type === "text";
+    password.type = showing ? "password" : "text";
+    event.currentTarget.textContent = showing ? "Show" : "Hide";
   });
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {

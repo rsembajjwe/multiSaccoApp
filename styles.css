@@ -56,10 +56,11 @@ button {
 .login-layout {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(320px, 0.95fr) minmax(360px, 1.05fr);
-  align-items: center;
-  gap: 42px;
-  width: min(1180px, calc(100vw - 40px));
+  grid-template-columns: minmax(420px, 0.96fr) minmax(430px, 1.04fr);
+  align-content: center;
+  align-items: stretch;
+  gap: 0;
+  width: min(1080px, calc(100vw - 40px));
   margin: 0 auto;
   padding: 36px 0;
 }
@@ -79,13 +80,14 @@ button {
 }
 
 .login-hero {
-  min-height: 560px;
+  min-height: 620px;
   display: grid;
   align-content: center;
   gap: 24px;
-  padding: 42px;
+  padding: 48px;
   color: #fff;
   background: var(--green-900);
+  border-radius: 8px 0 0 8px;
 }
 
 .logo-lockup {
@@ -144,6 +146,27 @@ button {
   line-height: 1.55;
 }
 
+.trust-list {
+  display: grid;
+  gap: 10px;
+  color: #dff8ea;
+  font-weight: 800;
+}
+
+.trust-list span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.trust-list span::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--amber-600);
+}
+
 .login-links {
   display: flex;
   flex-wrap: wrap;
@@ -161,9 +184,12 @@ button {
 }
 
 .login-card {
+  min-height: 620px;
   display: grid;
   gap: 18px;
-  padding: 28px;
+  align-content: center;
+  padding: 34px;
+  border-radius: 0 8px 8px 0;
 }
 
 .form-heading h2,
@@ -223,6 +249,21 @@ textarea {
   background: #fff;
 }
 
+.password-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px;
+  gap: 8px;
+}
+
+.password-row button {
+  min-height: 42px;
+  border: 1px solid #99d4c6;
+  border-radius: 8px;
+  color: var(--green-800);
+  background: #eef9f5;
+  font-weight: 800;
+}
+
 .check-row {
   display: flex;
   align-items: center;
@@ -276,20 +317,26 @@ textarea {
 }
 
 .demo-panel {
+  display: grid;
+  gap: 10px;
   border-top: 1px solid var(--line);
   padding-top: 14px;
 }
 
-.demo-panel summary {
-  cursor: pointer;
-  font-weight: 800;
+.demo-panel div:first-child {
+  display: grid;
+  gap: 3px;
 }
 
-.demo-grid {
+.demo-panel span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.demo-picker {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-  margin-top: 12px;
 }
 
 .demo-account {
@@ -302,6 +349,21 @@ textarea {
   color: var(--ink);
   background: #f9fcfa;
   text-align: left;
+}
+
+.login-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.login-footer-links button {
+  border: 0;
+  padding: 0;
+  color: var(--green-800);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .app-shell {
@@ -784,6 +846,12 @@ th {
 
   .login-hero {
     min-height: auto;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .login-card {
+    min-height: auto;
+    border-radius: 0 0 8px 8px;
   }
 
   .sidebar {
