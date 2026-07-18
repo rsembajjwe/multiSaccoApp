@@ -2,6 +2,30 @@
 
 Phase 2 starts with member onboarding and opening balance imports for pilot SACCO setup. The goal is to let staff validate spreadsheet data before saving it, with no manual database edits.
 
+## Excel Workbook Templates
+
+Excel-ready `.xlsx` templates are available in `docs/import-templates`:
+
+- `members-import-template.xlsx`
+- `member-metadata-import-template.xlsx`
+- `opening-balances-import-template.xlsx`
+- `loan-book-import-template.xlsx`
+- `repayment-history-import-template.xlsx`
+
+Each workbook has:
+
+- `Template` sheet with the exact backend CSV headers and sample rows.
+- `Guidance` sheet with the most important validation rules.
+
+The backend import APIs still accept JSON rows parsed from CSV. These workbooks are preparation aids for SACCO staff who prefer Excel before pasting/exporting CSV into the platform.
+
+Regenerate and verify the workbooks with:
+
+```powershell
+npm.cmd run imports:templates
+npm.cmd run imports:check
+```
+
 ## Member Import Flow
 
 1. Create or approve the SACCO tenant.
@@ -335,4 +359,4 @@ Content-Type: application/json
 - Opening balance import UI/API is implemented; next hardening is accounting journal evidence for each posted opening balance.
 - Loan book and repayment history import UI/API are implemented; next hardening is matching imported history to statement evidence.
 - Contact, next-of-kin, beneficiary, and KYC document metadata import is implemented; next hardening is file/object-storage reconciliation.
-- Spreadsheet `.xlsx` helper that exports the same CSV columns.
+- Spreadsheet `.xlsx` templates are implemented with header checks against Java backend constants.

@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.mjs",
     "start:java-api": "set JAVA_API_BASE=http://127.0.0.1:8080&& node server.mjs",
-    "check": "node --check app.js && node --check server.mjs && node --check backend/api.mjs && node --check backend/http.mjs && node --check backend/security.mjs && node --check backend/store.mjs && node --check scripts/api-smoke-test.mjs && node --check scripts/load-test.mjs && node --check scripts/setup-uat-data.mjs && node --check scripts/check-uat-browser.mjs && node --check scripts/check-java-proxy-mode.mjs && node --check scripts/check-security-hardening.mjs && node --check scripts/check-ui-panel-contracts.mjs && node --check scripts/check-browser-regression.mjs && powershell -NoProfile -Command \"Get-ChildItem scripts/*.ps1 | ForEach-Object { $tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$errors) > $null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_ }; exit 1 } }\" && node scripts/check-mobile-foundation.mjs && node scripts/check-java-proxy-mode.mjs && node scripts/check-ui-panel-contracts.mjs && npm.cmd run java:test",
+    "check": "node --check app.js && node --check server.mjs && node --check backend/api.mjs && node --check backend/http.mjs && node --check backend/security.mjs && node --check backend/store.mjs && node --check scripts/api-smoke-test.mjs && node --check scripts/load-test.mjs && node --check scripts/setup-uat-data.mjs && node --check scripts/check-uat-browser.mjs && node --check scripts/check-java-proxy-mode.mjs && node --check scripts/check-security-hardening.mjs && node --check scripts/check-ui-panel-contracts.mjs && node --check scripts/check-browser-regression.mjs && node --check scripts/generate-import-workbooks.mjs && node --check scripts/check-import-workbooks.mjs && powershell -NoProfile -Command \"Get-ChildItem scripts/*.ps1 | ForEach-Object { $tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$tokens,[ref]$errors) > $null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_ }; exit 1 } }\" && node scripts/check-mobile-foundation.mjs && node scripts/check-java-proxy-mode.mjs && node scripts/check-ui-panel-contracts.mjs && node scripts/check-import-workbooks.mjs && npm.cmd run java:test",
     "test:api": "node scripts/api-smoke-test.mjs",
     "java:test": "cd backend-java && mvnw.cmd test",
     "java:start": "cd backend-java && mvnw.cmd spring-boot:run",
@@ -21,7 +21,9 @@
     "backup:db": "powershell -ExecutionPolicy Bypass -File scripts/backup-postgres.ps1",
     "restore:db": "powershell -ExecutionPolicy Bypass -File scripts/restore-postgres.ps1",
     "backup:rehearse": "powershell -ExecutionPolicy Bypass -File scripts/check-backup-restore.ps1",
-    "load:test": "node scripts/load-test.mjs"
+    "load:test": "node scripts/load-test.mjs",
+    "imports:templates": "node scripts/generate-import-workbooks.mjs",
+    "imports:check": "node scripts/check-import-workbooks.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.1"

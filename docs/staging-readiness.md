@@ -43,7 +43,7 @@ These items are the main gap between the current build and live SACCO operation.
 | P1 | Backups | Backup, restore, and isolated restore-rehearsal scripts exist; encrypted scheduling and release evidence remain operational setup tasks. | Restore evidence is recorded for each release candidate. |
 | P1 | CI/CD | GitHub Actions now runs local verification on Windows and a Docker/PostgreSQL production-readiness gate with browser regression on Ubuntu. | Main branch cannot be promoted if the release suite fails. |
 | P2 | UAT | UAT scripts, seeded test data, browser UAT, release evidence, and findings templates now cover platform admin, SACCO staff, and member portal acceptance paths. | Signed UAT findings are closed or explicitly accepted. |
-| P2 | Data migration | Member, profile metadata, opening balance, loan book, and repayment history imports now include templates, dry-run validation, all-or-nothing Java-backed creation/posting, UI paste flows, and import guide coverage; file/object-storage reconciliation remains. | Pilot SACCO data imports without manual database edits. |
+| P2 | Data migration | Member, profile metadata, opening balance, loan book, and repayment history imports now include CSV/Excel templates, dry-run validation, all-or-nothing Java-backed creation/posting, UI paste flows, and import guide coverage; file/object-storage reconciliation remains. | Pilot SACCO data imports without manual database edits. |
 
 ## Recommended Next Sprint
 
