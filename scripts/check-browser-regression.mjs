@@ -37,13 +37,14 @@ try {
   await expectNoVisibleText(page, "Demo access", "demo tools hidden by default");
 
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
+  await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
   await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
   await assertScreen(page, "sacco-applications", ["SACCO application list", "Public SACCO registration wizard"]);
   await assertSaccoApplicationReview(page);
   await assertScreen(page, "subscriptions", ["Subscription list", "Subscription package configuration"]);
   await assertSubscriptionControl(page);
   await assertScreen(page, "operations", ["Operations command center", "Payment monitoring"]);
-  await assertScreen(page, "reports", ["Report catalogue", "Membership", "Audit"]);
+  await assertScreen(page, "reports", ["Report catalogue", "Subscriptions", "Audit"]);
   await assertScreen(page, "users", ["Platform administrators only", "Permission matrix"]);
   await assertPlatformUserCreation(page);
   await expectNoVisibleText(page, "Dashboard data source", "debug source panel hidden");
@@ -63,7 +64,7 @@ try {
   await assertScreen(page, "savings", ["Savings product list", "Savings accounts"]);
   await assertScreen(page, "shares", ["Share product list", "Share register"]);
   await assertScreen(page, "welfare", ["Welfare product list", "Welfare claims"]);
-  await assertScreen(page, "loans", ["Loan application list", "Loan details tabs"]);
+  await assertScreen(page, "loans", ["Loan application list", "Loan application form", "Loan detail and guarantors", "Add guarantor request"]);
   await assertScreen(page, "guarantors", ["Guarantor requests"]);
   await assertScreen(page, "approvals", ["Approval queue"]);
   await assertScreen(page, "accounting", ["Chart of accounts", "Expenses"]);
@@ -197,6 +198,7 @@ async function assertPlatformUserCreation(page) {
   });
   await page.locator("#addUserForm button[type='submit']").click();
   await expectText(page, fullName, "created platform user visible");
+  await page.locator("#globalSearch").fill(fullName);
   await page.locator("tr", { hasText: fullName }).locator("[data-row-action='user-detail']").click();
   await expectText(page, "User detail and role assignment", "platform user detail panel");
   await page.locator("#selectedUserRoleId").selectOption({ label: "Platform Administrator" }).catch(async () => {
@@ -204,6 +206,7 @@ async function assertPlatformUserCreation(page) {
   });
   await page.locator("#userRoleForm button[type='submit']").click();
   await expectAnyText(page, ["Role assignment saved", "Role update failed"], "platform user role assignment response");
+  await page.locator("#globalSearch").fill("");
   console.log("PASS platform user creation");
 }
 

@@ -66,6 +66,13 @@ const state = {
   selectedTransactionReceipt: null,
   selectedTransactionMessage: "",
   selectedTransactionError: "",
+  loanFormMessage: "",
+  loanFormError: "",
+  selectedLoanId: "",
+  selectedLoanGuarantors: [],
+  selectedLoanRepayments: [],
+  selectedLoanMessage: "",
+  selectedLoanError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -77,7 +84,6 @@ const platformModules = [
   ["sacco-accounts", "SACCO Accounts", "Tenant account health", "tenants:view", ["super", "billing", "compliance"]],
   ["members", "Members", "Read-only tenant member support", "members:view", ["super", "support"]],
   ["transactions", "Transactions", "Platform transaction monitoring", "transactions:view", ["super"]],
-  ["loans", "Loans", "Loan portfolio monitoring", "loans:view", ["super"]],
   ["approvals", "Approvals", "Platform approval queues", "approvals:view", ["super"]],
   ["operations", "Operations", "Health, callbacks, jobs, support access", "operations:view", ["super", "operations", "compliance", "support"]],
   ["reports", "Reports", "Registration, billing, compliance exports", "reports:view", ["super", "operations", "billing", "compliance"]],
@@ -665,25 +671,35 @@ function transactionsView() {
 }
 
 function loansView() {
+  const loans = dataRows("loans").map((loan) => ({
+    ...loan,
+    memberName: loan.memberName || memberName(loan.memberId),
+    requestedAmount: loan.requestedAmount || loan.amount,
+    outstandingBalance: loan.outstandingBalance || loan.balance,
+    action: "loan-detail",
+    actionLabel: "Review",
+    actionId: loan.id
+  }));
   return `
     <div class="dashboard-grid">
-      ${summary("Active loans", dataRows("loans").filter((l) => normal(l.status) === "active").length, "Current portfolio", "Open")}
-      ${summary("Outstanding principal", money.format(sum(dataRows("loans"), "outstandingBalance", "balance")), "Portfolio balance", "Review")}
-      ${summary("Awaiting approval", dataRows("loans").filter((l) => normal(l.status).includes("review") || normal(l.stage).includes("approval")).length, "Decision queue", "Approve")}
+      ${summary("Active loans", loans.filter((l) => normal(l.status) === "active").length, "Current portfolio", "Open")}
+      ${summary("Outstanding principal", money.format(sum(loans, "outstandingBalance", "balance")), "Portfolio balance", "Review")}
+      ${summary("Awaiting approval", loans.filter((l) => normal(l.status).includes("review") || normal(l.status).includes("submitted")).length, "Decision queue", "Approve")}
       ${summary("Portfolio at risk", "Review", "Arrears and DSR risk", "Report")}
     </div>
-    ${recordTable("Loan application list", dataRows("loans"), ["applicationNo", "memberName", "product", "requestedAmount", "eligibleAmount", "stage", "riskLevel", "status"])}
-    ${tabsCard("Loan details tabs", ["Overview", "Repayment Schedule", "Repayments", "Guarantors", "Collateral", "Charges", "Approval History", "Documents", "Accounting Entries", "Audit Trail"])}
+    ${loanApplicationPanel()}
+    ${loanDetailPanel(loans)}
+    ${recordTable("Loan application list", loans, ["applicationNo", "memberName", "product", "requestedAmount", "outstandingBalance", "repaymentMonths", "guarantors", "stage", "status"])}
   `;
 }
 
 function approvalsView() {
   const transactions = dataRows("transactions").filter((row) => normal(row.status).includes("pending"));
-  const loans = dataRows("loans").filter((row) => normal(row.status).includes("review") || normal(row.status).includes("submitted"));
+  const loans = isPlatform() ? [] : dataRows("loans").filter((row) => normal(row.status).includes("review") || normal(row.status).includes("submitted"));
   return `
     <div class="dashboard-grid">
       ${summary("Pending member approvals", dataRows("members").filter((m) => normal(m.status).includes("pending")).length, "KYC and onboarding", "Review")}
-      ${summary("Pending loan approvals", loans.length, "Credit workflow", "Review")}
+      ${summary(isPlatform() ? "Pending platform approvals" : "Pending loan approvals", loans.length, isPlatform() ? "Tenant and support workflow" : "Credit workflow", "Review")}
       ${summary("Pending transactions", transactions.length, "Finance maker-checker", "Review")}
       ${summary("Pending reversals", "0", "Requires reason", "Review")}
     </div>
@@ -706,7 +722,9 @@ function operationsView() {
 }
 
 function reportsView() {
-  const groups = ["Membership", "Savings", "Shares", "Welfare", "Loans", "Transactions", "Accounting", "Reconciliation", "Governance", "Compliance", "Audit", "Subscriptions"];
+  const groups = isPlatform()
+    ? ["Registration", "Subscriptions", "Transactions", "Operations", "Compliance", "Audit"]
+    : ["Membership", "Savings", "Shares", "Welfare", "Loans", "Transactions", "Accounting", "Reconciliation", "Governance", "Compliance", "Audit", "Subscriptions"];
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -1351,6 +1369,100 @@ function transactionDetailPanel(rows) {
   `;
 }
 
+function loanApplicationPanel() {
+  const canCreate = hasPermission("loans:create");
+  const activeMembers = dataRows("members").filter((member) => normal(member.status) === "active");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Loan application form</h2>
+          <p>Create a SACCO loan application with member eligibility checks handled by the Java backend.</p>
+        </div>
+      </div>
+      ${state.loanFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.loanFormMessage)}</strong></div>` : ""}
+      ${state.loanFormError ? `<div class="notice warning"><strong>Loan application failed.</strong><span>${escapeHtml(state.loanFormError)}</span></div>` : ""}
+      <form id="loanApplicationForm" class="form-grid">
+        <input type="hidden" id="newLoanTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
+        <label><span>Borrower</span><select id="newLoanMemberId" ${canCreate ? "" : "disabled"}>${activeMembers.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
+        <label><span>Loan product</span><select id="newLoanProduct" ${canCreate ? "" : "disabled"}>${loanProductOptions().map((product) => `<option value="${escapeHtml(product)}">${escapeHtml(product)}</option>`).join("")}</select></label>
+        <label><span>Amount</span><input id="newLoanAmount" type="number" min="1" step="1" required value="500000" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Repayment period</span><input id="newLoanRepaymentMonths" type="number" min="1" max="60" step="1" required value="12" ${canCreate ? "" : "disabled"}></label>
+        <label class="wide"><span>Purpose</span><input id="newLoanPurpose" placeholder="Business expansion, school fees, farming inputs..." ${canCreate ? "" : "disabled"}></label>
+        <div class="form-actions inline">${canCreate ? `<button class="button primary" type="submit">Submit loan application</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function loanDetailPanel(rows) {
+  const loan = rows.find((item) => item.id === state.selectedLoanId) || rows[0];
+  if (!loan) return "";
+  const canCreate = hasPermission("loans:create");
+  const canApprove = hasPermission("loans:approve");
+  const borrowerId = loan.memberId;
+  const guarantorOptions = dataRows("members").filter((member) => normal(member.status) === "active" && member.id !== borrowerId);
+  return `
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Loan detail and guarantors</h2>
+          <p>${escapeHtml(loan.applicationNo || loan.id)} - ${escapeHtml(loan.memberName || loan.memberId || "")}</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-loan-detail">Close</button>
+      </div>
+      ${state.selectedLoanMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedLoanMessage)}</strong></div>` : ""}
+      ${state.selectedLoanError ? `<div class="notice warning"><strong>Loan action failed.</strong><span>${escapeHtml(state.selectedLoanError)}</span></div>` : ""}
+      <div class="source-grid">
+        ${mini("Product", loan.product)}
+        ${mini("Amount", money.format(loan.amount || loan.requestedAmount || 0))}
+        ${mini("Outstanding", money.format(loan.balance || loan.outstandingBalance || 0))}
+        ${mini("Status", loan.status)}
+        ${mini("Stage", loan.stage)}
+        ${mini("Guarantors", loan.guarantors || 0)}
+        ${mini("Repayments", loan.repayments || 0)}
+        ${mini("DSR", `${loan.dsr || 0}%`)}
+      </div>
+      <div class="grid two">
+      <form id="loanGuarantorForm" class="form-grid single">
+          <input type="hidden" id="selectedLoanId" value="${escapeHtml(loan.id)}">
+          <h3>Add guarantor request</h3>
+          <label><span>Guarantor member</span><select id="newGuarantorMemberId" ${canCreate ? "" : "disabled"}>${guarantorOptions.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
+          <label><span>Guaranteed amount</span><input id="newGuarantorAmount" type="number" min="1" step="1" value="${Math.ceil(Number(loan.amount || loan.requestedAmount || 0) / 2)}" ${canCreate ? "" : "disabled"}></label>
+          <div class="form-actions">${canCreate ? `<button class="button secondary" type="submit">Add guarantor request</button>` : `<span class="status pending">View only</span>`}</div>
+        </form>
+        <form id="loanDecisionForm" class="form-grid single">
+          <h3>Decision and servicing</h3>
+          <label><span>Decision reason</span><input id="loanDecisionReason" placeholder="Decision note or rejection reason" ${canApprove ? "" : "disabled"}></label>
+          <div class="form-actions">
+            ${canApprove ? `
+              <button class="button secondary" type="button" data-loan-action="approve">Approve loan</button>
+              <button class="button ghost" type="button" data-loan-action="reject">Reject loan</button>
+              <button class="button primary" type="button" data-loan-action="disburse">Disburse loan</button>
+            ` : `<span class="status pending">View only</span>`}
+          </div>
+        </form>
+      </div>
+      <form id="loanRepaymentForm" class="form-grid">
+        <h3 class="wide">Record loan repayment</h3>
+        <label><span>Amount</span><input id="loanRepaymentAmount" type="number" min="1" step="1" value="50000" ${canApprove ? "" : "disabled"}></label>
+        <label><span>Channel</span><select id="loanRepaymentChannel" ${canApprove ? "" : "disabled"}><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option><option value="payroll_deduction">Payroll deduction</option></select></label>
+        <label><span>Reference</span><input id="loanRepaymentReference" value="LR-${Date.now()}" ${canApprove ? "" : "disabled"}></label>
+        <label><span>Narration</span><input id="loanRepaymentNarration" placeholder="Repayment note" ${canApprove ? "" : "disabled"}></label>
+        <div class="form-actions inline">${canApprove ? `<button class="button secondary" type="submit">Record repayment</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+      <div class="grid two">
+        ${recordTable("Loan guarantor requests", state.selectedLoanGuarantors.map((request) => ({ ...request, memberName: memberName(request.memberId) })), ["memberName", "guaranteedAmount", "capacity", "status", "createdAt"])}
+        ${recordTable("Loan repayment history", state.selectedLoanRepayments, ["reference", "amount", "channel", "narration", "receivedAt"])}
+      </div>
+    </section>
+  `;
+}
+
+function loanProductOptions() {
+  return ["Development Loan", "Emergency Loan"];
+}
+
 function userRoleOptions(platformOnly) {
   const tenantId = platformOnly ? "tenant_platform" : state.user?.tenantId;
   const roles = dataRows("roles").filter((role) => role.tenantId === tenantId);
@@ -1863,6 +1975,138 @@ async function runTransactionAction(action) {
   }
 }
 
+async function createLoanFromForm(event) {
+  event.preventDefault();
+  state.loanFormMessage = "";
+  state.loanFormError = "";
+  try {
+    const loan = await api("/loans", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: value("newLoanTenantId"),
+        memberId: value("newLoanMemberId"),
+        product: value("newLoanProduct"),
+        amount: Number(value("newLoanAmount")),
+        repaymentMonths: Number(value("newLoanRepaymentMonths")),
+        purpose: value("newLoanPurpose")
+      })
+    });
+    state.loanFormMessage = `Submitted loan ${loan.applicationNo || loan.id} for review.`;
+    state.selectedLoanId = loan.id;
+    await refreshAll();
+    state.selectedLoanId = loan.id;
+    state.loanFormMessage = `Submitted loan ${loan.applicationNo || loan.id} for review.`;
+    await openLoanDetail(loan.id, false);
+  } catch (error) {
+    state.loanFormError = error.message;
+    renderShell();
+  }
+}
+
+async function openLoanDetail(loanId, shouldRender = true) {
+  state.selectedLoanId = loanId;
+  state.selectedLoanGuarantors = [];
+  state.selectedLoanRepayments = [];
+  state.selectedLoanMessage = "";
+  state.selectedLoanError = "";
+  if (shouldRender) renderShell();
+  try {
+    const [guarantors, repayments] = await Promise.all([
+      optionalApi(`/loans/${encodeURIComponent(loanId)}/guarantors`, []),
+      optionalApi(`/loans/${encodeURIComponent(loanId)}/repayments`, [])
+    ]);
+    state.selectedLoanGuarantors = guarantors || [];
+    state.selectedLoanRepayments = repayments || [];
+  } catch (error) {
+    state.selectedLoanError = error.message;
+  }
+  renderShell();
+}
+
+async function addLoanGuarantor(event) {
+  event.preventDefault();
+  const loanId = value("selectedLoanId") || state.selectedLoanId;
+  if (!loanId) return;
+  state.selectedLoanMessage = "";
+  state.selectedLoanError = "";
+  try {
+    await api(`/loans/${encodeURIComponent(loanId)}/guarantors`, {
+      method: "POST",
+      body: JSON.stringify({
+        memberId: value("newGuarantorMemberId"),
+        guaranteedAmount: Number(value("newGuarantorAmount"))
+      })
+    });
+    state.selectedLoanMessage = "Guarantor request added.";
+    await refreshAll();
+    state.selectedLoanId = loanId;
+    await openLoanDetail(loanId, false);
+    state.selectedLoanMessage = "Guarantor request added.";
+    renderShell();
+  } catch (error) {
+    state.selectedLoanError = error.message;
+    renderShell();
+  }
+}
+
+async function runLoanAction(action) {
+  const loanId = value("selectedLoanId") || state.selectedLoanId;
+  if (!loanId) return;
+  state.selectedLoanMessage = "";
+  state.selectedLoanError = "";
+  try {
+    if (action === "disburse") {
+      const loan = await api(`/loans/${encodeURIComponent(loanId)}/disburse`, { method: "POST" });
+      state.selectedLoanMessage = `Loan ${loan.applicationNo || loan.id} disbursed.`;
+    } else {
+      const status = action === "approve" ? "approved" : "rejected";
+      const loan = await api(`/loans/${encodeURIComponent(loanId)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, reason: value("loanDecisionReason") || "Reviewed in Tereka Online" })
+      });
+      state.selectedLoanMessage = `Loan ${loan.applicationNo || loan.id} ${status}.`;
+    }
+    const message = state.selectedLoanMessage;
+    await refreshAll();
+    state.selectedLoanId = loanId;
+    await openLoanDetail(loanId, false);
+    state.selectedLoanMessage = message;
+    renderShell();
+  } catch (error) {
+    state.selectedLoanError = error.message;
+    renderShell();
+  }
+}
+
+async function recordLoanRepayment(event) {
+  event.preventDefault();
+  const loanId = value("selectedLoanId") || state.selectedLoanId;
+  if (!loanId) return;
+  state.selectedLoanMessage = "";
+  state.selectedLoanError = "";
+  try {
+    await api(`/loans/${encodeURIComponent(loanId)}/repayments`, {
+      method: "POST",
+      body: JSON.stringify({
+        amount: Number(value("loanRepaymentAmount")),
+        channel: value("loanRepaymentChannel"),
+        reference: value("loanRepaymentReference") || `LR-${Date.now()}`,
+        narration: value("loanRepaymentNarration") || "Loan repayment"
+      })
+    });
+    state.selectedLoanMessage = "Loan repayment recorded.";
+    const message = state.selectedLoanMessage;
+    await refreshAll();
+    state.selectedLoanId = loanId;
+    await openLoanDetail(loanId, false);
+    state.selectedLoanMessage = message;
+    renderShell();
+  } catch (error) {
+    state.selectedLoanError = error.message;
+    renderShell();
+  }
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -1951,6 +2195,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='transaction-detail']").forEach((button) => {
     button.addEventListener("click", () => openTransactionDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='loan-detail']").forEach((button) => {
+    button.addEventListener("click", () => openLoanDetail(button.dataset.rowId));
+  });
   document.querySelector("[data-action='close-user-detail']")?.addEventListener("click", () => {
     state.selectedUserId = "";
     state.selectedUserRoles = [];
@@ -1990,10 +2237,21 @@ function bindEvents() {
     state.selectedTransactionError = "";
     renderShell();
   });
+  document.querySelector("[data-action='close-loan-detail']")?.addEventListener("click", () => {
+    state.selectedLoanId = "";
+    state.selectedLoanGuarantors = [];
+    state.selectedLoanRepayments = [];
+    state.selectedLoanMessage = "";
+    state.selectedLoanError = "";
+    renderShell();
+  });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
   document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
   document.querySelector("#transactionForm")?.addEventListener("submit", createTransactionFromForm);
+  document.querySelector("#loanApplicationForm")?.addEventListener("submit", createLoanFromForm);
+  document.querySelector("#loanGuarantorForm")?.addEventListener("submit", addLoanGuarantor);
+  document.querySelector("#loanRepaymentForm")?.addEventListener("submit", recordLoanRepayment);
   document.querySelector("#memberStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     runMemberDecision("custom");
@@ -2017,6 +2275,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-transaction-action]").forEach((button) => {
     button.addEventListener("click", () => runTransactionAction(button.dataset.transactionAction));
+  });
+  document.querySelectorAll("[data-loan-action]").forEach((button) => {
+    button.addEventListener("click", () => runLoanAction(button.dataset.loanAction));
   });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
@@ -2074,6 +2335,13 @@ async function logout() {
     selectedTransactionReceipt: null,
     selectedTransactionMessage: "",
     selectedTransactionError: "",
+    loanFormMessage: "",
+    loanFormError: "",
+    selectedLoanId: "",
+    selectedLoanGuarantors: [],
+    selectedLoanRepayments: [],
+    selectedLoanMessage: "",
+    selectedLoanError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });

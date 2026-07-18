@@ -236,6 +236,10 @@ small {
   grid-template-columns: 1fr;
 }
 
+.form-grid .wide {
+  grid-column: 1 / -1;
+}
+
 .form-actions {
   display: flex;
   flex-wrap: wrap;
