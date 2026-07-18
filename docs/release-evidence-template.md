@@ -25,6 +25,7 @@ Use this template for each staging or production release candidate. Store the co
 | API health endpoint is healthy. | `GET /api/v1/health` response timestamp. |  |
 | Spring production profile is active. | `SPRING_PROFILES_ACTIVE=prod` evidence. |  |
 | Demo logins are disabled. | `SACCO_DEMO_LOGINS_ENABLED=false` evidence. |  |
+| Staging preflight passes. | `npm.cmd run staging:preflight` output. |  |
 | CORS/reverse proxy origins are restricted. | Host or proxy config reference. |  |
 | Secrets are stored outside git. | Secret-store reference, not secret values. |  |
 

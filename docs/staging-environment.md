@@ -17,6 +17,8 @@ Use this guide when preparing a hosted staging environment for pilot SACCO testi
 | `SACCO_SMS_PROVIDER` | Yes | Use `demo_sms` until a real SMS adapter is configured. |
 | `SACCO_EMAIL_PROVIDER` | Yes | Use `demo_email` until a real email adapter is configured. |
 | `SACCO_MOBILE_MONEY_PROVIDER` | Yes | Use `demo_mobile_money` until a real mobile-money adapter is configured. |
+| `STAGING_UI_BASE_URL` | Yes for handoff | Use the externally reachable HTTPS staging UI URL. |
+| `STAGING_API_BASE_URL` | Yes for handoff | Use the externally reachable HTTPS API base URL ending in `/api/v1`. |
 
 The Spring production profile also accepts `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, and `SERVER_PORT`. Docker Compose derives those from the PostgreSQL variables above.
 
@@ -34,7 +36,14 @@ Before starting the stack, replace `POSTGRES_PASSWORD` with a strong generated v
 - `SACCO_DEMO_LOGINS_ENABLED=false`
 - `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` are not shared with development.
 - Provider values are explicit: `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`.
+- `STAGING_UI_BASE_URL` and `STAGING_API_BASE_URL` are real HTTPS staging URLs, not the example placeholders.
 - `.env` remains ignored by git.
+
+Run the staging preflight check before handoff:
+
+```powershell
+npm.cmd run staging:preflight
+```
 
 Start the production-profile stack:
 
@@ -89,6 +98,7 @@ Attach or record:
 
 - Staging API base URL.
 - Backend health response timestamp.
+- `npm.cmd run staging:preflight` result.
 - `flyway_schema_history` version count from PostgreSQL.
 - `npm.cmd run check` result.
 - `npm.cmd run ready:check` result.

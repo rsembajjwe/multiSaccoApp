@@ -21,6 +21,7 @@ Use this checklist before handing the SACCO platform to testers or a pilot SACCO
 | `SACCO_DEMO_LOGINS_ENABLED=false` by default. | Environment evidence. |  |
 | Auth rate-limit settings are configured. | `SACCO_AUTH_RATE_LIMIT_MAX_FAILURES` and window evidence. |  |
 | Provider IDs are explicit for SMS, email, and mobile money. | Environment evidence. |  |
+| Staging preflight passes. | `npm.cmd run staging:preflight` |  |
 
 ## Release Gates
 
