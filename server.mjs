@@ -41,7 +41,8 @@ createServer(async (request, response) => {
 
     const content = await readFile(filePath);
     response.writeHead(200, securityHeaders({
-      "Content-Type": mimeTypes[extname(filePath)] || "application/octet-stream"
+      "Content-Type": mimeTypes[extname(filePath)] || "application/octet-stream",
+      "Cache-Control": "no-store, max-age=0"
     }));
     response.end(content);
   } catch {
