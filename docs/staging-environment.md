@@ -56,6 +56,13 @@ npm.cmd run check
 npm.cmd run ready:check
 ```
 
+Prepare tester data after the staging API is running:
+
+```powershell
+$env:API_BASE_URL = "https://staging-api.example.com/api/v1"
+npm.cmd run uat:setup
+```
+
 ## Hosted Staging Checklist
 
 - Store real secrets in the host secret manager or an untracked `.env`; never commit real `.env` files.
@@ -80,6 +87,7 @@ Attach or record:
 - `npm.cmd run backup:rehearse` result.
 - Confirmation that `SACCO_DEMO_LOGINS_ENABLED=false`.
 - Completed staging handoff checklist.
+- UAT data setup output.
 - UAT script result for each role.
 
 ## Rollback

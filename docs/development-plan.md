@@ -450,6 +450,7 @@ Progress:
 - Java finance/accounting permission enforcement added for transactions, reversals, products, accounts, welfare claims, accounting periods, journals, statement lines, reconciliation, mobile-money callback history, and regulatory reports, with loans-only staff regression tests.
 - Java loan and approval permission enforcement added for loan viewing/origination/approval/disbursement/repayment, guarantors, approval workflows, and approval decisions, with loan-originator regression tests.
 - Phase 1 staging handoff started with platform admin, SACCO staff, and member portal UAT scripts plus a staging handoff checklist covering environment, secrets, release gates, operations, UAT accounts, and approval evidence.
+- UAT data setup script added to create a fresh Java-backed tester dataset with branch, staff user, member login, posted balances, pending approval, reversal candidate, loan, guarantor request, member mobile loan, complaint sync, subscription review, and operations snapshot.
 
 Recommended stack:
 

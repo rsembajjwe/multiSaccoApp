@@ -89,6 +89,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Java backend deployment path includes a PostgreSQL production profile, Dockerfile, Docker Compose stack, environment template, and deployment/backup guide.
 - PostgreSQL backup and restore scripts provide repeatable Docker Compose database backup operations with ignored local backup artifacts and explicit restore confirmation.
 - Staging handoff checklist and UAT scripts define pass/fail evidence for platform admin, SACCO staff, and member portal acceptance testing.
+- UAT data setup script creates a known Java-backed staging dataset for staff, member, transaction, loan, guarantor, notification, complaint, operations, and subscription acceptance testing.
 - Java operations status endpoint exposes authenticated platform/tenant monitoring counts, database reachability, and alert indicators with tenant isolation.
 - Operations UI consumes the Java operations status endpoint with platform-wide or tenant-scoped views based on the selected tenant.
 - User, administrator, and technical manuals document staff/member workflows, platform administration, operational monitoring, backup/restore, validation, release, and troubleshooting procedures.
