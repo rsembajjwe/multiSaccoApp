@@ -297,7 +297,7 @@ function renderShell() {
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-top">
           <div class="logo-lockup compact">${logo()}<div><strong>Tereka Online</strong><span>${portal}</span></div></div>
-          <button class="icon-button" type="button" data-action="toggle-sidebar" aria-label="Collapse sidebar">☰</button>
+          <button class="icon-button" type="button" data-action="toggle-sidebar" aria-label="Collapse sidebar">M</button>
         </div>
         <div class="context-card">
           <small>${state.auth === "member" ? "SACCO" : isPlatform() ? "Context" : "SACCO"}</small>
@@ -315,11 +315,11 @@ function renderShell() {
       </aside>
       <main class="main">
         <header class="topbar">
-          <button class="icon-button mobile-only" type="button" data-action="toggle-sidebar" aria-label="Open menu">☰</button>
+          <button class="icon-button mobile-only" type="button" data-action="toggle-sidebar" aria-label="Open menu">Menu</button>
           <div class="breadcrumbs">Home / ${portal} / <strong>${module[1]}</strong></div>
           <div class="topbar-actions">
             <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs"></label>
-            <button class="icon-button" type="button" title="Notifications">🔔</button>
+            <button class="icon-button" type="button" title="Notifications">!</button>
             <button class="icon-button" type="button" title="Help">?</button>
             <button class="profile-chip" type="button">${initials(displayName())}</button>
           </div>

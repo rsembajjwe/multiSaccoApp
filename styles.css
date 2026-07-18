@@ -369,7 +369,7 @@ textarea {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 286px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -378,8 +378,8 @@ textarea {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 18px;
+  gap: 14px;
+  padding: 16px;
   color: #fff;
   background: var(--green-900);
 }
@@ -389,6 +389,20 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.sidebar-top .logo-lockup {
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-top .logo-lockup > div:last-child {
+  min-width: 0;
+}
+
+.sidebar-top .icon-button {
+  min-width: 40px;
+  flex: 0 0 auto;
 }
 
 .sidebar span,
@@ -401,25 +415,46 @@ textarea {
   gap: 4px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 8px;
-  padding: 12px;
+  padding: 11px 12px;
   background: rgba(255, 255, 255, 0.08);
 }
 
 .nav-list {
   display: grid;
-  gap: 6px;
-  overflow: auto;
+  gap: 4px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.34) transparent;
+}
+
+.nav-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.nav-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.32);
 }
 
 .nav-link {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   border: 0;
   border-radius: 8px;
-  padding: 11px 12px;
+  padding: 9px 12px;
   color: #fff;
   background: transparent;
   text-align: left;
+}
+
+.nav-link span {
+  font-size: 15px;
+}
+
+.nav-link small {
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .nav-link.active,
@@ -448,13 +483,13 @@ textarea {
   position: sticky;
   top: 0;
   z-index: 2;
-  min-height: 72px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid var(--line);
-  padding: 14px 24px;
+  padding: 11px 24px;
   background: rgba(255, 255, 255, 0.94);
 }
 
@@ -484,7 +519,8 @@ textarea {
 
 .icon-button,
 .profile-chip {
-  width: 40px;
+  min-width: 40px;
+  width: auto;
   padding: 0;
   color: var(--green-800);
   border-color: #a8d8cb;
@@ -492,7 +528,6 @@ textarea {
 }
 
 .profile-chip {
-  width: auto;
   min-width: 44px;
   padding: 0 12px;
 }
@@ -502,34 +537,43 @@ textarea {
   align-items: flex-end;
   justify-content: space-between;
   gap: 18px;
-  padding: 26px 24px 18px;
+  padding: 22px 24px 14px;
+}
+
+.page-header h1 {
+  font-size: 29px;
+  letter-spacing: 0;
 }
 
 .source-panel,
 .content-area {
-  margin: 0 24px 18px;
+  margin: 0 24px 16px;
 }
 
 .source-panel {
   display: grid;
-  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
-  gap: 16px;
-  padding: 18px;
+  grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1.3fr);
+  gap: 14px;
+  padding: 16px 18px;
   position: relative;
+}
+
+.source-panel h2 {
+  font-size: 21px;
 }
 
 .source-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(120px, 1fr));
-  gap: 10px;
+  gap: 9px;
 }
 
 .mini-fact {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 10px;
+  padding: 10px 11px;
   background: #fbfdfc;
 }
 
@@ -554,16 +598,16 @@ textarea {
 .report-grid,
 .package-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .summary-card {
-  min-height: 132px;
+  min-height: 112px;
   display: grid;
   align-content: space-between;
-  gap: 8px;
-  padding: 16px;
+  gap: 6px;
+  padding: 14px;
 }
 
 .summary-card span {
@@ -573,7 +617,7 @@ textarea {
 
 .summary-card strong {
   overflow-wrap: anywhere;
-  font-size: 25px;
+  font-size: 23px;
 }
 
 .summary-card small {
@@ -593,11 +637,11 @@ textarea {
 .grid.two {
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
-  gap: 18px;
+  gap: 16px;
 }
 
 .panel {
-  padding: 18px;
+  padding: 16px 18px;
 }
 
 .panel-heading {
