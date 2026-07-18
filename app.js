@@ -13,8 +13,54 @@ const navItems = [
   ["loans", "Loans", "credit"],
   ["approvals", "Approvals", "workflow"],
   ["operations", "Operations", "monitor"],
-  ["reports", "Reports", "audit"]
+  ["reports", "Reports", "audit"],
+  ["memberPortal", "Member Portal", "self-service"]
 ];
+
+const workspaceProfiles = {
+  platformAdmin: {
+    label: "Platform administration",
+    session: "Platform Administrator",
+    tenantLocked: false,
+    defaultView: "dashboard",
+    nav: ["dashboard", "registrations", "subscriptions", "members", "transactions", "loans", "approvals", "operations", "reports"]
+  },
+  saccoAdmin: {
+    label: "SACCO administrator",
+    session: "SACCO Administrator",
+    tenantLocked: true,
+    defaultView: "dashboard",
+    nav: ["dashboard", "members", "transactions", "loans", "approvals", "operations", "reports"]
+  },
+  treasurer: {
+    label: "Treasurer",
+    session: "SACCO Treasurer",
+    tenantLocked: true,
+    defaultView: "transactions",
+    nav: ["dashboard", "transactions", "approvals", "reports", "operations"]
+  },
+  secretary: {
+    label: "Secretary",
+    session: "SACCO Secretary",
+    tenantLocked: true,
+    defaultView: "members",
+    nav: ["dashboard", "members", "approvals", "reports"]
+  },
+  chairperson: {
+    label: "Chairperson",
+    session: "SACCO Chairperson",
+    tenantLocked: true,
+    defaultView: "dashboard",
+    nav: ["dashboard", "loans", "approvals", "reports", "operations"]
+  },
+  member: {
+    label: "Member view",
+    session: "Member Self-Service",
+    tenantLocked: true,
+    defaultView: "memberPortal",
+    nav: ["memberPortal"]
+  }
+};
 
 const money = new Intl.NumberFormat("en-UG", {
   style: "currency",
@@ -35,6 +81,7 @@ const today = new Date("2026-07-15T12:00:00+03:00");
 const seedData = {
   currentView: "dashboard",
   tenantId: "platform",
+  workspace: "platformAdmin",
   tenants: [
     {
       id: "platform",
@@ -190,6 +237,25 @@ function saveState() {
 
 function currentTenant() {
   return state.tenants.find((tenant) => tenant.id === state.tenantId) || state.tenants[0];
+}
+
+function currentWorkspace() {
+  return workspaceProfiles[state.workspace] || workspaceProfiles.platformAdmin;
+}
+
+function visibleNavItems() {
+  const allowed = new Set(currentWorkspace().nav);
+  return navItems.filter(([id]) => allowed.has(id));
+}
+
+function ensureWorkspaceTenant() {
+  const workspace = currentWorkspace();
+  if (workspace.tenantLocked && state.tenantId === "platform") {
+    state.tenantId = state.tenants.find((tenant) => tenant.id !== "platform")?.id || "platform";
+  }
+  if (!workspace.nav.includes(state.currentView)) {
+    state.currentView = workspace.defaultView;
+  }
 }
 
 function tenantScoped(collection) {
@@ -512,6 +578,7 @@ function memberRefreshButton(label = "Refresh member data") {
 
 function init() {
   renderTenantSelect();
+  renderWorkspaceSelect();
   renderNav();
   bindGlobalActions();
   render();
@@ -523,30 +590,46 @@ function renderTenantSelect() {
   const select = document.getElementById("tenantSelect");
   select.innerHTML = state.tenants.map((tenant) => `<option value="${tenant.id}">${tenant.name}</option>`).join("");
   select.value = state.tenantId;
-  select.addEventListener("change", () => {
+  select.onchange = () => {
     state.tenantId = select.value;
     saveState();
     render();
     if (apiState.user?.tenantId === "tenant_platform") refreshApiStatus();
-  });
+  };
+}
+
+function renderWorkspaceSelect() {
+  const select = document.getElementById("workspaceSelect");
+  select.innerHTML = Object.entries(workspaceProfiles).map(([id, profile]) => `<option value="${id}">${profile.label}</option>`).join("");
+  select.value = state.workspace || "platformAdmin";
+  select.onchange = () => {
+    state.workspace = select.value;
+    ensureWorkspaceTenant();
+    renderTenantSelect();
+    renderNav();
+    saveState();
+    render();
+    if (apiState.user) refreshApiStatus();
+  };
 }
 
 function renderNav() {
+  ensureWorkspaceTenant();
   const nav = document.getElementById("nav");
-  nav.innerHTML = navItems.map(([id, label, hint]) => `
+  nav.innerHTML = visibleNavItems().map(([id, label, hint]) => `
     <button class="nav-item" type="button" data-view="${id}">
       <span>${label}</span>
       <small>${hint}</small>
     </button>
   `).join("");
 
-  nav.addEventListener("click", (event) => {
+  nav.onclick = (event) => {
     const button = event.target.closest("[data-view]");
     if (!button) return;
     state.currentView = button.dataset.view;
     saveState();
     render();
-  });
+  };
 }
 
 function bindGlobalActions() {
@@ -558,11 +641,14 @@ function bindGlobalActions() {
   });
 
   document.getElementById("newMemberBtn").addEventListener("click", openMemberForm);
+  document.getElementById("globalSearchBtn").addEventListener("click", openGlobalSearch);
   document.getElementById("memberPortalBtn").addEventListener("click", () => {
     if (!memberApiState.member) {
       openMemberLoginForm();
       return;
     }
+    state.workspace = "member";
+    ensureWorkspaceTenant();
     state.currentView = "memberPortal";
     saveState();
     render();
@@ -572,12 +658,16 @@ function bindGlobalActions() {
 }
 
 function render() {
+  ensureWorkspaceTenant();
+  renderNav();
   document.querySelectorAll(".nav-item").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === state.currentView);
   });
 
   document.getElementById("tenantSelect").value = state.tenantId;
-  document.getElementById("sessionRole").textContent = state.tenantId === "platform" ? "Platform Administrator" : "SACCO Administrator";
+  document.getElementById("workspaceSelect").value = state.workspace || "platformAdmin";
+  document.getElementById("sessionRole").textContent = currentWorkspace().session;
+  document.getElementById("newMemberBtn").hidden = !currentWorkspace().nav.includes("members");
   renderApiChrome();
   renderShellStatus();
 
@@ -654,6 +744,7 @@ function renderDashboard() {
   const alertCount = operations.alerts?.length || 0;
 
   return `
+    ${workspaceOverview()}
     <div class="grid metrics">
       ${metric("Registered members", usingApi ? (operationCounts.members || members.length) : members.length, `${activeMembers} active`)}
       ${metric("Posted collections", money.format(deposits), usingApi ? "API-backed postings" : "tenant-filtered")}
@@ -667,7 +758,7 @@ function renderDashboard() {
           <h2>Dashboard data source</h2>
           <p class="eyebrow">${apiSyncState()} &middot; Java integration</p>
         </div>
-        ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
+        ${refreshApiButton("Refresh backend data")}
       </div>
       ${apiSyncNotice("Dashboard")}
       <div class="grid four compact-facts">
@@ -997,6 +1088,7 @@ function renderMembers() {
   const membersWithoutBranch = members.filter((member) => !member.branchId).length;
   const staleMemberLabel = apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed";
   return `
+    ${workspaceOverview()}
     <div class="grid metrics">
       ${metric("Members", members.length, `${activeMembers} active`)}
       ${metric("KYC verified", `${verifiedMembers}/${members.length}`, `${members.length - verifiedMembers} pending or expired`)}
@@ -1012,8 +1104,8 @@ function renderMembers() {
         </div>
         <div class="filters">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
-          ${apiState.user ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>` : ""}
-          ${apiState.user ? `<button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>` : ""}
+          <button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>
+          <button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>
         </div>
       </div>
       ${apiSyncNotice("Members screen")}
@@ -1021,7 +1113,7 @@ function renderMembers() {
         ${miniFact("Source", source)}
         ${miniFact("Last sync", staleMemberLabel)}
         ${miniFact("Unassigned branch", membersWithoutBranch)}
-        ${miniFact("Balance source", useApiMembers() ? "Server fields" : "Demo seed")}
+        ${miniFact("Balance source", useApiMembers() ? "Server fields" : "Demo seed / Server fields after login")}
       </div>
     </section>
 
@@ -1631,6 +1723,7 @@ function renderOperations() {
           ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
           ${miniFact("Scope", "Not loaded")}
           ${miniFact("Readiness", "Waiting")}
+          ${miniFact("Operations command center", "Login to load live queues")}
         </div>
       </section>
     `;
@@ -2302,6 +2395,7 @@ function renderMemberPortal() {
     const unreadNotifications = notifications.filter((notification) => notification.status === "unread").length;
     const pendingGuarantees = memberApiState.guarantorRequests.filter((request) => request.status === "pending").length;
     return `
+      ${workspaceOverview()}
       <div class="toolbar">
         <div>
           <h2>${member.fullName}</h2>
@@ -2453,6 +2547,7 @@ function renderMemberPortal() {
   }
   const memberLoans = state.loans.filter((loan) => loan.memberId === member.id);
   return `
+    ${workspaceOverview()}
     <section class="card integration-panel">
       <div class="toolbar">
         <div>
@@ -2504,6 +2599,62 @@ function renderMemberPortal() {
 
 function metric(label, value, detail) {
   return `<section class="card metric"><span>${label}</span><strong>${value}</strong><em>${detail}</em></section>`;
+}
+
+function workspaceOverview() {
+  const workspace = currentWorkspace();
+  const platformMode = state.workspace === "platformAdmin";
+  const rows = platformMode
+    ? [
+        ["Workspace", "Platform administration", "All SACCO tenants, subscriptions, approvals and operations"],
+        ["Search scope", "All SACCOs", "Find tenant, member, invoice, loan, transaction or audit records"],
+        ["Primary controls", "Registration + billing", "Tenant approval, subscription payment and release readiness"]
+      ]
+    : state.workspace === "member"
+      ? [
+          ["Workspace", "Member view", "Balances, loans, notifications, guarantees and offline drafts"],
+          ["Search scope", currentTenant().name, "Member self-service stays tenant-scoped"],
+          ["Primary controls", "Self-service", "Statement review, loan request and mobile money payment"]
+        ]
+      : [
+          ["Workspace", workspace.label, `${currentTenant().name} role-specific SACCO view`],
+          ["Search scope", currentTenant().name, "Members, transactions, loans, approvals and reports"],
+          ["Primary controls", roleControlSummary(), roleControlDetail()]
+        ];
+  return `
+    <section class="card workspace-panel">
+      <div class="toolbar">
+        <div>
+          <h2>${workspace.label}</h2>
+          <p class="eyebrow">${platformMode ? "Multi-SACCO administration" : currentTenant().name}</p>
+        </div>
+        <button class="secondary-button" data-action="globalSearch" type="button">Search records</button>
+      </div>
+      <div class="grid three">
+        ${rows.map(([label, value, detail]) => miniFact(label, `${value}<br><small>${detail}</small>`)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function roleControlSummary() {
+  const summaries = {
+    saccoAdmin: "Full SACCO operations",
+    treasurer: "Finance and approvals",
+    secretary: "Member records and governance",
+    chairperson: "Oversight and decisions"
+  };
+  return summaries[state.workspace] || "Tenant controls";
+}
+
+function roleControlDetail() {
+  const details = {
+    saccoAdmin: "Members, finance, loans, approvals, operations and reports",
+    treasurer: "Collections, reversals, reconciliations, reports and checker queues",
+    secretary: "Member register, KYC, meeting records, complaints and board packs",
+    chairperson: "Loan oversight, approval queues, risk reports and operating exceptions"
+  };
+  return details[state.workspace] || "Role-filtered workflows";
 }
 
 function miniFact(label, value) {
@@ -2602,6 +2753,7 @@ function memberRow(member) {
     <tr>
       <td><strong>${member.name}</strong><br><small>${member.no} &middot; ${member.phone}</small></td>
       <td>${member.type}</td>
+      <td>${member.branchName || branchName(member.branchId) || "Unassigned"}</td>
       <td>${member.kyc}</td>
       <td>${money.format(member.savings)}</td>
       <td>${money.format(member.shares)}</td>
@@ -2629,6 +2781,121 @@ function auditTable(rows) {
 
 function daysTo(dateString) {
   return Math.ceil((new Date(`${dateString}T23:59:59+03:00`) - today) / 86400000);
+}
+
+function openGlobalSearch() {
+  const results = globalSearchResults("");
+  openModal("Search SACCO records", `
+    <div class="search-modal">
+      <label class="field full">
+        <span>Search across ${state.workspace === "platformAdmin" ? "all SACCOs" : currentTenant().name}</span>
+        <input id="globalSearchInput" class="input" type="search" placeholder="Member, SACCO, invoice, transaction, loan, phone, reference">
+      </label>
+      <div id="globalSearchResults" class="search-results">${renderGlobalSearchResults(results)}</div>
+    </div>
+  `, `<button class="secondary-button" value="cancel" type="submit">Close</button>`);
+
+  const input = document.getElementById("globalSearchInput");
+  input?.focus();
+  input?.addEventListener("input", () => {
+    document.getElementById("globalSearchResults").innerHTML = renderGlobalSearchResults(globalSearchResults(input.value));
+    bindSearchResultActions();
+  });
+  bindSearchResultActions();
+}
+
+function globalSearchResults(query) {
+  const term = query.trim().toLowerCase();
+  const platformScope = state.workspace === "platformAdmin";
+  const tenantFilter = (row) => platformScope || !row.tenantId || row.tenantId === state.tenantId || row.tenantId === currentApiTenantId();
+  const rows = [
+    ...(useApiTenants() ? apiState.tenants.map(apiTenantToRow) : state.tenants).map((tenant) => ({
+      type: "SACCO",
+      title: tenant.name,
+      detail: `${tenant.registrationNo || tenant.id} - ${tenant.status}`,
+      tenantId: tenant.id,
+      view: "registrations",
+      text: JSON.stringify(tenant)
+    })),
+    ...(useApiMembers() ? apiState.members.map(apiMemberToRow) : state.members).map((member) => ({
+      type: "Member",
+      title: member.name,
+      detail: `${member.no} - ${member.phone || ""} - ${money.format(member.savings + member.shares + member.welfare)}`,
+      tenantId: member.tenantId,
+      view: "members",
+      text: JSON.stringify(member)
+    })),
+    ...(useApiTransactions() ? apiState.financialTransactions.map(apiTransactionToRow) : state.transactions).map((transaction) => ({
+      type: "Transaction",
+      title: transaction.ref || transaction.id,
+      detail: `${memberName(transaction.memberId)} - ${transaction.type} - ${money.format(transaction.amount)} - ${transaction.status}`,
+      tenantId: transaction.tenantId,
+      view: "transactions",
+      text: JSON.stringify(transaction)
+    })),
+    ...(useApiLoans() ? apiState.loans.map(apiLoanToRow) : state.loans).map((loan) => ({
+      type: "Loan",
+      title: `${loan.product} - ${memberName(loan.memberId)}`,
+      detail: `${money.format(loan.amount)} - ${loan.status} - balance ${money.format(loan.balance || 0)}`,
+      tenantId: loan.tenantId,
+      view: "loans",
+      text: JSON.stringify(loan)
+    })),
+    ...(useApiSubscriptions() ? apiState.subscriptions.map(apiSubscriptionToRow) : state.subscriptions).map((subscription) => ({
+      type: "Subscription",
+      title: subscription.invoice || subscription.id,
+      detail: `${tenantName(subscription.tenantId)} - ${money.format(subscription.amount)} - ${subscription.status}`,
+      tenantId: subscription.tenantId,
+      view: "subscriptions",
+      text: JSON.stringify(subscription)
+    })),
+    ...(apiState.user ? apiState.auditEvents : state.audit).map((event) => ({
+      type: "Audit",
+      title: event.action,
+      detail: `${tenantName(event.tenantId)} - ${event.actorName || event.actor || ""}`,
+      tenantId: event.tenantId,
+      view: "reports",
+      text: JSON.stringify(event)
+    }))
+  ];
+
+  return rows
+    .filter(tenantFilter)
+    .filter((row) => !term || row.text.toLowerCase().includes(term) || row.title.toLowerCase().includes(term) || row.detail.toLowerCase().includes(term))
+    .slice(0, 24);
+}
+
+function renderGlobalSearchResults(results) {
+  if (!results.length) return `<div class="notice">No matching records found for this workspace.</div>`;
+  return `
+    <ul class="search-list">
+      ${results.map((result, index) => `
+        <li>
+          <button class="search-result" type="button" data-search-index="${index}" data-search-view="${result.view}" data-search-tenant="${result.tenantId || ""}">
+            <span class="pill">${result.type}</span>
+            <strong>${result.title}</strong>
+            <small>${result.detail}</small>
+          </button>
+        </li>
+      `).join("")}
+    </ul>
+  `;
+}
+
+function bindSearchResultActions() {
+  document.querySelectorAll("[data-search-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const tenantId = button.dataset.searchTenant;
+      if (tenantId && state.workspace === "platformAdmin") {
+        state.tenantId = tenantId === "tenant_platform" ? "platform" : tenantId.replace(/^tenant_/, "");
+      }
+      state.currentView = button.dataset.searchView;
+      saveState();
+      closeModal();
+      render();
+      if (apiState.user) refreshApiStatus();
+    });
+  });
 }
 
 function bindViewActions() {
@@ -2754,6 +3021,7 @@ function bindViewActions() {
         loanBookImport: openLoanBookImport,
         repaymentHistoryImport: openRepaymentHistoryImport,
         newNotificationTemplate: () => openNotificationTemplateForm(),
+        globalSearch: openGlobalSearch,
         apiLogin: openApiLoginForm,
         memberLogin: openMemberLoginForm,
         memberLogout: memberLogout,
@@ -3014,6 +3282,8 @@ function openMemberLoginForm() {
       memberApiState.lastError = "";
       localStorage.setItem(MEMBER_SESSION_KEY, data.token);
       closeModal();
+      state.workspace = "member";
+      ensureWorkspaceTenant();
       state.currentView = "memberPortal";
       await refreshMemberStatus();
       render();
