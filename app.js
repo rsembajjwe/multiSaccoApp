@@ -96,6 +96,11 @@ const state = {
   expenseFormError: "",
   assetFormMessage: "",
   assetFormError: "",
+  governanceMeetingMessage: "",
+  governanceMeetingError: "",
+  selectedMeetingId: "",
+  selectedMeetingMessage: "",
+  selectedMeetingError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -131,7 +136,7 @@ const saccoModules = [
   ["accounting", "Accounting", "Trial balance, journals and reports", "transactions:view", ["admin", "treasurer", "accountant"]],
   ["reconciliation", "Reconciliation", "Bank and mobile-money matching", "transactions:view", ["admin", "treasurer", "accountant"]],
   ["reports", "Reports", "Operational and financial reporting", "reports:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "auditor"]],
-  ["governance", "Governance", "Meetings, minutes and resolutions", "reports:view", ["admin", "chairperson", "secretary"]],
+  ["governance", "Governance", "Meetings, minutes and resolutions", "governance:view", ["admin", "chairperson", "secretary"]],
   ["complaints", "Complaints", "Member cases and support", "complaints:view", ["admin", "secretary"]],
   ["users", "Users and Roles", "SACCO staff access", "roles:view", ["admin"]],
   ["settings", "Settings", "Products, branches and controls", "roles:create", ["admin"]],
@@ -174,6 +179,7 @@ function emptyData() {
     suppliers: [],
     expenses: [],
     assets: [],
+    governanceMeetings: [],
     statementLines: [],
     reconciliation: null,
     mobileMoneyCallbacks: [],
@@ -888,10 +894,10 @@ function moduleBlueprint(view) {
   if (view === "welfare") return welfareView();
   if (view === "accounting") return accountingView();
   if (view === "reconciliation") return reconciliationView();
+  if (view === "governance") return governanceView();
   if (view === "settings") return settingsView();
   if (view === "guarantors") return guarantorsView();
   const labels = {
-    governance: ["Governance", ["Meetings", "Agendas", "Attendance", "Minutes", "Resolutions", "Action items"]],
   };
   const item = labels[view] || ["Module", ["Search", "Filters", "Tables", "Actions"]];
   return tabsCard(item[0], item[1]);
@@ -1251,6 +1257,106 @@ function reconciliationMatchRows(matches) {
     sourceType: match.ledgerLine?.sourceType,
     postedAt: match.ledgerLine?.postedAt || match.statementLine?.statementDate
   }));
+}
+
+function governanceView() {
+  const meetings = dataRows("governanceMeetings").map((meeting) => ({
+    ...meeting,
+    chairName: userName(meeting.chairUserId),
+    action: "governance-meeting-detail",
+    actionLabel: "Open",
+    actionId: meeting.id
+  }));
+  const resolutions = meetings.flatMap((meeting) => (meeting.resolutions || []).map((resolution) => ({
+    ...resolution,
+    meetingTitle: meeting.title,
+    ownerName: userName(resolution.ownerUserId)
+  })));
+  return `
+    <div class="dashboard-grid">
+      ${summary("Meetings", meetings.length, "Board, AGM and committee records", "Open")}
+      ${summary("Scheduled meetings", meetings.filter((row) => normal(row.status) === "scheduled").length, "Upcoming governance events", "Prepare")}
+      ${summary("Open resolutions", resolutions.filter((row) => normal(row.status) !== "closed").length, "Action items needing follow-up", "Track")}
+      ${summary("Completed meetings", meetings.filter((row) => normal(row.status) === "completed").length, "Minutes and decisions", "Review")}
+    </div>
+    ${governanceMeetingPanel()}
+    ${governanceMeetingDetailPanel(meetings)}
+    ${recordTable("Governance meeting register", meetings, ["title", "meetingType", "scheduledAt", "chairName", "status", "openResolutions"])}
+    ${recordTable("Resolution action list", resolutions, ["meetingTitle", "title", "ownerName", "dueDate", "status", "createdAt"])}
+  `;
+}
+
+function governanceMeetingPanel() {
+  const canManage = hasPermission("governance:manage");
+  const users = dataRows("users").filter((user) => user.tenantId === state.user?.tenantId);
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Governance meeting setup</h2>
+          <p>Create board, AGM, committee, and management meetings with minutes.</p>
+        </div>
+      </div>
+      ${state.governanceMeetingMessage ? `<div class="notice compact"><strong>${escapeHtml(state.governanceMeetingMessage)}</strong></div>` : ""}
+      ${state.governanceMeetingError ? `<div class="notice warning"><strong>Meeting setup failed.</strong><span>${escapeHtml(state.governanceMeetingError)}</span></div>` : ""}
+      <form id="governanceMeetingForm" class="form-grid">
+        <input type="hidden" id="newMeetingTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
+        <label><span>Title</span><input id="newMeetingTitle" required placeholder="Monthly board meeting" ${canManage ? "" : "disabled"}></label>
+        <label><span>Meeting type</span><select id="newMeetingType" ${canManage ? "" : "disabled"}>${meetingTypeOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
+        <label><span>Scheduled time</span><input id="newMeetingScheduledAt" type="datetime-local" value="${localDateTimeValue()}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Chairperson</span><select id="newMeetingChairUserId" ${canManage ? "" : "disabled"}><option value="">Use current user</option>${users.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.fullName || user.email)}</option>`).join("")}</select></label>
+        <label><span>Status</span><select id="newMeetingStatus" ${canManage ? "" : "disabled"}><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+        <label class="wide"><span>Minutes / agenda</span><textarea id="newMeetingMinutes" placeholder="Agenda, attendance notes, or minutes summary" ${canManage ? "" : "disabled"}></textarea></label>
+        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">Create governance meeting</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function governanceMeetingDetailPanel(meetings) {
+  const meeting = meetings.find((item) => item.id === state.selectedMeetingId);
+  if (!meeting) return "";
+  const canManage = hasPermission("governance:manage");
+  const users = dataRows("users").filter((user) => user.tenantId === state.user?.tenantId);
+  return `
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Governance meeting detail</h2>
+          <p>${escapeHtml(meeting.title)} - ${escapeHtml(labelize(meeting.meetingType || ""))}</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-governance-meeting-detail">Close</button>
+      </div>
+      ${state.selectedMeetingMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedMeetingMessage)}</strong></div>` : ""}
+      ${state.selectedMeetingError ? `<div class="notice warning"><strong>Resolution update failed.</strong><span>${escapeHtml(state.selectedMeetingError)}</span></div>` : ""}
+      <div class="source-grid">
+        ${mini("Chairperson", meeting.chairName)}
+        ${mini("Status", meeting.status)}
+        ${mini("Scheduled", meeting.scheduledAt)}
+        ${mini("Open resolutions", meeting.openResolutions || 0)}
+        ${mini("Minutes", meeting.minutes ? "Captured" : "Pending")}
+      </div>
+      <form id="governanceResolutionForm" class="form-grid">
+        <input type="hidden" id="selectedMeetingId" value="${escapeHtml(meeting.id)}">
+        <label><span>Resolution title</span><input id="newResolutionTitle" required placeholder="Resolution or action item" ${canManage ? "" : "disabled"}></label>
+        <label><span>Owner</span><select id="newResolutionOwnerUserId" ${canManage ? "" : "disabled"}><option value="">Use current user</option>${users.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.fullName || user.email)}</option>`).join("")}</select></label>
+        <label><span>Due date</span><input id="newResolutionDueDate" type="date" ${canManage ? "" : "disabled"}></label>
+        <label><span>Status</span><select id="newResolutionStatus" ${canManage ? "" : "disabled"}><option value="open">Open</option><option value="in_progress">In progress</option><option value="closed">Closed</option></select></label>
+        <label class="wide"><span>Decision</span><textarea id="newResolutionDecision" placeholder="Decision text, follow-up requirement, or governance action" ${canManage ? "" : "disabled"}></textarea></label>
+        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">Record resolution</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+      ${recordTable("Meeting resolutions", (meeting.resolutions || []).map((resolution) => ({ ...resolution, ownerName: userName(resolution.ownerUserId) })), ["title", "ownerName", "dueDate", "status", "createdAt"])}
+    </section>
+  `;
+}
+
+function meetingTypeOptions() {
+  return ["board", "agm", "credit_committee", "audit_committee", "management"];
+}
+
+function localDateTimeValue() {
+  const date = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
 function settingsView() {
@@ -2117,6 +2223,7 @@ async function refreshAll() {
     ["suppliers", "/suppliers"],
     ["expenses", "/expenses"],
     ["assets", "/assets"],
+    ["governanceMeetings", "/governance-meetings"],
     ["statementLines", "/statement-lines"],
     ["reconciliation", "/reconciliation"],
     ["mobileMoneyCallbacks", "/integrations/mobile-money/callbacks"],
@@ -2867,6 +2974,71 @@ async function registerAsset(event) {
   }
 }
 
+async function createGovernanceMeeting(event) {
+  event.preventDefault();
+  state.governanceMeetingMessage = "";
+  state.governanceMeetingError = "";
+  try {
+    const meeting = await api("/governance-meetings", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: value("newMeetingTenantId"),
+        title: value("newMeetingTitle"),
+        meetingType: value("newMeetingType"),
+        scheduledAt: new Date(value("newMeetingScheduledAt")).toISOString(),
+        chairUserId: value("newMeetingChairUserId"),
+        status: value("newMeetingStatus"),
+        minutes: value("newMeetingMinutes")
+      })
+    });
+    state.governanceMeetingMessage = `Created governance meeting ${meeting.title}.`;
+    state.selectedMeetingId = meeting.id;
+    await refreshAll();
+    state.selectedMeetingId = meeting.id;
+    state.governanceMeetingMessage = `Created governance meeting ${meeting.title}.`;
+    renderShell();
+  } catch (error) {
+    state.governanceMeetingError = error.message;
+    renderShell();
+  }
+}
+
+function openGovernanceMeetingDetail(meetingId) {
+  state.selectedMeetingId = meetingId;
+  state.selectedMeetingMessage = "";
+  state.selectedMeetingError = "";
+  renderShell();
+}
+
+async function createGovernanceResolution(event) {
+  event.preventDefault();
+  const meetingId = value("selectedMeetingId") || state.selectedMeetingId;
+  if (!meetingId) return;
+  state.selectedMeetingMessage = "";
+  state.selectedMeetingError = "";
+  try {
+    const resolution = await api(`/governance-meetings/${encodeURIComponent(meetingId)}/resolutions`, {
+      method: "POST",
+      body: JSON.stringify({
+        title: value("newResolutionTitle"),
+        decision: value("newResolutionDecision"),
+        ownerUserId: value("newResolutionOwnerUserId"),
+        dueDate: value("newResolutionDueDate") || null,
+        status: value("newResolutionStatus")
+      })
+    });
+    state.selectedMeetingMessage = `Recorded resolution ${resolution.title}.`;
+    const message = state.selectedMeetingMessage;
+    await refreshAll();
+    state.selectedMeetingId = meetingId;
+    state.selectedMeetingMessage = message;
+    renderShell();
+  } catch (error) {
+    state.selectedMeetingError = error.message;
+    renderShell();
+  }
+}
+
 function openComplaintDetail(complaintId) {
   state.selectedComplaintId = complaintId;
   state.selectedComplaintMessage = "";
@@ -3070,6 +3242,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='welfare-claim-detail']").forEach((button) => {
     button.addEventListener("click", () => openWelfareClaimDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='governance-meeting-detail']").forEach((button) => {
+    button.addEventListener("click", () => openGovernanceMeetingDetail(button.dataset.rowId));
+  });
   document.querySelector("[data-action='close-user-detail']")?.addEventListener("click", () => {
     state.selectedUserId = "";
     state.selectedUserRoles = [];
@@ -3135,6 +3310,12 @@ function bindEvents() {
     state.selectedWelfareClaimError = "";
     renderShell();
   });
+  document.querySelector("[data-action='close-governance-meeting-detail']")?.addEventListener("click", () => {
+    state.selectedMeetingId = "";
+    state.selectedMeetingMessage = "";
+    state.selectedMeetingError = "";
+    renderShell();
+  });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
   document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
@@ -3154,6 +3335,8 @@ function bindEvents() {
   document.querySelector("#welfareClaimForm")?.addEventListener("submit", submitWelfareClaim);
   document.querySelector("#expenseForm")?.addEventListener("submit", postExpense);
   document.querySelector("#assetForm")?.addEventListener("submit", registerAsset);
+  document.querySelector("#governanceMeetingForm")?.addEventListener("submit", createGovernanceMeeting);
+  document.querySelector("#governanceResolutionForm")?.addEventListener("submit", createGovernanceResolution);
   document.querySelector("#memberStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     runMemberDecision("custom");
@@ -3273,6 +3456,11 @@ async function logout() {
     expenseFormError: "",
     assetFormMessage: "",
     assetFormError: "",
+    governanceMeetingMessage: "",
+    governanceMeetingError: "",
+    selectedMeetingId: "",
+    selectedMeetingMessage: "",
+    selectedMeetingError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });
