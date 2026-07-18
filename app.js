@@ -2481,6 +2481,7 @@ function renderOperations() {
   const warningAlerts = alerts.filter((alert) => alert.severity === "warning").length;
   const exceptionCount = Number(counts.callbackExceptions || 0) + Number(counts.deliveryExceptions || 0);
   const queuePressure = Number(counts.pendingFinancialTransactions || 0) + Number(counts.openComplaints || 0);
+  const activeTab = state.operationsTab || "overview";
   const releaseGates = [
     { label: "Database reachable", ok: status.database?.reachable === true, detail: status.checkedAt ? `checked ${status.checkedAt.slice(0, 16).replace("T", " ")}` : "waiting for API" },
     { label: "No critical operation alerts", ok: criticalAlerts === 0, detail: `${criticalAlerts} critical alert(s)` },
@@ -2513,7 +2514,14 @@ function renderOperations() {
           <h2>Operations command center</h2>
           <p class="eyebrow">API-backed &middot; release readiness, alerts, queues and runbooks for ${tenantLabel}</p>
         </div>
-        ${refreshApiButton()}
+        <div class="filters">
+          ${refreshApiButton()}
+          ${operationsTabButton("overview", "Overview", activeTab)}
+          ${operationsTabButton("alerts", "Alerts", activeTab)}
+          ${operationsTabButton("readiness", "Readiness", activeTab)}
+          ${operationsTabButton("queues", "Queues", activeTab)}
+          ${operationsTabButton("runbooks", "Runbooks", activeTab)}
+        </div>
       </div>
       <div class="grid metrics">
         ${metric("Readiness", `${healthyGateCount}/${releaseGates.length}`, "production gates passing")}
@@ -2521,55 +2529,55 @@ function renderOperations() {
         ${metric("Exception load", exceptionCount, "callbacks and provider deliveries")}
         ${metric("Queue pressure", queuePressure, "pending postings and complaints")}
       </div>
-      <div class="grid three" style="margin-top:16px">
-        ${metric("Scope", tenantLabel, status.ok ? "API operations status" : "waiting for refresh")}
-        ${metric("Database", status.database?.reachable ? "Reachable" : "Unknown", status.checkedAt ? status.checkedAt.slice(0, 10) : "not checked")}
-        ${metric("Runbooks", 4, "monitoring, deployment, security, technical")}
-      </div>
+      ${renderOperationsTab(activeTab, { status, counts, alerts, tenantLabel, releaseGates, healthyGateCount, criticalAlerts, warningAlerts, exceptionCount, queuePressure })}
     </section>
-    <div class="grid metrics">
-      ${metric("Scope", tenantLabel, status.ok ? "API operations status" : "waiting for refresh")}
-      ${metric("Database", status.database?.reachable ? "Reachable" : "Unknown", status.checkedAt ? status.checkedAt.slice(0, 10) : "not checked")}
-      ${metric("Alerts", alerts.length, `${criticalAlerts} critical, ${warningAlerts} warning`)}
-      ${metric("Active members", counts.activeMembers || 0, `${counts.members || 0} total members`)}
-    </div>
+  `;
+}
 
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
+function operationsTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-operations-tab="${id}" type="button">${label}</button>`;
+}
+
+function renderOperationsTab(activeTab, model) {
+  if (activeTab === "alerts") {
+    return `
+      <div class="toolbar" style="margin-top:16px">
         <div>
-          <h2>Operational alerts</h2>
+          <h3>Operational alerts</h3>
           <p class="eyebrow">Live from /api/v1/operations/status</p>
         </div>
-        ${refreshApiButton()}
       </div>
-      ${operationAlerts(alerts)}
-    </section>
-
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
+      ${operationAlerts(model.alerts)}
+    `;
+  }
+  if (activeTab === "readiness") {
+    return `
+      <div class="toolbar" style="margin-top:16px">
         <div>
-          <h2>Production readiness gates</h2>
+          <h3>Production readiness gates</h3>
           <p class="eyebrow">Release checks surfaced for administrators</p>
         </div>
       </div>
-      ${releaseGateList(releaseGates)}
-    </section>
-
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
+      ${releaseGateList(model.releaseGates)}
+    `;
+  }
+  if (activeTab === "queues") {
+    return `
+      <div class="toolbar" style="margin-top:16px">
         <div>
-          <h2>Operational counts</h2>
-          <p class="eyebrow">Tenant-isolated backend health signals</p>
+          <h3>Operational queues</h3>
+          <p class="eyebrow">Tenant-isolated backend health signals and action queues</p>
         </div>
       </div>
-      ${operationCountsTable(counts)}
-    </section>
-
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
+      ${operationCountsTable(model.counts)}
+    `;
+  }
+  if (activeTab === "runbooks") {
+    return `
+      <div class="toolbar" style="margin-top:16px">
         <div>
-          <h2>Runbook shortcuts</h2>
-          <p class="eyebrow">Phase 7 hardening artifacts</p>
+          <h3>Runbook shortcuts</h3>
+          <p class="eyebrow">Monitoring, deployment, security and troubleshooting artifacts</p>
         </div>
       </div>
       <div class="runbook-grid">
@@ -2578,7 +2586,17 @@ function renderOperations() {
         ${runbookLink("Security review", "docs/security-review.md", "Release gates for critical security findings")}
         ${runbookLink("Technical manual", "docs/technical-manual.md", "Validation, migrations and troubleshooting")}
       </div>
-    </section>
+    `;
+  }
+  return `
+    <div class="grid three" style="margin-top:16px">
+      ${metric("Scope", model.tenantLabel, model.status.ok ? "API operations status" : "waiting for refresh")}
+      ${metric("Database", model.status.database?.reachable ? "Reachable" : "Unknown", model.status.checkedAt ? model.status.checkedAt.slice(0, 10) : "not checked")}
+      ${metric("Runbooks", 4, "monitoring, deployment, security, technical")}
+    </div>
+    <div class="notice" style="margin-top:16px">
+      <strong>Operations focus:</strong> monitor alerts, release gates, exception queues and support hand-offs before a SACCO is allowed to run production activity.
+    </div>
   `;
 }
 
@@ -2644,6 +2662,7 @@ function renderNotifications() {
   const templates = apiState.notificationTemplates || [];
   const canManageTemplates = hasPermission("notifications:manage");
   const failed = deliveries.filter((delivery) => delivery.status !== "sent").length;
+  const activeTab = state.notificationsTab || "outbox";
   return `
     <section class="card integration-panel">
       <div class="toolbar">
@@ -2664,10 +2683,15 @@ function renderNotifications() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Provider outbox</h2>
-          <p class="eyebrow">Platform operations &middot; member alerts and provider status</p>
+          <h2>Notification control center</h2>
+          <p class="eyebrow">Platform operations &middot; provider outbox, templates and failed delivery follow-up</p>
         </div>
-        ${canManageTemplates ? `<button class="primary-button" data-action="newNotificationTemplate" type="button">New template</button>` : `<span class="pill">View only</span>`}
+        <div class="filters">
+          ${notificationsTabButton("outbox", "Provider outbox", activeTab)}
+          ${notificationsTabButton("templates", "Templates", activeTab)}
+          ${notificationsTabButton("exceptions", "Exceptions", activeTab)}
+          ${canManageTemplates ? `<button class="primary-button" data-action="newNotificationTemplate" type="button">New template</button>` : `<span class="pill">View only</span>`}
+        </div>
       </div>
       <div class="grid metrics">
         ${metric("SMS", deliveries.filter((item) => item.channel === "sms").length, "provider deliveries")}
@@ -2675,9 +2699,38 @@ function renderNotifications() {
         ${metric("Templates", templates.length, `${templates.filter((item) => item.status === "active").length} active`)}
         ${metric("Exceptions", failed, "needs follow-up")}
       </div>
-      ${notificationTemplateTable(templates)}
-      ${notificationDeliveryTable(deliveries)}
+      ${renderNotificationsTab(activeTab, deliveries, templates)}
     </section>
+  `;
+}
+
+function notificationsTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-notifications-tab="${id}" type="button">${label}</button>`;
+}
+
+function renderNotificationsTab(activeTab, deliveries, templates) {
+  if (activeTab === "templates") {
+    return `
+      <div class="notice" style="margin-top:16px">
+        <strong>Template governance:</strong> platform templates define the standard wording for payment, approval, loan and support alerts.
+      </div>
+      ${notificationTemplateTable(templates)}
+    `;
+  }
+  if (activeTab === "exceptions") {
+    const exceptions = deliveries.filter((delivery) => delivery.status !== "sent");
+    return `
+      <div class="notice" style="margin-top:16px">
+        <strong>Failed delivery follow-up:</strong> review provider exceptions before closing support complaints tied to member communication.
+      </div>
+      ${notificationDeliveryTable(exceptions)}
+    `;
+  }
+  return `
+    <div class="notice" style="margin-top:16px">
+      <strong>Provider outbox:</strong> latest SMS and email activity from Java API delivery records.
+    </div>
+    ${notificationDeliveryTable(deliveries)}
   `;
 }
 
@@ -2686,6 +2739,7 @@ function renderComplaints() {
   const open = complaints.filter((complaint) => !["resolved", "closed"].includes(complaint.status));
   const highPriority = open.filter((complaint) => complaint.priority === "high");
   const canManageComplaints = hasPermission("complaints:manage");
+  const activeTab = state.complaintsTab || "queue";
   return `
     <section class="card integration-panel">
       <div class="toolbar">
@@ -2709,15 +2763,50 @@ function renderComplaints() {
           <h2>Support queue</h2>
           <p class="eyebrow">Platform support &middot; tenant and member complaint follow-up</p>
         </div>
-        ${canManageComplaints ? `<button class="primary-button" data-action="newComplaint" type="button">New complaint</button>` : `<span class="pill">View only</span>`}
+        <div class="filters">
+          ${complaintsTabButton("queue", "Queue", activeTab)}
+          ${complaintsTabButton("escalations", "Escalations", activeTab)}
+          ${complaintsTabButton("closed", "Closed", activeTab)}
+          ${canManageComplaints ? `<button class="primary-button" data-action="newComplaint" type="button">New complaint</button>` : `<span class="pill">View only</span>`}
+        </div>
       </div>
       <div class="grid metrics">
         ${metric("Complaints", complaints.length, `${open.length} open`)}
         ${metric("High priority", highPriority.length, "needs follow-up")}
         ${metric("Resolved", complaints.filter((complaint) => ["resolved", "closed"].includes(complaint.status)).length, "closed queue")}
       </div>
-      ${complaintList(complaints)}
+      ${renderComplaintsTab(activeTab, complaints, open, highPriority)}
     </section>
+  `;
+}
+
+function complaintsTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-complaints-tab="${id}" type="button">${label}</button>`;
+}
+
+function renderComplaintsTab(activeTab, complaints, open, highPriority) {
+  if (activeTab === "escalations") {
+    return `
+      <div class="notice" style="margin-top:16px">
+        <strong>Escalation focus:</strong> high priority or unresolved complaints should be reviewed with SACCO officials and operations status.
+      </div>
+      ${complaintList(highPriority)}
+    `;
+  }
+  if (activeTab === "closed") {
+    const closed = complaints.filter((complaint) => ["resolved", "closed"].includes(complaint.status));
+    return `
+      <div class="notice" style="margin-top:16px">
+        <strong>Closed support evidence:</strong> resolved complaints remain available for reports and audit review.
+      </div>
+      ${complaintList(closed)}
+    `;
+  }
+  return `
+    <div class="notice" style="margin-top:16px">
+      <strong>Open complaint workflow:</strong> support officers triage the complaint, link the affected member or SACCO, then escalate where operations or compliance action is needed.
+    </div>
+    ${complaintList(open)}
   `;
 }
 
@@ -3931,6 +4020,30 @@ function bindViewActions() {
 
   document.querySelectorAll("[data-subscription-pay]").forEach((button) => {
     button.addEventListener("click", () => recordSubscriptionPayment(button.dataset.subscriptionPay));
+  });
+
+  document.querySelectorAll("[data-operations-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.operationsTab = button.dataset.operationsTab;
+      saveState();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-notifications-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.notificationsTab = button.dataset.notificationsTab;
+      saveState();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-complaints-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.complaintsTab = button.dataset.complaintsTab;
+      saveState();
+      render();
+    });
   });
 
   document.querySelectorAll("[data-tenant-review]").forEach((button) => {

@@ -125,10 +125,10 @@ async function assertStaffScreens(page) {
     { id: "registrations", nav: "SACCO Registration", heading: "SACCO registration data source", markers: ["Java-backed", "Last sync", "Tenant approval", "SACCO application review", "Applications", "Review queue", "Packages"] },
     { id: "subscriptions", nav: "Subscriptions", heading: "Subscriptions data source", markers: ["Java-backed", "Last sync", "Billable members", "Subscription management", "Overview", "Invoices", "Payments", "Packages", "Activation gate"] },
     { id: "members", nav: "Members", heading: "Members data source", markers: ["Java-backed", "Server fields", "Import members", "Profile metadata"] },
-    { id: "operations", nav: "Operations", heading: "Operations data source", markers: ["Java-backed", "Last sync", "Operations command center"] },
+    { id: "operations", nav: "Operations", heading: "Operations data source", markers: ["Java-backed", "Last sync", "Operations command center", "Overview", "Alerts", "Readiness", "Queues", "Runbooks", "Operations focus"] },
     { id: "usersRoles", nav: "Platform Users", heading: "Platform users management data source", markers: ["Java API", "Platform users management", "Assigned roles"] },
-    { id: "notifications", nav: "Notifications", heading: "Notifications data source", markers: ["Java API", "Provider outbox", "Templates"] },
-    { id: "complaints", nav: "Complaints", heading: "Complaints data source", markers: ["Java API", "Support queue", "Open complaints"] }
+    { id: "notifications", nav: "Notifications", heading: "Notifications data source", markers: ["Java API", "Provider outbox", "Templates", "Exceptions", "Notification control center"] },
+    { id: "complaints", nav: "Complaints", heading: "Complaints data source", markers: ["Java API", "Support queue", "Open complaints", "Queue", "Escalations", "Closed", "Open complaint workflow"] }
   ];
 
   for (const screen of screens) {
