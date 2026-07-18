@@ -310,8 +310,8 @@ async function assertMemberPaymentPosting(page) {
   await page.locator("#memberPaymentReference").fill(reference);
   await page.locator("#memberPaymentForm button[type='submit']").click();
   await expectText(page, "Payment posted", "member payment posted");
-  await navigateTo(page, "accounts");
-  await expectText(page, "Member account balances", "member balances visible after payment");
+  await navigateTo(page, "receipts");
+  await expectText(page, reference, "member payment receipt visible");
   console.log("PASS member payment action");
 }
 

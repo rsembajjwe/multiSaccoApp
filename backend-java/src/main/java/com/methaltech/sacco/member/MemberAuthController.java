@@ -15,6 +15,8 @@ import com.methaltech.sacco.loan.LoanGuarantorResponse;
 import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.loan.LoanRepository;
 import com.methaltech.sacco.loan.LoanResponse;
+import com.methaltech.sacco.finance.FinancialTransaction;
+import com.methaltech.sacco.finance.FinancialTransactionRepository;
 import com.methaltech.sacco.notification.Notification;
 import com.methaltech.sacco.notification.NotificationRepository;
 import com.methaltech.sacco.notification.NotificationResponse;
@@ -65,6 +67,7 @@ class MemberAuthController {
     private final LoanRepository loanRepository;
     private final LoanRepaymentRepository repaymentRepository;
     private final LoanGuarantorRepository guarantorRepository;
+    private final FinancialTransactionRepository transactionRepository;
     private final ComplaintService complaintService;
     private final NotificationRepository notificationRepository;
     private final NotificationService notificationService;
@@ -84,6 +87,7 @@ class MemberAuthController {
             LoanRepository loanRepository,
             LoanRepaymentRepository repaymentRepository,
             LoanGuarantorRepository guarantorRepository,
+            FinancialTransactionRepository transactionRepository,
             ComplaintService complaintService,
             NotificationRepository notificationRepository,
             NotificationService notificationService,
@@ -101,6 +105,7 @@ class MemberAuthController {
         this.loanRepository = loanRepository;
         this.repaymentRepository = repaymentRepository;
         this.guarantorRepository = guarantorRepository;
+        this.transactionRepository = transactionRepository;
         this.complaintService = complaintService;
         this.notificationRepository = notificationRepository;
         this.notificationService = notificationService;
@@ -245,6 +250,7 @@ class MemberAuthController {
                         loanRepository.findById(request.getLoanId()).orElse(null),
                         guaranteeCapacity(member, request.getId())))
                 .toList();
+        List<MobileStatementLineResponse> statementLines = recentStatementLines(member);
         Instant lastUpdatedAt = java.util.stream.Stream.concat(
                         loans.stream().map(LoanResponse::updatedAt),
                         notificationRepository.findByMemberIdOrderByCreatedAtDesc(member.getId()).stream().map(Notification::getCreatedAt))
@@ -260,6 +266,7 @@ class MemberAuthController {
                 loans,
                 notifications,
                 pendingGuarantors,
+                statementLines,
                 lastUpdatedAt,
                 true)));
     }
@@ -464,6 +471,30 @@ class MemberAuthController {
                 repaymentRepository.totalAmountByLoanId(loan.getId()));
     }
 
+    private List<MobileStatementLineResponse> recentStatementLines(Member member) {
+        BigDecimal runningBalance = BigDecimal.ZERO;
+        List<MobileStatementLineResponse> lines = new java.util.ArrayList<>();
+        for (FinancialTransaction transaction : transactionRepository.findByMemberIdAndStatusOrderByPostedAtAscCreatedAtAsc(member.getId(), "posted")) {
+            BigDecimal signedAmount = "withdrawal".equals(transaction.getType())
+                    ? transaction.getAmount().negate()
+                    : transaction.getAmount();
+            runningBalance = runningBalance.add(signedAmount);
+            lines.add(new MobileStatementLineResponse(
+                    transaction.getId(),
+                    transaction.getReference(),
+                    transaction.getType(),
+                    transaction.getChannel(),
+                    transaction.getAmount(),
+                    signedAmount.compareTo(BigDecimal.ZERO) < 0 ? signedAmount.abs() : BigDecimal.ZERO,
+                    signedAmount.compareTo(BigDecimal.ZERO) > 0 ? signedAmount : BigDecimal.ZERO,
+                    runningBalance,
+                    transaction.getNarration(),
+                    transaction.getPostedAt() == null ? transaction.getCreatedAt() : transaction.getPostedAt()));
+        }
+        int from = Math.max(lines.size() - 20, 0);
+        return lines.subList(from, lines.size());
+    }
+
     record LoginRequest(String saccoCode, @NotBlank String identifier, @NotBlank String password) {
     }
 
@@ -491,8 +522,22 @@ class MemberAuthController {
             List<LoanResponse> loans,
             List<NotificationResponse> notifications,
             List<LoanGuarantorResponse> pendingGuarantorRequests,
+            List<MobileStatementLineResponse> statementLines,
             Instant lastUpdatedAt,
             boolean serverConfirmed) {
+    }
+
+    record MobileStatementLineResponse(
+            String transactionId,
+            String reference,
+            String type,
+            String channel,
+            BigDecimal amount,
+            BigDecimal debit,
+            BigDecimal credit,
+            BigDecimal runningBalance,
+            String description,
+            Instant postedAt) {
     }
 
     record Balances(BigDecimal savings, BigDecimal shares, BigDecimal welfare) {
