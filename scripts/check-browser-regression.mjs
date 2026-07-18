@@ -108,8 +108,9 @@ async function clearSession(page) {
 }
 
 async function staffLogin(page) {
-  await page.getByRole("button", { name: "API login" }).first().click();
-  await page.locator("#apiEmail").fill(process.env.UI_STAFF_EMAIL || "admin@platform.local");
+  await page.getByRole("button", { name: /Staff login|API login/ }).first().click();
+  await page.locator("#apiSaccoCode").fill(process.env.UI_STAFF_SACCO_CODE || "PLATFORM");
+  await page.locator("#apiUsername").fill(process.env.UI_STAFF_USERNAME || process.env.UI_STAFF_EMAIL || "admin@platform.local");
   await page.locator("#apiPassword").fill(process.env.UI_STAFF_PASSWORD || "Admin@12345");
   await page.locator("#apiLoginSubmit").click();
   await expectText(page, "API:", "staff API badge");

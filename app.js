@@ -62,6 +62,16 @@ const workspaceProfiles = {
   }
 };
 
+const navPermissions = {
+  registrations: "tenants:view",
+  members: "members:view",
+  transactions: "transactions:view",
+  loans: "loans:view",
+  approvals: "approvals:view",
+  operations: "operations:view",
+  reports: "reports:view"
+};
+
 const money = new Intl.NumberFormat("en-UG", {
   style: "currency",
   currency: "UGX",
@@ -165,6 +175,9 @@ let offlineDrafts = loadOfflineDrafts();
 let apiState = {
   health: "checking",
   user: null,
+  roleIds: [],
+  roleNames: [],
+  permissionIds: [],
   token: localStorage.getItem(API_SESSION_KEY) || "",
   tenants: [],
   users: [],
@@ -245,7 +258,13 @@ function currentWorkspace() {
 
 function visibleNavItems() {
   const allowed = new Set(currentWorkspace().nav);
-  return navItems.filter(([id]) => allowed.has(id));
+  const permissions = new Set(apiState.permissionIds || []);
+  return navItems.filter(([id]) => {
+    if (!allowed.has(id)) return false;
+    if (!apiState.user || permissions.size === 0) return true;
+    const required = navPermissions[id];
+    return !required || permissions.has(required);
+  });
 }
 
 function ensureWorkspaceTenant() {
@@ -580,6 +599,17 @@ function isAuthenticated() {
   return Boolean(apiState.user || memberApiState.member);
 }
 
+function workspaceForStaff(user, roleNames = [], permissionIds = []) {
+  if (user?.tenantId === "tenant_platform") return "platformAdmin";
+  const roles = roleNames.join(" ").toLowerCase();
+  const permissions = new Set(permissionIds);
+  if (roles.includes("administrator")) return "saccoAdmin";
+  if (roles.includes("treasurer") || permissions.has("accounting:post") || permissions.has("transactions:approve")) return "treasurer";
+  if (roles.includes("secretary") || permissions.has("members:approve")) return "secretary";
+  if (roles.includes("chairperson") || permissions.has("loans:approve") || permissions.has("approvals:decide")) return "chairperson";
+  return "saccoAdmin";
+}
+
 function init() {
   renderTenantSelect();
   renderWorkspaceSelect();
@@ -676,6 +706,8 @@ function render() {
   document.getElementById("workspaceSelect").value = state.workspace || "platformAdmin";
   document.getElementById("sessionRole").textContent = currentWorkspace().session;
   document.getElementById("newMemberBtn").hidden = !currentWorkspace().nav.includes("members");
+  document.getElementById("globalSearchBtn").hidden = false;
+  document.getElementById("memberPortalBtn").hidden = false;
   renderApiChrome();
   renderShellStatus();
 
@@ -720,6 +752,10 @@ function renderLoginScreen() {
   document.querySelectorAll(".nav-item").forEach((button) => button.classList.remove("active"));
   document.getElementById("sectionKicker").textContent = "Welcome";
   document.getElementById("pageTitle").textContent = "Login to Tereka Online";
+  document.getElementById("apiLoginBtn").hidden = true;
+  document.getElementById("apiLogoutBtn").hidden = true;
+  document.getElementById("globalSearchBtn").hidden = true;
+  document.getElementById("memberPortalBtn").hidden = true;
   document.getElementById("newMemberBtn").hidden = true;
   document.getElementById("shellStatus").innerHTML = `
     ${shellFact("Application", "Tereka Online")}
@@ -746,9 +782,9 @@ function renderLoginScreen() {
         <article class="login-option">
           <span class="pill">Staff</span>
           <h3>Platform and SACCO administration</h3>
-          <p>Use this for platform administrators, SACCO admins, treasurers, secretaries and chairpersons.</p>
+          <p>Enter the SACCO code, username, and password for platform administrators, SACCO admins, treasurers, secretaries and chairpersons.</p>
           <button class="primary-button" data-action="apiLogin" type="button">Staff login</button>
-          <small>Use credentials issued by the platform administrator. Seeded demo staff work only when demo logins are enabled.</small>
+          <small>Use code PLATFORM for platform administration. SACCOs use their assigned code, for example GVS.</small>
         </article>
         <article class="login-option">
           <span class="pill">Member</span>
@@ -775,13 +811,14 @@ function renderShellStatus() {
     ? apiState.operationsStatus.checkedAt.slice(0, 16).replace("T", " ")
     : "pending";
   const apiLabel = apiState.user ? `API: ${apiState.user.fullName}` : `API: ${apiState.health || "checking"}`;
+  const roleLabel = apiState.roleNames?.length ? apiState.roleNames.join(", ") : currentWorkspace().session;
   const memberLabel = memberApiState.member ? `Member: ${memberApiState.member.fullName}` : "Member: signed out";
   shellStatus.innerHTML = `
     ${shellFact("Tenant", currentTenantName)}
     ${shellFact("Staff session", apiLabel)}
+    ${shellFact("Role access", roleLabel)}
     ${shellFact("Member session", memberLabel)}
     ${shellFact("Operations scope", operationsScope)}
-    ${shellFact("Backend sync", checkedAt)}
   `;
 }
 
@@ -3203,6 +3240,11 @@ async function refreshApiStatus() {
     if (apiState.token) {
       const session = await apiRequest("/auth/me");
       apiState.user = session.user;
+      apiState.roleIds = session.roleIds || [];
+      apiState.roleNames = session.roleNames || [];
+      apiState.permissionIds = session.permissionIds || [];
+      state.workspace = workspaceForStaff(session.user, apiState.roleNames, apiState.permissionIds);
+      ensureWorkspaceTenant();
       const [tenants, users, roles, permissions, auditEvents, operationsStatus, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, notificationTemplates, suppliers, expenses, assets, governanceMeetings, complaints, approvalWorkflows, approvalDecisions] = await Promise.all([
         apiRequest("/tenants"),
         apiRequest("/users"),
@@ -3288,9 +3330,10 @@ async function refreshApiStatus() {
 
 function openApiLoginForm() {
   openModal("API login", `
-    <div class="notice">Use your issued staff credentials. Seeded staff accounts are accepted only when <strong>SACCO_DEMO_LOGINS_ENABLED=true</strong> in development or an approved demo window.</div>
+    <div class="notice">Enter the code assigned to your SACCO. Use <strong>PLATFORM</strong> for platform administration. Access after login is limited by your assigned roles and permissions.</div>
     <div class="form-grid" style="margin-top:14px">
-      ${field("Email", "apiEmail", "email", "")}
+      ${field("SACCO code", "apiSaccoCode", "text", "")}
+      ${field("Username or email", "apiUsername", "text", "")}
       ${field("Password", "apiPassword", "password", "")}
     </div>
   `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="apiLoginSubmit" class="primary-button" type="button">Login</button>`);
@@ -3300,13 +3343,20 @@ function openApiLoginForm() {
       const data = await apiRequest("/auth/login", {
         method: "POST",
         headers: {},
-        body: JSON.stringify({ email: value("apiEmail"), password: value("apiPassword") })
+        body: JSON.stringify({
+          saccoCode: value("apiSaccoCode"),
+          username: value("apiUsername"),
+          password: value("apiPassword")
+        })
       });
       apiState.token = data.token;
       apiState.user = data.user;
+      apiState.roleIds = data.roleIds || [];
+      apiState.roleNames = data.roleNames || [];
+      apiState.permissionIds = data.permissionIds || [];
       localStorage.setItem(API_SESSION_KEY, data.token);
       closeModal();
-      state.workspace = data.user.tenantId === "tenant_platform" ? "platformAdmin" : "saccoAdmin";
+      state.workspace = workspaceForStaff(data.user, apiState.roleNames, apiState.permissionIds);
       ensureWorkspaceTenant();
       state.currentView = currentWorkspace().defaultView;
       saveState();
@@ -3512,7 +3562,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, tenants: [], users: [], roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], notificationTemplates: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], operationsStatus: null, loading: false, lastSyncedAt: "", lastError: "", message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, roleIds: [], roleNames: [], permissionIds: [], tenants: [], users: [], roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], notificationTemplates: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], operationsStatus: null, loading: false, lastSyncedAt: "", lastError: "", message: "Logged out of API session." };
   renderApiChrome();
   render();
 }

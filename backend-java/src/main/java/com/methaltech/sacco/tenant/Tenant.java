@@ -9,7 +9,7 @@ import java.time.LocalDate;
 
 @Entity
 @Table(name = "tenants")
-class Tenant {
+public class Tenant {
 
     @Id
     private String id;
@@ -69,7 +69,7 @@ class Tenant {
         this.updatedAt = Instant.now();
     }
 
-    String getId() {
+    public String getId() {
         return id;
     }
 

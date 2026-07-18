@@ -430,6 +430,49 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void loginAcceptsSaccoCodeUsernameAndExposesAccess() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "PLATFORM",
+								  "username": "admin@platform.local",
+								  "password": "Admin@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.tenantId", is("tenant_platform")))
+				.andExpect(jsonPath("$.data.roleNames", hasItem("Platform Administrator")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("tenants:view")));
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "GVS",
+								  "username": "admin@greenvalley.local",
+								  "password": "Sacco@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.roleNames", hasItem("SACCO Administrator")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("members:view")));
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "LFS",
+								  "username": "admin@greenvalley.local",
+								  "password": "Sacco@12345"
+								}
+								"""))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("AUTH_INVALID")));
+	}
+
+	@Test
 	void loginRejectsBadPassword() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/login")
 						.contentType("application/json")

@@ -140,7 +140,7 @@ All JSON responses should follow one of these shapes:
 | POST | `/users` | Create a user with hashed password. | Admin |
 | GET | `/users/:id/roles` | List assigned roles for a staff user. | Admin |
 | PUT | `/users/:id/roles` | Replace assigned roles for a staff user. | Admin |
-| POST | `/auth/login` | Authenticate user. | Public |
+| POST | `/auth/login` | Authenticate staff with `saccoCode`, `username`, and `password`; legacy `email` plus `password` remains accepted for automation. | Public |
 | POST | `/auth/logout` | End current session. | Required |
 | GET | `/auth/me` | Get current authenticated user. | Required |
 | POST | `/member-auth/login` | Authenticate a member with membership number, phone, or email. | Public |

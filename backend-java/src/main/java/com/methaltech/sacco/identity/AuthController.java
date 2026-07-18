@@ -4,6 +4,8 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.security.PasswordHasher;
 import com.methaltech.sacco.security.TokenGenerator;
+import com.methaltech.sacco.tenant.Tenant;
+import com.methaltech.sacco.tenant.TenantRepository;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,10 +38,12 @@ class AuthController {
     private final MfaChallengeRepository mfaChallengeRepository;
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
+    private final RolePermissionRepository rolePermissionRepository;
     private final AuthService authService;
     private final AuditService auditService;
     private final PasswordHasher passwordHasher;
     private final TokenGenerator tokenGenerator;
+    private final TenantRepository tenantRepository;
     private final TenantService tenantService;
     private final LoginAttemptService loginAttemptService;
     private final DemoCredentialPolicy demoCredentialPolicy;
@@ -51,10 +55,12 @@ class AuthController {
             MfaChallengeRepository mfaChallengeRepository,
             UserRoleRepository userRoleRepository,
             RoleRepository roleRepository,
+            RolePermissionRepository rolePermissionRepository,
             AuthService authService,
             AuditService auditService,
             PasswordHasher passwordHasher,
             TokenGenerator tokenGenerator,
+            TenantRepository tenantRepository,
             TenantService tenantService,
             LoginAttemptService loginAttemptService,
             DemoCredentialPolicy demoCredentialPolicy) {
@@ -64,10 +70,12 @@ class AuthController {
         this.mfaChallengeRepository = mfaChallengeRepository;
         this.userRoleRepository = userRoleRepository;
         this.roleRepository = roleRepository;
+        this.rolePermissionRepository = rolePermissionRepository;
         this.authService = authService;
         this.auditService = auditService;
         this.passwordHasher = passwordHasher;
         this.tokenGenerator = tokenGenerator;
+        this.tenantRepository = tenantRepository;
         this.tenantService = tenantService;
         this.loginAttemptService = loginAttemptService;
         this.demoCredentialPolicy = demoCredentialPolicy;
@@ -75,15 +83,26 @@ class AuthController {
 
     @PostMapping("/login")
     ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
-        String email = request.email().trim();
-        String rateLimitKey = "staff:" + servletRequest.getRemoteAddr();
+        String identifier = loginIdentifier(request);
+        if (identifier.isBlank() || request.password() == null || request.password().isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "LOGIN_REQUIRED", "SACCO code, username, and password are required."));
+        }
+
+        Tenant requestedTenant = resolveTenant(request.saccoCode());
+        if (request.saccoCode() != null && !request.saccoCode().isBlank() && requestedTenant == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiErrorResponse.of(401, "AUTH_INVALID", "Invalid SACCO code, username, or password."));
+        }
+
+        String rateLimitKey = "staff:" + servletRequest.getRemoteAddr() + ":" + (requestedTenant == null ? "legacy" : requestedTenant.getId());
         if (loginAttemptService.isLimited(rateLimitKey)) return rateLimited(rateLimitKey);
-        if (!demoCredentialPolicy.staffLoginAllowed(email)) {
+        if (!demoCredentialPolicy.staffLoginAllowed(identifier)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "DEMO_LOGIN_DISABLED", "Seeded demo staff accounts are disabled outside the development/demo profile."));
         }
 
-        User user = userRepository.findByEmailIgnoreCase(email)
+        User user = findLoginUser(requestedTenant, identifier)
                 .filter(candidate -> "active".equals(candidate.getStatus()))
                 .filter(candidate -> passwordHasher.matches(request.password(), candidate.getPasswordSalt(), candidate.getPasswordHash()))
                 .orElse(null);
@@ -176,10 +195,14 @@ class AuthController {
                 tokenGenerator.hashToken(token),
                 Instant.now().plus(Duration.ofHours(8))));
 
+        UserAccessResponse access = accessFor(user);
         return new LoginResponse(
                 token,
                 "Bearer",
-                UserResponse.from(user));
+                UserResponse.from(user),
+                access.roleIds(),
+                access.roleNames(),
+                access.permissionIds());
     }
 
     private boolean isPrivileged(User user) {
@@ -196,6 +219,50 @@ class AuthController {
         return String.format("%06d", secureRandom.nextInt(1_000_000));
     }
 
+    private String loginIdentifier(LoginRequest request) {
+        String username = request.username() == null ? "" : request.username().trim();
+        if (!username.isBlank()) return username;
+        return request.email() == null ? "" : request.email().trim();
+    }
+
+    private Tenant resolveTenant(String saccoCode) {
+        if (saccoCode == null || saccoCode.isBlank()) return null;
+        String code = saccoCode.trim();
+        if ("platform".equalsIgnoreCase(code)) {
+            return tenantRepository.findById("tenant_platform").orElse(null);
+        }
+        return tenantRepository.findByAbbreviationIgnoreCase(code)
+                .or(() -> tenantRepository.findByRegistrationNoIgnoreCase(code))
+                .orElse(null);
+    }
+
+    private java.util.Optional<User> findLoginUser(Tenant tenant, String identifier) {
+        if (tenant == null) return userRepository.findByEmailIgnoreCase(identifier);
+        if (identifier.contains("@")) {
+            return userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), identifier);
+        }
+        return userRepository.findByTenantIdAndPhone(tenant.getId(), identifier)
+                .or(() -> userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), identifier));
+    }
+
+    private UserAccessResponse accessFor(User user) {
+        List<String> roleIds = userRoleRepository.findByIdUserId(user.getId()).stream()
+                .map(userRole -> userRole.getId().getRoleId())
+                .sorted()
+                .toList();
+        List<Role> roles = roleRepository.findAllById(roleIds);
+        List<String> roleNames = roles.stream()
+                .map(Role::getName)
+                .sorted()
+                .toList();
+        List<String> permissionIds = rolePermissionRepository.findByIdRoleIdIn(roleIds).stream()
+                .map(rolePermission -> rolePermission.getId().getPermissionId())
+                .distinct()
+                .sorted()
+                .toList();
+        return new UserAccessResponse(roleIds, roleNames, permissionIds);
+    }
+
     private ResponseEntity<ApiErrorResponse> rateLimited(String key) {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, String.valueOf(loginAttemptService.retryAfterSeconds(key)))
@@ -208,9 +275,13 @@ class AuthController {
         if (currentSession == null) return authService.authRequired();
 
         TenantResponse tenant = tenantService.findById(currentSession.user().getTenantId()).orElse(null);
+        UserAccessResponse access = accessFor(currentSession.user());
         return ResponseEntity.ok(ApiResponse.of(new CurrentUserResponse(
                 UserResponse.from(currentSession.user()),
-                tenant)));
+                tenant,
+                access.roleIds(),
+                access.roleNames(),
+                access.permissionIds())));
     }
 
     @PostMapping("/logout")
@@ -293,10 +364,10 @@ class AuthController {
         return ResponseEntity.ok(ApiResponse.of(new PasswordResetConfirmResponse(true)));
     }
 
-    record LoginRequest(@Email @NotBlank String email, @NotBlank String password) {
+    record LoginRequest(String saccoCode, String username, @Email String email, @NotBlank String password) {
     }
 
-    record LoginResponse(String token, String tokenType, UserResponse user) {
+    record LoginResponse(String token, String tokenType, UserResponse user, List<String> roleIds, List<String> roleNames, List<String> permissionIds) {
     }
 
     record MfaRequiredResponse(boolean mfaRequired, String challengeId, String deliveryChannel, String demoCode, Instant expiresAt) {
@@ -308,7 +379,10 @@ class AuthController {
     record MfaVerifyRequest(@NotBlank String challengeId, @NotBlank String code) {
     }
 
-    record CurrentUserResponse(UserResponse user, TenantResponse tenant) {
+    record CurrentUserResponse(UserResponse user, TenantResponse tenant, List<String> roleIds, List<String> roleNames, List<String> permissionIds) {
+    }
+
+    record UserAccessResponse(List<String> roleIds, List<String> roleNames, List<String> permissionIds) {
     }
 
     record LogoutResponse(boolean loggedOut) {

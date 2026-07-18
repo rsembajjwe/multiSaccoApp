@@ -5,11 +5,12 @@ This manual is for SACCO staff and members using the SACCO Management Platform.
 ## Staff Login
 
 1. Open the web app at `http://127.0.0.1:5173`.
-2. Use **API Login** for backend-backed workflows.
-3. Sign in with a SACCO staff account issued by the platform or SACCO administrator. Seeded demo staff credentials are available only in development/demo mode.
+2. Use **Staff login** for backend-backed workflows.
+3. Enter the SACCO code, username, and password issued by the platform or SACCO administrator. Use `PLATFORM` for platform administration; SACCO staff use their SACCO's assigned code.
 4. Confirm the API status indicator shows the backend session is active.
 
 Staff users see only records for their SACCO unless they are platform administrators.
+Platform administrators can also be limited by assigned platform roles and permissions.
 
 ## Member Management
 

@@ -275,6 +275,8 @@ After API login, the Approvals screen reads pending financial postings and posts
 
 Approvals also shows a backend-backed control center for pending queue size, pending value, workflow coverage, decision history, corrections, and checker-clear status.
 
+Staff login requires a SACCO code, username, and password. Use `PLATFORM` for platform administration, or the SACCO's assigned code such as `GVS` for Green Valley SACCO. The backend validates that the username belongs to the selected SACCO code, then limits visible modules and API actions by assigned roles and permissions.
+
 Members can login from **Member portal** using their issued membership number, phone, or email plus password to view their savings, shares, and welfare balances. Seeded demo member credentials work only in development/demo mode when `SACCO_DEMO_LOGINS_ENABLED=true`.
 
 ## Demo roles
@@ -316,3 +318,8 @@ This is now the first build foundation. A production build should add:
 - SACCO admin: `admin@greenvalley.local` / `Sacco@12345`
 
 Seeded staff and member accounts are disabled outside development/demo mode by keeping `SACCO_DEMO_LOGINS_ENABLED=false`.
+
+Development/demo staff login codes:
+
+- Platform admin code: `PLATFORM`
+- Green Valley SACCO code: `GVS`

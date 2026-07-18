@@ -152,8 +152,9 @@ async function memberPortalUat(page) {
 }
 
 async function staffLogin(page, email, password, label) {
-  await page.getByRole("button", { name: "API login" }).first().click();
-  await page.locator("#apiEmail").fill(email);
+  await page.getByRole("button", { name: /Staff login|API login/ }).first().click();
+  await page.locator("#apiSaccoCode").fill(email.includes("platform") ? "PLATFORM" : "GVS");
+  await page.locator("#apiUsername").fill(email);
   await page.locator("#apiPassword").fill(password);
   await page.locator("#apiLoginSubmit").click();
   await expectText(page, "API:", `${label} API badge`);
