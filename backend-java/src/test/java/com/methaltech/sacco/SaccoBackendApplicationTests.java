@@ -315,7 +315,9 @@ class SaccoBackendApplicationTests {
 								}
 								""".formatted(paymentReference)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.idempotent", is(true)));
+				.andExpect(jsonPath("$.data.idempotent", is(true)))
+				.andExpect(jsonPath("$.data.subscription.paid", is(500000.00)))
+				.andExpect(jsonPath("$.data.payment.amount", is(500000.00)));
 
 		String paymentId = objectMapper.readTree(payment.getResponse().getContentAsString()).path("data").path("payment").path("id").asString();
 		MvcResult journals = mockMvc.perform(get("/api/v1/journal-entries?tenantId=tenant_lake")
@@ -326,6 +328,13 @@ class SaccoBackendApplicationTests {
 		if (!hasJournalReference(journalData, paymentReference, "subscription_payment")) {
 			throw new AssertionError("Subscription payment journal not found: " + paymentId);
 		}
+		org.junit.jupiter.api.Assertions.assertEquals(1, countJournalReference(journalData, paymentReference, "subscription_payment"));
+
+		mockMvc.perform(get("/api/v1/subscriptions?tenantId=tenant_lake")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].paid", is(500000.00)))
+				.andExpect(jsonPath("$.data[0].status", is("active")));
 
 		mockMvc.perform(get("/api/v1/audit-events")
 						.header("Authorization", "Bearer " + platformToken))
@@ -2129,6 +2138,18 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.lines[1].savingsMovement", is(-125000.00)))
 				.andExpect(jsonPath("$.data.lines[1].originalTransactionId", is(transactionId)));
 
+		MvcResult reversalJournals = mockMvc.perform(get("/api/v1/journal-entries")
+						.header("Authorization", "Bearer " + makerToken))
+				.andExpect(status().isOk())
+				.andReturn();
+		JsonNode reversalJournal = journalByReference(
+				objectMapper.readTree(reversalJournals.getResponse().getContentAsString()).path("data"),
+				objectMapper.readTree(reversal.getResponse().getContentAsString()).path("data").path("reference").asString(),
+				"financial_transaction_reversal");
+		org.junit.jupiter.api.Assertions.assertTrue(reversalJournal.path("isBalanced").asBoolean());
+		org.junit.jupiter.api.Assertions.assertEquals(125000.0, reversalJournal.path("debitTotal").asDouble(), 0.01);
+		org.junit.jupiter.api.Assertions.assertEquals(125000.0, reversalJournal.path("creditTotal").asDouble(), 0.01);
+
 		mockMvc.perform(get("/api/v1/members/" + memberId)
 						.header("Authorization", "Bearer " + makerToken))
 				.andExpect(status().isOk())
@@ -3441,6 +3462,17 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.length()", is(1)))
 				.andExpect(jsonPath("$.data[0].reference", is("LR-TEST-001")));
 
+		MvcResult openLoans = mockMvc.perform(get("/api/v1/loans")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andReturn();
+		JsonNode openLoan = loanFromList(openLoans, loanId);
+		org.junit.jupiter.api.Assertions.assertEquals("active", openLoan.path("status").asString());
+		org.junit.jupiter.api.Assertions.assertEquals("Repayment", openLoan.path("stage").asString());
+		org.junit.jupiter.api.Assertions.assertEquals(75000.0, openLoan.path("balance").asDouble(), 0.01);
+		org.junit.jupiter.api.Assertions.assertEquals(1, openLoan.path("repayments").asInt());
+		org.junit.jupiter.api.Assertions.assertEquals(125000.0, openLoan.path("repaymentTotal").asDouble(), 0.01);
+
 		mockMvc.perform(post("/api/v1/loans/" + loanId + "/repayments")
 						.header("Authorization", "Bearer " + staffToken)
 						.contentType("application/json")
@@ -3465,6 +3497,18 @@ class SaccoBackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(0.0, closedLoan.path("balance").asDouble(), 0.01);
 		org.junit.jupiter.api.Assertions.assertEquals(2, closedLoan.path("repayments").asInt());
 		org.junit.jupiter.api.Assertions.assertEquals(200000.0, closedLoan.path("repaymentTotal").asDouble(), 0.01);
+
+		MvcResult repaymentJournals = mockMvc.perform(get("/api/v1/journal-entries")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andReturn();
+		JsonNode journalData = objectMapper.readTree(repaymentJournals.getResponse().getContentAsString()).path("data");
+		JsonNode firstRepaymentJournal = journalByReference(journalData, "LR-TEST-001", "loan_repayment");
+		JsonNode secondRepaymentJournal = journalByReference(journalData, "LR-TEST-002", "loan_repayment");
+		org.junit.jupiter.api.Assertions.assertTrue(firstRepaymentJournal.path("isBalanced").asBoolean());
+		org.junit.jupiter.api.Assertions.assertTrue(secondRepaymentJournal.path("isBalanced").asBoolean());
+		org.junit.jupiter.api.Assertions.assertEquals(125000.0, firstRepaymentJournal.path("debitTotal").asDouble(), 0.01);
+		org.junit.jupiter.api.Assertions.assertEquals(75000.0, secondRepaymentJournal.path("debitTotal").asDouble(), 0.01);
 	}
 
 	@Test
@@ -4648,6 +4692,27 @@ class SaccoBackendApplicationTests {
 			}
 		}
 		return false;
+	}
+
+	private int countJournalReference(JsonNode journalData, String reference, String sourceType) {
+		int count = 0;
+		for (JsonNode journal : journalData) {
+			if (reference.equals(journal.path("reference").asString())
+					&& sourceType.equals(journal.path("sourceType").asString())) {
+				count++;
+			}
+		}
+		return count;
+	}
+
+	private JsonNode journalByReference(JsonNode journalData, String reference, String sourceType) {
+		for (JsonNode journal : journalData) {
+			if (reference.equals(journal.path("reference").asString())
+					&& sourceType.equals(journal.path("sourceType").asString())) {
+				return journal;
+			}
+		}
+		throw new AssertionError("Journal not found for reference " + reference + " and source type " + sourceType);
 	}
 
 }

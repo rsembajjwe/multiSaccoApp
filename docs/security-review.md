@@ -64,6 +64,7 @@ Checklist:
 | Financial permissions | `npm.cmd run java:test` | Loans-only staff can access loan views but receive `403 PERMISSION_REQUIRED` on financial transaction and accounting endpoints. |
 | Loan and approval permissions | `npm.cmd run java:test` | Loan-originator staff can create loan applications and view approval workflows but cannot approve loans, record repayments, or create approval decisions. |
 | Operational permissions | `npm.cmd run java:test` | Loans-only and no-role staff receive `403 PERMISSION_REQUIRED` on operations, notification, governance, and complaint staff endpoints. |
+| Financial correctness | `npm.cmd run java:test` | Statements, reversals, subscription idempotency, loan repayments, closed periods, and generated journals match expected balances and totals. |
 | Rate limiting | `npm.cmd run security:check` | Repeated failed staff logins return `429` with `Retry-After`. |
 | Demo gating | `npm.cmd run security:check` plus prod properties | `application-prod.properties` defaults `SACCO_DEMO_LOGINS_ENABLED` to `false`. |
 | UI source/sync polish | `npm.cmd run ui:check` | Main screens retain source, last-sync, loading, error, and refresh contract text. |
