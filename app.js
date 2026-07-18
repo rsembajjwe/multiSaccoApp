@@ -1000,20 +1000,71 @@ function auditView() {
     actor: event.actorName || userName(event.actorUserId),
     module: event.resourceType || event.module || "system",
     recordReference: event.resourceId || event.recordReference || event.recordId || "",
+    category: auditCategory(event),
     riskLevel: auditRiskLevel(event),
     result: event.result || "Recorded"
   }));
   const sensitive = rows.filter((event) => event.riskLevel !== "Normal");
+  const highRisk = rows.filter((event) => event.riskLevel === "High");
+  const approvals = rows.filter((event) => event.category === "Approvals");
+  const reversals = rows.filter((event) => event.category === "Reversals");
+  const access = rows.filter((event) => event.category === "Access control");
+  const finance = rows.filter((event) => event.category === "Financial activity");
   return `
     <div class="dashboard-grid">
       ${summary("Audit events", rows.length, "Immutable activity trail", "Inspect")}
-      ${summary("Sensitive events", sensitive.length, "Approvals, access and reversals", "Review")}
-      ${summary("Tenants affected", uniqueCount(rows, "tenantId"), "Across visible SACCOs", "Filter")}
+      ${summary("High-risk events", highRisk.length, "Roles, sessions and reversals", "Review")}
+      ${summary(isPlatform() ? "Tenants affected" : "Actors involved", isPlatform() ? uniqueCount(rows, "tenantId") : uniqueCount(rows, "actorUserId"), isPlatform() ? "Across visible SACCOs" : "Within this SACCO", "Filter")}
       ${summary("Actors", uniqueCount(rows, "actorUserId"), "Users and system actions", "Trace")}
     </div>
     ${filterToolbar("Search audit logs by SACCO, actor, action, module, IP address or record ID", "Export audit log", "Print report")}
-    ${recordTable("Sensitive audit queue", sensitive, ["createdAt", "tenantName", "actor", "action", "module", "recordReference", "ipAddress", "riskLevel"])}
-    ${recordTable(isPlatform() ? "Platform audit trail" : "SACCO audit trail", rows, ["createdAt", "tenantName", "actor", "action", "module", "recordReference", "ipAddress", "result"])}
+    ${auditEvidencePanel(rows, sensitive, approvals, reversals, access, finance)}
+    ${recordTable("Sensitive audit queue", sensitive, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "riskLevel"])}
+    ${recordTable(isPlatform() ? "Platform audit trail" : "SACCO audit trail", rows, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "result"])}
+  `;
+}
+
+function auditEvidencePanel(rows, sensitive, approvals, reversals, access, finance) {
+  const recent = rows[0]?.createdAt || "No event yet";
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${isPlatform() ? "Platform audit evidence" : "SACCO audit evidence"}</h2>
+          <p>${isPlatform() ? "System-wide oversight for administrator actions, tenant changes and sensitive access." : "Read-only evidence for SACCO approvals, finance actions, reversals, role changes and session activity."}</p>
+        </div>
+        <span class="status ${sensitive.length ? "pending" : "active"}">${sensitive.length ? "Review queue" : "Clear"}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Latest event", recent)}
+        ${mini("Approval events", approvals.length)}
+        ${mini("Reversal events", reversals.length)}
+        ${mini("Access events", access.length)}
+        ${mini("Finance events", finance.length)}
+        ${mini("Sensitive queue", sensitive.length)}
+      </div>
+    </section>
+    <div class="report-grid">
+      ${auditCategoryCard("Approvals", approvals, "Maker-checker decisions, status changes and review outcomes.")}
+      ${auditCategoryCard("Reversals", reversals, "Financial corrections that require follow-up evidence.")}
+      ${auditCategoryCard("Access control", access, "Logins, sessions, password, role and permission changes.")}
+      ${auditCategoryCard("Financial activity", finance, "Transactions, repayments, expenses, assets and contribution setup.")}
+    </div>
+  `;
+}
+
+function auditCategoryCard(title, rows, copy) {
+  const latest = rows[0]?.createdAt || "No events";
+  return `
+    <article class="report-card">
+      <h3>${escapeHtml(title)}</h3>
+      <p>${escapeHtml(copy)}</p>
+      <div class="mini-grid">
+        ${mini("Events", rows.length)}
+        ${mini("Latest", latest)}
+      </div>
+      <button class="button secondary" type="button">Review</button>
+    </article>
   `;
 }
 
@@ -3821,6 +3872,16 @@ function auditRiskLevel(event) {
   if (["password", "role", "permission", "session", "reversal", "disbursed", "suspended", "terminated"].some((word) => text.includes(word))) return "High";
   if (["approved", "rejected", "status", "payment", "template", "complaint", "loan"].some((word) => text.includes(word))) return "Review";
   return "Normal";
+}
+
+function auditCategory(event) {
+  const text = normal(`${event.action || ""} ${event.resourceType || ""} ${event.module || ""}`);
+  if (["role", "permission", "password", "session", "login", "logout", "user"].some((word) => text.includes(word))) return "Access control";
+  if (["reversal", "reverse", "corrected"].some((word) => text.includes(word))) return "Reversals";
+  if (["approved", "rejected", "approval", "status", "decision", "submitted"].some((word) => text.includes(word))) return "Approvals";
+  if (["transaction", "payment", "loan", "repayment", "expense", "asset", "product", "account", "branch"].some((word) => text.includes(word))) return "Financial activity";
+  if (["complaint", "template", "notification"].some((word) => text.includes(word))) return "Operations";
+  return "General";
 }
 
 function productsByType(type) {

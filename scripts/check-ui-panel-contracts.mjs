@@ -101,6 +101,8 @@ const contracts = [
   "Notification template editor",
   "Create template",
   "Save template",
+  "Platform audit evidence",
+  "SACCO audit evidence",
   "Platform audit trail",
   "Sensitive audit queue",
   "Audit events",
