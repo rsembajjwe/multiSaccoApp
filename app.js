@@ -72,6 +72,15 @@ const navPermissions = {
   reports: "reports:view"
 };
 
+const demoAccounts = [
+  { label: "Platform admin", code: "PLATFORM", username: "admin@platform.local", password: "Admin@12345", note: "Platform administration" },
+  { label: "SACCO admin", code: "GVS", username: "admin@greenvalley.local", password: "Sacco@12345", note: "Green Valley administrator" },
+  { label: "Treasurer", code: "GVS", username: "treasurer@greenvalley.local", password: "Treasurer@12345", note: "Finance and approvals" },
+  { label: "Secretary", code: "GVS", username: "secretary@greenvalley.local", password: "Secretary@12345", note: "Members and governance" },
+  { label: "Chairperson", code: "GVS", username: "chairperson@greenvalley.local", password: "Chair@12345", note: "Oversight and decisions" },
+  { label: "Member", code: "GVS", username: "GVS-0001", password: "Member@12345", note: "Member portal" }
+];
+
 const money = new Intl.NumberFormat("en-UG", {
   style: "currency",
   currency: "UGX",
@@ -794,6 +803,21 @@ function renderLoginScreen() {
           <button id="loginSubmit" class="primary-button" type="submit">Login</button>
         </div>
         <small>Use code PLATFORM for platform administration. SACCOs use their assigned code. Members use the same SACCO code plus their membership number, phone, or email.</small>
+        <div class="demo-account-panel">
+          <div>
+            <strong>Demo accounts</strong>
+            <span>Development/demo only. These are blocked when production demo logins are disabled.</span>
+          </div>
+          <div class="demo-account-grid">
+            ${demoAccounts.map((account, index) => `
+              <button class="demo-account" type="button" data-demo-account="${index}">
+                <strong>${account.label}</strong>
+                <span>${account.code} / ${account.username}</span>
+                <small>${account.note}</small>
+              </button>
+            `).join("")}
+          </div>
+        </div>
       </form>
       ${apiState.lastError ? `<div class="notice error">${apiState.lastError}</div>` : ""}
     </section>
@@ -814,6 +838,19 @@ function bindPrimaryLoginForm() {
             document.getElementById("loginError"),
             document.getElementById("loginSubmit"));
   });
+  document.querySelectorAll("[data-demo-account]").forEach((button) => {
+    button.addEventListener("click", () => fillDemoAccount(Number(button.dataset.demoAccount)));
+  });
+}
+
+function fillDemoAccount(index) {
+  const account = demoAccounts[index];
+  if (!account) return;
+  document.getElementById("loginSaccoCode").value = account.code;
+  document.getElementById("loginUsername").value = account.username;
+  document.getElementById("loginPassword").value = account.password;
+  showLoginError(document.getElementById("loginError"), "");
+  document.getElementById("loginUsername").focus();
 }
 
 function renderShellStatus() {

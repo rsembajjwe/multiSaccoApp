@@ -9,6 +9,8 @@ This manual is for SACCO staff and members using the SACCO Management Platform.
 3. Use `PLATFORM` for platform administration, or the assigned SACCO code for SACCO staff and members.
 4. After login, the app opens the correct workspace based on whether the authenticated account is a member, treasurer, secretary, chairperson, SACCO admin, or platform admin.
 
+The login screen includes demo account buttons for development/demo testing. These fill the login form with seeded local credentials, but the same seeded credentials are blocked when production demo logins are disabled.
+
 Staff users see only records for their SACCO unless they are platform administrators.
 Platform administrators can also be limited by assigned platform roles and permissions.
 

@@ -316,6 +316,10 @@ This is now the first build foundation. A production build should add:
 
 - Platform admin: `admin@platform.local` / `Admin@12345`
 - SACCO admin: `admin@greenvalley.local` / `Sacco@12345`
+- Treasurer: `treasurer@greenvalley.local` / `Treasurer@12345`
+- Secretary: `secretary@greenvalley.local` / `Secretary@12345`
+- Chairperson: `chairperson@greenvalley.local` / `Chair@12345`
+- Member: `GVS-0001` / `Member@12345`
 
 Seeded staff and member accounts are disabled outside development/demo mode by keeping `SACCO_DEMO_LOGINS_ENABLED=false`.
 

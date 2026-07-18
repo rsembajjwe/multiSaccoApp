@@ -473,6 +473,48 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void demoRoleAccountsLoginWithExpectedRoles() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "GVS",
+								  "username": "treasurer@greenvalley.local",
+								  "password": "Treasurer@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.roleNames", hasItem("Treasurer")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("accounting:post")));
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "GVS",
+								  "username": "secretary@greenvalley.local",
+								  "password": "Secretary@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.roleNames", hasItem("Secretary")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("members:approve")));
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "GVS",
+								  "username": "chairperson@greenvalley.local",
+								  "password": "Chair@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.roleNames", hasItem("Chairperson")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("approvals:decide")));
+	}
+
+	@Test
 	void loginRejectsBadPassword() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/login")
 						.contentType("application/json")

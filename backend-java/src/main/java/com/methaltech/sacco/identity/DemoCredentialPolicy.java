@@ -11,7 +11,10 @@ public class DemoCredentialPolicy {
     private static final Set<String> STAFF_IDENTIFIERS = Set.of(
             "admin@platform.local",
             "admin@greenvalley.local",
-            "admin@lakefarmers.local");
+            "admin@lakefarmers.local",
+            "treasurer@greenvalley.local",
+            "secretary@greenvalley.local",
+            "chairperson@greenvalley.local");
     private static final Set<String> MEMBER_IDENTIFIERS = Set.of(
             "gvs-0001",
             "gvs-0002",

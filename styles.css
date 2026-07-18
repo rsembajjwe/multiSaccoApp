@@ -786,6 +786,52 @@ pre.notice {
   line-height: 1.45;
 }
 
+.demo-account-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.demo-account-panel span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.demo-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.demo-account {
+  display: grid;
+  gap: 5px;
+  min-height: 82px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--ink);
+  background: #f8fcfa;
+  text-align: left;
+}
+
+.demo-account:hover {
+  border-color: #9fd8ca;
+  background: #edf9f5;
+}
+
+.demo-account strong,
+.demo-account span,
+.demo-account small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .chart {
   display: grid;
   gap: 10px;
