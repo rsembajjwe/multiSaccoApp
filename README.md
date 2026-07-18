@@ -95,6 +95,8 @@ This starts an isolated Docker Compose stack on PostgreSQL, applies Flyway migra
 
 `ready:check` is the broader local production-readiness gate. It starts an isolated Java/PostgreSQL stack, confirms Flyway, runs the API smoke test, security hardening checks, static UI source/sync checks, and the Java-backed browser regression. It uses alternate default ports `15433`, `18082`, and `5179` to avoid common local conflicts.
 
+For hosted staging setup, use [docs/staging-environment.md](docs/staging-environment.md) and keep real `.env` values outside git.
+
 ```powershell
 npm.cmd run security:check
 npm.cmd run ui:check

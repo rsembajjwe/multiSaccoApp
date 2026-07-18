@@ -19,6 +19,8 @@ Edit `.env` and set a strong `POSTGRES_PASSWORD`.
 
 Keep `SACCO_DEMO_LOGINS_ENABLED=false` outside development/demo verification. The production Spring profile defaults seeded staff/member demo logins to disabled unless this environment variable is explicitly enabled.
 
+For hosted staging preparation, use [Staging Environment and Secrets Guide](staging-environment.md) and start from `deploy\staging.env.example`. Real staging secrets must stay in the host secret store or an untracked `.env`.
+
 Start PostgreSQL and the Java backend:
 
 ```powershell
