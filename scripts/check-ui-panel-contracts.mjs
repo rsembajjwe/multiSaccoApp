@@ -74,6 +74,9 @@ const contracts = [
   "Platform audit trail",
   "Sensitive audit queue",
   "Audit events",
+  "Protected platform configuration",
+  "Platform subscription packages",
+  "Platform role catalogue",
   "SERVER-CONFIRMED BALANCES",
   "pendingGuarantors",
   "notifications"

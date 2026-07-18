@@ -48,6 +48,7 @@ try {
   await assertScreen(page, "operations", ["Operations command center", "Payment monitoring"]);
   await assertScreen(page, "reports", ["Report catalogue", "Subscriptions", "Audit"]);
   await assertScreen(page, "audit", ["Platform audit trail", "Sensitive audit queue", "Audit events"]);
+  await assertScreen(page, "settings", ["Protected platform configuration", "Platform subscription packages", "Platform role catalogue"]);
   await assertScreen(page, "users", ["Platform administrators only", "Permission matrix"]);
   await assertPlatformUserCreation(page);
   await assertScreen(page, "complaints", ["Platform support desk", "Support ticket capture", "Open complaints"]);

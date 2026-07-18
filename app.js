@@ -987,6 +987,7 @@ function reconciliationView() {
 }
 
 function settingsView() {
+  if (isPlatform()) return platformSettingsView();
   return `
     <div class="dashboard-grid">
       ${summary("Branches", dataRows("branches").length, "Tenant service points", "Manage")}
@@ -996,6 +997,47 @@ function settingsView() {
     </div>
     ${recordTable("Branch setup", dataRows("branches"), ["code", "name", "address", "status", "createdAt"])}
     ${recordTable("Financial product setup", dataRows("financialProducts"), ["productType", "code", "name", "contributionAmount", "minimumBalance", "interestRate", "status"])}
+  `;
+}
+
+function platformSettingsView() {
+  const packages = dataRows("subscriptionPackages");
+  const roles = dataRows("roles").filter((role) => role.tenantId === "tenant_platform");
+  const permissions = dataRows("permissions");
+  const templates = dataRows("notificationTemplates").filter((template) => !template.tenantId);
+  const canManage = hasPermission("roles:create") || roleKind() === "super";
+  return `
+    <div class="dashboard-grid">
+      ${summary("Subscription packages", packages.length, "Platform billing plans", "Review")}
+      ${summary("Platform roles", roles.length, "Administrator access profiles", "Manage")}
+      ${summary("Permission controls", permissions.length, "Route and action permissions", "Audit")}
+      ${summary("Global templates", templates.length, "Default notification content", "Edit")}
+    </div>
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Protected platform configuration</h2>
+          <p>System-level settings are restricted to Platform Super Admin users and should be changed with audit review.</p>
+        </div>
+        ${canManage ? `<span class="status active">Super Admin controls</span>` : `<span class="status pending">View only</span>`}
+      </div>
+      <div class="source-grid">
+        ${mini("App name", "Tereka Online")}
+        ${mini("Default platform code", "PLATFORM")}
+        ${mini("Production demo access", "Disabled outside dev/demo")}
+        ${mini("SACCO code login", "Required")}
+        ${mini("Tenant isolation", "Role and token enforced")}
+        ${mini("Audit coverage", `${dataRows("auditEvents").length} events`)}
+      </div>
+    </section>
+    <div class="grid two">
+      ${recordTable("Platform subscription packages", packages, ["name", "code", "price", "amount", "maxMembers", "maxBranches", "status"])}
+      ${recordTable("Platform role catalogue", roles, ["name", "description", "status", "createdAt"])}
+    </div>
+    <div class="grid two">
+      ${recordTable("Platform permission catalogue", permissions, ["id", "name", "description", "module"])}
+      ${recordTable("Global notification templates", templates, ["eventType", "channel", "title", "status", "updatedAt"])}
+    </div>
   `;
 }
 
