@@ -640,7 +640,33 @@ function subscriptionsView() {
 }
 
 function saccoAccounts() {
-  return recordTable("SACCO account health", dataRows("tenants").filter((t) => t.id !== "tenant_platform"), ["name", "abbreviation", "district", "status", "registrationNo"]);
+  const subscriptions = dataRows("subscriptions");
+  const rows = tenantRows().map((tenant) => {
+    const subscription = subscriptionForTenant(tenant.id);
+    return {
+      ...tenant,
+      saccoCode: tenant.abbreviation || tenant.code || tenant.id,
+      accountHealth: tenantAccountHealth(tenant, subscription),
+      subscriptionStatus: subscription?.status || "No subscription",
+      packageName: subscription?.tierLabel || subscription?.packageName || subscription?.packageId || "Not assigned",
+      expiry: subscription?.expiry || subscription?.expiryDate || "",
+      billableMembers: subscription?.billableMembers || subscription?.memberCount || tenant.memberCount || 0,
+      action: "tenant-detail",
+      actionLabel: "Open",
+      actionId: tenant.id
+    };
+  });
+  return `
+    <div class="dashboard-grid">
+      ${summary("Active accounts", rows.filter((row) => normal(row.status) === "active").length, "SACCOs allowed to operate", "Monitor")}
+      ${summary("Suspended accounts", rows.filter((row) => normal(row.status).includes("suspended")).length, "Access disabled", "Review")}
+      ${summary("Without subscription", rows.filter((row) => !subscriptions.some((sub) => sub.tenantId === row.id)).length, "Needs billing setup", "Assign")}
+      ${summary("Expiring soon", rows.filter((row) => normal(row.subscriptionStatus).includes("expired") || normal(row.accountHealth).includes("risk")).length, "Billing and access risk", "Renew")}
+    </div>
+    ${filterToolbar("Search SACCO code, name, district, status, subscription or package", "Activate SACCO", "Export accounts")}
+    ${tenantDetailPanel()}
+    ${recordTable("SACCO account health", rows, ["saccoCode", "name", "district", "status", "accountHealth", "subscriptionStatus", "packageName", "billableMembers", "expiry"])}
+  `;
 }
 
 function membersView() {
@@ -2374,6 +2400,21 @@ function tenantRows() {
 
 function pendingTenants() {
   return tenantRows().filter((tenant) => normal(tenant.status).includes("pending") || normal(tenant.status).includes("review"));
+}
+
+function subscriptionForTenant(tenantId) {
+  return dataRows("subscriptions").find((subscription) => subscription.tenantId === tenantId);
+}
+
+function tenantAccountHealth(tenant, subscription) {
+  const status = normal(tenant.status);
+  const subscriptionStatus = normal(subscription?.status);
+  if (status.includes("suspended") || status.includes("terminated")) return "Access blocked";
+  if (!subscription) return "Billing setup needed";
+  if (subscriptionStatus.includes("expired") || subscriptionStatus.includes("pending")) return "Billing risk";
+  if (status === "active" && subscriptionStatus === "active") return "Operational";
+  if (status.includes("pending") || status.includes("approved")) return "Activation pending";
+  return "Review";
 }
 
 function platformUsers() {

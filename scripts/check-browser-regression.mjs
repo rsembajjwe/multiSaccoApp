@@ -44,6 +44,7 @@ try {
   await assertSaccoApplicationReview(page);
   await assertScreen(page, "subscriptions", ["Subscription list", "Subscription package configuration"]);
   await assertSubscriptionControl(page);
+  await assertScreen(page, "sacco-accounts", ["SACCO account health", "Active accounts", "Without subscription"]);
   await assertScreen(page, "operations", ["Operations command center", "Payment monitoring"]);
   await assertScreen(page, "reports", ["Report catalogue", "Subscriptions", "Audit"]);
   await assertScreen(page, "users", ["Platform administrators only", "Permission matrix"]);
