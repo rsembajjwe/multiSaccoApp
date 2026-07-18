@@ -2006,6 +2006,14 @@ function renderTransactions() {
   const activeTab = state.transactionsTab || "postings";
   const canPostTransactions = !apiState.user || hasPermission("transactions:create");
   const canManageProducts = !apiState.user || hasPermission("financial-products:manage") || hasPermission("transactions:create");
+  const isTreasurer = state.workspace === "treasurer";
+  const transactionTitle = isTreasurer ? "Treasurer transaction workbench" : "Platform transaction oversight";
+  const transactionSubtitle = isTreasurer
+    ? `${source} &middot; collections, reversals, member statements, welfare payouts and reconciliation support`
+    : `${source} &middot; teller intake, checker queue, receipts, statements, reversals and welfare`;
+  const transactionNotice = isTreasurer
+    ? "Treasurer focus: post and review financial movement, monitor pending checker items, issue receipts, open member statements, and prepare reconciliation evidence."
+    : "Platform oversight: platform users monitor financial flow and exceptions; SACCO treasurers handle normal posting unless the role explicitly allows posting.";
   return `
     <section class="card integration-panel">
       <div class="toolbar">
@@ -2054,8 +2062,8 @@ function renderTransactions() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Platform transaction oversight</h2>
-          <p class="eyebrow">${source} &middot; teller intake, checker queue, receipts, statements, reversals and welfare</p>
+          <h2>${transactionTitle}</h2>
+          <p class="eyebrow">${transactionSubtitle}</p>
         </div>
         <div class="filters">
           ${transactionsTabButton("postings", "Postings", activeTab)}
@@ -2076,7 +2084,7 @@ function renderTransactions() {
         ${metric("Statement-ready", postedTransactions.length, "posted rows in member statements")}
       </div>
       <div class="notice" style="margin-top:16px">
-        <strong>Platform oversight:</strong> platform users monitor financial flow and exceptions; SACCO treasurers handle normal posting unless the role explicitly allows posting.
+        <strong>${isTreasurer ? "Treasurer focus" : "Platform oversight"}:</strong> ${transactionNotice.replace(/^Treasurer focus: |^Platform oversight: /, "")}
       </div>
     </section>
     ${activeTab === "postings" ? `<section class="card" style="margin-top:16px">
@@ -2409,6 +2417,11 @@ function renderApprovals() {
   const correctionDecisions = decisions.filter((decision) => decision.decision === "corrections_requested").length;
   const activeWorkflowCount = workflows.filter((workflow) => workflow.active).length;
   const workflowModules = new Set(workflows.map((workflow) => workflow.module).filter(Boolean)).size;
+  const isTreasurer = state.workspace === "treasurer";
+  const approvalTitle = isTreasurer ? "Treasurer approval queue" : "Approval control center";
+  const approvalSubtitle = isTreasurer
+    ? "API-backed &middot; finance checker queue, posting decisions, corrections and reversal approvals"
+    : "API-backed &middot; maker-checker queue, workflow coverage and decision history";
   return `
     <section class="card integration-panel">
       <div class="toolbar">
@@ -2433,8 +2446,8 @@ function renderApprovals() {
       <section class="card" style="margin-top:16px">
         <div class="toolbar">
           <div>
-            <h2>Approval control center</h2>
-            <p class="eyebrow">API-backed &middot; maker-checker queue, workflow coverage and decision history</p>
+            <h2>${approvalTitle}</h2>
+            <p class="eyebrow">${approvalSubtitle}</p>
           </div>
           ${refreshApiButton()}
         </div>
@@ -2448,6 +2461,9 @@ function renderApprovals() {
           ${metric("Corrections", correctionDecisions, "returned for follow-up")}
           ${metric("Checker clear", approvals.length === 0 ? "Yes" : "No", approvals.length === 0 ? "no pending items" : "review required")}
           ${metric("Queue source", "Backend", apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant")}
+        </div>
+        <div class="notice" style="margin-top:16px">
+          <strong>${isTreasurer ? "Treasurer checker focus" : "Approval focus"}:</strong> ${isTreasurer ? "confirm valid financial postings, return corrections, and keep the finance approval queue clean." : "review pending items against configured maker-checker workflows."}
         </div>
       </section>
       <section class="card" style="margin-top:16px">
@@ -2627,6 +2643,11 @@ function renderOperations() {
   const exceptionCount = Number(counts.callbackExceptions || 0) + Number(counts.deliveryExceptions || 0);
   const queuePressure = Number(counts.pendingFinancialTransactions || 0) + Number(counts.openComplaints || 0);
   const activeTab = state.operationsTab || "overview";
+  const isTreasurer = state.workspace === "treasurer";
+  const operationsTitle = isTreasurer ? "Treasurer operations health" : "Operations command center";
+  const operationsSubtitle = isTreasurer
+    ? `API-backed &middot; finance exceptions, callback alerts, pending postings and reconciliation readiness for ${tenantLabel}`
+    : `API-backed &middot; release readiness, alerts, queues and runbooks for ${tenantLabel}`;
   const releaseGates = [
     { label: "Database reachable", ok: status.database?.reachable === true, detail: status.checkedAt ? `checked ${status.checkedAt.slice(0, 16).replace("T", " ")}` : "waiting for API" },
     { label: "No critical operation alerts", ok: criticalAlerts === 0, detail: `${criticalAlerts} critical alert(s)` },
@@ -2656,8 +2677,8 @@ function renderOperations() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Operations command center</h2>
-          <p class="eyebrow">API-backed &middot; release readiness, alerts, queues and runbooks for ${tenantLabel}</p>
+          <h2>${operationsTitle}</h2>
+          <p class="eyebrow">${operationsSubtitle}</p>
         </div>
         <div class="filters">
           ${refreshApiButton()}
@@ -2674,7 +2695,7 @@ function renderOperations() {
         ${metric("Exception load", exceptionCount, "callbacks and provider deliveries")}
         ${metric("Queue pressure", queuePressure, "pending postings and complaints")}
       </div>
-      ${renderOperationsTab(activeTab, { status, counts, alerts, tenantLabel, releaseGates, healthyGateCount, criticalAlerts, warningAlerts, exceptionCount, queuePressure })}
+      ${renderOperationsTab(activeTab, { status, counts, alerts, tenantLabel, releaseGates, healthyGateCount, criticalAlerts, warningAlerts, exceptionCount, queuePressure, isTreasurer })}
     </section>
   `;
 }
@@ -2740,7 +2761,7 @@ function renderOperationsTab(activeTab, model) {
       ${metric("Runbooks", 4, "monitoring, deployment, security, technical")}
     </div>
     <div class="notice" style="margin-top:16px">
-      <strong>Operations focus:</strong> monitor alerts, release gates, exception queues and support hand-offs before a SACCO is allowed to run production activity.
+      <strong>${model.isTreasurer ? "Treasurer operations focus" : "Operations focus"}:</strong> ${model.isTreasurer ? "monitor callback exceptions, pending postings, delivery exceptions and reconciliation blockers before finance reports are finalized." : "monitor alerts, release gates, exception queues and support hand-offs before a SACCO is allowed to run production activity."}
     </div>
   `;
 }
@@ -2990,6 +3011,12 @@ function renderApiReports() {
   }, 0);
   const tenantLabel = apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant";
   const activeTab = state.reportsTab || "compliance";
+  const isTreasurer = state.workspace === "treasurer";
+  const reportsTitle = isTreasurer ? "Treasurer finance reports" : "Reports control center";
+  const reportsSubtitle = isTreasurer
+    ? `API-backed &middot; ledger integrity, reconciliation, cash position, expenses and callback evidence for ${tenantLabel}`
+    : `API-backed &middot; financial integrity, reconciliation, compliance and governance for ${tenantLabel}`;
+  const canManageAccess = hasPermission("roles:create") || hasPermission("users:create");
 
   return `
     <section class="card integration-panel">
@@ -3011,8 +3038,8 @@ function renderApiReports() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Reports control center</h2>
-          <p class="eyebrow">API-backed &middot; financial integrity, reconciliation, compliance and governance for ${tenantLabel}</p>
+          <h2>${reportsTitle}</h2>
+          <p class="eyebrow">${reportsSubtitle}</p>
         </div>
         <div class="filters">
           ${reportsTabButton("compliance", "Compliance", activeTab)}
@@ -3042,7 +3069,8 @@ function renderApiReports() {
         roles,
         permissions,
         auditEvents: apiState.auditEvents,
-        regulatoryReport
+        regulatoryReport,
+        isTreasurer
       })}
       <div class="grid three" style="margin-top:16px">
         ${metric("Accounting periods", `${openPeriods}/${periods.length}`, `${closedPeriods} closed`)}
@@ -3062,8 +3090,8 @@ function renderApiReports() {
           <h2>Access control</h2>
           <p class="eyebrow">Roles, permission sets and staff assignments for ${tenantLabel}</p>
         </div>
-        <button class="secondary-button" data-action="assignUserRoles" type="button">Assign roles</button>
-        <button class="primary-button" data-action="newRole" type="button">New role</button>
+        ${canManageAccess ? `<button class="secondary-button" data-action="assignUserRoles" type="button">Assign roles</button>
+        <button class="primary-button" data-action="newRole" type="button">New role</button>` : `<span class="pill">View only</span>`}
       </div>
       <div class="grid metrics">
         ${metric("Roles", roles.length, `${roles.filter((role) => role.protectedRole || role.protected).length} protected`)}
@@ -3234,7 +3262,7 @@ function reportsTabButton(id, label, activeTab) {
 
 function renderReportsTabSummary(activeTab, model) {
   if (activeTab === "ledger") {
-    return `<div class="notice" style="margin-top:16px"><strong>Ledger report focus:</strong> review journal integrity, accounting periods, chart of accounts, expenses and assets for ${model.tenantLabel}.</div>`;
+    return `<div class="notice" style="margin-top:16px"><strong>${model.isTreasurer ? "Treasurer ledger focus" : "Ledger report focus"}:</strong> review journal integrity, accounting periods, chart of accounts, expenses and assets for ${model.tenantLabel}.</div>`;
   }
   if (activeTab === "operations") {
     return `
@@ -3277,7 +3305,7 @@ function renderReportsTabSummary(activeTab, model) {
   }
   return `
     <div class="notice" style="margin-top:16px">
-      <strong>Compliance report focus:</strong> export-ready supervisory view covering reconciliation, PAR indicators, member totals and compliance exceptions for ${model.tenantLabel}.
+      <strong>${model.isTreasurer ? "Treasurer finance report focus" : "Compliance report focus"}:</strong> ${model.isTreasurer ? `cash position, reconciliation exceptions, posted journals and finance evidence for ${model.tenantLabel}.` : `export-ready supervisory view covering reconciliation, PAR indicators, member totals and compliance exceptions for ${model.tenantLabel}.`}
     </div>
   `;
 }

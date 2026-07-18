@@ -159,7 +159,13 @@ async function assertSaccoRoleDashboards(page) {
     {
       label: "Treasurer",
       credentials: { code: "GVS", username: "treasurer@greenvalley.local", password: "Treasurer@12345" },
-      markers: ["Treasurer dashboard", "Finance", "Approvals", "Reconciliation", "collections, reversals, reconciliations"]
+      markers: ["Treasurer dashboard", "Finance", "Approvals", "Reconciliation", "collections, reversals, reconciliations"],
+      screens: [
+        { id: "transactions", heading: "Transactions data source", markers: ["Treasurer transaction workbench", "Treasurer focus", "Postings", "Products and accounts", "Welfare"] },
+        { id: "approvals", heading: "Approvals data source", markers: ["Treasurer approval queue", "Treasurer checker focus", "Pending queue"] },
+        { id: "reports", heading: "Reports data source", markers: ["Treasurer finance reports", "Treasurer finance report focus", "Ledger", "Operations"] },
+        { id: "operations", heading: "Operations data source", markers: ["Treasurer operations health", "Treasurer operations focus", "Queues"] }
+      ]
     },
     {
       label: "Secretary",
@@ -179,6 +185,13 @@ async function assertSaccoRoleDashboards(page) {
     await expectText(page, "Dashboard data source", `${role.label} Dashboard source panel`);
     for (const marker of role.markers) {
       await expectText(page, marker, `${role.label} dashboard marker ${marker}`);
+    }
+    for (const screen of role.screens || []) {
+      await navigateTo(page, screen.id);
+      await expectText(page, screen.heading, `${role.label} ${screen.id} source panel`);
+      for (const marker of screen.markers) {
+        await expectText(page, marker, `${role.label} ${screen.id} marker ${marker}`);
+      }
     }
     await staffLogout(page);
   }
