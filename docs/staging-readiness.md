@@ -36,8 +36,8 @@ These items are the main gap between the current build and live SACCO operation.
 | P0 | Financial correctness | Tests now assert reversal statement impact, balanced reversal journals, exact loan repayment balances/totals, balanced repayment journals, subscription idempotency, closed-period blocking, expenses, assets, and subscription billing tiers. | Calculations are verified against expected ledger/balance outcomes. |
 | P0 | Secrets and deployment | Staging variables, secret-handling rules, demo-login control, HTTPS/reverse-proxy requirements, and handoff evidence are documented in `docs/staging-environment.md`. | Deployment guide has a tested staging path with no secrets in source control. |
 | P1 | Provider integrations | SMS, email, and mobile-money flows now use provider interfaces with demo provider IDs controlled by environment; real adapters and callback signature verification still need provider-specific implementation. | Provider sandbox tests prove callbacks are authenticated and idempotent. |
-| P1 | Monitoring | Add deployment health dashboards, structured logs, alert thresholds, and callback/delivery exception monitoring. | Operations runbook describes alerts and response steps. |
-| P1 | Backups | Schedule encrypted database backups and test restore regularly. | Restore evidence is recorded for each release candidate. |
+| P1 | Monitoring | Operations runbook now defines health, database, callback, pending posting, notification, complaint, and backup rehearsal alert checks. | Alert routing is connected to the hosting/operations platform. |
+| P1 | Backups | Backup, restore, and isolated restore-rehearsal scripts exist; encrypted scheduling and release evidence remain operational setup tasks. | Restore evidence is recorded for each release candidate. |
 | P1 | CI/CD | GitHub Actions now runs local verification on Windows and a Docker/PostgreSQL production-readiness gate with browser regression on Ubuntu. | Main branch cannot be promoted if the release suite fails. |
 | P2 | UAT | Run SACCO staff/member acceptance testing with realistic data. | Signed UAT findings are closed or explicitly accepted. |
 | P2 | Data migration | Define import templates and validation for onboarding a real SACCO from spreadsheets. | Pilot SACCO data imports without manual database edits. |
@@ -49,7 +49,7 @@ Focus the next sprint on turning the high-risk items into tests and enforcement.
 1. Provider-specific SMS/email/mobile-money adapters with callback signature verification.
 2. UAT scripts for platform admin, SACCO staff, and member acceptance testing.
 3. Data import templates and validation for pilot SACCO onboarding.
-4. Backup restore rehearsal evidence for the first staging release candidate.
+4. Connect monitoring alerts and encrypted backup schedules in the staging hosting environment.
 5. Provider sandbox credentials and callback-signature test fixtures.
 
 ## Release Candidate Checklist

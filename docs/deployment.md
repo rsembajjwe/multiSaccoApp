@@ -111,6 +111,14 @@ npm.cmd run restore:db -- -BackupPath .\backups\sacco_app-YYYYMMDD-HHMMSS.dump -
 
 Restore is destructive because it runs `pg_restore --clean --if-exists`. Confirm the target environment and backup path before using `-ConfirmRestore`.
 
+Before a staging or production release candidate, rehearse backup and restore on an isolated disposable database:
+
+```powershell
+npm.cmd run backup:rehearse
+```
+
+Record the generated backup path and pass/fail result in the release evidence. The rehearsal uses a separate Compose project and removes its volume when it finishes.
+
 ## Load Test
 
 After the backend is running, execute the baseline load check:

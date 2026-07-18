@@ -1,9 +1,24 @@
 param(
-    [string]$OutputDirectory = "backups"
+    [string]$OutputDirectory = "backups",
+    [string]$ProjectName = ""
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+function Invoke-Checked {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Command,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    & $Command @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code $LASTEXITCODE`: $Command $($Arguments -join ' ')"
+    }
+}
 
 function Get-ComposeEnvValue {
     param(
@@ -32,14 +47,22 @@ function Get-ComposeEnvValue {
 $database = Get-ComposeEnvValue -Name "POSTGRES_DB" -DefaultValue "sacco_app"
 $user = Get-ComposeEnvValue -Name "POSTGRES_USER" -DefaultValue "sacco"
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$fileName = "sacco_app-$timestamp.dump"
+$fileName = "$database-$timestamp.dump"
 $remotePath = "/tmp/$fileName"
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $localPath = Join-Path $OutputDirectory $fileName
 
-docker compose exec -T postgres pg_dump -U $user -d $database -Fc -f $remotePath
-docker compose cp "postgres:$remotePath" $localPath
-docker compose exec -T postgres rm -f $remotePath
+$composeArgs = @("compose")
+if ($ProjectName) {
+    $composeArgs += @("-p", $ProjectName)
+}
+
+$dockerArgs = $composeArgs + @("exec", "-T", "postgres", "pg_dump", "-U", $user, "-d", $database, "-Fc", "-f", $remotePath)
+Invoke-Checked docker $dockerArgs
+$dockerArgs = $composeArgs + @("cp", "postgres:$remotePath", $localPath)
+Invoke-Checked docker $dockerArgs
+$dockerArgs = $composeArgs + @("exec", "-T", "postgres", "rm", "-f", $remotePath)
+Invoke-Checked docker $dockerArgs
 
 Write-Host "Backup created: $localPath"

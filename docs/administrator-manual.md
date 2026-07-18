@@ -89,6 +89,14 @@ npm.cmd run restore:db -- -BackupPath .\backups\sacco_app-YYYYMMDD-HHMMSS.dump -
 
 Restore is destructive because the script cleans existing database objects before loading the backup.
 
+Before approving a release candidate, run a restore rehearsal against a disposable database:
+
+```powershell
+npm.cmd run backup:rehearse
+```
+
+Keep the successful rehearsal output with the release evidence.
+
 ## Incident Checklist
 
 For posting or payment issues:

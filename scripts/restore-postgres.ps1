@@ -2,11 +2,27 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$BackupPath,
 
-    [switch]$ConfirmRestore
+    [switch]$ConfirmRestore,
+
+    [string]$ProjectName = ""
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+function Invoke-Checked {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Command,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    & $Command @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code $LASTEXITCODE`: $Command $($Arguments -join ' ')"
+    }
+}
 
 function Get-ComposeEnvValue {
     param(
@@ -45,8 +61,16 @@ $database = Get-ComposeEnvValue -Name "POSTGRES_DB" -DefaultValue "sacco_app"
 $user = Get-ComposeEnvValue -Name "POSTGRES_USER" -DefaultValue "sacco"
 $remotePath = "/tmp/restore-sacco-app.dump"
 
-docker compose cp $resolvedBackup.Path "postgres:$remotePath"
-docker compose exec -T postgres pg_restore -U $user -d $database --clean --if-exists $remotePath
-docker compose exec -T postgres rm -f $remotePath
+$composeArgs = @("compose")
+if ($ProjectName) {
+    $composeArgs += @("-p", $ProjectName)
+}
+
+$dockerArgs = $composeArgs + @("cp", $resolvedBackup.Path, "postgres:$remotePath")
+Invoke-Checked docker $dockerArgs
+$dockerArgs = $composeArgs + @("exec", "-T", "postgres", "pg_restore", "-U", $user, "-d", $database, "--clean", "--if-exists", $remotePath)
+Invoke-Checked docker $dockerArgs
+$dockerArgs = $composeArgs + @("exec", "-T", "postgres", "rm", "-f", $remotePath)
+Invoke-Checked docker $dockerArgs
 
 Write-Host "Restore completed from: $($resolvedBackup.Path)"

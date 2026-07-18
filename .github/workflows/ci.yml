@@ -55,6 +55,10 @@ jobs:
       - name: Install browser dependencies
         run: npx playwright install --with-deps chromium
 
+      - name: Run backup restore rehearsal
+        shell: pwsh
+        run: ./scripts/check-backup-restore.ps1
+
       - name: Run production readiness gate
         shell: pwsh
         run: ./scripts/check-production-readiness.ps1
