@@ -332,6 +332,19 @@ The reconciliation flags:
 - Migrated loans where imported repayment history exceeds paid-to-date capacity.
 - Missing import audit events.
 
+Seeded demo data note:
+
+- Running this against the default H2/demo seed can produce expected balance and import-audit warnings because seeded member balances predate the Phase 2 import flow.
+- A pilot migration run should treat `FAIL` checks as blockers unless the release evidence explicitly explains the accepted source of truth.
+- For imported pilot SACCO data, use `MIGRATION_EVIDENCE_STRICT=true` so balance, repayment-capacity, and allocation failures stop the gate.
+
+Latest local tool validation:
+
+- On `2026-07-18`, `npm.cmd run migration:evidence` was run against a local H2 Java backend on `http://127.0.0.1:18084/api/v1`.
+- The report was generated successfully under `reports/migration-evidence`.
+- Expected seeded-data findings were produced: member balance reconciliation failures for seeded balances, opening-balance evidence warnings, and missing import audit coverage for seed data.
+- Loan repayment capacity checks passed for the seeded loan records.
+
 ## Opening Balance Import Flow
 
 Use opening balances after member records exist and before live posting starts.

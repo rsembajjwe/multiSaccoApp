@@ -37,6 +37,7 @@ Latest local gate evidence before hosted handoff: `npm.cmd run ready:check` pass
 | Local verification | `npm.cmd run check` |  |  |
 | Production readiness | `npm.cmd run ready:check` |  |  |
 | PostgreSQL/Flyway | `npm.cmd run postgres:check` or hosted migration artifact |  |  |
+| Migration evidence | `npm.cmd run migration:evidence` |  | Attach `summary.md`, `members.csv`, `loans.csv`, and `audit.csv`; explain accepted warnings. |
 | Backup restore rehearsal | `npm.cmd run backup:rehearse` |  |  |
 | Load test | `npm.cmd run load:test` |  |  |
 | Browser regression | `npm.cmd run ui:browser` |  |  |

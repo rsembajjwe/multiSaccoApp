@@ -51,7 +51,7 @@ Focus the next sprint on turning the high-risk items into tests and enforcement.
 
 1. Run hosted staging handoff using `docs/staging-handoff-checklist.md` and `docs/release-evidence-template.md`.
 2. Execute pilot UAT scripts and close or accept findings using `docs/uat-findings-template.md`.
-3. Run migration evidence packs for pilot SACCOs and attach any external KYC file/object-storage proof.
+3. Run migration evidence packs after pilot imports, treat unexplained `FAIL` checks as blockers, and attach any external KYC file/object-storage proof.
 4. Connect monitoring alerts and encrypted backup schedules in the staging hosting environment.
 5. Provider sandbox credentials and callback-signature test fixtures.
 
