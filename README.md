@@ -289,6 +289,7 @@ This is now the first build foundation. A production build should add:
 - [Data model](docs/data-model.md)
 - [API route map](docs/api-route-map.md)
 - [Deployment guide](docs/deployment.md)
+- [Staging readiness plan](docs/staging-readiness.md)
 - [Monitoring guide](docs/monitoring.md)
 - [User manual](docs/user-manual.md)
 - [Administrator manual](docs/administrator-manual.md)

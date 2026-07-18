@@ -445,6 +445,7 @@ Progress:
 - Transactions and Loans UI integration polish added with Java-backed source panels, sync freshness, backend error notices, loading-aware refresh controls, account coverage, repayment coverage, and cleaner money-movement headings.
 - Approvals and Reports UI integration polish added with Java-backed source panels, sync freshness, backend error notices, loading-aware refresh controls, workflow coverage, checker queue, journal rows, and reconciliation exception indicators.
 - SACCO Registration, Subscriptions, Operations, and Member Portal UI polish added with staff/member source panels, sync freshness, backend error notices, loading-aware refresh controls, approval/payment gates, operations readiness, and member self-service balance/loan/notification/offline-draft state.
+- Staging readiness plan added with current completion snapshot, pass/fail release gates, remaining production gaps, and the recommended next sprint.
 
 Recommended stack:
 
