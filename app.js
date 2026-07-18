@@ -3,6 +3,7 @@ const API_SESSION_KEY = "sacco-platform-api-session-v1";
 const MEMBER_SESSION_KEY = "sacco-platform-member-session-v1";
 const OFFLINE_DRAFTS_KEY = "sacco-platform-offline-drafts-v1";
 const API_BASE = "/api/v1";
+const UI_BUILD_VERSION = "Role UI redesign 2026-07-18";
 
 const navItems = [
   ["dashboard", "Dashboard", "overview"],
@@ -886,6 +887,7 @@ function renderLoginScreen() {
         <div>
           <h2>Tereka Online</h2>
           <p>Multi-SACCO operations, member self-service, billing, finance, loans and oversight.</p>
+          <span class="pill">${UI_BUILD_VERSION}</span>
         </div>
       </div>
       <form id="primaryLoginForm" class="login-form">
@@ -973,6 +975,7 @@ function renderShellStatus() {
     ${shellFact("Role access", roleLabel)}
     ${shellFact("Member session", memberLabel)}
     ${shellFact("Operations scope", operationsScope)}
+    ${shellFact("UI build", UI_BUILD_VERSION)}
   `;
 }
 
