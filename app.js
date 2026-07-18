@@ -576,6 +576,10 @@ function memberRefreshButton(label = "Refresh member data") {
   return `<button class="secondary-button" data-action="refreshMember" type="button" ${memberApiState.loading ? "disabled" : ""}>${memberApiState.loading ? "Refreshing..." : label}</button>`;
 }
 
+function isAuthenticated() {
+  return Boolean(apiState.user || memberApiState.member);
+}
+
 function init() {
   renderTenantSelect();
   renderWorkspaceSelect();
@@ -658,6 +662,10 @@ function bindGlobalActions() {
 }
 
 function render() {
+  if (!isAuthenticated()) {
+    renderLoginScreen();
+    return;
+  }
   ensureWorkspaceTenant();
   renderNav();
   document.querySelectorAll(".nav-item").forEach((button) => {
@@ -701,6 +709,58 @@ function render() {
   };
 
   document.getElementById("app").innerHTML = routes[state.currentView]();
+  bindViewActions();
+}
+
+function renderLoginScreen() {
+  renderApiChrome();
+  document.getElementById("sessionRole").textContent = "Signed out";
+  document.getElementById("tenantSelect").value = state.tenantId;
+  document.getElementById("workspaceSelect").value = state.workspace || "platformAdmin";
+  document.querySelectorAll(".nav-item").forEach((button) => button.classList.remove("active"));
+  document.getElementById("sectionKicker").textContent = "Welcome";
+  document.getElementById("pageTitle").textContent = "Login to Tereka Online";
+  document.getElementById("newMemberBtn").hidden = true;
+  document.getElementById("shellStatus").innerHTML = `
+    ${shellFact("Application", "Tereka Online")}
+    ${shellFact("Staff session", "Signed out")}
+    ${shellFact("Member session", "Signed out")}
+    ${shellFact("Backend", apiState.health || "checking")}
+    ${shellFact("Mode", apiState.health === "online" ? "Java API ready" : "Waiting for API")}
+  `;
+  document.getElementById("app").innerHTML = `
+    <section class="login-screen">
+      <div class="login-brand">
+        <div class="brand-mark login-logo" aria-hidden="true">
+          <svg viewBox="0 0 48 48" role="img">
+            <path d="M8 10h32v7H27v21h-7V17H8z"></path>
+            <path d="M31 21h9v17H31z"></path>
+          </svg>
+        </div>
+        <div>
+          <h2>Tereka Online</h2>
+          <p>Multi-SACCO operations, member self-service, billing, finance, loans and oversight.</p>
+        </div>
+      </div>
+      <div class="login-grid">
+        <article class="login-option">
+          <span class="pill">Staff</span>
+          <h3>Platform and SACCO administration</h3>
+          <p>Use this for platform administrators, SACCO admins, treasurers, secretaries and chairpersons.</p>
+          <button class="primary-button" data-action="apiLogin" type="button">Staff login</button>
+          <small>Demo staff: admin@platform.local / Admin@12345</small>
+        </article>
+        <article class="login-option">
+          <span class="pill">Member</span>
+          <h3>Member self-service</h3>
+          <p>Members can view balances, loans, notifications, guarantee requests and offline drafts.</p>
+          <button class="secondary-button" data-action="memberLogin" type="button">Member login</button>
+          <small>Demo member: GVS-0001 / Member@12345</small>
+        </article>
+      </div>
+      ${apiState.lastError ? `<div class="notice error">${apiState.lastError}</div>` : ""}
+    </section>
+  `;
   bindViewActions();
 }
 
@@ -3102,7 +3162,7 @@ async function refreshMemberStatus() {
   if (!memberApiState.token) return;
   memberApiState.loading = true;
   memberApiState.lastError = "";
-  if (state.currentView === "memberPortal") render();
+  if (!isAuthenticated() || state.currentView === "memberPortal") render();
 
   try {
     const [session, mobileDashboard, guarantorRequests, notifications] = await Promise.all([
@@ -3126,14 +3186,14 @@ async function refreshMemberStatus() {
   } finally {
     memberApiState.loading = false;
   }
-  if (state.currentView === "memberPortal") render();
+  if (!isAuthenticated() || state.currentView === "memberPortal") render();
 }
 
 async function refreshApiStatus() {
   apiState.loading = true;
   apiState.lastError = "";
   renderApiChrome();
-  if (["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans"].includes(state.currentView)) render();
+  if (!isAuthenticated() || ["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans"].includes(state.currentView)) render();
 
   try {
     const health = await apiRequest("/health");
@@ -3223,7 +3283,7 @@ async function refreshApiStatus() {
     apiState.loading = false;
   }
   renderApiChrome();
-  if (["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans"].includes(state.currentView)) render();
+  if (!isAuthenticated() || ["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans"].includes(state.currentView)) render();
 }
 
 function openApiLoginForm() {
@@ -3246,6 +3306,10 @@ function openApiLoginForm() {
       apiState.user = data.user;
       localStorage.setItem(API_SESSION_KEY, data.token);
       closeModal();
+      state.workspace = data.user.tenantId === "tenant_platform" ? "platformAdmin" : "saccoAdmin";
+      ensureWorkspaceTenant();
+      state.currentView = currentWorkspace().defaultView;
+      saveState();
       await refreshApiStatus();
     } catch (error) {
       document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
