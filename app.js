@@ -318,6 +318,7 @@ function visibleNavItems() {
   const permissions = new Set(apiState.permissionIds || []);
   return navItems.filter(([id]) => {
     if (!allowed.has(id)) return false;
+    if (id === "dashboard" && apiState.user) return true;
     if (!apiState.user || permissions.size === 0 || isPlatformFullAdmin()) return true;
     const required = navPermissions[id];
     return !required || permissions.has(required);
@@ -993,21 +994,30 @@ function renderDashboard() {
   const portfolio = loans.reduce((sum, loan) => sum + (loan.balance || 0), 0);
   const activeMembers = usingApi ? (operationCounts.activeMembers || members.filter((m) => m.status === "Active").length) : members.filter((m) => m.status === "Active").length;
   const alertCount = operations.alerts?.length || 0;
+  const roleKind = saccoDashboardRoleKind();
+  const model = saccoDashboardModel(roleKind, {
+    tenant,
+    operations,
+    operationCounts,
+    members,
+    transactions,
+    loans,
+    approvals,
+    deposits,
+    portfolio,
+    activeMembers,
+    alertCount,
+    usingApi
+  });
+  const selectedTab = state.saccoDashboardTab || "overview";
+  const activeTab = model.tabs.some((tab) => tab.id === selectedTab) ? selectedTab : model.tabs[0].id;
 
   return `
-    ${workspaceOverview()}
-    <div class="grid metrics">
-      ${metric("Registered members", usingApi ? (operationCounts.members || members.length) : members.length, `${activeMembers} active`)}
-      ${metric("Posted collections", money.format(deposits), usingApi ? "API-backed postings" : "tenant-filtered")}
-      ${metric("Loan portfolio", money.format(portfolio), `${usingApi ? (operationCounts.openLoans || loans.length) : loans.filter((l) => l.status !== "Closed").length} open loan files`)}
-      ${metric("Pending approvals", usingApi ? (operationCounts.pendingFinancialTransactions || approvals.length) : approvals.length, "maker-checker controls")}
-    </div>
-
     <section class="card integration-panel" style="margin-top:16px">
       <div class="toolbar">
         <div>
           <h2>Dashboard data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; Java integration</p>
+          <p class="eyebrow">${apiSyncState()} &middot; Java-backed ${model.title.toLowerCase()}</p>
         </div>
         ${refreshApiButton("Refresh backend data")}
       </div>
@@ -1020,109 +1030,132 @@ function renderDashboard() {
       </div>
     </section>
 
-    <div class="grid two" style="margin-top:16px">
-      <section class="card">
-        <div class="toolbar">
-          <div>
-            <h2>${tenant.name}</h2>
-            <p class="eyebrow">${tenant.status} tenant</p>
-          </div>
-          <span class="status ${statusClass(tenant.status)}">${tenant.status}</span>
-        </div>
-        <div class="grid three">
-          ${miniFact("District", tenant.district)}
-          ${miniFact("Registration", tenant.registrationNo)}
-          ${miniFact("Package", packageName(tenant.packageId))}
-        </div>
-        <h3 style="margin-top:18px">Onboarding progress</h3>
-        <div class="progress" aria-label="Onboarding progress"><span style="width:${tenant.onboarding}%"></span></div>
-        <p style="margin-top:10px;color:var(--muted)">${tenant.onboarding}% complete. Live financial processing requires approved registration, active subscription, branches, products, roles, and opening balances.</p>
-      </section>
-
-      <section class="card">
-        <h2>Control alerts</h2>
-        <ul class="list">
-          ${usingApi ? alertItem("Operations status", alertCount ? `${alertCount} alert(s)` : "Clear", alertCount ? "pending" : "active") : alertItem("Licence monitoring", daysTo(tenant.licenseExpiry) < 90 ? "Expiry attention needed" : "Valid", daysTo(tenant.licenseExpiry) < 90 ? "overdue" : "active")}
-          ${alertItem("Tenant isolation", usingApi ? `${operations.scope === "platform" ? "Platform scope" : tenantName(operations.scope || currentApiTenantId())}` : "All tables are filtered by tenant in this demo", "active")}
-          ${alertItem("Idempotency", "Payment and posting references are unique", "active")}
-          ${alertItem("Audit events", `${usingApi ? apiState.auditEvents.length : state.audit.length} sensitive actions captured`, "trial")}
-        </ul>
-      </section>
+    <div class="grid metrics" style="margin-top:16px">
+      ${model.metrics.map((item) => metric(item.label, item.value, item.detail)).join("")}
     </div>
 
-    <section class="card api-panel" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Backend connection</h2>
-          <p class="eyebrow">Sprint 1 API foundation</p>
-        </div>
-        <span class="status ${apiState.health === "online" ? "active" : apiState.health === "offline" ? "overdue" : "trial"}">${apiState.health}</span>
-      </div>
-      <div class="grid three">
-        ${miniFact("Authenticated user", apiState.user ? apiState.user.fullName : "Not logged in")}
-        ${miniFact("Operations scope", operations.scope || "Not loaded")}
-        ${miniFact("API members", String(operationCounts.members || apiState.members.length))}
-      </div>
-      <p class="muted">${apiState.message}</p>
-      ${apiState.user ? `<div class="toolbar" style="margin-top:14px;margin-bottom:0"><button class="secondary-button" data-view-jump="operations" type="button">Open operations center</button><button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button></div>` : ""}
-    </section>
-
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Android member app</h2>
-          <p class="eyebrow">Flutter foundation &middot; mobile/member_app</p>
+          <h2>${model.title}</h2>
+          <p class="eyebrow">${model.subtitle}</p>
         </div>
-        <button class="secondary-button" data-view-jump="memberPortal" type="button">Open member portal</button>
-      </div>
-      <div class="grid metrics">
-        ${metric("Mobile auth", "Ready", "member token flow")}
-        ${metric("Dashboard API", "Ready", "/member-auth/mobile-dashboard")}
-        ${metric("Offline drafts", "Ready", "local save + sync")}
-      </div>
-      <div class="notice" style="margin-top:16px">Android emulator API base: <strong>http://10.0.2.2:5173/api/v1</strong>. Demo member logins require the development/demo profile.</div>
-    </section>
-
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Security hardening</h2>
-          <p class="eyebrow">Phase 7 production controls</p>
+        <div class="filters">
+          ${model.tabs.map((tab) => saccoDashboardTabButton(tab.id, tab.label, activeTab)).join("")}
         </div>
-        <span class="status active">enabled</span>
       </div>
-      <div class="grid metrics">
-        ${metric("Security headers", "On", "nosniff, frame deny, referrer policy")}
-        ${metric("Rate limiting", "On", "staff login, member login, callbacks")}
-        ${metric("API cache policy", "No-store", "JSON responses")}
-      </div>
-    </section>
-
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Mobile money callbacks</h2>
-          <p class="eyebrow">Provider posting monitor</p>
-        </div>
-        <button class="primary-button" data-action="simulateMobileMoneyCallback" type="button">Simulate callback</button>
-      </div>
-      <div class="grid metrics">
-        ${metric("Callbacks", apiState.mobileMoneyCallbacks.length, `${money.format(apiState.mobileMoneyCallbacks.reduce((sum, item) => sum + item.amount, 0))} received`)}
-        ${metric("SMS sent", apiState.notificationDeliveries.filter((item) => item.channel === "sms").length, "demo provider")}
-        ${metric("Email sent", apiState.notificationDeliveries.filter((item) => item.channel === "email").length, "demo provider")}
-      </div>
-      ${mobileMoneyCallbackTable(apiState.mobileMoneyCallbacks.slice(0, 5))}
-      ${notificationDeliveryTable(apiState.notificationDeliveries.slice(0, 5))}
-    </section>
-
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <h2>Recent activity</h2>
-        <button class="secondary-button" data-view-jump="reports" type="button">View audit</button>
-      </div>
-      ${auditTable(tenantScoped(state.audit).slice(0, 5))}
+      ${renderSaccoDashboardTab(model, activeTab)}
     </section>
   `;
+}
+
+function saccoDashboardTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-sacco-dashboard-tab="${id}" type="button">${label}</button>`;
+}
+
+function saccoDashboardRoleKind() {
+  if (state.workspace === "treasurer") return "treasurer";
+  if (state.workspace === "secretary") return "secretary";
+  if (state.workspace === "chairperson") return "chairperson";
+  return "admin";
+}
+
+function saccoDashboardModel(roleKind, data) {
+  const pendingTransactions = data.transactions.filter((tx) => tx.status === "Pending Approval").length;
+  const postedTransactions = data.transactions.filter((tx) => tx.status === "Posted").length;
+  const kycPending = data.members.filter((member) => member.kyc !== "Verified").length;
+  const openLoans = data.loans.filter((loan) => loan.status !== "Closed").length;
+  const pendingLoans = data.loans.filter((loan) => ["Submitted", "Under Review", "Approved"].includes(loan.status)).length;
+  const alerts = data.operations.alerts?.length || 0;
+  const common = {
+    admin: {
+      title: "SACCO Administrator dashboard",
+      subtitle: "Full SACCO operations view for members, finance, loans, approvals and reports",
+      metrics: [
+        { label: "Registered members", value: data.members.length, detail: `${data.activeMembers} active` },
+        { label: "Posted collections", value: money.format(data.deposits), detail: `${postedTransactions} posted movement(s)` },
+        { label: "Loan portfolio", value: money.format(data.portfolio), detail: `${openLoans} open loan file(s)` },
+        { label: "Pending approvals", value: data.approvals.length, detail: "maker-checker controls" }
+      ],
+      tabs: [{ id: "overview", label: "Overview" }, { id: "members", label: "Members" }, { id: "finance", label: "Finance" }, { id: "risk", label: "Risk" }]
+    },
+    treasurer: {
+      title: "Treasurer dashboard",
+      subtitle: "Finance workbench for collections, reversals, reconciliations, welfare payouts and checker queues",
+      metrics: [
+        { label: "Posted collections", value: money.format(data.deposits), detail: `${postedTransactions} posted movement(s)` },
+        { label: "Pending postings", value: pendingTransactions, detail: "awaiting approval" },
+        { label: "Statement-ready", value: postedTransactions, detail: "rows available for member statements" },
+        { label: "Callback alerts", value: data.operationCounts.callbackExceptions || 0, detail: "mobile-money exceptions" }
+      ],
+      tabs: [{ id: "finance", label: "Finance" }, { id: "approvals", label: "Approvals" }, { id: "reconciliation", label: "Reconciliation" }]
+    },
+    secretary: {
+      title: "Secretary dashboard",
+      subtitle: "Member records, KYC, branch coverage, meeting records, complaints and board pack preparation",
+      metrics: [
+        { label: "Registered members", value: data.members.length, detail: `${data.activeMembers} active` },
+        { label: "KYC pending", value: kycPending, detail: "records needing update" },
+        { label: "Open complaints", value: data.operationCounts.openComplaints || 0, detail: "support follow-up" },
+        { label: "Board pack items", value: data.approvals.length + kycPending, detail: "records for review" }
+      ],
+      tabs: [{ id: "members", label: "Members" }, { id: "governance", label: "Governance" }, { id: "complaints", label: "Complaints" }]
+    },
+    chairperson: {
+      title: "Chairperson dashboard",
+      subtitle: "Board oversight for loan decisions, approvals, risk exposure, operating exceptions and governance follow-up",
+      metrics: [
+        { label: "Loan portfolio", value: money.format(data.portfolio), detail: `${openLoans} open loan file(s)` },
+        { label: "Loan decisions", value: pendingLoans, detail: "applications and approved files" },
+        { label: "Pending approvals", value: data.approvals.length, detail: "board or checker action" },
+        { label: "Operations alerts", value: alerts, detail: "exceptions needing attention" }
+      ],
+      tabs: [{ id: "oversight", label: "Oversight" }, { id: "loans", label: "Loans" }, { id: "decisions", label: "Decisions" }, { id: "risk", label: "Risk" }]
+    }
+  };
+  return common[roleKind] || common.admin;
+}
+
+function renderSaccoDashboardTab(model, activeTab) {
+  const quickActions = {
+    members: [["members", "Open members"], ["reports", "Board reports"]],
+    finance: [["transactions", "Open transactions"], ["reports", "Finance reports"]],
+    approvals: [["approvals", "Open approvals"], ["transactions", "Review postings"]],
+    reconciliation: [["reports", "Open reconciliation"], ["operations", "Operations health"]],
+    governance: [["reports", "Governance reports"], ["approvals", "Approvals"]],
+    complaints: [["reports", "Complaint reports"], ["operations", "Operations health"]],
+    loans: [["loans", "Open loans"], ["approvals", "Loan approvals"]],
+    decisions: [["approvals", "Decision queue"], ["reports", "Board reports"]],
+    risk: [["reports", "Risk reports"], ["operations", "Operations health"]],
+    oversight: [["loans", "Loan oversight"], ["reports", "Reports"]]
+  };
+  const actions = quickActions[activeTab] || [["members", "Members"], ["transactions", "Transactions"], ["reports", "Reports"]];
+  return `
+    <div class="notice" style="margin-top:16px">
+      <strong>${model.title}:</strong> ${saccoDashboardTabText(activeTab)}
+    </div>
+    <div class="toolbar" style="margin-top:16px;margin-bottom:0">
+      ${actions.map(([view, label]) => `<button class="secondary-button" data-view-jump="${view}" type="button">${label}</button>`).join("")}
+      ${refreshApiButton("Refresh backend data")}
+    </div>
+  `;
+}
+
+function saccoDashboardTabText(activeTab) {
+  const copy = {
+    overview: "daily operating snapshot for the selected SACCO.",
+    members: "membership health, KYC readiness and branch coverage.",
+    finance: "collections, postings, reversals, welfare payments and financial exceptions.",
+    approvals: "items that need maker-checker or leadership action.",
+    reconciliation: "cash, bank, mobile-money and ledger exception monitoring.",
+    governance: "meeting records, board packs, resolutions and compliance follow-up.",
+    complaints: "member and SACCO support issues requiring secretary follow-up.",
+    oversight: "board-level operating health across loans, approvals and exceptions.",
+    loans: "loan pipeline, guarantor readiness, disbursement readiness and repayment exposure.",
+    decisions: "approval queue and board decision priorities.",
+    risk: "portfolio, DSR, operating alerts and audit exceptions."
+  };
+  return copy[activeTab] || copy.overview;
 }
 
 function renderPlatformDashboard() {
@@ -4262,6 +4295,14 @@ function bindViewActions() {
   document.querySelectorAll("[data-reports-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.reportsTab = button.dataset.reportsTab;
+      saveState();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-sacco-dashboard-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.saccoDashboardTab = button.dataset.saccoDashboardTab;
       saveState();
       render();
     });

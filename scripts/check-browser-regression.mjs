@@ -38,6 +38,7 @@ try {
   await staffLogin(page);
   await assertStaffScreens(page);
   await staffLogout(page);
+  await assertSaccoRoleDashboards(page);
   await memberLogin(page);
   await assertMemberPortal(page);
 
@@ -108,10 +109,10 @@ async function clearSession(page) {
   });
 }
 
-async function staffLogin(page) {
-  await page.locator("#loginSaccoCode").fill(process.env.UI_STAFF_SACCO_CODE || "PLATFORM");
-  await page.locator("#loginUsername").fill(process.env.UI_STAFF_USERNAME || process.env.UI_STAFF_EMAIL || "admin@platform.local");
-  await page.locator("#loginPassword").fill(process.env.UI_STAFF_PASSWORD || "Admin@12345");
+async function staffLogin(page, credentials = {}) {
+  await page.locator("#loginSaccoCode").fill(credentials.code || process.env.UI_STAFF_SACCO_CODE || "PLATFORM");
+  await page.locator("#loginUsername").fill(credentials.username || process.env.UI_STAFF_USERNAME || process.env.UI_STAFF_EMAIL || "admin@platform.local");
+  await page.locator("#loginPassword").fill(credentials.password || process.env.UI_STAFF_PASSWORD || "Admin@12345");
   await page.locator("#loginSubmit").click();
   await expectText(page, "API:", "staff API badge");
   await expectText(page, "Java-backed", "staff Java-backed source state");
@@ -150,6 +151,36 @@ async function assertStaffScreens(page) {
       await expectText(page, "System", "Dashboard System tab");
       await expectNoText(page, "Android member app", "Dashboard old Android panel");
     }
+  }
+}
+
+async function assertSaccoRoleDashboards(page) {
+  const roles = [
+    {
+      label: "Treasurer",
+      credentials: { code: "GVS", username: "treasurer@greenvalley.local", password: "Treasurer@12345" },
+      markers: ["Treasurer dashboard", "Finance", "Approvals", "Reconciliation", "collections, reversals, reconciliations"]
+    },
+    {
+      label: "Secretary",
+      credentials: { code: "GVS", username: "secretary@greenvalley.local", password: "Secretary@12345" },
+      markers: ["Secretary dashboard", "Members", "Governance", "Complaints", "Member records, KYC"]
+    },
+    {
+      label: "Chairperson",
+      credentials: { code: "GVS", username: "chairperson@greenvalley.local", password: "Chair@12345" },
+      markers: ["Chairperson dashboard", "Oversight", "Loans", "Decisions", "Risk"]
+    }
+  ];
+
+  for (const role of roles) {
+    await staffLogin(page, role.credentials);
+    await navigateTo(page, "dashboard");
+    await expectText(page, "Dashboard data source", `${role.label} Dashboard source panel`);
+    for (const marker of role.markers) {
+      await expectText(page, marker, `${role.label} dashboard marker ${marker}`);
+    }
+    await staffLogout(page);
   }
 }
 
