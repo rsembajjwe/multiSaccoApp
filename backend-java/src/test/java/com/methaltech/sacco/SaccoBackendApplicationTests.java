@@ -512,6 +512,61 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.roleNames", hasItem("Chairperson")))
 				.andExpect(jsonPath("$.data.permissionIds", hasItem("approvals:decide")));
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "PLATFORM",
+								  "username": "operations@platform.local",
+								  "password": "Operations@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.roleNames", hasItem("Platform Operations Officer")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("operations:view")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("notifications:view")));
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "PLATFORM",
+								  "username": "billing@platform.local",
+								  "password": "Billing@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.roleNames", hasItem("Platform Billing Officer")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("subscriptions:manage")));
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "PLATFORM",
+								  "username": "compliance@platform.local",
+								  "password": "Compliance@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.roleNames", hasItem("Platform Compliance Officer")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("accounting:view")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("reports:view")));
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "PLATFORM",
+								  "username": "support@platform.local",
+								  "password": "Support@12345"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.roleNames", hasItem("Platform Support Officer")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("members:view")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("complaints:view")));
 	}
 
 	@Test

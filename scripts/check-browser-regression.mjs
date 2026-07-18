@@ -37,6 +37,7 @@ try {
 
   await staffLogin(page);
   await assertStaffScreens(page);
+  await staffLogout(page);
   await memberLogin(page);
   await assertMemberPortal(page);
 
@@ -124,7 +125,10 @@ async function assertStaffScreens(page) {
     { id: "registrations", nav: "SACCO Registration", heading: "SACCO registration data source", markers: ["Java-backed", "Last sync", "Tenant approval"] },
     { id: "subscriptions", nav: "Subscriptions", heading: "Subscriptions data source", markers: ["Java-backed", "Last sync", "Billable members"] },
     { id: "members", nav: "Members", heading: "Members data source", markers: ["Java-backed", "Server fields", "Import members", "Profile metadata"] },
-    { id: "operations", nav: "Operations", heading: "Operations data source", markers: ["Java-backed", "Last sync", "Operations command center"] }
+    { id: "operations", nav: "Operations", heading: "Operations data source", markers: ["Java-backed", "Last sync", "Operations command center"] },
+    { id: "usersRoles", nav: "Users & Roles", heading: "Users and roles data source", markers: ["Java API", "Staff access", "Platform roles"] },
+    { id: "notifications", nav: "Notifications", heading: "Notifications data source", markers: ["Java API", "Provider outbox", "Templates"] },
+    { id: "complaints", nav: "Complaints", heading: "Complaints data source", markers: ["Java API", "Support queue", "Open complaints"] }
   ];
 
   for (const screen of screens) {
@@ -159,6 +163,11 @@ async function memberLogin(page) {
   await page.locator("#loginPassword").fill(process.env.UI_MEMBER_PASSWORD || "Member@12345");
   await page.locator("#loginSubmit").click();
   await waitForSettledUi(page);
+}
+
+async function staffLogout(page) {
+  await page.locator("#apiLogoutBtn").click();
+  await page.locator("#loginSaccoCode").waitFor({ state: "attached" });
 }
 
 async function assertMemberPortal(page) {

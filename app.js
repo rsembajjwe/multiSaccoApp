@@ -14,16 +14,54 @@ const navItems = [
   ["approvals", "Approvals", "workflow"],
   ["operations", "Operations", "monitor"],
   ["reports", "Reports", "audit"],
+  ["usersRoles", "Users & Roles", "access"],
+  ["notifications", "Notifications", "messages"],
+  ["complaints", "Complaints", "support"],
   ["memberPortal", "Member Portal", "self-service"]
 ];
 
 const workspaceProfiles = {
+  platformSuperAdmin: {
+    label: "Platform Super Admin",
+    session: "Platform Super Admin",
+    tenantLocked: false,
+    defaultView: "dashboard",
+    nav: ["dashboard", "registrations", "subscriptions", "members", "transactions", "loans", "approvals", "operations", "reports", "usersRoles", "notifications", "complaints"]
+  },
   platformAdmin: {
     label: "Platform administration",
     session: "Platform Administrator",
     tenantLocked: false,
     defaultView: "dashboard",
-    nav: ["dashboard", "registrations", "subscriptions", "members", "transactions", "loans", "approvals", "operations", "reports"]
+    nav: ["dashboard", "registrations", "subscriptions", "members", "transactions", "loans", "approvals", "operations", "reports", "usersRoles", "notifications", "complaints"]
+  },
+  platformOperations: {
+    label: "Platform Operations",
+    session: "Platform Operations Officer",
+    tenantLocked: false,
+    defaultView: "operations",
+    nav: ["dashboard", "registrations", "operations", "reports", "complaints", "notifications"]
+  },
+  platformBilling: {
+    label: "Platform Billing",
+    session: "Platform Billing Officer",
+    tenantLocked: false,
+    defaultView: "subscriptions",
+    nav: ["dashboard", "subscriptions", "registrations", "reports"]
+  },
+  platformCompliance: {
+    label: "Platform Compliance",
+    session: "Platform Compliance Officer",
+    tenantLocked: false,
+    defaultView: "reports",
+    nav: ["dashboard", "registrations", "reports", "operations"]
+  },
+  platformSupport: {
+    label: "Platform Support",
+    session: "Platform Support Officer",
+    tenantLocked: false,
+    defaultView: "operations",
+    nav: ["dashboard", "registrations", "members", "operations", "complaints"]
   },
   saccoAdmin: {
     label: "SACCO administrator",
@@ -71,11 +109,18 @@ const navPermissions = {
   loans: "loans:view",
   approvals: "approvals:view",
   operations: "operations:view",
-  reports: "reports:view"
+  reports: "reports:view",
+  usersRoles: "roles:view",
+  notifications: "notifications:view",
+  complaints: "complaints:view"
 };
 
 const demoAccounts = [
   { label: "Platform admin", code: "PLATFORM", username: "admin@platform.local", password: "Admin@12345", note: "Platform administration" },
+  { label: "Platform operations", code: "PLATFORM", username: "operations@platform.local", password: "Operations@12345", note: "Support, monitoring and notifications" },
+  { label: "Platform billing", code: "PLATFORM", username: "billing@platform.local", password: "Billing@12345", note: "Subscriptions and payment control" },
+  { label: "Platform compliance", code: "PLATFORM", username: "compliance@platform.local", password: "Compliance@12345", note: "Reports, operations and audit oversight" },
+  { label: "Platform support", code: "PLATFORM", username: "support@platform.local", password: "Support@12345", note: "SACCO support and complaints" },
   { label: "SACCO admin", code: "GVS", username: "admin@greenvalley.local", password: "Sacco@12345", note: "Green Valley administrator" },
   { label: "Treasurer", code: "GVS", username: "treasurer@greenvalley.local", password: "Treasurer@12345", note: "Finance and approvals" },
   { label: "Secretary", code: "GVS", username: "secretary@greenvalley.local", password: "Secretary@12345", note: "Members and governance" },
@@ -272,7 +317,7 @@ function visibleNavItems() {
   const permissions = new Set(apiState.permissionIds || []);
   return navItems.filter(([id]) => {
     if (!allowed.has(id)) return false;
-    if (!apiState.user || permissions.size === 0) return true;
+    if (!apiState.user || permissions.size === 0 || isPlatformFullAdmin()) return true;
     const required = navPermissions[id];
     return !required || permissions.has(required);
   });
@@ -611,14 +656,33 @@ function isAuthenticated() {
 }
 
 function workspaceForStaff(user, roleNames = [], permissionIds = []) {
-  if (user?.tenantId === "tenant_platform") return "platformAdmin";
   const roles = roleNames.join(" ").toLowerCase();
   const permissions = new Set(permissionIds);
+  if (user?.tenantId === "tenant_platform") {
+    if (roles.includes("super admin")) return "platformSuperAdmin";
+    if (roles.includes("billing")) return "platformBilling";
+    if (roles.includes("compliance")) return "platformCompliance";
+    if (roles.includes("support")) return "platformSupport";
+    if (roles.includes("operations")) return "platformOperations";
+    return "platformAdmin";
+  }
   if (roles.includes("administrator")) return "saccoAdmin";
   if (roles.includes("treasurer") || permissions.has("accounting:post") || permissions.has("transactions:approve")) return "treasurer";
   if (roles.includes("secretary") || permissions.has("members:approve")) return "secretary";
   if (roles.includes("chairperson") || permissions.has("loans:approve") || permissions.has("approvals:decide")) return "chairperson";
   return "saccoAdmin";
+}
+
+function hasPermission(permissionId) {
+  if (!apiState.user) return true;
+  if (isPlatformFullAdmin()) return true;
+  return (apiState.permissionIds || []).includes(permissionId);
+}
+
+function isPlatformFullAdmin() {
+  if (apiState.user?.tenantId !== "tenant_platform") return false;
+  const roles = (apiState.roleNames || []).join(" ").toLowerCase();
+  return roles.includes("platform administrator") || roles.includes("platform super admin");
 }
 
 function init() {
@@ -717,7 +781,7 @@ function render() {
   document.getElementById("tenantSelect").value = state.tenantId;
   document.getElementById("workspaceSelect").value = state.workspace || "platformAdmin";
   document.getElementById("sessionRole").textContent = currentWorkspace().session;
-  document.getElementById("newMemberBtn").hidden = !currentWorkspace().nav.includes("members");
+  document.getElementById("newMemberBtn").hidden = !currentWorkspace().nav.includes("members") || !hasPermission("members:create");
   document.getElementById("globalSearchBtn").hidden = false;
   document.getElementById("memberPortalBtn").hidden = false;
   renderApiChrome();
@@ -733,6 +797,9 @@ function render() {
     approvals: ["Governance", "Approval workflow"],
     operations: ["Operations", "Monitoring and release readiness"],
     reports: ["Controls", "Reports and audit trail"],
+    usersRoles: ["Access", "Users and roles"],
+    notifications: ["Messages", "Notifications"],
+    complaints: ["Support", "Complaints"],
     memberPortal: ["Member Portal", "Self-service account"]
   };
   const [kicker, title] = titles[state.currentView] || titles.dashboard;
@@ -749,6 +816,9 @@ function render() {
     approvals: renderApprovals,
     operations: renderOperations,
     reports: renderReports,
+    usersRoles: renderUsersRoles,
+    notifications: renderNotifications,
+    complaints: renderComplaints,
     memberPortal: renderMemberPortal
   };
 
@@ -1031,7 +1101,7 @@ function renderRegistrations() {
     ? apiState.tenants.filter((tenant) => tenant.id !== "tenant_platform").map(apiTenantToRow)
     : state.tenants.filter((tenant) => tenant.id !== "platform");
   const source = useApiTenants() ? "API-backed" : "Local demo";
-  const canCreateOnApi = apiState.user?.tenantId === "tenant_platform";
+  const canCreateOnApi = !apiState.user || hasPermission("tenants:manage");
   const approvedTenants = tenants.filter((tenant) => tenant.status === "Approved").length;
   const pendingTenants = tenants.filter((tenant) => tenant.status === "Pending Review").length;
   const suspendedTenants = tenants.filter((tenant) => tenant.status === "Suspended").length;
@@ -1115,7 +1185,7 @@ function renderRegistrations() {
 function renderSubscriptions() {
   const packages = useApiSubscriptions() ? apiState.subscriptionPackages.map(apiPackageToRow) : state.packages;
   const subscriptions = useApiSubscriptions() ? apiState.subscriptions.map(apiSubscriptionToRow) : state.subscriptions;
-  const canRecordApiPayment = apiState.user?.tenantId === "tenant_platform";
+  const canRecordApiPayment = !apiState.user || hasPermission("subscriptions:manage");
   const source = useApiSubscriptions() ? "API-backed" : "Local demo";
   const billingRows = subscriptions.map((subscription) => subscriptionBillingDetails(subscription));
   const invoiceTotal = billingRows.reduce((sum, billing) => sum + billing.amount, 0);
@@ -1239,6 +1309,7 @@ function renderMembers() {
   const branchCount = new Set(members.map((member) => member.branchId).filter(Boolean)).size;
   const membersWithoutBranch = members.filter((member) => !member.branchId).length;
   const staleMemberLabel = apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed";
+  const canCreateMembers = hasPermission("members:create");
   return `
     ${workspaceOverview()}
     <div class="grid metrics">
@@ -1256,8 +1327,8 @@ function renderMembers() {
         </div>
         <div class="filters">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
-          <button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>
-          <button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>
+          ${canCreateMembers ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>
+          <button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>` : `<span class="pill">View only</span>`}
         </div>
       </div>
       ${apiSyncNotice("Members screen")}
@@ -1293,9 +1364,9 @@ function renderMembers() {
         <div class="filters">
           <input class="input" id="memberSearch" placeholder="Search members">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
-          ${apiState.user ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>` : ""}
-          ${apiState.user ? `<button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>` : ""}
-          <button class="primary-button" data-action="newMember" type="button">Register member</button>
+          ${apiState.user && canCreateMembers ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>` : ""}
+          ${apiState.user && canCreateMembers ? `<button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>` : ""}
+          ${canCreateMembers ? `<button class="primary-button" data-action="newMember" type="button">Register member</button>` : `<span class="pill">View only</span>`}
         </div>
       </div>
       ${apiSyncNotice("Member register")}
@@ -1990,6 +2061,132 @@ function renderOperations() {
   `;
 }
 
+function renderUsersRoles() {
+  const users = apiState.users || [];
+  const roles = apiState.roles || [];
+  const permissions = apiState.permissions || [];
+  const canManageRoles = hasPermission("roles:create");
+  const tenantLabel = apiState.user?.tenantId === "tenant_platform" ? "platform scope" : tenantName(currentApiTenantId());
+  return `
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Users and roles data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; staff access control and protected role matrix</p>
+        </div>
+        ${refreshApiButton("Refresh backend data")}
+      </div>
+      ${apiSyncNotice("Users and roles screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", "Java API")}
+        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
+        ${miniFact("Scope", tenantLabel)}
+        ${miniFact("Permissions", permissions.length)}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Staff access</h2>
+          <p class="eyebrow">Platform administration &middot; role-limited staff accounts</p>
+        </div>
+        ${canManageRoles ? `<button class="secondary-button" data-action="assignUserRoles" type="button">Assign roles</button>
+        <button class="primary-button" data-action="newRole" type="button">New role</button>` : `<span class="pill">View only</span>`}
+      </div>
+      <div class="grid metrics">
+        ${metric("Users", users.length, `${users.filter((user) => user.status === "active").length} active`)}
+        ${metric("Roles", roles.length, `${roles.filter((role) => role.protectedRole || role.protected).length} protected`)}
+        ${metric("Permissions", permissions.length, "catalogued actions")}
+        ${metric("Platform roles", roles.filter((role) => role.tenantId === "tenant_platform").length, "platform admin views")}
+      </div>
+      ${userTable(users)}
+      ${roleTable(roles)}
+    </section>
+  `;
+}
+
+function renderNotifications() {
+  const deliveries = apiState.notificationDeliveries || [];
+  const templates = apiState.notificationTemplates || [];
+  const canManageTemplates = hasPermission("notifications:manage");
+  const failed = deliveries.filter((delivery) => delivery.status !== "sent").length;
+  return `
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Notifications data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; SMS, email and template oversight</p>
+        </div>
+        ${refreshApiButton("Refresh backend data")}
+      </div>
+      ${apiSyncNotice("Notifications screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", "Java API")}
+        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
+        ${miniFact("Deliveries", deliveries.length)}
+        ${miniFact("Exceptions", failed)}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Provider outbox</h2>
+          <p class="eyebrow">Platform operations &middot; member alerts and provider status</p>
+        </div>
+        ${canManageTemplates ? `<button class="primary-button" data-action="newNotificationTemplate" type="button">New template</button>` : `<span class="pill">View only</span>`}
+      </div>
+      <div class="grid metrics">
+        ${metric("SMS", deliveries.filter((item) => item.channel === "sms").length, "provider deliveries")}
+        ${metric("Email", deliveries.filter((item) => item.channel === "email").length, "provider deliveries")}
+        ${metric("Templates", templates.length, `${templates.filter((item) => item.status === "active").length} active`)}
+        ${metric("Exceptions", failed, "needs follow-up")}
+      </div>
+      ${notificationTemplateTable(templates)}
+      ${notificationDeliveryTable(deliveries)}
+    </section>
+  `;
+}
+
+function renderComplaints() {
+  const complaints = apiState.complaints || [];
+  const open = complaints.filter((complaint) => !["resolved", "closed"].includes(complaint.status));
+  const highPriority = open.filter((complaint) => complaint.priority === "high");
+  const canManageComplaints = hasPermission("complaints:manage");
+  return `
+    <section class="card integration-panel">
+      <div class="toolbar">
+        <div>
+          <h2>Complaints data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; platform support and complaint monitoring</p>
+        </div>
+        ${refreshApiButton("Refresh backend data")}
+      </div>
+      ${apiSyncNotice("Complaints screen")}
+      <div class="grid four compact-facts">
+        ${miniFact("Source", "Java API")}
+        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
+        ${miniFact("Open complaints", open.length)}
+        ${miniFact("High priority", highPriority.length)}
+      </div>
+    </section>
+    <section class="card" style="margin-top:16px">
+      <div class="toolbar">
+        <div>
+          <h2>Support queue</h2>
+          <p class="eyebrow">Platform support &middot; tenant and member complaint follow-up</p>
+        </div>
+        ${canManageComplaints ? `<button class="primary-button" data-action="newComplaint" type="button">New complaint</button>` : `<span class="pill">View only</span>`}
+      </div>
+      <div class="grid metrics">
+        ${metric("Complaints", complaints.length, `${open.length} open`)}
+        ${metric("High priority", highPriority.length, "needs follow-up")}
+        ${metric("Resolved", complaints.filter((complaint) => ["resolved", "closed"].includes(complaint.status)).length, "closed queue")}
+      </div>
+      ${complaintList(complaints)}
+    </section>
+  `;
+}
+
 function renderApiReports() {
   const journals = apiState.journalEntries;
   const periods = apiState.accountingPeriods;
@@ -2017,6 +2214,7 @@ function renderApiReports() {
   const callbackExceptions = mobileMoneyCallbacks.filter((item) => item.status !== "posted").length;
   const expenseTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
   const assetNetBookValue = assets.reduce((sum, asset) => sum + asset.netBookValue, 0);
+  const canManageGovernance = hasPermission("governance:manage") || hasPermission("complaints:manage");
   const cashPosition = journals.reduce((sum, entry) => {
     return sum + entry.lines
       .filter((line) => ["1000", "1010", "1020", "1030"].includes(line.accountCode))
@@ -2201,8 +2399,8 @@ function renderApiReports() {
           <h2>Governance</h2>
           <p class="eyebrow">Meetings, resolutions and member complaints for ${tenantLabel}</p>
         </div>
-        <button class="secondary-button" data-action="newComplaint" type="button">New complaint</button>
-        <button class="primary-button" data-action="newGovernanceMeeting" type="button">New meeting</button>
+        ${canManageGovernance ? `<button class="secondary-button" data-action="newComplaint" type="button">New complaint</button>
+        <button class="primary-button" data-action="newGovernanceMeeting" type="button">New meeting</button>` : `<span class="pill">View only</span>`}
       </div>
       <div class="grid metrics">
         ${metric("Meetings", meetings.length, `${meetings.reduce((sum, meeting) => sum + (meeting.openResolutions || 0), 0)} open resolution(s)`)}
@@ -2253,6 +2451,26 @@ function roleTable(roles) {
               <td><span class="status ${(role.protectedRole || role.protected) ? "active" : "pending"}">${(role.protectedRole || role.protected) ? "Protected" : "Custom"}</span></td>
             </tr>
           `).join("") || `<tr><td colspan="4">No roles found.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function userTable(users) {
+  return `
+    <div class="table-wrap" style="margin-top:16px">
+      <table>
+        <thead><tr><th>User</th><th>Tenant</th><th>Contact</th><th>Status</th></tr></thead>
+        <tbody>
+          ${users.map((user) => `
+            <tr>
+              <td><strong>${user.fullName || user.name}</strong><br><small>${user.id}</small></td>
+              <td>${tenantName(user.tenantId)}</td>
+              <td>${user.email || ""}<br><small>${user.phone || ""}</small></td>
+              <td><span class="status ${statusClass(user.status)}">${titleCase(user.status || "active")}</span></td>
+            </tr>
+          `).join("") || `<tr><td colspan="4">No staff users found.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -2397,6 +2615,7 @@ function notificationTemplateTable(templates) {
 
 function canManageNotificationTemplate(template) {
   if (!apiState.user) return false;
+  if (!hasPermission("notifications:manage")) return false;
   if (apiState.user.tenantId === "tenant_platform") return true;
   return template.tenantId === apiState.user.tenantId;
 }
@@ -3293,7 +3512,7 @@ async function refreshApiStatus() {
   apiState.loading = true;
   apiState.lastError = "";
   renderApiChrome();
-  if (!isAuthenticated() || ["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans"].includes(state.currentView)) render();
+  if (!isAuthenticated() || ["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans", "usersRoles", "notifications", "complaints"].includes(state.currentView)) render();
 
   try {
     const health = await apiRequest("/health");
@@ -3388,7 +3607,7 @@ async function refreshApiStatus() {
     apiState.loading = false;
   }
   renderApiChrome();
-  if (!isAuthenticated() || ["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans"].includes(state.currentView)) render();
+  if (!isAuthenticated() || ["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans", "usersRoles", "notifications", "complaints"].includes(state.currentView)) render();
 }
 
 function openApiLoginForm() {
