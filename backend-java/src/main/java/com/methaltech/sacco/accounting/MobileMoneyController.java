@@ -48,6 +48,7 @@ class MobileMoneyController {
     private final NotificationService notificationService;
     private final AuthService authService;
     private final ObjectMapper objectMapper;
+    private final MobileMoneyProvider mobileMoneyProvider;
 
     @PostMapping("/callback")
     ResponseEntity<?> receiveCallback(@Valid @RequestBody MobileMoneyCallbackRequest body) {
@@ -75,7 +76,7 @@ class MobileMoneyController {
         }
 
         String purpose = body.purpose().trim();
-        String provider = body.provider() == null || body.provider().isBlank() ? "demo_mobile_money" : body.provider().trim();
+        String provider = mobileMoneyProvider.normalizeProvider(body.provider());
         if (CONTRIBUTION_PURPOSES.contains(purpose)) {
             return postContribution(body, tenantId, externalReference, provider, member);
         }

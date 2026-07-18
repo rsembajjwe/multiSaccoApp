@@ -2654,7 +2654,6 @@ class SaccoBackendApplicationTests {
 								  "purpose": "share_purchase",
 								  "amount": 45000,
 								  "externalReference": "%s",
-								  "provider": "demo_mobile_money",
 								  "providerPayload": { "phone": "+256700000002" }
 								}
 								""".formatted(externalReference)))
@@ -2662,6 +2661,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
 				.andExpect(jsonPath("$.data.memberId", is("member_green_daniel")))
 				.andExpect(jsonPath("$.data.purpose", is("share_purchase")))
+				.andExpect(jsonPath("$.data.provider", is("demo_mobile_money")))
 				.andExpect(jsonPath("$.data.status", is("posted")))
 				.andExpect(jsonPath("$.data.resourceType", is("financial_transaction")))
 				.andExpect(jsonPath("$.data.duplicate", is(false)))
@@ -2701,6 +2701,8 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(2)))
 				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+				.andExpect(jsonPath("$.data[*].provider", hasItem("demo_sms")))
+				.andExpect(jsonPath("$.data[*].provider", hasItem("demo_email")))
 				.andExpect(jsonPath("$.data[0].status", is("sent")));
 	}
 

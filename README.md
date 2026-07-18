@@ -97,6 +97,8 @@ This starts an isolated Docker Compose stack on PostgreSQL, applies Flyway migra
 
 For hosted staging setup, use [docs/staging-environment.md](docs/staging-environment.md) and keep real `.env` values outside git.
 
+SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`; demo values remain the default until real provider adapters are wired.
+
 ```powershell
 npm.cmd run security:check
 npm.cmd run ui:check

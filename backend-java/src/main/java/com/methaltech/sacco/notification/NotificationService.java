@@ -2,6 +2,7 @@ package com.methaltech.sacco.notification;
 
 import com.methaltech.sacco.member.Member;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -13,6 +14,7 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationDeliveryRepository deliveryRepository;
     private final NotificationTemplateRepository templateRepository;
+    private final List<NotificationProvider> providers;
 
     public Notification notifyPaymentPosted(Member member, String purpose, BigDecimal amount, String resourceType, String resourceId) {
         String eventType = "loan_repayment".equals(purpose) ? "loan_repayment_received" : "payment_received";
@@ -28,8 +30,7 @@ public class NotificationService {
                 message,
                 resourceType,
                 resourceId));
-        createDelivery(notification, member, "sms", "demo_sms", member.getPhone(), message);
-        createDelivery(notification, member, "email", "demo_email", member.getEmail(), title + ": " + message);
+        createDeliveries(notification, member, title, message);
         return notification;
     }
 
@@ -71,15 +72,26 @@ public class NotificationService {
                 .orElse(null);
     }
 
-    private void createDelivery(Notification notification, Member member, String channel, String provider, String recipient, String message) {
-        if (recipient == null || recipient.isBlank()) return;
+    private void createDeliveries(Notification notification, Member member, String title, String message) {
+        providers.stream()
+                .filter(provider -> provider.enabledFor(member))
+                .forEach(provider -> createDelivery(
+                        notification,
+                        member,
+                        provider.channel(),
+                        provider.providerId(),
+                        provider.recipient(member),
+                        "email".equals(provider.channel()) ? title + ": " + message : message));
+    }
+
+    private void createDelivery(Notification notification, Member member, String channel, String providerId, String recipient, String message) {
         deliveryRepository.save(new NotificationDelivery(
                 "delivery_" + UUID.randomUUID(),
                 notification.getTenantId(),
                 notification.getId(),
                 member.getId(),
                 channel,
-                provider,
+                providerId,
                 recipient,
                 message));
     }
