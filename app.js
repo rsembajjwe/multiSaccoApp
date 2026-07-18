@@ -748,14 +748,14 @@ function renderLoginScreen() {
           <h3>Platform and SACCO administration</h3>
           <p>Use this for platform administrators, SACCO admins, treasurers, secretaries and chairpersons.</p>
           <button class="primary-button" data-action="apiLogin" type="button">Staff login</button>
-          <small>Demo staff: admin@platform.local / Admin@12345</small>
+          <small>Use credentials issued by the platform administrator. Seeded demo staff work only when demo logins are enabled.</small>
         </article>
         <article class="login-option">
           <span class="pill">Member</span>
           <h3>Member self-service</h3>
           <p>Members can view balances, loans, notifications, guarantee requests and offline drafts.</p>
           <button class="secondary-button" data-action="memberLogin" type="button">Member login</button>
-          <small>Demo member: GVS-0001 / Member@12345</small>
+          <small>Use your membership number, phone, or email. Seeded demo members are disabled outside development/demo mode.</small>
         </article>
       </div>
       ${apiState.lastError ? `<div class="notice error">${apiState.lastError}</div>` : ""}
@@ -889,7 +889,7 @@ function renderDashboard() {
         ${metric("Dashboard API", "Ready", "/member-auth/mobile-dashboard")}
         ${metric("Offline drafts", "Ready", "local save + sync")}
       </div>
-      <div class="notice" style="margin-top:16px">Android emulator API base: <strong>http://10.0.2.2:5173/api/v1</strong>. Seed login: <strong>GVS-0001</strong> / <strong>Member@12345</strong>.</div>
+      <div class="notice" style="margin-top:16px">Android emulator API base: <strong>http://10.0.2.2:5173/api/v1</strong>. Demo member logins require the development/demo profile.</div>
     </section>
 
     <section class="card" style="margin-top:16px">
@@ -3288,10 +3288,10 @@ async function refreshApiStatus() {
 
 function openApiLoginForm() {
   openModal("API login", `
-    <div class="notice">Seed accounts: <strong>admin@platform.local</strong> / <strong>Admin@12345</strong> or <strong>admin@greenvalley.local</strong> / <strong>Sacco@12345</strong>.</div>
+    <div class="notice">Use your issued staff credentials. Seeded staff accounts are accepted only when <strong>SACCO_DEMO_LOGINS_ENABLED=true</strong> in development or an approved demo window.</div>
     <div class="form-grid" style="margin-top:14px">
-      ${field("Email", "apiEmail", "email", "admin@platform.local")}
-      ${field("Password", "apiPassword", "password", "Admin@12345")}
+      ${field("Email", "apiEmail", "email", "")}
+      ${field("Password", "apiPassword", "password", "")}
     </div>
   `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="apiLoginSubmit" class="primary-button" type="button">Login</button>`);
 
@@ -3319,10 +3319,10 @@ function openApiLoginForm() {
 
 function openMemberLoginForm() {
   openModal("Member login", `
-    <div class="notice">Seed member account: <strong>GVS-0001</strong> / <strong>Member@12345</strong>. Phone or email also work.</div>
+    <div class="notice">Use your membership number, phone, or email. Seeded demo member accounts are disabled outside the development/demo profile.</div>
     <div class="form-grid" style="margin-top:14px">
-      ${field("Membership no., phone, or email", "memberIdentifier", "text", "GVS-0001")}
-      ${field("Password", "memberPassword", "password", "Member@12345")}
+      ${field("Membership no., phone, or email", "memberIdentifier", "text", "")}
+      ${field("Password", "memberPassword", "password", "")}
     </div>
   `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="memberLoginSubmit" class="primary-button" type="button">Login</button>`);
 

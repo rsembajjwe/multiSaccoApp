@@ -275,7 +275,7 @@ After API login, the Approvals screen reads pending financial postings and posts
 
 Approvals also shows a backend-backed control center for pending queue size, pending value, workflow coverage, decision history, corrections, and checker-clear status.
 
-Members can login from **Member portal** using the seeded account `GVS-0001` / `Member@12345` to view their savings, shares, and welfare balances.
+Members can login from **Member portal** using their issued membership number, phone, or email plus password to view their savings, shares, and welfare balances. Seeded demo member credentials work only in development/demo mode when `SACCO_DEMO_LOGINS_ENABLED=true`.
 
 ## Demo roles
 
@@ -310,7 +310,9 @@ This is now the first build foundation. A production build should add:
 - [Security review checklist](docs/security-review.md)
 - [Android member app foundation](mobile/member_app/README.md)
 
-## Seed API accounts
+## Development/demo seed API accounts
 
 - Platform admin: `admin@platform.local` / `Admin@12345`
 - SACCO admin: `admin@greenvalley.local` / `Sacco@12345`
+
+Seeded staff and member accounts are disabled outside development/demo mode by keeping `SACCO_DEMO_LOGINS_ENABLED=false`.

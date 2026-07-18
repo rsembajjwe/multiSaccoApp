@@ -70,8 +70,10 @@ cd backend-java
 - PostgreSQL and Flyway dependencies included for the production database path.
 - Lombok is configured for concise DTOs and constructor injection in new Java modules.
 
-Seed logins:
+Development/demo seed logins:
 
 - Platform admin: `admin@platform.local` / `Admin@12345`
 - SACCO admin: `admin@greenvalley.local` / `Sacco@12345`
 - Member portal: `GVS-0001` / `Member@12345`
+
+These seeded staff and member logins are blocked outside development/demo mode when `SACCO_DEMO_LOGINS_ENABLED=false`, which is the production profile default.
