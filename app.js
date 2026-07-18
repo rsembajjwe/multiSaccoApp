@@ -3233,6 +3233,14 @@ async function apiRequest(path, options = {}) {
   return payload.data;
 }
 
+async function apiOptional(path, fallback) {
+  try {
+    return await apiRequest(path);
+  } catch {
+    return fallback;
+  }
+}
+
 async function memberApiRequest(path, options = {}) {
   const headers = {
     ...(options.body ? { "Content-Type": "application/json" } : {}),
@@ -3299,37 +3307,37 @@ async function refreshApiStatus() {
       state.workspace = workspaceForStaff(session.user, apiState.roleNames, apiState.permissionIds);
       ensureWorkspaceTenant();
       const [tenants, users, roles, permissions, auditEvents, operationsStatus, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, notificationTemplates, suppliers, expenses, assets, governanceMeetings, complaints, approvalWorkflows, approvalDecisions] = await Promise.all([
-        apiRequest("/tenants"),
-        apiRequest("/users"),
-        apiRequest(`/roles${apiTenantQuery()}`),
-        apiRequest("/permissions"),
-        apiRequest("/audit-events"),
-        apiRequest(`/operations/status${apiOperationsQuery()}`),
-        apiRequest(`/branches${apiTenantQuery()}`),
-        apiRequest(`/members${apiTenantQuery()}`),
-        apiRequest("/subscription-packages"),
-        apiRequest(`/subscriptions${apiSubscriptionQuery()}`),
-        apiRequest(`/financial-products${apiTenantQuery()}`),
-        apiRequest(`/financial-accounts${apiTenantQuery()}`),
-        apiRequest(`/financial-transactions${apiTenantQuery()}`),
-        apiRequest(`/welfare-claims${apiTenantQuery()}`),
-        apiRequest(`/loans${apiTenantQuery()}`),
-        apiRequest(`/accounting-periods${apiTenantQuery()}`),
-        apiRequest("/chart-of-accounts"),
-        apiRequest(`/journal-entries${apiTenantQuery()}`),
-        apiRequest(`/statement-lines${apiTenantQuery()}`),
-        apiRequest(`/reconciliation${apiTenantQuery()}`),
-        apiRequest(`/regulatory-report${apiTenantQuery()}`),
-        apiRequest(`/integrations/mobile-money/callbacks${apiTenantQuery()}`),
-        apiRequest(`/notifications/deliveries${apiTenantQuery()}`),
-        apiRequest(`/notification-templates${apiTenantQuery()}`),
-        apiRequest(`/suppliers${apiTenantQuery()}`),
-        apiRequest(`/expenses${apiTenantQuery()}`),
-        apiRequest(`/assets${apiTenantQuery()}`),
-        apiRequest(`/governance-meetings${apiTenantQuery()}`),
-        apiRequest(`/complaints${apiTenantQuery()}`),
-        apiRequest(`/approval-workflows${apiTenantQuery()}`),
-        apiRequest(`/approval-decisions${apiTenantQuery()}`)
+        apiOptional("/tenants", []),
+        apiOptional("/users", []),
+        apiOptional(`/roles${apiTenantQuery()}`, []),
+        apiOptional("/permissions", []),
+        apiOptional("/audit-events", []),
+        apiOptional(`/operations/status${apiOperationsQuery()}`, null),
+        apiOptional(`/branches${apiTenantQuery()}`, []),
+        apiOptional(`/members${apiTenantQuery()}`, []),
+        apiOptional("/subscription-packages", []),
+        apiOptional(`/subscriptions${apiSubscriptionQuery()}`, []),
+        apiOptional(`/financial-products${apiTenantQuery()}`, []),
+        apiOptional(`/financial-accounts${apiTenantQuery()}`, []),
+        apiOptional(`/financial-transactions${apiTenantQuery()}`, []),
+        apiOptional(`/welfare-claims${apiTenantQuery()}`, []),
+        apiOptional(`/loans${apiTenantQuery()}`, []),
+        apiOptional(`/accounting-periods${apiTenantQuery()}`, []),
+        apiOptional("/chart-of-accounts", []),
+        apiOptional(`/journal-entries${apiTenantQuery()}`, []),
+        apiOptional(`/statement-lines${apiTenantQuery()}`, []),
+        apiOptional(`/reconciliation${apiTenantQuery()}`, null),
+        apiOptional(`/regulatory-report${apiTenantQuery()}`, { reports: [] }),
+        apiOptional(`/integrations/mobile-money/callbacks${apiTenantQuery()}`, []),
+        apiOptional(`/notifications/deliveries${apiTenantQuery()}`, []),
+        apiOptional(`/notification-templates${apiTenantQuery()}`, []),
+        apiOptional(`/suppliers${apiTenantQuery()}`, []),
+        apiOptional(`/expenses${apiTenantQuery()}`, []),
+        apiOptional(`/assets${apiTenantQuery()}`, []),
+        apiOptional(`/governance-meetings${apiTenantQuery()}`, []),
+        apiOptional(`/complaints${apiTenantQuery()}`, []),
+        apiOptional(`/approval-workflows${apiTenantQuery()}`, []),
+        apiOptional(`/approval-decisions${apiTenantQuery()}`, [])
       ]);
       apiState.tenants = tenants;
       apiState.users = users;
@@ -3363,7 +3371,7 @@ async function refreshApiStatus() {
       apiState.approvalWorkflows = approvalWorkflows;
       apiState.approvalDecisions = approvalDecisions;
       apiState.lastSyncedAt = new Date().toISOString();
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${roles.length} role(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialProducts.length} product(s), ${financialAccounts.length} account(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${regulatoryReport.reports.length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${notificationTemplates.length} notification template(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), ${approvalWorkflows.length} workflow(s), ${approvalDecisions.length} decision(s), and ${auditEvents.length} audit event(s).`;
+      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${roles.length} role(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialProducts.length} product(s), ${financialAccounts.length} account(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${(regulatoryReport?.reports || []).length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${notificationTemplates.length} notification template(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), ${approvalWorkflows.length} workflow(s), ${approvalDecisions.length} decision(s), and ${auditEvents.length} audit event(s).`;
     }
   } catch (error) {
     if (apiState.token) {
