@@ -2095,7 +2095,7 @@ function renderUsersRoles() {
       <div class="toolbar">
         <div>
           <h2>Platform users management data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; platform staff, assigned roles and protected access matrix</p>
+          <p class="eyebrow">${apiSyncState()} &middot; Tereka Online platform administrators, assigned roles and protected access matrix</p>
         </div>
         ${refreshApiButton("Refresh backend data")}
       </div>
@@ -2111,7 +2111,7 @@ function renderUsersRoles() {
       <div class="toolbar">
         <div>
           <h2>Platform users management</h2>
-          <p class="eyebrow">Platform administration &middot; create users, assign roles and review active access</p>
+          <p class="eyebrow">Platform administration only &middot; SACCO staff and SACCO members are managed in their own SACCO views</p>
         </div>
         ${canManageRoles ? `<button class="secondary-button" data-action="assignUserRoles" type="button">Assign roles</button>
         <button class="primary-button" data-action="newRole" type="button">New role</button>` : `<span class="pill">View only</span>`}
@@ -2122,7 +2122,7 @@ function renderUsersRoles() {
         ${metric("Permissions", permissions.length, "catalogued actions")}
         ${metric("Platform roles", roles.filter((role) => role.tenantId === "tenant_platform").length, "platform admin views")}
       </div>
-      ${userTable(platformUsers.length ? platformUsers : users)}
+      ${userTable(platformUsers, "No platform administrator users found. SACCO users are not shown here.")}
       ${roleTable(roles)}
     </section>
   `;
@@ -2480,7 +2480,7 @@ function roleTable(roles) {
   `;
 }
 
-function userTable(users) {
+function userTable(users, emptyMessage = "No staff users found.") {
   return `
     <div class="table-wrap" style="margin-top:16px">
       <table>
@@ -2498,7 +2498,7 @@ function userTable(users) {
                 <td><span class="status ${statusClass(user.status)}">${titleCase(user.status || "active")}</span></td>
               </tr>
             `;
-          }).join("") || `<tr><td colspan="5">No staff users found.</td></tr>`}
+          }).join("") || `<tr><td colspan="5">${emptyMessage}</td></tr>`}
         </tbody>
       </table>
     </div>
