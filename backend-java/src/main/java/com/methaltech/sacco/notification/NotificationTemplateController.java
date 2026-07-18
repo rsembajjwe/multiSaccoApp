@@ -47,6 +47,9 @@ class NotificationTemplateController {
             @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "notifications:view")) {
+            return authService.permissionRequired("notifications:view");
+        }
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null && !authService.isPlatform(currentSession.user())) return tenantAccessDenied();
@@ -67,6 +70,9 @@ class NotificationTemplateController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "notifications:manage")) {
+            return authService.permissionRequired("notifications:manage");
+        }
 
         String tenantId = body.tenantId() == null && authService.isPlatform(currentSession.user())
                 ? null
@@ -110,6 +116,9 @@ class NotificationTemplateController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "notifications:manage")) {
+            return authService.permissionRequired("notifications:manage");
+        }
 
         NotificationTemplate template = templateRepository.findById(templateId).orElse(null);
         if (template == null) {

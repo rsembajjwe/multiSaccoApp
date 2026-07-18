@@ -4202,6 +4202,31 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + noPermissionToken))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/operations/status")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/notifications/deliveries")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/notification-templates")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/governance-meetings")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/complaints")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
 	}
 
 	@Test
@@ -4259,6 +4284,89 @@ class SaccoBackendApplicationTests {
 
 		mockMvc.perform(get("/api/v1/accounting-periods")
 						.header("Authorization", "Bearer " + loansOnlyToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+	}
+
+	@Test
+	void operationalEndpointsRequireOperationalPermissions() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String email = "operational-denied-" + System.currentTimeMillis() + "@greenvalley.local";
+
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Operational Denied Staff",
+								  "email": "%s",
+								  "phone": "+256700456777",
+								  "password": "Plain@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String userId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+		mockMvc.perform(put("/api/v1/users/" + userId + "/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_green_loans_officer"]
+								}
+								"""))
+				.andExpect(status().isOk());
+		String loansOnlyToken = loginAndReturnToken(email, "Plain@12345");
+
+		mockMvc.perform(get("/api/v1/loans")
+						.header("Authorization", "Bearer " + loansOnlyToken))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/v1/operations/status")
+						.header("Authorization", "Bearer " + loansOnlyToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/notifications/deliveries")
+						.header("Authorization", "Bearer " + loansOnlyToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/notification-templates")
+						.header("Authorization", "Bearer " + loansOnlyToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "eventType": "permission_smoke",
+								  "channel": "email",
+								  "title": "Permission smoke",
+								  "body": "Permission smoke body"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/governance-meetings")
+						.header("Authorization", "Bearer " + loansOnlyToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "title": "Permission Smoke",
+								  "meetingType": "board"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/complaints")
+						.header("Authorization", "Bearer " + loansOnlyToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "category": "service",
+								  "subject": "Permission smoke"
+								}
+								"""))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
 	}

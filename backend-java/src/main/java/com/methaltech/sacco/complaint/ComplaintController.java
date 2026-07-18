@@ -39,6 +39,9 @@ class ComplaintController {
             @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "complaints:view")) {
+            return authService.permissionRequired("complaints:view");
+        }
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null && !authService.isPlatform(currentSession.user())) return tenantAccessDenied();
@@ -56,6 +59,9 @@ class ComplaintController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "complaints:manage")) {
+            return authService.permissionRequired("complaints:manage");
+        }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
@@ -99,6 +105,9 @@ class ComplaintController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "complaints:manage")) {
+            return authService.permissionRequired("complaints:manage");
+        }
 
         String status = body.status().trim();
         if (!ComplaintService.STATUSES.contains(status)) {

@@ -44,6 +44,9 @@ class GovernanceController {
             @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "governance:view")) {
+            return authService.permissionRequired("governance:view");
+        }
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null && !authService.isPlatform(currentSession.user())) return tenantAccessDenied();
@@ -61,6 +64,9 @@ class GovernanceController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "governance:manage")) {
+            return authService.permissionRequired("governance:manage");
+        }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
@@ -101,6 +107,9 @@ class GovernanceController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "governance:manage")) {
+            return authService.permissionRequired("governance:manage");
+        }
 
         return meetingRepository.findById(meetingId)
                 .<ResponseEntity<?>>map(meeting -> {
