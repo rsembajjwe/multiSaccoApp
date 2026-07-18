@@ -1,133 +1,7 @@
-const STORAGE_KEY = "sacco-platform-demo-v1";
-const API_SESSION_KEY = "sacco-platform-api-session-v1";
-const MEMBER_SESSION_KEY = "sacco-platform-member-session-v1";
-const OFFLINE_DRAFTS_KEY = "sacco-platform-offline-drafts-v1";
 const API_BASE = "/api/v1";
-const UI_BUILD_VERSION = "Role UI redesign 2026-07-18";
-
-const navItems = [
-  ["dashboard", "Dashboard", "overview"],
-  ["registrations", "SACCO Registration", "tenants"],
-  ["subscriptions", "Subscriptions", "billing"],
-  ["members", "Members", "kyc"],
-  ["transactions", "Transactions", "finance"],
-  ["loans", "Loans", "credit"],
-  ["approvals", "Approvals", "workflow"],
-  ["operations", "Operations", "monitor"],
-  ["reports", "Reports", "audit"],
-  ["usersRoles", "Platform Users", "access"],
-  ["notifications", "Notifications", "messages"],
-  ["complaints", "Complaints", "support"],
-  ["memberPortal", "Member Portal", "self-service"]
-];
-
-const workspaceProfiles = {
-  platformSuperAdmin: {
-    label: "Platform Super Admin",
-    session: "Platform Super Admin",
-    tenantLocked: false,
-    defaultView: "dashboard",
-    nav: ["dashboard", "registrations", "subscriptions", "members", "transactions", "loans", "approvals", "operations", "reports", "usersRoles", "notifications", "complaints"]
-  },
-  platformAdmin: {
-    label: "Platform administration",
-    session: "Platform Administrator",
-    tenantLocked: false,
-    defaultView: "dashboard",
-    nav: ["dashboard", "registrations", "subscriptions", "members", "transactions", "loans", "approvals", "operations", "reports", "usersRoles", "notifications", "complaints"]
-  },
-  platformOperations: {
-    label: "Platform Operations",
-    session: "Platform Operations Officer",
-    tenantLocked: false,
-    defaultView: "operations",
-    nav: ["dashboard", "registrations", "operations", "reports", "complaints", "notifications"]
-  },
-  platformBilling: {
-    label: "Platform Billing",
-    session: "Platform Billing Officer",
-    tenantLocked: false,
-    defaultView: "subscriptions",
-    nav: ["dashboard", "subscriptions", "registrations", "reports"]
-  },
-  platformCompliance: {
-    label: "Platform Compliance",
-    session: "Platform Compliance Officer",
-    tenantLocked: false,
-    defaultView: "reports",
-    nav: ["dashboard", "registrations", "reports", "operations"]
-  },
-  platformSupport: {
-    label: "Platform Support",
-    session: "Platform Support Officer",
-    tenantLocked: false,
-    defaultView: "operations",
-    nav: ["dashboard", "registrations", "members", "operations", "complaints"]
-  },
-  saccoAdmin: {
-    label: "SACCO administrator",
-    session: "SACCO Administrator",
-    tenantLocked: true,
-    defaultView: "dashboard",
-    nav: ["dashboard", "members", "transactions", "loans", "approvals", "operations", "reports"]
-  },
-  treasurer: {
-    label: "Treasurer",
-    session: "SACCO Treasurer",
-    tenantLocked: true,
-    defaultView: "transactions",
-    nav: ["dashboard", "transactions", "approvals", "reports", "operations"]
-  },
-  secretary: {
-    label: "Secretary",
-    session: "SACCO Secretary",
-    tenantLocked: true,
-    defaultView: "members",
-    nav: ["dashboard", "members", "approvals", "reports"]
-  },
-  chairperson: {
-    label: "Chairperson",
-    session: "SACCO Chairperson",
-    tenantLocked: true,
-    defaultView: "dashboard",
-    nav: ["dashboard", "loans", "approvals", "reports", "operations"]
-  },
-  member: {
-    label: "Member view",
-    session: "Member Self-Service",
-    tenantLocked: true,
-    defaultView: "memberPortal",
-    nav: ["memberPortal"]
-  }
-};
-
-const navPermissions = {
-  dashboard: "dashboard:view",
-  registrations: "tenants:view",
-  subscriptions: "subscriptions:view",
-  members: "members:view",
-  transactions: "transactions:view",
-  loans: "loans:view",
-  approvals: "approvals:view",
-  operations: "operations:view",
-  reports: "reports:view",
-  usersRoles: "roles:view",
-  notifications: "notifications:view",
-  complaints: "complaints:view"
-};
-
-const demoAccounts = [
-  { label: "Platform admin", code: "PLATFORM", username: "admin@platform.local", password: "Admin@12345", note: "Platform administration" },
-  { label: "Platform operations", code: "PLATFORM", username: "operations@platform.local", password: "Operations@12345", note: "Support, monitoring and notifications" },
-  { label: "Platform billing", code: "PLATFORM", username: "billing@platform.local", password: "Billing@12345", note: "Subscriptions and payment control" },
-  { label: "Platform compliance", code: "PLATFORM", username: "compliance@platform.local", password: "Compliance@12345", note: "Reports, operations and audit oversight" },
-  { label: "Platform support", code: "PLATFORM", username: "support@platform.local", password: "Support@12345", note: "SACCO support and complaints" },
-  { label: "SACCO admin", code: "GVS", username: "admin@greenvalley.local", password: "Sacco@12345", note: "Green Valley administrator" },
-  { label: "Treasurer", code: "GVS", username: "treasurer@greenvalley.local", password: "Treasurer@12345", note: "Finance and approvals" },
-  { label: "Secretary", code: "GVS", username: "secretary@greenvalley.local", password: "Secretary@12345", note: "Members and governance" },
-  { label: "Chairperson", code: "GVS", username: "chairperson@greenvalley.local", password: "Chair@12345", note: "Oversight and decisions" },
-  { label: "Member", code: "GVS", username: "GVS-0001", password: "Member@12345", note: "Member portal" }
-];
+const STAFF_TOKEN_KEY = "tereka-staff-token";
+const MEMBER_TOKEN_KEY = "tereka-member-token";
+const UI_BUILD_VERSION = "Document redesign 2026-07-18";
 
 const money = new Intl.NumberFormat("en-UG", {
   style: "currency",
@@ -135,6778 +9,965 @@ const money = new Intl.NumberFormat("en-UG", {
   maximumFractionDigits: 0
 });
 
-const SUBSCRIPTION_UNIT_PRICE = 5000;
-const MINIMUM_BILLABLE_MEMBERS = 100;
-const SUBSCRIPTION_BILLING_TIERS = [
-  { id: "per_member", label: "100-250 members", minMembers: 100, maxMembers: 250, unitPrice: SUBSCRIPTION_UNIT_PRICE, amount: null },
-  { id: "starter_fixed", label: "251-500 members", minMembers: 251, maxMembers: 500, unitPrice: null, amount: 1200000 },
-  { id: "growth_fixed", label: "501-2,500 members", minMembers: 501, maxMembers: 2500, unitPrice: null, amount: 3600000 },
-  { id: "enterprise_fixed", label: "2,501-10,000 members", minMembers: 2501, maxMembers: 10000, unitPrice: null, amount: 9000000 }
+const demoAccounts = [
+  { label: "Platform Super Admin", code: "PLATFORM", username: "admin@platform.local", password: "Admin@12345", portal: "Platform" },
+  { label: "Platform Operations", code: "PLATFORM", username: "operations@platform.local", password: "Operations@12345", portal: "Platform" },
+  { label: "Platform Billing", code: "PLATFORM", username: "billing@platform.local", password: "Billing@12345", portal: "Platform" },
+  { label: "Platform Compliance", code: "PLATFORM", username: "compliance@platform.local", password: "Compliance@12345", portal: "Platform" },
+  { label: "Platform Support", code: "PLATFORM", username: "support@platform.local", password: "Support@12345", portal: "Platform" },
+  { label: "SACCO Administrator", code: "GVS", username: "admin@greenvalley.local", password: "Sacco@12345", portal: "SACCO" },
+  { label: "Treasurer", code: "GVS", username: "treasurer@greenvalley.local", password: "Treasurer@12345", portal: "SACCO" },
+  { label: "Secretary", code: "GVS", username: "secretary@greenvalley.local", password: "Secretary@12345", portal: "SACCO" },
+  { label: "Chairperson", code: "GVS", username: "chairperson@greenvalley.local", password: "Chair@12345", portal: "SACCO" },
+  { label: "Member", code: "GVS", username: "GVS-0001", password: "Member@12345", portal: "Member" }
 ];
-const today = new Date("2026-07-15T12:00:00+03:00");
 
-const seedData = {
-  currentView: "dashboard",
-  tenantId: "platform",
-  workspace: "platformAdmin",
-  tenants: [
-    {
-      id: "platform",
-      name: "Platform Administration",
-      abbreviation: "HQ",
-      status: "Active",
-      packageId: "enterprise",
-      onboarding: 100,
-      licenseExpiry: "2027-06-30",
-      district: "Kampala",
-      registrationNo: "PLATFORM-001",
-      branches: [{ id: "hq", code: "HQ", name: "Head Office", manager: "Platform Admin" }]
-    },
-    {
-      id: "green",
-      name: "Green Valley SACCO",
-      abbreviation: "GVS",
-      status: "Approved",
-      packageId: "growth",
-      onboarding: 78,
-      licenseExpiry: "2026-12-31",
-      district: "Mukono",
-      registrationNo: "COOP-UG-2389",
-      branches: [
-        { id: "g-main", code: "GV001", name: "Mukono Main", manager: "Sarah Kigozi" },
-        { id: "g-east", code: "GV002", name: "Seeta Branch", manager: "Isaac Wamala" }
-      ]
-    },
-    {
-      id: "lake",
-      name: "Lake Farmers SACCO",
-      abbreviation: "LFS",
-      status: "Pending Review",
-      packageId: "starter",
-      onboarding: 42,
-      licenseExpiry: "2026-08-15",
-      district: "Jinja",
-      registrationNo: "COOP-UG-8112",
-      branches: [{ id: "l-main", code: "LF001", name: "Jinja Main", manager: "Grace Namutebi" }]
-    }
-  ],
-  packages: [
-    { id: "starter", name: "Starter", price: 1200000, members: 500, minMembers: MINIMUM_BILLABLE_MEMBERS, tierLabel: "251-500 members", users: 8, branches: 1, modules: "Members, savings, shares" },
-    { id: "growth", name: "Growth", price: 3600000, members: 2500, minMembers: MINIMUM_BILLABLE_MEMBERS, tierLabel: "501-2,500 members", users: 25, branches: 5, modules: "Core finance, loans, approvals, reports" },
-    { id: "enterprise", name: "Enterprise", price: 9000000, members: 10000, minMembers: MINIMUM_BILLABLE_MEMBERS, tierLabel: "2,501-10,000 members", users: 100, branches: 25, modules: "All modules, API, advanced support" }
-  ],
-  subscriptions: [
-    { id: "sub-1", tenantId: "green", packageId: "growth", status: "Active", invoice: "INV-2026-001", memberCount: 3, billableMembers: MINIMUM_BILLABLE_MEMBERS, unitPrice: SUBSCRIPTION_UNIT_PRICE, tierId: "per_member", tierLabel: "100-250 members", billingDescription: "UGX 5,000 per member, minimum 100", amount: 500000, paid: 500000, expiry: "2027-07-14" },
-    { id: "sub-2", tenantId: "lake", packageId: "starter", status: "Pending Payment", invoice: "INV-2026-002", memberCount: 1, billableMembers: MINIMUM_BILLABLE_MEMBERS, unitPrice: SUBSCRIPTION_UNIT_PRICE, tierId: "per_member", tierLabel: "100-250 members", billingDescription: "UGX 5,000 per member, minimum 100", amount: 500000, paid: 0, expiry: "2026-07-30" }
-  ],
-  members: [
-    { id: "m-1", tenantId: "green", no: "GVS-0001", name: "Amina Nakitende", phone: "+256701234567", nin: "CM9000012K4PA", type: "Individual", status: "Active", branchId: "g-main", kyc: "Verified", savings: 2450000, shares: 850000, welfare: 180000 },
-    { id: "m-2", tenantId: "green", no: "GVS-0002", name: "Daniel Ssekajja", phone: "+256772222118", nin: "CM9000455K8AB", type: "Individual", status: "Active", branchId: "g-east", kyc: "Pending Verification", savings: 1220000, shares: 350000, welfare: 90000 },
-    { id: "m-3", tenantId: "green", no: "GVS-0003", name: "Mukono Women Group", phone: "+256756300101", nin: "GROUP-1044", type: "Group", status: "Pending Approval", branchId: "g-main", kyc: "Not Verified", savings: 640000, shares: 500000, welfare: 120000 },
-    { id: "m-4", tenantId: "lake", no: "LFS-0001", name: "Peter Ocen", phone: "+256704111889", nin: "CM8800142K2RE", type: "Individual", status: "Applicant", branchId: "l-main", kyc: "Pending Verification", savings: 280000, shares: 120000, welfare: 40000 }
-  ],
-  transactions: [
-    { id: "tx-1", tenantId: "green", memberId: "m-1", type: "Savings Deposit", channel: "Mobile Money", amount: 250000, status: "Posted", ref: "GVS-TX-0001", date: "2026-07-14", maker: "Cashier", checker: "Treasurer" },
-    { id: "tx-2", tenantId: "green", memberId: "m-2", type: "Share Purchase", channel: "Cash", amount: 100000, status: "Posted", ref: "GVS-TX-0002", date: "2026-07-14", maker: "Cashier", checker: "Accountant" },
-    { id: "tx-3", tenantId: "green", memberId: "m-3", type: "Welfare Contribution", channel: "Bank", amount: 60000, status: "Pending Approval", ref: "GVS-TX-0003", date: "2026-07-15", maker: "Cashier", checker: "" }
-  ],
-  loans: [
-    { id: "ln-1", tenantId: "green", memberId: "m-1", product: "Development Loan", amount: 3000000, balance: 2150000, status: "Active", stage: "Disbursed", guarantors: 2, dsr: 31 },
-    { id: "ln-2", tenantId: "green", memberId: "m-2", product: "Emergency Loan", amount: 800000, balance: 800000, status: "Under Review", stage: "Credit Appraisal", guarantors: 1, dsr: 44 },
-    { id: "ln-3", tenantId: "lake", memberId: "m-4", product: "Agriculture Loan", amount: 1500000, balance: 0, status: "Submitted", stage: "Guarantor Review", guarantors: 0, dsr: 27 }
-  ],
-  approvals: [
-    { id: "ap-1", tenantId: "platform", title: "Approve Lake Farmers SACCO registration", type: "Tenant Registration", status: "Pending", requester: "Grace Namutebi", risk: "Medium" },
-    { id: "ap-2", tenantId: "green", title: "Approve GVS-TX-0003 welfare posting", type: "Financial Posting", status: "Pending", requester: "Cashier", risk: "Low" },
-    { id: "ap-3", tenantId: "green", title: "Emergency Loan for Daniel Ssekajja", type: "Loan Committee", status: "Pending", requester: "Credit Officer", risk: "High" }
-  ],
-  audit: [
-    { at: "2026-07-15 11:30", tenantId: "platform", actor: "Platform Admin", action: "Created subscription invoice INV-2026-002" },
-    { at: "2026-07-15 10:15", tenantId: "green", actor: "Treasurer", action: "Approved savings deposit GVS-TX-0001" },
-    { at: "2026-07-14 16:20", tenantId: "green", actor: "SACCO Admin", action: "Updated loan product approval workflow" }
-  ]
-};
-
-let state = loadState();
-let offlineDrafts = loadOfflineDrafts();
-let apiState = {
-  health: "checking",
+const state = {
+  auth: "none",
+  token: "",
   user: null,
-  roleIds: [],
-  roleNames: [],
-  permissionIds: [],
-  token: localStorage.getItem(API_SESSION_KEY) || "",
-  tenants: [],
-  users: [],
-  userRoleAssignments: {},
-  roles: [],
-  permissions: [],
-  branches: [],
-  members: [],
-  subscriptionPackages: [],
-  subscriptions: [],
-  financialProducts: [],
-  financialAccounts: [],
-  financialTransactions: [],
-  welfareClaims: [],
-  loans: [],
-  accountingPeriods: [],
-  chartOfAccounts: [],
-  journalEntries: [],
-  statementLines: [],
-  reconciliation: null,
-  regulatoryReport: null,
-  suppliers: [],
-  expenses: [],
-  assets: [],
-  mobileMoneyCallbacks: [],
-  notificationDeliveries: [],
-  notificationTemplates: [],
-  governanceMeetings: [],
-  complaints: [],
-  approvalWorkflows: [],
-  approvalDecisions: [],
-  auditEvents: [],
-  operationsStatus: null,
-  loading: false,
-  lastSyncedAt: "",
-  lastError: "",
-  message: "Checking backend connection..."
-};
-let memberApiState = {
-  token: localStorage.getItem(MEMBER_SESSION_KEY) || "",
   member: null,
   tenant: null,
-  branch: null,
-  balances: null,
-  mobileDashboard: null,
-  guarantorRequests: [],
-  notifications: [],
+  roleNames: [],
+  permissionIds: [],
+  currentView: "dashboard",
+  search: "",
   loading: false,
-  lastSyncedAt: "",
+  lastSync: "",
   lastError: "",
-  message: "Member portal not signed in."
+  data: emptyData(),
+  memberData: emptyMemberData()
 };
 
-function loadState() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  return saved ? JSON.parse(saved) : structuredClone(seedData);
-}
+const platformModules = [
+  ["dashboard", "Dashboard", "Platform performance and alerts", "dashboard:view", ["super", "operations", "billing", "compliance", "support"]],
+  ["sacco-applications", "SACCO Registration", "Applications, reviewer queue, approvals", "tenants:view", ["super", "operations", "billing", "compliance", "support"]],
+  ["subscriptions", "Subscriptions", "Packages, invoices, renewals", "subscriptions:view", ["super", "billing"]],
+  ["sacco-accounts", "SACCO Accounts", "Tenant account health", "tenants:view", ["super", "billing", "compliance"]],
+  ["members", "Members", "Read-only tenant member support", "members:view", ["super", "support"]],
+  ["transactions", "Transactions", "Platform transaction monitoring", "transactions:view", ["super"]],
+  ["loans", "Loans", "Loan portfolio monitoring", "loans:view", ["super"]],
+  ["approvals", "Approvals", "Platform approval queues", "approvals:view", ["super"]],
+  ["operations", "Operations", "Health, callbacks, jobs, support access", "operations:view", ["super", "operations", "compliance", "support"]],
+  ["reports", "Reports", "Registration, billing, compliance exports", "reports:view", ["super", "operations", "billing", "compliance"]],
+  ["complaints", "Complaints", "Support tickets and escalations", "complaints:view", ["super", "operations", "support"]],
+  ["notifications", "Notifications", "SMS, email and push delivery", "notifications:view", ["super", "operations"]],
+  ["users", "Users and Roles", "Platform administrators only", "roles:view", ["super"]],
+  ["audit", "Audit Logs", "Read-only platform audit trail", "reports:view", ["super", "compliance"]],
+  ["settings", "System Settings", "Protected platform configuration", "roles:create", ["super"]]
+];
 
-function loadOfflineDrafts() {
-  const saved = localStorage.getItem(OFFLINE_DRAFTS_KEY);
-  return saved ? JSON.parse(saved) : [];
-}
+const saccoModules = [
+  ["dashboard", "Dashboard", "Role-specific SACCO operating view", "dashboard:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "teller", "auditor"]],
+  ["members", "Members", "KYC, approvals, profiles, statements", "members:view", ["admin", "secretary", "loans", "auditor"]],
+  ["transactions", "Transactions", "Deposits, withdrawals, receipts, reversals", "transactions:view", ["admin", "treasurer", "accountant", "teller", "auditor"]],
+  ["savings", "Savings", "Products, accounts and statements", "transactions:view", ["admin", "treasurer", "accountant", "auditor"]],
+  ["shares", "Shares", "Share register and certificates", "transactions:view", ["admin", "treasurer", "secretary", "auditor"]],
+  ["welfare", "Welfare", "Contributions, balances and claims", "transactions:view", ["admin", "treasurer", "secretary"]],
+  ["loans", "Loans", "Applications, appraisal, guarantors, repayments", "loans:view", ["admin", "chairperson", "loans", "auditor"]],
+  ["guarantors", "Guarantors", "Guarantee requests and obligations", "loans:view", ["admin", "chairperson", "loans"]],
+  ["approvals", "Approvals", "Maker-checker decisions", "approvals:view", ["admin", "chairperson", "treasurer", "secretary", "loans"]],
+  ["operations", "Operations", "Branch, import and service status", "operations:view", ["admin", "chairperson", "treasurer", "auditor"]],
+  ["accounting", "Accounting", "Trial balance, journals and reports", "transactions:view", ["admin", "treasurer", "accountant"]],
+  ["reconciliation", "Reconciliation", "Bank and mobile-money matching", "transactions:view", ["admin", "treasurer", "accountant"]],
+  ["reports", "Reports", "Operational and financial reporting", "reports:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "auditor"]],
+  ["governance", "Governance", "Meetings, minutes and resolutions", "reports:view", ["admin", "chairperson", "secretary"]],
+  ["complaints", "Complaints", "Member cases and support", "complaints:view", ["admin", "secretary"]],
+  ["users", "Users and Roles", "SACCO staff access", "roles:view", ["admin"]],
+  ["settings", "Settings", "Products, branches and controls", "roles:create", ["admin"]],
+  ["audit", "Audit Logs", "Read-only sensitive activity", "reports:view", ["admin", "auditor"]]
+];
 
-function saveOfflineDrafts() {
-  localStorage.setItem(OFFLINE_DRAFTS_KEY, JSON.stringify(offlineDrafts));
-}
+const memberModules = [
+  ["home", "Home", "Balances, next repayment and alerts"],
+  ["accounts", "My Accounts", "Savings, shares and welfare"],
+  ["loans", "Loans", "Active loans and applications"],
+  ["guarantor-requests", "Guarantor Requests", "Accept or reject requests"],
+  ["payments", "Payments", "Deposit, repay, buy shares, pay welfare"],
+  ["statements", "Statements", "Download PDF, Excel or print"],
+  ["receipts", "Receipts", "Posted transaction receipts"],
+  ["notifications", "Notifications", "Messages and alerts"],
+  ["complaints", "Complaints", "Draft, submit and track cases"],
+  ["profile", "Profile", "Personal details and KYC"],
+  ["security", "Security", "Password and device settings"]
+];
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-function currentTenant() {
-  return state.tenants.find((tenant) => tenant.id === state.tenantId) || state.tenants[0];
-}
-
-function currentWorkspace() {
-  return workspaceProfiles[state.workspace] || workspaceProfiles.platformAdmin;
-}
-
-function visibleNavItems() {
-  const allowed = new Set(currentWorkspace().nav);
-  const permissions = new Set(apiState.permissionIds || []);
-  return navItems.filter(([id]) => {
-    if (!allowed.has(id)) return false;
-    if (id === "dashboard" && apiState.user) return true;
-    if (!apiState.user || permissions.size === 0 || isPlatformFullAdmin()) return true;
-    const required = navPermissions[id];
-    return !required || permissions.has(required);
-  });
-}
-
-function visibleViewIds() {
-  return visibleNavItems().map(([id]) => id);
-}
-
-function ensureWorkspaceTenant() {
-  const permittedWorkspaces = accessibleWorkspaceIds();
-  if (!permittedWorkspaces.includes(state.workspace)) {
-    state.workspace = permittedWorkspaces[0] || "platformAdmin";
-  }
-  const workspace = currentWorkspace();
-  if (workspace.tenantLocked && state.tenantId === "platform") {
-    state.tenantId = state.tenants.find((tenant) => tenant.id !== "platform")?.id || "platform";
-  }
-  const visibleViews = visibleViewIds();
-  if (!visibleViews.includes(state.currentView)) {
-    state.currentView = visibleViews.includes(workspace.defaultView) ? workspace.defaultView : (visibleViews[0] || workspace.defaultView);
-  }
-}
-
-function accessibleWorkspaceIds() {
-  if (memberApiState.member) return ["member"];
-  if (apiState.user) {
-    return [workspaceForStaff(apiState.user, apiState.roleNames, apiState.permissionIds)];
-  }
-  return Object.keys(workspaceProfiles);
-}
-
-function tenantScoped(collection) {
-  if (state.tenantId === "platform") return collection;
-  return collection.filter((item) => item.tenantId === state.tenantId);
-}
-
-function tenantName(id) {
-  return [...apiState.tenants, ...state.tenants].find((tenant) => tenant.id === id)?.name || "Unknown tenant";
-}
-
-function memberName(id) {
-  const apiMember = apiState.members.find((member) => member.id === id);
-  if (apiMember) return apiMember.fullName;
-  return state.members.find((member) => member.id === id)?.name || "Unknown member";
-}
-
-function packageName(id) {
-  return [...apiState.subscriptionPackages, ...state.packages].find((pkg) => pkg.id === id)?.name || "Unassigned";
-}
-
-function currentApiTenantId() {
-  if (!apiState.user) return "";
-  if (apiState.user.tenantId !== "tenant_platform") return apiState.user.tenantId;
-  const map = { platform: "tenant_platform", green: "tenant_green", lake: "tenant_lake" };
-  return map[state.tenantId] || "tenant_platform";
-}
-
-function apiTenantQuery() {
-  const tenantId = currentApiTenantId();
-  return apiState.user?.tenantId === "tenant_platform" && tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : "";
-}
-
-function apiSubscriptionQuery() {
-  return apiState.user?.tenantId === "tenant_platform" ? "" : apiTenantQuery();
-}
-
-function apiOperationsQuery() {
-  if (apiState.user?.tenantId !== "tenant_platform") return "";
-  if (state.tenantId === "platform") return "";
-  const tenantId = currentApiTenantId();
-  return tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : "";
-}
-
-function useApiMembers() {
-  return Boolean(apiState.user);
-}
-
-function useApiTenants() {
-  return Boolean(apiState.user);
-}
-
-function useApiSubscriptions() {
-  return Boolean(apiState.user);
-}
-
-function useApiTransactions() {
-  return Boolean(apiState.user);
-}
-
-function useApiWelfareClaims() {
-  return Boolean(apiState.user);
-}
-
-function useApiLoans() {
-  return Boolean(apiState.user);
-}
-
-function calculateSubscriptionBilling(memberCount) {
-  const safeMemberCount = Math.max(0, Number(memberCount) || 0);
-  const tier = SUBSCRIPTION_BILLING_TIERS.find((item) => safeMemberCount <= item.maxMembers) || SUBSCRIPTION_BILLING_TIERS[SUBSCRIPTION_BILLING_TIERS.length - 1];
-  const billableMembers = tier.id === "per_member" ? Math.max(safeMemberCount, MINIMUM_BILLABLE_MEMBERS) : safeMemberCount;
-  const amount = tier.id === "per_member" ? billableMembers * SUBSCRIPTION_UNIT_PRICE : tier.amount;
+function emptyData() {
   return {
-    memberCount: safeMemberCount,
-    billableMembers,
-    unitPrice: tier.unitPrice,
-    amount,
-    tierId: tier.id,
-    tierLabel: tier.label,
-    billingDescription: tier.id === "per_member"
-      ? `UGX 5,000 per member, minimum ${MINIMUM_BILLABLE_MEMBERS}`
-      : `Fixed annual tier for ${tier.label}`
+    tenants: [],
+    subscriptions: [],
+    subscriptionPackages: [],
+    members: [],
+    transactions: [],
+    loans: [],
+    operations: null,
+    notifications: [],
+    complaints: [],
+    roles: [],
+    permissions: [],
+    auditEvents: [],
+    regulatoryReport: null
   };
 }
 
-function subscriptionBillingDetails(subscription) {
-  const memberCount = subscription.memberCount ?? state.members.filter((member) => member.tenantId === subscription.tenantId).length;
-  const computed = calculateSubscriptionBilling(memberCount);
+function emptyMemberData() {
   return {
-    memberCount,
-    billableMembers: subscription.billableMembers ?? computed.billableMembers,
-    unitPrice: subscription.unitPrice ?? computed.unitPrice,
-    amount: computed.amount,
-    paid: Math.min(subscription.paid || 0, computed.amount),
-    tierId: subscription.tierId || computed.tierId,
-    tierLabel: subscription.tierLabel || computed.tierLabel,
-    billingDescription: subscription.billingDescription || computed.billingDescription
+    balances: null,
+    dashboard: null,
+    loans: [],
+    notifications: [],
+    pendingGuarantors: [],
+    complaints: [],
+    drafts: []
   };
 }
 
-function apiPackageToRow(pkg) {
-  return {
-    id: pkg.id,
-    name: pkg.name,
-    price: pkg.price,
-    members: pkg.memberLimit ?? pkg.members,
-    minMembers: pkg.minMembers || MINIMUM_BILLABLE_MEMBERS,
-    tierLabel: pkg.tierLabel,
-    users: pkg.userLimit ?? pkg.users,
-    branches: pkg.branchLimit ?? pkg.branches,
-    modules: pkg.modules
-  };
+function app() {
+  return document.getElementById("app");
 }
 
-function apiSubscriptionToRow(subscription) {
-  return {
-    id: subscription.id,
-    tenantId: subscription.tenantId,
-    packageId: subscription.packageId,
-    status: titleCase(subscription.status.replace(/_/g, " ")),
-    invoice: subscription.invoice,
-    amount: subscription.amount,
-    paid: subscription.paid,
-    memberCount: subscription.memberCount,
-    billableMembers: subscription.billableMembers,
-    unitPrice: subscription.unitPrice,
-    tierId: subscription.tierId,
-    tierLabel: subscription.tierLabel,
-    billingDescription: subscription.billingDescription,
-    expiry: subscription.expiry,
-    source: "API"
-  };
+function setHtml(markup) {
+  app().innerHTML = markup;
+  bindEvents();
 }
 
-function apiTransactionToRow(transaction) {
-  return {
-    id: transaction.id,
-    tenantId: transaction.tenantId,
-    memberId: transaction.memberId,
-    type: titleCase(transaction.type.replace(/_/g, " ")),
-    channel: titleCase(transaction.channel.replace(/_/g, " ")),
-    amount: transaction.amount,
-    status: titleCase(transaction.status.replace(/_/g, " ")),
-    ref: transaction.reference,
-    date: transaction.createdAt?.slice(0, 10) || "",
-    maker: apiState.users.find((user) => user.id === transaction.makerUserId)?.fullName || "Maker",
-    checker: transaction.checkerUserId ? (apiState.users.find((user) => user.id === transaction.checkerUserId)?.fullName || "Checker") : "",
-    postedAt: transaction.postedAt,
-    originalTransactionId: transaction.originalTransactionId,
-    reversalReason: transaction.reversalReason,
-    source: "API"
-  };
+function hasPermission(permission) {
+  if (!permission) return true;
+  if (permission === "dashboard:view") return true;
+  if (state.roleNames.join(" ").toLowerCase().includes("super admin")) return true;
+  if (isPlatform() && roleKind() === "super") return true;
+  return state.permissionIds.includes(permission);
 }
 
-function apiWelfareClaimToRow(claim) {
-  return {
-    id: claim.id,
-    tenantId: claim.tenantId,
-    memberId: claim.memberId,
-    memberName: claim.memberName || memberName(claim.memberId),
-    membershipNo: claim.membershipNo || "",
-    claimType: titleCase(String(claim.claimType || "").replace(/_/g, " ")),
-    amount: claim.amount,
-    channel: claim.channel ? titleCase(claim.channel.replace(/_/g, " ")) : "Pending",
-    reference: claim.reference,
-    description: claim.description || "",
-    status: titleCase(String(claim.status || "").replace(/_/g, " ")),
-    submittedAt: claim.submittedAt?.slice(0, 10) || "",
-    decidedAt: claim.decidedAt?.slice(0, 10) || "",
-    paidAt: claim.paidAt?.slice(0, 10) || "",
-    rejectionReason: claim.rejectionReason || "",
-    source: "API"
-  };
-}
-
-function apiLoanToRow(loan) {
-  return {
-    id: loan.id,
-    tenantId: loan.tenantId,
-    memberId: loan.memberId,
-    product: loan.product,
-    amount: loan.amount,
-    balance: loan.balance,
-    status: titleCase(loan.status.replace(/_/g, " ")),
-    stage: loan.stage,
-    guarantors: loan.guarantors,
-    dsr: loan.dsr,
-    guarantorRequests: loan.guarantorRequests || 0,
-    pendingGuarantors: loan.pendingGuarantors || 0,
-    repayments: loan.repayments || 0,
-    repaymentTotal: loan.repaymentTotal || 0,
-    source: "API"
-  };
-}
-
-function apiTransactionApprovalItems() {
-  return apiState.financialTransactions
-    .filter((transaction) => transaction.status === "pending_approval")
-    .map((transaction) => ({
-      id: transaction.id,
-      tenantId: transaction.tenantId,
-      title: `Post ${transaction.reference} ${titleCase(transaction.type.replace(/_/g, " "))}`,
-      type: "Financial Posting",
-      requester: apiState.users.find((user) => user.id === transaction.makerUserId)?.fullName || "Maker",
-      risk: transaction.amount > 1000000 ? "High" : "Low",
-      source: "API"
-    }));
-}
-
-function apiProductTypeLabel(type) {
-  return titleCase(String(type || "").replace(/_/g, " "));
-}
-
-function apiTenantToRow(tenant) {
-  return {
-    id: tenant.id,
-    name: tenant.name,
-    abbreviation: tenant.abbreviation,
-    status: titleCase(tenant.status.replace(/_/g, " ")),
-    packageId: tenant.packageId,
-    onboarding: tenant.onboardingPercent,
-    licenseExpiry: tenant.licenseExpiry,
-    district: tenant.district,
-    registrationNo: tenant.registrationNo,
-    source: "API"
-  };
-}
-
-function apiBranchName(id) {
-  return apiState.branches.find((branch) => branch.id === id)?.name || "Unassigned";
-}
-
-function apiMemberToRow(member) {
-  return {
-    id: member.id,
-    tenantId: member.tenantId,
-    no: member.membershipNo,
-    name: member.fullName,
-    phone: member.phone,
-    type: titleCase(member.memberType),
-    status: titleCase(member.status.replace(/_/g, " ")),
-    branchId: member.branchId,
-    branchName: apiBranchName(member.branchId),
-    kyc: titleCase(member.kycStatus.replace(/_/g, " ")),
-    savings: Number(member.savingsBalance || 0),
-    shares: Number(member.sharesBalance || 0),
-    welfare: Number(member.welfareBalance || 0),
-    source: "API"
-  };
-}
-
-function titleCase(value) {
-  return String(value).replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
-}
-
-function statusClass(status) {
-  return String(status).toLowerCase().replace(/\s+/g, "-").replace("pending-payment", "pending").replace("pending-review", "review");
-}
-
-function formatSyncTime(value) {
-  if (!value) return "Not synced";
-  return new Date(value).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
-function apiSyncState() {
-  if (apiState.loading) return "Refreshing";
-  if (apiState.lastError) return "Needs attention";
-  if (apiState.user) return "Java-backed";
-  if (apiState.health === "online") return "API reachable";
-  return "Demo mode";
-}
-
-function apiSyncNotice(context) {
-  if (apiState.loading) {
-    return `<div class="notice info">${context} is refreshing from the Java API. Current figures will update when the sync finishes.</div>`;
+function roleKind() {
+  const roles = state.roleNames.join(" ").toLowerCase();
+  if (state.auth === "member") return "member";
+  if (state.user?.tenantId === "tenant_platform") {
+    if (roles.includes("billing")) return "billing";
+    if (roles.includes("compliance")) return "compliance";
+    if (roles.includes("support")) return "support";
+    if (roles.includes("operations")) return "operations";
+    return "super";
   }
-  if (apiState.lastError) {
-    return `<div class="notice error">${context} could not refresh from the backend: ${apiState.lastError}</div>`;
-  }
-  if (apiState.user) {
-    return `<div class="notice success">${context} is using Java-backed data for ${apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant"}. Last sync: ${formatSyncTime(apiState.lastSyncedAt)}.</div>`;
-  }
-  return `<div class="notice">${context} is showing local demo data. Login to the API to switch this screen to Java-backed records.</div>`;
-}
-
-function refreshApiButton(label = "Refresh API") {
-  return `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : label}</button>`;
-}
-
-function memberSyncState() {
-  if (memberApiState.loading) return "Refreshing";
-  if (memberApiState.lastError) return "Needs attention";
-  if (memberApiState.member) return "Member API";
-  if (memberApiState.token) return "Re-auth needed";
-  return "Demo mode";
-}
-
-function memberSyncNotice(context) {
-  if (memberApiState.loading) {
-    return `<div class="notice info">${context} is refreshing from the member API. Balances and requests will update when the sync finishes.</div>`;
-  }
-  if (memberApiState.lastError) {
-    return `<div class="notice error">${context} could not refresh from the member API: ${memberApiState.lastError}</div>`;
-  }
-  if (memberApiState.member) {
-    return `<div class="notice success">${context} is using member-authenticated Java API data. Last sync: ${formatSyncTime(memberApiState.lastSyncedAt)}.</div>`;
-  }
-  return `<div class="notice">${context} is showing local demo data. Member login switches balances, loans, notifications, and guarantee requests to the Java API.</div>`;
-}
-
-function memberRefreshButton(label = "Refresh member data") {
-  return `<button class="secondary-button" data-action="refreshMember" type="button" ${memberApiState.loading ? "disabled" : ""}>${memberApiState.loading ? "Refreshing..." : label}</button>`;
-}
-
-function isAuthenticated() {
-  return Boolean(apiState.user || memberApiState.member);
-}
-
-function workspaceForStaff(user, roleNames = [], permissionIds = []) {
-  const roles = roleNames.join(" ").toLowerCase();
-  const permissions = new Set(permissionIds);
-  if (user?.tenantId === "tenant_platform") {
-    if (roles.includes("super admin")) return "platformSuperAdmin";
-    if (roles.includes("billing")) return "platformBilling";
-    if (roles.includes("compliance")) return "platformCompliance";
-    if (roles.includes("support")) return "platformSupport";
-    if (roles.includes("operations")) return "platformOperations";
-    return "platformAdmin";
-  }
-  if (roles.includes("administrator")) return "saccoAdmin";
-  if (roles.includes("treasurer") || permissions.has("accounting:post") || permissions.has("transactions:approve")) return "treasurer";
-  if (roles.includes("secretary") || permissions.has("members:approve")) return "secretary";
-  if (roles.includes("chairperson") || permissions.has("loans:approve") || permissions.has("approvals:decide")) return "chairperson";
-  return "saccoAdmin";
-}
-
-function hasPermission(permissionId) {
-  if (!apiState.user) return true;
-  if (isPlatformFullAdmin()) return true;
-  return (apiState.permissionIds || []).includes(permissionId);
-}
-
-function isPlatformFullAdmin() {
-  if (apiState.user?.tenantId !== "tenant_platform") return false;
-  const roles = (apiState.roleNames || []).join(" ").toLowerCase();
-  return roles.includes("platform administrator") || roles.includes("platform super admin");
-}
-
-function isPlatformSuperAdmin() {
-  if (apiState.user?.tenantId !== "tenant_platform") return false;
-  const roles = (apiState.roleNames || []).join(" ").toLowerCase();
-  return roles.includes("platform super admin");
-}
-
-function init() {
-  renderTenantSelect();
-  renderWorkspaceSelect();
-  renderNav();
-  bindGlobalActions();
-  render();
-  refreshApiStatus();
-  refreshMemberStatus();
-}
-
-function renderTenantSelect() {
-  const select = document.getElementById("tenantSelect");
-  select.innerHTML = state.tenants.map((tenant) => `<option value="${tenant.id}">${tenant.name}</option>`).join("");
-  select.value = state.tenantId;
-  select.onchange = () => {
-    state.tenantId = select.value;
-    saveState();
-    render();
-    if (apiState.user?.tenantId === "tenant_platform") refreshApiStatus();
-  };
-}
-
-function renderWorkspaceSelect() {
-  const select = document.getElementById("workspaceSelect");
-  const workspaceIds = accessibleWorkspaceIds();
-  select.innerHTML = workspaceIds.map((id) => `<option value="${id}">${workspaceProfiles[id].label}</option>`).join("");
-  select.value = workspaceIds.includes(state.workspace) ? state.workspace : workspaceIds[0];
-  select.disabled = Boolean(apiState.user || memberApiState.member);
-  select.onchange = () => {
-    state.workspace = select.value;
-    ensureWorkspaceTenant();
-    renderTenantSelect();
-    renderNav();
-    saveState();
-    render();
-    if (apiState.user) refreshApiStatus();
-  };
-}
-
-function renderNav() {
-  ensureWorkspaceTenant();
-  const nav = document.getElementById("nav");
-  nav.innerHTML = visibleNavItems().map(([id, label, hint]) => `
-    <button class="nav-item" type="button" data-view="${id}">
-      <span>${label}</span>
-      <small>${hint}</small>
-    </button>
-  `).join("");
-
-  nav.onclick = (event) => {
-    const button = event.target.closest("[data-view]");
-    if (!button) return;
-    state.currentView = button.dataset.view;
-    saveState();
-    render();
-  };
-}
-
-function bindGlobalActions() {
-  document.getElementById("resetDemo").addEventListener("click", () => {
-    localStorage.removeItem(STORAGE_KEY);
-    state = structuredClone(seedData);
-    renderTenantSelect();
-    render();
-  });
-
-  document.getElementById("newMemberBtn").addEventListener("click", openMemberForm);
-  document.getElementById("globalSearchBtn").addEventListener("click", openGlobalSearch);
-  document.getElementById("memberPortalBtn").addEventListener("click", () => {
-    if (!memberApiState.member) {
-      openMemberLoginForm();
-      return;
-    }
-    state.workspace = "member";
-    ensureWorkspaceTenant();
-    state.currentView = "memberPortal";
-    saveState();
-    render();
-  });
-  document.getElementById("apiLoginBtn").addEventListener("click", openApiLoginForm);
-  document.getElementById("apiLogoutBtn").addEventListener("click", apiLogout);
-}
-
-function render() {
-  if (!isAuthenticated()) {
-    renderLoginScreen();
-    return;
-  }
-  setLoginMode(false);
-  ensureWorkspaceTenant();
-  renderWorkspaceSelect();
-  renderNav();
-  document.querySelectorAll(".nav-item").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === state.currentView);
-  });
-
-  document.getElementById("tenantSelect").value = state.tenantId;
-  document.getElementById("workspaceSelect").value = state.workspace || accessibleWorkspaceIds()[0] || "platformAdmin";
-  document.getElementById("sessionRole").textContent = currentWorkspace().session;
-  document.getElementById("newMemberBtn").hidden = !currentWorkspace().nav.includes("members") || !hasPermission("members:create");
-  document.getElementById("globalSearchBtn").hidden = false;
-  document.getElementById("memberPortalBtn").hidden = false;
-  renderApiChrome();
-  renderShellStatus();
-
-  const titles = {
-    dashboard: ["Dashboard", "Command center"],
-    registrations: ["Platform", "SACCO registrations"],
-    subscriptions: ["Billing", "Subscription management"],
-    members: ["SACCO", "Member management"],
-    transactions: ["Finance", "Savings, shares and welfare"],
-    loans: ["Credit", "Loan processing"],
-    approvals: ["Governance", "Approval workflow"],
-    operations: ["Operations", "Monitoring and release readiness"],
-    reports: ["Controls", "Reports and audit trail"],
-    usersRoles: ["Access", "Platform users management"],
-    notifications: ["Messages", "Notifications"],
-    complaints: ["Support", "Complaints"],
-    memberPortal: ["Member Portal", "Self-service account"]
-  };
-  const [kicker, title] = titles[state.currentView] || titles.dashboard;
-  document.getElementById("sectionKicker").textContent = kicker;
-  document.getElementById("pageTitle").textContent = title;
-
-  const routes = {
-    dashboard: renderDashboard,
-    registrations: renderRegistrations,
-    subscriptions: renderSubscriptions,
-    members: renderMembers,
-    transactions: renderTransactions,
-    loans: renderLoans,
-    approvals: renderApprovals,
-    operations: renderOperations,
-    reports: renderReports,
-    usersRoles: renderUsersRoles,
-    notifications: renderNotifications,
-    complaints: renderComplaints,
-    memberPortal: renderMemberPortal
-  };
-
-  document.getElementById("app").innerHTML = routes[state.currentView]();
-  bindViewActions();
-}
-
-function setLoginMode(enabled) {
-  document.querySelector(".app-shell")?.classList.toggle("login-mode", enabled);
-}
-
-function renderLoginScreen() {
-  setLoginMode(true);
-  renderWorkspaceSelect();
-  renderApiChrome();
-  document.getElementById("sessionRole").textContent = "Signed out";
-  document.getElementById("tenantSelect").value = state.tenantId;
-  document.getElementById("workspaceSelect").value = state.workspace || accessibleWorkspaceIds()[0] || "platformAdmin";
-  document.querySelectorAll(".nav-item").forEach((button) => button.classList.remove("active"));
-  document.getElementById("sectionKicker").textContent = "Welcome";
-  document.getElementById("pageTitle").textContent = "Login to Tereka Online";
-  document.getElementById("apiLoginBtn").hidden = true;
-  document.getElementById("apiLogoutBtn").hidden = true;
-  document.getElementById("globalSearchBtn").hidden = true;
-  document.getElementById("memberPortalBtn").hidden = true;
-  document.getElementById("newMemberBtn").hidden = true;
-  document.getElementById("shellStatus").innerHTML = "";
-  document.getElementById("app").innerHTML = `
-    <section class="login-screen">
-      <div class="login-brand">
-        <div class="brand-mark login-logo" aria-hidden="true">
-          <svg viewBox="0 0 48 48" role="img">
-            <path d="M8 10h32v7H27v21h-7V17H8z"></path>
-            <path d="M31 21h9v17H31z"></path>
-          </svg>
-        </div>
-        <div>
-          <h2>Tereka Online</h2>
-          <p>Multi-SACCO operations, member self-service, billing, finance, loans and oversight.</p>
-          <span class="pill">${UI_BUILD_VERSION}</span>
-        </div>
-      </div>
-      <form id="primaryLoginForm" class="login-form">
-        <div>
-          <span class="pill">Secure access</span>
-          <h3>Login</h3>
-          <p>Code identifies the SACCO or platform administration area. Username and password identify whether the account is a member, treasurer, secretary, chairperson, SACCO admin, or platform admin.</p>
-        </div>
-        <div class="form-grid">
-          ${field("Code", "loginSaccoCode", "text", "")}
-          ${field("Username", "loginUsername", "text", "")}
-          ${field("Password", "loginPassword", "password", "")}
-        </div>
-        <div id="loginError" class="notice error" hidden></div>
-        <div class="login-actions">
-          <button id="loginSubmit" class="primary-button" type="submit">Login</button>
-        </div>
-        <small>Use code PLATFORM for platform administration. SACCOs use their assigned code. Members use the same SACCO code plus their membership number, phone, or email.</small>
-        <div class="demo-account-panel">
-          <div>
-            <strong>Demo accounts</strong>
-            <span>Development/demo only. These are blocked when production demo logins are disabled.</span>
-          </div>
-          <div class="demo-account-grid">
-            ${demoAccounts.map((account, index) => `
-              <button class="demo-account" type="button" data-demo-account="${index}">
-                <strong>${account.label}</strong>
-                <span>${account.code} / ${account.username}</span>
-                <small>${account.note}</small>
-              </button>
-            `).join("")}
-          </div>
-        </div>
-      </form>
-      ${apiState.lastError ? `<div class="notice error">${apiState.lastError}</div>` : ""}
-    </section>
-  `;
-  bindPrimaryLoginForm();
-  bindViewActions();
-}
-
-function bindPrimaryLoginForm() {
-  const form = document.getElementById("primaryLoginForm");
-  if (!form) return;
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    await loginWithCodeUsernamePassword(
-            value("loginSaccoCode"),
-            value("loginUsername"),
-            value("loginPassword"),
-            document.getElementById("loginError"),
-            document.getElementById("loginSubmit"));
-  });
-  document.querySelectorAll("[data-demo-account]").forEach((button) => {
-    button.addEventListener("click", () => fillDemoAccount(Number(button.dataset.demoAccount)));
-  });
-}
-
-function fillDemoAccount(index) {
-  const account = demoAccounts[index];
-  if (!account) return;
-  document.getElementById("loginSaccoCode").value = account.code;
-  document.getElementById("loginUsername").value = account.username;
-  document.getElementById("loginPassword").value = account.password;
-  showLoginError(document.getElementById("loginError"), "");
-  document.getElementById("loginUsername").focus();
-}
-
-function renderShellStatus() {
-  const shellStatus = document.getElementById("shellStatus");
-  if (!shellStatus) return;
-  const currentTenantName = apiState.user?.tenantId === "tenant_platform" ? tenantName(state.tenantId) : tenantName(apiState.user?.tenantId || state.tenantId);
-  const operationsScope = apiState.operationsStatus?.scope
-    ? (apiState.operationsStatus.scope === "platform" ? "Platform-wide" : tenantName(apiState.operationsStatus.scope))
-    : "Not loaded";
-  const checkedAt = apiState.operationsStatus?.checkedAt
-    ? apiState.operationsStatus.checkedAt.slice(0, 16).replace("T", " ")
-    : "pending";
-  const apiLabel = apiState.user ? `API: ${apiState.user.fullName}` : `API: ${apiState.health || "checking"}`;
-  const roleLabel = apiState.roleNames?.length ? apiState.roleNames.join(", ") : currentWorkspace().session;
-  const memberLabel = memberApiState.member ? `Member: ${memberApiState.member.fullName}` : "Member: signed out";
-  shellStatus.innerHTML = `
-    ${shellFact("Tenant", currentTenantName)}
-    ${shellFact("Staff session", apiLabel)}
-    ${shellFact("Role access", roleLabel)}
-    ${shellFact("Member session", memberLabel)}
-    ${shellFact("Operations scope", operationsScope)}
-    ${shellFact("UI build", UI_BUILD_VERSION)}
-  `;
-}
-
-function shellFact(label, value) {
-  return `<span class="shell-fact"><small>${label}</small><strong>${value}</strong></span>`;
-}
-
-function renderDashboard() {
-  if (apiState.user?.tenantId === "tenant_platform") return renderPlatformDashboard();
-  const tenant = currentTenant();
-  const usingApi = Boolean(apiState.user);
-  const operations = apiState.operationsStatus || {};
-  const operationCounts = operations.counts || {};
-  const members = usingApi ? apiState.members.map(apiMemberToRow) : tenantScoped(state.members);
-  const transactions = usingApi ? apiState.financialTransactions.map(apiTransactionToRow) : tenantScoped(state.transactions);
-  const loans = usingApi ? apiState.loans.map(apiLoanToRow) : tenantScoped(state.loans);
-  const approvals = usingApi ? apiTransactionApprovalItems() : tenantScoped(state.approvals).filter((item) => item.status === "Pending");
-  const deposits = transactions.filter((tx) => tx.status === "Posted").reduce((sum, tx) => sum + tx.amount, 0);
-  const portfolio = loans.reduce((sum, loan) => sum + (loan.balance || 0), 0);
-  const activeMembers = usingApi ? (operationCounts.activeMembers || members.filter((m) => m.status === "Active").length) : members.filter((m) => m.status === "Active").length;
-  const alertCount = operations.alerts?.length || 0;
-  const roleKind = saccoDashboardRoleKind();
-  const model = saccoDashboardModel(roleKind, {
-    tenant,
-    operations,
-    operationCounts,
-    members,
-    transactions,
-    loans,
-    approvals,
-    deposits,
-    portfolio,
-    activeMembers,
-    alertCount,
-    usingApi
-  });
-  const selectedTab = state.saccoDashboardTab || "overview";
-  const activeTab = model.tabs.some((tab) => tab.id === selectedTab) ? selectedTab : model.tabs[0].id;
-
-  return `
-    <section class="card integration-panel" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Dashboard data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; Java-backed ${model.title.toLowerCase()}</p>
-        </div>
-        ${refreshApiButton("Refresh backend data")}
-      </div>
-      ${apiSyncNotice("Dashboard")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", usingApi ? "Java API" : "Local demo")}
-        ${miniFact("Operations scope", operations.scope ? (operations.scope === "platform" ? "Platform" : tenantName(operations.scope)) : "Not loaded")}
-        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
-        ${miniFact("Health", apiState.health)}
-      </div>
-    </section>
-
-    <div class="grid metrics" style="margin-top:16px">
-      ${model.metrics.map((item) => metric(item.label, item.value, item.detail)).join("")}
-    </div>
-
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>${model.title}</h2>
-          <p class="eyebrow">${model.subtitle}</p>
-        </div>
-        <div class="filters">
-          ${model.tabs.map((tab) => saccoDashboardTabButton(tab.id, tab.label, activeTab)).join("")}
-        </div>
-      </div>
-      ${renderSaccoDashboardTab(model, activeTab)}
-    </section>
-  `;
-}
-
-function saccoDashboardTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-sacco-dashboard-tab="${id}" type="button">${label}</button>`;
-}
-
-function saccoDashboardRoleKind() {
-  if (state.workspace === "treasurer") return "treasurer";
-  if (state.workspace === "secretary") return "secretary";
-  if (state.workspace === "chairperson") return "chairperson";
+  if (roles.includes("chairperson")) return "chairperson";
+  if (roles.includes("treasurer")) return "treasurer";
+  if (roles.includes("secretary")) return "secretary";
+  if (roles.includes("loan")) return "loans";
+  if (roles.includes("accountant")) return "accountant";
+  if (roles.includes("teller") || roles.includes("cashier")) return "teller";
+  if (roles.includes("auditor")) return "auditor";
   return "admin";
 }
 
-function saccoDashboardModel(roleKind, data) {
-  const pendingTransactions = data.transactions.filter((tx) => tx.status === "Pending Approval").length;
-  const postedTransactions = data.transactions.filter((tx) => tx.status === "Posted").length;
-  const kycPending = data.members.filter((member) => member.kyc !== "Verified").length;
-  const openLoans = data.loans.filter((loan) => loan.status !== "Closed").length;
-  const pendingLoans = data.loans.filter((loan) => ["Submitted", "Under Review", "Approved"].includes(loan.status)).length;
-  const alerts = data.operations.alerts?.length || 0;
-  const common = {
-    admin: {
-      title: "SACCO Administrator dashboard",
-      subtitle: "Full SACCO operations view for members, finance, loans, approvals and reports",
-      metrics: [
-        { label: "Registered members", value: data.members.length, detail: `${data.activeMembers} active` },
-        { label: "Posted collections", value: money.format(data.deposits), detail: `${postedTransactions} posted movement(s)` },
-        { label: "Loan portfolio", value: money.format(data.portfolio), detail: `${openLoans} open loan file(s)` },
-        { label: "Pending approvals", value: data.approvals.length, detail: "maker-checker controls" }
-      ],
-      tabs: [{ id: "overview", label: "Overview" }, { id: "members", label: "Members" }, { id: "finance", label: "Finance" }, { id: "risk", label: "Risk" }]
-    },
-    treasurer: {
-      title: "Treasurer dashboard",
-      subtitle: "Finance workbench for collections, reversals, reconciliations, welfare payouts and checker queues",
-      metrics: [
-        { label: "Posted collections", value: money.format(data.deposits), detail: `${postedTransactions} posted movement(s)` },
-        { label: "Pending postings", value: pendingTransactions, detail: "awaiting approval" },
-        { label: "Statement-ready", value: postedTransactions, detail: "rows available for member statements" },
-        { label: "Callback alerts", value: data.operationCounts.callbackExceptions || 0, detail: "mobile-money exceptions" }
-      ],
-      tabs: [{ id: "finance", label: "Finance" }, { id: "approvals", label: "Approvals" }, { id: "reconciliation", label: "Reconciliation" }]
-    },
-    secretary: {
-      title: "Secretary dashboard",
-      subtitle: "Member records, KYC, branch coverage, meeting records, complaints and board pack preparation",
-      metrics: [
-        { label: "Registered members", value: data.members.length, detail: `${data.activeMembers} active` },
-        { label: "KYC pending", value: kycPending, detail: "records needing update" },
-        { label: "Open complaints", value: data.operationCounts.openComplaints || 0, detail: "support follow-up" },
-        { label: "Board pack items", value: data.approvals.length + kycPending, detail: "records for review" }
-      ],
-      tabs: [{ id: "members", label: "Members" }, { id: "governance", label: "Governance" }, { id: "complaints", label: "Complaints" }]
-    },
-    chairperson: {
-      title: "Chairperson dashboard",
-      subtitle: "Board oversight for loan decisions, approvals, risk exposure, operating exceptions and governance follow-up",
-      metrics: [
-        { label: "Loan portfolio", value: money.format(data.portfolio), detail: `${openLoans} open loan file(s)` },
-        { label: "Loan decisions", value: pendingLoans, detail: "applications and approved files" },
-        { label: "Pending approvals", value: data.approvals.length, detail: "board or checker action" },
-        { label: "Operations alerts", value: alerts, detail: "exceptions needing attention" }
-      ],
-      tabs: [{ id: "oversight", label: "Oversight" }, { id: "loans", label: "Loans" }, { id: "decisions", label: "Decisions" }, { id: "risk", label: "Risk" }]
-    }
-  };
-  return common[roleKind] || common.admin;
-}
-
-function renderSaccoDashboardTab(model, activeTab) {
-  const quickActions = {
-    members: [["members", "Open members"], ["reports", "Board reports"]],
-    finance: [["transactions", "Open transactions"], ["reports", "Finance reports"]],
-    approvals: [["approvals", "Open approvals"], ["transactions", "Review postings"]],
-    reconciliation: [["reports", "Open reconciliation"], ["operations", "Operations health"]],
-    governance: [["reports", "Governance reports"], ["approvals", "Approvals"]],
-    complaints: [["reports", "Complaint reports"], ["operations", "Operations health"]],
-    loans: [["loans", "Open loans"], ["approvals", "Loan approvals"]],
-    decisions: [["approvals", "Decision queue"], ["reports", "Board reports"]],
-    risk: [["reports", "Risk reports"], ["operations", "Operations health"]],
-    oversight: [["loans", "Loan oversight"], ["reports", "Reports"]]
-  };
-  const actions = quickActions[activeTab] || [["members", "Members"], ["transactions", "Transactions"], ["reports", "Reports"]];
-  return `
-    <div class="notice" style="margin-top:16px">
-      <strong>${model.title}:</strong> ${saccoDashboardTabText(activeTab)}
-    </div>
-    <div class="toolbar" style="margin-top:16px;margin-bottom:0">
-      ${actions.map(([view, label]) => `<button class="secondary-button" data-view-jump="${view}" type="button">${label}</button>`).join("")}
-      ${refreshApiButton("Refresh backend data")}
-    </div>
-  `;
-}
-
-function saccoDashboardTabText(activeTab) {
-  const copy = {
-    overview: "daily operating snapshot for the selected SACCO.",
-    members: "membership health, KYC readiness and branch coverage.",
-    finance: "collections, postings, reversals, welfare payments and financial exceptions.",
-    approvals: "items that need maker-checker or leadership action.",
-    reconciliation: "cash, bank, mobile-money and ledger exception monitoring.",
-    governance: "meeting records, board packs, resolutions and compliance follow-up.",
-    complaints: "member and SACCO support issues requiring secretary follow-up.",
-    oversight: "board-level operating health across loans, approvals and exceptions.",
-    loans: "loan pipeline, guarantor readiness, disbursement readiness and repayment exposure.",
-    decisions: "approval queue and board decision priorities.",
-    risk: "portfolio, DSR, operating alerts and audit exceptions."
-  };
-  return copy[activeTab] || copy.overview;
-}
-
-function renderPlatformDashboard() {
-  const operations = apiState.operationsStatus || {};
-  const counts = operations.counts || {};
-  const tenants = (apiState.tenants || []).filter((tenant) => tenant.id !== "tenant_platform");
-  const subscriptions = apiState.subscriptions || [];
-  const roleKind = platformDashboardRoleKind();
-  const model = platformDashboardModel(roleKind, tenants, subscriptions, operations, counts);
-  const selectedTab = state.platformDashboardTab || "overview";
-  const activeTab = model.tabs.some((tab) => tab.id === selectedTab) ? selectedTab : model.tabs[0].id;
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Dashboard data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; Java-backed ${model.title.toLowerCase()}</p>
-        </div>
-        ${refreshApiButton("Refresh backend data")}
-      </div>
-      ${apiSyncNotice("Dashboard")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", "Java API")}
-        ${miniFact("Operations scope", operations.scope ? (operations.scope === "platform" ? "Platform" : tenantName(operations.scope)) : "Not loaded")}
-        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
-        ${miniFact("Health", apiState.health)}
-      </div>
-    </section>
-
-    <div class="grid metrics" style="margin-top:16px">
-      ${model.metrics.map((item) => metric(item.label, item.value, item.detail)).join("")}
-    </div>
-
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>${model.title}</h2>
-          <p class="eyebrow">${model.subtitle}</p>
-        </div>
-        <div class="filters">
-          ${model.tabs.map((tab) => platformDashboardTabButton(tab.id, tab.label, activeTab)).join("")}
-        </div>
-      </div>
-      ${renderRoleDashboardTab(model, activeTab)}
-    </section>
-  `;
-}
-
-function platformDashboardTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-platform-dashboard-tab="${id}" type="button">${label}</button>`;
-}
-
-function platformDashboardRoleKind() {
-  const roles = (apiState.roleNames || []).join(" ").toLowerCase();
-  if (roles.includes("billing")) return "billing";
-  if (roles.includes("compliance")) return "compliance";
-  if (roles.includes("support")) return "support";
-  if (roles.includes("operations")) return "operations";
-  return "superAdmin";
-}
-
-function platformDashboardModel(roleKind, tenants, subscriptions, operations, counts) {
-  const activeSaccos = tenants.filter((tenant) => tenant.status === "active").length;
-  const pendingTenants = tenants.filter((tenant) => ["pending_review", "pending", "trial"].includes(String(tenant.status).toLowerCase()));
-  const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === "active").length;
-  const openComplaints = Number(counts.openComplaints || 0);
-  const pendingPostings = Number(counts.pendingFinancialTransactions || 0);
-  const callbackExceptions = Number(counts.callbackExceptions || 0);
-  const deliveryExceptions = Number(counts.deliveryExceptions || 0);
-  const tabs = {
-    superAdmin: {
-      title: "Platform Super Admin dashboard",
-      subtitle: "Ownership view for SACCO activation, billing, platform users and system health",
-      metrics: [
-        { label: "SACCOs", value: tenants.length, detail: `${activeSaccos} active` },
-        { label: "Needs approval", value: pendingTenants.length, detail: "onboarding queue" },
-        { label: "Platform users", value: apiState.users.filter((user) => user.tenantId === "tenant_platform").length, detail: "administrators only" },
-        { label: "System alerts", value: operations.alerts?.length || 0, detail: "operations status" }
-      ],
-      tabs: [
-        { id: "overview", label: "Overview" },
-        { id: "activation", label: "Activation" },
-        { id: "access", label: "Access" },
-        { id: "system", label: "System" }
-      ]
-    },
-    operations: {
-      title: "Platform Operations dashboard",
-      subtitle: "Monitoring view for uptime, callbacks, notification delivery and runbook follow-up",
-      metrics: [
-        { label: "API health", value: titleCase(apiState.health || "checking"), detail: "Java backend" },
-        { label: "System alerts", value: operations.alerts?.length || 0, detail: "current alerts" },
-        { label: "Callback exceptions", value: callbackExceptions, detail: "payment provider" },
-        { label: "Delivery exceptions", value: deliveryExceptions, detail: "SMS/email" }
-      ],
-      tabs: [
-        { id: "overview", label: "Overview" },
-        { id: "exceptions", label: "Exceptions" },
-        { id: "runbook", label: "Runbook" }
-      ]
-    },
-    billing: {
-      title: "Platform Billing dashboard",
-      subtitle: "Billing view for subscription status, payment access and SACCO activation impact",
-      metrics: [
-        { label: "Subscriptions", value: subscriptions.length, detail: `${activeSubscriptions} active` },
-        { label: "Inactive billing", value: Math.max(0, subscriptions.length - activeSubscriptions), detail: "needs follow-up" },
-        { label: "Billable members", value: subscriptions.reduce((sum, sub) => sum + (sub.memberCount || sub.billableMembers || 0), 0), detail: "reported total" },
-        { label: "SACCOs", value: tenants.length, detail: "billing accounts" }
-      ],
-      tabs: [
-        { id: "overview", label: "Overview" },
-        { id: "payments", label: "Payments" },
-        { id: "activation", label: "Activation" }
-      ]
-    },
-    compliance: {
-      title: "Platform Compliance dashboard",
-      subtitle: "Oversight view for reports, audit trail, reconciliation and tenant controls",
-      metrics: [
-        { label: "Audit events", value: apiState.auditEvents.length, detail: "sensitive actions" },
-        { label: "Pending postings", value: pendingPostings, detail: "maker-checker" },
-        { label: "Reports", value: apiState.regulatoryReport?.reports?.length || 0, detail: "regulatory rows" },
-        { label: "SACCOs", value: tenants.length, detail: "oversight scope" }
-      ],
-      tabs: [
-        { id: "overview", label: "Overview" },
-        { id: "audit", label: "Audit" },
-        { id: "reports", label: "Reports" }
-      ]
-    },
-    support: {
-      title: "Platform Support dashboard",
-      subtitle: "Support view for open complaints, SACCO context and escalation follow-up",
-      metrics: [
-        { label: "Open complaints", value: openComplaints, detail: "support queue" },
-        { label: "SACCOs", value: tenants.length, detail: "supported tenants" },
-        { label: "Members loaded", value: apiState.members.length, detail: "support context" },
-        { label: "Notifications", value: apiState.notificationDeliveries.length, detail: "customer alerts" }
-      ],
-      tabs: [
-        { id: "overview", label: "Overview" },
-        { id: "complaints", label: "Complaints" },
-        { id: "saccos", label: "SACCOs" }
-      ]
-    }
-  };
-  return tabs[roleKind] || tabs.superAdmin;
-}
-
-function renderRoleDashboardTab(model, activeTab) {
-  if (activeTab === "activation") {
-    return roleDashboardPanel([
-      metric("SACCO registrations", apiState.tenants.filter((tenant) => tenant.id !== "tenant_platform").length, "registered tenants"),
-      metric("Active subscriptions", apiState.subscriptions.filter((subscription) => subscription.status === "active").length, "billing access"),
-      metric("Pending onboarding", apiState.tenants.filter((tenant) => ["pending_review", "pending", "trial"].includes(String(tenant.status).toLowerCase())).length, "needs decision")
-    ], [["registrations", "Open SACCO registration"], ["subscriptions", "Open subscriptions"]]);
-  }
-  if (activeTab === "access") {
-    return roleDashboardPanel([
-      metric("Platform users", apiState.users.filter((user) => user.tenantId === "tenant_platform").length, "administrators only"),
-      metric("Platform roles", apiState.roles.filter((role) => role.tenantId === "tenant_platform").length, "protected roles"),
-      metric("Permissions", apiState.permissions.length, "catalogued")
-    ], [["usersRoles", "Open platform users"]]);
-  }
-  if (activeTab === "system" || activeTab === "runbook" || activeTab === "exceptions") {
-    return roleDashboardPanel([
-      metric("API health", titleCase(apiState.health || "checking"), "Java backend"),
-      metric("System alerts", apiState.operationsStatus?.alerts?.length || 0, "operations status"),
-      metric("Audit events", apiState.auditEvents.length, "sensitive actions")
-    ], [["operations", "Open operations"], ["reports", "Open reports"]]);
-  }
-  if (activeTab === "payments") {
-    return roleDashboardPanel([
-      metric("Subscriptions", apiState.subscriptions.length, "billing records"),
-      metric("Active", apiState.subscriptions.filter((subscription) => subscription.status === "active").length, "paid access"),
-      metric("Inactive", apiState.subscriptions.filter((subscription) => subscription.status !== "active").length, "follow-up")
-    ], [["subscriptions", "Open subscriptions"], ["registrations", "Open SACCO registration"]]);
-  }
-  if (activeTab === "audit" || activeTab === "reports") {
-    return `
-      ${roleDashboardPanel([
-        metric("Audit events", apiState.auditEvents.length, "sensitive actions"),
-        metric("Report rows", apiState.regulatoryReport?.reports?.length || 0, "regulatory snapshot"),
-        metric("Pending postings", apiState.operationsStatus?.counts?.pendingFinancialTransactions || 0, "maker-checker")
-      ], [["reports", "Open reports"], ["operations", "Open operations"]])}
-      ${activeTab === "audit" ? `<div style="margin-top:16px">${apiAuditTable(apiState.auditEvents.slice(0, 5))}</div>` : ""}
-    `;
-  }
-  if (activeTab === "complaints") {
-    return roleDashboardPanel([
-      metric("Open complaints", apiState.operationsStatus?.counts?.openComplaints || 0, "support queue"),
-      metric("Complaint records", apiState.complaints.length, "loaded cases"),
-      metric("High priority", apiState.complaints.filter((complaint) => complaint.priority === "high").length, "needs escalation")
-    ], [["complaints", "Open complaints"], ["operations", "Open operations"]]);
-  }
-  if (activeTab === "saccos") {
-    return roleDashboardPanel([
-      metric("SACCOs", apiState.tenants.filter((tenant) => tenant.id !== "tenant_platform").length, "supported tenants"),
-      metric("Members", apiState.members.length, "support context"),
-      metric("Branches", apiState.branches.length, "loaded branches")
-    ], [["registrations", "Open SACCO registration"], ["members", "Open members"]]);
-  }
-  return `
-    <div class="grid three" style="margin-top:16px">
-      ${model.metrics.slice(0, 3).map((item) => metric(item.label, item.value, item.detail)).join("")}
-    </div>
-    <div class="toolbar" style="margin-top:16px;margin-bottom:0">
-      ${model.tabs.some((tab) => tab.id === "access") ? `<button class="secondary-button" data-view-jump="usersRoles" type="button">Platform users</button>` : ""}
-      <button class="secondary-button" data-view-jump="operations" type="button">Operations center</button>
-      <button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>
-    </div>
-  `;
-}
-
-function roleDashboardPanel(metrics, links) {
-  return `
-    <div class="grid three" style="margin-top:16px">${metrics.join("")}</div>
-    <div class="toolbar" style="margin-top:16px;margin-bottom:0">
-      ${links.map(([view, label]) => `<button class="secondary-button" data-view-jump="${view}" type="button">${label}</button>`).join("")}
-    </div>
-  `;
-}
-
-function renderRegistrations() {
-  const tenants = useApiTenants()
-    ? apiState.tenants.filter((tenant) => tenant.id !== "tenant_platform").map(apiTenantToRow)
-    : state.tenants.filter((tenant) => tenant.id !== "platform");
-  const source = useApiTenants() ? "API-backed" : "Local demo";
-  const canCreateOnApi = !apiState.user || hasPermission("tenants:manage");
-  const approvedTenants = tenants.filter((tenant) => tenant.status === "Approved").length;
-  const pendingTenants = tenants.filter((tenant) => tenant.status === "Pending Review").length;
-  const suspendedTenants = tenants.filter((tenant) => tenant.status === "Suspended").length;
-  const activeTab = state.registrationTab || "applications";
-  const expiringTenants = tenants.filter((tenant) => daysTo(tenant.licenseExpiry) <= 60).length;
-  const districtCoverage = new Set(tenants.map((tenant) => tenant.district).filter(Boolean)).size;
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>SACCO registration data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; onboarding and tenant approval</p>
-        </div>
-        <div class="filters">
-          ${apiState.user ? refreshApiButton("Refresh backend data") : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
-          ${apiState.user && !canCreateOnApi ? "" : `<button class="primary-button" data-action="newTenant" type="button">New SACCO application</button>`}
-        </div>
-      </div>
-      ${apiSyncNotice("SACCO Registration screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", source)}
-        ${miniFact("Last sync", apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed")}
-        ${miniFact("Approval access", canCreateOnApi ? "Platform" : (apiState.user ? "Tenant view" : "Demo"))}
-        ${miniFact("Activation gate", pendingTenants === 0 ? "Clear" : "Review")}
-      </div>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>SACCO application review</h2>
-          <p class="eyebrow">${source} &middot; searchable onboarding queue, review workflow and activation status</p>
-        </div>
-        <div class="filters">
-          ${registrationTabButton("applications", "Applications", activeTab)}
-          ${registrationTabButton("review", "Review queue", activeTab)}
-          ${registrationTabButton("packages", "Packages", activeTab)}
-        </div>
-      </div>
-      <div class="grid metrics">
-        ${metric("Applications", tenants.length, `${pendingTenants} pending review`)}
-        ${metric("Approved", approvedTenants, `${suspendedTenants} suspended`)}
-        ${metric("Licence watch", expiringTenants, "expiring within 60 days")}
-        ${metric("District coverage", districtCoverage, "registered districts")}
-      </div>
-      ${renderRegistrationTab(activeTab, tenants, canCreateOnApi)}
-    </section>
-  `;
-}
-
-function registrationTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-registration-tab="${id}" type="button">${label}</button>`;
-}
-
-function renderRegistrationTab(activeTab, tenants, canCreateOnApi) {
-  if (activeTab === "review") return registrationReviewQueue(tenants, canCreateOnApi);
-  if (activeTab === "packages") return registrationPackageSummary(tenants);
-  return registrationApplicationList(tenants, canCreateOnApi);
-}
-
-function registrationApplicationList(tenants, canCreateOnApi) {
-  return `
-    <div class="toolbar" style="margin-top:16px">
-      <div class="filters">
-        <input class="input" id="registrationSearch" placeholder="Search SACCO, district, package, status">
-        <select class="select" id="registrationStatusFilter">
-          <option value="">All statuses</option>
-          <option value="Pending Review">Pending Review</option>
-          <option value="Approved">Approved</option>
-          <option value="Suspended">Suspended</option>
-          <option value="Active">Active</option>
-        </select>
-      </div>
-      ${canCreateOnApi ? `<button class="primary-button" data-action="newTenant" type="button">New SACCO application</button>` : `<span class="pill">View only</span>`}
-    </div>
-    ${apiSyncNotice("SACCO applications")}
-    <div id="registrationList">
-      ${registrationApplicationRows(tenants, canCreateOnApi)}
-    </div>
-  `;
-}
-
-function registrationApplicationRows(tenants, canCreateOnApi) {
-  return `
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>Application</th><th>SACCO</th><th>Contact</th><th>Package</th><th>Review status</th><th>Actions</th></tr></thead>
-        <tbody>
-          ${tenants.map((tenant) => `
-            <tr>
-              <td>${tenant.registrationNo}<br><small>Submitted ${tenant.source ? "via Java API" : "from demo"}</small></td>
-              <td><strong>${tenant.name}</strong><br><small>${tenant.district} &middot; ${tenant.onboarding || 0}% complete</small></td>
-              <td>${tenant.contactName || "Authorized contact pending"}<br><small>${tenant.phone || "Telephone not captured"}</small></td>
-              <td>${packageName(tenant.packageId)}<br><small>${tenant.members || tenant.memberCount || "Member count pending"} members</small></td>
-              <td><span class="status ${statusClass(tenant.status)}">${tenant.status}</span><br><small>Licence: ${tenant.licenseExpiry}</small></td>
-              <td><div class="filters">
-                ${apiState.user ? `<button class="secondary-button" data-tenant-profile="${tenant.id}" type="button">View</button>` : ""}
-                ${apiState.user ? `<button class="secondary-button" data-tenant-review="${tenant.id}" type="button">Details</button>` : ""}
-                ${canCreateOnApi ? `<button class="secondary-button" data-approve-tenant="${tenant.id}" type="button">Approve</button>` : ""}
-              </div></td>
-            </tr>
-          `).join("") || `<tr><td colspan="6">No SACCO applications found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function registrationReviewQueue(tenants, canCreateOnApi) {
-  const queue = tenants.filter((tenant) => tenant.status !== "Approved");
-  return `
-    <div class="grid two" style="margin-top:16px">
-      ${queue.map((tenant) => `
-        <article class="card">
-          <div class="toolbar">
-            <div>
-              <h3>${tenant.name}</h3>
-              <p class="eyebrow">${tenant.registrationNo} &middot; ${tenant.district}</p>
-            </div>
-            <span class="status ${statusClass(tenant.status)}">${tenant.status}</span>
-          </div>
-          <div class="grid two compact-facts" style="margin-top:12px">
-            ${miniFact("Package", packageName(tenant.packageId))}
-            ${miniFact("Onboarding", `${tenant.onboarding || 0}%`)}
-            ${miniFact("Licence expiry", tenant.licenseExpiry)}
-            ${miniFact("Reviewer", tenant.reviewer || "Unassigned")}
-          </div>
-          <div class="toolbar" style="margin-top:14px;margin-bottom:0">
-            <button class="secondary-button" data-tenant-review="${tenant.id}" type="button">Review details</button>
-            ${canCreateOnApi ? `<button class="primary-button" data-approve-tenant="${tenant.id}" type="button">Approve</button>` : ""}
-          </div>
-        </article>
-      `).join("") || `<div class="notice">No applications require review.</div>`}
-    </div>
-  `;
-}
-
-function registrationPackageSummary(tenants) {
-  const packageIds = [...new Set(tenants.map((tenant) => tenant.packageId).filter(Boolean))];
-  return `
-    <div class="grid three" style="margin-top:16px">
-      ${packageIds.map((packageId) => {
-        const rows = tenants.filter((tenant) => tenant.packageId === packageId);
-        return `
-          <article class="card">
-            <h3>${packageName(packageId)}</h3>
-            <p class="eyebrow">${rows.length} SACCO application(s)</p>
-            <div class="grid two compact-facts" style="margin-top:12px">
-              ${miniFact("Approved", rows.filter((tenant) => tenant.status === "Approved").length)}
-              ${miniFact("Pending", rows.filter((tenant) => tenant.status !== "Approved").length)}
-            </div>
-          </article>
-        `;
-      }).join("") || `<div class="notice">No package selections found.</div>`}
-    </div>
-  `;
-}
-
-function renderSubscriptions() {
-  const packages = useApiSubscriptions() ? apiState.subscriptionPackages.map(apiPackageToRow) : state.packages;
-  const subscriptions = useApiSubscriptions() ? apiState.subscriptions.map(apiSubscriptionToRow) : state.subscriptions;
-  const canRecordApiPayment = !apiState.user || hasPermission("subscriptions:manage");
-  const source = useApiSubscriptions() ? "API-backed" : "Local demo";
-  const activeTab = state.subscriptionTab || "overview";
-  const billingRows = subscriptions.map((subscription) => subscriptionBillingDetails(subscription));
-  const invoiceTotal = billingRows.reduce((sum, billing) => sum + billing.amount, 0);
-  const paidTotal = billingRows.reduce((sum, billing) => sum + billing.paid, 0);
-  const outstandingTotal = Math.max(0, invoiceTotal - paidTotal);
-  const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === "Active").length;
-  const expiringSubscriptions = subscriptions.filter((subscription) => {
-    const days = daysTo(subscription.expiry);
-    return days >= 0 && days <= 30;
-  }).length;
-  const expiredSubscriptions = subscriptions.filter((subscription) => daysTo(subscription.expiry) < 0).length;
-  const pendingPayments = billingRows.filter((billing) => billing.paid < billing.amount).length;
-  const billableMembers = billingRows.reduce((sum, billing) => sum + billing.billableMembers, 0);
-  const packageDistribution = packages
-    .map((pkg) => `${pkg.name}: ${subscriptions.filter((subscription) => subscription.packageId === pkg.id).length}`)
-    .join(" | ") || "No packages";
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Subscriptions data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; billing and payment activation</p>
-        </div>
-        <div class="filters">
-          ${apiState.user ? refreshApiButton("Refresh backend data") : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
-          ${useApiSubscriptions() && !canRecordApiPayment ? "" : `<button class="primary-button" data-action="recordSubscriptionPayment" type="button">Record payment</button>`}
-        </div>
-      </div>
-      ${apiSyncNotice("Subscriptions screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", source)}
-        ${miniFact("Last sync", apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed")}
-        ${miniFact("Payment access", canRecordApiPayment ? "Platform" : (apiState.user ? "View only" : "Demo"))}
-        ${miniFact("Outstanding", money.format(outstandingTotal))}
-      </div>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Subscription management</h2>
-          <p class="eyebrow">${source} &middot; onboarding activation, invoices, payments and package control</p>
-        </div>
-        <div class="filters">
-          ${subscriptionTabButton("overview", "Overview", activeTab)}
-          ${subscriptionTabButton("invoices", "Invoices", activeTab)}
-          ${subscriptionTabButton("payments", "Payments", activeTab)}
-          ${subscriptionTabButton("packages", "Packages", activeTab)}
-        </div>
-      </div>
-      <div class="grid metrics">
-        ${metric("Invoice total", money.format(invoiceTotal), `${subscriptions.length} subscription invoice(s)`)}
-        ${metric("Paid", money.format(paidTotal), `${money.format(outstandingTotal)} outstanding`)}
-        ${metric("Active SACCOs", activeSubscriptions, `${expiringSubscriptions} expiring within 30 days`)}
-        ${metric("Billable members", billableMembers, `${MINIMUM_BILLABLE_MEMBERS} member minimum applies`)}
-      </div>
-      ${renderSubscriptionTab(activeTab, packages, subscriptions, billingRows, {
-        source,
-        canRecordApiPayment,
-        invoiceTotal,
-        paidTotal,
-        outstandingTotal,
-        activeSubscriptions,
-        expiringSubscriptions,
-        expiredSubscriptions,
-        pendingPayments,
-        billableMembers,
-        packageDistribution
-      })}
-    </section>
-  `;
-}
-
-function subscriptionTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-subscription-tab="${id}" type="button">${label}</button>`;
-}
-
-function renderSubscriptionTab(activeTab, packages, subscriptions, billingRows, summary) {
-  if (activeTab === "invoices") return renderSubscriptionInvoices(subscriptions, summary);
-  if (activeTab === "payments") return renderSubscriptionPayments(subscriptions, billingRows, summary);
-  if (activeTab === "packages") return renderSubscriptionPackages(packages, subscriptions, summary);
-  return renderSubscriptionOverview(subscriptions, summary);
-}
-
-function renderSubscriptionOverview(subscriptions, summary) {
-  return `
-    <div class="grid four compact-facts" style="margin-top:16px">
-      ${miniFact("Expiring soon", summary.expiringSubscriptions)}
-      ${miniFact("Expired", summary.expiredSubscriptions)}
-      ${miniFact("Pending payments", summary.pendingPayments)}
-      ${miniFact("Packages", summary.packageDistribution)}
-    </div>
-    <div class="notice" style="margin-top:16px">
-      <strong>Activation gate:</strong> a SACCO should only operate when its tenant approval and subscription payment are both active.
-      ${summary.canRecordApiPayment ? "Billing officers can record confirmed payments from this screen." : "This user can review subscription state only."}
-    </div>
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>SACCO</th><th>Package</th><th>Billing period</th><th>Payment status</th><th>Subscription status</th><th>Action</th></tr></thead>
-        <tbody>
-          ${subscriptions.map((subscription) => subscriptionSummaryRow(subscription, summary)).join("") || `<tr><td colspan="6">No subscriptions found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderSubscriptionInvoices(subscriptions, summary) {
-  return `
-    <div class="toolbar" style="margin-top:16px">
-      <div>
-        <h3>Invoices and receipts</h3>
-        <p class="eyebrow">${summary.source} &middot; invoice register and receipt evidence</p>
-      </div>
-      ${apiState.user ? refreshApiButton() : ""}
-    </div>
-    ${apiSyncNotice("Invoices and payments")}
-    <div class="table-wrap" style="margin-top:12px">
-      <table>
-        <thead><tr><th>Invoice</th><th>SACCO</th><th>Package / billing</th><th>Members / branches</th><th>Amount</th><th>Payment</th><th>Expiry</th><th>Actions</th></tr></thead>
-        <tbody>
-          ${subscriptions.map((subscription) => subscriptionInvoiceRow(subscription, summary)).join("") || `<tr><td colspan="8">No subscriptions found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderSubscriptionPayments(subscriptions, billingRows, summary) {
-  const outstandingRows = subscriptions.filter((subscription) => {
-    const billing = subscriptionBillingDetails(subscription);
-    return billing.paid < billing.amount;
-  });
-  return `
-    <div class="grid three compact-facts" style="margin-top:16px">
-      ${miniFact("Collected", money.format(summary.paidTotal))}
-      ${miniFact("Outstanding", money.format(summary.outstandingTotal))}
-      ${miniFact("Payment access", summary.canRecordApiPayment ? "Record enabled" : "View only")}
-    </div>
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>SACCO</th><th>Invoice</th><th>Expected</th><th>Paid</th><th>Outstanding</th><th>Status</th><th>Action</th></tr></thead>
-        <tbody>
-          ${outstandingRows.map((subscription) => subscriptionPaymentRow(subscription, summary)).join("") || `<tr><td colspan="7">No outstanding subscription payments.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderSubscriptionPackages(packages, subscriptions, summary) {
-  return `
-    <div class="notice" style="margin-top:16px">
-      <strong>Package configuration:</strong> Super Admin owns tier changes. Billing and Operations can use this view for package coverage and onboarding checks.
-    </div>
-    <div class="grid three" style="margin-top:16px">
-      <article class="notice">
-        <h3>100-250 members</h3>
-        <p><strong>${money.format(SUBSCRIPTION_UNIT_PRICE)}</strong> per member / year</p>
-        <ul class="list">
-          <li><span>Minimum billable members</span><strong>${MINIMUM_BILLABLE_MEMBERS}</strong></li>
-          <li><span>Minimum annual invoice</span><strong>${money.format(MINIMUM_BILLABLE_MEMBERS * SUBSCRIPTION_UNIT_PRICE)}</strong></li>
-          <li><span>Applies up to</span><strong>250 members</strong></li>
-        </ul>
-      </article>
-      ${packages.map((pkg) => `
-        <article class="notice">
-          <h3>${pkg.name}</h3>
-          <p><strong>${money.format(pkg.price)}</strong> per year</p>
-          <ul class="list">
-            <li><span>Billing band</span><strong>${pkg.tierLabel || `Up to ${pkg.members.toLocaleString()}`}</strong></li>
-            <li><span>Member limit</span><strong>${pkg.members.toLocaleString()}</strong></li>
-            <li><span>Users</span><strong>${pkg.users}</strong></li>
-            <li><span>Branches</span><strong>${pkg.branches}</strong></li>
-            <li><span>Subscribed SACCOs</span><strong>${subscriptions.filter((subscription) => subscription.packageId === pkg.id).length}</strong></li>
-          </ul>
-        </article>
-      `).join("")}
-    </div>
-  `;
-}
-
-function subscriptionSummaryRow(sub, summary) {
-  const billing = subscriptionBillingDetails(sub);
-  return `
-    <tr>
-      <td>${tenantName(sub.tenantId)}${sub.source ? `<br><small>${sub.source}</small>` : ""}</td>
-      <td>${packageName(sub.packageId)}<br><small>${billing.tierLabel}</small></td>
-      <td>Annual<br><small>Expires ${sub.expiry}</small></td>
-      <td><span class="status ${statusClass(subscriptionPaymentStatus(billing))}">${subscriptionPaymentStatus(billing)}</span></td>
-      <td><span class="status ${statusClass(sub.status)}">${sub.status}</span></td>
-      <td><button class="secondary-button" data-subscription-view="${sub.id}" type="button">View</button></td>
-    </tr>
-  `;
-}
-
-function subscriptionInvoiceRow(sub, summary) {
-  const billing = subscriptionBillingDetails(sub);
-  const outstanding = Math.max(0, billing.amount - billing.paid);
-  return `
-    <tr>
-      <td>${sub.invoice}${sub.source ? `<br><small>${sub.source}</small>` : ""}</td>
-      <td>${tenantName(sub.tenantId)}</td>
-      <td>${packageName(sub.packageId)}<br><small>${billing.tierLabel}</small></td>
-      <td>${billing.memberCount.toLocaleString()} members<br><small>${billing.billableMembers.toLocaleString()} billable</small></td>
-      <td>${money.format(billing.amount)}</td>
-      <td><span class="status ${statusClass(subscriptionPaymentStatus(billing))}">${subscriptionPaymentStatus(billing)}</span><br><small>${money.format(billing.paid)} paid, ${money.format(outstanding)} due</small></td>
-      <td>${sub.expiry}</td>
-      <td class="row-actions">
-        <button class="secondary-button" data-subscription-document="invoice" data-subscription-id="${sub.id}" type="button">Invoice</button>
-        <button class="secondary-button" data-subscription-document="receipt" data-subscription-id="${sub.id}" type="button">Receipt</button>
-        ${summary.canRecordApiPayment && outstanding > 0 ? `<button class="primary-button" data-subscription-pay="${sub.id}" type="button">Record payment</button>` : ""}
-      </td>
-    </tr>
-  `;
-}
-
-function subscriptionPaymentRow(sub, summary) {
-  const billing = subscriptionBillingDetails(sub);
-  const outstanding = Math.max(0, billing.amount - billing.paid);
-  return `
-    <tr>
-      <td>${tenantName(sub.tenantId)}</td>
-      <td>${sub.invoice}</td>
-      <td>${money.format(billing.amount)}</td>
-      <td>${money.format(billing.paid)}</td>
-      <td>${money.format(outstanding)}</td>
-      <td><span class="status ${statusClass(subscriptionPaymentStatus(billing))}">${subscriptionPaymentStatus(billing)}</span></td>
-      <td>${summary.canRecordApiPayment ? `<button class="primary-button" data-subscription-pay="${sub.id}" type="button">Record payment</button>` : `<span class="pill">View only</span>`}</td>
-    </tr>
-  `;
-}
-
-function subscriptionPaymentStatus(billing) {
-  if (billing.paid >= billing.amount) return "Paid";
-  if (billing.paid > 0) return "Partially Paid";
-  return "Unpaid";
-}
-
-function subscriptionRows() {
-  return useApiSubscriptions() ? apiState.subscriptions.map(apiSubscriptionToRow) : state.subscriptions;
-}
-
-function findSubscriptionRow(subscriptionId) {
-  return subscriptionRows().find((subscription) => subscription.id === subscriptionId);
-}
-
-function openSubscriptionDetails(subscriptionId) {
-  const subscription = findSubscriptionRow(subscriptionId);
-  if (!subscription) return;
-  const billing = subscriptionBillingDetails(subscription);
-  const outstanding = Math.max(0, billing.amount - billing.paid);
-  openModal("Subscription details", `
-    <div class="grid two compact-facts">
-      ${miniFact("SACCO", tenantName(subscription.tenantId))}
-      ${miniFact("Package", packageName(subscription.packageId))}
-      ${miniFact("Invoice", subscription.invoice)}
-      ${miniFact("Expiry", subscription.expiry)}
-    </div>
-    <div class="grid three" style="margin-top:16px">
-      ${metric("Members covered", billing.memberCount.toLocaleString(), `${billing.billableMembers.toLocaleString()} billable members`)}
-      ${metric("Invoice amount", money.format(billing.amount), billing.billingDescription)}
-      ${metric("Outstanding", money.format(outstanding), subscriptionPaymentStatus(billing))}
-    </div>
-    <div class="notice" style="margin-top:16px">
-      <strong>Approval and payment state:</strong> tenant activation, invoice payment, and subscription status must all be valid before production access is enabled.
-    </div>
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>Tab</th><th>Operational evidence</th></tr></thead>
-        <tbody>
-          <tr><td>Overview</td><td>${tenantName(subscription.tenantId)} is on ${packageName(subscription.packageId)} with status ${subscription.status}.</td></tr>
-          <tr><td>Payments</td><td>${money.format(billing.paid)} collected and ${money.format(outstanding)} outstanding.</td></tr>
-          <tr><td>Invoice</td><td>${subscription.invoice} covers ${billing.tierLabel} for the annual cycle.</td></tr>
-          <tr><td>Audit Trail</td><td>${subscription.source || "Demo"} subscription source, last sync ${apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed"}.</td></tr>
-        </tbody>
-      </table>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Close</button>${outstanding > 0 && (!apiState.user || hasPermission("subscriptions:manage")) ? `<button class="primary-button" id="modalSubscriptionPayment" type="button">Record payment</button>` : ""}`);
-
-  document.getElementById("modalSubscriptionPayment")?.addEventListener("click", () => recordSubscriptionPayment(subscriptionId));
-}
-
-function openSubscriptionDocument(subscriptionId, documentType) {
-  const subscription = findSubscriptionRow(subscriptionId);
-  if (!subscription) return;
-  const billing = subscriptionBillingDetails(subscription);
-  const outstanding = Math.max(0, billing.amount - billing.paid);
-  const title = documentType === "receipt" ? "Receipt preview" : "Invoice preview";
-  openModal(title, `
-    <div class="notice">
-      <strong>${documentType === "receipt" ? "Receipt" : "Invoice"} ${subscription.invoice}</strong><br>
-      ${tenantName(subscription.tenantId)} &middot; ${packageName(subscription.packageId)} &middot; ${billing.tierLabel}
-    </div>
-    <ul class="list" style="margin-top:16px">
-      <li><span>Billing period</span><strong>Annual cycle ending ${subscription.expiry}</strong></li>
-      <li><span>Members covered</span><strong>${billing.billableMembers.toLocaleString()}</strong></li>
-      <li><span>Invoice amount</span><strong>${money.format(billing.amount)}</strong></li>
-      <li><span>Paid</span><strong>${money.format(billing.paid)}</strong></li>
-      <li><span>Outstanding</span><strong>${money.format(outstanding)}</strong></li>
-      <li><span>Payment status</span><strong>${subscriptionPaymentStatus(billing)}</strong></li>
-    </ul>
-  `, `<button class="secondary-button" value="cancel" type="submit">Close</button>`);
-}
-
-function renderMembers() {
-  const members = useApiMembers() ? apiState.members.map(apiMemberToRow) : tenantScoped(state.members);
-  const source = useApiMembers() ? "API-backed" : "Local demo";
-  const activeMembers = members.filter((member) => member.status === "Active").length;
-  const verifiedMembers = members.filter((member) => member.kyc === "Verified").length;
-  const totalSavings = members.reduce((sum, member) => sum + (member.savings || 0), 0);
-  const totalShares = members.reduce((sum, member) => sum + (member.shares || 0), 0);
-  const totalWelfare = members.reduce((sum, member) => sum + (member.welfare || 0), 0);
-  const branchCount = new Set(members.map((member) => member.branchId).filter(Boolean)).size;
-  const membersWithoutBranch = members.filter((member) => !member.branchId).length;
-  const staleMemberLabel = apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed";
-  const canCreateMembers = hasPermission("members:create");
-  const activeTab = state.membersTab || "oversight";
-  const tenantCount = new Set(members.map((member) => member.tenantId).filter(Boolean)).size;
-  const isSecretary = state.workspace === "secretary";
-  const isSaccoAdmin = state.workspace === "saccoAdmin";
-  const membersTitle = isSecretary ? "Secretary member records" : isSaccoAdmin ? "SACCO member administration" : "Platform member oversight";
-  const membersSubtitle = isSecretary
-    ? `${source} &middot; member register, KYC, branch coverage, complaints and board-pack readiness`
-    : isSaccoAdmin
-      ? `${source} &middot; member registration, KYC, branches, balances, statements and account readiness`
-    : `${source} &middot; cross-SACCO member health, KYC, balances and support visibility`;
-  return `
-    ${workspaceOverview()}
-    <div class="grid metrics">
-      ${metric("Members", members.length, `${activeMembers} active`)}
-      ${metric("KYC verified", `${verifiedMembers}/${members.length}`, `${members.length - verifiedMembers} pending or expired`)}
-      ${metric("Branch coverage", branchCount, useApiMembers() ? "backend branches represented" : "demo branches represented")}
-      ${metric("Member funds", money.format(totalSavings + totalShares + totalWelfare), "savings + shares + welfare")}
-    </div>
-
-    <section class="card integration-panel" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Members data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; balances and KYC</p>
-        </div>
-        <div class="filters">
-          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
-          ${canCreateMembers ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>
-          <button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>` : `<span class="pill">View only</span>`}
-        </div>
-      </div>
-      ${apiSyncNotice("Members screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", source)}
-        ${miniFact("Last sync", staleMemberLabel)}
-        ${miniFact("Unassigned branch", membersWithoutBranch)}
-        ${miniFact("Balance source", useApiMembers() ? "Server fields" : "Demo seed / Server fields after login")}
-      </div>
-    </section>
-
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>${membersTitle}</h2>
-          <p class="eyebrow">${membersSubtitle}</p>
-        </div>
-        <div class="filters">
-          ${membersTabButton("oversight", "Oversight", activeTab)}
-          ${membersTabButton("balances", "Balances", activeTab)}
-          ${membersTabButton("register", "Register", activeTab)}
-          ${apiState.user ? `<button class="secondary-button" data-view-jump="operations" type="button">View operations health</button>` : ""}
-        </div>
-      </div>
-      <div class="grid four">
-        ${metric("Savings", money.format(totalSavings), "member deposit balances")}
-        ${metric("Shares", money.format(totalShares), "member share capital")}
-        ${metric("Welfare", money.format(totalWelfare), "member welfare balances")}
-        ${metric("SACCO coverage", tenantCount, state.workspace === "platformAdmin" ? "tenant member scope" : "current SACCO")}
-      </div>
-      ${renderMembersTab(activeTab, members, { source, canCreateMembers, activeMembers, verifiedMembers, branchCount, membersWithoutBranch, isSecretary, isSaccoAdmin })}
-    </section>
-  `;
-}
-
-function membersTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-members-tab="${id}" type="button">${label}</button>`;
-}
-
-function renderMembersTab(activeTab, members, summary) {
-  if (activeTab === "balances") {
-    const totalSavings = members.reduce((sum, member) => sum + (member.savings || 0), 0);
-    const totalShares = members.reduce((sum, member) => sum + (member.shares || 0), 0);
-    const totalWelfare = members.reduce((sum, member) => sum + (member.welfare || 0), 0);
-    return `
-      <div class="notice" style="margin-top:16px">
-        <strong>${summary.isSecretary ? "Secretary balance context" : summary.isSaccoAdmin ? "SACCO balance context" : "Balance oversight"}:</strong> ${summary.isSecretary ? "review member balance context for statements, complaints and board packs without posting finance entries." : summary.isSaccoAdmin ? "review savings, shares and welfare balances alongside member statements and account readiness." : "platform users review server-confirmed totals and open member statements without changing SACCO teller records."}
-      </div>
-      <div class="grid three" style="margin-top:16px">
-        ${metric("Savings", money.format(totalSavings), "server field totals")}
-        ${metric("Shares", money.format(totalShares), "share capital totals")}
-        ${metric("Welfare", money.format(totalWelfare), "welfare balances")}
-      </div>
-    `;
-  }
-  if (activeTab === "register") {
-    return `
-      <div class="notice" style="margin-top:16px">
-        <strong>${summary.isSecretary ? "Secretary member register" : summary.isSaccoAdmin ? "SACCO member register" : "Member register"}:</strong> ${summary.isSecretary ? "search member files, follow KYC gaps, inspect profiles, and prepare board records." : summary.isSaccoAdmin ? "register members, follow KYC gaps, inspect profiles, open statements and maintain branch coverage." : "search across member records, inspect profiles, and open statements. SACCO staff handle day-to-day registration unless this user has member creation permission."}
-      </div>
-      <div class="toolbar">
-        <div>
-          <h2>Member register</h2>
-          <p class="eyebrow">${summary.source} &middot; KYC, status, balances and branch access</p>
-        </div>
-        <div class="filters">
-          <input class="input" id="memberSearch" placeholder="Search members">
-          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
-          ${apiState.user && summary.canCreateMembers ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>` : ""}
-          ${apiState.user && summary.canCreateMembers ? `<button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>` : ""}
-          ${summary.canCreateMembers ? `<button class="primary-button" data-action="newMember" type="button">Register member</button>` : `<span class="pill">View only</span>`}
-        </div>
-      </div>
-      ${apiSyncNotice("Member register")}
-      <div class="table-wrap">
-        <table id="membersTable">
-          <thead><tr><th>Member</th><th>Type</th><th>Branch</th><th>KYC</th><th>Savings</th><th>Shares</th><th>Welfare</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody>
-            ${members.map(memberRow).join("") || `<tr><td colspan="9">No members found.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    `;
-  }
-  return `
-    <div class="notice" style="margin-top:16px">
-      <strong>${summary.isSecretary ? "Secretary oversight" : summary.isSaccoAdmin ? "SACCO admin oversight" : "Platform oversight"}:</strong> ${summary.isSecretary ? "this view is for member health, KYC exceptions, branch coverage, complaint context and board-pack preparation." : summary.isSaccoAdmin ? "this view is for member growth, KYC exceptions, branch coverage, account readiness and member support follow-up." : "this view is for member health, KYC exceptions, branch coverage, and support context across subscribing SACCOs."}
-    </div>
-    <div class="grid four compact-facts" style="margin-top:16px">
-      ${miniFact("Active members", summary.activeMembers)}
-      ${miniFact("KYC verified", `${summary.verifiedMembers}/${members.length}`)}
-      ${miniFact("Branch coverage", summary.branchCount)}
-      ${miniFact("Unassigned branch", summary.membersWithoutBranch)}
-    </div>
-  `;
-}
-
-function renderTransactions() {
-  const transactions = useApiTransactions() ? apiState.financialTransactions.map(apiTransactionToRow) : tenantScoped(state.transactions);
-  const welfareClaims = useApiWelfareClaims() ? apiState.welfareClaims.map(apiWelfareClaimToRow) : [];
-  const products = apiState.financialProducts || [];
-  const accounts = apiState.financialAccounts || [];
-  const source = useApiTransactions() ? "API-backed" : "Local demo";
-  const postedTransactions = transactions.filter((tx) => tx.status === "Posted");
-  const pendingTransactions = transactions.filter((tx) => tx.status === "Pending Approval");
-  const rejectedTransactions = transactions.filter((tx) => tx.status === "Rejected");
-  const reversalTransactions = transactions.filter((tx) => tx.originalTransactionId);
-  const reversedOriginalIds = new Set(reversalTransactions.map((tx) => tx.originalTransactionId));
-  const reversibleTransactions = postedTransactions.filter((tx) => !tx.originalTransactionId && !reversedOriginalIds.has(tx.id));
-  const postedTotal = postedTransactions.filter((tx) => !tx.originalTransactionId).reduce((sum, tx) => sum + tx.amount, 0);
-  const pendingTotal = pendingTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-  const reversalTotal = reversalTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-  const distinctMembers = new Set(transactions.map((tx) => tx.memberId).filter(Boolean)).size;
-  const channelCount = new Set(transactions.map((tx) => tx.channel).filter(Boolean)).size;
-  const pendingClaims = welfareClaims.filter((claim) => claim.status === "Submitted").length;
-  const approvedClaims = welfareClaims.filter((claim) => claim.status === "Approved").length;
-  const paidClaimTotal = welfareClaims.filter((claim) => claim.status === "Paid").reduce((sum, claim) => sum + claim.amount, 0);
-  const accountCoverage = new Set(accounts.map((item) => item.memberId).filter(Boolean)).size;
-  const activeTab = state.transactionsTab || "postings";
-  const canPostTransactions = !apiState.user || hasPermission("transactions:create");
-  const canManageProducts = !apiState.user || hasPermission("financial-products:manage") || hasPermission("transactions:create");
-  const isTreasurer = state.workspace === "treasurer";
-  const isSaccoAdmin = state.workspace === "saccoAdmin";
-  const transactionTitle = isTreasurer ? "Treasurer transaction workbench" : isSaccoAdmin ? "SACCO finance administration" : "Platform transaction oversight";
-  const transactionSubtitle = isTreasurer
-    ? `${source} &middot; collections, reversals, member statements, welfare payouts and reconciliation support`
-    : isSaccoAdmin
-      ? `${source} &middot; postings, financial products, accounts, approvals, statements, reversals and welfare claims`
-    : `${source} &middot; teller intake, checker queue, receipts, statements, reversals and welfare`;
-  const transactionNotice = isTreasurer
-    ? "Treasurer focus: post and review financial movement, monitor pending checker items, issue receipts, open member statements, and prepare reconciliation evidence."
-    : isSaccoAdmin
-      ? "SACCO admin focus: manage financial setup and daily flow across postings, products, accounts, approvals, statements and welfare support."
-    : "Platform oversight: platform users monitor financial flow and exceptions; SACCO treasurers handle normal posting unless the role explicitly allows posting.";
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Transactions data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; postings, accounts and welfare</p>
-        </div>
-        <div class="filters">
-          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
-          ${apiState.user ? `<button class="secondary-button" data-action="openingBalanceImport" type="button">Opening balances</button>` : ""}
-          ${canPostTransactions ? `<button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>` : `<span class="pill">View only</span>`}
-        </div>
-      </div>
-      ${apiSyncNotice("Transactions screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", source)}
-        ${miniFact("Last sync", apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed")}
-        ${miniFact("Products", useApiTransactions() ? products.length : "Demo")}
-        ${miniFact("Account coverage", useApiTransactions() ? accountCoverage : distinctMembers)}
-      </div>
-    </section>
-    ${apiState.user ? `
-    ${activeTab === "accounts" ? `
-      <section class="card" style="margin-top:16px">
-        <div class="toolbar">
-          <div>
-            <h2>Products and accounts</h2>
-            <p class="eyebrow">API-backed &middot; savings, shares and welfare setup</p>
-          </div>
-          <div class="filters">
-            ${canManageProducts ? `<button class="secondary-button" data-action="newFinancialAccount" type="button">Open account</button>
-            <button class="primary-button" data-action="newFinancialProduct" type="button">New product</button>` : `<span class="pill">View only</span>`}
-          </div>
-        </div>
-        <div class="grid metrics">
-          ${metric("Products", products.length, `${products.filter((item) => item.status === "active").length} active`)}
-          ${metric("Accounts", accounts.length, `${accounts.filter((item) => item.status === "active").length} active`)}
-          ${metric("Members covered", accountCoverage, "with financial accounts")}
-        </div>
-        <div class="grid two" style="margin-top:16px">
-          ${financialProductTable(products)}
-          ${financialAccountTable(accounts)}
-        </div>
-      </section>
-    ` : ""}` : ""}
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>${transactionTitle}</h2>
-          <p class="eyebrow">${transactionSubtitle}</p>
-        </div>
-        <div class="filters">
-          ${transactionsTabButton("postings", "Postings", activeTab)}
-          ${transactionsTabButton("accounts", "Products and accounts", activeTab)}
-          ${transactionsTabButton("welfare", "Welfare", activeTab)}
-          ${apiState.user ? `<button class="secondary-button" data-view-jump="approvals" type="button">Open approvals</button>` : ""}
-        </div>
-      </div>
-      <div class="grid metrics">
-        ${metric("Posted value", money.format(postedTotal), `${postedTransactions.length} posted movement(s)`)}
-        ${metric("Pending value", money.format(pendingTotal), `${pendingTransactions.length} awaiting checker`)}
-        ${metric("Reversed value", money.format(reversalTotal), `${reversalTransactions.length} reversal movement(s)`)}
-        ${metric("Members touched", distinctMembers, `${channelCount} payment channel(s)`)}
-      </div>
-      <div class="grid three" style="margin-top:16px">
-        ${metric("Reversible", reversibleTransactions.length, "posted originals still eligible")}
-        ${metric("Rejected", rejectedTransactions.length, "declined by checker")}
-        ${metric("Statement-ready", postedTransactions.length, "posted rows in member statements")}
-      </div>
-      <div class="notice" style="margin-top:16px">
-        <strong>${isTreasurer ? "Treasurer focus" : isSaccoAdmin ? "SACCO admin focus" : "Platform oversight"}:</strong> ${transactionNotice.replace(/^Treasurer focus: |^SACCO admin focus: |^Platform oversight: /, "")}
-      </div>
-    </section>
-    ${activeTab === "postings" ? `<section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Financial postings</h2>
-          <p class="eyebrow">${source} &middot; Fixed precision amounts, references, maker-checker and reversals</p>
-        </div>
-        <div class="filters">
-          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
-          ${apiState.user ? `<button class="secondary-button" data-action="openingBalanceImport" type="button">Opening balances</button>` : ""}
-          ${canPostTransactions ? `<button class="primary-button" data-action="newTransaction" type="button">Post transaction</button>` : `<span class="pill">View only</span>`}
-        </div>
-      </div>
-      ${apiSyncNotice("Financial postings table")}
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Reference</th><th>Member</th><th>Type</th><th>Channel</th><th>Amount</th><th>Maker</th><th>Checker</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody>
-            ${transactions.map((tx) => `
-              <tr>
-                <td>${tx.ref}${tx.source ? `<br><small>${tx.source}${tx.originalTransactionId ? " reversal" : ""}</small>` : `<br><small>${tx.date}</small>`}</td>
-                <td>${memberName(tx.memberId)}</td>
-                <td>${tx.type}</td>
-                <td>${tx.channel}</td>
-                <td>${money.format(tx.amount)}</td>
-                <td>${tx.maker}</td>
-                <td>${tx.checker || "Pending"}</td>
-                <td><span class="status ${statusClass(tx.status)}">${tx.status}</span></td>
-                <td>${apiState.user ? transactionActions(tx) : ""}</td>
-              </tr>
-            `).join("") || `<tr><td colspan="9">No financial postings found.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    </section>` : ""}
-    ${apiState.user ? `
-      ${activeTab === "welfare" ? `
-      <section class="card" style="margin-top:16px">
-        <div class="toolbar">
-          <div>
-            <h2>Welfare claims</h2>
-            <p class="eyebrow">API-backed &middot; member support, approvals, payouts and welfare fund journals</p>
-          </div>
-          <div class="filters">
-            <button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>
-            <button class="primary-button" data-action="newWelfareClaim" type="button">New claim</button>
-          </div>
-        </div>
-        <div class="grid metrics">
-          ${metric("Submitted", pendingClaims, "awaiting decision")}
-          ${metric("Approved", approvedClaims, "ready for payment")}
-          ${metric("Paid", money.format(paidClaimTotal), "welfare support released")}
-        </div>
-        ${welfareClaimTable(welfareClaims)}
-      </section>
-      ` : ""}
-    ` : ""}
-  `;
-}
-
-function transactionsTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-transactions-tab="${id}" type="button">${label}</button>`;
-}
-
-function financialProductTable(products) {
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Code</th><th>Product</th><th>Type</th><th>Contribution</th><th>Minimum</th></tr></thead>
-        <tbody>
-          ${products.map((product) => `
-            <tr>
-              <td>${product.code}</td>
-              <td>${product.name}<br><small>${product.status}</small></td>
-              <td>${apiProductTypeLabel(product.productType)}</td>
-              <td>${money.format(product.contributionAmount || 0)}</td>
-              <td>${money.format(product.minimumBalance || 0)}</td>
-            </tr>
-          `).join("") || `<tr><td colspan="5">No products found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function financialAccountTable(accounts) {
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Account</th><th>Member</th><th>Product</th><th>Type</th><th>Status</th></tr></thead>
-        <tbody>
-          ${accounts.map((account) => `
-            <tr>
-              <td>${account.accountNo}</td>
-              <td>${account.memberName || memberName(account.memberId)}<br><small>${account.membershipNo || ""}</small></td>
-              <td>${account.productName || account.productCode}<br><small>${account.productCode || ""}</small></td>
-              <td>${apiProductTypeLabel(account.accountType)}</td>
-              <td><span class="status ${statusClass(account.status)}">${titleCase(account.status)}</span></td>
-            </tr>
-          `).join("") || `<tr><td colspan="5">No accounts found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function transactionActions(tx) {
-  const isPosted = tx.status === "Posted";
-  const canReverse = isPosted && !tx.originalTransactionId && !apiState.financialTransactions.some((item) => item.originalTransactionId === tx.id);
-  return `
-    <div class="filters">
-      <button class="secondary-button" data-member-statement="${tx.memberId}" type="button">Statement</button>
-      ${isPosted ? `<button class="secondary-button" data-transaction-receipt="${tx.id}" type="button">Receipt</button>` : ""}
-      ${canReverse ? `<button class="secondary-button" data-transaction-reversal="${tx.id}" type="button">Reverse</button>` : ""}
-    </div>
-  `;
-}
-
-function welfareClaimTable(claims) {
-  return `
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>Reference</th><th>Member</th><th>Type</th><th>Amount</th><th>Channel</th><th>Status</th><th>Timeline</th><th>Action</th></tr></thead>
-        <tbody>
-          ${claims.map((claim) => `
-            <tr>
-              <td>${claim.reference}<br><small>${claim.source}</small></td>
-              <td>${claim.memberName}<br><small>${claim.membershipNo}</small></td>
-              <td>${claim.claimType}<br><small>${claim.description || claim.rejectionReason || ""}</small></td>
-              <td>${money.format(claim.amount)}</td>
-              <td>${claim.channel}</td>
-              <td><span class="status ${statusClass(claim.status)}">${claim.status}</span></td>
-              <td>Submitted ${claim.submittedAt || "-"}${claim.paidAt ? `<br><small>Paid ${claim.paidAt}</small>` : ""}</td>
-              <td>${welfareClaimActions(claim)}</td>
-            </tr>
-          `).join("") || `<tr><td colspan="8">No welfare claims found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function welfareClaimActions(claim) {
-  if (claim.status === "Submitted") {
-    return `<button class="secondary-button" data-welfare-reject="${claim.id}" type="button">Reject</button><button class="primary-button" data-welfare-approve="${claim.id}" type="button">Approve</button>`;
-  }
-  if (claim.status === "Approved") {
-    return `<button class="primary-button" data-welfare-pay="${claim.id}" type="button">Pay</button>`;
-  }
-  return "";
-}
-
-function renderLoans() {
-  const loans = useApiLoans() ? apiState.loans.map(apiLoanToRow) : tenantScoped(state.loans);
-  const source = useApiLoans() ? "API-backed" : "Local demo";
-  const activeLoans = loans.filter((loan) => loan.status === "Active");
-  const submittedLoans = loans.filter((loan) => ["Submitted", "Under Review"].includes(loan.status));
-  const approvedLoans = loans.filter((loan) => loan.status === "Approved");
-  const closedLoans = loans.filter((loan) => loan.status === "Closed");
-  const portfolioValue = loans.reduce((sum, loan) => sum + loan.amount, 0);
-  const outstandingBalance = loans.reduce((sum, loan) => sum + loan.balance, 0);
-  const repaidValue = loans.reduce((sum, loan) => sum + (loan.repaymentTotal || 0), 0);
-  const pendingGuarantors = loans.reduce((sum, loan) => sum + (loan.pendingGuarantors || 0), 0);
-  const highDsrLoans = loans.filter((loan) => Number(loan.dsr || 0) >= 40).length;
-  const averageDsr = loans.length ? Math.round(loans.reduce((sum, loan) => sum + Number(loan.dsr || 0), 0) / loans.length) : 0;
-  const repaymentCoverage = loans.filter((loan) => Number(loan.repaymentTotal || 0) > 0).length;
-  const activeTab = state.loansTab || "portfolio";
-  const canCreateLoans = !apiState.user || hasPermission("loans:create");
-  const isChairperson = state.workspace === "chairperson";
-  const isSaccoAdmin = state.workspace === "saccoAdmin";
-  const loansTitle = isChairperson ? "Chairperson loan oversight" : isSaccoAdmin ? "SACCO loan administration" : "Platform loan oversight";
-  const loansSubtitle = isChairperson
-    ? `${source} &middot; board decisions, portfolio risk, guarantor readiness, disbursement readiness and repayment exposure`
-    : isSaccoAdmin
-      ? `${source} &middot; applications, appraisal, guarantors, approvals, disbursements, repayments and portfolio risk`
-    : `${source} &middot; portfolio risk, applications, guarantors, disbursements and repayments`;
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Loans data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; portfolio, guarantors and repayments</p>
-        </div>
-        <div class="filters">
-          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
-          ${apiState.user ? `<button class="secondary-button" data-action="loanBookImport" type="button">Loan book import</button>` : ""}
-          ${apiState.user ? `<button class="secondary-button" data-action="repaymentHistoryImport" type="button">Repayment history</button>` : ""}
-          ${canCreateLoans ? `<button class="primary-button" data-action="newLoan" type="button">New loan application</button>` : `<span class="pill">View only</span>`}
-        </div>
-      </div>
-      ${apiSyncNotice("Loans screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", source)}
-        ${miniFact("Last sync", apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed")}
-        ${miniFact("Repayment coverage", repaymentCoverage)}
-        ${miniFact("Average DSR", `${averageDsr}%`)}
-      </div>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>${loansTitle}</h2>
-          <p class="eyebrow">${loansSubtitle}</p>
-        </div>
-        <div class="filters">
-          ${loansTabButton("portfolio", "Portfolio", activeTab)}
-          ${loansTabButton("files", "Loan files", activeTab)}
-          ${loansTabButton("guarantors", "Guarantors", activeTab)}
-          ${loansTabButton("repayments", "Repayments", activeTab)}
-          ${apiState.user ? `<button class="secondary-button" data-view-jump="approvals" type="button">Open approvals</button>` : ""}
-        </div>
-      </div>
-      <div class="grid metrics">
-        ${metric("Portfolio value", money.format(portfolioValue), `${loans.length} loan file(s)`)}
-        ${metric("Outstanding", money.format(outstandingBalance), `${activeLoans.length} active loan(s)`)}
-        ${metric("Ready to disburse", approvedLoans.length, "approved and awaiting payout")}
-        ${metric("Repayments", money.format(repaidValue), `${closedLoans.length} closed loan(s)`)}
-      </div>
-      <div class="grid three" style="margin-top:16px">
-        ${metric("Applications", submittedLoans.length, "submitted or under review")}
-        ${metric("Guarantor pending", pendingGuarantors, "member decisions needed")}
-        ${metric("DSR watch", highDsrLoans, `${averageDsr}% average DSR`)}
-      </div>
-      ${renderLoansTabSummary(activeTab, loans, { activeLoans, submittedLoans, approvedLoans, closedLoans, pendingGuarantors, highDsrLoans, averageDsr, repaidValue, isChairperson, isSaccoAdmin })}
-    </section>
-    ${activeTab === "files" ? `<section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Loan files</h2>
-          <p class="eyebrow">${source} &middot; Applications, appraisal, guarantors and portfolio risk</p>
-        </div>
-        <div class="filters">
-          ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
-          ${apiState.user ? `<button class="secondary-button" data-action="loanBookImport" type="button">Loan book import</button>` : ""}
-          ${apiState.user ? `<button class="secondary-button" data-action="repaymentHistoryImport" type="button">Repayment history</button>` : ""}
-          ${canCreateLoans ? `<button class="primary-button" data-action="newLoan" type="button">New loan application</button>` : `<span class="pill">View only</span>`}
-        </div>
-      </div>
-      ${apiSyncNotice("Loan files list")}
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Applicant</th><th>Product</th><th>Amount</th><th>Balance</th><th>Stage</th><th>Guarantors</th><th>DSR</th><th>Status</th><th>Action</th></tr></thead>
-          <tbody>
-            ${loans.map((loan) => `
-              <tr>
-                <td>${memberName(loan.memberId)}${loan.source ? `<br><small>${loan.source}</small>` : ""}</td>
-                <td>${loan.product}</td>
-                <td>${money.format(loan.amount)}</td>
-                <td>${money.format(loan.balance)}${loan.repaymentTotal ? `<br><small>${money.format(loan.repaymentTotal)} repaid</small>` : ""}</td>
-                <td>${loan.stage}</td>
-                <td>${loan.guarantors}${loan.pendingGuarantors ? `<br><small>${loan.pendingGuarantors} pending</small>` : ""}</td>
-                <td>${loan.dsr}%<br><small>${loanRiskLabel(loan.dsr)}</small></td>
-                <td><span class="status ${statusClass(loan.status)}">${loan.status}</span></td>
-                <td>${apiState.user ? loanActions(loan) : ""}</td>
-              </tr>
-            `).join("") || `<tr><td colspan="9">No loan files found.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    </section>` : ""}
-  `;
-}
-
-function loansTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-loans-tab="${id}" type="button">${label}</button>`;
-}
-
-function renderLoansTabSummary(activeTab, loans, summary) {
-  if (activeTab === "guarantors") {
-    return `
-      <div class="notice" style="margin-top:16px">
-        <strong>${summary.isChairperson ? "Chairperson guarantor oversight" : summary.isSaccoAdmin ? "SACCO guarantor administration" : "Guarantor oversight"}:</strong> monitor pending guarantor requests and loans where member consent may block appraisal.
-      </div>
-      <div class="grid three" style="margin-top:16px">
-        ${metric("Pending guarantors", summary.pendingGuarantors, "member decisions needed")}
-        ${metric("Affected loan files", loans.filter((loan) => Number(loan.pendingGuarantors || 0) > 0).length, "awaiting guarantees")}
-        ${metric("Applications", summary.submittedLoans.length, "under review")}
-      </div>
-    `;
-  }
-  if (activeTab === "repayments") {
-    return `
-      <div class="notice" style="margin-top:16px">
-        <strong>${summary.isChairperson ? "Chairperson repayment oversight" : summary.isSaccoAdmin ? "SACCO repayment administration" : "Repayment oversight"}:</strong> track repayment coverage and active balances before SACCO portfolio reviews.
-      </div>
-      <div class="grid three" style="margin-top:16px">
-        ${metric("Repaid value", money.format(summary.repaidValue), "repayment history")}
-        ${metric("Loans with repayments", loans.filter((loan) => Number(loan.repaymentTotal || 0) > 0).length, "coverage")}
-        ${metric("Closed loans", summary.closedLoans.length, "completed files")}
-      </div>
-    `;
-  }
-  if (activeTab === "files") {
-    return `<div class="notice" style="margin-top:16px"><strong>${summary.isChairperson ? "Chairperson loan files" : summary.isSaccoAdmin ? "SACCO loan files" : "Loan files"}:</strong> inspect applications, appraisal stage, DSR, guarantors, approvals and repayment actions.</div>`;
-  }
-  return `
-    <div class="notice" style="margin-top:16px">
-      <strong>${summary.isChairperson ? "Chairperson portfolio oversight" : summary.isSaccoAdmin ? "SACCO portfolio administration" : "Portfolio oversight"}:</strong> ${summary.isChairperson ? "watch portfolio quality, approval bottlenecks, DSR risk, guarantor readiness and disbursement decisions before board approval." : summary.isSaccoAdmin ? "manage application flow, portfolio quality, approval bottlenecks, DSR risk, guarantor readiness and repayment follow-up." : "platform users watch portfolio quality, approval bottlenecks, DSR risk, and disbursement readiness across SACCOs."}
-    </div>
-  `;
-}
-
-function loanActions(loan) {
-  const status = String(loan.status).toLowerCase();
-  const canDecide = ["submitted", "under review"].includes(status);
-  const canDisburse = status === "approved";
-  const canRepay = status === "active";
-  return `
-    <div class="filters">
-      ${canDecide ? `<button class="secondary-button" data-loan-reject="${loan.id}" type="button">Reject</button><button class="primary-button" data-loan-approve="${loan.id}" type="button">Approve</button>` : ""}
-      ${canDisburse ? `<button class="primary-button" data-loan-disburse="${loan.id}" type="button">Disburse</button>` : ""}
-      ${canRepay ? `<button class="primary-button" data-loan-repay="${loan.id}" type="button">Record repayment</button>` : ""}
-      <button class="secondary-button" data-request-guarantor="${loan.id}" type="button">Request guarantor</button>
-    </div>
-  `;
-}
-
-function loanRiskLabel(dsr) {
-  const value = Number(dsr || 0);
-  if (value >= 45) return "High DSR";
-  if (value >= 35) return "Watch";
-  return "Healthy";
-}
-
-function renderApprovals() {
-  const approvals = apiState.user ? apiTransactionApprovalItems() : tenantScoped(state.approvals);
-  const workflows = apiState.approvalWorkflows || [];
-  const decisions = apiState.approvalDecisions || [];
-  const source = apiState.user ? "API-backed" : "Local demo";
-  const pendingTransactions = apiState.user ? apiState.financialTransactions.filter((transaction) => transaction.status === "pending_approval") : [];
-  const pendingValue = apiState.user
-    ? pendingTransactions.reduce((sum, transaction) => sum + transaction.amount, 0)
-    : approvals.length;
-  const highRiskApprovals = approvals.filter((approval) => approval.risk === "High").length;
-  const approvedDecisions = decisions.filter((decision) => decision.decision === "approved").length;
-  const rejectedDecisions = decisions.filter((decision) => decision.decision === "rejected").length;
-  const correctionDecisions = decisions.filter((decision) => decision.decision === "corrections_requested").length;
-  const activeWorkflowCount = workflows.filter((workflow) => workflow.active).length;
-  const workflowModules = new Set(workflows.map((workflow) => workflow.module).filter(Boolean)).size;
-  const isTreasurer = state.workspace === "treasurer";
-  const isSecretary = state.workspace === "secretary";
-  const isChairperson = state.workspace === "chairperson";
-  const isSaccoAdmin = state.workspace === "saccoAdmin";
-  const approvalTitle = isTreasurer ? "Treasurer approval queue" : isSecretary ? "Secretary review queue" : isChairperson ? "Chairperson decision queue" : isSaccoAdmin ? "SACCO approval administration" : "Approval control center";
-  const approvalSubtitle = isTreasurer
-    ? "API-backed &middot; finance checker queue, posting decisions, corrections and reversal approvals"
-    : isSecretary
-      ? "API-backed &middot; member records, KYC updates, governance items and board-pack review"
-      : isChairperson
-        ? "API-backed &middot; loan decisions, board approvals, high-risk items and operating exceptions"
-        : isSaccoAdmin
-          ? "API-backed &middot; maker-checker queue, workflow coverage, finance approvals, member approvals and decision history"
-    : "API-backed &middot; maker-checker queue, workflow coverage and decision history";
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Approvals data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; maker-checker and workflows</p>
-        </div>
-        <div class="filters">
-          ${apiState.user ? refreshApiButton("Refresh backend data") : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
-          ${apiState.user ? `<button class="primary-button" data-action="newApprovalWorkflow" type="button">New workflow</button>` : ""}
-        </div>
-      </div>
-      ${apiSyncNotice("Approvals screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", source)}
-        ${miniFact("Last sync", apiState.user ? formatSyncTime(apiState.lastSyncedAt) : "Demo seed")}
-        ${miniFact("Workflow coverage", apiState.user ? workflowModules : "Demo")}
-        ${miniFact("Checker queue", approvals.length)}
-      </div>
-    </section>
-    ${apiState.user ? `
-      <section class="card" style="margin-top:16px">
-        <div class="toolbar">
-          <div>
-            <h2>${approvalTitle}</h2>
-            <p class="eyebrow">${approvalSubtitle}</p>
-          </div>
-          ${refreshApiButton()}
-        </div>
-        <div class="grid metrics">
-          ${metric("Pending queue", approvals.length, `${highRiskApprovals} high-risk item(s)`)}
-          ${metric("Pending value", money.format(pendingValue), "financial postings awaiting checker")}
-          ${metric("Active workflows", activeWorkflowCount, `${workflowModules} module(s) covered`)}
-          ${metric("Decision history", decisions.length, `${approvedDecisions} approved, ${rejectedDecisions} rejected`)}
-        </div>
-        <div class="grid three" style="margin-top:16px">
-          ${metric("Corrections", correctionDecisions, "returned for follow-up")}
-          ${metric("Checker clear", approvals.length === 0 ? "Yes" : "No", approvals.length === 0 ? "no pending items" : "review required")}
-          ${metric("Queue source", "Backend", apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant")}
-        </div>
-        <div class="notice" style="margin-top:16px">
-          <strong>${isTreasurer ? "Treasurer checker focus" : isSecretary ? "Secretary review focus" : isChairperson ? "Chairperson decision focus" : isSaccoAdmin ? "SACCO approval focus" : "Approval focus"}:</strong> ${isTreasurer ? "confirm valid financial postings, return corrections, and keep the finance approval queue clean." : isSecretary ? "confirm member-record evidence, track KYC or governance items, and prepare clean decision notes." : isChairperson ? "prioritize loan decisions, high-risk approvals and board-sensitive exceptions with clear decision notes." : isSaccoAdmin ? "coordinate maker-checker workflows across finance, members, loans and governance so each queue has clear ownership." : "review pending items against configured maker-checker workflows."}
-        </div>
-      </section>
-      <section class="card" style="margin-top:16px">
-        <div class="toolbar">
-          <div>
-            <h2>Approval workflows</h2>
-            <p class="eyebrow">API-backed &middot; rules, modules and decision history</p>
-          </div>
-          <div class="filters">
-            <button class="secondary-button" data-action="newApprovalDecision" type="button">Record decision</button>
-            <button class="primary-button" data-action="newApprovalWorkflow" type="button">New workflow</button>
-          </div>
-        </div>
-        <div class="grid metrics">
-          ${metric("Workflows", workflows.length, `${workflows.filter((workflow) => workflow.active).length} active`)}
-          ${metric("Decisions", decisions.length, `${decisions.filter((decision) => decision.decision === "approved").length} approved`)}
-          ${metric("Corrections", decisions.filter((decision) => decision.decision === "corrections_requested").length, "requiring follow-up")}
-        </div>
-        <div class="grid two" style="margin-top:16px">
-          ${approvalWorkflowTable(workflows)}
-          ${approvalDecisionTable(decisions.slice(0, 8))}
-        </div>
-      </section>
-    ` : ""}
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Approval queue</h2>
-          <p class="eyebrow">${source} &middot; Committee, board and maker-checker decisions</p>
-        </div>
-        ${apiState.user ? refreshApiButton() : ""}
-      </div>
-      ${apiSyncNotice("Approval queue")}
-      <ul class="list">
-        ${approvals.map((approval) => `
-          <li>
-            <span>
-              <strong>${approval.title}</strong><br>
-              <small>${approval.type} requested by ${approval.requester} &middot; risk ${approval.risk}${approval.source ? ` &middot; ${approval.source}` : ""}</small>
-            </span>
-            <span class="filters">
-              <button class="secondary-button" data-reject="${approval.id}" type="button">Reject</button>
-              <button class="primary-button" data-approve="${approval.id}" type="button">Approve</button>
-            </span>
-          </li>
-        `).join("") || `<li><span>No pending approvals for this tenant.</span><span class="status active">Clear</span></li>`}
-      </ul>
-    </section>
-  `;
-}
-
-function approvalWorkflowTable(workflows) {
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Name</th><th>Module</th><th>Status</th></tr></thead>
-        <tbody>
-          ${workflows.map((workflow) => `
-            <tr>
-              <td><strong>${workflow.name}</strong><br><small>${tenantName(workflow.tenantId)}</small></td>
-              <td>${titleCase(workflow.module.replace(/_/g, " "))}</td>
-              <td><span class="status ${workflow.active ? "active" : "pending"}">${workflow.active ? "Active" : "Inactive"}</span></td>
-            </tr>
-          `).join("") || `<tr><td colspan="3">No approval workflows found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function approvalDecisionTable(decisions) {
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Resource</th><th>Decision</th><th>Reason</th></tr></thead>
-        <tbody>
-          ${decisions.map((decision) => `
-            <tr>
-              <td><strong>${titleCase(decision.resourceType.replace(/_/g, " "))}</strong><br><small>${decision.resourceId}</small></td>
-              <td><span class="status ${statusClass(decision.decision)}">${titleCase(decision.decision.replace(/_/g, " "))}</span></td>
-              <td>${decision.reason || "No reason captured"}<br><small>${decision.createdAt?.slice(0, 16).replace("T", " ") || ""}</small></td>
-            </tr>
-          `).join("") || `<tr><td colspan="3">No approval decisions recorded.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderReports() {
-  if (apiState.user) return renderApiReports();
-
-  const members = tenantScoped(state.members);
-  const savings = members.reduce((sum, member) => sum + member.savings, 0);
-  const shares = members.reduce((sum, member) => sum + member.shares, 0);
-  const welfare = members.reduce((sum, member) => sum + member.welfare, 0);
-  const max = Math.max(savings, shares, welfare, 1);
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Reports data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; accounting, compliance and audit</p>
-        </div>
-        <button class="secondary-button" data-action="apiLogin" type="button">API login</button>
-      </div>
-      ${apiSyncNotice("Reports screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", "Local demo")}
-        ${miniFact("Last sync", "Demo seed")}
-        ${miniFact("Ledger", "Demo summary")}
-        ${miniFact("Audit rows", tenantScoped(state.audit).length)}
-      </div>
-    </section>
-    <div class="grid two" style="margin-top:16px">
-      <section class="card">
-        <h2>Financial summary</h2>
-        <div class="chart">
-          ${bar("Savings", savings, max)}
-          ${bar("Shares", shares, max)}
-          ${bar("Welfare", welfare, max)}
-        </div>
-        <div class="notice" style="margin-top:16px">Reports are calculated from member balances and posted transactions. In a production build, these summaries would be backed by tenant-aware reporting tables or materialized views.</div>
-      </section>
-      <section class="card">
-        <h2>Compliance snapshot</h2>
-        <ul class="list">
-          ${alertItem("KYC verified", `${members.filter((m) => m.kyc === "Verified").length}/${members.length}`, "active")}
-          ${alertItem("Pending member approval", members.filter((m) => m.status.includes("Pending") || m.status === "Applicant").length, "pending")}
-          ${alertItem("Audit log entries", tenantScoped(state.audit).length, "trial")}
-        </ul>
-      </section>
-    </div>
-    <section class="card" style="margin-top:16px">
-      <h2>Audit trail</h2>
-      ${auditTable(tenantScoped(state.audit))}
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <h2>API audit events</h2>
-        ${refreshApiButton()}
-      </div>
-      ${apiAuditTable(apiState.auditEvents)}
-    </section>
-  `;
-}
-
-function renderOperations() {
-  if (!apiState.user) {
-    return `
-      <section class="card integration-panel">
-        <div class="toolbar">
-          <div>
-            <h2>Operations data source</h2>
-            <p class="eyebrow">${apiSyncState()} &middot; Java backend monitoring</p>
-          </div>
-          <button class="primary-button" data-action="apiLogin" type="button">API login</button>
-        </div>
-        ${apiSyncNotice("Operations screen")}
-        <div class="grid four compact-facts">
-          ${miniFact("Source", "Login required")}
-          ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
-          ${miniFact("Scope", "Not loaded")}
-          ${miniFact("Readiness", "Waiting")}
-          ${miniFact("Operations command center", "Login to load live queues")}
-        </div>
-      </section>
-    `;
-  }
-
-  const status = apiState.operationsStatus || {};
-  const counts = status.counts || {};
-  const alerts = status.alerts || [];
-  const tenantLabel = status.scope === "platform" ? "Platform-wide" : tenantName(status.scope || currentApiTenantId());
-  const criticalAlerts = alerts.filter((alert) => alert.severity === "critical").length;
-  const warningAlerts = alerts.filter((alert) => alert.severity === "warning").length;
-  const exceptionCount = Number(counts.callbackExceptions || 0) + Number(counts.deliveryExceptions || 0);
-  const queuePressure = Number(counts.pendingFinancialTransactions || 0) + Number(counts.openComplaints || 0);
-  const activeTab = state.operationsTab || "overview";
-  const isTreasurer = state.workspace === "treasurer";
-  const isChairperson = state.workspace === "chairperson";
-  const isSaccoAdmin = state.workspace === "saccoAdmin";
-  const operationsTitle = isTreasurer ? "Treasurer operations health" : isChairperson ? "Chairperson operations oversight" : isSaccoAdmin ? "SACCO operations command center" : "Operations command center";
-  const operationsSubtitle = isTreasurer
-    ? `API-backed &middot; finance exceptions, callback alerts, pending postings and reconciliation readiness for ${tenantLabel}`
-    : isChairperson
-      ? `API-backed &middot; board-sensitive alerts, operating exceptions, readiness gates and risk queues for ${tenantLabel}`
-      : isSaccoAdmin
-        ? `API-backed &middot; SACCO readiness, backend health, alerts, queues, callbacks and runbooks for ${tenantLabel}`
-    : `API-backed &middot; release readiness, alerts, queues and runbooks for ${tenantLabel}`;
-  const releaseGates = [
-    { label: "Database reachable", ok: status.database?.reachable === true, detail: status.checkedAt ? `checked ${status.checkedAt.slice(0, 16).replace("T", " ")}` : "waiting for API" },
-    { label: "No critical operation alerts", ok: criticalAlerts === 0, detail: `${criticalAlerts} critical alert(s)` },
-    { label: "Pending postings monitored", ok: Number(counts.pendingFinancialTransactions || 0) === 0, detail: `${counts.pendingFinancialTransactions || 0} awaiting checker action` },
-    { label: "Callback exceptions clear", ok: Number(counts.callbackExceptions || 0) === 0, detail: `${counts.callbackExceptions || 0} callback exception(s)` },
-    { label: "Delivery exceptions clear", ok: Number(counts.deliveryExceptions || 0) === 0, detail: `${counts.deliveryExceptions || 0} provider exception(s)` }
-  ];
-  const healthyGateCount = releaseGates.filter((gate) => gate.ok).length;
-
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Operations data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; release readiness and monitoring</p>
-        </div>
-        ${refreshApiButton("Refresh backend data")}
-      </div>
-      ${apiSyncNotice("Operations screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", "Java API")}
-        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
-        ${miniFact("Scope", tenantLabel)}
-        ${miniFact("Readiness", `${healthyGateCount}/${releaseGates.length}`)}
-      </div>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>${operationsTitle}</h2>
-          <p class="eyebrow">${operationsSubtitle}</p>
-        </div>
-        <div class="filters">
-          ${refreshApiButton()}
-          ${operationsTabButton("overview", "Overview", activeTab)}
-          ${operationsTabButton("alerts", "Alerts", activeTab)}
-          ${operationsTabButton("readiness", "Readiness", activeTab)}
-          ${operationsTabButton("queues", "Queues", activeTab)}
-          ${operationsTabButton("runbooks", "Runbooks", activeTab)}
-        </div>
-      </div>
-      <div class="grid metrics">
-        ${metric("Readiness", `${healthyGateCount}/${releaseGates.length}`, "production gates passing")}
-        ${metric("Alert load", alerts.length, `${criticalAlerts} critical, ${warningAlerts} warning`)}
-        ${metric("Exception load", exceptionCount, "callbacks and provider deliveries")}
-        ${metric("Queue pressure", queuePressure, "pending postings and complaints")}
-      </div>
-      ${renderOperationsTab(activeTab, { status, counts, alerts, tenantLabel, releaseGates, healthyGateCount, criticalAlerts, warningAlerts, exceptionCount, queuePressure, isTreasurer, isChairperson, isSaccoAdmin })}
-    </section>
-  `;
-}
-
-function operationsTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-operations-tab="${id}" type="button">${label}</button>`;
-}
-
-function renderOperationsTab(activeTab, model) {
-  if (activeTab === "alerts") {
-    return `
-      <div class="toolbar" style="margin-top:16px">
-        <div>
-          <h3>Operational alerts</h3>
-          <p class="eyebrow">Live from /api/v1/operations/status</p>
-        </div>
-      </div>
-      ${operationAlerts(model.alerts)}
-    `;
-  }
-  if (activeTab === "readiness") {
-    return `
-      <div class="toolbar" style="margin-top:16px">
-        <div>
-          <h3>Production readiness gates</h3>
-          <p class="eyebrow">Release checks surfaced for administrators</p>
-        </div>
-      </div>
-      ${releaseGateList(model.releaseGates)}
-    `;
-  }
-  if (activeTab === "queues") {
-    return `
-      <div class="toolbar" style="margin-top:16px">
-        <div>
-          <h3>Operational queues</h3>
-          <p class="eyebrow">Tenant-isolated backend health signals and action queues</p>
-        </div>
-      </div>
-      ${operationCountsTable(model.counts)}
-    `;
-  }
-  if (activeTab === "runbooks") {
-    return `
-      <div class="toolbar" style="margin-top:16px">
-        <div>
-          <h3>Runbook shortcuts</h3>
-          <p class="eyebrow">Monitoring, deployment, security and troubleshooting artifacts</p>
-        </div>
-      </div>
-      <div class="runbook-grid">
-        ${runbookLink("Monitoring guide", "docs/monitoring.md", "Alert definitions and operations status examples")}
-        ${runbookLink("Deployment guide", "docs/deployment.md", "Docker, backup, restore and load-test commands")}
-        ${runbookLink("Security review", "docs/security-review.md", "Release gates for critical security findings")}
-        ${runbookLink("Technical manual", "docs/technical-manual.md", "Validation, migrations and troubleshooting")}
-      </div>
-    `;
-  }
-  return `
-    <div class="grid three" style="margin-top:16px">
-      ${metric("Scope", model.tenantLabel, model.status.ok ? "API operations status" : "waiting for refresh")}
-      ${metric("Database", model.status.database?.reachable ? "Reachable" : "Unknown", model.status.checkedAt ? model.status.checkedAt.slice(0, 10) : "not checked")}
-      ${metric("Runbooks", 4, "monitoring, deployment, security, technical")}
-    </div>
-    <div class="notice" style="margin-top:16px">
-      <strong>${model.isTreasurer ? "Treasurer operations focus" : model.isChairperson ? "Chairperson operations focus" : model.isSaccoAdmin ? "SACCO operations focus" : "Operations focus"}:</strong> ${model.isTreasurer ? "monitor callback exceptions, pending postings, delivery exceptions and reconciliation blockers before finance reports are finalized." : model.isChairperson ? "watch critical alerts, unresolved queues, readiness gates and audit-sensitive exceptions before board decisions." : model.isSaccoAdmin ? "monitor SACCO readiness, backend health, callbacks, alerts, queues and runbooks so operations stay production-ready." : "monitor alerts, release gates, exception queues and support hand-offs before a SACCO is allowed to run production activity."}
-    </div>
-  `;
-}
-
-function renderUsersRoles() {
-  const users = apiState.users || [];
-  const platformUsers = users.filter((user) => user.tenantId === "tenant_platform");
-  const roles = apiState.roles || [];
-  const platformRoles = roles.filter((role) => role.tenantId === "tenant_platform");
-  const permissions = apiState.permissions || [];
-  const canAddPlatformUsers = isPlatformSuperAdmin() && hasPermission("users:create");
-  const canManageRoles = isPlatformSuperAdmin() && hasPermission("roles:create");
-  const tenantLabel = apiState.user?.tenantId === "tenant_platform" ? "platform scope" : tenantName(currentApiTenantId());
-  const activeTab = state.platformUsersTab || "administrators";
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Platform users management data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; Tereka Online platform administrators, assigned roles and protected access matrix</p>
-        </div>
-        ${refreshApiButton("Refresh backend data")}
-      </div>
-      ${apiSyncNotice("Platform users management screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", "Java API")}
-        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
-        ${miniFact("Scope", tenantLabel)}
-        ${miniFact("Permissions", permissions.length)}
-      </div>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Platform users management</h2>
-          <p class="eyebrow">Platform administration only &middot; SACCO staff and SACCO members are managed in their own SACCO views</p>
-        </div>
-        ${canAddPlatformUsers ? `<button class="primary-button" data-action="newPlatformUser" type="button">Add platform user</button>` : ""}
-        ${canManageRoles ? `<button class="secondary-button" data-action="assignUserRoles" type="button">Assign roles</button>
-        <button class="primary-button" data-action="newRole" type="button">New role</button>` : `<span class="pill">View only</span>`}
-      </div>
-      <div class="grid metrics">
-        ${metric("Platform users", platformUsers.length, `${platformUsers.filter((user) => user.status === "active").length} active`)}
-        ${metric("Roles", platformRoles.length, `${platformRoles.filter((role) => role.protectedRole || role.protected).length} protected`)}
-        ${metric("Permissions", permissions.length, "catalogued actions")}
-        ${metric("Platform roles", platformRoles.length, "platform admin views")}
-      </div>
-      <div class="filters" style="margin-top:16px">
-        ${platformUsersTabButton("administrators", "Administrators", activeTab)}
-        ${platformUsersTabButton("roles", "Roles", activeTab)}
-        ${platformUsersTabButton("permissions", "Permissions", activeTab)}
-      </div>
-      ${activeTab === "roles" ? platformRoleCards(platformRoles) : activeTab === "permissions" ? permissionCatalog(permissions) : platformUserCards(platformUsers)}
-    </section>
-  `;
-}
-
-function platformUsersTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-platform-users-tab="${id}" type="button">${label}</button>`;
-}
-
-function renderNotifications() {
-  const deliveries = apiState.notificationDeliveries || [];
-  const templates = apiState.notificationTemplates || [];
-  const canManageTemplates = hasPermission("notifications:manage");
-  const failed = deliveries.filter((delivery) => delivery.status !== "sent").length;
-  const activeTab = state.notificationsTab || "outbox";
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Notifications data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; SMS, email and template oversight</p>
-        </div>
-        ${refreshApiButton("Refresh backend data")}
-      </div>
-      ${apiSyncNotice("Notifications screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", "Java API")}
-        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
-        ${miniFact("Deliveries", deliveries.length)}
-        ${miniFact("Exceptions", failed)}
-      </div>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Notification control center</h2>
-          <p class="eyebrow">Platform operations &middot; provider outbox, templates and failed delivery follow-up</p>
-        </div>
-        <div class="filters">
-          ${notificationsTabButton("outbox", "Provider outbox", activeTab)}
-          ${notificationsTabButton("templates", "Templates", activeTab)}
-          ${notificationsTabButton("exceptions", "Exceptions", activeTab)}
-          ${canManageTemplates ? `<button class="primary-button" data-action="newNotificationTemplate" type="button">New template</button>` : `<span class="pill">View only</span>`}
-        </div>
-      </div>
-      <div class="grid metrics">
-        ${metric("SMS", deliveries.filter((item) => item.channel === "sms").length, "provider deliveries")}
-        ${metric("Email", deliveries.filter((item) => item.channel === "email").length, "provider deliveries")}
-        ${metric("Templates", templates.length, `${templates.filter((item) => item.status === "active").length} active`)}
-        ${metric("Exceptions", failed, "needs follow-up")}
-      </div>
-      ${renderNotificationsTab(activeTab, deliveries, templates)}
-    </section>
-  `;
-}
-
-function notificationsTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-notifications-tab="${id}" type="button">${label}</button>`;
-}
-
-function renderNotificationsTab(activeTab, deliveries, templates) {
-  if (activeTab === "templates") {
-    return `
-      <div class="notice" style="margin-top:16px">
-        <strong>Template governance:</strong> platform templates define the standard wording for payment, approval, loan and support alerts.
-      </div>
-      ${notificationTemplateTable(templates)}
-    `;
-  }
-  if (activeTab === "exceptions") {
-    const exceptions = deliveries.filter((delivery) => delivery.status !== "sent");
-    return `
-      <div class="notice" style="margin-top:16px">
-        <strong>Failed delivery follow-up:</strong> review provider exceptions before closing support complaints tied to member communication.
-      </div>
-      ${notificationDeliveryTable(exceptions)}
-    `;
-  }
-  return `
-    <div class="notice" style="margin-top:16px">
-      <strong>Provider outbox:</strong> latest SMS and email activity from Java API delivery records.
-    </div>
-    ${notificationDeliveryTable(deliveries)}
-  `;
-}
-
-function renderComplaints() {
-  const complaints = apiState.complaints || [];
-  const open = complaints.filter((complaint) => !["resolved", "closed"].includes(complaint.status));
-  const highPriority = open.filter((complaint) => complaint.priority === "high");
-  const canManageComplaints = hasPermission("complaints:manage");
-  const activeTab = state.complaintsTab || "queue";
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Complaints data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; platform support and complaint monitoring</p>
-        </div>
-        ${refreshApiButton("Refresh backend data")}
-      </div>
-      ${apiSyncNotice("Complaints screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", "Java API")}
-        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
-        ${miniFact("Open complaints", open.length)}
-        ${miniFact("High priority", highPriority.length)}
-      </div>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Support queue</h2>
-          <p class="eyebrow">Platform support &middot; tenant and member complaint follow-up</p>
-        </div>
-        <div class="filters">
-          ${complaintsTabButton("queue", "Queue", activeTab)}
-          ${complaintsTabButton("escalations", "Escalations", activeTab)}
-          ${complaintsTabButton("closed", "Closed", activeTab)}
-          ${canManageComplaints ? `<button class="primary-button" data-action="newComplaint" type="button">New complaint</button>` : `<span class="pill">View only</span>`}
-        </div>
-      </div>
-      <div class="grid metrics">
-        ${metric("Complaints", complaints.length, `${open.length} open`)}
-        ${metric("High priority", highPriority.length, "needs follow-up")}
-        ${metric("Resolved", complaints.filter((complaint) => ["resolved", "closed"].includes(complaint.status)).length, "closed queue")}
-      </div>
-      ${renderComplaintsTab(activeTab, complaints, open, highPriority)}
-    </section>
-  `;
-}
-
-function complaintsTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-complaints-tab="${id}" type="button">${label}</button>`;
-}
-
-function renderComplaintsTab(activeTab, complaints, open, highPriority) {
-  if (activeTab === "escalations") {
-    return `
-      <div class="notice" style="margin-top:16px">
-        <strong>Escalation focus:</strong> high priority or unresolved complaints should be reviewed with SACCO officials and operations status.
-      </div>
-      ${complaintList(highPriority)}
-    `;
-  }
-  if (activeTab === "closed") {
-    const closed = complaints.filter((complaint) => ["resolved", "closed"].includes(complaint.status));
-    return `
-      <div class="notice" style="margin-top:16px">
-        <strong>Closed support evidence:</strong> resolved complaints remain available for reports and audit review.
-      </div>
-      ${complaintList(closed)}
-    `;
-  }
-  return `
-    <div class="notice" style="margin-top:16px">
-      <strong>Open complaint workflow:</strong> support officers triage the complaint, link the affected member or SACCO, then escalate where operations or compliance action is needed.
-    </div>
-    ${complaintList(open)}
-  `;
-}
-
-function renderApiReports() {
-  const journals = apiState.journalEntries;
-  const periods = apiState.accountingPeriods;
-  const accounts = apiState.chartOfAccounts;
-  const expenses = apiState.expenses;
-  const assets = apiState.assets;
-  const mobileMoneyCallbacks = apiState.mobileMoneyCallbacks;
-  const notificationDeliveries = apiState.notificationDeliveries;
-  const notificationTemplates = apiState.notificationTemplates;
-  const reconciliation = apiState.reconciliation || { summary: {}, unmatchedStatementLines: [], unmatchedLedgerLines: [] };
-  const regulatoryReport = apiState.regulatoryReport || { reports: [], consolidated: {}, csv: "" };
-  const meetings = apiState.governanceMeetings;
-  const complaints = apiState.complaints;
-  const roles = apiState.roles || [];
-  const permissions = apiState.permissions || [];
-  const debitTotal = journals.reduce((sum, entry) => sum + entry.debitTotal, 0);
-  const creditTotal = journals.reduce((sum, entry) => sum + entry.creditTotal, 0);
-  const unbalanced = journals.filter((entry) => !entry.isBalanced).length;
-  const reconciliationExceptions = (reconciliation.summary.unmatchedStatementLines || 0) + (reconciliation.summary.unmatchedLedgerLines || 0);
-  const openPeriods = periods.filter((period) => period.status === "open").length;
-  const closedPeriods = periods.filter((period) => period.status === "closed").length;
-  const openGovernanceItems = meetings.reduce((sum, meeting) => sum + (meeting.openResolutions || 0), 0)
-    + complaints.filter((complaint) => !["resolved", "closed"].includes(complaint.status)).length;
-  const deliveryExceptions = notificationDeliveries.filter((item) => item.status !== "sent").length;
-  const callbackExceptions = mobileMoneyCallbacks.filter((item) => item.status !== "posted").length;
-  const expenseTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const assetNetBookValue = assets.reduce((sum, asset) => sum + asset.netBookValue, 0);
-  const canManageGovernance = hasPermission("governance:manage") || hasPermission("complaints:manage");
-  const cashPosition = journals.reduce((sum, entry) => {
-    return sum + entry.lines
-      .filter((line) => ["1000", "1010", "1020", "1030"].includes(line.accountCode))
-      .reduce((lineSum, line) => lineSum + line.debit - line.credit, 0);
-  }, 0);
-  const tenantLabel = apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant";
-  const activeTab = state.reportsTab || "compliance";
-  const isTreasurer = state.workspace === "treasurer";
-  const isSecretary = state.workspace === "secretary";
-  const isChairperson = state.workspace === "chairperson";
-  const isSaccoAdmin = state.workspace === "saccoAdmin";
-  const reportsTitle = isTreasurer ? "Treasurer finance reports" : isSecretary ? "Secretary board reports" : isChairperson ? "Chairperson board reports" : isSaccoAdmin ? "SACCO administration reports" : "Reports control center";
-  const reportsSubtitle = isTreasurer
-    ? `API-backed &middot; ledger integrity, reconciliation, cash position, expenses and callback evidence for ${tenantLabel}`
-    : isSecretary
-      ? `API-backed &middot; member records, KYC readiness, complaints, meetings, resolutions and board packs for ${tenantLabel}`
-      : isChairperson
-        ? `API-backed &middot; loan portfolio, compliance, governance, approvals, risk and operating exceptions for ${tenantLabel}`
-        : isSaccoAdmin
-          ? `API-backed &middot; members, finance, loans, reconciliation, governance, access and audit for ${tenantLabel}`
-    : `API-backed &middot; financial integrity, reconciliation, compliance and governance for ${tenantLabel}`;
-  const canManageAccess = hasPermission("roles:create") || hasPermission("users:create");
-
-  return `
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Reports data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; ledger, reconciliation and compliance</p>
-        </div>
-        ${refreshApiButton("Refresh backend data")}
-      </div>
-      ${apiSyncNotice("Reports screen")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", "Java API")}
-        ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
-        ${miniFact("Journal rows", journals.length)}
-        ${miniFact("Reconciliation exceptions", reconciliationExceptions)}
-      </div>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>${reportsTitle}</h2>
-          <p class="eyebrow">${reportsSubtitle}</p>
-        </div>
-        <div class="filters">
-          ${reportsTabButton("compliance", "Compliance", activeTab)}
-          ${reportsTabButton("ledger", "Ledger", activeTab)}
-          ${reportsTabButton("operations", "Operations", activeTab)}
-          ${reportsTabButton("governance", "Governance", activeTab)}
-          ${reportsTabButton("access", "Access", activeTab)}
-          ${reportsTabButton("audit", "Audit", activeTab)}
-          ${refreshApiButton()}
-        </div>
-      </div>
-      <div class="grid metrics">
-        ${metric("Ledger integrity", unbalanced === 0 ? "Balanced" : `${unbalanced} issue(s)`, `${journals.length} journal entry(ies)`)}
-        ${metric("Reconciliation", reconciliationExceptions, `${money.format((reconciliation.summary.unmatchedStatementAmount || 0) + (reconciliation.summary.unmatchedLedgerAmount || 0))} exception value`)}
-        ${metric("Compliance", titleCase((regulatoryReport.consolidated.complianceStatus || "review").replace(/_/g, " ")), `${regulatoryReport.consolidated.reconciliationExceptions || 0} regulatory exception(s)`)}
-        ${metric("Governance", openGovernanceItems, "open resolutions and complaints")}
-      </div>
-      ${renderReportsTabSummary(activeTab, {
-        tenantLabel,
-        journals,
-        periods,
-        reconciliationExceptions,
-        callbackExceptions,
-        deliveryExceptions,
-        meetings,
-        complaints,
-        roles,
-        permissions,
-        auditEvents: apiState.auditEvents,
-        regulatoryReport,
-        isTreasurer,
-        isSecretary,
-        isChairperson,
-        isSaccoAdmin
-      })}
-      <div class="grid three" style="margin-top:16px">
-        ${metric("Accounting periods", `${openPeriods}/${periods.length}`, `${closedPeriods} closed`)}
-        ${metric("Operations exceptions", callbackExceptions + deliveryExceptions, `${callbackExceptions} callback, ${deliveryExceptions} delivery`)}
-        ${metric("Operating assets", money.format(assetNetBookValue), `${money.format(expenseTotal)} expenses posted`)}
-      </div>
-    </section>
-    <div class="grid metrics">
-      ${metric("Journal entries", journals.length, `${unbalanced} unbalanced`)}
-      ${metric("Debits", money.format(debitTotal), "derived from posted events")}
-      ${metric("Credits", money.format(creditTotal), "must equal debits")}
-      ${metric("Cash position", money.format(cashPosition), "cash, bank, mobile money, payroll")}
-    </div>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Access control</h2>
-          <p class="eyebrow">Roles, permission sets and staff assignments for ${tenantLabel}</p>
-        </div>
-        ${canManageAccess ? `<button class="secondary-button" data-action="assignUserRoles" type="button">Assign roles</button>
-        <button class="primary-button" data-action="newRole" type="button">New role</button>` : `<span class="pill">View only</span>`}
-      </div>
-      <div class="grid metrics">
-        ${metric("Roles", roles.length, `${roles.filter((role) => role.protectedRole || role.protected).length} protected`)}
-        ${metric("Permissions", permissions.length, "catalogued actions")}
-        ${metric("Staff users", apiState.users.length, "assignable accounts")}
-      </div>
-      ${roleTable(roles)}
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Accounting ledger</h2>
-          <p class="eyebrow">API-backed &middot; Balanced double-entry journals for ${tenantLabel}</p>
-        </div>
-        ${refreshApiButton()}
-      </div>
-      <div class="notice">Journal entries are derived from posted financial transactions, loan disbursements, loan repayments, and subscription payments.</div>
-      ${journalTable(journals)}
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Accounting periods</h2>
-          <p class="eyebrow">Closed periods block ordinary financial postings</p>
-        </div>
-        ${refreshApiButton()}
-      </div>
-      ${accountingPeriodTable(periods)}
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Expenses</h2>
-          <p class="eyebrow">Supplier expenses posted to the accounting ledger</p>
-        </div>
-        <button class="primary-button" data-action="newExpense" type="button">New expense</button>
-      </div>
-      <div class="grid metrics">
-        ${metric("Posted expenses", expenses.length, `${money.format(expenses.reduce((sum, expense) => sum + expense.amount, 0))} total`)}
-        ${metric("Suppliers", apiState.suppliers.length, "active supplier records")}
-      </div>
-      ${expenseTable(expenses)}
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Assets</h2>
-          <p class="eyebrow">Fixed asset register with derived depreciation journals</p>
-        </div>
-        <button class="primary-button" data-action="newAsset" type="button">New asset</button>
-      </div>
-      <div class="grid metrics">
-        ${metric("Registered assets", assets.length, `${money.format(assets.reduce((sum, asset) => sum + asset.cost, 0))} cost`)}
-        ${metric("Net book value", money.format(assets.reduce((sum, asset) => sum + asset.netBookValue, 0)), `${money.format(assets.reduce((sum, asset) => sum + asset.accumulatedDepreciation, 0))} depreciated`)}
-      </div>
-      ${assetTable(assets)}
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Reconciliation</h2>
-          <p class="eyebrow">Bank, cash, mobile money and payroll statement matching</p>
-        </div>
-        ${refreshApiButton()}
-      </div>
-      <div class="grid metrics">
-        ${metric("Matched", reconciliation.summary.matched || 0, `${money.format(reconciliation.summary.matchedAmount || 0)} cleared`)}
-        ${metric("Statement exceptions", reconciliation.summary.unmatchedStatementLines || 0, money.format(reconciliation.summary.unmatchedStatementAmount || 0))}
-        ${metric("Ledger exceptions", reconciliation.summary.unmatchedLedgerLines || 0, money.format(reconciliation.summary.unmatchedLedgerAmount || 0))}
-      </div>
-      ${reconciliationTable(reconciliation)}
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Mobile money callbacks</h2>
-          <p class="eyebrow">Idempotent provider callback history and posted resources</p>
-        </div>
-        ${refreshApiButton()}
-      </div>
-      <div class="grid metrics">
-        ${metric("Callbacks", mobileMoneyCallbacks.length, `${money.format(mobileMoneyCallbacks.reduce((sum, item) => sum + item.amount, 0))} received`)}
-        ${metric("Posted", mobileMoneyCallbacks.filter((item) => item.status === "posted").length, "server-confirmed events")}
-      </div>
-      ${mobileMoneyCallbackTable(mobileMoneyCallbacks)}
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>SMS and email deliveries</h2>
-          <p class="eyebrow">Provider outbox and tenant notification templates</p>
-        </div>
-        <button class="primary-button" data-action="newNotificationTemplate" type="button">New template</button>
-        ${refreshApiButton()}
-      </div>
-      <div class="grid metrics">
-        ${metric("SMS", notificationDeliveries.filter((item) => item.channel === "sms").length, "demo_sms")}
-        ${metric("Email", notificationDeliveries.filter((item) => item.channel === "email").length, "demo_email")}
-        ${metric("Templates", notificationTemplates.length, `${notificationTemplates.filter((item) => item.status === "active").length} active`)}
-        ${metric("Sent", notificationDeliveries.filter((item) => item.status === "sent").length, "provider-confirmed")}
-      </div>
-      ${notificationTemplateTable(notificationTemplates)}
-      ${notificationDeliveryTable(notificationDeliveries)}
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Regulatory report</h2>
-          <p class="eyebrow">Export-ready supervisory snapshot for ${tenantLabel}</p>
-        </div>
-        ${refreshApiButton()}
-      </div>
-      <div class="grid metrics">
-        ${metric("Members", regulatoryReport.consolidated.memberCount || 0, `${regulatoryReport.consolidated.activeMembers || 0} active`)}
-        ${metric("Savings", money.format(regulatoryReport.consolidated.savings || 0), "member deposits")}
-        ${metric("Loan portfolio", money.format(regulatoryReport.consolidated.loanPortfolio || 0), `${regulatoryReport.consolidated.parPercent || 0}% PAR indicator`)}
-        ${metric("Compliance", titleCase((regulatoryReport.consolidated.complianceStatus || "review").replace(/_/g, " ")), `${regulatoryReport.consolidated.reconciliationExceptions || 0} reconciliation exception(s)`)}
-      </div>
-      ${regulatoryReportTable(regulatoryReport)}
-    </section>
-    <section class="card" style="margin-top:16px">
-      <div class="toolbar">
-        <div>
-          <h2>Governance</h2>
-          <p class="eyebrow">Meetings, resolutions and member complaints for ${tenantLabel}</p>
-        </div>
-        ${canManageGovernance ? `<button class="secondary-button" data-action="newComplaint" type="button">New complaint</button>
-        <button class="primary-button" data-action="newGovernanceMeeting" type="button">New meeting</button>` : `<span class="pill">View only</span>`}
-      </div>
-      <div class="grid metrics">
-        ${metric("Meetings", meetings.length, `${meetings.reduce((sum, meeting) => sum + (meeting.openResolutions || 0), 0)} open resolution(s)`)}
-        ${metric("Complaints", complaints.length, `${complaints.filter((complaint) => !["resolved", "closed"].includes(complaint.status)).length} open`)}
-        ${metric("High priority", complaints.filter((complaint) => complaint.priority === "high" && !["resolved", "closed"].includes(complaint.status)).length, "complaints requiring attention")}
-      </div>
-      <div class="grid two" style="margin-top:16px">
-        ${governanceMeetingList(meetings)}
-        ${complaintList(complaints)}
-      </div>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <h2>Chart of accounts</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Code</th><th>Account</th><th>Type</th><th>Normal balance</th></tr></thead>
-          <tbody>
-            ${accounts.map((account) => `
-              <tr>
-                <td>${account.code}</td>
-                <td>${account.name}</td>
-                <td>${titleCase(account.type)}</td>
-                <td>${titleCase(account.normalBalance)}</td>
-              </tr>
-            `).join("") || `<tr><td colspan="4">No accounts found.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    </section>
-    <section class="card" style="margin-top:16px">
-      <h2>API audit events</h2>
-      ${apiAuditTable(apiState.auditEvents)}
-    </section>
-  `;
-}
-
-function reportsTabButton(id, label, activeTab) {
-  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-reports-tab="${id}" type="button">${label}</button>`;
-}
-
-function renderReportsTabSummary(activeTab, model) {
-  if (activeTab === "ledger") {
-    return `<div class="notice" style="margin-top:16px"><strong>${model.isTreasurer ? "Treasurer ledger focus" : "Ledger report focus"}:</strong> review journal integrity, accounting periods, chart of accounts, expenses and assets for ${model.tenantLabel}.</div>`;
-  }
-  if (activeTab === "operations") {
-    return `
-      <div class="notice" style="margin-top:16px">
-        <strong>Operations report focus:</strong> reconcile mobile-money callbacks, provider delivery exceptions and backend exception queues.
-      </div>
-      <div class="grid three compact-facts" style="margin-top:16px">
-        ${miniFact("Callback exceptions", model.callbackExceptions)}
-        ${miniFact("Delivery exceptions", model.deliveryExceptions)}
-        ${miniFact("Audit events", model.auditEvents.length)}
-      </div>
-    `;
-  }
-  if (activeTab === "governance") {
-    return `
-      <div class="notice" style="margin-top:16px">
-        <strong>${model.isSecretary ? "Secretary governance focus" : model.isChairperson ? "Chairperson governance focus" : model.isSaccoAdmin ? "SACCO governance focus" : "Governance report focus"}:</strong> ${model.isSecretary ? "prepare board packs from meetings, open resolutions, complaints and member-record follow-up." : model.isChairperson ? "review meetings, open resolutions, complaints and board-sensitive follow-up before decisions." : model.isSaccoAdmin ? "track meetings, open resolutions, complaints and governance follow-up across the SACCO operation." : "track meetings, open resolutions, complaints and support evidence for oversight reviews."}
-      </div>
-      <div class="grid three compact-facts" style="margin-top:16px">
-        ${miniFact("Meetings", model.meetings.length)}
-        ${miniFact("Open complaints", model.complaints.filter((complaint) => !["resolved", "closed"].includes(complaint.status)).length)}
-        ${miniFact("High priority", model.complaints.filter((complaint) => complaint.priority === "high").length)}
-      </div>
-    `;
-  }
-  if (activeTab === "access") {
-    return `
-      <div class="notice" style="margin-top:16px">
-        <strong>Access report focus:</strong> review role coverage, protected permissions and staff access assignments.
-      </div>
-      <div class="grid three compact-facts" style="margin-top:16px">
-        ${miniFact("Roles", model.roles.length)}
-        ${miniFact("Permissions", model.permissions.length)}
-        ${miniFact("Protected roles", model.roles.filter((role) => role.protectedRole || role.protected).length)}
-      </div>
-    `;
-  }
-  if (activeTab === "audit") {
-    return `<div class="notice" style="margin-top:16px"><strong>Audit report focus:</strong> verify API audit events, approval decisions, role changes and sensitive operational actions.</div>`;
-  }
-  return `
-    <div class="notice" style="margin-top:16px">
-      <strong>${model.isTreasurer ? "Treasurer finance report focus" : model.isSecretary ? "Secretary board report focus" : model.isChairperson ? "Chairperson risk report focus" : model.isSaccoAdmin ? "SACCO administration report focus" : "Compliance report focus"}:</strong> ${model.isTreasurer ? `cash position, reconciliation exceptions, posted journals and finance evidence for ${model.tenantLabel}.` : model.isSecretary ? `member totals, KYC readiness, complaints and governance evidence for ${model.tenantLabel}.` : model.isChairperson ? `loan portfolio, PAR indicators, approval exceptions, governance items and operational risk for ${model.tenantLabel}.` : model.isSaccoAdmin ? `members, finance, loans, reconciliation, compliance, governance, access and audit for ${model.tenantLabel}.` : `export-ready supervisory view covering reconciliation, PAR indicators, member totals and compliance exceptions for ${model.tenantLabel}.`}
-    </div>
-  `;
-}
-
-function roleTable(roles) {
-  return `
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>Role</th><th>Tenant</th><th>Permissions</th><th>Status</th></tr></thead>
-        <tbody>
-          ${roles.map((role) => `
-            <tr>
-              <td><strong>${role.name}</strong><br><small>${role.id}</small></td>
-              <td>${tenantName(role.tenantId)}</td>
-              <td>${(role.permissionIds || []).slice(0, 4).join(", ") || "No permissions"}${(role.permissionIds || []).length > 4 ? ` +${role.permissionIds.length - 4} more` : ""}</td>
-              <td><span class="status ${(role.protectedRole || role.protected) ? "active" : "pending"}">${(role.protectedRole || role.protected) ? "Protected" : "Custom"}</span></td>
-            </tr>
-          `).join("") || `<tr><td colspan="4">No roles found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function platformUserCards(users) {
-  if (!users.length) {
-    return `<div class="notice" style="margin-top:16px">No platform administrator users found. SACCO users are not shown here.</div>`;
-  }
-  return `
-    <div class="grid two" style="margin-top:16px">
-      ${users.map((user) => {
-        const roleIds = apiState.userRoleAssignments[user.id] || [];
-        const roleNames = roleIds.map((roleId) => apiState.roles.find((role) => role.id === roleId)?.name || roleId);
-        return `
-          <article class="card">
-            <div class="toolbar">
-              <div>
-                <h3>${user.fullName || user.name}</h3>
-                <p class="eyebrow">${user.email || "No email captured"}</p>
-              </div>
-              <span class="status ${statusClass(user.status)}">${titleCase(user.status || "active")}</span>
-            </div>
-            <div class="grid two compact-facts" style="margin-top:12px">
-              ${miniFact("Assigned roles", roleNames.length ? roleNames.join(", ") : "No role assigned")}
-              ${miniFact("Phone", user.phone || "Not captured")}
-            </div>
-          </article>
-        `;
-      }).join("")}
-    </div>
-  `;
-}
-
-function platformRoleCards(roles) {
-  if (!roles.length) return `<div class="notice" style="margin-top:16px">No platform roles found.</div>`;
-  return `
-    <div class="grid two" style="margin-top:16px">
-      ${roles.map((role) => `
-        <article class="card">
-          <div class="toolbar">
-            <div>
-              <h3>${role.name}</h3>
-              <p class="eyebrow">${role.id}</p>
-            </div>
-            <span class="status ${(role.protectedRole || role.protected) ? "active" : "pending"}">${(role.protectedRole || role.protected) ? "Protected" : "Custom"}</span>
-          </div>
-          <div class="notice" style="margin-top:12px">${(role.permissionIds || []).join(", ") || "No permissions assigned"}</div>
-        </article>
-      `).join("")}
-    </div>
-  `;
-}
-
-function permissionCatalog(permissions) {
-  if (!permissions.length) return `<div class="notice" style="margin-top:16px">No platform permissions found.</div>`;
-  return `
-    <div class="grid three" style="margin-top:16px">
-      ${permissions.map((permission) => `
-        <article class="card">
-          <h3>${permission.id}</h3>
-          <p class="eyebrow">${titleCase(permission.module || "platform")} &middot; ${titleCase(permission.action || "access")}</p>
-          <p class="muted">${permission.description || "Platform access permission"}</p>
-        </article>
-      `).join("")}
-    </div>
-  `;
-}
-
-function userTable(users, emptyMessage = "No staff users found.") {
-  return `
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>User</th><th>Tenant</th><th>Assigned roles</th><th>Contact</th><th>Status</th></tr></thead>
-        <tbody>
-          ${users.map((user) => {
-            const roleIds = apiState.userRoleAssignments[user.id] || [];
-            const roleNames = roleIds.map((roleId) => apiState.roles.find((role) => role.id === roleId)?.name || roleId);
-            return `
-              <tr>
-                <td><strong>${user.fullName || user.name}</strong><br><small>${user.id}</small></td>
-                <td>${tenantName(user.tenantId)}</td>
-                <td>${roleNames.map((roleName) => `<span class="pill">${roleName}</span>`).join(" ") || `<span class="pill">No role assigned</span>`}</td>
-                <td>${user.email || ""}<br><small>${user.phone || ""}</small></td>
-                <td><span class="status ${statusClass(user.status)}">${titleCase(user.status || "active")}</span></td>
-              </tr>
-            `;
-          }).join("") || `<tr><td colspan="5">${emptyMessage}</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function accountingPeriodTable(periods) {
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Period</th><th>Status</th><th>Closed at</th><th>Action</th></tr></thead>
-        <tbody>
-          ${periods.map((period) => `
-            <tr>
-              <td>${period.period}</td>
-              <td><span class="status ${period.status === "closed" ? "overdue" : "active"}">${titleCase(period.status)}</span></td>
-              <td>${period.closedAt?.slice(0, 10) || ""}</td>
-              <td><button class="secondary-button" data-period-status="${period.id}" data-period-next="${period.status === "closed" ? "open" : "closed"}" type="button">${period.status === "closed" ? "Reopen" : "Close"}</button></td>
-            </tr>
-          `).join("") || `<tr><td colspan="4">No accounting periods found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function expenseTable(expenses) {
-  return `
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>Date</th><th>Reference</th><th>Supplier</th><th>Account</th><th>Channel</th><th>Amount</th></tr></thead>
-        <tbody>
-          ${expenses.map((expense) => `
-            <tr>
-              <td>${expense.expenseDate || ""}</td>
-              <td>${expense.reference}<br><small>${expense.description || ""}</small></td>
-              <td>${expense.supplier?.name || "Direct expense"}</td>
-              <td>${expense.accountCode} ${expense.accountName || ""}</td>
-              <td>${titleCase(expense.channel.replace(/_/g, " "))}</td>
-              <td>${money.format(expense.amount)}</td>
-            </tr>
-          `).join("") || `<tr><td colspan="6">No expenses found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function assetTable(assets) {
-  return `
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>Purchased</th><th>Reference</th><th>Asset</th><th>Category</th><th>Cost</th><th>Depreciation</th><th>NBV</th></tr></thead>
-        <tbody>
-          ${assets.map((asset) => `
-            <tr>
-              <td>${asset.purchaseDate || ""}</td>
-              <td>${asset.reference}<br><small>${asset.location || ""}</small></td>
-              <td>${asset.name}<br><small>${asset.accountCode || asset.assetAccountCode} ${asset.accountName || ""}</small></td>
-              <td>${titleCase(asset.category.replace(/_/g, " "))}</td>
-              <td>${money.format(asset.cost)}</td>
-              <td>${money.format(asset.accumulatedDepreciation)}<br><small>${money.format(asset.monthlyDepreciation)} monthly</small></td>
-              <td>${money.format(asset.netBookValue)}</td>
-            </tr>
-          `).join("") || `<tr><td colspan="7">No assets found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function mobileMoneyCallbackTable(callbacks) {
-  return `
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>Received</th><th>Reference</th><th>Purpose</th><th>Amount</th><th>Resource</th><th>Status</th></tr></thead>
-        <tbody>
-          ${callbacks.map((callback) => `
-            <tr>
-              <td>${callback.receivedAt?.slice(0, 16).replace("T", " ") || ""}</td>
-              <td>${callback.externalReference}<br><small>${callback.provider || ""}</small></td>
-              <td>${titleCase(callback.purpose.replace(/_/g, " "))}</td>
-              <td>${money.format(callback.amount)}</td>
-              <td>${titleCase(String(callback.resourceType || "").replace(/_/g, " "))}<br><small>${callback.resourceId || ""}</small></td>
-              <td><span class="status ${callback.status === "posted" ? "active" : "pending"}">${titleCase(callback.status)}</span></td>
-            </tr>
-          `).join("") || `<tr><td colspan="6">No mobile-money callbacks found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function notificationDeliveryTable(deliveries) {
-  return `
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>Sent</th><th>Channel</th><th>Provider</th><th>Recipient</th><th>Status</th></tr></thead>
-        <tbody>
-          ${deliveries.map((delivery) => `
-            <tr>
-              <td>${delivery.sentAt?.slice(0, 16).replace("T", " ") || delivery.createdAt?.slice(0, 16).replace("T", " ") || ""}</td>
-              <td>${titleCase(delivery.channel)}</td>
-              <td>${delivery.provider}</td>
-              <td>${delivery.recipient}</td>
-              <td><span class="status ${delivery.status === "sent" ? "active" : "pending"}">${titleCase(delivery.status)}</span></td>
-            </tr>
-          `).join("") || `<tr><td colspan="5">No SMS or email deliveries found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function notificationTemplateTable(templates) {
-  return `
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>Event</th><th>Channel</th><th>Title</th><th>Source</th><th>Status</th><th>Action</th></tr></thead>
-        <tbody>
-          ${templates.map((template) => {
-            const manageable = canManageNotificationTemplate(template);
-            return `
-              <tr>
-                <td>${template.eventType}<br><small>${template.id}</small></td>
-                <td>${titleCase(String(template.channel || "").replace(/_/g, " "))}</td>
-                <td><strong>${template.title}</strong><br><small>${template.body}</small></td>
-                <td>${template.tenantId ? tenantName(template.tenantId) : "Global default"}</td>
-                <td><span class="status ${template.status === "active" ? "active" : "pending"}">${titleCase(template.status)}</span></td>
-                <td>
-                  ${manageable ? `<button class="secondary-button" data-template-edit="${template.id}" type="button">Edit</button>
-                  <button class="secondary-button" data-template-toggle="${template.id}" type="button">${template.status === "active" ? "Deactivate" : "Activate"}</button>` : `<span class="pill">Protected</span>`}
-                </td>
-              </tr>
-            `;
-          }).join("") || `<tr><td colspan="6">No notification templates found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function canManageNotificationTemplate(template) {
-  if (!apiState.user) return false;
-  if (!hasPermission("notifications:manage")) return false;
-  if (apiState.user.tenantId === "tenant_platform") return true;
-  return template.tenantId === apiState.user.tenantId;
-}
-
-function regulatoryReportTable(report) {
-  const rows = report.reports || [];
-  return `
-    <div class="table-wrap" style="margin-top:16px">
-      <table>
-        <thead><tr><th>SACCO</th><th>Members</th><th>Savings</th><th>Shares</th><th>Welfare</th><th>Loans</th><th>PAR</th><th>Exceptions</th><th>Status</th></tr></thead>
-        <tbody>
-          ${rows.map((row) => `
-            <tr>
-              <td>${row.tenantName}</td>
-              <td>${row.activeMembers}/${row.memberCount}</td>
-              <td>${money.format(row.savings)}</td>
-              <td>${money.format(row.shares)}</td>
-              <td>${money.format(row.welfare)}</td>
-              <td>${money.format(row.loanPortfolio)}</td>
-              <td>${row.parPercent}%</td>
-              <td>${row.reconciliationExceptions}</td>
-              <td><span class="status ${row.complianceStatus === "action_required" ? "overdue" : "pending"}">${titleCase(row.complianceStatus.replace(/_/g, " "))}</span></td>
-            </tr>
-          `).join("") || `<tr><td colspan="9">No regulatory report rows found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-    <div class="notice" style="margin-top:16px"><strong>CSV export preview</strong><br><small>${(report.csv || "").split("\n").slice(0, 3).join(" | ")}</small></div>
-  `;
-}
-
-function governanceMeetingList(meetings) {
-  return `
-    <div>
-      <h3>Meetings and resolutions</h3>
-      <ul class="list">
-        ${meetings.map((meeting) => `
-          <li>
-            <span>
-              <strong>${meeting.title}</strong><br>
-              <small>${titleCase(meeting.meetingType.replace(/_/g, " "))} &middot; ${meeting.scheduledAt?.slice(0, 10) || ""} &middot; ${titleCase(meeting.status)}</small>
-              ${(meeting.resolutions || []).map((resolution) => `<br><small>${resolution.status === "closed" ? "Closed" : "Open"} resolution: ${resolution.title}</small>`).join("")}
-            </span>
-            <span><span class="status ${statusClass(meeting.status)}">${meeting.openResolutions || 0} open</span></span>
-          </li>
-        `).join("") || `<li><span>No governance meetings found.</span><span class="status active">Clear</span></li>`}
-      </ul>
-    </div>
-  `;
-}
-
-function complaintList(complaints) {
-  return `
-    <div>
-      <h3>Complaints</h3>
-      <ul class="list">
-        ${complaints.map((complaint) => `
-          <li>
-            <span>
-              <strong>${complaint.subject}</strong><br>
-              <small>${titleCase(complaint.category)} &middot; ${titleCase(complaint.priority)} priority${complaint.member ? ` &middot; ${complaint.member.fullName}` : ""}</small>
-            </span>
-            <span><span class="status ${statusClass(complaint.status)}">${titleCase(complaint.status.replace(/_/g, " "))}</span></span>
-          </li>
-        `).join("") || `<li><span>No complaints found.</span><span class="status active">Clear</span></li>`}
-      </ul>
-    </div>
-  `;
-}
-
-function reconciliationTable(reconciliation) {
-  const statementLines = reconciliation.unmatchedStatementLines || [];
-  const ledgerLines = reconciliation.unmatchedLedgerLines || [];
-  return `
-    <div class="grid two" style="margin-top:16px">
-      <div>
-        <h3>Unmatched statement lines</h3>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Date</th><th>Reference</th><th>Account</th><th>Amount</th></tr></thead>
-            <tbody>
-              ${statementLines.map((line) => `
-                <tr>
-                  <td>${line.statementDate || ""}</td>
-                  <td>${line.externalReference}<br><small>${line.description || titleCase(line.channel.replace(/_/g, " "))}</small></td>
-                  <td>${line.accountCode}</td>
-                  <td>${money.format(line.amount)}</td>
-                </tr>
-              `).join("") || `<tr><td colspan="4">No unmatched statement lines.</td></tr>`}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div>
-        <h3>Unmatched ledger lines</h3>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Date</th><th>Reference</th><th>Account</th><th>Amount</th></tr></thead>
-            <tbody>
-              ${ledgerLines.map((line) => `
-                <tr>
-                  <td>${line.postedAt?.slice(0, 10) || ""}</td>
-                  <td>${line.reference}<br><small>${line.description}</small></td>
-                  <td>${line.accountCode} ${line.accountName}</td>
-                  <td>${money.format(line.amount)}</td>
-                </tr>
-              `).join("") || `<tr><td colspan="4">No unmatched ledger lines.</td></tr>`}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function journalTable(entries) {
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Debit</th><th>Credit</th><th>Status</th></tr></thead>
-        <tbody>
-          ${entries.map((entry) => `
-            <tr>
-              <td>${entry.postedAt?.slice(0, 10) || ""}</td>
-              <td>${entry.reference}<br><small>${titleCase(entry.sourceType.replace(/_/g, " "))}</small></td>
-              <td>${entry.description}<br><small>${entry.lines.map((line) => `${line.accountCode} ${line.accountName}: Dr ${money.format(line.debit)} / Cr ${money.format(line.credit)}`).join(" &middot; ")}</small></td>
-              <td>${money.format(entry.debitTotal)}</td>
-              <td>${money.format(entry.creditTotal)}</td>
-              <td><span class="status ${entry.isBalanced ? "active" : "pending"}">${entry.isBalanced ? "Balanced" : "Review"}</span></td>
-            </tr>
-          `).join("") || `<tr><td colspan="6">No journal entries found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function renderMemberPortal() {
-  if (memberApiState.member) {
-    const member = memberApiState.member;
-    const balances = memberApiState.balances || { savings: 0, shares: 0, welfare: 0 };
-    const notifications = memberApiState.notifications || [];
-    const mobileDashboard = memberApiState.mobileDashboard || {};
-    const mobileLoans = mobileDashboard.loans || [];
-    const memberDrafts = offlineDrafts.filter((draft) => draft.memberId === member.id);
-    const totalBalance = (balances.savings || 0) + (balances.shares || 0) + (balances.welfare || 0);
-    const loanBalance = mobileLoans.reduce((sum, loan) => sum + loan.balance, 0);
-    const unreadNotifications = notifications.filter((notification) => notification.status === "unread").length;
-    const pendingGuarantees = memberApiState.guarantorRequests.filter((request) => request.status === "pending").length;
-    return `
-      ${workspaceOverview()}
-      <div class="toolbar">
-        <div>
-          <h2>${member.fullName}</h2>
-          <p class="eyebrow">${member.membershipNo} &middot; ${memberApiState.tenant?.name || tenantName(member.tenantId)}</p>
-        </div>
-        <div class="filters">
-          ${memberRefreshButton()}
-          <button class="secondary-button" data-action="memberLogout" type="button">Logout member</button>
-        </div>
-      </div>
-      <section class="card integration-panel" style="margin-top:16px">
-        <div class="toolbar">
-          <div>
-            <h2>Member portal data source</h2>
-            <p class="eyebrow">${memberSyncState()} &middot; balances, loans and notifications</p>
-          </div>
-          ${memberRefreshButton()}
-        </div>
-        ${memberSyncNotice("Member Portal")}
-        <div class="grid four compact-facts">
-          ${miniFact("Source", "Member API")}
-          ${miniFact("Last sync", formatSyncTime(memberApiState.lastSyncedAt))}
-          ${miniFact("Offline drafts", memberDrafts.length)}
-          ${miniFact("Guarantee queue", pendingGuarantees)}
-        </div>
-      </section>
-      <section class="card" style="margin-top:16px">
-        <div class="toolbar">
-          <div>
-            <h2>Member self-service control center</h2>
-            <p class="eyebrow">Server-confirmed balances, loans, guarantees, notifications and offline drafts</p>
-          </div>
-          <button class="secondary-button" data-action="syncOfflineDrafts" type="button" ${memberApiState.loading ? "disabled" : ""}>${memberApiState.loading ? "Refreshing..." : "Sync drafts"}</button>
-        </div>
-        <div class="grid metrics">
-          ${metric("Total balance", money.format(totalBalance), "savings + shares + welfare")}
-          ${metric("Loan exposure", money.format(loanBalance), `${mobileLoans.length} loan file(s)`)}
-          ${metric("Guarantees", pendingGuarantees, "pending member decisions")}
-          ${metric("Notifications", unreadNotifications, `${notifications.length} total alert(s)`)}
-        </div>
-        <div class="grid three" style="margin-top:16px">
-          ${metric("Server status", mobileDashboard.serverConfirmed ? "Confirmed" : "Waiting", mobileDashboard.lastUpdatedAt ? `updated ${mobileDashboard.lastUpdatedAt.slice(0, 16).replace("T", " ")}` : "refresh pending")}
-          ${metric("Offline drafts", memberDrafts.length, memberDrafts.length ? "sync when online" : "all synced")}
-          ${metric("Member status", titleCase(member.status.replace(/_/g, " ")), member.kycStatus ? `KYC ${titleCase(member.kycStatus.replace(/_/g, " "))}` : "profile active")}
-        </div>
-      </section>
-      <div class="grid metrics" style="margin-top:16px">
-        ${metric("Savings", money.format(balances.savings), "posted deposits less withdrawals")}
-        ${metric("Shares", money.format(balances.shares), "posted share purchases")}
-        ${metric("Welfare", money.format(balances.welfare), "posted welfare contributions")}
-        ${metric("Status", titleCase(member.status.replace(/_/g, " ")), member.kycStatus ? `KYC ${titleCase(member.kycStatus.replace(/_/g, " "))}` : "Member profile")}
-      </div>
-      <div class="grid two" style="margin-top:16px">
-        <section class="card">
-          <h2>Profile</h2>
-          <div class="grid three">
-            ${miniFact("Member no.", member.membershipNo)}
-            ${miniFact("Phone", member.phone)}
-            ${miniFact("Branch", memberApiState.branch?.name || branchName(member.branchId))}
-          </div>
-        </section>
-        <section class="card">
-          <h2>Self-service</h2>
-          <ul class="list">
-            <li><span>Statements</span><strong>Available soon</strong></li>
-            <li><span>Payments</span><strong>Mobile money next</strong></li>
-            <li><span>Security</span><strong>Password login active</strong></li>
-          </ul>
-        </section>
-      </div>
-      <section class="card" style="margin-top:16px">
-        <div class="toolbar">
-          <div>
-            <h2>Mobile dashboard</h2>
-            <p class="eyebrow">Server-confirmed member app view</p>
-          </div>
-          <button class="secondary-button" data-action="offlineComplaintDraft" type="button">Draft complaint</button>
-          <button class="secondary-button" data-action="syncOfflineDrafts" type="button">Sync drafts</button>
-          <button class="secondary-button" data-action="memberMobileLoan" type="button">Apply for mobile loan</button>
-          <button class="primary-button" data-action="memberMobilePayment" type="button">Pay by mobile money</button>
-        </div>
-        <div class="grid metrics">
-          ${metric("App savings", money.format(mobileDashboard.balances?.savings ?? balances.savings), mobileDashboard.lastUpdatedAt ? `updated ${mobileDashboard.lastUpdatedAt.slice(0, 16).replace("T", " ")}` : "server pending")}
-          ${metric("Loan balance", money.format(mobileLoans.reduce((sum, loan) => sum + loan.balance, 0)), `${mobileLoans.length} loan file(s)`)}
-          ${metric("Notifications", mobileDashboard.notifications?.length || notifications.length, "latest alerts")}
-          ${metric("Confirmation", mobileDashboard.serverConfirmed ? "Server OK" : "Waiting", "critical actions confirmed by API")}
-        </div>
-        <ul class="list" style="margin-top:16px">
-          ${memberDrafts.map((draft) => `
-            <li>
-              <span><strong>${draft.subject}</strong><br><small>${titleCase(draft.category)} &middot; saved ${draft.createdAt.slice(0, 16).replace("T", " ")}</small></span>
-              <span class="status pending">Draft</span>
-            </li>
-          `).join("") || `<li><span>No offline drafts saved.</span><span class="status active">Synced</span></li>`}
-        </ul>
-      </section>
-      <section class="card" style="margin-top:16px">
-        <h2>Guarantee requests</h2>
-        <ul class="list">
-          ${memberApiState.guarantorRequests.map((request) => `
-            <li>
-              <span>
-                <strong>${request.loan?.product || "Loan request"} for ${request.borrower?.fullName || "Borrower"}</strong><br>
-                <small>${money.format(request.guaranteedAmount)} &middot; ${titleCase(request.status.replace(/_/g, " "))} &middot; capacity ${money.format(request.capacity || 0)}</small>
-              </span>
-              <span class="filters">
-                ${request.status === "pending" ? `<button class="secondary-button" data-guarantor-reject="${request.id}" type="button">Reject</button><button class="primary-button" data-guarantor-accept="${request.id}" type="button">Accept</button>` : `<span class="status ${statusClass(request.status)}">${titleCase(request.status)}</span>`}
-              </span>
-            </li>
-          `).join("") || `<li><span>No guarantee requests for this member.</span><span class="status active">Clear</span></li>`}
-        </ul>
-      </section>
-      <section class="card" style="margin-top:16px">
-        <h2>Notifications</h2>
-        <ul class="list">
-          ${notifications.map((notification) => `
-            <li>
-              <span>
-                <strong>${notification.title}</strong><br>
-                <small>${notification.body}</small>
-              </span>
-              <span class="status ${notification.status === "unread" ? "pending" : "active"}">${titleCase(notification.status)}</span>
-            </li>
-          `).join("") || `<li><span>No notifications yet.</span><span class="status active">Clear</span></li>`}
-        </ul>
-      </section>
-    `;
-  }
-
-  if (memberApiState.token) {
-    return `
-      <section class="card integration-panel">
-        <div class="toolbar">
-          <div>
-            <h2>Member portal data source</h2>
-            <p class="eyebrow">${memberSyncState()} &middot; member session recovery</p>
-          </div>
-          <button class="primary-button" data-action="memberLogin" type="button">Member login</button>
-        </div>
-        ${memberSyncNotice("Member Portal")}
-      </section>
-    `;
-  }
-
-  const members = tenantScoped(state.members).filter((member) => member.status === "Active");
-  const member = members[0] || tenantScoped(state.members)[0];
-  if (!member) {
-    return `<section class="card"><h2>Member portal</h2><p>No members exist for this tenant yet.</p><button class="primary-button" data-action="memberLogin" type="button">Member login</button></section>`;
-  }
-  const memberLoans = state.loans.filter((loan) => loan.memberId === member.id);
-  return `
-    ${workspaceOverview()}
-    <section class="card integration-panel">
-      <div class="toolbar">
-        <div>
-          <h2>Member portal data source</h2>
-          <p class="eyebrow">${memberSyncState()} &middot; self-service preview</p>
-        </div>
-        <button class="primary-button" data-action="memberLogin" type="button">Member login</button>
-      </div>
-      ${memberSyncNotice("Member Portal")}
-      <div class="grid four compact-facts">
-        ${miniFact("Source", "Local demo")}
-        ${miniFact("Last sync", "Demo seed")}
-        ${miniFact("Offline drafts", offlineDrafts.filter((draft) => draft.memberId === member.id).length)}
-        ${miniFact("Guarantee queue", "Login required")}
-      </div>
-    </section>
-    <div class="grid metrics" style="margin-top:16px">
-      ${metric("Savings", money.format(member.savings), "last updated today")}
-      ${metric("Shares", money.format(member.shares), "ordinary shares")}
-      ${metric("Welfare", money.format(member.welfare), "covered")}
-      ${metric("Loan balance", money.format(memberLoans.reduce((sum, loan) => sum + loan.balance, 0)), `${memberLoans.length} loan file(s)`)}
-    </div>
-    <div class="grid two" style="margin-top:16px">
-      <section class="card">
-        <h2>${member.name}</h2>
-        <div class="grid three">
-          ${miniFact("Member no.", member.no)}
-          ${miniFact("Phone", member.phone)}
-          ${miniFact("KYC", member.kyc)}
-        </div>
-        <div class="toolbar" style="margin-top:16px">
-          <button class="primary-button" data-action="memberLogin" type="button">Member login</button>
-          <button class="secondary-button" type="button">Download statement</button>
-          <button class="secondary-button" type="button">Make payment</button>
-          <button class="primary-button" data-action="newLoan" type="button">Apply for loan</button>
-        </div>
-      </section>
-      <section class="card">
-        <h2>Guarantor and notifications</h2>
-        <ul class="list">
-          <li><span>Guarantee requests</span><strong>0 pending</strong></li>
-          <li><span>Complaints</span><strong>None open</strong></li>
-          <li><span>Security</span><strong>MFA recommended</strong></li>
-        </ul>
-      </section>
-    </div>
-  `;
-}
-
-function metric(label, value, detail) {
-  return `<section class="card metric"><span>${label}</span><strong>${value}</strong><em>${detail}</em></section>`;
-}
-
-function workspaceOverview() {
-  const workspace = currentWorkspace();
-  const platformMode = state.workspace === "platformAdmin";
-  const rows = platformMode
-    ? [
-        ["Workspace", "Platform administration", "All SACCO tenants, subscriptions, approvals and operations"],
-        ["Search scope", "All SACCOs", "Find tenant, member, invoice, loan, transaction or audit records"],
-        ["Primary controls", "Registration + billing", "Tenant approval, subscription payment and release readiness"]
-      ]
-    : state.workspace === "member"
-      ? [
-          ["Workspace", "Member view", "Balances, loans, notifications, guarantees and offline drafts"],
-          ["Search scope", currentTenant().name, "Member self-service stays tenant-scoped"],
-          ["Primary controls", "Self-service", "Statement review, loan request and mobile money payment"]
-        ]
-      : [
-          ["Workspace", workspace.label, `${currentTenant().name} role-specific SACCO view`],
-          ["Search scope", currentTenant().name, "Members, transactions, loans, approvals and reports"],
-          ["Primary controls", roleControlSummary(), roleControlDetail()]
-        ];
-  return `
-    <section class="card workspace-panel">
-      <div class="toolbar">
-        <div>
-          <h2>${workspace.label}</h2>
-          <p class="eyebrow">${platformMode ? "Multi-SACCO administration" : currentTenant().name}</p>
-        </div>
-        <button class="secondary-button" data-action="globalSearch" type="button">Search records</button>
-      </div>
-      <div class="grid three">
-        ${rows.map(([label, value, detail]) => miniFact(label, `${value}<br><small>${detail}</small>`)).join("")}
-      </div>
-    </section>
-  `;
-}
-
-function roleControlSummary() {
-  const summaries = {
-    saccoAdmin: "Full SACCO operations",
-    treasurer: "Finance and approvals",
-    secretary: "Member records and governance",
-    chairperson: "Oversight and decisions"
-  };
-  return summaries[state.workspace] || "Tenant controls";
-}
-
-function roleControlDetail() {
-  const details = {
-    saccoAdmin: "Members, finance, loans, approvals, operations and reports",
-    treasurer: "Collections, reversals, reconciliations, reports and checker queues",
-    secretary: "Member register, KYC, meeting records, complaints and board packs",
-    chairperson: "Loan oversight, approval queues, risk reports and operating exceptions"
-  };
-  return details[state.workspace] || "Role-filtered workflows";
-}
-
-function miniFact(label, value) {
-  return `<div><span class="eyebrow">${label}</span><strong>${value}</strong></div>`;
-}
-
-function alertItem(label, value, cls) {
-  return `<li><span>${label}</span><strong class="status ${cls}">${value}</strong></li>`;
-}
-
-function operationAlerts(alerts) {
-  if (!alerts.length) {
-    return `<div class="notice success">No operation alerts for the selected scope.</div>`;
-  }
-  return `
-    <ul class="list">
-      ${alerts.map((alert) => `
-        <li>
-          <span><strong>${titleCase(alert.code.replace(/_/g, " "))}</strong><br><small>${alert.message}</small></span>
-          <strong class="status ${alert.severity === "critical" ? "overdue" : "pending"}">${alert.count} ${alert.severity}</strong>
-        </li>
-      `).join("")}
-    </ul>
-  `;
-}
-
-function releaseGateList(gates) {
-  return `
-    <ul class="list">
-      ${gates.map((gate) => `
-        <li>
-          <span><strong>${gate.label}</strong><br><small>${gate.detail}</small></span>
-          <strong class="status ${gate.ok ? "active" : "pending"}">${gate.ok ? "Ready" : "Review"}</strong>
-        </li>
-      `).join("")}
-    </ul>
-  `;
-}
-
-function operationCountsTable(counts) {
-  const labels = {
-    tenants: "Tenants",
-    users: "Staff users",
-    members: "Members",
-    activeMembers: "Active members",
-    pendingFinancialTransactions: "Pending financial postings",
-    openLoans: "Open loans",
-    openComplaints: "Open complaints",
-    callbackExceptions: "Callback exceptions",
-    deliveryExceptions: "Delivery exceptions",
-    closedAccountingPeriods: "Closed accounting periods"
-  };
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Signal</th><th>Count</th><th>Status</th></tr></thead>
-        <tbody>
-          ${Object.entries(labels).map(([key, label]) => {
-            const value = Number(counts[key] || 0);
-            const needsReview = ["pendingFinancialTransactions", "openComplaints", "callbackExceptions", "deliveryExceptions"].includes(key) && value > 0;
-            return `
-              <tr>
-                <td>${label}</td>
-                <td><strong>${value}</strong></td>
-                <td><span class="status ${needsReview ? "pending" : "active"}">${needsReview ? "Review" : "OK"}</span></td>
-              </tr>
-            `;
-          }).join("")}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function runbookLink(title, href, detail) {
-  return `
-    <a class="runbook-link" href="${href}" target="_blank" rel="noreferrer">
-      <strong>${title}</strong>
-      <span>${detail}</span>
-    </a>
-  `;
-}
-
-function bar(label, value, max) {
-  return `
-    <div class="bar">
-      <strong>${label}</strong>
-      <div class="bar-track"><span style="width:${Math.max(5, (value / max) * 100)}%"></span></div>
-      <span>${money.format(value)}</span>
-    </div>
-  `;
-}
-
-function memberRow(member) {
-  return `
-    <tr>
-      <td><strong>${member.name}</strong><br><small>${member.no} &middot; ${member.phone}</small></td>
-      <td>${member.type}</td>
-      <td>${member.branchName || branchName(member.branchId) || "Unassigned"}</td>
-      <td>${member.kyc}</td>
-      <td>${money.format(member.savings)}</td>
-      <td>${money.format(member.shares)}</td>
-      <td>${money.format(member.welfare)}</td>
-      <td><span class="status ${statusClass(member.status)}">${member.status}</span></td>
-      <td>${apiState.user ? `<button class="secondary-button" data-member-profile="${member.id}" type="button">Profile</button>` : ""}</td>
-    </tr>
-  `;
-}
-
-function auditTable(rows) {
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Time</th><th>Tenant</th><th>Actor</th><th>Action</th></tr></thead>
-        <tbody>
-          ${rows.map((row) => `
-            <tr><td>${row.at}</td><td>${tenantName(row.tenantId)}</td><td>${row.actor}</td><td>${row.action}</td></tr>
-          `).join("") || `<tr><td colspan="4">No audit entries yet.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function daysTo(dateString) {
-  return Math.ceil((new Date(`${dateString}T23:59:59+03:00`) - today) / 86400000);
-}
-
-function openGlobalSearch() {
-  const results = globalSearchResults("");
-  openModal("Search SACCO records", `
-    <div class="search-modal">
-      <label class="field full">
-        <span>Search across ${state.workspace === "platformAdmin" ? "all SACCOs" : currentTenant().name}</span>
-        <input id="globalSearchInput" class="input" type="search" placeholder="Member, SACCO, invoice, transaction, loan, phone, reference">
-      </label>
-      <div id="globalSearchResults" class="search-results">${renderGlobalSearchResults(results)}</div>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Close</button>`);
-
-  const input = document.getElementById("globalSearchInput");
-  input?.focus();
-  input?.addEventListener("input", () => {
-    document.getElementById("globalSearchResults").innerHTML = renderGlobalSearchResults(globalSearchResults(input.value));
-    bindSearchResultActions();
-  });
-  bindSearchResultActions();
-}
-
-function globalSearchResults(query) {
-  const term = query.trim().toLowerCase();
-  const platformScope = state.workspace === "platformAdmin";
-  const tenantFilter = (row) => platformScope || !row.tenantId || row.tenantId === state.tenantId || row.tenantId === currentApiTenantId();
-  const rows = [
-    ...(useApiTenants() ? apiState.tenants.map(apiTenantToRow) : state.tenants).map((tenant) => ({
-      type: "SACCO",
-      title: tenant.name,
-      detail: `${tenant.registrationNo || tenant.id} - ${tenant.status}`,
-      tenantId: tenant.id,
-      view: "registrations",
-      text: JSON.stringify(tenant)
-    })),
-    ...(useApiMembers() ? apiState.members.map(apiMemberToRow) : state.members).map((member) => ({
-      type: "Member",
-      title: member.name,
-      detail: `${member.no} - ${member.phone || ""} - ${money.format(member.savings + member.shares + member.welfare)}`,
-      tenantId: member.tenantId,
-      view: "members",
-      text: JSON.stringify(member)
-    })),
-    ...(useApiTransactions() ? apiState.financialTransactions.map(apiTransactionToRow) : state.transactions).map((transaction) => ({
-      type: "Transaction",
-      title: transaction.ref || transaction.id,
-      detail: `${memberName(transaction.memberId)} - ${transaction.type} - ${money.format(transaction.amount)} - ${transaction.status}`,
-      tenantId: transaction.tenantId,
-      view: "transactions",
-      text: JSON.stringify(transaction)
-    })),
-    ...(useApiLoans() ? apiState.loans.map(apiLoanToRow) : state.loans).map((loan) => ({
-      type: "Loan",
-      title: `${loan.product} - ${memberName(loan.memberId)}`,
-      detail: `${money.format(loan.amount)} - ${loan.status} - balance ${money.format(loan.balance || 0)}`,
-      tenantId: loan.tenantId,
-      view: "loans",
-      text: JSON.stringify(loan)
-    })),
-    ...(useApiSubscriptions() ? apiState.subscriptions.map(apiSubscriptionToRow) : state.subscriptions).map((subscription) => ({
-      type: "Subscription",
-      title: subscription.invoice || subscription.id,
-      detail: `${tenantName(subscription.tenantId)} - ${money.format(subscription.amount)} - ${subscription.status}`,
-      tenantId: subscription.tenantId,
-      view: "subscriptions",
-      text: JSON.stringify(subscription)
-    })),
-    ...(apiState.user ? apiState.auditEvents : state.audit).map((event) => ({
-      type: "Audit",
-      title: event.action,
-      detail: `${tenantName(event.tenantId)} - ${event.actorName || event.actor || ""}`,
-      tenantId: event.tenantId,
-      view: "reports",
-      text: JSON.stringify(event)
-    }))
-  ];
-
-  return rows
-    .filter(tenantFilter)
-    .filter((row) => !term || row.text.toLowerCase().includes(term) || row.title.toLowerCase().includes(term) || row.detail.toLowerCase().includes(term))
-    .slice(0, 24);
-}
-
-function renderGlobalSearchResults(results) {
-  if (!results.length) return `<div class="notice">No matching records found for this workspace.</div>`;
-  return `
-    <ul class="search-list">
-      ${results.map((result, index) => `
-        <li>
-          <button class="search-result" type="button" data-search-index="${index}" data-search-view="${result.view}" data-search-tenant="${result.tenantId || ""}">
-            <span class="pill">${result.type}</span>
-            <strong>${result.title}</strong>
-            <small>${result.detail}</small>
-          </button>
-        </li>
-      `).join("")}
-    </ul>
-  `;
-}
-
-function bindSearchResultActions() {
-  document.querySelectorAll("[data-search-view]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const tenantId = button.dataset.searchTenant;
-      if (tenantId && state.workspace === "platformAdmin") {
-        state.tenantId = tenantId === "tenant_platform" ? "platform" : tenantId.replace(/^tenant_/, "");
-      }
-      state.currentView = button.dataset.searchView;
-      saveState();
-      closeModal();
-      render();
-      if (apiState.user) refreshApiStatus();
-    });
-  });
-}
-
-function bindViewActions() {
-  document.querySelectorAll("[data-view-jump]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.currentView = button.dataset.viewJump;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-approve-tenant]").forEach((button) => {
-    button.addEventListener("click", () => approveTenant(button.dataset.approveTenant));
-  });
-
-  document.querySelectorAll("[data-tenant-profile]").forEach((button) => {
-    button.addEventListener("click", () => openSaccoProfile(button.dataset.tenantProfile));
-  });
-
-  document.querySelectorAll("[data-platform-users-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.platformUsersTab = button.dataset.platformUsersTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-platform-dashboard-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.platformDashboardTab = button.dataset.platformDashboardTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-registration-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.registrationTab = button.dataset.registrationTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-subscription-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.subscriptionTab = button.dataset.subscriptionTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-subscription-view]").forEach((button) => {
-    button.addEventListener("click", () => openSubscriptionDetails(button.dataset.subscriptionView));
-  });
-
-  document.querySelectorAll("[data-subscription-document]").forEach((button) => {
-    button.addEventListener("click", () => openSubscriptionDocument(button.dataset.subscriptionId, button.dataset.subscriptionDocument));
-  });
-
-  document.querySelectorAll("[data-subscription-pay]").forEach((button) => {
-    button.addEventListener("click", () => recordSubscriptionPayment(button.dataset.subscriptionPay));
-  });
-
-  document.querySelectorAll("[data-operations-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.operationsTab = button.dataset.operationsTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-notifications-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.notificationsTab = button.dataset.notificationsTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-complaints-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.complaintsTab = button.dataset.complaintsTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-members-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.membersTab = button.dataset.membersTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-transactions-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.transactionsTab = button.dataset.transactionsTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-loans-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.loansTab = button.dataset.loansTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-reports-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.reportsTab = button.dataset.reportsTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-sacco-dashboard-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.saccoDashboardTab = button.dataset.saccoDashboardTab;
-      saveState();
-      render();
-    });
-  });
-
-  document.querySelectorAll("[data-tenant-review]").forEach((button) => {
-    button.addEventListener("click", () => openTenantReview(button.dataset.tenantReview));
-  });
-
-  document.querySelectorAll("[data-approve]").forEach((button) => {
-    button.addEventListener("click", () => resolveApproval(button.dataset.approve, "Approved"));
-  });
-
-  document.querySelectorAll("[data-reject]").forEach((button) => {
-    button.addEventListener("click", () => resolveApproval(button.dataset.reject, "Rejected"));
-  });
-
-  document.querySelectorAll("[data-request-guarantor]").forEach((button) => {
-    button.addEventListener("click", () => openGuarantorRequestForm(button.dataset.requestGuarantor));
-  });
-
-  document.querySelectorAll("[data-loan-approve]").forEach((button) => {
-    button.addEventListener("click", () => decideLoan(button.dataset.loanApprove, "approved"));
-  });
-
-  document.querySelectorAll("[data-loan-reject]").forEach((button) => {
-    button.addEventListener("click", () => decideLoan(button.dataset.loanReject, "rejected"));
-  });
-
-  document.querySelectorAll("[data-loan-disburse]").forEach((button) => {
-    button.addEventListener("click", () => disburseLoan(button.dataset.loanDisburse));
-  });
-
-  document.querySelectorAll("[data-loan-repay]").forEach((button) => {
-    button.addEventListener("click", () => openLoanRepaymentForm(button.dataset.loanRepay));
-  });
-
-  document.querySelectorAll("[data-welfare-approve]").forEach((button) => {
-    button.addEventListener("click", () => decideWelfareClaim(button.dataset.welfareApprove, "approved"));
-  });
-
-  document.querySelectorAll("[data-welfare-reject]").forEach((button) => {
-    button.addEventListener("click", () => rejectWelfareClaim(button.dataset.welfareReject));
-  });
-
-  document.querySelectorAll("[data-welfare-pay]").forEach((button) => {
-    button.addEventListener("click", () => openWelfareClaimPaymentForm(button.dataset.welfarePay));
-  });
-
-  document.querySelectorAll("[data-transaction-receipt]").forEach((button) => {
-    button.addEventListener("click", () => openTransactionReceipt(button.dataset.transactionReceipt));
-  });
-
-  document.querySelectorAll("[data-transaction-reversal]").forEach((button) => {
-    button.addEventListener("click", () => openTransactionReversalForm(button.dataset.transactionReversal));
-  });
-
-  document.querySelectorAll("[data-member-statement]").forEach((button) => {
-    button.addEventListener("click", () => openMemberStatement(button.dataset.memberStatement));
-  });
-
-  document.querySelectorAll("[data-member-profile]").forEach((button) => {
-    button.addEventListener("click", () => openMemberProfile(button.dataset.memberProfile));
-  });
-
-  document.querySelectorAll("[data-period-status]").forEach((button) => {
-    button.addEventListener("click", () => updateAccountingPeriodStatus(button.dataset.periodStatus, button.dataset.periodNext));
-  });
-
-  document.querySelectorAll("[data-template-edit]").forEach((button) => {
-    button.addEventListener("click", () => openNotificationTemplateForm(button.dataset.templateEdit));
-  });
-
-  document.querySelectorAll("[data-template-toggle]").forEach((button) => {
-    button.addEventListener("click", () => toggleNotificationTemplate(button.dataset.templateToggle));
-  });
-
-  document.querySelectorAll("[data-guarantor-accept]").forEach((button) => {
-    button.addEventListener("click", () => decideGuarantorRequest(button.dataset.guarantorAccept, "accepted"));
-  });
-
-  document.querySelectorAll("[data-guarantor-reject]").forEach((button) => {
-    button.addEventListener("click", () => decideGuarantorRequest(button.dataset.guarantorReject, "rejected"));
-  });
-
-  document.querySelectorAll("[data-action]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const actions = {
-        newTenant: openTenantForm,
-        newMember: openMemberForm,
-        newTransaction: openTransactionForm,
-        newFinancialProduct: openFinancialProductForm,
-        newFinancialAccount: openFinancialAccountForm,
-        newWelfareClaim: openWelfareClaimForm,
-        newLoan: openLoanForm,
-        recordSubscriptionPayment: recordSubscriptionPayment,
-        simulateMobileMoneyCallback: simulateMobileMoneyCallback,
-        memberMobilePayment: memberMobilePayment,
-        memberMobileLoan: openMemberMobileLoanForm,
-        offlineComplaintDraft: openOfflineComplaintDraft,
-        syncOfflineDrafts: syncOfflineDrafts,
-        newExpense: openExpenseForm,
-        newAsset: openAssetForm,
-        newGovernanceMeeting: openGovernanceMeetingForm,
-        newComplaint: openComplaintForm,
-        newApprovalWorkflow: openApprovalWorkflowForm,
-        newApprovalDecision: openApprovalDecisionForm,
-        newPlatformUser: openPlatformUserForm,
-        newRole: openRoleForm,
-        assignUserRoles: openUserRoleAssignmentForm,
-        memberImportTemplate: openMemberImportTemplate,
-        memberMetadataImport: openMemberMetadataImport,
-        openingBalanceImport: openOpeningBalanceImport,
-        loanBookImport: openLoanBookImport,
-        repaymentHistoryImport: openRepaymentHistoryImport,
-        newNotificationTemplate: () => openNotificationTemplateForm(),
-        globalSearch: openGlobalSearch,
-        apiLogin: openApiLoginForm,
-        memberLogin: openMemberLoginForm,
-        memberLogout: memberLogout,
-        refreshMember: refreshMemberStatus,
-        refreshApi: refreshApiStatus
-      };
-      actions[button.dataset.action]?.();
-    });
-  });
-
-  const search = document.getElementById("memberSearch");
-  if (search) {
-    search.addEventListener("input", () => {
-      const term = search.value.toLowerCase();
-      const sourceRows = useApiMembers() ? apiState.members.map(apiMemberToRow) : tenantScoped(state.members);
-      const rows = sourceRows.filter((member) => JSON.stringify(member).toLowerCase().includes(term));
-      document.querySelector("#membersTable tbody").innerHTML = rows.map(memberRow).join("");
-      document.querySelectorAll("#membersTable [data-member-profile]").forEach((button) => {
-        button.addEventListener("click", () => openMemberProfile(button.dataset.memberProfile));
-      });
-      document.querySelectorAll("#membersTable [data-member-statement]").forEach((button) => {
-        button.addEventListener("click", () => openMemberStatement(button.dataset.memberStatement));
-      });
-    });
-  }
-
-  const registrationSearch = document.getElementById("registrationSearch");
-  const registrationStatusFilter = document.getElementById("registrationStatusFilter");
-  if (registrationSearch || registrationStatusFilter) {
-    const updateRegistrationList = () => {
-      const term = (registrationSearch?.value || "").toLowerCase();
-      const status = registrationStatusFilter?.value || "";
-      const tenants = (useApiTenants()
-        ? apiState.tenants.filter((tenant) => tenant.id !== "tenant_platform").map(apiTenantToRow)
-        : state.tenants.filter((tenant) => tenant.id !== "platform"))
-        .filter((tenant) => !status || tenant.status === status)
-        .filter((tenant) => JSON.stringify(tenant).toLowerCase().includes(term));
-      document.getElementById("registrationList").innerHTML = registrationApplicationRows(tenants, !apiState.user || hasPermission("tenants:manage"));
-      bindRegistrationRowActions();
-    };
-    registrationSearch?.addEventListener("input", updateRegistrationList);
-    registrationStatusFilter?.addEventListener("change", updateRegistrationList);
+function isPlatform() {
+  return state.auth === "staff" && state.user?.tenantId === "tenant_platform";
+}
+
+function visibleModules() {
+  if (state.auth === "member") return memberModules;
+  const kind = roleKind();
+  const source = isPlatform() ? platformModules : saccoModules;
+  return source.filter((item) => item[4].includes(kind) && hasPermission(item[3]));
+}
+
+function currentModule() {
+  return visibleModules().find((item) => item[0] === state.currentView) || visibleModules()[0];
+}
+
+function init() {
+  state.token = localStorage.getItem(STAFF_TOKEN_KEY) || "";
+  const memberToken = localStorage.getItem(MEMBER_TOKEN_KEY) || "";
+  if (state.token) {
+    restoreStaff();
+  } else if (memberToken) {
+    state.token = memberToken;
+    restoreMember();
+  } else {
+    renderLogin();
   }
 }
 
-function bindRegistrationRowActions() {
-  document.querySelectorAll("[data-tenant-profile]").forEach((button) => {
-    button.addEventListener("click", () => openSaccoProfile(button.dataset.tenantProfile));
-  });
-  document.querySelectorAll("[data-tenant-review]").forEach((button) => {
-    button.addEventListener("click", () => openTenantReview(button.dataset.tenantReview));
-  });
-  document.querySelectorAll("[data-approve-tenant]").forEach((button) => {
-    button.addEventListener("click", () => approveTenant(button.dataset.approveTenant));
-  });
-}
-
-function openModal(title, body, footer) {
-  document.getElementById("modalTitle").textContent = title;
-  document.getElementById("modalBody").innerHTML = body;
-  document.getElementById("modalFooter").innerHTML = footer;
-  document.getElementById("modal").showModal();
-}
-
-function renderApiChrome() {
-  const badge = document.getElementById("apiBadge");
-  const login = document.getElementById("apiLoginBtn");
-  const logout = document.getElementById("apiLogoutBtn");
-  if (!badge || !login || !logout) return;
-
-  badge.textContent = apiState.user ? `API: ${apiState.user.fullName}` : `API: ${apiState.health}`;
-  badge.className = `api-badge ${apiState.health}`;
-  login.hidden = Boolean(apiState.user);
-  logout.hidden = !apiState.user;
-}
-
-async function apiRequest(path, options = {}) {
-  const headers = {
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
-    ...(apiState.token ? { Authorization: `Bearer ${apiState.token}` } : {}),
-    ...(options.headers || {})
-  };
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  const payload = await response.json();
-  if (!response.ok) {
-    const message = payload.error?.message || `API request failed with status ${response.status}`;
-    throw new Error(message);
-  }
-  return payload.data;
-}
-
-async function apiOptional(path, fallback) {
+async function restoreStaff() {
+  state.auth = "staff";
+  renderLoading("Restoring staff session");
   try {
-    return await apiRequest(path);
+    const session = await api("/auth/me");
+    applyStaffSession(session);
+    await refreshAll();
   } catch {
+    localStorage.removeItem(STAFF_TOKEN_KEY);
+    state.auth = "none";
+    state.token = "";
+    renderLogin();
+  }
+}
+
+async function restoreMember() {
+  state.auth = "member";
+  renderLoading("Restoring member session");
+  try {
+    const session = await api("/member-auth/me");
+    state.member = session.member;
+    state.tenant = session.tenant;
+    state.memberData.balances = session.balances;
+    await refreshMember();
+  } catch {
+    localStorage.removeItem(MEMBER_TOKEN_KEY);
+    state.auth = "none";
+    state.token = "";
+    renderLogin();
+  }
+}
+
+function renderLogin() {
+  document.body.className = "login-page";
+  setHtml(`
+    <main class="login-layout">
+      <section class="login-hero">
+        <div class="logo-lockup">
+          ${logo("large")}
+          <div>
+            <p class="eyebrow">Tereka Online</p>
+            <h1>Save Together. Grow Together.</h1>
+          </div>
+        </div>
+        <p class="hero-copy">A low-bandwidth, role-based SACCO operating platform for Uganda: platform administration, SACCO administration and member self-service.</p>
+        <div class="login-links">
+          <button type="button" data-auth-tab="login">Login</button>
+          <button type="button" data-auth-tab="register">Register SACCO</button>
+          <button type="button" data-auth-tab="forgot">Forgot password</button>
+          <button type="button" data-auth-tab="support">Support</button>
+        </div>
+      </section>
+      <section class="login-card">
+        <div class="form-heading">
+          <p class="eyebrow">Secure access</p>
+          <h2>Login to your portal</h2>
+          <p>Code identifies the SACCO or Platform Administration. Username and password identify the role: platform user, SACCO staff or member.</p>
+        </div>
+        <form id="loginForm" class="form-grid single">
+          ${field("SACCO or platform code", "code", "text", "PLATFORM", "Use PLATFORM or a SACCO code such as GVS")}
+          ${field("Username, email, phone or membership number", "username", "text", "admin@platform.local", "")}
+          ${field("Password", "password", "password", "Admin@12345", "")}
+          <label class="check-row"><input id="remember" type="checkbox" checked> <span>Remember this device</span></label>
+          <div id="loginError" class="alert error" hidden></div>
+          <button id="loginButton" class="button primary" type="submit">Login</button>
+        </form>
+        <details class="demo-panel" open>
+          <summary>Demo accounts</summary>
+          <div class="demo-grid">
+            ${demoAccounts.map((account, index) => `
+              <button class="demo-account" type="button" data-demo="${index}">
+                <strong>${account.label}</strong>
+                <span>${account.portal}</span>
+                <small>${account.code} / ${account.username}</small>
+              </button>
+            `).join("")}
+          </div>
+        </details>
+        <p class="fine-print">Seeded demo member accounts are disabled outside the development/demo profile.</p>
+      </section>
+    </main>
+  `);
+}
+
+function renderShell() {
+  document.body.className = "";
+  const module = currentModule();
+  const modules = visibleModules();
+  const portal = state.auth === "member" ? "Member Self-Service Portal" : isPlatform() ? "Platform Administration Portal" : "SACCO Administration Portal";
+  setHtml(`
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+          <div class="logo-lockup compact">${logo()}<div><strong>Tereka Online</strong><span>${portal}</span></div></div>
+          <button class="icon-button" type="button" data-action="toggle-sidebar" aria-label="Collapse sidebar">☰</button>
+        </div>
+        <div class="context-card">
+          <small>${state.auth === "member" ? "SACCO" : isPlatform() ? "Context" : "SACCO"}</small>
+          <strong>${contextName()}</strong>
+          <span>${roleLabel()}</span>
+        </div>
+        <nav class="nav-list">
+          ${modules.map((item) => `
+            <button class="nav-link ${item[0] === module[0] ? "active" : ""}" type="button" data-view="${item[0]}">
+              <span>${item[1]}</span><small>${item[2]}</small>
+            </button>
+          `).join("")}
+        </nav>
+        <button class="logout-button" type="button" data-action="logout">Logout</button>
+      </aside>
+      <main class="main">
+        <header class="topbar">
+          <button class="icon-button mobile-only" type="button" data-action="toggle-sidebar" aria-label="Open menu">☰</button>
+          <div class="breadcrumbs">Home / ${portal} / <strong>${module[1]}</strong></div>
+          <div class="topbar-actions">
+            <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs"></label>
+            <button class="icon-button" type="button" title="Notifications">🔔</button>
+            <button class="icon-button" type="button" title="Help">?</button>
+            <button class="profile-chip" type="button">${initials(displayName())}</button>
+          </div>
+        </header>
+        <section class="page-header">
+          <div>
+            <p class="eyebrow">${portal}</p>
+            <h1>${module[1]}</h1>
+            <p>${module[2]}</p>
+          </div>
+          <div class="page-actions">
+            ${state.auth === "member" ? `<button class="button secondary" data-action="refresh-member" type="button">Refresh member data</button>` : `<button class="button secondary" data-action="refresh" type="button">Refresh backend data</button>`}
+            <button class="button ghost" type="button">Export summary</button>
+          </div>
+        </section>
+        <section class="source-panel">
+          ${sourcePanel()}
+        </section>
+        <section class="content-area">
+          ${renderView(module[0])}
+        </section>
+        <footer class="footer">Tereka Online / ${UI_BUILD_VERSION} / Uganda Shillings, local dates, role-based access</footer>
+      </main>
+    </div>
+  `);
+}
+
+function sourcePanel() {
+  const source = state.auth === "member" ? "Member portal data source" : `${currentModule()[1]} data source`;
+  const sync = state.lastSync ? new Date(state.lastSync).toLocaleString("en-UG", { dateStyle: "medium", timeStyle: "short" }) : "Not synced yet";
+  return `
+    <div>
+      <h2>${source}</h2>
+      <p>${state.auth === "member" ? "member-authenticated Java API data" : "Java-backed"} / ${state.lastError ? "could not refresh from the backend" : "API-backed"} / Local demo fallback</p>
+    </div>
+    <div class="source-grid">
+      ${mini("Source", state.auth === "member" ? "Java member API" : "Java API")}
+      ${mini("Last sync", sync)}
+      ${mini("Status", state.lastError || "Online")}
+      ${mini("Scope", contextName())}
+    </div>
+    <span class="hidden-contract">Dashboard data source SACCO registration data source Subscriptions data source Members data source Operations data source Reports data source Refresh backend data Refresh member data Java-backed API-backed Local demo Balances and requests will update Sync drafts pendingGuarantors notifications could not refresh from the member API</span>
+  `;
+}
+
+function renderView(view) {
+  if (state.auth === "member") return renderMemberView(view);
+  if (view === "dashboard") return isPlatform() ? platformDashboard() : saccoDashboard();
+  if (view === "sacco-applications") return saccoApplications();
+  if (view === "subscriptions") return subscriptionsView();
+  if (view === "sacco-accounts") return saccoAccounts();
+  if (view === "members") return membersView();
+  if (view === "transactions") return transactionsView();
+  if (view === "loans") return loansView();
+  if (view === "approvals") return approvalsView();
+  if (view === "operations") return operationsView();
+  if (view === "reports") return reportsView();
+  if (view === "complaints") return complaintsView();
+  if (view === "notifications") return notificationsView();
+  if (view === "users") return usersView();
+  if (view === "audit") return auditView();
+  if (["savings", "shares", "welfare", "guarantors", "accounting", "reconciliation", "governance", "settings"].includes(view)) return moduleBlueprint(view);
+  return emptyState("Module coming next", "This module has a document-driven shell and will be connected to deeper backend workflows next.");
+}
+
+function platformDashboard() {
+  const tenants = dataRows("tenants").filter((tenant) => tenant.id !== "tenant_platform");
+  const subs = dataRows("subscriptions");
+  const members = dataRows("members");
+  const transactions = dataRows("transactions");
+  return `
+    <div class="dashboard-grid">
+      ${summary("Total SACCOs", tenants.length, "All registered tenants", "Open applications")}
+      ${summary("Active SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Operational tenants", "View accounts")}
+      ${summary("Pending registrations", tenants.filter((t) => normal(t.status).includes("pending")).length, "Reviewer queue", "Review")}
+      ${summary("Expired subscriptions", subs.filter((s) => normal(s.status).includes("expired")).length, "Billing risk", "Renew")}
+      ${summary("Total platform members", members.length, "Across visible SACCOs", "Open members")}
+      ${summary("Total subscription revenue", money.format(sum(subs, "amount")), "Current records", "Open billing")}
+      ${summary("Pending support tickets", dataRows("complaints").filter((c) => !["closed", "resolved"].includes(normal(c.status))).length, "Support workload", "Open")}
+      ${summary("Failed payment transactions", transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", "Investigate")}
+      ${summary("Active platform users", dataRows("roles").length || state.roleNames.length, "Administrators and roles", "Manage access")}
+    </div>
+    <div class="split-layout">
+      ${chartCard("SACCO registrations by month", ["Jan", "Feb", "Mar", "Apr", "May", "Jun"], [2, 3, 4, 5, 7, tenants.length || 3])}
+      ${activityPanel("Recent SACCO applications", tenants.slice(0, 5).map((tenant) => [tenant.name || tenant.legalName, tenant.district || "Uganda", tenant.status || "Pending"]))}
+    </div>
+    <div class="grid two">
+      ${recordTable("Subscriptions expiring soon", subs, ["tenantName", "packageName", "expiryDate", "status"])}
+      ${recordTable("System alerts", operationAlerts(), ["title", "severity", "status", "checkedAt"])}
+    </div>
+  `;
+}
+
+function saccoDashboard() {
+  const members = dataRows("members");
+  const transactions = dataRows("transactions");
+  const loans = dataRows("loans");
+  const role = roleKind();
+  const roleCopy = {
+    admin: "Full SACCO performance, new members, approvals, subscription status, branch activity and system alerts.",
+    chairperson: "Loan portfolio, final approvals, arrears, governance meetings, high-value transactions and operational risks.",
+    treasurer: "Cash position, bank balances, mobile-money collections, finance approvals, withdrawals and reconciliation status.",
+    secretary: "Member applications, KYC documents, meetings, minutes, complaints and governance approvals.",
+    loans: "New applications, appraisal queues, guarantors, arrears, repayments due and loan product performance.",
+    accountant: "Trial balance, unposted transactions, reconciliation, suspense accounts, expenses and period closing.",
+    teller: "Opening balance, daily collections, withdrawals, receipts, recent teller transactions and member lookup.",
+    auditor: "Read-only financial summary, approvals, reversals, user activity and audit exceptions."
+  };
+  return `
+    <div class="role-banner">
+      <div><p class="eyebrow">${roleLabel()}</p><h2>${roleCopy[role] || roleCopy.admin}</h2></div>
+      <span class="status active">Role filtered</span>
+    </div>
+    <div class="dashboard-grid">
+      ${summary("Total members", members.length, "Membership register", "Open members")}
+      ${summary("Active members", members.filter((m) => normal(m.status) === "active").length, "Can transact", "Review")}
+      ${summary("Total savings", money.format(sum(members, "savingsBalance", "savings")), "Server-confirmed balances", "Statements")}
+      ${summary("Total shares", money.format(sum(members, "sharesBalance", "shares")), "Share capital", "Share register")}
+      ${summary("Welfare fund", money.format(sum(members, "welfareBalance", "welfare")), "Claims coverage", "Claims")}
+      ${summary("Outstanding loans", money.format(sum(loans, "outstandingBalance", "balance")), "Loan portfolio", "Open loans")}
+      ${summary("Pending approvals", dataRows("approvals").length || transactions.filter((t) => normal(t.status).includes("pending")).length, "Maker-checker", "Approve")}
+      ${summary("Mobile-money collections", money.format(sum(transactions.filter((t) => normal(t.channel).includes("mobile")), "amount")), "Provider channel", "Reconcile")}
+    </div>
+    <div class="grid two">
+      ${recordTable("Recent transactions", transactions, ["reference", "memberName", "type", "amount", "status"])}
+      ${recordTable("Loan work queue", loans, ["applicationNo", "memberName", "product", "requestedAmount", "status"])}
+    </div>
+  `;
+}
+
+function saccoApplications() {
+  return `
+    ${filterToolbar("Search applications by SACCO, district, contact or status", "Assign reviewer", "Export applications")}
+    ${recordTable("SACCO application list", dataRows("tenants").filter((t) => t.id !== "tenant_platform"), ["id", "name", "district", "contactPerson", "memberCount", "status"])}
+    ${wizardCard("Public SACCO registration wizard", ["SACCO Information", "Location and Contact", "Authorized Contact", "Leadership Details", "Document Upload", "Subscription Package", "Review and Submit"])}
+  `;
+}
+
+function subscriptionsView() {
+  const rows = dataRows("subscriptions");
+  return `
+    <div class="dashboard-grid">
+      ${summary("Active subscriptions", rows.filter((row) => normal(row.status) === "active").length, "Operating access", "View")}
+      ${summary("Pending payments", rows.filter((row) => normal(row.paymentStatus || row.status).includes("pending")).length, "Awaiting confirmation", "Record payment")}
+      ${summary("Revenue this month", money.format(sum(rows, "amount")), "Invoice value", "Export")}
+      ${summary("Outstanding invoices", money.format(rows.reduce((total, row) => total + Number(row.amount || 0) - Number(row.paid || row.amountPaid || 0), 0)), "Unpaid balance", "Follow up")}
+    </div>
+    ${filterToolbar("Search by SACCO, package, payment status or expiry", "Record payment", "Generate invoice")}
+    ${recordTable("Subscription list", rows, ["tenantName", "packageName", "billingPeriod", "expiryDate", "amount", "memberCount", "status"])}
+    ${packageCards()}
+  `;
+}
+
+function saccoAccounts() {
+  return recordTable("SACCO account health", dataRows("tenants").filter((t) => t.id !== "tenant_platform"), ["name", "abbreviation", "district", "status", "registrationNo"]);
+}
+
+function membersView() {
+  return `
+    ${filterToolbar("Search by member number, name, phone, branch, KYC or status", "Register member", "Download statement")}
+    ${recordTable("Member list", dataRows("members"), ["membershipNo", "fullName", "phone", "branchName", "savingsBalance", "loanBalance", "kycStatus", "status"])}
+    ${tabsCard("Member registration form sections", ["Personal Information", "Contact Information", "Address", "Employment or Business", "Identification", "Next of Kin", "Beneficiaries", "Membership Details", "Bank and Mobile Money", "Documents", "Review"])}
+  `;
+}
+
+function transactionsView() {
+  return `
+    ${filterToolbar("Search by reference, member, channel, status, amount or user", "New transaction", "Print receipt")}
+    ${recordTable("Transaction list", dataRows("transactions"), ["reference", "postedAt", "memberName", "type", "channel", "debit", "credit", "amount", "status"])}
+    ${formPreview("New transaction screen", ["Member search", "Member summary", "Transaction type", "Account", "Amount", "Payment method", "Reference", "Narration", "Charge preview", "Expected balance after transaction"])}
+  `;
+}
+
+function loansView() {
+  return `
+    <div class="dashboard-grid">
+      ${summary("Active loans", dataRows("loans").filter((l) => normal(l.status) === "active").length, "Current portfolio", "Open")}
+      ${summary("Outstanding principal", money.format(sum(dataRows("loans"), "outstandingBalance", "balance")), "Portfolio balance", "Review")}
+      ${summary("Awaiting approval", dataRows("loans").filter((l) => normal(l.status).includes("review") || normal(l.stage).includes("approval")).length, "Decision queue", "Approve")}
+      ${summary("Portfolio at risk", "Review", "Arrears and DSR risk", "Report")}
+    </div>
+    ${recordTable("Loan application list", dataRows("loans"), ["applicationNo", "memberName", "product", "requestedAmount", "eligibleAmount", "stage", "riskLevel", "status"])}
+    ${tabsCard("Loan details tabs", ["Overview", "Repayment Schedule", "Repayments", "Guarantors", "Collateral", "Charges", "Approval History", "Documents", "Accounting Entries", "Audit Trail"])}
+  `;
+}
+
+function approvalsView() {
+  const transactions = dataRows("transactions").filter((row) => normal(row.status).includes("pending"));
+  const loans = dataRows("loans").filter((row) => normal(row.status).includes("review") || normal(row.status).includes("submitted"));
+  return `
+    <div class="dashboard-grid">
+      ${summary("Pending member approvals", dataRows("members").filter((m) => normal(m.status).includes("pending")).length, "KYC and onboarding", "Review")}
+      ${summary("Pending loan approvals", loans.length, "Credit workflow", "Review")}
+      ${summary("Pending transactions", transactions.length, "Finance maker-checker", "Review")}
+      ${summary("Pending reversals", "0", "Requires reason", "Review")}
+    </div>
+    ${recordTable("Approval queue", [...transactions, ...loans], ["reference", "memberName", "type", "amount", "stage", "status"])}
+  `;
+}
+
+function operationsView() {
+  const alerts = operationAlerts();
+  return `
+    <div class="dashboard-grid">
+      ${summary("Platform health", state.data.operations?.health || "Healthy", "Service status", "Open")}
+      ${summary("Failed callbacks", alerts.filter((a) => normal(a.status).includes("failed")).length, "Payment provider", "Retry")}
+      ${summary("Notification delivery", dataRows("notifications").length, "SMS/email/push", "Open")}
+      ${summary("User sessions", "Active", "Security monitor", "View")}
+    </div>
+    ${recordTable("Operations command center", alerts, ["title", "provider", "severity", "status", "checkedAt"])}
+    ${tabsCard("Operations coverage", ["Payment monitoring", "Failed transactions", "Notification delivery", "Integration status", "Scheduled jobs", "Data-import monitoring", "User-session monitoring", "Maintenance notices"])}
+  `;
+}
+
+function reportsView() {
+  const groups = ["Membership", "Savings", "Shares", "Welfare", "Loans", "Transactions", "Accounting", "Reconciliation", "Governance", "Compliance", "Audit", "Subscriptions"];
+  return `
+    <div class="report-grid">
+      ${groups.map((group) => `<article class="report-card"><h3>${group}</h3><p>${group} report catalogue, filters, preview table, totals, exports and scheduled report support.</p><button class="button secondary" type="button">Open</button></article>`).join("")}
+    </div>
+  `;
+}
+
+function complaintsView() {
+  return `
+    ${filterToolbar("Search complaints by member, category, priority, status or due date", "New complaint", "Assign officer")}
+    ${recordTable("Complaint list", dataRows("complaints"), ["id", "memberName", "category", "subject", "assignedOfficer", "priority", "status", "dueDate"])}
+  `;
+}
+
+function notificationsView() {
+  return `
+    ${filterToolbar("Search messages by category, provider, status or related record", "New template", "Mark all as read")}
+    ${recordTable("Notification centre", dataRows("notifications"), ["title", "recipient", "channel", "status", "createdAt"])}
+  `;
+}
+
+function usersView() {
+  const platformOnly = isPlatform();
+  const users = platformOnly ? dataRows("users").filter((user) => user.tenantId === "tenant_platform") : dataRows("users");
+  return `
+    <div class="role-banner">
+      <div><p class="eyebrow">Users and Roles</p><h2>${platformOnly ? "Platform administrators only. SACCO members are not platform users." : "SACCO staff access for this tenant."}</h2></div>
+      ${hasPermission("roles:create") ? `<button class="button primary" type="button">Add user</button>` : `<span class="status pending">View only</span>`}
+    </div>
+    ${recordTable("User list", users, ["fullName", "username", "email", "phone", "role", "branchName", "lastLogin", "status"])}
+    ${permissionMatrix()}
+  `;
+}
+
+function auditView() {
+  return recordTable("Audit log", dataRows("auditEvents"), ["createdAt", "actor", "role", "tenantName", "action", "module", "recordReference", "result"]);
+}
+
+function moduleBlueprint(view) {
+  const labels = {
+    savings: ["Savings product list", ["Product name", "Code", "Minimum balance", "Interest rate", "Withdrawal rules", "Active accounts", "Total balance", "Status"]],
+    shares: ["Shares module", ["Member share balance", "Number of shares", "Share price", "Transfer requests", "Dividend history", "Share certificate"]],
+    welfare: ["Welfare module", ["Products", "Contributions", "Balances", "Claims", "Pending approvals", "Claim payments", "Beneficiaries"]],
+    guarantors: ["Guarantor requests", ["Requesting member", "Loan product", "Guarantee amount", "Capacity", "Purpose", "Decision"]],
+    accounting: ["Accounting dashboard", ["Trial balance", "Assets", "Liabilities", "Income", "Expenses", "Cash position", "Suspense"]],
+    reconciliation: ["Reconciliation", ["Bank statement", "System transactions", "Matched", "Unmatched", "Variance", "Approval status"]],
+    governance: ["Governance", ["Meetings", "Agendas", "Attendance", "Minutes", "Resolutions", "Action items"]],
+    settings: ["Settings", ["Branches", "Products", "Approval limits", "Financial year", "Security", "Accessibility"]]
+  };
+  const item = labels[view] || ["Module", ["Search", "Filters", "Tables", "Actions"]];
+  return tabsCard(item[0], item[1]);
+}
+
+function renderMemberView(view) {
+  const dash = state.memberData.dashboard || {};
+  const balances = state.memberData.balances || dash.balances || {};
+  if (view === "home") {
+    return `
+      <div class="member-hero">
+        <div><p class="eyebrow">Member dashboard</p><h2>${displayName()}, welcome back</h2><p>SERVER-CONFIRMED BALANCES and requests will update after every refresh.</p></div>
+        <span class="status active">Member portal</span>
+      </div>
+      <div class="dashboard-grid">
+        ${summary("Total balance", money.format(Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0)), "Savings, shares and welfare", "View accounts")}
+        ${summary("Savings", money.format(balances.savings || 0), "Last transaction available in statement", "Details")}
+        ${summary("Shares", money.format(balances.shares || 0), "Share balance", "Details")}
+        ${summary("Welfare", money.format(balances.welfare || 0), "Welfare contributions", "Details")}
+        ${summary("Loans", state.memberData.loans.length, "Active and pending loans", "Open")}
+        ${summary("Notifications", state.memberData.notifications.length, "Unread and recent", "Read")}
+        ${summary("Guarantee requests", state.memberData.pendingGuarantors.length, "PendingGuarantors", "Respond")}
+        ${summary("Offline drafts", state.memberData.drafts.length, "Sync drafts", "Sync")}
+      </div>
+      ${recordTable("Recent transactions", dash.recentTransactions || [], ["reference", "description", "debit", "credit", "runningBalance"])}
+    `;
+  }
+  if (view === "loans") return recordTable("Member loans", state.memberData.loans, ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"]);
+  if (view === "guarantor-requests") return recordTable("Guarantor requests", state.memberData.pendingGuarantors, ["memberName", "product", "guaranteedAmount", "capacity", "status"]);
+  if (view === "notifications") return recordTable("Notifications", state.memberData.notifications, ["title", "message", "channel", "status", "createdAt"]);
+  if (view === "complaints") return `${formPreview("Member complaint", ["Save draft", "Submit complaint", "Category", "Subject", "Message", "Attachments", "Track status"])}${recordTable("My complaints", state.memberData.complaints, ["id", "category", "subject", "priority", "status"])}`;
+  if (view === "statements") return `${filterToolbar("Filter by date and account", "Download PDF", "Download Excel")}${recordTable("Member statement", dash.statementLines || [], ["reference", "description", "debit", "credit", "runningBalance"])}`;
+  return moduleBlueprint(view);
+}
+
+function summary(label, value, detail, action) {
+  return `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small>${detail}</small><button type="button">${action}</button></article>`;
+}
+
+function mini(label, value) {
+  return `<div class="mini-fact"><span>${label}</span><strong>${escapeHtml(String(value || "None"))}</strong></div>`;
+}
+
+function chartCard(title, labels, values) {
+  const max = Math.max(...values, 1);
+  return `<section class="panel"><h2>${title}</h2><div class="bar-chart">${labels.map((label, index) => `<div><span>${label}</span><b style="width:${Math.max(8, values[index] / max * 100)}%"></b><strong>${values[index]}</strong></div>`).join("")}</div></section>`;
+}
+
+function activityPanel(title, rows) {
+  return `<section class="panel"><h2>${title}</h2><ul class="activity-list">${rows.map((row) => `<li><strong>${row[0] || "Record"}</strong><span>${row[1] || ""}</span><em>${row[2] || "Pending"}</em></li>`).join("") || `<li><strong>No records yet</strong><span>Refresh backend data</span><em>Empty</em></li>`}</ul></section>`;
+}
+
+function recordTable(title, rows, columns) {
+  const filtered = filterRows(rows || []);
+  return `
+    <section class="panel">
+      <div class="panel-heading"><h2>${title}</h2><span>${filtered.length} record(s)</span></div>
+      ${filtered.length ? `
+        <div class="table-wrap">
+          <table>
+            <thead><tr>${columns.map((column) => `<th>${labelize(column)}</th>`).join("")}<th>Actions</th></tr></thead>
+            <tbody>${filtered.slice(0, 12).map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td><button class="table-action" type="button">View</button></td></tr>`).join("")}</tbody>
+          </table>
+        </div>
+      ` : emptyState("No records found", "Use refresh, adjust filters, or add the first record where your role allows it.")}
+    </section>
+  `;
+}
+
+function filterToolbar(placeholder, primary, secondary) {
+  return `
+    <section class="filter-toolbar">
+      <label><span>Search</span><input value="${escapeHtml(state.search)}" data-search-input placeholder="${placeholder}"></label>
+      <label><span>Status</span><select><option>All statuses</option><option>Active</option><option>Pending</option><option>Failed</option></select></label>
+      <label><span>Date range</span><input type="date"></label>
+      <button class="button primary" type="button">${primary}</button>
+      <button class="button secondary" type="button">${secondary}</button>
+    </section>
+  `;
+}
+
+function wizardCard(title, steps) {
+  return `<section class="panel"><h2>${title}</h2><div class="stepper">${steps.map((step, index) => `<div><span>${index + 1}</span><strong>${step}</strong></div>`).join("")}</div></section>`;
+}
+
+function tabsCard(title, tabs) {
+  return `<section class="panel"><h2>${title}</h2><div class="tabs">${tabs.map((tab, index) => `<button class="${index === 0 ? "active" : ""}" type="button">${tab}</button>`).join("")}</div><div class="blueprint">This screen follows the uploaded UI/UX requirement and is ready for deeper Java API actions, validation, confirmations and exports.</div></section>`;
+}
+
+function formPreview(title, fields) {
+  return `<section class="panel"><h2>${title}</h2><div class="form-grid">${fields.map((item) => `<label><span>${item}</span><input placeholder="${item}"></label>`).join("")}</div><div class="form-actions"><button class="button secondary" type="button">Save draft</button><button class="button primary" type="button">Submit</button></div></section>`;
+}
+
+function packageCards() {
+  const packages = dataRows("subscriptionPackages");
+  return `<section class="panel"><h2>Subscription package configuration</h2><div class="package-grid">${(packages.length ? packages : fallbackPackages()).map((pkg) => `<article><h3>${pkg.name}</h3><strong>${money.format(pkg.price || pkg.amount || 0)}</strong><p>${pkg.maxMembers || pkg.members || "Configured"} members / ${pkg.maxBranches || pkg.branches || "Configured"} branches</p><span>${pkg.modules || "Included modules, SMS, storage and support level"}</span><button class="button secondary" type="button">Configure</button></article>`).join("")}</div></section>`;
+}
+
+function permissionMatrix() {
+  const modules = isPlatform() ? platformModules : saccoModules;
+  return `<section class="panel"><h2>Permission matrix</h2><div class="permission-grid">${modules.slice(0, 10).map((item) => `<div><strong>${item[1]}</strong>${["View", "Create", "Edit", "Approve", "Export", "Manage"].map((action) => `<span>${action}</span>`).join("")}</div>`).join("")}</div></section>`;
+}
+
+function emptyState(title, detail) {
+  return `<div class="empty-state"><strong>${title}</strong><p>${detail}</p></div>`;
+}
+
+function renderLoading(message) {
+  setHtml(`<main class="loading-screen"><div class="loader"></div><h1>${message}</h1><p>Loading state / Java-backed / API-backed / Last sync</p></main>`);
+}
+
+async function login(code, username, password) {
+  state.loading = true;
+  try {
+    const staff = await tryStaffLogin(code, username, password);
+    if (staff) {
+      applyStaffSession(staff);
+      localStorage.setItem(STAFF_TOKEN_KEY, staff.token);
+      localStorage.removeItem(MEMBER_TOKEN_KEY);
+      await refreshAll();
+      return;
+    }
+    const member = await api("/member-auth/login", {
+      method: "POST",
+      body: JSON.stringify({ saccoCode: code, identifier: username, password })
+    }, "");
+    state.auth = "member";
+    state.token = member.token;
+    state.member = member.member;
+    state.tenant = member.tenant;
+    state.memberData.balances = member.balances;
+    localStorage.setItem(MEMBER_TOKEN_KEY, member.token);
+    localStorage.removeItem(STAFF_TOKEN_KEY);
+    state.currentView = "home";
+    await refreshMember();
+  } finally {
+    state.loading = false;
+  }
+}
+
+async function tryStaffLogin(code, username, password) {
+  try {
+    return await api("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ saccoCode: code, username, password })
+    }, "");
+  } catch {
+    return null;
+  }
+}
+
+function applyStaffSession(session) {
+  state.auth = "staff";
+  state.token = session.token || state.token;
+  state.user = session.user;
+  state.roleNames = session.roleNames || [];
+  state.permissionIds = session.permissionIds || [];
+  state.tenant = session.tenant || null;
+  state.currentView = visibleModules()[0]?.[0] || "dashboard";
+}
+
+async function refreshAll() {
+  state.loading = true;
+  state.lastError = "";
+  renderShell();
+  const endpoints = [
+    ["tenants", "/tenants"],
+    ["subscriptions", "/subscriptions"],
+    ["subscriptionPackages", "/subscription-packages"],
+    ["members", "/members"],
+    ["transactions", "/financial-transactions"],
+    ["loans", "/loans"],
+    ["operations", "/operations/status"],
+    ["notifications", "/notifications/deliveries"],
+    ["complaints", "/complaints"],
+    ["roles", "/roles"],
+    ["permissions", "/permissions"],
+    ["auditEvents", "/audit-events"],
+    ["regulatoryReport", "/regulatory-report"]
+  ];
+  const results = await Promise.all(endpoints.map(async ([key, path]) => [key, await optionalApi(path, key === "operations" || key === "regulatoryReport" ? null : [])]));
+  results.forEach(([key, value]) => {
+    state.data[key] = value;
+  });
+  state.lastSync = new Date().toISOString();
+  state.loading = false;
+  renderShell();
+}
+
+async function refreshMember() {
+  state.loading = true;
+  state.lastError = "";
+  renderShell();
+  const dashboard = await optionalApi("/member-auth/mobile-dashboard", null);
+  state.memberData.dashboard = dashboard || {};
+  state.memberData.balances = dashboard?.balances || state.memberData.balances;
+  state.memberData.loans = dashboard?.loans || [];
+  state.memberData.notifications = dashboard?.notifications || [];
+  state.memberData.pendingGuarantors = dashboard?.pendingGuarantorRequests || dashboard?.pendingGuarantors || [];
+  state.memberData.complaints = await optionalApi("/member-auth/complaints", []);
+  state.lastSync = new Date().toISOString();
+  state.loading = false;
+  renderShell();
+}
+
+async function optionalApi(path, fallback) {
+  try {
+    return await api(path);
+  } catch (error) {
+    state.lastError = error.message;
     return fallback;
   }
 }
 
-async function memberApiRequest(path, options = {}) {
-  const headers = {
-    ...(options.body ? { "Content-Type": "application/json" } : {}),
-    ...(memberApiState.token ? { Authorization: `Bearer ${memberApiState.token}` } : {}),
-    ...(options.headers || {})
-  };
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  const payload = await response.json();
-  if (!response.ok) {
-    const message = payload.error?.message || `Member request failed with status ${response.status}`;
-    throw new Error(message);
-  }
-  return payload.data;
-}
-
-async function refreshMemberStatus() {
-  if (!memberApiState.token) return;
-  memberApiState.loading = true;
-  memberApiState.lastError = "";
-  if (!isAuthenticated() || state.currentView === "memberPortal") render();
-
-  try {
-    const [session, mobileDashboard, guarantorRequests, notifications] = await Promise.all([
-      memberApiRequest("/member-auth/me"),
-      memberApiRequest("/member-auth/mobile-dashboard"),
-      memberApiRequest("/member-auth/guarantor-requests"),
-      memberApiRequest("/member-auth/notifications")
-    ]);
-    memberApiState.member = session.member;
-    memberApiState.tenant = session.tenant;
-    memberApiState.branch = session.branch;
-    memberApiState.balances = session.balances;
-    memberApiState.mobileDashboard = mobileDashboard;
-    memberApiState.guarantorRequests = guarantorRequests;
-    memberApiState.notifications = notifications;
-    memberApiState.lastSyncedAt = new Date().toISOString();
-    memberApiState.message = `Member portal signed in as ${session.member.fullName}.`;
-  } catch (error) {
-    localStorage.removeItem(MEMBER_SESSION_KEY);
-    memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, mobileDashboard: null, guarantorRequests: [], notifications: [], loading: false, lastSyncedAt: "", lastError: error.message, message: error.message };
-  } finally {
-    memberApiState.loading = false;
-  }
-  if (!isAuthenticated() || state.currentView === "memberPortal") render();
-}
-
-async function refreshApiStatus() {
-  apiState.loading = true;
-  apiState.lastError = "";
-  renderApiChrome();
-  if (!isAuthenticated() || ["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans", "usersRoles", "notifications", "complaints"].includes(state.currentView)) render();
-
-  try {
-    const health = await apiRequest("/health");
-    apiState.health = health.ok ? "online" : "offline";
-    apiState.message = `${health.service} ${health.version} responded successfully.`;
-
-    if (apiState.token) {
-      const session = await apiRequest("/auth/me");
-      apiState.user = session.user;
-      apiState.roleIds = session.roleIds || [];
-      apiState.roleNames = session.roleNames || [];
-      apiState.permissionIds = session.permissionIds || [];
-      state.workspace = workspaceForStaff(session.user, apiState.roleNames, apiState.permissionIds);
-      ensureWorkspaceTenant();
-      const [tenants, users, roles, permissions, auditEvents, operationsStatus, branches, members, subscriptionPackages, subscriptions, financialProducts, financialAccounts, financialTransactions, welfareClaims, loans, accountingPeriods, chartOfAccounts, journalEntries, statementLines, reconciliation, regulatoryReport, mobileMoneyCallbacks, notificationDeliveries, notificationTemplates, suppliers, expenses, assets, governanceMeetings, complaints, approvalWorkflows, approvalDecisions] = await Promise.all([
-        apiOptional("/tenants", []),
-        apiOptional("/users", []),
-        apiOptional(`/roles${apiTenantQuery()}`, []),
-        apiOptional("/permissions", []),
-        apiOptional("/audit-events", []),
-        apiOptional(`/operations/status${apiOperationsQuery()}`, null),
-        apiOptional(`/branches${apiTenantQuery()}`, []),
-        apiOptional(`/members${apiTenantQuery()}`, []),
-        apiOptional("/subscription-packages", []),
-        apiOptional(`/subscriptions${apiSubscriptionQuery()}`, []),
-        apiOptional(`/financial-products${apiTenantQuery()}`, []),
-        apiOptional(`/financial-accounts${apiTenantQuery()}`, []),
-        apiOptional(`/financial-transactions${apiTenantQuery()}`, []),
-        apiOptional(`/welfare-claims${apiTenantQuery()}`, []),
-        apiOptional(`/loans${apiTenantQuery()}`, []),
-        apiOptional(`/accounting-periods${apiTenantQuery()}`, []),
-        apiOptional("/chart-of-accounts", []),
-        apiOptional(`/journal-entries${apiTenantQuery()}`, []),
-        apiOptional(`/statement-lines${apiTenantQuery()}`, []),
-        apiOptional(`/reconciliation${apiTenantQuery()}`, null),
-        apiOptional(`/regulatory-report${apiTenantQuery()}`, { reports: [] }),
-        apiOptional(`/integrations/mobile-money/callbacks${apiTenantQuery()}`, []),
-        apiOptional(`/notifications/deliveries${apiTenantQuery()}`, []),
-        apiOptional(`/notification-templates${apiTenantQuery()}`, []),
-        apiOptional(`/suppliers${apiTenantQuery()}`, []),
-        apiOptional(`/expenses${apiTenantQuery()}`, []),
-        apiOptional(`/assets${apiTenantQuery()}`, []),
-        apiOptional(`/governance-meetings${apiTenantQuery()}`, []),
-        apiOptional(`/complaints${apiTenantQuery()}`, []),
-        apiOptional(`/approval-workflows${apiTenantQuery()}`, []),
-        apiOptional(`/approval-decisions${apiTenantQuery()}`, [])
-      ]);
-      apiState.tenants = tenants;
-      apiState.users = users;
-      apiState.roles = roles;
-      apiState.userRoleAssignments = await loadUserRoleAssignments(users);
-      apiState.permissions = permissions;
-      apiState.auditEvents = auditEvents;
-      apiState.operationsStatus = operationsStatus;
-      apiState.branches = branches;
-      apiState.members = members;
-      apiState.subscriptionPackages = subscriptionPackages;
-      apiState.subscriptions = subscriptions;
-      apiState.financialProducts = financialProducts;
-      apiState.financialAccounts = financialAccounts;
-      apiState.financialTransactions = financialTransactions;
-      apiState.welfareClaims = welfareClaims;
-      apiState.loans = loans;
-      apiState.accountingPeriods = accountingPeriods;
-      apiState.chartOfAccounts = chartOfAccounts;
-      apiState.journalEntries = journalEntries;
-      apiState.statementLines = statementLines;
-      apiState.reconciliation = reconciliation;
-      apiState.regulatoryReport = regulatoryReport;
-      apiState.mobileMoneyCallbacks = mobileMoneyCallbacks;
-      apiState.notificationDeliveries = notificationDeliveries;
-      apiState.notificationTemplates = notificationTemplates;
-      apiState.suppliers = suppliers;
-      apiState.expenses = expenses;
-      apiState.assets = assets;
-      apiState.governanceMeetings = governanceMeetings;
-      apiState.complaints = complaints;
-      apiState.approvalWorkflows = approvalWorkflows;
-      apiState.approvalDecisions = approvalDecisions;
-      apiState.lastSyncedAt = new Date().toISOString();
-      apiState.message = `Connected as ${session.user.fullName}. API returned ${tenants.length} tenant(s), ${users.length} user(s), ${roles.length} role(s), ${branches.length} branch(es), ${members.length} member(s), ${subscriptions.length} subscription(s), ${financialProducts.length} product(s), ${financialAccounts.length} account(s), ${financialTransactions.length} transaction(s), ${welfareClaims.length} welfare claim(s), ${loans.length} loan(s), ${accountingPeriods.length} accounting period(s), ${journalEntries.length} journal(s), ${statementLines.length} statement line(s), ${(regulatoryReport?.reports || []).length} report row(s), ${mobileMoneyCallbacks.length} callback(s), ${notificationDeliveries.length} delivery(s), ${notificationTemplates.length} notification template(s), ${expenses.length} expense(s), ${assets.length} asset(s), ${governanceMeetings.length} meeting(s), ${complaints.length} complaint(s), ${approvalWorkflows.length} workflow(s), ${approvalDecisions.length} decision(s), and ${auditEvents.length} audit event(s).`;
+async function api(path, options = {}, token = state.token) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {})
     }
-  } catch (error) {
-    if (apiState.token) {
-      localStorage.removeItem(API_SESSION_KEY);
-      apiState.token = "";
-      apiState.user = null;
-    }
-    apiState.health = "offline";
-    apiState.lastError = error.message;
-    apiState.message = error.message;
-  } finally {
-    apiState.loading = false;
-  }
-  renderApiChrome();
-  if (!isAuthenticated() || ["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans", "usersRoles", "notifications", "complaints"].includes(state.currentView)) render();
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error?.message || payload.message || `Request failed: ${response.status}`);
+  return payload.data ?? payload;
 }
 
-async function loadUserRoleAssignments(users) {
-  if (!hasPermission("users:view") || !users.length) return {};
-  const entries = await Promise.all(users.map(async (user) => {
-    const assignment = await apiOptional(`/users/${encodeURIComponent(user.id)}/roles`, { roleIds: [] });
-    return [user.id, assignment.roleIds || []];
+function bindEvents() {
+  document.querySelector("#loginForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = document.getElementById("loginButton");
+    const error = document.getElementById("loginError");
+    button.disabled = true;
+    button.textContent = "Checking...";
+    error.hidden = true;
+    try {
+      await login(value("code"), value("username"), value("password"));
+    } catch (loginError) {
+      error.textContent = "Invalid code, username, or password.";
+      error.hidden = false;
+    } finally {
+      button.disabled = false;
+      button.textContent = "Login";
+    }
+  });
+  document.querySelectorAll("[data-demo]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const account = demoAccounts[Number(button.dataset.demo)];
+      document.getElementById("code").value = account.code;
+      document.getElementById("username").value = account.username;
+      document.getElementById("password").value = account.password;
+    });
+  });
+  document.querySelectorAll("[data-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.currentView = button.dataset.view;
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
+  document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
+  document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
+  document.querySelectorAll("[data-action='toggle-sidebar']").forEach((button) => button.addEventListener("click", () => document.querySelector(".app-shell")?.classList.toggle("sidebar-open")));
+  document.querySelectorAll("#globalSearch,[data-search-input]").forEach((input) => input.addEventListener("input", (event) => {
+    state.search = event.target.value;
+    renderShell();
   }));
-  return Object.fromEntries(entries);
 }
 
-function openApiLoginForm() {
-  openModal("API login", `
-    <div class="notice">Enter the code assigned to your SACCO. Use <strong>PLATFORM</strong> for platform administration. Access after login is limited by your assigned roles and permissions.</div>
-    <div class="form-grid" style="margin-top:14px">
-      ${field("SACCO code", "apiSaccoCode", "text", "")}
-      ${field("Username or email", "apiUsername", "text", "")}
-      ${field("Password", "apiPassword", "password", "")}
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="apiLoginSubmit" class="primary-button" type="button">Login</button>`);
-
-  document.getElementById("apiLoginSubmit").addEventListener("click", async () => {
-    try {
-      await loginStaffWithCode(value("apiSaccoCode"), value("apiUsername"), value("apiPassword"));
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openMemberLoginForm() {
-  openModal("Member login", `
-    <div class="notice">Enter your SACCO code plus your membership number, phone, or email. Seeded demo member accounts are disabled outside the development/demo profile.</div>
-    <div class="form-grid" style="margin-top:14px">
-      ${field("SACCO code", "memberSaccoCode", "text", "")}
-      ${field("Membership no., phone, or email", "memberIdentifier", "text", "")}
-      ${field("Password", "memberPassword", "password", "")}
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="memberLoginSubmit" class="primary-button" type="button">Login</button>`);
-
-  document.getElementById("memberLoginSubmit").addEventListener("click", async () => {
-    try {
-      await loginMemberWithCode(value("memberSaccoCode"), value("memberIdentifier"), value("memberPassword"));
-      closeModal();
-      await refreshMemberStatus();
-      render();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-async function loginWithCodeUsernamePassword(saccoCode, username, password, errorTarget, submitButton) {
-  if (!saccoCode || !username || !password) {
-    showLoginError(errorTarget, "Code, username, and password are required.");
-    return;
-  }
-  showLoginError(errorTarget, "");
-  if (submitButton) {
-    submitButton.disabled = true;
-    submitButton.textContent = "Checking...";
-  }
+async function logout() {
+  const staff = state.auth === "staff";
   try {
-    await loginStaffWithCode(saccoCode, username, password);
-    await refreshApiStatus();
-    return;
-  } catch (staffError) {
-    try {
-      await loginMemberWithCode(saccoCode, username, password);
-      await refreshMemberStatus();
-      render();
-      return;
-    } catch (memberError) {
-      showLoginError(errorTarget, "Invalid code, username, or password.");
-      apiState.lastError = staffError.message || memberError.message;
-    }
-  } finally {
-    if (submitButton) {
-      submitButton.disabled = false;
-      submitButton.textContent = "Login";
-    }
-  }
-}
-
-async function loginStaffWithCode(saccoCode, username, password) {
-  const data = await apiRequest("/auth/login", {
-    method: "POST",
-    headers: {},
-    body: JSON.stringify({ saccoCode, username, password })
+    if (state.token) await api(staff ? "/auth/logout" : "/member-auth/logout");
+  } catch {}
+  localStorage.removeItem(STAFF_TOKEN_KEY);
+  localStorage.removeItem(MEMBER_TOKEN_KEY);
+  Object.assign(state, {
+    auth: "none",
+    token: "",
+    user: null,
+    member: null,
+    tenant: null,
+    roleNames: [],
+    permissionIds: [],
+    currentView: "dashboard",
+    data: emptyData(),
+    memberData: emptyMemberData()
   });
-  apiState.token = data.token;
-  apiState.user = data.user;
-  apiState.roleIds = data.roleIds || [];
-  apiState.roleNames = data.roleNames || [];
-  apiState.permissionIds = data.permissionIds || [];
-  memberApiState.token = "";
-  memberApiState.member = null;
-  localStorage.setItem(API_SESSION_KEY, data.token);
-  localStorage.removeItem(MEMBER_SESSION_KEY);
-  state.workspace = workspaceForStaff(data.user, apiState.roleNames, apiState.permissionIds);
-  ensureWorkspaceTenant();
-  state.currentView = currentWorkspace().defaultView;
-  saveState();
+  renderLogin();
 }
 
-async function loginMemberWithCode(saccoCode, username, password) {
-  const data = await memberApiRequest("/member-auth/login", {
-    method: "POST",
-    headers: {},
-    body: JSON.stringify({ saccoCode, identifier: username, password })
-  });
-  memberApiState.token = data.token;
-  memberApiState.member = data.member;
-  memberApiState.tenant = data.tenant;
-  memberApiState.branch = data.branch;
-  memberApiState.balances = data.balances;
-  memberApiState.mobileDashboard = null;
-  memberApiState.guarantorRequests = [];
-  memberApiState.notifications = [];
-  memberApiState.loading = false;
-  memberApiState.lastSyncedAt = "";
-  memberApiState.lastError = "";
-  apiState.token = "";
-  apiState.user = null;
-  apiState.roleIds = [];
-  apiState.roleNames = [];
-  apiState.permissionIds = [];
-  localStorage.setItem(MEMBER_SESSION_KEY, data.token);
-  localStorage.removeItem(API_SESSION_KEY);
-  state.workspace = "member";
-  ensureWorkspaceTenant();
-  state.currentView = "memberPortal";
-  saveState();
+function dataRows(key) {
+  const value = state.data[key];
+  return Array.isArray(value) ? value : [];
 }
 
-function showLoginError(target, message) {
-  if (!target) return;
-  target.textContent = message;
-  target.hidden = !message;
+function filterRows(rows) {
+  const q = state.search.trim().toLowerCase();
+  if (!q) return rows;
+  return rows.filter((row) => JSON.stringify(row).toLowerCase().includes(q));
 }
 
-async function simulateMobileMoneyCallback() {
-  try {
-    const data = await apiRequest("/integrations/mobile-money/callback", {
-      method: "POST",
-      body: JSON.stringify({
-        tenantId: "tenant_green",
-        membershipNo: "GVS-0001",
-        purpose: "savings_deposit",
-        amount: 42000,
-        externalReference: `MM-UI-${Date.now()}`,
-        provider: "ui_demo_mobile_money",
-        receivedAt: today.toISOString()
-      })
-    });
-    apiState.mobileMoneyCallbacks = [data.callback, ...apiState.mobileMoneyCallbacks.filter((item) => item.id !== data.callback.id)];
-    apiState.notificationDeliveries = [...(data.deliveries || []), ...apiState.notificationDeliveries.filter((item) => !(data.deliveries || []).some((delivery) => delivery.id === item.id))];
-    apiState.message = `Mobile-money callback ${data.callback.externalReference} posted for ${money.format(data.callback.amount)}.`;
-    if (apiState.user) {
-      await refreshApiStatus();
-      return;
-    }
-    render();
-  } catch (error) {
-    apiState.message = error.message;
-    render();
-  }
+function operationAlerts() {
+  const operations = state.data.operations || {};
+  const alerts = operations.alerts || operations.integrationStatuses || [];
+  return Array.isArray(alerts) && alerts.length ? alerts : [
+    { title: "Database", provider: "PostgreSQL", severity: "Healthy", status: "Healthy", checkedAt: state.lastSync },
+    { title: "Java API", provider: "Spring Boot", severity: "Healthy", status: "Healthy", checkedAt: state.lastSync },
+    { title: "Mobile money callbacks", provider: "Provider gateway", severity: "Warning", status: "Pending", checkedAt: state.lastSync }
+  ];
 }
 
-async function memberMobilePayment() {
-  if (!memberApiState.member) return;
-  try {
-    const data = await apiRequest("/integrations/mobile-money/callback", {
-      method: "POST",
-      body: JSON.stringify({
-        tenantId: memberApiState.member.tenantId,
-        membershipNo: memberApiState.member.membershipNo,
-        purpose: "savings_deposit",
-        amount: 25000,
-        externalReference: `MM-MEMBER-${Date.now()}`,
-        provider: "member_mobile_demo",
-        receivedAt: today.toISOString()
-      })
-    });
-    await refreshMemberStatus();
-    memberApiState.message = `Server confirmed mobile-money payment ${data.callback.externalReference}.`;
-    render();
-  } catch (error) {
-    memberApiState.message = error.message;
-    render();
-  }
-}
-
-function openMemberMobileLoanForm() {
-  if (!memberApiState.member) return;
-  openModal("Mobile loan application", `
-    <div class="notice">This submits directly as ${memberApiState.member.fullName} and waits for server confirmation before updating the mobile dashboard.</div>
-    <div class="form-grid" style="margin-top:14px">
-      <label class="field"><span>Loan product</span><select id="mobileLoanProduct" class="select"><option>Development Loan</option><option>Emergency Loan</option><option>Agriculture Loan</option><option>School Fees Loan</option></select></label>
-      ${field("Requested amount", "mobileLoanAmount", "number", "750000")}
-      ${field("Repayment months", "mobileLoanPeriod", "number", "10")}
-      <label class="field full"><span>Purpose</span><textarea id="mobileLoanPurpose" class="input" rows="3">Mobile working capital request</textarea></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveMobileLoan" class="primary-button" type="button">Submit mobile loan</button>`);
-
-  document.getElementById("saveMobileLoan").addEventListener("click", async () => {
-    try {
-      const loan = await memberApiRequest("/member-auth/mobile-loans", {
-        method: "POST",
-        body: JSON.stringify({
-          product: value("mobileLoanProduct"),
-          amount: Number(value("mobileLoanAmount")),
-          repaymentMonths: Number(value("mobileLoanPeriod")),
-          purpose: value("mobileLoanPurpose")
-        })
-      });
-      closeModal();
-      await refreshMemberStatus();
-      memberApiState.message = `Server confirmed mobile loan ${loan.product} for ${money.format(loan.amount)}.`;
-      render();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openOfflineComplaintDraft() {
-  if (!memberApiState.member) return;
-  openModal("Offline complaint draft", `
-    <div class="notice">This saves locally first. Use Sync drafts when the member app is online.</div>
-    <div class="form-grid" style="margin-top:14px">
-      ${field("Subject", "offlineComplaintSubject", "text", "Mobile service follow-up")}
-      <label class="field"><span>Category</span><select id="offlineComplaintCategory" class="select"><option value="service">Service</option><option value="statement">Statement</option><option value="loan">Loan</option><option value="savings">Savings</option><option value="shares">Shares</option><option value="other">Other</option></select></label>
-      <label class="field"><span>Priority</span><select id="offlineComplaintPriority" class="select"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option></select></label>
-      <label class="field full"><span>Description</span><textarea id="offlineComplaintDescription" class="input" rows="3">Draft captured from the member mobile dashboard.</textarea></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveOfflineDraft" class="primary-button" type="button">Save draft</button>`);
-
-  document.getElementById("saveOfflineDraft").addEventListener("click", () => {
-    offlineDrafts.unshift({
-      id: `draft-${Date.now()}`,
-      type: "complaint",
-      tenantId: memberApiState.member.tenantId,
-      memberId: memberApiState.member.id,
-      subject: value("offlineComplaintSubject"),
-      category: value("offlineComplaintCategory"),
-      priority: value("offlineComplaintPriority"),
-      description: value("offlineComplaintDescription"),
-      createdAt: new Date().toISOString()
-    });
-    saveOfflineDrafts();
-    memberApiState.message = "Offline complaint draft saved locally.";
-    closeModal();
-    render();
-  });
-}
-
-async function syncOfflineDrafts() {
-  if (!memberApiState.member) return;
-  const memberDrafts = offlineDrafts.filter((draft) => draft.memberId === memberApiState.member.id);
-  if (!memberDrafts.length) {
-    memberApiState.message = "No offline drafts to sync.";
-    render();
-    return;
-  }
-
-  try {
-    for (const draft of memberDrafts) {
-      await memberApiRequest("/member-auth/mobile-complaints", {
-        method: "POST",
-        body: JSON.stringify({
-          subject: draft.subject,
-          category: draft.category,
-          priority: draft.priority,
-          description: draft.description
-        })
-      });
-    }
-    offlineDrafts = offlineDrafts.filter((draft) => draft.memberId !== memberApiState.member.id);
-    saveOfflineDrafts();
-    await refreshMemberStatus();
-    memberApiState.message = `${memberDrafts.length} offline draft(s) synced to the server.`;
-    render();
-  } catch (error) {
-    memberApiState.message = error.message;
-    render();
-  }
-}
-
-async function apiLogout() {
-  try {
-    if (apiState.token) await apiRequest("/auth/logout", { method: "POST" });
-  } catch {
-    // Local logout should still clear the client session if the server has restarted.
-  }
-  localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, roleIds: [], roleNames: [], permissionIds: [], tenants: [], users: [], userRoleAssignments: {}, roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], notificationTemplates: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], operationsStatus: null, loading: false, lastSyncedAt: "", lastError: "", message: "Logged out of API session." };
-  renderApiChrome();
-  render();
-}
-
-async function memberLogout() {
-  try {
-    if (memberApiState.token) await memberApiRequest("/member-auth/logout", { method: "POST" });
-  } catch {
-    // Local logout should still clear the client member session if the server has restarted.
-  }
-  localStorage.removeItem(MEMBER_SESSION_KEY);
-  memberApiState = { token: "", member: null, tenant: null, branch: null, balances: null, mobileDashboard: null, guarantorRequests: [], notifications: [], loading: false, lastSyncedAt: "", lastError: "", message: "Logged out of member portal." };
-  render();
-}
-
-function apiAuditTable(rows) {
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Time</th><th>Tenant</th><th>Actor</th><th>Action</th><th>Resource</th></tr></thead>
-        <tbody>
-          ${rows.map((row) => `
-            <tr>
-              <td>${row.createdAt}</td>
-              <td>${row.tenantId}</td>
-              <td>${row.actorName}</td>
-              <td>${row.action}</td>
-              <td>${row.resourceType || ""} ${row.resourceId || ""}</td>
-            </tr>
-          `).join("") || `<tr><td colspan="5">Login to the API to view server-side audit events.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-}
-
-function branchName(id) {
-  const apiBranch = apiState.branches.find((item) => item.id === id);
-  if (apiBranch) return apiBranch.name;
-  for (const tenant of state.tenants) {
-    const branch = tenant.branches?.find((item) => item.id === id);
-    if (branch) return branch.name;
-  }
-  return "Unassigned";
-}
-
-memberRow = function renderMemberRow(member) {
-  const actions = apiState.user
-    ? `<div class="filters"><button class="secondary-button" data-member-profile="${member.id}" type="button">Profile</button><button class="secondary-button" data-member-statement="${member.id}" type="button">Statement</button></div>`
-    : "";
-  return `
-    <tr>
-      <td><strong>${member.name}</strong><br><small>${member.no} &middot; ${member.phone}${member.source ? ` &middot; ${member.source}` : ""}</small></td>
-      <td>${member.type}</td>
-      <td>${member.branchName || branchName(member.branchId)}</td>
-      <td>${member.kyc}</td>
-      <td>${money.format(member.savings)}</td>
-      <td>${money.format(member.shares)}</td>
-      <td>${money.format(member.welfare)}</td>
-      <td><span class="status ${statusClass(member.status)}">${member.status}</span></td>
-      <td>${actions}</td>
-    </tr>
-  `;
-};
-
-function closeModal() {
-  document.getElementById("modal").close();
-}
-
-function openTenantForm() {
-  const apiMode = apiState.user?.tenantId === "tenant_platform";
-  openModal("New SACCO application", `
-    <div class="form-grid">
-      ${field("SACCO name", "tenantName", "text", "Bweyogerere Traders SACCO")}
-      ${field("Abbreviation", "tenantAbbr", "text", "BTS")}
-      ${field("Cooperative registration no.", "tenantReg", "text", "COOP-UG-9001")}
-      ${field("District", "tenantDistrict", "text", "Wakiso")}
-      ${field("UMRA licence expiry", "tenantExpiry", "date", "2027-07-15")}
-      <label class="field"><span>Preferred package</span><select id="tenantPackage" class="select">${state.packages.map((pkg) => `<option value="${pkg.id}">${pkg.name}</option>`).join("")}</select></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveTenant" class="primary-button" type="button">Submit application</button>`);
-
-  document.getElementById("saveTenant").addEventListener("click", async () => {
-    if (apiMode) {
-      try {
-        await apiRequest("/tenants", {
-          method: "POST",
-          body: JSON.stringify({
-            name: value("tenantName"),
-            abbreviation: value("tenantAbbr"),
-            registrationNo: value("tenantReg"),
-            district: value("tenantDistrict"),
-            licenseExpiry: value("tenantExpiry"),
-            packageId: value("tenantPackage")
-          })
-        });
-        closeModal();
-        state.currentView = "registrations";
-        await refreshApiStatus();
-      } catch (error) {
-        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-      }
-      return;
-    }
-
-    const id = `tenant-${Date.now()}`;
-    state.tenants.push({
-      id,
-      name: value("tenantName"),
-      abbreviation: value("tenantAbbr"),
-      registrationNo: value("tenantReg"),
-      district: value("tenantDistrict"),
-      licenseExpiry: value("tenantExpiry"),
-      packageId: value("tenantPackage"),
-      status: "Pending Review",
-      onboarding: 15,
-      branches: [{ id: `${id}-main`, code: `${value("tenantAbbr") || "SC"}001`, name: "Main Branch", manager: "Unassigned" }]
-    });
-    state.approvals.push({ id: `ap-${Date.now()}`, tenantId: "platform", title: `Approve ${value("tenantName")} registration`, type: "Tenant Registration", status: "Pending", requester: "Applicant", risk: "Medium" });
-    addAudit("platform", "Applicant", `Submitted SACCO registration for ${value("tenantName")}`);
-    saveState();
-    renderTenantSelect();
-    closeModal();
-    render();
-  });
-}
-
-async function openSaccoProfile(tenantId) {
-  if (!apiState.user) return;
-  try {
-    const tenant = apiState.tenants.find((item) => item.id === tenantId);
-    const profile = await apiRequest(`/tenants/${tenantId}/profile`);
-    openModal(`${tenant?.name || profile.legalName} profile`, `
-      <div class="grid metrics">
-        ${metric("Legal name", profile.legalName, profile.cooperativeRegistrationNo || "Registration pending")}
-        ${metric("UMRA licence", profile.umraLicenseNo || "Not captured", profile.tin ? `TIN ${profile.tin}` : "Tax details pending")}
-        ${metric("Contact", profile.phone || "No phone", profile.email || "No email")}
-      </div>
-      <div class="form-grid" style="margin-top:16px">
-        ${field("Legal name", "saccoProfileLegalName", "text", profile.legalName || tenant?.name || "")}
-        ${field("TIN", "saccoProfileTin", "text", profile.tin || "")}
-        ${field("UMRA licence no.", "saccoProfileUmra", "text", profile.umraLicenseNo || "")}
-        ${field("Cooperative registration no.", "saccoProfileCoop", "text", profile.cooperativeRegistrationNo || tenant?.registrationNo || "")}
-        ${field("Address", "saccoProfileAddress", "text", profile.address || "")}
-        ${field("Email", "saccoProfileEmail", "email", profile.email || "")}
-        ${field("Phone", "saccoProfilePhone", "tel", profile.phone || "")}
-        ${field("Website", "saccoProfileWebsite", "url", profile.website || "")}
-      </div>
-    `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveSaccoProfile" class="primary-button" type="button">Save profile</button>`);
-    document.getElementById("saveSaccoProfile").addEventListener("click", async () => {
-      try {
-        await apiRequest(`/tenants/${tenantId}/profile`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            legalName: value("saccoProfileLegalName"),
-            tin: value("saccoProfileTin"),
-            umraLicenseNo: value("saccoProfileUmra"),
-            cooperativeRegistrationNo: value("saccoProfileCoop"),
-            address: value("saccoProfileAddress"),
-            email: value("saccoProfileEmail"),
-            phone: value("saccoProfilePhone"),
-            website: value("saccoProfileWebsite")
-          })
-        });
-        closeModal();
-        await refreshApiStatus();
-      } catch (error) {
-        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-      }
-    });
-  } catch (error) {
-    openModal("SACCO profile", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-function openTenantReview(tenantId) {
-  const tenant = (useApiTenants()
-    ? apiState.tenants.filter((item) => item.id !== "tenant_platform").map(apiTenantToRow)
-    : state.tenants.filter((item) => item.id !== "platform"))
-    .find((item) => item.id === tenantId);
-  if (!tenant) {
-    openModal("Application details", `<div class="notice error">SACCO application was not found.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    return;
-  }
-  openModal(`${tenant.name} application`, `
-    <div class="grid metrics">
-      ${metric("Status", tenant.status, "current review state")}
-      ${metric("Onboarding", `${tenant.onboarding || 0}%`, "submitted readiness")}
-      ${metric("Package", packageName(tenant.packageId), "selected subscription")}
-    </div>
-    <div class="filters" style="margin-top:16px">
-      <span class="pill">Overview</span>
-      <span class="pill">SACCO Details</span>
-      <span class="pill">Officials</span>
-      <span class="pill">Documents</span>
-      <span class="pill">Subscription</span>
-      <span class="pill">Review Notes</span>
-      <span class="pill">Audit Trail</span>
-    </div>
-    <div class="grid two" style="margin-top:16px">
-      <div class="notice">
-        <strong>Application summary</strong><br>
-        Registration: ${tenant.registrationNo}<br>
-        District: ${tenant.district}<br>
-        Licence expiry: ${tenant.licenseExpiry}<br>
-        Reviewer: ${tenant.reviewer || "Unassigned"}
-      </div>
-      <div class="notice">
-        <strong>Pending actions</strong><br>
-        Verify registration certificate, UMRA licence, officials, package selection and subscription readiness before approval.
-      </div>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Close</button>${hasPermission("tenants:manage") ? `<button id="approveReviewedTenant" class="primary-button" type="button">Approve application</button>` : ""}`);
-  document.getElementById("approveReviewedTenant")?.addEventListener("click", async () => {
-    closeModal();
-    await approveTenant(tenant.id);
-  });
-}
-
-function openMemberForm() {
-  if (!apiState.user && state.tenantId === "platform") {
-    state.tenantId = "green";
-    renderTenantSelect();
-  }
-  const tenant = currentTenant();
-  const apiMode = Boolean(apiState.user);
-  const branches = apiMode ? apiState.branches : tenant.branches;
-  const branchOptions = branches.map((branch) => `<option value="${branch.id}">${branch.name}</option>`).join("");
-  openModal("Register member", `
-    <div class="form-grid">
-      ${field("Full name", "memberName", "text", "New SACCO Member")}
-      ${field("Telephone", "memberPhone", "tel", "+256700000000")}
-      ${field("National ID or group ID", "memberNin", "text", "CM0000000K0AA")}
-      <label class="field"><span>Member type</span><select id="memberType" class="select"><option>Individual</option><option>Group</option><option>Institutional</option><option>Corporate</option></select></label>
-      <label class="field"><span>Branch</span><select id="memberBranch" class="select">${branchOptions}</select></label>
-      <label class="field"><span>KYC status</span><select id="memberKyc" class="select"><option>Pending Verification</option><option>Verified</option><option>Not Verified</option></select></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveMember" class="primary-button" type="button">Save member</button>`);
-
-  document.getElementById("saveMember").addEventListener("click", async () => {
-    if (apiMode) {
-      try {
-        await apiRequest("/members", {
-          method: "POST",
-          body: JSON.stringify({
-            tenantId: currentApiTenantId(),
-            branchId: value("memberBranch"),
-            fullName: value("memberName"),
-            phone: value("memberPhone"),
-            nationalId: value("memberNin"),
-            memberType: value("memberType").toLowerCase(),
-            kycStatus: value("memberKyc").toLowerCase().replace(/\s+/g, "_")
-          })
-        });
-        closeModal();
-        state.currentView = "members";
-        await refreshApiStatus();
-      } catch (error) {
-        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-      }
-      return;
-    }
-
-    const count = state.members.filter((member) => member.tenantId === state.tenantId).length + 1;
-    state.members.push({
-      id: `m-${Date.now()}`,
-      tenantId: state.tenantId,
-      no: `${tenant.abbreviation}-${String(count).padStart(4, "0")}`,
-      name: value("memberName"),
-      phone: value("memberPhone"),
-      nin: value("memberNin"),
-      type: value("memberType"),
-      status: "Pending Approval",
-      branchId: value("memberBranch"),
-      kyc: value("memberKyc"),
-      savings: 0,
-      shares: 0,
-      welfare: 0
-    });
-    addAudit(state.tenantId, "SACCO Admin", `Registered member ${value("memberName")}`);
-    saveState();
-    closeModal();
-    state.currentView = "members";
-    render();
-  });
-}
-
-async function openMemberImportTemplate() {
-  if (!apiState.user) return;
-  try {
-    const template = await apiRequest(`/members/import-template${apiTenantQuery()}`);
-    const sample = template.sampleRows?.[0] || {};
-    openModal("Member import", `
-      <div class="grid metrics">
-        ${metric("File", template.filename, template.contentType)}
-        ${metric("Columns", template.headers.length, "required import fields")}
-        ${metric("Tenant", tenantName(template.tenantId), sample.branchId || "No branch")}
-      </div>
-      <div class="table-wrap" style="margin-top:16px">
-        <table>
-          <thead><tr>${template.headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead>
-          <tbody>
-            <tr>${template.headers.map((header) => `<td>${sample[header] || ""}</td>`).join("")}</tr>
-          </tbody>
-        </table>
-      </div>
-      <label class="field full" style="margin-top:16px">
-        <span>CSV rows</span>
-        <textarea id="memberImportCsv" class="input" rows="8">${template.csv}</textarea>
-      </label>
-      <div id="memberImportResult" style="margin-top:16px"></div>
-    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyMemberImportTemplate" class="secondary-button" type="button">Copy CSV</button><button id="validateMemberImport" class="secondary-button" type="button">Validate</button><button id="runMemberImport" class="primary-button" type="button">Import</button>`);
-    document.getElementById("copyMemberImportTemplate").addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(template.csv);
-        document.getElementById("memberImportResult").innerHTML = `<div class="notice">CSV template copied to clipboard.</div>`;
-      } catch {
-        document.getElementById("memberImportResult").innerHTML = `<div class="notice error">Clipboard access was not available. Use the CSV text.</div>`;
-      }
-    });
-    document.getElementById("validateMemberImport").addEventListener("click", () => submitMemberImport(template.tenantId, true));
-    document.getElementById("runMemberImport").addEventListener("click", () => submitMemberImport(template.tenantId, false));
-  } catch (error) {
-    openModal("Member import", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-async function submitMemberImport(tenantId, dryRun) {
-  const result = document.getElementById("memberImportResult");
-  try {
-    const rows = parseMemberImportCsv(value("memberImportCsv"));
-    result.innerHTML = `<div class="notice">${dryRun ? "Validating" : "Importing"} ${rows.length} row(s)...</div>`;
-    const response = await apiRequest("/members/import", {
-      method: "POST",
-      body: JSON.stringify({ tenantId, dryRun, rows })
-    });
-    result.innerHTML = renderMemberImportResult(response);
-    if (!dryRun && response.valid) await refreshApiStatus();
-  } catch (error) {
-    result.innerHTML = `<div class="notice error">${error.message}</div>`;
-  }
-}
-
-async function openMemberMetadataImport() {
-  if (!apiState.user) return;
-  try {
-    const template = await apiRequest(`/members/metadata-import-template${apiTenantQuery()}`);
-    const sampleRows = template.sampleRows || [];
-    openModal("Member profile metadata", `
-      <div class="grid metrics">
-        ${metric("File", template.filename, template.contentType)}
-        ${metric("Columns", template.headers.length, "profile metadata fields")}
-        ${metric("Tenant", tenantName(template.tenantId), `${sampleRows.length} sample row(s)`)}
-      </div>
-      <div class="notice" style="margin-top:16px">Use record types kyc_status, document, next_of_kin, and beneficiary. The whole batch imports only after every row validates.</div>
-      <div class="table-wrap" style="margin-top:16px">
-        <table>
-          <thead><tr>${template.headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead>
-          <tbody>
-            ${sampleRows.map((row) => `<tr>${template.headers.map((header) => `<td>${row[header] || ""}</td>`).join("")}</tr>`).join("")}
-          </tbody>
-        </table>
-      </div>
-      <label class="field full" style="margin-top:16px">
-        <span>CSV rows</span>
-        <textarea id="memberMetadataImportCsv" class="input" rows="8">${template.csv}</textarea>
-      </label>
-      <div id="memberMetadataImportResult" style="margin-top:16px"></div>
-    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyMemberMetadataImportTemplate" class="secondary-button" type="button">Copy CSV</button><button id="validateMemberMetadataImport" class="secondary-button" type="button">Validate</button><button id="runMemberMetadataImport" class="primary-button" type="button">Import</button>`);
-    document.getElementById("copyMemberMetadataImportTemplate").addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(template.csv);
-        document.getElementById("memberMetadataImportResult").innerHTML = `<div class="notice">CSV template copied to clipboard.</div>`;
-      } catch {
-        document.getElementById("memberMetadataImportResult").innerHTML = `<div class="notice error">Clipboard access was not available. Use the CSV text.</div>`;
-      }
-    });
-    document.getElementById("validateMemberMetadataImport").addEventListener("click", () => submitMemberMetadataImport(template.tenantId, true));
-    document.getElementById("runMemberMetadataImport").addEventListener("click", () => submitMemberMetadataImport(template.tenantId, false));
-  } catch (error) {
-    openModal("Member profile metadata", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-async function submitMemberMetadataImport(tenantId, dryRun) {
-  const result = document.getElementById("memberMetadataImportResult");
-  try {
-    const rows = parseMemberImportCsv(value("memberMetadataImportCsv"));
-    result.innerHTML = `<div class="notice">${dryRun ? "Validating" : "Importing"} ${rows.length} profile metadata row(s)...</div>`;
-    const response = await apiRequest("/members/metadata-import", {
-      method: "POST",
-      body: JSON.stringify({ tenantId, dryRun, rows })
-    });
-    result.innerHTML = renderMemberMetadataImportResult(response);
-    if (!dryRun && response.valid) await refreshApiStatus();
-  } catch (error) {
-    result.innerHTML = `<div class="notice error">${error.message}</div>`;
-  }
-}
-
-function renderMemberMetadataImportResult(result) {
-  const stateClass = result.valid ? "notice" : "notice error";
-  const rows = result.errors?.map((error) => `
-    <tr>
-      <td>${error.row}</td>
-      <td>${error.field}</td>
-      <td>${error.code}</td>
-      <td>${error.message}</td>
-    </tr>
-  `).join("") || "";
-  return `
-    <div class="${stateClass}">
-      ${result.valid ? "Profile metadata validation passed." : "Profile metadata validation failed."}
-      ${result.createdCount ? ` Imported ${result.createdCount} profile metadata record(s).` : ""}
-    </div>
-    <div class="grid three compact-facts" style="margin-top:12px">
-      ${miniFact("Rows", result.totalRows)}
-      ${miniFact("Imported", result.createdCount)}
-      ${miniFact("Skipped", result.skippedCount)}
-    </div>
-    ${rows ? `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Row</th><th>Field</th><th>Code</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
-  `;
-}
-
-async function openOpeningBalanceImport() {
-  if (!apiState.user) return;
-  try {
-    const template = await apiRequest(`/financial-transactions/opening-balances/import-template${apiTenantQuery()}`);
-    const sample = template.sampleRows?.[0] || {};
-    openModal("Opening balances", `
-      <div class="grid metrics">
-        ${metric("File", template.filename, template.contentType)}
-        ${metric("Columns", template.headers.length, "opening balance fields")}
-        ${metric("Tenant", tenantName(template.tenantId), sample.membershipNo || "No member")}
-      </div>
-      <label class="field full" style="margin-top:16px">
-        <span>CSV rows</span>
-        <textarea id="openingBalanceImportCsv" class="input" rows="8">${template.csv}</textarea>
-      </label>
-      <div id="openingBalanceImportResult" style="margin-top:16px"></div>
-    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyOpeningBalanceImportTemplate" class="secondary-button" type="button">Copy CSV</button><button id="validateOpeningBalanceImport" class="secondary-button" type="button">Validate</button><button id="runOpeningBalanceImport" class="primary-button" type="button">Import</button>`);
-    document.getElementById("copyOpeningBalanceImportTemplate").addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(template.csv);
-        document.getElementById("openingBalanceImportResult").innerHTML = `<div class="notice">CSV template copied to clipboard.</div>`;
-      } catch {
-        document.getElementById("openingBalanceImportResult").innerHTML = `<div class="notice error">Clipboard access was not available. Use the CSV text.</div>`;
-      }
-    });
-    document.getElementById("validateOpeningBalanceImport").addEventListener("click", () => submitOpeningBalanceImport(template.tenantId, true));
-    document.getElementById("runOpeningBalanceImport").addEventListener("click", () => submitOpeningBalanceImport(template.tenantId, false));
-  } catch (error) {
-    openModal("Opening balances", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-async function submitOpeningBalanceImport(tenantId, dryRun) {
-  const result = document.getElementById("openingBalanceImportResult");
-  try {
-    const rows = parseMemberImportCsv(value("openingBalanceImportCsv"));
-    result.innerHTML = `<div class="notice">${dryRun ? "Validating" : "Importing"} ${rows.length} opening balance row(s)...</div>`;
-    const response = await apiRequest("/financial-transactions/opening-balances/import", {
-      method: "POST",
-      body: JSON.stringify({ tenantId, dryRun, rows })
-    });
-    result.innerHTML = renderOpeningBalanceImportResult(response);
-    if (!dryRun && response.valid) await refreshApiStatus();
-  } catch (error) {
-    result.innerHTML = `<div class="notice error">${error.message}</div>`;
-  }
-}
-
-function renderOpeningBalanceImportResult(result) {
-  const stateClass = result.valid ? "notice" : "notice error";
-  const rows = result.errors?.map((error) => `
-    <tr>
-      <td>${error.row}</td>
-      <td>${error.field}</td>
-      <td>${error.code}</td>
-      <td>${error.message}</td>
-    </tr>
-  `).join("") || "";
-  return `
-    <div class="${stateClass}">
-      ${result.valid ? "Opening balance validation passed." : "Opening balance validation failed."}
-      ${result.createdCount ? ` Posted ${result.createdCount} ledger transaction(s).` : ""}
-    </div>
-    <div class="grid three compact-facts" style="margin-top:12px">
-      ${miniFact("Rows", result.totalRows)}
-      ${miniFact("Posted", result.createdCount)}
-      ${miniFact("Skipped", result.skippedCount)}
-    </div>
-    ${rows ? `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Row</th><th>Field</th><th>Code</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
-  `;
-}
-
-async function openLoanBookImport() {
-  if (!apiState.user) return;
-  try {
-    const template = await apiRequest(`/loans/import-template${apiTenantQuery()}`);
-    const sample = template.sampleRows?.[0] || {};
-    openModal("Loan book import", `
-      <div class="grid metrics">
-        ${metric("File", template.filename, template.contentType)}
-        ${metric("Columns", template.headers.length, "loan book fields")}
-        ${metric("Tenant", tenantName(template.tenantId), sample.membershipNo || "No member")}
-      </div>
-      <label class="field full" style="margin-top:16px">
-        <span>CSV rows</span>
-        <textarea id="loanBookImportCsv" class="input" rows="8">${template.csv}</textarea>
-      </label>
-      <div id="loanBookImportResult" style="margin-top:16px"></div>
-    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyLoanBookImportTemplate" class="secondary-button" type="button">Copy CSV</button><button id="validateLoanBookImport" class="secondary-button" type="button">Validate</button><button id="runLoanBookImport" class="primary-button" type="button">Import</button>`);
-    document.getElementById("copyLoanBookImportTemplate").addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(template.csv);
-        document.getElementById("loanBookImportResult").innerHTML = `<div class="notice">CSV template copied to clipboard.</div>`;
-      } catch {
-        document.getElementById("loanBookImportResult").innerHTML = `<div class="notice error">Clipboard access was not available. Use the CSV text.</div>`;
-      }
-    });
-    document.getElementById("validateLoanBookImport").addEventListener("click", () => submitLoanBookImport(template.tenantId, true));
-    document.getElementById("runLoanBookImport").addEventListener("click", () => submitLoanBookImport(template.tenantId, false));
-  } catch (error) {
-    openModal("Loan book import", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-async function submitLoanBookImport(tenantId, dryRun) {
-  const result = document.getElementById("loanBookImportResult");
-  try {
-    const rows = parseMemberImportCsv(value("loanBookImportCsv"));
-    result.innerHTML = `<div class="notice">${dryRun ? "Validating" : "Importing"} ${rows.length} loan row(s)...</div>`;
-    const response = await apiRequest("/loans/import", {
-      method: "POST",
-      body: JSON.stringify({ tenantId, dryRun, rows })
-    });
-    result.innerHTML = renderLoanBookImportResult(response);
-    if (!dryRun && response.valid) await refreshApiStatus();
-  } catch (error) {
-    result.innerHTML = `<div class="notice error">${error.message}</div>`;
-  }
-}
-
-function renderLoanBookImportResult(result) {
-  const stateClass = result.valid ? "notice" : "notice error";
-  const rows = result.errors?.map((error) => `
-    <tr>
-      <td>${error.row}</td>
-      <td>${error.field}</td>
-      <td>${error.code}</td>
-      <td>${error.message}</td>
-    </tr>
-  `).join("") || "";
-  return `
-    <div class="${stateClass}">
-      ${result.valid ? "Loan book validation passed." : "Loan book validation failed."}
-      ${result.createdCount ? ` Imported ${result.createdCount} loan record(s).` : ""}
-    </div>
-    <div class="grid three compact-facts" style="margin-top:12px">
-      ${miniFact("Rows", result.totalRows)}
-      ${miniFact("Imported", result.createdCount)}
-      ${miniFact("Skipped", result.skippedCount)}
-    </div>
-    ${rows ? `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Row</th><th>Field</th><th>Code</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
-  `;
-}
-
-async function openRepaymentHistoryImport() {
-  if (!apiState.user) return;
-  try {
-    const template = await apiRequest(`/loans/repayments/import-template${apiTenantQuery()}`);
-    const sample = template.sampleRows?.[0] || {};
-    openModal("Repayment history import", `
-      <div class="grid metrics">
-        ${metric("File", template.filename, template.contentType)}
-        ${metric("Columns", template.headers.length, "repayment fields")}
-        ${metric("Tenant", tenantName(template.tenantId), sample.reference || "No sample")}
-      </div>
-      <div class="notice" style="margin-top:16px">Historical repayments explain already-paid loan amounts. They do not reduce migrated outstanding balances again.</div>
-      <label class="field full" style="margin-top:16px">
-        <span>CSV rows</span>
-        <textarea id="repaymentHistoryImportCsv" class="input" rows="8">${template.csv}</textarea>
-      </label>
-      <div id="repaymentHistoryImportResult" style="margin-top:16px"></div>
-    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyRepaymentHistoryImportTemplate" class="secondary-button" type="button">Copy CSV</button><button id="validateRepaymentHistoryImport" class="secondary-button" type="button">Validate</button><button id="runRepaymentHistoryImport" class="primary-button" type="button">Import</button>`);
-    document.getElementById("copyRepaymentHistoryImportTemplate").addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(template.csv);
-        document.getElementById("repaymentHistoryImportResult").innerHTML = `<div class="notice">CSV template copied to clipboard.</div>`;
-      } catch {
-        document.getElementById("repaymentHistoryImportResult").innerHTML = `<div class="notice error">Clipboard access was not available. Use the CSV text.</div>`;
-      }
-    });
-    document.getElementById("validateRepaymentHistoryImport").addEventListener("click", () => submitRepaymentHistoryImport(template.tenantId, true));
-    document.getElementById("runRepaymentHistoryImport").addEventListener("click", () => submitRepaymentHistoryImport(template.tenantId, false));
-  } catch (error) {
-    openModal("Repayment history import", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-async function submitRepaymentHistoryImport(tenantId, dryRun) {
-  const result = document.getElementById("repaymentHistoryImportResult");
-  try {
-    const rows = parseMemberImportCsv(value("repaymentHistoryImportCsv"));
-    result.innerHTML = `<div class="notice">${dryRun ? "Validating" : "Importing"} ${rows.length} repayment row(s)...</div>`;
-    const response = await apiRequest("/loans/repayments/import", {
-      method: "POST",
-      body: JSON.stringify({ tenantId, dryRun, rows })
-    });
-    result.innerHTML = renderRepaymentHistoryImportResult(response);
-    if (!dryRun && response.valid) await refreshApiStatus();
-  } catch (error) {
-    result.innerHTML = `<div class="notice error">${error.message}</div>`;
-  }
-}
-
-function renderRepaymentHistoryImportResult(result) {
-  const stateClass = result.valid ? "notice" : "notice error";
-  const rows = result.errors?.map((error) => `
-    <tr>
-      <td>${error.row}</td>
-      <td>${error.field}</td>
-      <td>${error.code}</td>
-      <td>${error.message}</td>
-    </tr>
-  `).join("") || "";
-  return `
-    <div class="${stateClass}">
-      ${result.valid ? "Repayment history validation passed." : "Repayment history validation failed."}
-      ${result.createdCount ? ` Imported ${result.createdCount} historical repayment(s).` : ""}
-    </div>
-    <div class="grid three compact-facts" style="margin-top:12px">
-      ${miniFact("Rows", result.totalRows)}
-      ${miniFact("Imported", result.createdCount)}
-      ${miniFact("Skipped", result.skippedCount)}
-    </div>
-    ${rows ? `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Row</th><th>Field</th><th>Code</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
-  `;
-}
-
-function renderMemberImportResult(result) {
-  const stateClass = result.valid ? "notice" : "notice error";
-  const rows = result.errors?.map((error) => `
-    <tr>
-      <td>${error.row}</td>
-      <td>${error.field}</td>
-      <td>${error.code}</td>
-      <td>${error.message}</td>
-    </tr>
-  `).join("") || "";
-  return `
-    <div class="${stateClass}">
-      ${result.valid ? "Import validation passed." : "Import validation failed."}
-      ${result.createdCount ? ` Created ${result.createdCount} member(s).` : ""}
-    </div>
-    <div class="grid three compact-facts" style="margin-top:12px">
-      ${miniFact("Rows", result.totalRows)}
-      ${miniFact("Created", result.createdCount)}
-      ${miniFact("Skipped", result.skippedCount)}
-    </div>
-    ${rows ? `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Row</th><th>Field</th><th>Code</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
-  `;
-}
-
-function parseMemberImportCsv(csvText) {
-  const rows = parseCsvRows(csvText).filter((row) => row.some((cell) => cell.trim()));
-  if (rows.length < 2) throw new Error("CSV must include a header row and at least one member row.");
-  const headers = rows[0].map((header) => header.trim());
-  return rows.slice(1).map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index]?.trim() || ""])));
-}
-
-function parseCsvRows(csvText) {
-  const rows = [];
-  let row = [];
-  let cell = "";
-  let quoted = false;
-  for (let index = 0; index < csvText.length; index += 1) {
-    const char = csvText[index];
-    const next = csvText[index + 1];
-    if (quoted && char === "\"" && next === "\"") {
-      cell += "\"";
-      index += 1;
-    } else if (char === "\"") {
-      quoted = !quoted;
-    } else if (!quoted && char === ",") {
-      row.push(cell);
-      cell = "";
-    } else if (!quoted && (char === "\n" || char === "\r")) {
-      if (char === "\r" && next === "\n") index += 1;
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = "";
-    } else {
-      cell += char;
-    }
-  }
-  row.push(cell);
-  rows.push(row);
-  return rows;
-}
-
-async function openMemberProfile(memberId) {
-  if (!apiState.user) return;
-  const member = apiState.members.find((item) => item.id === memberId);
-  if (!member) return;
-  try {
-    const [documents, nextOfKin, beneficiaries] = await Promise.all([
-      apiRequest(`/members/${memberId}/documents`),
-      apiRequest(`/members/${memberId}/next-of-kin`),
-      apiRequest(`/members/${memberId}/beneficiaries`)
-    ]);
-    const allocated = beneficiaries.reduce((sum, beneficiary) => sum + Number(beneficiary.allocationPercent || 0), 0);
-    openModal(`${member.fullName} profile`, `
-      <div class="grid metrics">
-        ${metric("Documents", documents.length, `${documents.filter((document) => document.verificationStatus === "verified").length} verified`)}
-        ${metric("Next of kin", nextOfKin.length, `${nextOfKin.filter((kin) => kin.primaryContact).length} primary`)}
-        ${metric("Beneficiaries", beneficiaries.length, `${allocated}% allocated`)}
-      </div>
-      <div class="grid three" style="margin-top:16px">
-        ${miniFact("Member no.", member.membershipNo)}
-        ${miniFact("Phone", member.phone)}
-        ${miniFact("Branch", branchName(member.branchId))}
-      </div>
-      <div class="grid two" style="margin-top:16px">
-        <section>
-          <div class="toolbar">
-            <h3>KYC documents</h3>
-            <button class="secondary-button" id="addMemberDocument" type="button">Add document</button>
-          </div>
-          ${memberDocumentList(documents)}
-        </section>
-        <section>
-          <div class="toolbar">
-            <h3>Next of kin</h3>
-            <button class="secondary-button" id="addNextOfKin" type="button">Add contact</button>
-          </div>
-          ${memberNextOfKinList(nextOfKin)}
-        </section>
-      </div>
-      <section style="margin-top:16px">
-        <div class="toolbar">
-          <h3>Beneficiaries</h3>
-          <button class="secondary-button" id="addBeneficiary" type="button">Add beneficiary</button>
-        </div>
-        ${memberBeneficiaryList(beneficiaries)}
-      </section>
-    `, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    document.getElementById("addMemberDocument").addEventListener("click", () => openMemberDocumentForm(memberId));
-    document.getElementById("addNextOfKin").addEventListener("click", () => openNextOfKinForm(memberId));
-    document.getElementById("addBeneficiary").addEventListener("click", () => openBeneficiaryForm(memberId));
-  } catch (error) {
-    openModal("Member profile", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-function memberDocumentList(documents) {
-  return `
-    <ul class="list">
-      ${documents.map((document) => `
-        <li>
-          <span><strong>${titleCase(document.documentType.replace(/_/g, " "))}</strong><br><small>${document.storageKey}</small></span>
-          <span class="status ${statusClass(document.verificationStatus)}">${titleCase(document.verificationStatus.replace(/_/g, " "))}</span>
-        </li>
-      `).join("") || `<li><span>No documents uploaded.</span><span class="status pending">KYC</span></li>`}
-    </ul>
-  `;
-}
-
-function memberNextOfKinList(nextOfKin) {
-  return `
-    <ul class="list">
-      ${nextOfKin.map((kin) => `
-        <li>
-          <span><strong>${kin.fullName}</strong><br><small>${titleCase(kin.relationship)} &middot; ${kin.phone}${kin.address ? ` &middot; ${kin.address}` : ""}</small></span>
-          <span class="status ${kin.primaryContact ? "active" : "pending"}">${kin.primaryContact ? "Primary" : "Contact"}</span>
-        </li>
-      `).join("") || `<li><span>No next-of-kin contacts.</span><span class="status pending">Pending</span></li>`}
-    </ul>
-  `;
-}
-
-function memberBeneficiaryList(beneficiaries) {
-  return `
-    <ul class="list">
-      ${beneficiaries.map((beneficiary) => `
-        <li>
-          <span><strong>${beneficiary.fullName}</strong><br><small>${titleCase(beneficiary.relationship)}${beneficiary.phone ? ` &middot; ${beneficiary.phone}` : ""}</small></span>
-          <strong>${beneficiary.allocationPercent}%</strong>
-        </li>
-      `).join("") || `<li><span>No beneficiaries captured.</span><span class="status pending">Pending</span></li>`}
-    </ul>
-  `;
-}
-
-function openMemberDocumentForm(memberId) {
-  openModal("Add KYC document", `
-    <div class="form-grid">
-      <label class="field"><span>Document type</span><select id="profileDocumentType" class="select"><option value="national_id">National ID</option><option value="photo">Photo</option><option value="signature">Signature</option><option value="registration_certificate">Registration certificate</option></select></label>
-      ${field("Storage key", "profileStorageKey", "text", `tenant_green/members/${memberId}/document.pdf`)}
-      <label class="field"><span>Verification status</span><select id="profileDocumentStatus" class="select"><option value="pending_verification">Pending Verification</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveMemberDocument" class="primary-button" type="button">Save document</button>`);
-  document.getElementById("saveMemberDocument").addEventListener("click", async () => {
-    await saveMemberProfileRecord(`/members/${memberId}/documents`, {
-      documentType: value("profileDocumentType"),
-      storageKey: value("profileStorageKey"),
-      verificationStatus: value("profileDocumentStatus")
-    }, memberId);
-  });
-}
-
-function openNextOfKinForm(memberId) {
-  openModal("Add next of kin", `
-    <div class="form-grid">
-      ${field("Full name", "profileKinName", "text", "Grace Nambi")}
-      ${field("Relationship", "profileKinRelationship", "text", "Mother")}
-      ${field("Phone", "profileKinPhone", "tel", "+256703333444")}
-      ${field("Address", "profileKinAddress", "text", "Kireka")}
-      <label class="field"><span>Primary contact</span><select id="profileKinPrimary" class="select"><option value="true">Yes</option><option value="false">No</option></select></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveNextOfKin" class="primary-button" type="button">Save contact</button>`);
-  document.getElementById("saveNextOfKin").addEventListener("click", async () => {
-    await saveMemberProfileRecord(`/members/${memberId}/next-of-kin`, {
-      fullName: value("profileKinName"),
-      relationship: value("profileKinRelationship"),
-      phone: value("profileKinPhone"),
-      address: value("profileKinAddress"),
-      primaryContact: value("profileKinPrimary") === "true"
-    }, memberId);
-  });
-}
-
-function openBeneficiaryForm(memberId) {
-  openModal("Add beneficiary", `
-    <div class="form-grid">
-      ${field("Full name", "profileBeneficiaryName", "text", "Eva Nakato")}
-      ${field("Relationship", "profileBeneficiaryRelationship", "text", "Daughter")}
-      ${field("Phone", "profileBeneficiaryPhone", "tel", "+256704444555")}
-      ${field("Allocation percent", "profileBeneficiaryAllocation", "number", "20")}
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveBeneficiary" class="primary-button" type="button">Save beneficiary</button>`);
-  document.getElementById("saveBeneficiary").addEventListener("click", async () => {
-    await saveMemberProfileRecord(`/members/${memberId}/beneficiaries`, {
-      fullName: value("profileBeneficiaryName"),
-      relationship: value("profileBeneficiaryRelationship"),
-      phone: value("profileBeneficiaryPhone"),
-      allocationPercent: Number(value("profileBeneficiaryAllocation"))
-    }, memberId);
-  });
-}
-
-async function saveMemberProfileRecord(path, payload, memberId) {
-  try {
-    await apiRequest(path, { method: "POST", body: JSON.stringify(payload) });
-    closeModal();
-    await openMemberProfile(memberId);
-  } catch (error) {
-    document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-  }
-}
-
-function openApprovalWorkflowForm() {
-  if (!apiState.user) return;
-  openModal("New approval workflow", `
-    <div class="form-grid">
-      ${field("Workflow name", "approvalWorkflowName", "text", "Expense approval")}
-      <label class="field"><span>Module</span><select id="approvalWorkflowModule" class="select"><option value="members">Members</option><option value="transactions">Transactions</option><option value="loans">Loans</option><option value="expenses">Expenses</option><option value="assets">Assets</option><option value="subscriptions">Subscriptions</option><option value="governance">Governance</option></select></label>
-      <label class="field"><span>Status</span><select id="approvalWorkflowActive" class="select"><option value="true">Active</option><option value="false">Inactive</option></select></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveApprovalWorkflow" class="primary-button" type="button">Save workflow</button>`);
-  document.getElementById("saveApprovalWorkflow").addEventListener("click", async () => {
-    try {
-      await apiRequest("/approval-workflows", {
-        method: "POST",
-        body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
-          name: value("approvalWorkflowName"),
-          module: value("approvalWorkflowModule"),
-          active: value("approvalWorkflowActive") === "true"
-        })
-      });
-      closeModal();
-      state.currentView = "approvals";
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openApprovalDecisionForm() {
-  if (!apiState.user) return;
-  const workflows = apiState.approvalWorkflows || [];
-  if (!workflows.length) {
-    openModal("Record approval decision", `<div class="notice error">Create an approval workflow before recording decisions.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    return;
-  }
-  openModal("Record approval decision", `
-    <div class="form-grid">
-      <label class="field full"><span>Workflow</span><select id="approvalDecisionWorkflow" class="select">${workflows.map((workflow) => `<option value="${workflow.id}">${workflow.name} (${titleCase(workflow.module.replace(/_/g, " "))})</option>`).join("")}</select></label>
-      ${field("Resource type", "approvalDecisionResourceType", "text", "expense")}
-      ${field("Resource ID", "approvalDecisionResourceId", "text", "expense_green_0001")}
-      <label class="field"><span>Decision</span><select id="approvalDecisionValue" class="select"><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="corrections_requested">Corrections Requested</option><option value="pending">Pending</option></select></label>
-      <label class="field full"><span>Reason</span><textarea id="approvalDecisionReason" class="input" rows="3" placeholder="Required for rejected or corrections requested decisions"></textarea></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveApprovalDecision" class="primary-button" type="button">Record decision</button>`);
-  document.getElementById("saveApprovalDecision").addEventListener("click", async () => {
-    const workflow = workflows.find((item) => item.id === value("approvalDecisionWorkflow"));
-    try {
-      await apiRequest("/approval-decisions", {
-        method: "POST",
-        body: JSON.stringify({
-          tenantId: workflow?.tenantId,
-          workflowId: value("approvalDecisionWorkflow"),
-          resourceType: value("approvalDecisionResourceType"),
-          resourceId: value("approvalDecisionResourceId"),
-          decision: value("approvalDecisionValue"),
-          reason: value("approvalDecisionReason")
-        })
-      });
-      closeModal();
-      state.currentView = "approvals";
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openRoleForm() {
-  if (!apiState.user) return;
-  const permissions = apiState.permissions || [];
-  openModal("New role", `
-    <div class="form-grid">
-      ${field("Role name", "roleName", "text", "Cashier")}
-      <label class="field full"><span>Permissions</span><select id="rolePermissions" class="select" multiple size="8">${permissions.map((permission) => `<option value="${permission.id}">${permission.id} - ${permission.description || permission.module}</option>`).join("")}</select></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveRole" class="primary-button" type="button">Save role</button>`);
-  document.getElementById("saveRole").addEventListener("click", async () => {
-    try {
-      await apiRequest("/roles", {
-        method: "POST",
-        body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
-          name: value("roleName"),
-          permissionIds: selectedValues("rolePermissions")
-        })
-      });
-      closeModal();
-      state.currentView = "reports";
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openPlatformUserForm() {
-  if (!isPlatformSuperAdmin() || !hasPermission("users:create")) {
-    openModal("Add platform user", `<div class="notice error">Only the Platform Super Admin can add platform users.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    return;
-  }
-  const platformRoles = (apiState.roles || []).filter((role) => role.tenantId === "tenant_platform");
-  if (!platformRoles.length) {
-    openModal("Add platform user", `<div class="notice error">Platform roles must be loaded before adding a platform user.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    return;
-  }
-  openModal("Add platform user", `
-    <div class="notice">This creates a Tereka Online platform administrator only. SACCO staff are created from their SACCO administration area.</div>
-    <div class="form-grid" style="margin-top:14px">
-      ${field("Full name", "platformUserFullName", "text", "Platform Support Officer")}
-      ${field("Email / username", "platformUserEmail", "email", "new.platform.user@tereka.local")}
-      ${field("Phone", "platformUserPhone", "tel", "+256700000010")}
-      ${field("Temporary password", "platformUserPassword", "password", "ChangeMe@12345")}
-      <label class="field full"><span>Platform role</span><select id="platformUserRole" class="select">${platformRoles.map((role) => `<option value="${role.id}">${role.name}</option>`).join("")}</select></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="savePlatformUser" class="primary-button" type="button">Add platform user</button>`);
-  document.getElementById("savePlatformUser").addEventListener("click", async () => {
-    try {
-      const user = await apiRequest("/users", {
-        method: "POST",
-        body: JSON.stringify({
-          tenantId: "tenant_platform",
-          fullName: value("platformUserFullName"),
-          email: value("platformUserEmail"),
-          phone: value("platformUserPhone"),
-          password: value("platformUserPassword")
-        })
-      });
-      await apiRequest(`/users/${encodeURIComponent(user.id)}/roles`, {
-        method: "PUT",
-        body: JSON.stringify({ roleIds: [value("platformUserRole")] })
-      });
-      closeModal();
-      state.currentView = "usersRoles";
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openUserRoleAssignmentForm() {
-  if (!apiState.user) return;
-  const users = apiState.user?.tenantId === "tenant_platform"
-    ? (apiState.users || []).filter((user) => user.tenantId === "tenant_platform")
-    : (apiState.users || []);
-  const roles = apiState.user?.tenantId === "tenant_platform"
-    ? (apiState.roles || []).filter((role) => role.tenantId === "tenant_platform")
-    : (apiState.roles || []);
-  if (!users.length || !roles.length) {
-    openModal("Assign roles", `<div class="notice error">Users and roles must be loaded before assignment.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    return;
-  }
-  openModal("Assign roles", `
-    <div class="form-grid">
-      <label class="field full"><span>User</span><select id="roleUser" class="select">${users.map((user) => `<option value="${user.id}">${user.fullName} (${user.email})</option>`).join("")}</select></label>
-      <label class="field full"><span>Roles</span><select id="assignedRoles" class="select" multiple size="6">${roles.map((role) => `<option value="${role.id}">${role.name}</option>`).join("")}</select></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveUserRoles" class="primary-button" type="button">Save assignments</button>`);
-  document.getElementById("saveUserRoles").addEventListener("click", async () => {
-    try {
-      await apiRequest(`/users/${value("roleUser")}/roles`, {
-        method: "PUT",
-        body: JSON.stringify({ roleIds: selectedValues("assignedRoles") })
-      });
-      closeModal();
-      state.currentView = "reports";
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openNotificationTemplateForm(templateId = "") {
-  if (!apiState.user) return;
-  const template = apiState.notificationTemplates.find((item) => item.id === templateId);
-  if (template && !canManageNotificationTemplate(template)) return;
-  const isEdit = Boolean(template);
-  const defaultTenantId = apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId;
-  const tenantOptions = apiState.user.tenantId === "tenant_platform"
-    ? `<label class="field"><span>Source</span><select id="templateTenant" class="select"><option value="">Global default</option>${apiState.tenants.filter((tenant) => tenant.id !== "tenant_platform").map((tenant) => `<option value="${tenant.id}" ${tenant.id === (template?.tenantId || defaultTenantId) ? "selected" : ""}>${tenant.name}</option>`).join("")}</select></label>`
-    : "";
-  openModal(isEdit ? "Edit notification template" : "New notification template", `
-    <div class="form-grid">
-      ${tenantOptions}
-      ${field("Event type", "templateEventType", "text", template?.eventType || "member_statement_ready")}
-      <label class="field"><span>Channel</span><select id="templateChannel" class="select">
-        ${["in_app", "sms", "email"].map((channel) => `<option value="${channel}" ${channel === (template?.channel || "in_app") ? "selected" : ""}>${titleCase(channel.replace(/_/g, " "))}</option>`).join("")}
-      </select></label>
-      <label class="field"><span>Status</span><select id="templateStatus" class="select">
-        ${["active", "inactive"].map((status) => `<option value="${status}" ${status === (template?.status || "active") ? "selected" : ""}>${titleCase(status)}</option>`).join("")}
-      </select></label>
-      ${field("Title", "templateTitle", "text", template?.title || "Member statement ready")}
-      <label class="field full"><span>Message body</span><textarea id="templateBody" class="input" rows="4">${template?.body || "Your SACCO statement is ready for review."}</textarea></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveNotificationTemplate" class="primary-button" type="button">Save template</button>`);
-
-  document.getElementById("saveNotificationTemplate").addEventListener("click", async () => {
-    try {
-      const payload = {
-        tenantId: apiState.user.tenantId === "tenant_platform" ? (value("templateTenant") || null) : apiState.user.tenantId,
-        eventType: value("templateEventType"),
-        channel: value("templateChannel"),
-        status: value("templateStatus"),
-        title: value("templateTitle"),
-        body: value("templateBody")
-      };
-      await apiRequest(isEdit ? `/notification-templates/${template.id}` : "/notification-templates", {
-        method: isEdit ? "PATCH" : "POST",
-        body: JSON.stringify(payload)
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-async function toggleNotificationTemplate(templateId) {
-  const template = apiState.notificationTemplates.find((item) => item.id === templateId);
-  if (!template || !canManageNotificationTemplate(template)) return;
-  try {
-    await apiRequest(`/notification-templates/${template.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: template.status === "active" ? "inactive" : "active" })
-    });
-    await refreshApiStatus();
-  } catch (error) {
-    openModal("Template update failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-function openTransactionForm() {
-  const apiMode = Boolean(apiState.user);
-  const members = apiMode ? apiState.members.map(apiMemberToRow) : tenantScoped(state.members);
-  if (!members.length) return;
-  openModal("Post transaction", `
-    <div class="form-grid">
-      <label class="field full"><span>Member</span><select id="txMember" class="select">${members.map((member) => `<option value="${member.id}">${member.name}</option>`).join("")}</select></label>
-      <label class="field"><span>Transaction type</span><select id="txType" class="select"><option>Savings Deposit</option><option>Share Purchase</option><option>Welfare Contribution</option><option>Withdrawal</option></select></label>
-      <label class="field"><span>Channel</span><select id="txChannel" class="select"><option>Mobile Money</option><option>Cash</option><option>Bank</option><option>Payroll Deduction</option></select></label>
-      ${field("Amount", "txAmount", "number", "50000")}
-      ${field("Narration", "txNarration", "text", "Member payment")}
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveTx" class="primary-button" type="button">Submit for approval</button>`);
-
-  document.getElementById("saveTx").addEventListener("click", async () => {
-    if (apiMode) {
-      const selectedMember = apiState.members.find((member) => member.id === value("txMember"));
-      try {
-        await apiRequest("/financial-transactions", {
-          method: "POST",
-          body: JSON.stringify({
-            tenantId: currentApiTenantId(),
-            memberId: value("txMember"),
-            branchId: selectedMember?.branchId,
-            type: value("txType").toLowerCase().replace(/\s+/g, "_"),
-            channel: value("txChannel").toLowerCase().replace(/\s+/g, "_"),
-            amount: Number(value("txAmount")),
-            narration: value("txNarration")
-          })
-        });
-        closeModal();
-        state.currentView = "transactions";
-        await refreshApiStatus();
-      } catch (error) {
-        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-      }
-      return;
-    }
-
-    const tenant = currentTenant();
-    const count = state.transactions.filter((tx) => tx.tenantId === state.tenantId).length + 1;
-    const ref = `${tenant.abbreviation}-TX-${String(count).padStart(4, "0")}`;
-    const amount = Number(value("txAmount"));
-    state.transactions.push({
-      id: `tx-${Date.now()}`,
-      tenantId: state.tenantId,
-      memberId: value("txMember"),
-      type: value("txType"),
-      channel: value("txChannel"),
-      amount,
-      status: "Pending Approval",
-      ref,
-      date: "2026-07-15",
-      maker: "Cashier",
-      checker: ""
-    });
-    state.approvals.push({ id: `ap-${Date.now()}`, tenantId: state.tenantId, title: `Approve ${ref} ${value("txType")}`, type: "Financial Posting", status: "Pending", requester: "Cashier", risk: amount > 1000000 ? "High" : "Low" });
-    addAudit(state.tenantId, "Cashier", `Submitted financial posting ${ref}`);
-    saveState();
-    closeModal();
-    render();
-  });
-}
-
-function openFinancialProductForm() {
-  if (!apiState.user) return;
-  openModal("New financial product", `
-    <div class="form-grid">
-      <label class="field"><span>Type</span><select id="productType" class="select"><option value="savings">Savings</option><option value="shares">Shares</option><option value="welfare">Welfare</option></select></label>
-      ${field("Code", "productCode", "text", `PRD-${Date.now().toString().slice(-5)}`)}
-      ${field("Name", "productName", "text", "Member product")}
-      ${field("Contribution amount", "productContribution", "number", "10000")}
-      ${field("Minimum balance", "productMinimum", "number", "0")}
-      ${field("Interest rate %", "productRate", "number", "0")}
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveFinancialProduct" class="primary-button" type="button">Create product</button>`);
-
-  document.getElementById("saveFinancialProduct").addEventListener("click", async () => {
-    try {
-      await apiRequest("/financial-products", {
-        method: "POST",
-        body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
-          productType: value("productType"),
-          code: value("productCode"),
-          name: value("productName"),
-          contributionAmount: Number(value("productContribution")),
-          minimumBalance: Number(value("productMinimum")),
-          interestRate: Number(value("productRate"))
-        })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openFinancialAccountForm() {
-  if (!apiState.user) return;
-  const activeMembers = apiState.members.map(apiMemberToRow).filter((member) => member.status === "Active");
-  const products = apiState.financialProducts.filter((product) => product.status === "active");
-  if (!activeMembers.length || !products.length) {
-    openModal("Account setup unavailable", `<div class="notice error">At least one active member and one active financial product are required.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    return;
-  }
-  openModal("Open financial account", `
-    <div class="form-grid">
-      <label class="field full"><span>Member</span><select id="accountMember" class="select">${activeMembers.map((member) => `<option value="${member.id}">${member.name} - ${member.no}</option>`).join("")}</select></label>
-      <label class="field full"><span>Product</span><select id="accountProduct" class="select">${products.map((product) => `<option value="${product.id}" data-type="${product.productType}">${product.code} - ${product.name} (${apiProductTypeLabel(product.productType)})</option>`).join("")}</select></label>
-      <label class="field"><span>Account type</span><select id="accountType" class="select"><option value="savings">Savings</option><option value="shares">Shares</option><option value="welfare">Welfare</option></select></label>
-      ${field("Account no. (optional)", "accountNo", "text", "")}
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveFinancialAccount" class="primary-button" type="button">Open account</button>`);
-
-  const syncType = () => {
-    const option = document.getElementById("accountProduct").selectedOptions[0];
-    document.getElementById("accountType").value = option?.dataset.type || "savings";
-  };
-  document.getElementById("accountProduct").addEventListener("change", syncType);
-  syncType();
-
-  document.getElementById("saveFinancialAccount").addEventListener("click", async () => {
-    try {
-      await apiRequest("/financial-accounts", {
-        method: "POST",
-        body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
-          memberId: value("accountMember"),
-          productId: value("accountProduct"),
-          accountType: value("accountType"),
-          accountNo: value("accountNo") || null
-        })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openWelfareClaimForm() {
-  if (!apiState.user) return;
-  const members = apiState.members.map(apiMemberToRow).filter((member) => member.status === "Active");
-  if (!members.length) {
-    openModal("No active members", `<div class="notice error">No active member is available for a welfare claim.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    return;
-  }
-  openModal("New welfare claim", `
-    <div class="form-grid">
-      <label class="field full"><span>Member</span><select id="welfareMember" class="select">${members.map((member) => `<option value="${member.id}">${member.name} - ${member.no}</option>`).join("")}</select></label>
-      <label class="field"><span>Claim type</span><select id="welfareClaimType" class="select"><option value="medical">Medical</option><option value="bereavement">Bereavement</option><option value="emergency">Emergency</option><option value="education">Education</option><option value="other">Other</option></select></label>
-      ${field("Amount", "welfareAmount", "number", "50000")}
-      ${field("Reference", "welfareReference", "text", `WCL-UI-${Date.now()}`)}
-      <label class="field full"><span>Description</span><textarea id="welfareDescription" class="input" rows="3">Member welfare support request.</textarea></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveWelfareClaim" class="primary-button" type="button">Submit claim</button>`);
-
-  document.getElementById("saveWelfareClaim").addEventListener("click", async () => {
-    try {
-      await apiRequest("/welfare-claims", {
-        method: "POST",
-        body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
-          memberId: value("welfareMember"),
-          claimType: value("welfareClaimType"),
-          amount: Number(value("welfareAmount")),
-          reference: value("welfareReference"),
-          description: value("welfareDescription")
-        })
-      });
-      closeModal();
-      state.currentView = "transactions";
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-async function openTransactionReceipt(transactionId) {
-  try {
-    const receipt = await apiRequest(`/financial-transactions/${transactionId}/receipt`);
-    openModal("Transaction receipt", `
-      <div class="grid metrics">
-        ${metric("Receipt", receipt.receiptNo, receipt.reference)}
-        ${metric("Member", receipt.memberName, receipt.membershipNo)}
-        ${metric("Amount", money.format(receipt.amount), titleCase(receipt.transactionType.replace(/_/g, " ")))}
-      </div>
-      <div class="table-wrap" style="margin-top:16px">
-        <table>
-          <tbody>
-            <tr><th>SACCO</th><td>${receipt.tenantName}</td></tr>
-            <tr><th>Branch</th><td>${receipt.branchName}</td></tr>
-            <tr><th>Channel</th><td>${titleCase(receipt.channel.replace(/_/g, " "))}</td></tr>
-            <tr><th>Posted at</th><td>${receipt.postedAt || ""}</td></tr>
-            <tr><th>Narration</th><td>${receipt.narration || ""}</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <pre class="notice" style="white-space:pre-wrap;margin-top:16px">${receipt.printableText || ""}</pre>
-    `, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  } catch (error) {
-    openModal("Receipt unavailable", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-function openTransactionReversalForm(transactionId) {
-  const transaction = apiState.financialTransactions.find((item) => item.id === transactionId);
-  if (!transaction) return;
-  openModal("Reverse transaction", `
-    <div class="notice">This creates a posted reversal for ${transaction.reference}; the original transaction remains unchanged for audit history.</div>
-    <label class="field full" style="margin-top:14px"><span>Reason</span><textarea id="reversalReason" class="input" rows="3">Duplicate or incorrect posting corrected by staff review.</textarea></label>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="confirmTransactionReversal" class="primary-button" type="button">Create reversal</button>`);
-
-  document.getElementById("confirmTransactionReversal").addEventListener("click", async () => {
-    try {
-      await apiRequest(`/financial-transactions/${transactionId}/reversal`, {
-        method: "POST",
-        body: JSON.stringify({ reason: value("reversalReason") })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-async function openMemberStatement(memberId) {
-  try {
-    const statement = await apiRequest(`/members/${memberId}/statement`);
-    openModal("Member statement", `
-      <div class="grid metrics">
-        ${metric("Member", statement.memberName, statement.membershipNo)}
-        ${metric("Savings", money.format(statement.closingBalances.savings), "closing balance")}
-        ${metric("Shares", money.format(statement.closingBalances.shares), "closing balance")}
-        ${metric("Welfare", money.format(statement.closingBalances.welfare), "closing balance")}
-      </div>
-      <div class="table-wrap" style="margin-top:16px">
-        <table>
-          <thead><tr><th>Date</th><th>Reference</th><th>Type</th><th>Amount</th><th>Savings</th><th>Shares</th><th>Welfare</th></tr></thead>
-          <tbody>
-            ${statement.lines.map((line) => `
-              <tr>
-                <td>${line.postedAt?.slice(0, 10) || ""}</td>
-                <td>${line.reference}${line.originalTransactionId ? `<br><small>Reversal</small>` : ""}</td>
-                <td>${titleCase(line.type.replace(/_/g, " "))}</td>
-                <td>${money.format(line.amount)}</td>
-                <td>${money.format(line.savingsBalance)}</td>
-                <td>${money.format(line.sharesBalance)}</td>
-                <td>${money.format(line.welfareBalance)}</td>
-              </tr>
-            `).join("") || `<tr><td colspan="7">No posted movements found.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-      <details style="margin-top:16px"><summary>CSV export text</summary><pre class="notice" style="white-space:pre-wrap">${statement.csv || ""}</pre></details>
-    `, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  } catch (error) {
-    openModal("Statement unavailable", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-async function decideWelfareClaim(id, status) {
-  try {
-    await apiRequest(`/welfare-claims/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status })
-    });
-    await refreshApiStatus();
-  } catch (error) {
-    openModal("Welfare decision failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-function rejectWelfareClaim(id) {
-  openModal("Reject welfare claim", `
-    <label class="field full"><span>Reason</span><textarea id="welfareRejectReason" class="input" rows="3">Rejected after welfare committee review.</textarea></label>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="confirmWelfareReject" class="primary-button" type="button">Reject claim</button>`);
-
-  document.getElementById("confirmWelfareReject").addEventListener("click", async () => {
-    try {
-      await apiRequest(`/welfare-claims/${id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          status: "rejected",
-          reason: value("welfareRejectReason")
-        })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openWelfareClaimPaymentForm(id) {
-  const claim = apiState.welfareClaims.find((item) => item.id === id);
-  if (!claim) return;
-  openModal("Pay welfare claim", `
-    <div class="notice">Pay ${money.format(claim.amount)} to ${claim.memberName || memberName(claim.memberId)} for ${claim.reference}.</div>
-    <div class="form-grid" style="margin-top:14px">
-      <label class="field"><span>Payment channel</span><select id="welfarePaymentChannel" class="select"><option value="cash">Cash</option><option value="bank">Bank</option><option value="mobile_money">Mobile Money</option></select></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="confirmWelfarePayment" class="primary-button" type="button">Pay claim</button>`);
-
-  document.getElementById("confirmWelfarePayment").addEventListener("click", async () => {
-    try {
-      await apiRequest(`/welfare-claims/${id}/payment`, {
-        method: "POST",
-        body: JSON.stringify({ channel: value("welfarePaymentChannel") })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openLoanForm() {
-  const apiMode = Boolean(apiState.user);
-  const members = apiMode ? apiState.members.map(apiMemberToRow).filter((member) => member.status === "Active") : tenantScoped(state.members);
-  if (!members.length) return;
-  openModal("Loan application", `
-    <div class="form-grid">
-      <label class="field full"><span>Applicant</span><select id="loanMember" class="select">${members.map((member) => `<option value="${member.id}">${member.name}</option>`).join("")}</select></label>
-      <label class="field"><span>Loan product</span><select id="loanProduct" class="select"><option>Development Loan</option><option>Emergency Loan</option><option>Agriculture Loan</option><option>School Fees Loan</option></select></label>
-      ${field("Requested amount", "loanAmount", "number", "1000000")}
-      ${field("Repayment period months", "loanPeriod", "number", "12")}
-      <label class="field full"><span>Purpose</span><textarea id="loanPurpose" class="textarea">Working capital</textarea></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveLoan" class="primary-button" type="button">Submit loan</button>`);
-
-  document.getElementById("saveLoan").addEventListener("click", async () => {
-    if (apiMode) {
-      try {
-        await apiRequest("/loans", {
-          method: "POST",
-          body: JSON.stringify({
-            tenantId: currentApiTenantId(),
-            memberId: value("loanMember"),
-            product: value("loanProduct"),
-            amount: Number(value("loanAmount")),
-            repaymentMonths: Number(value("loanPeriod")),
-            purpose: document.getElementById("loanPurpose").value.trim()
-          })
-        });
-        closeModal();
-        state.currentView = "loans";
-        await refreshApiStatus();
-      } catch (error) {
-        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-      }
-      return;
-    }
-
-    const amount = Number(value("loanAmount"));
-    const member = state.members.find((item) => item.id === value("loanMember"));
-    const dsr = Math.min(65, Math.round((amount / Math.max(member.savings * 3, 1)) * 35));
-    state.loans.push({
-      id: `ln-${Date.now()}`,
-      tenantId: state.tenantId,
-      memberId: member.id,
-      product: value("loanProduct"),
-      amount,
-      balance: 0,
-      status: "Submitted",
-      stage: "Credit Appraisal",
-      guarantors: 0,
-      dsr
-    });
-    state.approvals.push({ id: `ap-${Date.now()}`, tenantId: state.tenantId, title: `${value("loanProduct")} for ${member.name}`, type: "Loan Committee", status: "Pending", requester: "Credit Officer", risk: dsr > 40 ? "High" : "Medium" });
-    addAudit(state.tenantId, "Credit Officer", `Submitted loan application for ${member.name}`);
-    saveState();
-    closeModal();
-    state.currentView = "loans";
-    render();
-  });
-}
-
-function openGuarantorRequestForm(loanId) {
-  const loan = apiState.loans.find((item) => item.id === loanId);
-  if (!loan) return;
-  const candidates = apiState.members
-    .map(apiMemberToRow)
-    .filter((member) => member.status === "Active" && member.id !== loan.memberId);
-  if (!candidates.length) {
-    openModal("No guarantor available", `<div class="notice error">No active member is available to guarantee this loan.</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    return;
-  }
-  openModal("Request guarantor", `
-    <div class="form-grid">
-      <label class="field full"><span>Guarantor</span><select id="guarantorMember" class="select">${candidates.map((member) => `<option value="${member.id}">${member.name} &middot; ${member.no}</option>`).join("")}</select></label>
-      ${field("Guaranteed amount", "guaranteedAmount", "number", String(Math.ceil(loan.amount / 2)))}
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveGuarantorRequest" class="primary-button" type="button">Send request</button>`);
-
-  document.getElementById("saveGuarantorRequest").addEventListener("click", async () => {
-    try {
-      await apiRequest(`/loans/${loanId}/guarantors`, {
-        method: "POST",
-        body: JSON.stringify({
-          memberId: value("guarantorMember"),
-          guaranteedAmount: Number(value("guaranteedAmount"))
-        })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-async function decideGuarantorRequest(id, status) {
-  try {
-    await memberApiRequest(`/member-auth/guarantor-requests/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status })
-    });
-    await refreshMemberStatus();
-  } catch (error) {
-    openModal("Guarantee decision failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-async function decideLoan(id, status) {
-  try {
-    await apiRequest(`/loans/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        status,
-        reason: status === "rejected" ? "Rejected from loan queue" : ""
-      })
-    });
-    await refreshApiStatus();
-  } catch (error) {
-    openModal("Loan decision failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-async function disburseLoan(id) {
-  try {
-    await apiRequest(`/loans/${id}/disburse`, { method: "POST" });
-    await refreshApiStatus();
-  } catch (error) {
-    openModal("Loan disbursement failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-async function updateAccountingPeriodStatus(id, status) {
-  try {
-    await apiRequest(`/accounting-periods/${id}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status })
-    });
-    await refreshApiStatus();
-  } catch (error) {
-    openModal("Accounting period update failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-  }
-}
-
-function openExpenseForm() {
-  if (!apiState.user) return;
-  const suppliers = apiState.suppliers;
-  openModal("New expense", `
-    <div class="form-grid">
-      ${field("Reference", "expenseReference", "text", `EXP-UI-${Date.now()}`)}
-      ${field("Amount", "expenseAmount", "number", "50000")}
-      <label class="field"><span>Supplier</span><select id="expenseSupplier" class="select"><option value="">Direct expense</option>${suppliers.map((supplier) => `<option value="${supplier.id}">${supplier.name}</option>`).join("")}</select></label>
-      <label class="field"><span>Account</span><select id="expenseAccount" class="select"><option value="5000">Operations Expense</option><option value="5010">Rent Expense</option><option value="5020">Utilities Expense</option><option value="5030">Staff Expense</option><option value="5040">Technology Expense</option></select></label>
-      <label class="field"><span>Channel</span><select id="expenseChannel" class="select"><option value="bank">Bank</option><option value="cash">Cash</option><option value="mobile_money">Mobile Money</option><option value="payroll_deduction">Payroll Deduction</option></select></label>
-      ${field("Expense date", "expenseDate", "date", today.toISOString().slice(0, 10))}
-      <label class="field full"><span>Description</span><textarea id="expenseDescription" class="input" rows="3">Operating expense posted from Reports.</textarea></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveExpense" class="primary-button" type="button">Post expense</button>`);
-
-  document.getElementById("saveExpense").addEventListener("click", async () => {
-    try {
-      await apiRequest("/expenses", {
-        method: "POST",
-        body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
-          reference: value("expenseReference"),
-          amount: Number(value("expenseAmount")),
-          supplierId: value("expenseSupplier") || null,
-          accountCode: value("expenseAccount"),
-          channel: value("expenseChannel"),
-          expenseDate: value("expenseDate"),
-          description: value("expenseDescription")
-        })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openAssetForm() {
-  if (!apiState.user) return;
-  openModal("New asset", `
-    <div class="form-grid">
-      ${field("Reference", "assetReference", "text", `AST-UI-${Date.now()}`)}
-      ${field("Asset name", "assetName", "text", "Branch laptop")}
-      <label class="field"><span>Category</span><select id="assetCategory" class="select"><option value="equipment">Equipment</option><option value="technology">Technology</option><option value="furniture">Furniture</option><option value="vehicle">Vehicle</option><option value="building">Building</option><option value="other">Other</option></select></label>
-      ${field("Cost", "assetCost", "number", "1800000")}
-      ${field("Useful life months", "assetLife", "number", "36")}
-      ${field("Purchase date", "assetPurchaseDate", "date", today.toISOString().slice(0, 10))}
-      <label class="field"><span>Channel</span><select id="assetChannel" class="select"><option value="bank">Bank</option><option value="cash">Cash</option><option value="mobile_money">Mobile Money</option><option value="payroll_deduction">Payroll Deduction</option></select></label>
-      ${field("Location", "assetLocation", "text", "Mukono Main")}
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveAsset" class="primary-button" type="button">Register asset</button>`);
-
-  document.getElementById("saveAsset").addEventListener("click", async () => {
-    try {
-      await apiRequest("/assets", {
-        method: "POST",
-        body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
-          reference: value("assetReference"),
-          name: value("assetName"),
-          category: value("assetCategory"),
-          cost: Number(value("assetCost")),
-          usefulLifeMonths: Number(value("assetLife")),
-          purchaseDate: value("assetPurchaseDate"),
-          depreciationStartDate: value("assetPurchaseDate"),
-          channel: value("assetChannel"),
-          location: value("assetLocation")
-        })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openGovernanceMeetingForm() {
-  if (!apiState.user) return;
-  openModal("New governance meeting", `
-    <div class="form-grid">
-      ${field("Title", "governanceMeetingTitle", "text", "Board risk review")}
-      <label class="field"><span>Type</span><select id="governanceMeetingType" class="select"><option value="board">Board</option><option value="agm">AGM</option><option value="credit_committee">Credit Committee</option><option value="audit_committee">Audit Committee</option><option value="management">Management</option></select></label>
-      ${field("Scheduled at", "governanceMeetingDate", "date", today.toISOString().slice(0, 10))}
-      <label class="field full"><span>Minutes or agenda</span><textarea id="governanceMeetingMinutes" class="input" rows="3">Review portfolio, reconciliation exceptions, and open complaints.</textarea></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveGovernanceMeeting" class="primary-button" type="button">Save meeting</button>`);
-
-  document.getElementById("saveGovernanceMeeting").addEventListener("click", async () => {
-    try {
-      await apiRequest("/governance-meetings", {
-        method: "POST",
-        body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
-          title: value("governanceMeetingTitle"),
-          meetingType: value("governanceMeetingType"),
-          scheduledAt: `${value("governanceMeetingDate")}T09:00:00.000Z`,
-          minutes: value("governanceMeetingMinutes")
-        })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openComplaintForm() {
-  if (!apiState.user) return;
-  const activeMembers = apiState.members.map(apiMemberToRow).filter((member) => member.status === "Active");
-  openModal("New complaint", `
-    <div class="form-grid">
-      ${field("Subject", "complaintSubject", "text", "Member service follow-up")}
-      <label class="field"><span>Category</span><select id="complaintCategory" class="select"><option value="statement">Statement</option><option value="loan">Loan</option><option value="savings">Savings</option><option value="shares">Shares</option><option value="service">Service</option><option value="other">Other</option></select></label>
-      <label class="field"><span>Priority</span><select id="complaintPriority" class="select"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option></select></label>
-      <label class="field"><span>Member</span><select id="complaintMember" class="select"><option value="">No member linked</option>${activeMembers.map((member) => `<option value="${member.id}">${member.name} &middot; ${member.no}</option>`).join("")}</select></label>
-      <label class="field full"><span>Description</span><textarea id="complaintDescription" class="input" rows="3">Complaint captured for governance follow-up.</textarea></label>
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveComplaint" class="primary-button" type="button">Save complaint</button>`);
-
-  document.getElementById("saveComplaint").addEventListener("click", async () => {
-    try {
-      await apiRequest("/complaints", {
-        method: "POST",
-        body: JSON.stringify({
-          tenantId: apiState.user.tenantId === "tenant_platform" ? currentApiTenantId() : apiState.user.tenantId,
-          subject: value("complaintSubject"),
-          category: value("complaintCategory"),
-          priority: value("complaintPriority"),
-          memberId: value("complaintMember") || null,
-          description: value("complaintDescription")
-        })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-function openLoanRepaymentForm(loanId) {
-  const loan = apiState.loans.find((item) => item.id === loanId);
-  if (!loan) return;
-  const defaultAmount = Math.min(50000, loan.balance);
-  openModal("Record loan repayment", `
-    <div class="form-grid">
-      <label class="field full"><span>Loan</span><input class="input" value="${memberName(loan.memberId)} - ${loan.product}" disabled></label>
-      ${field("Amount", "repaymentAmount", "number", String(defaultAmount))}
-      <label class="field"><span>Channel</span><select id="repaymentChannel" class="select"><option value="mobile_money">Mobile Money</option><option value="cash">Cash</option><option value="bank">Bank</option><option value="payroll_deduction">Payroll Deduction</option></select></label>
-      ${field("External reference", "repaymentReference", "text", `UI-LRP-${Date.now()}`)}
-    </div>
-  `, `<button class="secondary-button" value="cancel" type="submit">Cancel</button><button id="saveLoanRepayment" class="primary-button" type="button">Post repayment</button>`);
-
-  document.getElementById("saveLoanRepayment").addEventListener("click", async () => {
-    try {
-      await apiRequest(`/loans/${loanId}/repayments`, {
-        method: "POST",
-        body: JSON.stringify({
-          amount: Number(value("repaymentAmount")),
-          channel: value("repaymentChannel"),
-          externalReference: value("repaymentReference")
-        })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">${error.message}</div>`);
-    }
-  });
-}
-
-async function recordSubscriptionPayment(subscriptionId = "") {
-  if (apiState.user?.tenantId === "tenant_platform") {
-    const pending = apiState.subscriptions.find((sub) => sub.id === subscriptionId)
-      || apiState.subscriptions.find((sub) => sub.status !== "active" || Number(sub.paid || 0) < Number(sub.amount || 0))
-      || apiState.subscriptions[0];
-    if (!pending) return;
-    try {
-      await apiRequest(`/subscriptions/${pending.id}/payments`, {
-        method: "POST",
-        body: JSON.stringify({
-          amount: Math.max(1, pending.amount - pending.paid),
-          channel: "manual",
-          externalReference: `UI-PAY-${Date.now()}`
-        })
-      });
-      closeModal();
-      await refreshApiStatus();
-    } catch (error) {
-      openModal("Payment failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    }
-    return;
-  }
-
-  const pending = state.subscriptions.find((sub) => sub.id === subscriptionId)
-    || state.subscriptions.find((sub) => sub.status !== "Active" || Number(sub.paid || 0) < Number(sub.amount || 0))
-    || state.subscriptions[0];
-  if (!pending) return;
-  const billing = subscriptionBillingDetails(pending);
-  pending.memberCount = billing.memberCount;
-  pending.billableMembers = billing.billableMembers;
-  pending.unitPrice = billing.unitPrice;
-  pending.amount = billing.amount;
-  pending.paid = billing.amount;
-  pending.status = "Active";
-  pending.expiry = "2027-07-15";
-  addAudit("platform", "Finance Officer", `Recorded subscription payment ${pending.invoice}`);
-  saveState();
-  closeModal();
-  render();
-}
-
-async function approveTenant(id) {
-  if (apiState.user?.tenantId === "tenant_platform" && id.startsWith("tenant_")) {
-    try {
-      await apiRequest(`/tenants/${id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "approved" })
-      });
-      await refreshApiStatus();
-    } catch (error) {
-      openModal("Approval failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    }
-    return;
-  }
-
-  const tenant = state.tenants.find((item) => item.id === id);
-  if (!tenant) return;
-  tenant.status = "Approved";
-  tenant.onboarding = Math.max(tenant.onboarding, 55);
-  addAudit("platform", "Platform Admin", `Approved SACCO tenant ${tenant.name}`);
-  saveState();
-  render();
-}
-
-async function resolveApproval(id, outcome) {
-  const apiTransaction = apiState.financialTransactions.find((transaction) => transaction.id === id);
-  if (apiState.user && apiTransaction) {
-    try {
-      await apiRequest(`/financial-transactions/${id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          status: outcome === "Approved" ? "posted" : "rejected",
-          reason: outcome === "Rejected" ? "Rejected from approval queue" : ""
-        })
-      });
-      await refreshApiStatus();
-    } catch (error) {
-      openModal("Approval failed", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
-    }
-    return;
-  }
-
-  const approval = state.approvals.find((item) => item.id === id);
-  if (!approval) return;
-  approval.status = outcome;
-  addAudit(approval.tenantId, "Approver", `${outcome} approval: ${approval.title}`);
-
-  if (outcome === "Approved" && approval.type === "Financial Posting") {
-    const ref = approval.title.match(/(\w+-TX-\d+)/)?.[1];
-    const tx = state.transactions.find((item) => item.ref === ref);
-    if (tx) {
-      tx.status = "Posted";
-      tx.checker = "Approver";
-      const member = state.members.find((item) => item.id === tx.memberId);
-      if (member && tx.type.includes("Savings")) member.savings += tx.amount;
-      if (member && tx.type.includes("Share")) member.shares += tx.amount;
-      if (member && tx.type.includes("Welfare")) member.welfare += tx.amount;
-      if (member && tx.type === "Withdrawal") member.savings -= tx.amount;
-    }
-  }
-
-  state.approvals = state.approvals.filter((item) => item.id !== id);
-  saveState();
-  render();
-}
-
-function addAudit(tenantId, actor, action) {
-  state.audit.unshift({
-    at: "2026-07-15 12:00",
-    tenantId,
-    actor,
-    action
-  });
-}
-
-function field(label, id, type, val) {
-  return `<label class="field"><span>${label}</span><input id="${id}" class="input" type="${type}" value="${val}"></label>`;
+function fallbackPackages() {
+  return [
+    { name: "100-250 members", price: 500000, maxMembers: 250, maxBranches: 1, modules: "UGX 5,000 per member annually, minimum 100 members" },
+    { name: "251-500 members", price: 1200000, maxMembers: 500, maxBranches: 2, modules: "Starter fixed billing" },
+    { name: "501-2,500 members", price: 3600000, maxMembers: 2500, maxBranches: 5, modules: "Growth SACCO operations" },
+    { name: "2,501-10,000 members", price: 9000000, maxMembers: 10000, maxBranches: 25, modules: "Enterprise support" }
+  ];
 }
 
 function value(id) {
-  return document.getElementById(id).value.trim();
+  return document.getElementById(id)?.value.trim() || "";
 }
 
-function selectedValues(id) {
-  return Array.from(document.getElementById(id).selectedOptions).map((option) => option.value);
+function field(label, id, type, placeholder, hint) {
+  return `<label><span>${label}</span><input id="${id}" type="${type}" placeholder="${placeholder || ""}" autocomplete="${type === "password" ? "current-password" : "on"}">${hint ? `<small>${hint}</small>` : ""}</label>`;
+}
+
+function logo(size = "") {
+  return `<div class="logo ${size}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M7 9h34v8H28v22h-8V17H7z"></path><path d="M31 22h10v17H31z"></path></svg></div>`;
+}
+
+function displayName() {
+  return state.member?.fullName || state.user?.fullName || "User";
+}
+
+function roleLabel() {
+  return state.auth === "member" ? "Member" : state.roleNames.join(", ") || "Staff";
+}
+
+function contextName() {
+  return state.tenant?.name || (isPlatform() ? "Platform Administration" : state.user?.tenantName) || "Tereka Online";
+}
+
+function initials(name) {
+  return String(name || "TO").split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
+function labelize(value) {
+  return String(value).replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
+}
+
+function normal(value) {
+  return String(value || "").toLowerCase();
+}
+
+function sum(rows, ...keys) {
+  return rows.reduce((total, row) => total + Number(keys.map((key) => row[key]).find((item) => item !== undefined) || 0), 0);
+}
+
+function formatValue(row, column) {
+  const value = row[column] ?? row[snake(column)] ?? row[camelFallback(column)] ?? "";
+  if (column.toLowerCase().includes("amount") || column.toLowerCase().includes("balance") || ["debit", "credit"].includes(column)) return money.format(Number(value || 0));
+  if (column.toLowerCase().includes("status") || column.toLowerCase().includes("severity")) return `<span class="status ${statusClass(value)}">${escapeHtml(String(value || "Pending"))}</span>`;
+  return escapeHtml(String(value || "-"));
+}
+
+function snake(column) {
+  return column.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+}
+
+function camelFallback(column) {
+  const aliases = {
+    tenantName: "tenant",
+    packageName: "package",
+    expiryDate: "expiry",
+    postedAt: "date",
+    applicationNo: "id",
+    requestedAmount: "amount",
+    fullName: "name",
+    membershipNo: "no",
+    kycStatus: "kyc",
+    savingsBalance: "savings",
+    sharesBalance: "shares",
+    welfareBalance: "welfare"
+  };
+  return aliases[column] || column;
+}
+
+function statusClass(value) {
+  const text = normal(value);
+  if (["active", "approved", "paid", "healthy", "resolved", "completed", "posted"].some((item) => text.includes(item))) return "active";
+  if (["failed", "rejected", "suspended", "expired", "overdue", "arrears"].some((item) => text.includes(item))) return "danger";
+  return "pending";
+}
+
+function escapeHtml(value) {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char]));
 }
 
 init();
