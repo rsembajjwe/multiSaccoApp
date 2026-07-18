@@ -73,7 +73,7 @@ try {
   await assertScreen(page, "loans", ["Loan application list", "Loan application form", "Loan detail and guarantors", "Add guarantor request"]);
   await assertScreen(page, "guarantors", ["Guarantor requests"]);
   await assertScreen(page, "approvals", ["Approval queue"]);
-  await assertScreen(page, "accounting", ["Chart of accounts", "Expenses"]);
+  await assertScreen(page, "accounting", ["Chart of accounts", "Expense capture", "Fixed asset register", "Unbalanced journals"]);
   await assertScreen(page, "reconciliation", ["Bank and mobile-money matching", "Provider callbacks"]);
   await assertScreen(page, "settings", ["Branch setup", "Financial product setup"]);
   await logout(page);

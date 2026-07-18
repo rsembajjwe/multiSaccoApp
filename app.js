@@ -92,6 +92,10 @@ const state = {
   selectedWelfareClaimId: "",
   selectedWelfareClaimMessage: "",
   selectedWelfareClaimError: "",
+  expenseFormMessage: "",
+  expenseFormError: "",
+  assetFormMessage: "",
+  assetFormError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -1075,6 +1079,68 @@ function financialAccountTitle(type) {
   return `Open ${labelize(type)} account`;
 }
 
+function expenseCapturePanel() {
+  const canPost = hasPermission("accounting:post");
+  const expenseAccounts = dataRows("chartOfAccounts").filter((account) => normal(account.type) === "expense");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Expense capture</h2>
+          <p>Post operating expenses into the SACCO accounting ledger.</p>
+        </div>
+      </div>
+      ${state.expenseFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.expenseFormMessage)}</strong></div>` : ""}
+      ${state.expenseFormError ? `<div class="notice warning"><strong>Expense posting failed.</strong><span>${escapeHtml(state.expenseFormError)}</span></div>` : ""}
+      <form id="expenseForm" class="form-grid">
+        <input type="hidden" id="newExpenseTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
+        <label><span>Expense account</span><select id="newExpenseAccountCode" ${canPost ? "" : "disabled"}>${expenseAccounts.map((account) => `<option value="${escapeHtml(account.code)}">${escapeHtml(account.code)} - ${escapeHtml(account.name)}</option>`).join("")}</select></label>
+        <label><span>Amount</span><input id="newExpenseAmount" type="number" min="1" step="1" value="25000" ${canPost ? "" : "disabled"}></label>
+        <label><span>Channel</span><select id="newExpenseChannel" ${canPost ? "" : "disabled"}><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option><option value="payroll_deduction">Payroll deduction</option></select></label>
+        <label><span>Expense date</span><input id="newExpenseDate" type="date" value="${new Date().toISOString().slice(0, 10)}" ${canPost ? "" : "disabled"}></label>
+        <label><span>Reference</span><input id="newExpenseReference" placeholder="Auto if blank" ${canPost ? "" : "disabled"}></label>
+        <label class="wide"><span>Description</span><input id="newExpenseDescription" placeholder="Expense purpose" ${canPost ? "" : "disabled"}></label>
+        <div class="form-actions inline">${canPost ? `<button class="button primary" type="submit">Post expense</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function assetCapturePanel() {
+  const canPost = hasPermission("accounting:post");
+  const assetAccounts = dataRows("chartOfAccounts").filter((account) => normal(account.type) === "asset" && account.code !== "1310");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Fixed asset register</h2>
+          <p>Register SACCO assets with depreciation inputs and acquisition journals.</p>
+        </div>
+      </div>
+      ${state.assetFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.assetFormMessage)}</strong></div>` : ""}
+      ${state.assetFormError ? `<div class="notice warning"><strong>Asset registration failed.</strong><span>${escapeHtml(state.assetFormError)}</span></div>` : ""}
+      <form id="assetForm" class="form-grid">
+        <input type="hidden" id="newAssetTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
+        <label><span>Asset name</span><input id="newAssetName" required placeholder="Laptop, printer, motorcycle..." ${canPost ? "" : "disabled"}></label>
+        <label><span>Category</span><select id="newAssetCategory" ${canPost ? "" : "disabled"}>${assetCategoryOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
+        <label><span>Asset account</span><select id="newAssetAccountCode" ${canPost ? "" : "disabled"}>${assetAccounts.map((account) => `<option value="${escapeHtml(account.code)}">${escapeHtml(account.code)} - ${escapeHtml(account.name)}</option>`).join("")}</select></label>
+        <label><span>Cost</span><input id="newAssetCost" type="number" min="1" step="1" value="1500000" ${canPost ? "" : "disabled"}></label>
+        <label><span>Salvage value</span><input id="newAssetSalvageValue" type="number" min="0" step="1" value="0" ${canPost ? "" : "disabled"}></label>
+        <label><span>Useful life months</span><input id="newAssetLifeMonths" type="number" min="1" step="1" value="36" ${canPost ? "" : "disabled"}></label>
+        <label><span>Purchase date</span><input id="newAssetPurchaseDate" type="date" value="${new Date().toISOString().slice(0, 10)}" ${canPost ? "" : "disabled"}></label>
+        <label><span>Channel</span><select id="newAssetChannel" ${canPost ? "" : "disabled"}><option value="bank">Bank</option><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="payroll_deduction">Payroll deduction</option></select></label>
+        <label><span>Reference</span><input id="newAssetReference" placeholder="Auto if blank" ${canPost ? "" : "disabled"}></label>
+        <label><span>Location</span><input id="newAssetLocation" placeholder="Branch or office" ${canPost ? "" : "disabled"}></label>
+        <div class="form-actions inline">${canPost ? `<button class="button primary" type="submit">Register asset</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function assetCategoryOptions() {
+  return ["equipment", "furniture", "vehicle", "building", "technology", "other"];
+}
+
 function guarantorsView() {
   const requests = dataRows("guarantorRequests");
   const loans = dataRows("loans").filter((loan) => normal(loan.stage).includes("guarant") || normal(loan.status).includes("guarant"));
@@ -1095,13 +1161,19 @@ function accountingView() {
   const journals = dataRows("journalEntries");
   const expenses = dataRows("expenses");
   const assets = dataRows("assets");
+  const unbalanced = journals.filter((journal) => journal.isBalanced === false || Number(journal.debitTotal || 0) !== Number(journal.creditTotal || 0));
   return `
     <div class="dashboard-grid">
       ${summary("Chart accounts", accounts.length, "Ledger structure", "Open")}
       ${summary("Accounting periods", periods.length, "Financial years", "View")}
       ${summary("Journal entries", journals.length, "Posted entries", "Review")}
+      ${summary("Unbalanced journals", unbalanced.length, "Must remain zero", "Investigate")}
       ${summary("Expenses", money.format(sum(expenses, "amount")), "Supplier and operating costs", "Open")}
       ${summary("Assets", money.format(sum(assets, "netBookValue", "cost")), "Fixed asset register", "View")}
+    </div>
+    <div class="grid two">
+      ${expenseCapturePanel()}
+      ${assetCapturePanel()}
     </div>
     <div class="grid two">
       ${recordTable("Chart of accounts", accounts, ["code", "name", "type", "normalBalance"])}
@@ -2687,6 +2759,65 @@ function scopedValue(form, group, field) {
   return form.querySelector(`[data-${group}-field='${field}']`)?.value || "";
 }
 
+async function postExpense(event) {
+  event.preventDefault();
+  state.expenseFormMessage = "";
+  state.expenseFormError = "";
+  try {
+    const expense = await api("/expenses", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: value("newExpenseTenantId"),
+        accountCode: value("newExpenseAccountCode"),
+        amount: Number(value("newExpenseAmount")),
+        channel: value("newExpenseChannel"),
+        reference: value("newExpenseReference"),
+        description: value("newExpenseDescription"),
+        expenseDate: value("newExpenseDate")
+      })
+    });
+    state.expenseFormMessage = `Posted expense ${expense.reference}.`;
+    await refreshAll();
+    state.expenseFormMessage = `Posted expense ${expense.reference}.`;
+    renderShell();
+  } catch (error) {
+    state.expenseFormError = error.message;
+    renderShell();
+  }
+}
+
+async function registerAsset(event) {
+  event.preventDefault();
+  state.assetFormMessage = "";
+  state.assetFormError = "";
+  try {
+    const asset = await api("/assets", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: value("newAssetTenantId"),
+        name: value("newAssetName"),
+        category: value("newAssetCategory"),
+        assetAccountCode: value("newAssetAccountCode"),
+        cost: Number(value("newAssetCost")),
+        salvageValue: Number(value("newAssetSalvageValue")),
+        usefulLifeMonths: Number(value("newAssetLifeMonths")),
+        purchaseDate: value("newAssetPurchaseDate"),
+        depreciationStartDate: value("newAssetPurchaseDate"),
+        channel: value("newAssetChannel"),
+        reference: value("newAssetReference"),
+        location: value("newAssetLocation")
+      })
+    });
+    state.assetFormMessage = `Registered asset ${asset.reference}.`;
+    await refreshAll();
+    state.assetFormMessage = `Registered asset ${asset.reference}.`;
+    renderShell();
+  } catch (error) {
+    state.assetFormError = error.message;
+    renderShell();
+  }
+}
+
 function openComplaintDetail(complaintId) {
   state.selectedComplaintId = complaintId;
   state.selectedComplaintMessage = "";
@@ -2972,6 +3103,8 @@ function bindEvents() {
   document.querySelectorAll("[data-product-form]").forEach((form) => form.addEventListener("submit", createFinancialProduct));
   document.querySelectorAll("[data-account-form]").forEach((form) => form.addEventListener("submit", openFinancialAccount));
   document.querySelector("#welfareClaimForm")?.addEventListener("submit", submitWelfareClaim);
+  document.querySelector("#expenseForm")?.addEventListener("submit", postExpense);
+  document.querySelector("#assetForm")?.addEventListener("submit", registerAsset);
   document.querySelector("#memberStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     runMemberDecision("custom");
@@ -3087,6 +3220,10 @@ async function logout() {
     selectedWelfareClaimId: "",
     selectedWelfareClaimMessage: "",
     selectedWelfareClaimError: "",
+    expenseFormMessage: "",
+    expenseFormError: "",
+    assetFormMessage: "",
+    assetFormError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });
