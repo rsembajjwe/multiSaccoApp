@@ -46,7 +46,7 @@ try {
   await assertSubscriptionControl(page);
   await assertScreen(page, "sacco-accounts", ["SACCO account health", "Active accounts", "Without subscription"]);
   await assertScreen(page, "operations", ["Operations command center", "Payment monitoring"]);
-  await assertScreen(page, "reports", ["Report catalogue", "Subscriptions", "Audit"]);
+  await assertScreen(page, "reports", ["Report catalogue", "Report readiness", "Platform regulatory report"]);
   await assertScreen(page, "audit", ["Platform audit trail", "Sensitive audit queue", "Audit events"]);
   await assertScreen(page, "settings", ["Protected platform configuration", "Platform subscription packages", "Platform role catalogue"]);
   await assertScreen(page, "users", ["Platform administrators only", "Platform role coverage", "Permission matrix"]);
@@ -75,6 +75,7 @@ try {
   await assertScreen(page, "approvals", ["Approval queue"]);
   await assertScreen(page, "accounting", ["Chart of accounts", "Expense capture", "Fixed asset register", "Unbalanced journals"]);
   await assertScreen(page, "reconciliation", ["Reconciliation command center", "Bank and mobile-money matching", "Unmatched ledger lines", "Provider callback exceptions"]);
+  await assertScreen(page, "reports", ["Report catalogue", "Report readiness", "SACCO regulatory report"]);
   await assertScreen(page, "governance", ["Governance meeting setup", "Governance meeting register", "Resolution action list"]);
   await assertScreen(page, "settings", ["Branch setup", "Financial product setup"]);
   await assertScreen(page, "users", ["SACCO staff access", "Add SACCO staff user", "SACCO staff role coverage"]);

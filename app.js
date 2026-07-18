@@ -776,21 +776,140 @@ function operationsView() {
 }
 
 function reportsView() {
-  const groups = isPlatform()
-    ? ["Registration", "Subscriptions", "Transactions", "Operations", "Compliance", "Audit"]
-    : ["Membership", "Savings", "Shares", "Welfare", "Loans", "Transactions", "Accounting", "Reconciliation", "Governance", "Compliance", "Audit", "Subscriptions"];
+  const platform = isPlatform();
+  const rows = regulatoryReportRows(platform);
+  const consolidated = regulatoryConsolidated(rows);
+  const catalogue = reportCatalogue(platform);
   return `
+    <div class="dashboard-grid">
+      ${summary(platform ? "Reporting SACCOs" : "Members in report", platform ? rows.length : consolidated.memberCount, platform ? "Regulatory rows available" : "Active and inactive members", "Review")}
+      ${summary("Savings reported", money.format(consolidated.savings || 0), "Member deposit balances", "Export")}
+      ${summary(platform ? "Subscription revenue" : "Loan portfolio", money.format(platform ? sum(dataRows("subscriptions"), "amount") : consolidated.loanPortfolio || 0), platform ? "Billing reports" : "Credit exposure", "Open")}
+      ${summary("Compliance exceptions", Number(consolidated.reconciliationExceptions || 0) + Number(consolidated.unbalancedJournalEntries || 0), "Reconciliation and journal checks", "Investigate")}
+    </div>
+    ${filterToolbar(platform ? "Search reports by SACCO, module, compliance status or export type" : "Search reports by module, member group, product or compliance status", "Export report", "Schedule report")}
     <section class="panel">
       <div class="panel-heading">
         <div>
           <h2>Report catalogue</h2>
-          <p>Grouped reports with filters, preview, export, print and scheduling support.</p>
+          <p>${platform ? "Platform reports focus on tenants, subscriptions, operations, compliance and audit evidence." : "SACCO reports focus on members, finance, accounting, governance and statutory evidence."}</p>
         </div>
+        <span>${catalogue.length} report group(s)</span>
+      </div>
+      <div class="report-grid">
+        ${catalogue.map((report) => `
+          <article class="report-card">
+            <h3>${escapeHtml(report.title)}</h3>
+            <p>${escapeHtml(report.copy)}</p>
+            <div class="mini-grid">
+              ${mini("Owner", report.owner)}
+              ${mini("Output", report.output)}
+            </div>
+            <button class="button secondary" type="button">${escapeHtml(report.action)}</button>
+          </article>
+        `).join("")}
       </div>
     </section>
-    <div class="report-grid">
-      ${groups.map((group) => `<article class="report-card"><h3>${group}</h3><p>${group} report catalogue, filters, preview table, totals, exports and scheduled report support.</p><button class="button secondary" type="button">Open</button></article>`).join("")}
-    </div>
+    ${reportReadinessPanel(consolidated)}
+    ${recordTable(platform ? "Platform regulatory report" : "SACCO regulatory report", rows, platform
+      ? ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "loanPortfolio", "reconciliationExceptions", "openComplaints", "complianceStatus"]
+      : ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "loanPortfolio", "activeLoans", "expenseTotal", "assetNetBookValue", "complianceStatus"])}
+  `;
+}
+
+function regulatoryReportRows(platform) {
+  const report = state.data.regulatoryReport || {};
+  const rawRows = Array.isArray(report.reports) ? report.reports : [];
+  const rows = rawRows.length ? rawRows : tenantRows().map((tenant) => ({
+    tenantId: tenant.id,
+    tenantName: tenant.name,
+    memberCount: dataRows("members").filter((member) => member.tenantId === tenant.id).length,
+    activeMembers: dataRows("members").filter((member) => member.tenantId === tenant.id && normal(member.status) === "active").length,
+    savings: sum(dataRows("members").filter((member) => member.tenantId === tenant.id), "savingsBalance", "savings"),
+    shares: sum(dataRows("members").filter((member) => member.tenantId === tenant.id), "sharesBalance", "shares"),
+    welfare: sum(dataRows("members").filter((member) => member.tenantId === tenant.id), "welfareBalance", "welfare"),
+    loanPortfolio: sum(dataRows("loans").filter((loan) => loan.tenantId === tenant.id), "outstandingBalance", "balance", "amount"),
+    activeLoans: dataRows("loans").filter((loan) => loan.tenantId === tenant.id && !["rejected", "closed"].includes(normal(loan.status))).length,
+    expenseTotal: sum(dataRows("expenses").filter((expense) => expense.tenantId === tenant.id), "amount"),
+    assetNetBookValue: sum(dataRows("assets").filter((asset) => asset.tenantId === tenant.id), "netBookValue", "cost"),
+    reconciliationExceptions: 0,
+    openComplaints: dataRows("complaints").filter((complaint) => complaint.tenantId === tenant.id && !["resolved", "closed"].includes(normal(complaint.status))).length,
+    complianceStatus: "local fallback"
+  }));
+  const scopedRows = platform ? rows : rows.filter((row) => !row.tenantId || row.tenantId === state.currentTenantId);
+  return scopedRows.map((row) => ({
+    ...row,
+    tenantName: row.tenantName || tenantName(row.tenantId)
+  }));
+}
+
+function regulatoryConsolidated(rows) {
+  const report = state.data.regulatoryReport || {};
+  if (report.consolidated && (isPlatform() || report.consolidated.tenantId === state.currentTenantId || report.reports?.length === 1)) {
+    return report.consolidated;
+  }
+  return {
+    memberCount: sum(rows, "memberCount"),
+    activeMembers: sum(rows, "activeMembers"),
+    savings: sum(rows, "savings"),
+    shares: sum(rows, "shares"),
+    welfare: sum(rows, "welfare"),
+    loanPortfolio: sum(rows, "loanPortfolio"),
+    activeLoans: sum(rows, "activeLoans"),
+    expenseTotal: sum(rows, "expenseTotal"),
+    assetNetBookValue: sum(rows, "assetNetBookValue"),
+    journalEntries: sum(rows, "journalEntries"),
+    unbalancedJournalEntries: sum(rows, "unbalancedJournalEntries"),
+    reconciliationExceptions: sum(rows, "reconciliationExceptions"),
+    openComplaints: sum(rows, "openComplaints"),
+    openResolutions: sum(rows, "openResolutions"),
+    complianceStatus: rows.some((row) => normal(row.complianceStatus) !== "clear") ? "review" : "clear"
+  };
+}
+
+function reportCatalogue(platform) {
+  if (platform) {
+    return [
+      { title: "SACCO registration", copy: "Applications, approval turnaround, active tenants and onboarding exceptions.", owner: "Operations", output: "PDF / Excel", action: "Open applications" },
+      { title: "Subscriptions", copy: "Packages, billable members, received payments, arrears and renewal risk.", owner: "Billing", output: "Invoice pack", action: "Open billing" },
+      { title: "Transactions", copy: "Platform-wide transaction monitoring without exposing SACCO-only loan workflows.", owner: "Operations", output: "Excel", action: "Open transactions" },
+      { title: "Operations", copy: "Health checks, provider callbacks, scheduled jobs and support workload.", owner: "Support", output: "Dashboard export", action: "Open operations" },
+      { title: "Compliance", copy: "Regulatory consolidation, reconciliation exceptions and tenant evidence status.", owner: "Compliance", output: "Regulatory file", action: "Open evidence" },
+      { title: "Audit", copy: "Sensitive activity, login history, password reset requests and role changes.", owner: "Compliance", output: "Audit pack", action: "Open audit" }
+    ];
+  }
+  return [
+    { title: "Membership", copy: "Member register, KYC status, contacts, beneficiaries and branch distribution.", owner: "Secretary", output: "Excel / PDF", action: "Open members" },
+    { title: "Savings", copy: "Savings products, member deposits, withdrawals and dormant account positions.", owner: "Treasurer", output: "Statement pack", action: "Open savings" },
+    { title: "Shares", copy: "Share capital, member share accounts, contribution cycles and ownership totals.", owner: "Treasurer", output: "Share register", action: "Open shares" },
+    { title: "Welfare", copy: "Welfare contributions, claims, approvals, payment status and fund exposure.", owner: "Committee", output: "Claims report", action: "Open welfare" },
+    { title: "Loans", copy: "Applications, guarantors, repayments, arrears, PAR and portfolio balances.", owner: "Credit", output: "Portfolio report", action: "Open loans" },
+    { title: "Accounting", copy: "Chart of accounts, expenses, assets, journals and trial-balance readiness.", owner: "Accountant", output: "Ledger pack", action: "Open accounting" },
+    { title: "Governance", copy: "Meetings, resolutions, action owners and committee follow-up status.", owner: "Chairperson", output: "Governance pack", action: "Open governance" },
+    { title: "Audit", copy: "User activity, approvals, reversals and high-risk operational events.", owner: "Auditor", output: "Audit pack", action: "Open audit" }
+  ];
+}
+
+function reportReadinessPanel(consolidated) {
+  const exceptions = Number(consolidated.reconciliationExceptions || 0) + Number(consolidated.unbalancedJournalEntries || 0);
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Report readiness</h2>
+          <p>Evidence checks before exporting board, regulator or management reports.</p>
+        </div>
+        <span class="status ${exceptions ? "pending" : "active"}">${exceptions ? "Review needed" : "Ready"}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Ledger entries", consolidated.journalEntries || 0)}
+        ${mini("Unbalanced journals", consolidated.unbalancedJournalEntries || 0)}
+        ${mini("Reconciliation exceptions", consolidated.reconciliationExceptions || 0)}
+        ${mini("Open complaints", consolidated.openComplaints || 0)}
+        ${mini("Open resolutions", consolidated.openResolutions || 0)}
+        ${mini("Compliance status", consolidated.complianceStatus || "review")}
+      </div>
+    </section>
   `;
 }
 
@@ -3664,7 +3783,7 @@ function sum(rows, ...keys) {
 
 function formatValue(row, column) {
   const value = row[column] ?? row[snake(column)] ?? row[camelFallback(column)] ?? "";
-  if (column.toLowerCase().includes("amount") || column.toLowerCase().includes("balance") || ["debit", "credit"].includes(column)) return money.format(Number(value || 0));
+  if (column.toLowerCase().includes("amount") || column.toLowerCase().includes("balance") || ["debit", "credit", "savings", "shares", "welfare", "loanPortfolio", "loansAtRisk", "expenseTotal", "assetCost", "assetNetBookValue"].includes(column)) return money.format(Number(value || 0));
   if (column.toLowerCase().includes("status") || column.toLowerCase().includes("severity")) return `<span class="status ${statusClass(value)}">${escapeHtml(String(value || "Pending"))}</span>`;
   return escapeHtml(String(value || "-"));
 }
