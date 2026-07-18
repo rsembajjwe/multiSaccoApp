@@ -49,7 +49,7 @@ try {
   await assertScreen(page, "reports", ["Report catalogue", "Subscriptions", "Audit"]);
   await assertScreen(page, "audit", ["Platform audit trail", "Sensitive audit queue", "Audit events"]);
   await assertScreen(page, "settings", ["Protected platform configuration", "Platform subscription packages", "Platform role catalogue"]);
-  await assertScreen(page, "users", ["Platform administrators only", "Permission matrix"]);
+  await assertScreen(page, "users", ["Platform administrators only", "Platform role coverage", "Permission matrix"]);
   await assertPlatformUserCreation(page);
   await assertScreen(page, "complaints", ["Platform support desk", "Support ticket capture", "Open complaints"]);
   await assertScreen(page, "notifications", ["Notification delivery monitor", "Notification template setup", "Notification templates"]);
@@ -77,6 +77,7 @@ try {
   await assertScreen(page, "reconciliation", ["Reconciliation command center", "Bank and mobile-money matching", "Unmatched ledger lines", "Provider callback exceptions"]);
   await assertScreen(page, "governance", ["Governance meeting setup", "Governance meeting register", "Resolution action list"]);
   await assertScreen(page, "settings", ["Branch setup", "Financial product setup"]);
+  await assertScreen(page, "users", ["SACCO staff access", "Add SACCO staff user", "SACCO staff role coverage"]);
   await logout(page);
 
   await assertRoleDashboard(page, "GVS", "chairperson@greenvalley.local", "Chair@12345", "SACCO Chairperson", ["SACCO Chairperson", "Loans awaiting approval", "Chairperson approval queue"]);

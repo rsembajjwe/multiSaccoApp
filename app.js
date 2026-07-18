@@ -852,13 +852,21 @@ function usersView() {
   const users = platformOnly ? dataRows("users").filter((user) => user.tenantId === "tenant_platform") : dataRows("users");
   const canCreate = hasPermission("users:create") || hasPermission("roles:create");
   const rows = users.map((user) => ({ ...user, action: "user-detail", actionLabel: "View", actionId: user.id }));
+  const roles = userRoleOptions(platformOnly);
   return `
     <div class="role-banner">
       <div><p class="eyebrow">Users and Roles</p><h2>${platformOnly ? "Platform administrators only. SACCO members are not platform users." : "SACCO staff access for this tenant."}</h2></div>
       ${canCreate ? `<span class="status active">Super Admin</span>` : `<span class="status pending">View only</span>`}
     </div>
+    <div class="dashboard-grid">
+      ${summary(platformOnly ? "Platform users" : "SACCO staff users", users.length, platformOnly ? "Administrators only" : "Staff accounts only, not members", "Review")}
+      ${summary("Active users", users.filter((user) => normal(user.status) === "active").length, "Can sign in", "Monitor")}
+      ${summary("Configured roles", roles.length, "Available assignments", "Manage")}
+      ${summary("Role coverage", roleCoverage(users, roles), "Users with assigned roles", "Audit")}
+    </div>
     ${canCreate ? addUserPanel(platformOnly) : ""}
     ${userDetailPanel(users, canCreate)}
+    ${roleCoveragePanel(users, roles, platformOnly)}
     ${recordTable("User list", rows, ["fullName", "username", "email", "phone", "role", "branchName", "lastLogin", "status"])}
     ${permissionMatrix()}
   `;
@@ -1528,15 +1536,15 @@ function addUserPanel(platformOnly) {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Add platform user</h2>
-          <p>Create a platform administrator and assign the role that controls their views.</p>
+          <h2>${platformOnly ? "Add platform user" : "Add SACCO staff user"}</h2>
+          <p>${platformOnly ? "Create a platform administrator and assign the role that controls their views." : "Create a SACCO staff login and assign their operational role."}</p>
         </div>
       </div>
       ${state.userFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.userFormMessage)}</strong></div>` : ""}
       ${state.userFormError ? `<div class="notice warning"><strong>Could not create user.</strong><span>${escapeHtml(state.userFormError)}</span></div>` : ""}
       <form id="addUserForm" class="form-grid">
         <input type="hidden" id="newUserTenantId" value="${platformOnly ? "tenant_platform" : escapeHtml(state.user?.tenantId || "")}">
-        <label><span>Full name</span><input id="newUserFullName" required placeholder="e.g. Platform Support Officer"></label>
+        <label><span>Full name</span><input id="newUserFullName" required placeholder="${platformOnly ? "e.g. Platform Support Officer" : "e.g. Branch Teller"}"></label>
         <label><span>Email / username</span><input id="newUserEmail" type="email" required placeholder="name@tereka.online"></label>
         <label><span>Phone</span><input id="newUserPhone" placeholder="+256..."></label>
         <label><span>Temporary password</span><input id="newUserPassword" type="password" required minlength="10" placeholder="At least 10 characters"></label>
@@ -1575,7 +1583,7 @@ function userDetailPanel(users, canManageRoles) {
       <form id="userRoleForm" class="form-grid single">
         <input type="hidden" id="selectedUserId" value="${escapeHtml(selected.id)}">
         <label>
-          <span>Assigned platform role</span>
+          <span>${selected.tenantId === "tenant_platform" ? "Assigned platform role" : "Assigned SACCO staff role"}</span>
           <select id="selectedUserRoleId" ${canManageRoles ? "" : "disabled"}>
             ${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === assigned ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}
           </select>
@@ -1586,6 +1594,46 @@ function userDetailPanel(users, canManageRoles) {
       </form>
     </section>
   `;
+}
+
+function roleCoveragePanel(users, roles, platformOnly) {
+  const rows = roles.map((role) => {
+    const assignedUsers = users.filter((user) => normal(user.role).includes(normal(role.name)) || user.roleId === role.id);
+    return {
+      roleName: role.name,
+      scope: platformOnly ? "Platform administration" : "SACCO staff",
+      assignedUsers: assignedUsers.length,
+      accessPurpose: rolePurpose(role.name, platformOnly),
+      status: role.status || "active"
+    };
+  });
+  return recordTable(platformOnly ? "Platform role coverage" : "SACCO staff role coverage", rows, ["roleName", "scope", "assignedUsers", "accessPurpose", "status"]);
+}
+
+function roleCoverage(users, roles) {
+  if (!users.length) return "0%";
+  const assigned = users.filter((user) => user.role || user.roleId || roles.some((role) => normal(user.role).includes(normal(role.name)))).length;
+  return `${Math.round((assigned / users.length) * 100)}%`;
+}
+
+function rolePurpose(roleName, platformOnly) {
+  const name = normal(roleName);
+  if (platformOnly) {
+    if (name.includes("super")) return "Full platform control";
+    if (name.includes("billing")) return "Subscriptions and payments";
+    if (name.includes("compliance")) return "Audit and oversight";
+    if (name.includes("support")) return "Tenant support";
+    if (name.includes("operations")) return "Monitoring and operations";
+    return "Platform administration";
+  }
+  if (name.includes("treasurer")) return "Finance and cash control";
+  if (name.includes("secretary")) return "Membership and governance";
+  if (name.includes("chair")) return "Oversight and approvals";
+  if (name.includes("accountant")) return "Accounting and reconciliation";
+  if (name.includes("teller")) return "Transactions and cashiering";
+  if (name.includes("auditor")) return "Read-only audit review";
+  if (name.includes("loan")) return "Loan origination";
+  return "SACCO administration";
 }
 
 function tenantDetailPanel() {
