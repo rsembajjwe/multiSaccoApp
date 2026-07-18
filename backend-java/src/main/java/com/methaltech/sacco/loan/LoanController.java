@@ -72,6 +72,9 @@ class LoanController {
             @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:view")) {
+            return authService.permissionRequired("loans:view");
+        }
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null) return tenantAccessDenied();
@@ -90,6 +93,9 @@ class LoanController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:create")) {
+            return authService.permissionRequired("loans:create");
+        }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
@@ -149,6 +155,9 @@ class LoanController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:approve")) {
+            return authService.permissionRequired("loans:approve");
+        }
 
         String status = body.status().trim();
         if (!DECISION_STATUSES.contains(status)) {
@@ -168,6 +177,9 @@ class LoanController {
             @PathVariable String loanId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:view")) {
+            return authService.permissionRequired("loans:view");
+        }
 
         return loanRepository.findById(loanId)
                 .<ResponseEntity<?>>map(loan -> {
@@ -189,6 +201,9 @@ class LoanController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:create")) {
+            return authService.permissionRequired("loans:create");
+        }
 
         return loanRepository.findById(loanId)
                 .<ResponseEntity<?>>map(loan -> createGuarantor(loan, body, currentSession, request))
@@ -203,6 +218,9 @@ class LoanController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:approve")) {
+            return authService.permissionRequired("loans:approve");
+        }
 
         return loanRepository.findById(loanId)
                 .<ResponseEntity<?>>map(loan -> {
@@ -236,6 +254,9 @@ class LoanController {
             @PathVariable String loanId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:view")) {
+            return authService.permissionRequired("loans:view");
+        }
 
         return loanRepository.findById(loanId)
                 .<ResponseEntity<?>>map(loan -> {
@@ -257,6 +278,9 @@ class LoanController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:approve")) {
+            return authService.permissionRequired("loans:approve");
+        }
 
         return loanRepository.findById(loanId)
                 .<ResponseEntity<?>>map(loan -> createRepayment(loan, body, currentSession, request))

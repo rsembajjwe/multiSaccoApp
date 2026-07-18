@@ -42,6 +42,9 @@ class ApprovalController {
             @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "approvals:view")) {
+            return authService.permissionRequired("approvals:view");
+        }
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null && !authService.isPlatform(currentSession.user())) return tenantAccessDenied();
@@ -59,6 +62,9 @@ class ApprovalController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "approvals:decide")) {
+            return authService.permissionRequired("approvals:decide");
+        }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
@@ -98,6 +104,9 @@ class ApprovalController {
             @RequestParam(name = "decision", required = false) String requestedDecision) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "approvals:view")) {
+            return authService.permissionRequired("approvals:view");
+        }
 
         String decision = normalizeDecision(requestedDecision);
         if (requestedDecision != null && decision == null) {
@@ -128,6 +137,9 @@ class ApprovalController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "approvals:decide")) {
+            return authService.permissionRequired("approvals:decide");
+        }
 
         String decisionValue = normalizeDecision(body.decision());
         if (decisionValue == null) {

@@ -4192,6 +4192,16 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + noPermissionToken))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/loans")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(get("/api/v1/approval-workflows")
+						.header("Authorization", "Bearer " + noPermissionToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
 	}
 
 	@Test
@@ -4249,6 +4259,93 @@ class SaccoBackendApplicationTests {
 
 		mockMvc.perform(get("/api/v1/accounting-periods")
 						.header("Authorization", "Bearer " + loansOnlyToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+	}
+
+	@Test
+	void loansAndApprovalsRequireDecisionPermissions() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String email = "loan-originator-" + System.currentTimeMillis() + "@greenvalley.local";
+
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Loan Originator",
+								  "email": "%s",
+								  "phone": "+256700654222",
+								  "password": "Plain@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String userId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+		mockMvc.perform(put("/api/v1/users/" + userId + "/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_green_loans_officer"]
+								}
+								"""))
+				.andExpect(status().isOk());
+		String loanOriginatorToken = loginAndReturnToken(email, "Plain@12345");
+
+		MvcResult createdLoan = mockMvc.perform(post("/api/v1/loans")
+						.header("Authorization", "Bearer " + loanOriginatorToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "product": "Emergency Loan",
+								  "amount": 100000,
+								  "repaymentMonths": 6
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andReturn();
+		String loanId = objectMapper.readTree(createdLoan.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/approval-workflows")
+						.header("Authorization", "Bearer " + loanOriginatorToken))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
+						.header("Authorization", "Bearer " + loanOriginatorToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "approved" }
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/loans/" + loanId + "/repayments")
+						.header("Authorization", "Bearer " + loanOriginatorToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 10000,
+								  "channel": "cash",
+								  "reference": "NO-APPROVE-%s"
+								}
+								""".formatted(System.currentTimeMillis())))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/approval-decisions")
+						.header("Authorization", "Bearer " + loanOriginatorToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "workflowId": "workflow_green_loans",
+								  "resourceType": "loan",
+								  "resourceId": "%s",
+								  "decision": "approved"
+								}
+								""".formatted(loanId)))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
 	}
