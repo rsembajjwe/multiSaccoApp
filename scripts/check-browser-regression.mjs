@@ -41,6 +41,7 @@ try {
   await assertScreen(page, "sacco-applications", ["SACCO application list", "Public SACCO registration wizard"]);
   await assertSaccoApplicationReview(page);
   await assertScreen(page, "subscriptions", ["Subscription list", "Subscription package configuration"]);
+  await assertSubscriptionControl(page);
   await assertScreen(page, "operations", ["Operations command center", "Payment monitoring"]);
   await assertScreen(page, "reports", ["Report catalogue", "Membership", "Audit"]);
   await assertScreen(page, "users", ["Platform administrators only", "Permission matrix"]);
@@ -211,6 +212,15 @@ async function assertSaccoApplicationReview(page) {
   await expectText(page, "Save decision", "SACCO save decision action");
   await expectText(page, "Request changes", "SACCO request changes action");
   console.log("PASS SACCO application review");
+}
+
+async function assertSubscriptionControl(page) {
+  await page.locator("[data-row-action='subscription-detail']").first().click();
+  await expectText(page, "Subscription control", "subscription detail panel");
+  await expectText(page, "Operating access", "subscription operating access");
+  await expectText(page, "Record payment", "subscription record payment action");
+  await expectText(page, "Renew full year", "subscription renew action");
+  console.log("PASS subscription control");
 }
 
 async function canLogin(code, username, password) {

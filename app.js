@@ -47,6 +47,9 @@ const state = {
   selectedTenantProfile: null,
   selectedTenantMessage: "",
   selectedTenantError: "",
+  selectedSubscriptionId: "",
+  selectedSubscriptionMessage: "",
+  selectedSubscriptionError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -600,6 +603,7 @@ function saccoApplications() {
 
 function subscriptionsView() {
   const rows = dataRows("subscriptions");
+  const tableRows = rows.map((subscription) => ({ ...subscription, action: "subscription-detail", actionLabel: "Manage", actionId: subscription.id }));
   return `
     <div class="dashboard-grid">
       ${summary("Active subscriptions", rows.filter((row) => normal(row.status) === "active").length, "Operating access", "View")}
@@ -608,7 +612,8 @@ function subscriptionsView() {
       ${summary("Outstanding invoices", money.format(rows.reduce((total, row) => total + Number(row.amount || 0) - Number(row.paid || row.amountPaid || 0), 0)), "Unpaid balance", "Follow up")}
     </div>
     ${filterToolbar("Search by SACCO, package, payment status or expiry", "Record payment", "Generate invoice")}
-    ${recordTable("Subscription list", rows, ["tenantName", "packageName", "billingPeriod", "expiryDate", "amount", "memberCount", "status"])}
+    ${subscriptionDetailPanel(rows)}
+    ${recordTable("Subscription list", tableRows, ["tenantName", "tenantId", "packageId", "tierLabel", "billingDescription", "amount", "paid", "expiry", "status"])}
     ${packageCards()}
   `;
 }
@@ -1093,6 +1098,60 @@ function tenantStatusLabel(status) {
   return tenantStatusOptions().find((option) => option.value === status)?.label || status || "Pending";
 }
 
+function subscriptionDetailPanel(rows) {
+  const subscription = rows.find((item) => item.id === state.selectedSubscriptionId);
+  if (!subscription) return "";
+  const tenant = tenantRows().find((item) => item.id === subscription.tenantId) || {};
+  const canManage = isPlatform() && (hasPermission("subscriptions:manage") || roleKind() === "super" || roleKind() === "billing");
+  const due = Math.max(0, Number(subscription.amount || 0) - Number(subscription.paid || 0));
+  return `
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Subscription control</h2>
+          <p>${escapeHtml(tenant.name || subscription.tenantId)} - invoice ${escapeHtml(subscription.invoice || subscription.id)}</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-subscription-detail">Close</button>
+      </div>
+      ${state.selectedSubscriptionMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedSubscriptionMessage)}</strong></div>` : ""}
+      ${state.selectedSubscriptionError ? `<div class="notice warning"><strong>Subscription update failed.</strong><span>${escapeHtml(state.selectedSubscriptionError)}</span></div>` : ""}
+      <div class="source-grid">
+        ${mini("Operating access", subscriptionAccessLabel(subscription, tenant))}
+        ${mini("Subscription status", subscription.status)}
+        ${mini("Package", subscription.tierLabel || subscription.packageId)}
+        ${mini("Billable members", subscription.billableMembers || subscription.memberCount)}
+        ${mini("Amount", money.format(subscription.amount || 0))}
+        ${mini("Paid", money.format(subscription.paid || 0))}
+        ${mini("Balance due", money.format(due))}
+        ${mini("Expiry", subscription.expiry)}
+      </div>
+      <form id="subscriptionPaymentForm" class="form-grid">
+        <input type="hidden" id="selectedSubscriptionId" value="${escapeHtml(subscription.id)}">
+        <input type="hidden" id="selectedSubscriptionTenantId" value="${escapeHtml(subscription.tenantId)}">
+        <label><span>Payment amount</span><input id="subscriptionPaymentAmount" type="number" min="1" step="1" value="${due || subscription.amount || 0}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Payment channel</span><select id="subscriptionPaymentChannel" ${canManage ? "" : "disabled"}><option value="manual">Manual</option><option value="cash">Cash</option><option value="bank">Bank</option><option value="mobile_money">Mobile money</option></select></label>
+        <label><span>Reference</span><input id="subscriptionPaymentReference" value="PAY-${Date.now()}" ${canManage ? "" : "disabled"}></label>
+        <div class="form-actions inline">
+          ${canManage ? `
+            <button class="button primary" type="submit">Record payment</button>
+            <button class="button secondary" type="button" data-subscription-action="renew">Renew full year</button>
+            <button class="button secondary" type="button" data-subscription-action="activate-tenant">Activate access</button>
+            <button class="button ghost" type="button" data-subscription-action="suspend-tenant">Suspend access</button>
+          ` : `<span class="status pending">View only</span>`}
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function subscriptionAccessLabel(subscription, tenant) {
+  if (normal(tenant.status).includes("suspended")) return "Suspended";
+  if (normal(subscription.status) === "active" && normal(tenant.status) === "active") return "Active";
+  if (normal(subscription.status).includes("pending")) return "Payment pending";
+  if (normal(subscription.status).includes("expired")) return "Expired";
+  return subscription.status || tenant.status || "Pending";
+}
+
 function userRoleOptions(platformOnly) {
   const tenantId = platformOnly ? "tenant_platform" : state.user?.tenantId;
   const roles = dataRows("roles").filter((role) => role.tenantId === tenantId);
@@ -1365,6 +1424,69 @@ async function saveTenantStatus(status) {
   }
 }
 
+function openSubscriptionDetail(subscriptionId) {
+  state.selectedSubscriptionId = subscriptionId;
+  state.selectedSubscriptionMessage = "";
+  state.selectedSubscriptionError = "";
+  renderShell();
+}
+
+async function recordSubscriptionPayment(amountOverride = null) {
+  const subscriptionId = value("selectedSubscriptionId") || state.selectedSubscriptionId;
+  const subscription = dataRows("subscriptions").find((item) => item.id === subscriptionId);
+  if (!subscription) return;
+  const due = Math.max(0, Number(subscription.amount || 0) - Number(subscription.paid || 0));
+  const amount = amountOverride ?? Number(value("subscriptionPaymentAmount") || due || subscription.amount || 0);
+  state.selectedSubscriptionMessage = "";
+  state.selectedSubscriptionError = "";
+  try {
+    const result = await api(`/subscriptions/${encodeURIComponent(subscriptionId)}/payments`, {
+      method: "POST",
+      body: JSON.stringify({
+        amount,
+        channel: value("subscriptionPaymentChannel") || "manual",
+        externalReference: value("subscriptionPaymentReference") || `PAY-${Date.now()}`
+      })
+    });
+    state.selectedSubscriptionMessage = `${result.idempotent ? "Existing payment found" : "Payment recorded"}: ${money.format(result.payment?.amount || amount)}.`;
+    await refreshAll();
+    state.selectedSubscriptionId = result.subscription?.id || subscriptionId;
+    state.selectedSubscriptionMessage = `${result.idempotent ? "Existing payment found" : "Payment recorded"}: ${money.format(result.payment?.amount || amount)}.`;
+    renderShell();
+  } catch (error) {
+    state.selectedSubscriptionError = error.message;
+    renderShell();
+  }
+}
+
+async function runSubscriptionAction(action) {
+  const subscriptionId = state.selectedSubscriptionId;
+  const subscription = dataRows("subscriptions").find((item) => item.id === subscriptionId);
+  if (!subscription) return;
+  const due = Math.max(0, Number(subscription.amount || 0) - Number(subscription.paid || 0));
+  if (action === "renew") {
+    await recordSubscriptionPayment(due || Number(subscription.amount || 0));
+    return;
+  }
+  const tenantStatus = action === "suspend-tenant" ? "suspended" : "active";
+  state.selectedSubscriptionMessage = "";
+  state.selectedSubscriptionError = "";
+  try {
+    await api(`/tenants/${encodeURIComponent(subscription.tenantId)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: tenantStatus })
+    });
+    state.selectedSubscriptionMessage = tenantStatus === "active" ? "SACCO operating access activated." : "SACCO operating access suspended.";
+    await refreshAll();
+    state.selectedSubscriptionId = subscriptionId;
+    state.selectedSubscriptionMessage = tenantStatus === "active" ? "SACCO operating access activated." : "SACCO operating access suspended.";
+    renderShell();
+  } catch (error) {
+    state.selectedSubscriptionError = error.message;
+    renderShell();
+  }
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -1444,6 +1566,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='tenant-detail']").forEach((button) => {
     button.addEventListener("click", () => openTenantDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='subscription-detail']").forEach((button) => {
+    button.addEventListener("click", () => openSubscriptionDetail(button.dataset.rowId));
+  });
   document.querySelector("[data-action='close-user-detail']")?.addEventListener("click", () => {
     state.selectedUserId = "";
     state.selectedUserRoles = [];
@@ -1459,14 +1584,27 @@ function bindEvents() {
     state.selectedTenantError = "";
     renderShell();
   });
+  document.querySelector("[data-action='close-subscription-detail']")?.addEventListener("click", () => {
+    state.selectedSubscriptionId = "";
+    state.selectedSubscriptionMessage = "";
+    state.selectedSubscriptionError = "";
+    renderShell();
+  });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
   document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
   document.querySelector("#tenantStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     saveTenantStatus(value("selectedTenantStatus"));
   });
+  document.querySelector("#subscriptionPaymentForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    recordSubscriptionPayment();
+  });
   document.querySelectorAll("[data-tenant-status]").forEach((button) => {
     button.addEventListener("click", () => saveTenantStatus(button.dataset.tenantStatus));
+  });
+  document.querySelectorAll("[data-subscription-action]").forEach((button) => {
+    button.addEventListener("click", () => runSubscriptionAction(button.dataset.subscriptionAction));
   });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
@@ -1505,6 +1643,9 @@ async function logout() {
     selectedTenantProfile: null,
     selectedTenantMessage: "",
     selectedTenantError: "",
+    selectedSubscriptionId: "",
+    selectedSubscriptionMessage: "",
+    selectedSubscriptionError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });
