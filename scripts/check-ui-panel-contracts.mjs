@@ -66,6 +66,11 @@ const contracts = [
   "Support ticket capture",
   "Complaint review",
   "Save complaint status",
+  "Notification delivery monitor",
+  "Notification template setup",
+  "Notification template editor",
+  "Create template",
+  "Save template",
   "SERVER-CONFIRMED BALANCES",
   "pendingGuarantors",
   "notifications"

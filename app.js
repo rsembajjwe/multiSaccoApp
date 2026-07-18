@@ -78,6 +78,11 @@ const state = {
   selectedComplaintId: "",
   selectedComplaintMessage: "",
   selectedComplaintError: "",
+  notificationTemplateMessage: "",
+  notificationTemplateError: "",
+  selectedTemplateId: "",
+  selectedTemplateMessage: "",
+  selectedTemplateError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -796,10 +801,30 @@ function complaintsView() {
 }
 
 function notificationsView() {
+  const deliveries = dataRows("notifications").map((delivery) => ({
+    ...delivery,
+    tenantName: tenantName(delivery.tenantId),
+    memberName: delivery.memberId ? memberName(delivery.memberId) : "SACCO broadcast"
+  }));
+  const templates = dataRows("notificationTemplates").map((template) => ({
+    ...template,
+    tenantName: template.tenantId ? tenantName(template.tenantId) : "Global template",
+    action: "template-detail",
+    actionLabel: "Edit",
+    actionId: template.id
+  }));
   return `
-    ${filterToolbar("Search messages by category, provider, status or related record", "New template", "Mark all as read")}
-    ${recordTable("Notification centre", dataRows("notifications"), ["title", "recipient", "channel", "status", "createdAt"])}
-    ${recordTable("Notification templates", dataRows("notificationTemplates"), ["title", "channel", "eventType", "status", "updatedAt"])}
+    <div class="dashboard-grid">
+      ${summary("Deliveries", deliveries.length, "SMS, email and in-app events", "Monitor")}
+      ${summary("Failed deliveries", deliveries.filter((row) => normal(row.status).includes("failed")).length, "Provider exceptions", "Investigate")}
+      ${summary("Active templates", templates.filter((row) => normal(row.status) === "active").length, "Reusable message rules", "Edit")}
+      ${summary("Global templates", templates.filter((row) => !row.tenantId).length, "Platform defaults", "Review")}
+    </div>
+    ${filterToolbar("Search by SACCO, member, provider, recipient, channel, status or event", "New template", "Export delivery log")}
+    ${notificationTemplatePanel()}
+    ${notificationTemplateDetailPanel(templates)}
+    ${recordTable("Notification delivery monitor", deliveries, ["tenantName", "memberName", "channel", "provider", "recipient", "status", "message", "sentAt", "createdAt"])}
+    ${recordTable("Notification templates", templates, ["tenantName", "eventType", "channel", "title", "status", "updatedAt"])}
   `;
 }
 
@@ -1594,6 +1619,68 @@ function complaintStatusOptions() {
   return ["open", "in_progress", "resolved", "closed"];
 }
 
+function notificationTemplatePanel() {
+  const canManage = hasPermission("notifications:manage");
+  const tenants = tenantRows();
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Notification template setup</h2>
+          <p>Create global platform templates or SACCO-specific overrides for Java notification delivery.</p>
+        </div>
+      </div>
+      ${state.notificationTemplateMessage ? `<div class="notice compact"><strong>${escapeHtml(state.notificationTemplateMessage)}</strong></div>` : ""}
+      ${state.notificationTemplateError ? `<div class="notice warning"><strong>Template setup failed.</strong><span>${escapeHtml(state.notificationTemplateError)}</span></div>` : ""}
+      <form id="notificationTemplateForm" class="form-grid">
+        <label><span>Template scope</span><select id="newTemplateTenantId" ${canManage ? "" : "disabled"}><option value="">Global platform template</option>${tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}">${escapeHtml(tenant.abbreviation || tenant.name)} - ${escapeHtml(tenant.name || tenant.id)}</option>`).join("")}</select></label>
+        <label><span>Event type</span><select id="newTemplateEventType" ${canManage ? "" : "disabled"}>${notificationEventOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
+        <label><span>Channel</span><select id="newTemplateChannel" ${canManage ? "" : "disabled"}>${notificationChannelOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
+        <label><span>Status</span><select id="newTemplateStatus" ${canManage ? "" : "disabled"}><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+        <label><span>Title</span><input id="newTemplateTitle" required placeholder="Message title" ${canManage ? "" : "disabled"}></label>
+        <label class="wide"><span>Message body</span><textarea id="newTemplateBody" required placeholder="Use clear plain language for SMS, email or in-app messages" ${canManage ? "" : "disabled"}></textarea></label>
+        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">Create template</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function notificationTemplateDetailPanel(rows) {
+  const template = rows.find((item) => item.id === state.selectedTemplateId);
+  if (!template) return "";
+  const canManage = hasPermission("notifications:manage");
+  return `
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Notification template editor</h2>
+          <p>${escapeHtml(template.eventType)} - ${escapeHtml(template.channel)} - ${escapeHtml(template.tenantName || "")}</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-template-detail">Close</button>
+      </div>
+      ${state.selectedTemplateMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedTemplateMessage)}</strong></div>` : ""}
+      ${state.selectedTemplateError ? `<div class="notice warning"><strong>Template update failed.</strong><span>${escapeHtml(state.selectedTemplateError)}</span></div>` : ""}
+      <form id="notificationTemplateEditForm" class="form-grid">
+        <input type="hidden" id="selectedTemplateId" value="${escapeHtml(template.id)}">
+        <label><span>Event type</span><select id="selectedTemplateEventType" ${canManage ? "" : "disabled"}>${notificationEventOptions(template.eventType).map((item) => `<option value="${escapeHtml(item)}" ${item === template.eventType ? "selected" : ""}>${labelize(item)}</option>`).join("")}</select></label>
+        <label><span>Channel</span><select id="selectedTemplateChannel" ${canManage ? "" : "disabled"}>${notificationChannelOptions().map((item) => `<option value="${escapeHtml(item)}" ${item === template.channel ? "selected" : ""}>${labelize(item)}</option>`).join("")}</select></label>
+        <label><span>Status</span><select id="selectedTemplateStatus" ${canManage ? "" : "disabled"}><option value="active" ${template.status === "active" ? "selected" : ""}>Active</option><option value="inactive" ${template.status === "inactive" ? "selected" : ""}>Inactive</option></select></label>
+        <label><span>Title</span><input id="selectedTemplateTitle" value="${escapeHtml(template.title || "")}" ${canManage ? "" : "disabled"}></label>
+        <label class="wide"><span>Message body</span><textarea id="selectedTemplateBody" ${canManage ? "" : "disabled"}>${escapeHtml(template.body || "")}</textarea></label>
+        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">Save template</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function notificationEventOptions(extra = "") {
+  return Array.from(new Set(["payment_posted", "loan_application_submitted", "complaint_synced", "subscription_due", "sacco_approved", extra].filter(Boolean)));
+}
+
+function notificationChannelOptions() {
+  return ["in_app", "sms", "email"];
+}
+
 function userRoleOptions(platformOnly) {
   const tenantId = platformOnly ? "tenant_platform" : state.user?.tenantId;
   const roles = dataRows("roles").filter((role) => role.tenantId === tenantId);
@@ -2300,6 +2387,70 @@ async function saveComplaintStatus(status = null) {
   }
 }
 
+async function createNotificationTemplate(event) {
+  event.preventDefault();
+  state.notificationTemplateMessage = "";
+  state.notificationTemplateError = "";
+  try {
+    const template = await api("/notification-templates", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: value("newTemplateTenantId") || null,
+        eventType: value("newTemplateEventType"),
+        channel: value("newTemplateChannel"),
+        title: value("newTemplateTitle"),
+        body: value("newTemplateBody"),
+        status: value("newTemplateStatus")
+      })
+    });
+    state.notificationTemplateMessage = `Created template ${template.eventType} for ${labelize(template.channel)}.`;
+    state.selectedTemplateId = template.id;
+    await refreshAll();
+    state.selectedTemplateId = template.id;
+    state.notificationTemplateMessage = `Created template ${template.eventType} for ${labelize(template.channel)}.`;
+    renderShell();
+  } catch (error) {
+    state.notificationTemplateError = error.message;
+    renderShell();
+  }
+}
+
+function openTemplateDetail(templateId) {
+  state.selectedTemplateId = templateId;
+  state.selectedTemplateMessage = "";
+  state.selectedTemplateError = "";
+  renderShell();
+}
+
+async function saveNotificationTemplate(event) {
+  event.preventDefault();
+  const templateId = value("selectedTemplateId") || state.selectedTemplateId;
+  if (!templateId) return;
+  state.selectedTemplateMessage = "";
+  state.selectedTemplateError = "";
+  try {
+    const template = await api(`/notification-templates/${encodeURIComponent(templateId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        eventType: value("selectedTemplateEventType"),
+        channel: value("selectedTemplateChannel"),
+        title: value("selectedTemplateTitle"),
+        body: value("selectedTemplateBody"),
+        status: value("selectedTemplateStatus")
+      })
+    });
+    state.selectedTemplateMessage = `Template ${template.eventType} saved.`;
+    const message = state.selectedTemplateMessage;
+    await refreshAll();
+    state.selectedTemplateId = template.id;
+    state.selectedTemplateMessage = message;
+    renderShell();
+  } catch (error) {
+    state.selectedTemplateError = error.message;
+    renderShell();
+  }
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -2400,6 +2551,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='complaint-detail']").forEach((button) => {
     button.addEventListener("click", () => openComplaintDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='template-detail']").forEach((button) => {
+    button.addEventListener("click", () => openTemplateDetail(button.dataset.rowId));
+  });
   document.querySelector("[data-action='close-user-detail']")?.addEventListener("click", () => {
     state.selectedUserId = "";
     state.selectedUserRoles = [];
@@ -2453,6 +2607,12 @@ function bindEvents() {
     state.selectedComplaintError = "";
     renderShell();
   });
+  document.querySelector("[data-action='close-template-detail']")?.addEventListener("click", () => {
+    state.selectedTemplateId = "";
+    state.selectedTemplateMessage = "";
+    state.selectedTemplateError = "";
+    renderShell();
+  });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
   document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
@@ -2465,6 +2625,8 @@ function bindEvents() {
     event.preventDefault();
     saveComplaintStatus();
   });
+  document.querySelector("#notificationTemplateForm")?.addEventListener("submit", createNotificationTemplate);
+  document.querySelector("#notificationTemplateEditForm")?.addEventListener("submit", saveNotificationTemplate);
   document.querySelector("#memberStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     runMemberDecision("custom");
@@ -2563,6 +2725,11 @@ async function logout() {
     selectedComplaintId: "",
     selectedComplaintMessage: "",
     selectedComplaintError: "",
+    notificationTemplateMessage: "",
+    notificationTemplateError: "",
+    selectedTemplateId: "",
+    selectedTemplateMessage: "",
+    selectedTemplateError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });

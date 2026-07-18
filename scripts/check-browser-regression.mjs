@@ -50,6 +50,7 @@ try {
   await assertScreen(page, "users", ["Platform administrators only", "Permission matrix"]);
   await assertPlatformUserCreation(page);
   await assertScreen(page, "complaints", ["Platform support desk", "Support ticket capture", "Open complaints"]);
+  await assertScreen(page, "notifications", ["Notification delivery monitor", "Notification template setup", "Notification templates"]);
   await expectNoVisibleText(page, "Dashboard data source", "debug source panel hidden");
   await logout(page);
 
