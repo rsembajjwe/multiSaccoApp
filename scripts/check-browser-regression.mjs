@@ -126,7 +126,7 @@ async function assertStaffScreens(page) {
     { id: "subscriptions", nav: "Subscriptions", heading: "Subscriptions data source", markers: ["Java-backed", "Last sync", "Billable members"] },
     { id: "members", nav: "Members", heading: "Members data source", markers: ["Java-backed", "Server fields", "Import members", "Profile metadata"] },
     { id: "operations", nav: "Operations", heading: "Operations data source", markers: ["Java-backed", "Last sync", "Operations command center"] },
-    { id: "usersRoles", nav: "Users & Roles", heading: "Users and roles data source", markers: ["Java API", "Staff access", "Platform roles"] },
+    { id: "usersRoles", nav: "Platform Users", heading: "Platform users management data source", markers: ["Java API", "Platform users management", "Assigned roles"] },
     { id: "notifications", nav: "Notifications", heading: "Notifications data source", markers: ["Java API", "Provider outbox", "Templates"] },
     { id: "complaints", nav: "Complaints", heading: "Complaints data source", markers: ["Java API", "Support queue", "Open complaints"] }
   ];

@@ -14,7 +14,7 @@ const navItems = [
   ["approvals", "Approvals", "workflow"],
   ["operations", "Operations", "monitor"],
   ["reports", "Reports", "audit"],
-  ["usersRoles", "Users & Roles", "access"],
+  ["usersRoles", "Platform Users", "access"],
   ["notifications", "Notifications", "messages"],
   ["complaints", "Complaints", "support"],
   ["memberPortal", "Member Portal", "self-service"]
@@ -237,6 +237,7 @@ let apiState = {
   token: localStorage.getItem(API_SESSION_KEY) || "",
   tenants: [],
   users: [],
+  userRoleAssignments: {},
   roles: [],
   permissions: [],
   branches: [],
@@ -323,14 +324,31 @@ function visibleNavItems() {
   });
 }
 
+function visibleViewIds() {
+  return visibleNavItems().map(([id]) => id);
+}
+
 function ensureWorkspaceTenant() {
+  const permittedWorkspaces = accessibleWorkspaceIds();
+  if (!permittedWorkspaces.includes(state.workspace)) {
+    state.workspace = permittedWorkspaces[0] || "platformAdmin";
+  }
   const workspace = currentWorkspace();
   if (workspace.tenantLocked && state.tenantId === "platform") {
     state.tenantId = state.tenants.find((tenant) => tenant.id !== "platform")?.id || "platform";
   }
-  if (!workspace.nav.includes(state.currentView)) {
-    state.currentView = workspace.defaultView;
+  const visibleViews = visibleViewIds();
+  if (!visibleViews.includes(state.currentView)) {
+    state.currentView = visibleViews.includes(workspace.defaultView) ? workspace.defaultView : (visibleViews[0] || workspace.defaultView);
   }
+}
+
+function accessibleWorkspaceIds() {
+  if (memberApiState.member) return ["member"];
+  if (apiState.user) {
+    return [workspaceForStaff(apiState.user, apiState.roleNames, apiState.permissionIds)];
+  }
+  return Object.keys(workspaceProfiles);
 }
 
 function tenantScoped(collection) {
@@ -709,8 +727,10 @@ function renderTenantSelect() {
 
 function renderWorkspaceSelect() {
   const select = document.getElementById("workspaceSelect");
-  select.innerHTML = Object.entries(workspaceProfiles).map(([id, profile]) => `<option value="${id}">${profile.label}</option>`).join("");
-  select.value = state.workspace || "platformAdmin";
+  const workspaceIds = accessibleWorkspaceIds();
+  select.innerHTML = workspaceIds.map((id) => `<option value="${id}">${workspaceProfiles[id].label}</option>`).join("");
+  select.value = workspaceIds.includes(state.workspace) ? state.workspace : workspaceIds[0];
+  select.disabled = Boolean(apiState.user || memberApiState.member);
   select.onchange = () => {
     state.workspace = select.value;
     ensureWorkspaceTenant();
@@ -773,13 +793,14 @@ function render() {
   }
   setLoginMode(false);
   ensureWorkspaceTenant();
+  renderWorkspaceSelect();
   renderNav();
   document.querySelectorAll(".nav-item").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === state.currentView);
   });
 
   document.getElementById("tenantSelect").value = state.tenantId;
-  document.getElementById("workspaceSelect").value = state.workspace || "platformAdmin";
+  document.getElementById("workspaceSelect").value = state.workspace || accessibleWorkspaceIds()[0] || "platformAdmin";
   document.getElementById("sessionRole").textContent = currentWorkspace().session;
   document.getElementById("newMemberBtn").hidden = !currentWorkspace().nav.includes("members") || !hasPermission("members:create");
   document.getElementById("globalSearchBtn").hidden = false;
@@ -797,7 +818,7 @@ function render() {
     approvals: ["Governance", "Approval workflow"],
     operations: ["Operations", "Monitoring and release readiness"],
     reports: ["Controls", "Reports and audit trail"],
-    usersRoles: ["Access", "Users and roles"],
+    usersRoles: ["Access", "Platform users management"],
     notifications: ["Messages", "Notifications"],
     complaints: ["Support", "Complaints"],
     memberPortal: ["Member Portal", "Self-service account"]
@@ -832,10 +853,11 @@ function setLoginMode(enabled) {
 
 function renderLoginScreen() {
   setLoginMode(true);
+  renderWorkspaceSelect();
   renderApiChrome();
   document.getElementById("sessionRole").textContent = "Signed out";
   document.getElementById("tenantSelect").value = state.tenantId;
-  document.getElementById("workspaceSelect").value = state.workspace || "platformAdmin";
+  document.getElementById("workspaceSelect").value = state.workspace || accessibleWorkspaceIds()[0] || "platformAdmin";
   document.querySelectorAll(".nav-item").forEach((button) => button.classList.remove("active"));
   document.getElementById("sectionKicker").textContent = "Welcome";
   document.getElementById("pageTitle").textContent = "Login to Tereka Online";
@@ -2063,6 +2085,7 @@ function renderOperations() {
 
 function renderUsersRoles() {
   const users = apiState.users || [];
+  const platformUsers = users.filter((user) => user.tenantId === "tenant_platform");
   const roles = apiState.roles || [];
   const permissions = apiState.permissions || [];
   const canManageRoles = hasPermission("roles:create");
@@ -2071,12 +2094,12 @@ function renderUsersRoles() {
     <section class="card integration-panel">
       <div class="toolbar">
         <div>
-          <h2>Users and roles data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; staff access control and protected role matrix</p>
+          <h2>Platform users management data source</h2>
+          <p class="eyebrow">${apiSyncState()} &middot; platform staff, assigned roles and protected access matrix</p>
         </div>
         ${refreshApiButton("Refresh backend data")}
       </div>
-      ${apiSyncNotice("Users and roles screen")}
+      ${apiSyncNotice("Platform users management screen")}
       <div class="grid four compact-facts">
         ${miniFact("Source", "Java API")}
         ${miniFact("Last sync", formatSyncTime(apiState.lastSyncedAt))}
@@ -2087,19 +2110,19 @@ function renderUsersRoles() {
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Staff access</h2>
-          <p class="eyebrow">Platform administration &middot; role-limited staff accounts</p>
+          <h2>Platform users management</h2>
+          <p class="eyebrow">Platform administration &middot; create users, assign roles and review active access</p>
         </div>
         ${canManageRoles ? `<button class="secondary-button" data-action="assignUserRoles" type="button">Assign roles</button>
         <button class="primary-button" data-action="newRole" type="button">New role</button>` : `<span class="pill">View only</span>`}
       </div>
       <div class="grid metrics">
-        ${metric("Users", users.length, `${users.filter((user) => user.status === "active").length} active`)}
+        ${metric("Platform users", platformUsers.length, `${platformUsers.filter((user) => user.status === "active").length} active`)}
         ${metric("Roles", roles.length, `${roles.filter((role) => role.protectedRole || role.protected).length} protected`)}
         ${metric("Permissions", permissions.length, "catalogued actions")}
         ${metric("Platform roles", roles.filter((role) => role.tenantId === "tenant_platform").length, "platform admin views")}
       </div>
-      ${userTable(users)}
+      ${userTable(platformUsers.length ? platformUsers : users)}
       ${roleTable(roles)}
     </section>
   `;
@@ -2461,16 +2484,21 @@ function userTable(users) {
   return `
     <div class="table-wrap" style="margin-top:16px">
       <table>
-        <thead><tr><th>User</th><th>Tenant</th><th>Contact</th><th>Status</th></tr></thead>
+        <thead><tr><th>User</th><th>Tenant</th><th>Assigned roles</th><th>Contact</th><th>Status</th></tr></thead>
         <tbody>
-          ${users.map((user) => `
-            <tr>
-              <td><strong>${user.fullName || user.name}</strong><br><small>${user.id}</small></td>
-              <td>${tenantName(user.tenantId)}</td>
-              <td>${user.email || ""}<br><small>${user.phone || ""}</small></td>
-              <td><span class="status ${statusClass(user.status)}">${titleCase(user.status || "active")}</span></td>
-            </tr>
-          `).join("") || `<tr><td colspan="4">No staff users found.</td></tr>`}
+          ${users.map((user) => {
+            const roleIds = apiState.userRoleAssignments[user.id] || [];
+            const roleNames = roleIds.map((roleId) => apiState.roles.find((role) => role.id === roleId)?.name || roleId);
+            return `
+              <tr>
+                <td><strong>${user.fullName || user.name}</strong><br><small>${user.id}</small></td>
+                <td>${tenantName(user.tenantId)}</td>
+                <td>${roleNames.map((roleName) => `<span class="pill">${roleName}</span>`).join(" ") || `<span class="pill">No role assigned</span>`}</td>
+                <td>${user.email || ""}<br><small>${user.phone || ""}</small></td>
+                <td><span class="status ${statusClass(user.status)}">${titleCase(user.status || "active")}</span></td>
+              </tr>
+            `;
+          }).join("") || `<tr><td colspan="5">No staff users found.</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -3563,6 +3591,7 @@ async function refreshApiStatus() {
       apiState.tenants = tenants;
       apiState.users = users;
       apiState.roles = roles;
+      apiState.userRoleAssignments = await loadUserRoleAssignments(users);
       apiState.permissions = permissions;
       apiState.auditEvents = auditEvents;
       apiState.operationsStatus = operationsStatus;
@@ -3608,6 +3637,15 @@ async function refreshApiStatus() {
   }
   renderApiChrome();
   if (!isAuthenticated() || ["dashboard", "reports", "operations", "members", "registrations", "subscriptions", "transactions", "approvals", "loans", "usersRoles", "notifications", "complaints"].includes(state.currentView)) render();
+}
+
+async function loadUserRoleAssignments(users) {
+  if (!hasPermission("users:view") || !users.length) return {};
+  const entries = await Promise.all(users.map(async (user) => {
+    const assignment = await apiOptional(`/users/${encodeURIComponent(user.id)}/roles`, { roleIds: [] });
+    return [user.id, assignment.roleIds || []];
+  }));
+  return Object.fromEntries(entries);
 }
 
 function openApiLoginForm() {
@@ -3897,7 +3935,7 @@ async function apiLogout() {
     // Local logout should still clear the client session if the server has restarted.
   }
   localStorage.removeItem(API_SESSION_KEY);
-  apiState = { ...apiState, token: "", user: null, roleIds: [], roleNames: [], permissionIds: [], tenants: [], users: [], roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], notificationTemplates: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], operationsStatus: null, loading: false, lastSyncedAt: "", lastError: "", message: "Logged out of API session." };
+  apiState = { ...apiState, token: "", user: null, roleIds: [], roleNames: [], permissionIds: [], tenants: [], users: [], userRoleAssignments: {}, roles: [], permissions: [], branches: [], members: [], subscriptionPackages: [], subscriptions: [], financialProducts: [], financialAccounts: [], financialTransactions: [], welfareClaims: [], loans: [], accountingPeriods: [], chartOfAccounts: [], journalEntries: [], statementLines: [], reconciliation: null, regulatoryReport: null, mobileMoneyCallbacks: [], notificationDeliveries: [], notificationTemplates: [], suppliers: [], expenses: [], assets: [], governanceMeetings: [], complaints: [], approvalWorkflows: [], approvalDecisions: [], auditEvents: [], operationsStatus: null, loading: false, lastSyncedAt: "", lastError: "", message: "Logged out of API session." };
   renderApiChrome();
   render();
 }
