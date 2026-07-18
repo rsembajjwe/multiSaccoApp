@@ -428,7 +428,6 @@ function platformDashboard() {
   const transactions = dataRows("transactions");
   const users = platformUsers();
   return `
-    ${dashboardIntro("Platform Super Admin", "Full ownership view for SACCO activation, subscriptions, platform users and system risk.")}
     <div class="dashboard-grid">
       ${summary("Total SACCOs", tenants.length, "All registered tenants", "Open applications")}
       ${summary("Active SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Operational tenants", "View accounts")}
