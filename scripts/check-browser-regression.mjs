@@ -141,10 +141,10 @@ async function assertStaffScreens(page) {
       await expectNoText(page, "User\nTenant\nAssigned roles\nContact\nStatus", "Platform Users legacy table header");
     }
     if (screen.id === "dashboard") {
-      await expectText(page, "Platform dashboard", "Dashboard tabbed platform panel");
-      await expectText(page, "SACCOs", "Dashboard SACCOs tab");
+      await expectText(page, "Platform Super Admin dashboard", "Dashboard role-specific platform panel");
+      await expectText(page, "Activation", "Dashboard Activation tab");
+      await expectText(page, "Access", "Dashboard Access tab");
       await expectText(page, "System", "Dashboard System tab");
-      await expectText(page, "Activity", "Dashboard Activity tab");
       await expectNoText(page, "Android member app", "Dashboard old Android panel");
     }
   }

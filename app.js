@@ -1130,17 +1130,16 @@ function renderPlatformDashboard() {
   const counts = operations.counts || {};
   const tenants = (apiState.tenants || []).filter((tenant) => tenant.id !== "tenant_platform");
   const subscriptions = apiState.subscriptions || [];
-  const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === "active").length;
-  const pendingApprovals = Number(counts.pendingFinancialTransactions || 0) + Number(counts.pendingLoans || 0);
-  const openComplaints = Number(counts.openComplaints || 0);
-  const alertCount = operations.alerts?.length || 0;
-  const activeTab = state.platformDashboardTab || "overview";
+  const roleKind = platformDashboardRoleKind();
+  const model = platformDashboardModel(roleKind, tenants, subscriptions, operations, counts);
+  const selectedTab = state.platformDashboardTab || "overview";
+  const activeTab = model.tabs.some((tab) => tab.id === selectedTab) ? selectedTab : model.tabs[0].id;
   return `
     <section class="card integration-panel">
       <div class="toolbar">
         <div>
           <h2>Dashboard data source</h2>
-          <p class="eyebrow">${apiSyncState()} &middot; Java-backed platform command center</p>
+          <p class="eyebrow">${apiSyncState()} &middot; Java-backed ${model.title.toLowerCase()}</p>
         </div>
         ${refreshApiButton("Refresh backend data")}
       </div>
@@ -1154,26 +1153,20 @@ function renderPlatformDashboard() {
     </section>
 
     <div class="grid metrics" style="margin-top:16px">
-      ${metric("SACCOs", tenants.length, `${tenants.filter((tenant) => tenant.status === "active").length} active`)}
-      ${metric("Subscriptions", activeSubscriptions, `${subscriptions.length} total`)}
-      ${metric("Pending work", pendingApprovals, "approvals and loan decisions")}
-      ${metric("Open complaints", openComplaints, alertCount ? `${alertCount} alert(s)` : "operations clear")}
+      ${model.metrics.map((item) => metric(item.label, item.value, item.detail)).join("")}
     </div>
 
     <section class="card" style="margin-top:16px">
       <div class="toolbar">
         <div>
-          <h2>Platform dashboard</h2>
-          <p class="eyebrow">Compact platform administration view</p>
+          <h2>${model.title}</h2>
+          <p class="eyebrow">${model.subtitle}</p>
         </div>
         <div class="filters">
-          ${platformDashboardTabButton("overview", "Overview", activeTab)}
-          ${platformDashboardTabButton("saccos", "SACCOs", activeTab)}
-          ${platformDashboardTabButton("system", "System", activeTab)}
-          ${platformDashboardTabButton("activity", "Activity", activeTab)}
+          ${model.tabs.map((tab) => platformDashboardTabButton(tab.id, tab.label, activeTab)).join("")}
         </div>
       </div>
-      ${renderPlatformDashboardTab(activeTab, tenants, subscriptions, operations)}
+      ${renderRoleDashboardTab(model, activeTab)}
     </section>
   `;
 }
@@ -1182,62 +1175,174 @@ function platformDashboardTabButton(id, label, activeTab) {
   return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-platform-dashboard-tab="${id}" type="button">${label}</button>`;
 }
 
-function renderPlatformDashboardTab(activeTab, tenants, subscriptions, operations) {
+function platformDashboardRoleKind() {
+  const roles = (apiState.roleNames || []).join(" ").toLowerCase();
+  if (roles.includes("billing")) return "billing";
+  if (roles.includes("compliance")) return "compliance";
+  if (roles.includes("support")) return "support";
+  if (roles.includes("operations")) return "operations";
+  return "superAdmin";
+}
+
+function platformDashboardModel(roleKind, tenants, subscriptions, operations, counts) {
+  const activeSaccos = tenants.filter((tenant) => tenant.status === "active").length;
+  const pendingTenants = tenants.filter((tenant) => ["pending_review", "pending", "trial"].includes(String(tenant.status).toLowerCase()));
+  const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === "active").length;
+  const openComplaints = Number(counts.openComplaints || 0);
+  const pendingPostings = Number(counts.pendingFinancialTransactions || 0);
+  const callbackExceptions = Number(counts.callbackExceptions || 0);
+  const deliveryExceptions = Number(counts.deliveryExceptions || 0);
+  const tabs = {
+    superAdmin: {
+      title: "Platform Super Admin dashboard",
+      subtitle: "Ownership view for SACCO activation, billing, platform users and system health",
+      metrics: [
+        { label: "SACCOs", value: tenants.length, detail: `${activeSaccos} active` },
+        { label: "Needs approval", value: pendingTenants.length, detail: "onboarding queue" },
+        { label: "Platform users", value: apiState.users.filter((user) => user.tenantId === "tenant_platform").length, detail: "administrators only" },
+        { label: "System alerts", value: operations.alerts?.length || 0, detail: "operations status" }
+      ],
+      tabs: [
+        { id: "overview", label: "Overview" },
+        { id: "activation", label: "Activation" },
+        { id: "access", label: "Access" },
+        { id: "system", label: "System" }
+      ]
+    },
+    operations: {
+      title: "Platform Operations dashboard",
+      subtitle: "Monitoring view for uptime, callbacks, notification delivery and runbook follow-up",
+      metrics: [
+        { label: "API health", value: titleCase(apiState.health || "checking"), detail: "Java backend" },
+        { label: "System alerts", value: operations.alerts?.length || 0, detail: "current alerts" },
+        { label: "Callback exceptions", value: callbackExceptions, detail: "payment provider" },
+        { label: "Delivery exceptions", value: deliveryExceptions, detail: "SMS/email" }
+      ],
+      tabs: [
+        { id: "overview", label: "Overview" },
+        { id: "exceptions", label: "Exceptions" },
+        { id: "runbook", label: "Runbook" }
+      ]
+    },
+    billing: {
+      title: "Platform Billing dashboard",
+      subtitle: "Billing view for subscription status, payment access and SACCO activation impact",
+      metrics: [
+        { label: "Subscriptions", value: subscriptions.length, detail: `${activeSubscriptions} active` },
+        { label: "Inactive billing", value: Math.max(0, subscriptions.length - activeSubscriptions), detail: "needs follow-up" },
+        { label: "Billable members", value: subscriptions.reduce((sum, sub) => sum + (sub.memberCount || sub.billableMembers || 0), 0), detail: "reported total" },
+        { label: "SACCOs", value: tenants.length, detail: "billing accounts" }
+      ],
+      tabs: [
+        { id: "overview", label: "Overview" },
+        { id: "payments", label: "Payments" },
+        { id: "activation", label: "Activation" }
+      ]
+    },
+    compliance: {
+      title: "Platform Compliance dashboard",
+      subtitle: "Oversight view for reports, audit trail, reconciliation and tenant controls",
+      metrics: [
+        { label: "Audit events", value: apiState.auditEvents.length, detail: "sensitive actions" },
+        { label: "Pending postings", value: pendingPostings, detail: "maker-checker" },
+        { label: "Reports", value: apiState.regulatoryReport?.reports?.length || 0, detail: "regulatory rows" },
+        { label: "SACCOs", value: tenants.length, detail: "oversight scope" }
+      ],
+      tabs: [
+        { id: "overview", label: "Overview" },
+        { id: "audit", label: "Audit" },
+        { id: "reports", label: "Reports" }
+      ]
+    },
+    support: {
+      title: "Platform Support dashboard",
+      subtitle: "Support view for open complaints, SACCO context and escalation follow-up",
+      metrics: [
+        { label: "Open complaints", value: openComplaints, detail: "support queue" },
+        { label: "SACCOs", value: tenants.length, detail: "supported tenants" },
+        { label: "Members loaded", value: apiState.members.length, detail: "support context" },
+        { label: "Notifications", value: apiState.notificationDeliveries.length, detail: "customer alerts" }
+      ],
+      tabs: [
+        { id: "overview", label: "Overview" },
+        { id: "complaints", label: "Complaints" },
+        { id: "saccos", label: "SACCOs" }
+      ]
+    }
+  };
+  return tabs[roleKind] || tabs.superAdmin;
+}
+
+function renderRoleDashboardTab(model, activeTab) {
+  if (activeTab === "activation") {
+    return roleDashboardPanel([
+      metric("SACCO registrations", apiState.tenants.filter((tenant) => tenant.id !== "tenant_platform").length, "registered tenants"),
+      metric("Active subscriptions", apiState.subscriptions.filter((subscription) => subscription.status === "active").length, "billing access"),
+      metric("Pending onboarding", apiState.tenants.filter((tenant) => ["pending_review", "pending", "trial"].includes(String(tenant.status).toLowerCase())).length, "needs decision")
+    ], [["registrations", "Open SACCO registration"], ["subscriptions", "Open subscriptions"]]);
+  }
+  if (activeTab === "access") {
+    return roleDashboardPanel([
+      metric("Platform users", apiState.users.filter((user) => user.tenantId === "tenant_platform").length, "administrators only"),
+      metric("Platform roles", apiState.roles.filter((role) => role.tenantId === "tenant_platform").length, "protected roles"),
+      metric("Permissions", apiState.permissions.length, "catalogued")
+    ], [["usersRoles", "Open platform users"]]);
+  }
+  if (activeTab === "system" || activeTab === "runbook" || activeTab === "exceptions") {
+    return roleDashboardPanel([
+      metric("API health", titleCase(apiState.health || "checking"), "Java backend"),
+      metric("System alerts", apiState.operationsStatus?.alerts?.length || 0, "operations status"),
+      metric("Audit events", apiState.auditEvents.length, "sensitive actions")
+    ], [["operations", "Open operations"], ["reports", "Open reports"]]);
+  }
+  if (activeTab === "payments") {
+    return roleDashboardPanel([
+      metric("Subscriptions", apiState.subscriptions.length, "billing records"),
+      metric("Active", apiState.subscriptions.filter((subscription) => subscription.status === "active").length, "paid access"),
+      metric("Inactive", apiState.subscriptions.filter((subscription) => subscription.status !== "active").length, "follow-up")
+    ], [["subscriptions", "Open subscriptions"], ["registrations", "Open SACCO registration"]]);
+  }
+  if (activeTab === "audit" || activeTab === "reports") {
+    return `
+      ${roleDashboardPanel([
+        metric("Audit events", apiState.auditEvents.length, "sensitive actions"),
+        metric("Report rows", apiState.regulatoryReport?.reports?.length || 0, "regulatory snapshot"),
+        metric("Pending postings", apiState.operationsStatus?.counts?.pendingFinancialTransactions || 0, "maker-checker")
+      ], [["reports", "Open reports"], ["operations", "Open operations"]])}
+      ${activeTab === "audit" ? `<div style="margin-top:16px">${apiAuditTable(apiState.auditEvents.slice(0, 5))}</div>` : ""}
+    `;
+  }
+  if (activeTab === "complaints") {
+    return roleDashboardPanel([
+      metric("Open complaints", apiState.operationsStatus?.counts?.openComplaints || 0, "support queue"),
+      metric("Complaint records", apiState.complaints.length, "loaded cases"),
+      metric("High priority", apiState.complaints.filter((complaint) => complaint.priority === "high").length, "needs escalation")
+    ], [["complaints", "Open complaints"], ["operations", "Open operations"]]);
+  }
   if (activeTab === "saccos") {
-    const pendingTenants = tenants.filter((tenant) => ["pending_review", "pending", "trial"].includes(String(tenant.status).toLowerCase()));
-    return `
-      <div class="grid three" style="margin-top:16px">
-        ${metric("Registered SACCOs", tenants.length, "platform tenants")}
-        ${metric("Needs approval", pendingTenants.length, "onboarding queue")}
-        ${metric("Active subscriptions", subscriptions.filter((subscription) => subscription.status === "active").length, "billing access")}
-      </div>
-      <div class="toolbar" style="margin-top:16px;margin-bottom:0">
-        <button class="secondary-button" data-view-jump="registrations" type="button">Open SACCO registration</button>
-        <button class="secondary-button" data-view-jump="subscriptions" type="button">Open subscriptions</button>
-      </div>
-    `;
-  }
-  if (activeTab === "system") {
-    return `
-      <div class="grid three" style="margin-top:16px">
-        ${metric("API health", titleCase(apiState.health || "checking"), "Java backend")}
-        ${metric("Alerts", operations.alerts?.length || 0, "operations status")}
-        ${metric("Audit events", apiState.auditEvents.length, "sensitive actions")}
-      </div>
-      <div class="toolbar" style="margin-top:16px;margin-bottom:0">
-        <button class="secondary-button" data-view-jump="operations" type="button">Open operations</button>
-        <button class="secondary-button" data-view-jump="reports" type="button">Open reports</button>
-      </div>
-    `;
-  }
-  if (activeTab === "activity") {
-    return `
-      <div class="grid two" style="margin-top:16px">
-        <div>
-          <h3>Control alerts</h3>
-          <ul class="list">
-            ${alertItem("Operations status", operations.alerts?.length ? `${operations.alerts.length} alert(s)` : "Clear", operations.alerts?.length ? "pending" : "active")}
-            ${alertItem("Tenant isolation", "Platform-scoped API session", "active")}
-            ${alertItem("Audit trail", `${apiState.auditEvents.length} event(s) loaded`, "trial")}
-          </ul>
-        </div>
-        <div>
-          <h3>Recent audit</h3>
-          ${apiAuditTable(apiState.auditEvents.slice(0, 5))}
-        </div>
-      </div>
-    `;
+    return roleDashboardPanel([
+      metric("SACCOs", apiState.tenants.filter((tenant) => tenant.id !== "tenant_platform").length, "supported tenants"),
+      metric("Members", apiState.members.length, "support context"),
+      metric("Branches", apiState.branches.length, "loaded branches")
+    ], [["registrations", "Open SACCO registration"], ["members", "Open members"]]);
   }
   return `
     <div class="grid three" style="margin-top:16px">
-      ${metric("Members", apiState.members.length, "across selected scope")}
-      ${metric("Transactions", apiState.financialTransactions.length, "Java-backed records")}
-      ${metric("Loans", apiState.loans.length, "credit portfolio")}
+      ${model.metrics.slice(0, 3).map((item) => metric(item.label, item.value, item.detail)).join("")}
     </div>
     <div class="toolbar" style="margin-top:16px;margin-bottom:0">
-      <button class="secondary-button" data-view-jump="usersRoles" type="button">Platform users</button>
+      ${model.tabs.some((tab) => tab.id === "access") ? `<button class="secondary-button" data-view-jump="usersRoles" type="button">Platform users</button>` : ""}
       <button class="secondary-button" data-view-jump="operations" type="button">Operations center</button>
       <button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>
+    </div>
+  `;
+}
+
+function roleDashboardPanel(metrics, links) {
+  return `
+    <div class="grid three" style="margin-top:16px">${metrics.join("")}</div>
+    <div class="toolbar" style="margin-top:16px;margin-bottom:0">
+      ${links.map(([view, label]) => `<button class="secondary-button" data-view-jump="${view}" type="button">${label}</button>`).join("")}
     </div>
   `;
 }
