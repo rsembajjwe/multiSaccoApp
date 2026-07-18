@@ -30,6 +30,8 @@ Use this template for each staging or production release candidate. Store the co
 
 ## Automated Gates
 
+Latest local gate evidence before hosted handoff: `npm.cmd run ready:check` passed on `2026-07-18`, including Java/PostgreSQL API smoke, static UI contracts, Java-backed browser regression, browser UAT, security hardening checks, and Docker stack cleanup.
+
 | Gate | Command or artifact | Pass/fail | Evidence link or notes |
 | --- | --- | --- | --- |
 | Local verification | `npm.cmd run check` |  |  |

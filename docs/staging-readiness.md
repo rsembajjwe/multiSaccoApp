@@ -18,7 +18,7 @@ A build can be called staging-ready only when every required gate passes.
 | --- | --- | --- | --- |
 | Full local verification | `npm.cmd run check` | JavaScript syntax, UI contracts, proxy mode, mobile contract, and Java tests pass. | Ready |
 | PostgreSQL verification | `npm.cmd run postgres:check` | Docker/PostgreSQL starts, Flyway applies, API smoke test passes, and security checks pass. | Passed on 2026-07-18 |
-| Production-readiness bundle | `npm.cmd run ready:check` | Isolated Java/PostgreSQL stack passes Flyway, API smoke, security, UI, browser regression, and browser UAT checks. | Ready |
+| Production-readiness bundle | `npm.cmd run ready:check` | Isolated Java/PostgreSQL stack passes Flyway, API smoke, security, UI, browser regression, and browser UAT checks. | Passed on 2026-07-18 |
 | Seed/demo gating | `SACCO_DEMO_LOGINS_ENABLED=false` in production profile | Demo credentials are disabled unless explicitly enabled for dev/demo verification. | Ready |
 | Browser-backed UI regression | `npm.cmd run ui:browser` | Main Java-backed screens render source, sync, loading/error, and member portal panels. | Ready |
 | Browser UAT smoke test | `npm.cmd run uat:browser` plus `docs/uat-scripts.md` | Platform admin, SACCO staff, and member portal scripts pass or have accepted findings. | Ready for hosted run |
