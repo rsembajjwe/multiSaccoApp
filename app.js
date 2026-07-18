@@ -1867,9 +1867,12 @@ function renderMembers() {
   const activeTab = state.membersTab || "oversight";
   const tenantCount = new Set(members.map((member) => member.tenantId).filter(Boolean)).size;
   const isSecretary = state.workspace === "secretary";
-  const membersTitle = isSecretary ? "Secretary member records" : "Platform member oversight";
+  const isSaccoAdmin = state.workspace === "saccoAdmin";
+  const membersTitle = isSecretary ? "Secretary member records" : isSaccoAdmin ? "SACCO member administration" : "Platform member oversight";
   const membersSubtitle = isSecretary
     ? `${source} &middot; member register, KYC, branch coverage, complaints and board-pack readiness`
+    : isSaccoAdmin
+      ? `${source} &middot; member registration, KYC, branches, balances, statements and account readiness`
     : `${source} &middot; cross-SACCO member health, KYC, balances and support visibility`;
   return `
     ${workspaceOverview()}
@@ -1920,7 +1923,7 @@ function renderMembers() {
         ${metric("Welfare", money.format(totalWelfare), "member welfare balances")}
         ${metric("SACCO coverage", tenantCount, state.workspace === "platformAdmin" ? "tenant member scope" : "current SACCO")}
       </div>
-      ${renderMembersTab(activeTab, members, { source, canCreateMembers, activeMembers, verifiedMembers, branchCount, membersWithoutBranch, isSecretary })}
+      ${renderMembersTab(activeTab, members, { source, canCreateMembers, activeMembers, verifiedMembers, branchCount, membersWithoutBranch, isSecretary, isSaccoAdmin })}
     </section>
   `;
 }
@@ -1936,7 +1939,7 @@ function renderMembersTab(activeTab, members, summary) {
     const totalWelfare = members.reduce((sum, member) => sum + (member.welfare || 0), 0);
     return `
       <div class="notice" style="margin-top:16px">
-        <strong>${summary.isSecretary ? "Secretary balance context" : "Balance oversight"}:</strong> ${summary.isSecretary ? "review member balance context for statements, complaints and board packs without posting finance entries." : "platform users review server-confirmed totals and open member statements without changing SACCO teller records."}
+        <strong>${summary.isSecretary ? "Secretary balance context" : summary.isSaccoAdmin ? "SACCO balance context" : "Balance oversight"}:</strong> ${summary.isSecretary ? "review member balance context for statements, complaints and board packs without posting finance entries." : summary.isSaccoAdmin ? "review savings, shares and welfare balances alongside member statements and account readiness." : "platform users review server-confirmed totals and open member statements without changing SACCO teller records."}
       </div>
       <div class="grid three" style="margin-top:16px">
         ${metric("Savings", money.format(totalSavings), "server field totals")}
@@ -1948,7 +1951,7 @@ function renderMembersTab(activeTab, members, summary) {
   if (activeTab === "register") {
     return `
       <div class="notice" style="margin-top:16px">
-        <strong>${summary.isSecretary ? "Secretary member register" : "Member register"}:</strong> ${summary.isSecretary ? "search member files, follow KYC gaps, inspect profiles, and prepare board records." : "search across member records, inspect profiles, and open statements. SACCO staff handle day-to-day registration unless this user has member creation permission."}
+        <strong>${summary.isSecretary ? "Secretary member register" : summary.isSaccoAdmin ? "SACCO member register" : "Member register"}:</strong> ${summary.isSecretary ? "search member files, follow KYC gaps, inspect profiles, and prepare board records." : summary.isSaccoAdmin ? "register members, follow KYC gaps, inspect profiles, open statements and maintain branch coverage." : "search across member records, inspect profiles, and open statements. SACCO staff handle day-to-day registration unless this user has member creation permission."}
       </div>
       <div class="toolbar">
         <div>
@@ -1976,7 +1979,7 @@ function renderMembersTab(activeTab, members, summary) {
   }
   return `
     <div class="notice" style="margin-top:16px">
-      <strong>${summary.isSecretary ? "Secretary oversight" : "Platform oversight"}:</strong> ${summary.isSecretary ? "this view is for member health, KYC exceptions, branch coverage, complaint context and board-pack preparation." : "this view is for member health, KYC exceptions, branch coverage, and support context across subscribing SACCOs."}
+      <strong>${summary.isSecretary ? "Secretary oversight" : summary.isSaccoAdmin ? "SACCO admin oversight" : "Platform oversight"}:</strong> ${summary.isSecretary ? "this view is for member health, KYC exceptions, branch coverage, complaint context and board-pack preparation." : summary.isSaccoAdmin ? "this view is for member growth, KYC exceptions, branch coverage, account readiness and member support follow-up." : "this view is for member health, KYC exceptions, branch coverage, and support context across subscribing SACCOs."}
     </div>
     <div class="grid four compact-facts" style="margin-top:16px">
       ${miniFact("Active members", summary.activeMembers)}
@@ -2012,12 +2015,17 @@ function renderTransactions() {
   const canPostTransactions = !apiState.user || hasPermission("transactions:create");
   const canManageProducts = !apiState.user || hasPermission("financial-products:manage") || hasPermission("transactions:create");
   const isTreasurer = state.workspace === "treasurer";
-  const transactionTitle = isTreasurer ? "Treasurer transaction workbench" : "Platform transaction oversight";
+  const isSaccoAdmin = state.workspace === "saccoAdmin";
+  const transactionTitle = isTreasurer ? "Treasurer transaction workbench" : isSaccoAdmin ? "SACCO finance administration" : "Platform transaction oversight";
   const transactionSubtitle = isTreasurer
     ? `${source} &middot; collections, reversals, member statements, welfare payouts and reconciliation support`
+    : isSaccoAdmin
+      ? `${source} &middot; postings, financial products, accounts, approvals, statements, reversals and welfare claims`
     : `${source} &middot; teller intake, checker queue, receipts, statements, reversals and welfare`;
   const transactionNotice = isTreasurer
     ? "Treasurer focus: post and review financial movement, monitor pending checker items, issue receipts, open member statements, and prepare reconciliation evidence."
+    : isSaccoAdmin
+      ? "SACCO admin focus: manage financial setup and daily flow across postings, products, accounts, approvals, statements and welfare support."
     : "Platform oversight: platform users monitor financial flow and exceptions; SACCO treasurers handle normal posting unless the role explicitly allows posting.";
   return `
     <section class="card integration-panel">
@@ -2089,7 +2097,7 @@ function renderTransactions() {
         ${metric("Statement-ready", postedTransactions.length, "posted rows in member statements")}
       </div>
       <div class="notice" style="margin-top:16px">
-        <strong>${isTreasurer ? "Treasurer focus" : "Platform oversight"}:</strong> ${transactionNotice.replace(/^Treasurer focus: |^Platform oversight: /, "")}
+        <strong>${isTreasurer ? "Treasurer focus" : isSaccoAdmin ? "SACCO admin focus" : "Platform oversight"}:</strong> ${transactionNotice.replace(/^Treasurer focus: |^SACCO admin focus: |^Platform oversight: /, "")}
       </div>
     </section>
     ${activeTab === "postings" ? `<section class="card" style="margin-top:16px">
@@ -2260,9 +2268,12 @@ function renderLoans() {
   const activeTab = state.loansTab || "portfolio";
   const canCreateLoans = !apiState.user || hasPermission("loans:create");
   const isChairperson = state.workspace === "chairperson";
-  const loansTitle = isChairperson ? "Chairperson loan oversight" : "Platform loan oversight";
+  const isSaccoAdmin = state.workspace === "saccoAdmin";
+  const loansTitle = isChairperson ? "Chairperson loan oversight" : isSaccoAdmin ? "SACCO loan administration" : "Platform loan oversight";
   const loansSubtitle = isChairperson
     ? `${source} &middot; board decisions, portfolio risk, guarantor readiness, disbursement readiness and repayment exposure`
+    : isSaccoAdmin
+      ? `${source} &middot; applications, appraisal, guarantors, approvals, disbursements, repayments and portfolio risk`
     : `${source} &middot; portfolio risk, applications, guarantors, disbursements and repayments`;
   return `
     <section class="card integration-panel">
@@ -2311,7 +2322,7 @@ function renderLoans() {
         ${metric("Guarantor pending", pendingGuarantors, "member decisions needed")}
         ${metric("DSR watch", highDsrLoans, `${averageDsr}% average DSR`)}
       </div>
-      ${renderLoansTabSummary(activeTab, loans, { activeLoans, submittedLoans, approvedLoans, closedLoans, pendingGuarantors, highDsrLoans, averageDsr, repaidValue, isChairperson })}
+      ${renderLoansTabSummary(activeTab, loans, { activeLoans, submittedLoans, approvedLoans, closedLoans, pendingGuarantors, highDsrLoans, averageDsr, repaidValue, isChairperson, isSaccoAdmin })}
     </section>
     ${activeTab === "files" ? `<section class="card" style="margin-top:16px">
       <div class="toolbar">
@@ -2359,7 +2370,7 @@ function renderLoansTabSummary(activeTab, loans, summary) {
   if (activeTab === "guarantors") {
     return `
       <div class="notice" style="margin-top:16px">
-        <strong>${summary.isChairperson ? "Chairperson guarantor oversight" : "Guarantor oversight"}:</strong> monitor pending guarantor requests and loans where member consent may block appraisal.
+        <strong>${summary.isChairperson ? "Chairperson guarantor oversight" : summary.isSaccoAdmin ? "SACCO guarantor administration" : "Guarantor oversight"}:</strong> monitor pending guarantor requests and loans where member consent may block appraisal.
       </div>
       <div class="grid three" style="margin-top:16px">
         ${metric("Pending guarantors", summary.pendingGuarantors, "member decisions needed")}
@@ -2371,7 +2382,7 @@ function renderLoansTabSummary(activeTab, loans, summary) {
   if (activeTab === "repayments") {
     return `
       <div class="notice" style="margin-top:16px">
-        <strong>${summary.isChairperson ? "Chairperson repayment oversight" : "Repayment oversight"}:</strong> track repayment coverage and active balances before SACCO portfolio reviews.
+        <strong>${summary.isChairperson ? "Chairperson repayment oversight" : summary.isSaccoAdmin ? "SACCO repayment administration" : "Repayment oversight"}:</strong> track repayment coverage and active balances before SACCO portfolio reviews.
       </div>
       <div class="grid three" style="margin-top:16px">
         ${metric("Repaid value", money.format(summary.repaidValue), "repayment history")}
@@ -2381,11 +2392,11 @@ function renderLoansTabSummary(activeTab, loans, summary) {
     `;
   }
   if (activeTab === "files") {
-    return `<div class="notice" style="margin-top:16px"><strong>${summary.isChairperson ? "Chairperson loan files" : "Loan files"}:</strong> inspect applications, appraisal stage, DSR, guarantors, approvals and repayment actions.</div>`;
+    return `<div class="notice" style="margin-top:16px"><strong>${summary.isChairperson ? "Chairperson loan files" : summary.isSaccoAdmin ? "SACCO loan files" : "Loan files"}:</strong> inspect applications, appraisal stage, DSR, guarantors, approvals and repayment actions.</div>`;
   }
   return `
     <div class="notice" style="margin-top:16px">
-      <strong>${summary.isChairperson ? "Chairperson portfolio oversight" : "Portfolio oversight"}:</strong> ${summary.isChairperson ? "watch portfolio quality, approval bottlenecks, DSR risk, guarantor readiness and disbursement decisions before board approval." : "platform users watch portfolio quality, approval bottlenecks, DSR risk, and disbursement readiness across SACCOs."}
+      <strong>${summary.isChairperson ? "Chairperson portfolio oversight" : summary.isSaccoAdmin ? "SACCO portfolio administration" : "Portfolio oversight"}:</strong> ${summary.isChairperson ? "watch portfolio quality, approval bottlenecks, DSR risk, guarantor readiness and disbursement decisions before board approval." : summary.isSaccoAdmin ? "manage application flow, portfolio quality, approval bottlenecks, DSR risk, guarantor readiness and repayment follow-up." : "platform users watch portfolio quality, approval bottlenecks, DSR risk, and disbursement readiness across SACCOs."}
     </div>
   `;
 }
@@ -2430,13 +2441,16 @@ function renderApprovals() {
   const isTreasurer = state.workspace === "treasurer";
   const isSecretary = state.workspace === "secretary";
   const isChairperson = state.workspace === "chairperson";
-  const approvalTitle = isTreasurer ? "Treasurer approval queue" : isSecretary ? "Secretary review queue" : isChairperson ? "Chairperson decision queue" : "Approval control center";
+  const isSaccoAdmin = state.workspace === "saccoAdmin";
+  const approvalTitle = isTreasurer ? "Treasurer approval queue" : isSecretary ? "Secretary review queue" : isChairperson ? "Chairperson decision queue" : isSaccoAdmin ? "SACCO approval administration" : "Approval control center";
   const approvalSubtitle = isTreasurer
     ? "API-backed &middot; finance checker queue, posting decisions, corrections and reversal approvals"
     : isSecretary
       ? "API-backed &middot; member records, KYC updates, governance items and board-pack review"
       : isChairperson
         ? "API-backed &middot; loan decisions, board approvals, high-risk items and operating exceptions"
+        : isSaccoAdmin
+          ? "API-backed &middot; maker-checker queue, workflow coverage, finance approvals, member approvals and decision history"
     : "API-backed &middot; maker-checker queue, workflow coverage and decision history";
   return `
     <section class="card integration-panel">
@@ -2479,7 +2493,7 @@ function renderApprovals() {
           ${metric("Queue source", "Backend", apiState.user.tenantId === "tenant_platform" ? tenantName(state.tenantId) : "your SACCO tenant")}
         </div>
         <div class="notice" style="margin-top:16px">
-          <strong>${isTreasurer ? "Treasurer checker focus" : isSecretary ? "Secretary review focus" : isChairperson ? "Chairperson decision focus" : "Approval focus"}:</strong> ${isTreasurer ? "confirm valid financial postings, return corrections, and keep the finance approval queue clean." : isSecretary ? "confirm member-record evidence, track KYC or governance items, and prepare clean decision notes." : isChairperson ? "prioritize loan decisions, high-risk approvals and board-sensitive exceptions with clear decision notes." : "review pending items against configured maker-checker workflows."}
+          <strong>${isTreasurer ? "Treasurer checker focus" : isSecretary ? "Secretary review focus" : isChairperson ? "Chairperson decision focus" : isSaccoAdmin ? "SACCO approval focus" : "Approval focus"}:</strong> ${isTreasurer ? "confirm valid financial postings, return corrections, and keep the finance approval queue clean." : isSecretary ? "confirm member-record evidence, track KYC or governance items, and prepare clean decision notes." : isChairperson ? "prioritize loan decisions, high-risk approvals and board-sensitive exceptions with clear decision notes." : isSaccoAdmin ? "coordinate maker-checker workflows across finance, members, loans and governance so each queue has clear ownership." : "review pending items against configured maker-checker workflows."}
         </div>
       </section>
       <section class="card" style="margin-top:16px">
@@ -2661,11 +2675,14 @@ function renderOperations() {
   const activeTab = state.operationsTab || "overview";
   const isTreasurer = state.workspace === "treasurer";
   const isChairperson = state.workspace === "chairperson";
-  const operationsTitle = isTreasurer ? "Treasurer operations health" : isChairperson ? "Chairperson operations oversight" : "Operations command center";
+  const isSaccoAdmin = state.workspace === "saccoAdmin";
+  const operationsTitle = isTreasurer ? "Treasurer operations health" : isChairperson ? "Chairperson operations oversight" : isSaccoAdmin ? "SACCO operations command center" : "Operations command center";
   const operationsSubtitle = isTreasurer
     ? `API-backed &middot; finance exceptions, callback alerts, pending postings and reconciliation readiness for ${tenantLabel}`
     : isChairperson
       ? `API-backed &middot; board-sensitive alerts, operating exceptions, readiness gates and risk queues for ${tenantLabel}`
+      : isSaccoAdmin
+        ? `API-backed &middot; SACCO readiness, backend health, alerts, queues, callbacks and runbooks for ${tenantLabel}`
     : `API-backed &middot; release readiness, alerts, queues and runbooks for ${tenantLabel}`;
   const releaseGates = [
     { label: "Database reachable", ok: status.database?.reachable === true, detail: status.checkedAt ? `checked ${status.checkedAt.slice(0, 16).replace("T", " ")}` : "waiting for API" },
@@ -2714,7 +2731,7 @@ function renderOperations() {
         ${metric("Exception load", exceptionCount, "callbacks and provider deliveries")}
         ${metric("Queue pressure", queuePressure, "pending postings and complaints")}
       </div>
-      ${renderOperationsTab(activeTab, { status, counts, alerts, tenantLabel, releaseGates, healthyGateCount, criticalAlerts, warningAlerts, exceptionCount, queuePressure, isTreasurer, isChairperson })}
+      ${renderOperationsTab(activeTab, { status, counts, alerts, tenantLabel, releaseGates, healthyGateCount, criticalAlerts, warningAlerts, exceptionCount, queuePressure, isTreasurer, isChairperson, isSaccoAdmin })}
     </section>
   `;
 }
@@ -2780,7 +2797,7 @@ function renderOperationsTab(activeTab, model) {
       ${metric("Runbooks", 4, "monitoring, deployment, security, technical")}
     </div>
     <div class="notice" style="margin-top:16px">
-      <strong>${model.isTreasurer ? "Treasurer operations focus" : model.isChairperson ? "Chairperson operations focus" : "Operations focus"}:</strong> ${model.isTreasurer ? "monitor callback exceptions, pending postings, delivery exceptions and reconciliation blockers before finance reports are finalized." : model.isChairperson ? "watch critical alerts, unresolved queues, readiness gates and audit-sensitive exceptions before board decisions." : "monitor alerts, release gates, exception queues and support hand-offs before a SACCO is allowed to run production activity."}
+      <strong>${model.isTreasurer ? "Treasurer operations focus" : model.isChairperson ? "Chairperson operations focus" : model.isSaccoAdmin ? "SACCO operations focus" : "Operations focus"}:</strong> ${model.isTreasurer ? "monitor callback exceptions, pending postings, delivery exceptions and reconciliation blockers before finance reports are finalized." : model.isChairperson ? "watch critical alerts, unresolved queues, readiness gates and audit-sensitive exceptions before board decisions." : model.isSaccoAdmin ? "monitor SACCO readiness, backend health, callbacks, alerts, queues and runbooks so operations stay production-ready." : "monitor alerts, release gates, exception queues and support hand-offs before a SACCO is allowed to run production activity."}
     </div>
   `;
 }
@@ -3033,13 +3050,16 @@ function renderApiReports() {
   const isTreasurer = state.workspace === "treasurer";
   const isSecretary = state.workspace === "secretary";
   const isChairperson = state.workspace === "chairperson";
-  const reportsTitle = isTreasurer ? "Treasurer finance reports" : isSecretary ? "Secretary board reports" : isChairperson ? "Chairperson board reports" : "Reports control center";
+  const isSaccoAdmin = state.workspace === "saccoAdmin";
+  const reportsTitle = isTreasurer ? "Treasurer finance reports" : isSecretary ? "Secretary board reports" : isChairperson ? "Chairperson board reports" : isSaccoAdmin ? "SACCO administration reports" : "Reports control center";
   const reportsSubtitle = isTreasurer
     ? `API-backed &middot; ledger integrity, reconciliation, cash position, expenses and callback evidence for ${tenantLabel}`
     : isSecretary
       ? `API-backed &middot; member records, KYC readiness, complaints, meetings, resolutions and board packs for ${tenantLabel}`
       : isChairperson
         ? `API-backed &middot; loan portfolio, compliance, governance, approvals, risk and operating exceptions for ${tenantLabel}`
+        : isSaccoAdmin
+          ? `API-backed &middot; members, finance, loans, reconciliation, governance, access and audit for ${tenantLabel}`
     : `API-backed &middot; financial integrity, reconciliation, compliance and governance for ${tenantLabel}`;
   const canManageAccess = hasPermission("roles:create") || hasPermission("users:create");
 
@@ -3097,7 +3117,8 @@ function renderApiReports() {
         regulatoryReport,
         isTreasurer,
         isSecretary,
-        isChairperson
+        isChairperson,
+        isSaccoAdmin
       })}
       <div class="grid three" style="margin-top:16px">
         ${metric("Accounting periods", `${openPeriods}/${periods.length}`, `${closedPeriods} closed`)}
@@ -3306,7 +3327,7 @@ function renderReportsTabSummary(activeTab, model) {
   if (activeTab === "governance") {
     return `
       <div class="notice" style="margin-top:16px">
-        <strong>${model.isSecretary ? "Secretary governance focus" : model.isChairperson ? "Chairperson governance focus" : "Governance report focus"}:</strong> ${model.isSecretary ? "prepare board packs from meetings, open resolutions, complaints and member-record follow-up." : model.isChairperson ? "review meetings, open resolutions, complaints and board-sensitive follow-up before decisions." : "track meetings, open resolutions, complaints and support evidence for oversight reviews."}
+        <strong>${model.isSecretary ? "Secretary governance focus" : model.isChairperson ? "Chairperson governance focus" : model.isSaccoAdmin ? "SACCO governance focus" : "Governance report focus"}:</strong> ${model.isSecretary ? "prepare board packs from meetings, open resolutions, complaints and member-record follow-up." : model.isChairperson ? "review meetings, open resolutions, complaints and board-sensitive follow-up before decisions." : model.isSaccoAdmin ? "track meetings, open resolutions, complaints and governance follow-up across the SACCO operation." : "track meetings, open resolutions, complaints and support evidence for oversight reviews."}
       </div>
       <div class="grid three compact-facts" style="margin-top:16px">
         ${miniFact("Meetings", model.meetings.length)}
@@ -3332,7 +3353,7 @@ function renderReportsTabSummary(activeTab, model) {
   }
   return `
     <div class="notice" style="margin-top:16px">
-      <strong>${model.isTreasurer ? "Treasurer finance report focus" : model.isSecretary ? "Secretary board report focus" : model.isChairperson ? "Chairperson risk report focus" : "Compliance report focus"}:</strong> ${model.isTreasurer ? `cash position, reconciliation exceptions, posted journals and finance evidence for ${model.tenantLabel}.` : model.isSecretary ? `member totals, KYC readiness, complaints and governance evidence for ${model.tenantLabel}.` : model.isChairperson ? `loan portfolio, PAR indicators, approval exceptions, governance items and operational risk for ${model.tenantLabel}.` : `export-ready supervisory view covering reconciliation, PAR indicators, member totals and compliance exceptions for ${model.tenantLabel}.`}
+      <strong>${model.isTreasurer ? "Treasurer finance report focus" : model.isSecretary ? "Secretary board report focus" : model.isChairperson ? "Chairperson risk report focus" : model.isSaccoAdmin ? "SACCO administration report focus" : "Compliance report focus"}:</strong> ${model.isTreasurer ? `cash position, reconciliation exceptions, posted journals and finance evidence for ${model.tenantLabel}.` : model.isSecretary ? `member totals, KYC readiness, complaints and governance evidence for ${model.tenantLabel}.` : model.isChairperson ? `loan portfolio, PAR indicators, approval exceptions, governance items and operational risk for ${model.tenantLabel}.` : model.isSaccoAdmin ? `members, finance, loans, reconciliation, compliance, governance, access and audit for ${model.tenantLabel}.` : `export-ready supervisory view covering reconciliation, PAR indicators, member totals and compliance exceptions for ${model.tenantLabel}.`}
     </div>
   `;
 }

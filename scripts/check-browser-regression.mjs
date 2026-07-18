@@ -157,6 +157,19 @@ async function assertStaffScreens(page) {
 async function assertSaccoRoleDashboards(page) {
   const roles = [
     {
+      label: "SACCO Administrator",
+      credentials: { code: "GVS", username: "admin@greenvalley.local", password: "Sacco@12345" },
+      markers: ["SACCO Administrator dashboard", "Overview", "Members", "Finance", "Risk"],
+      screens: [
+        { id: "members", heading: "Members data source", markers: ["SACCO member administration", "SACCO admin oversight", "Oversight", "Balances", "Register"] },
+        { id: "transactions", heading: "Transactions data source", markers: ["SACCO finance administration", "SACCO admin focus", "Postings", "Products and accounts", "Welfare"] },
+        { id: "loans", heading: "Loans data source", markers: ["SACCO loan administration", "SACCO portfolio administration", "Portfolio", "Loan files"] },
+        { id: "approvals", heading: "Approvals data source", markers: ["SACCO approval administration", "SACCO approval focus", "Pending queue"] },
+        { id: "reports", heading: "Reports data source", markers: ["SACCO administration reports", "SACCO administration report focus", "Governance", "Compliance"] },
+        { id: "operations", heading: "Operations data source", markers: ["SACCO operations command center", "SACCO operations focus", "Queues"] }
+      ]
+    },
+    {
       label: "Treasurer",
       credentials: { code: "GVS", username: "treasurer@greenvalley.local", password: "Treasurer@12345" },
       markers: ["Treasurer dashboard", "Finance", "Approvals", "Reconciliation", "collections, reversals, reconciliations"],
