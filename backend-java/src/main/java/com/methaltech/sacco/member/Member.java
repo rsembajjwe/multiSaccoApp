@@ -110,6 +110,11 @@ public class Member {
         this.updatedAt = Instant.now();
     }
 
+    void updateKycStatus(String kycStatus) {
+        this.kycStatus = kycStatus;
+        this.updatedAt = Instant.now();
+    }
+
     public void applyPostedTransaction(String type, BigDecimal amount) {
         if ("savings_deposit".equals(type)) this.savingsBalance = this.savingsBalance.add(amount);
         if ("withdrawal".equals(type)) this.savingsBalance = this.savingsBalance.subtract(amount);

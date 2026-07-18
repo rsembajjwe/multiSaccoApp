@@ -65,6 +65,74 @@ Content-Type: application/json
 }
 ```
 
+## Member Profile Metadata Import Flow
+
+Use profile metadata import after member records exist. One CSV supports four `recordType` values:
+
+- `kyc_status` updates the member KYC status.
+- `document` records KYC/document metadata and storage keys.
+- `next_of_kin` records emergency or family contacts.
+- `beneficiary` records beneficiary allocation percentages.
+
+Validation is all-or-nothing:
+
+- The member must exist in the selected SACCO.
+- `kycStatus` and `verificationStatus` must use supported KYC states.
+- `documentType` must be one of the supported document categories.
+- Next-of-kin rows require full name, relationship, and phone.
+- Beneficiary rows require full name, relationship, and allocation percentage.
+- Existing plus imported beneficiary allocations cannot exceed `100`.
+- Duplicate metadata rows in the same file are rejected.
+
+## Member Profile Metadata Columns
+
+| Column | Rule |
+| --- | --- |
+| `recordType` | Required. Allowed: `kyc_status`, `document`, `next_of_kin`, `beneficiary`. |
+| `membershipNo` | Required, must already exist in the selected SACCO. |
+| `fullName` | Required for `next_of_kin` and `beneficiary`. |
+| `relationship` | Required for `next_of_kin` and `beneficiary`. |
+| `phone` | Required for `next_of_kin`; optional for `beneficiary`. |
+| `address` | Optional next-of-kin address. |
+| `primaryContact` | Optional `true`/`false` for `next_of_kin`. |
+| `allocationPercent` | Required for `beneficiary`; total allocations cannot exceed `100`. |
+| `documentType` | Required for `document`. Allowed: `national_id`, `photo`, `signature`, `bylaws`, `registration_certificate`, `other`. |
+| `storageKey` | Required for `document`; points to the file/object-store key. |
+| `verificationStatus` | Optional for `document`; defaults to `pending_verification`. |
+| `kycStatus` | Required for `kyc_status`. |
+
+Validate or import profile metadata:
+
+```http
+POST /api/v1/members/metadata-import
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+```json
+{
+  "tenantId": "tenant_green",
+  "dryRun": true,
+  "rows": [
+    {
+      "recordType": "document",
+      "membershipNo": "GVS-0100",
+      "documentType": "national_id",
+      "storageKey": "kyc/GVS-0100/national-id.pdf",
+      "verificationStatus": "verified"
+    },
+    {
+      "recordType": "beneficiary",
+      "membershipNo": "GVS-0100",
+      "fullName": "Sample Beneficiary",
+      "relationship": "daughter",
+      "phone": "+256700333444",
+      "allocationPercent": "50"
+    }
+  ]
+}
+```
+
 ## Loan Book Import Flow
 
 Use loan book import after members are active and opening balances have been validated.
@@ -266,5 +334,5 @@ Content-Type: application/json
 
 - Opening balance import UI/API is implemented; next hardening is accounting journal evidence for each posted opening balance.
 - Loan book and repayment history import UI/API are implemented; next hardening is matching imported history to statement evidence.
-- Contact, next-of-kin, beneficiary, and KYC document metadata import.
+- Contact, next-of-kin, beneficiary, and KYC document metadata import is implemented; next hardening is file/object-storage reconciliation.
 - Spreadsheet `.xlsx` helper that exports the same CSV columns.

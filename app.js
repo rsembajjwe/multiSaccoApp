@@ -1013,6 +1013,7 @@ function renderMembers() {
         <div class="filters">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
           ${apiState.user ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>` : ""}
+          ${apiState.user ? `<button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>` : ""}
         </div>
       </div>
       ${apiSyncNotice("Members screen")}
@@ -1049,6 +1050,7 @@ function renderMembers() {
           <input class="input" id="memberSearch" placeholder="Search members">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
           ${apiState.user ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>` : ""}
+          ${apiState.user ? `<button class="secondary-button" data-action="memberMetadataImport" type="button">Profile metadata</button>` : ""}
           <button class="primary-button" data-action="newMember" type="button">Register member</button>
         </div>
       </div>
@@ -2747,6 +2749,7 @@ function bindViewActions() {
         newRole: openRoleForm,
         assignUserRoles: openUserRoleAssignmentForm,
         memberImportTemplate: openMemberImportTemplate,
+        memberMetadataImport: openMemberMetadataImport,
         openingBalanceImport: openOpeningBalanceImport,
         loanBookImport: openLoanBookImport,
         repaymentHistoryImport: openRepaymentHistoryImport,
@@ -3473,6 +3476,87 @@ async function submitMemberImport(tenantId, dryRun) {
   } catch (error) {
     result.innerHTML = `<div class="notice error">${error.message}</div>`;
   }
+}
+
+async function openMemberMetadataImport() {
+  if (!apiState.user) return;
+  try {
+    const template = await apiRequest(`/members/metadata-import-template${apiTenantQuery()}`);
+    const sampleRows = template.sampleRows || [];
+    openModal("Member profile metadata", `
+      <div class="grid metrics">
+        ${metric("File", template.filename, template.contentType)}
+        ${metric("Columns", template.headers.length, "profile metadata fields")}
+        ${metric("Tenant", tenantName(template.tenantId), `${sampleRows.length} sample row(s)`)}
+      </div>
+      <div class="notice" style="margin-top:16px">Use record types kyc_status, document, next_of_kin, and beneficiary. The whole batch imports only after every row validates.</div>
+      <div class="table-wrap" style="margin-top:16px">
+        <table>
+          <thead><tr>${template.headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead>
+          <tbody>
+            ${sampleRows.map((row) => `<tr>${template.headers.map((header) => `<td>${row[header] || ""}</td>`).join("")}</tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <label class="field full" style="margin-top:16px">
+        <span>CSV rows</span>
+        <textarea id="memberMetadataImportCsv" class="input" rows="8">${template.csv}</textarea>
+      </label>
+      <div id="memberMetadataImportResult" style="margin-top:16px"></div>
+    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyMemberMetadataImportTemplate" class="secondary-button" type="button">Copy CSV</button><button id="validateMemberMetadataImport" class="secondary-button" type="button">Validate</button><button id="runMemberMetadataImport" class="primary-button" type="button">Import</button>`);
+    document.getElementById("copyMemberMetadataImportTemplate").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(template.csv);
+        document.getElementById("memberMetadataImportResult").innerHTML = `<div class="notice">CSV template copied to clipboard.</div>`;
+      } catch {
+        document.getElementById("memberMetadataImportResult").innerHTML = `<div class="notice error">Clipboard access was not available. Use the CSV text.</div>`;
+      }
+    });
+    document.getElementById("validateMemberMetadataImport").addEventListener("click", () => submitMemberMetadataImport(template.tenantId, true));
+    document.getElementById("runMemberMetadataImport").addEventListener("click", () => submitMemberMetadataImport(template.tenantId, false));
+  } catch (error) {
+    openModal("Member profile metadata", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
+}
+
+async function submitMemberMetadataImport(tenantId, dryRun) {
+  const result = document.getElementById("memberMetadataImportResult");
+  try {
+    const rows = parseMemberImportCsv(value("memberMetadataImportCsv"));
+    result.innerHTML = `<div class="notice">${dryRun ? "Validating" : "Importing"} ${rows.length} profile metadata row(s)...</div>`;
+    const response = await apiRequest("/members/metadata-import", {
+      method: "POST",
+      body: JSON.stringify({ tenantId, dryRun, rows })
+    });
+    result.innerHTML = renderMemberMetadataImportResult(response);
+    if (!dryRun && response.valid) await refreshApiStatus();
+  } catch (error) {
+    result.innerHTML = `<div class="notice error">${error.message}</div>`;
+  }
+}
+
+function renderMemberMetadataImportResult(result) {
+  const stateClass = result.valid ? "notice" : "notice error";
+  const rows = result.errors?.map((error) => `
+    <tr>
+      <td>${error.row}</td>
+      <td>${error.field}</td>
+      <td>${error.code}</td>
+      <td>${error.message}</td>
+    </tr>
+  `).join("") || "";
+  return `
+    <div class="${stateClass}">
+      ${result.valid ? "Profile metadata validation passed." : "Profile metadata validation failed."}
+      ${result.createdCount ? ` Imported ${result.createdCount} profile metadata record(s).` : ""}
+    </div>
+    <div class="grid three compact-facts" style="margin-top:12px">
+      ${miniFact("Rows", result.totalRows)}
+      ${miniFact("Imported", result.createdCount)}
+      ${miniFact("Skipped", result.skippedCount)}
+    </div>
+    ${rows ? `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Row</th><th>Field</th><th>Code</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+  `;
 }
 
 async function openOpeningBalanceImport() {

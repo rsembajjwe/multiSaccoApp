@@ -30,6 +30,8 @@ Java-backed routes currently implemented:
 - `GET /api/v1/members`
 - `GET /api/v1/members/import-template`
 - `POST /api/v1/members/import`
+- `GET /api/v1/members/metadata-import-template`
+- `POST /api/v1/members/metadata-import`
 - `POST /api/v1/members`
 - `GET /api/v1/members/:id`
 - `GET /api/v1/members/:id/statement`
@@ -166,6 +168,8 @@ All JSON responses should follow one of these shapes:
 | GET | `/members` | List tenant members. | Required |
 | GET | `/members/import-template` | Return CSV headers, sample rows, and content for bulk member import. | Required |
 | POST | `/members/import` | Validate or create tenant-scoped member import rows with all-or-nothing save behavior. | Required |
+| GET | `/members/metadata-import-template` | Return CSV headers, sample rows, and content for profile metadata import. | Required |
+| POST | `/members/metadata-import` | Validate or create KYC status, document, next-of-kin, and beneficiary metadata rows. | Required |
 | POST | `/members` | Register member. | SACCO staff |
 | GET | `/members/:id` | Get member profile. | Required |
 | GET | `/members/:id/statement` | Get posted member movements with running savings/share/welfare balances and CSV export text. | Required |

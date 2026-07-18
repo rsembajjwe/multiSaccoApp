@@ -1504,6 +1504,192 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberMetadataImportTemplatesValidatesAndCreatesProfileRecords() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String runId = String.valueOf(System.currentTimeMillis());
+		String membershipNo = "META-" + runId;
+		String tenantId = createTenantForImport(platformToken, "COOP-META-" + runId);
+		String branchId = createBranchForImport(platformToken, tenantId);
+		String memberId = createImportedMember(platformToken, tenantId, branchId, membershipNo, "+256700666101");
+
+		mockMvc.perform(get("/api/v1/members/metadata-import-template?tenantId=" + tenantId)
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenantId", is(tenantId)))
+				.andExpect(jsonPath("$.data.headers", hasItem("recordType")))
+				.andExpect(jsonPath("$.data.sampleRows[0].membershipNo", is(membershipNo)))
+				.andExpect(jsonPath("$.data.csv", startsWith("recordType,membershipNo,fullName")));
+
+		String importPayload = """
+				{
+				  "tenantId": "%s",
+				  "dryRun": %s,
+				  "rows": [
+				    {
+				      "recordType": "kyc_status",
+				      "membershipNo": "%s",
+				      "kycStatus": "verified"
+				    },
+				    {
+				      "recordType": "document",
+				      "membershipNo": "%s",
+				      "documentType": "national_id",
+				      "storageKey": "kyc/%s/national-id.pdf",
+				      "verificationStatus": "verified"
+				    },
+				    {
+				      "recordType": "next_of_kin",
+				      "membershipNo": "%s",
+				      "fullName": "Metadata Next Of Kin",
+				      "relationship": "spouse",
+				      "phone": "+256700666201",
+				      "address": "Kampala",
+				      "primaryContact": "true"
+				    },
+				    {
+				      "recordType": "beneficiary",
+				      "membershipNo": "%s",
+				      "fullName": "Metadata Beneficiary",
+				      "relationship": "daughter",
+				      "phone": "+256700666301",
+				      "allocationPercent": "60"
+				    }
+				  ]
+				}
+				""";
+
+		mockMvc.perform(post("/api/v1/members/metadata-import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content(importPayload.formatted(tenantId, "true", membershipNo, membershipNo, membershipNo, membershipNo, membershipNo)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.valid", is(true)))
+				.andExpect(jsonPath("$.data.createdCount", is(0)));
+
+		mockMvc.perform(post("/api/v1/members/metadata-import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content(importPayload.formatted(tenantId, "false", membershipNo, membershipNo, membershipNo, membershipNo, membershipNo)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.valid", is(true)))
+				.andExpect(jsonPath("$.data.createdCount", is(4)))
+				.andExpect(jsonPath("$.data.createdRecords[*].recordType", hasItem("kyc_status")))
+				.andExpect(jsonPath("$.data.createdRecords[*].recordType", hasItem("document")))
+				.andExpect(jsonPath("$.data.createdRecords[*].recordType", hasItem("next_of_kin")))
+				.andExpect(jsonPath("$.data.createdRecords[*].recordType", hasItem("beneficiary")));
+
+		mockMvc.perform(get("/api/v1/members?tenantId=" + tenantId)
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].kycStatus", is("verified")));
+
+		mockMvc.perform(get("/api/v1/members/" + memberId + "/documents")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(1)))
+				.andExpect(jsonPath("$.data[0].documentType", is("national_id")));
+
+		mockMvc.perform(get("/api/v1/members/" + memberId + "/next-of-kin")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(1)))
+				.andExpect(jsonPath("$.data[0].primaryContact", is(true)));
+
+		mockMvc.perform(get("/api/v1/members/" + memberId + "/beneficiaries")
+				.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(1)))
+				.andExpect(jsonPath("$.data[0].allocationPercent", is(60.0)));
+	}
+
+	@Test
+	void memberMetadataImportRejectsInvalidRowsWithoutSaving() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String runId = String.valueOf(System.currentTimeMillis());
+		String membershipNo = "META-BAD-" + runId;
+		String tenantId = createTenantForImport(platformToken, "COOP-META-BAD-" + runId);
+		String branchId = createBranchForImport(platformToken, tenantId);
+		String memberId = createImportedMember(platformToken, tenantId, branchId, membershipNo, "+256700666401");
+
+		mockMvc.perform(post("/api/v1/members/" + memberId + "/beneficiaries")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Existing Beneficiary",
+								  "relationship": "son",
+								  "phone": "+256700666501",
+								  "allocationPercent": 80
+								}
+								"""))
+				.andExpect(status().isCreated());
+
+		mockMvc.perform(post("/api/v1/members/metadata-import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "recordType": "document",
+								      "membershipNo": "%s",
+								      "documentType": "passport",
+								      "verificationStatus": "unknown"
+								    },
+								    {
+								      "recordType": "next_of_kin",
+								      "membershipNo": "%s",
+								      "fullName": "Bad Kin",
+								      "relationship": "",
+								      "phone": "",
+								      "primaryContact": "maybe"
+								    },
+								    {
+								      "recordType": "beneficiary",
+								      "membershipNo": "%s",
+								      "fullName": "Too Much Beneficiary",
+								      "relationship": "daughter",
+								      "allocationPercent": "30"
+								    },
+								    {
+								      "recordType": "kyc_status",
+								      "membershipNo": "MISSING-%s",
+								      "kycStatus": "clear"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, membershipNo, membershipNo, runId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.valid", is(false)))
+				.andExpect(jsonPath("$.data.createdCount", is(0)))
+				.andExpect(jsonPath("$.data.skippedCount", is(4)))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_DOCUMENT_TYPE")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_DOCUMENT_STATUS")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("REQUIRED")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_BOOLEAN")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("ALLOCATION_EXCEEDED")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_MEMBER")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_KYC_STATUS")));
+
+		mockMvc.perform(get("/api/v1/members/" + memberId + "/documents")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(0)));
+
+		mockMvc.perform(get("/api/v1/members/" + memberId + "/next-of-kin")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(0)));
+
+		mockMvc.perform(get("/api/v1/members/" + memberId + "/beneficiaries")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(1)));
+	}
+
+	@Test
 	void openingBalanceImportTemplatesValidatesAndPostsLedgerTransactions() throws Exception {
 		String platformToken = loginAndReturnToken();
 		String runId = String.valueOf(System.currentTimeMillis());

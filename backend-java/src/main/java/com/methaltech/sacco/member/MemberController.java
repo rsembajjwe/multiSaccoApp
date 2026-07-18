@@ -19,9 +19,11 @@ import java.time.format.DateTimeParseException;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -35,6 +37,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequestMapping("/api/v1/members")
@@ -51,6 +54,24 @@ class MemberController {
             "kycStatus",
             "joiningDate",
             "password");
+    private static final List<String> MEMBER_METADATA_IMPORT_HEADERS = List.of(
+            "recordType",
+            "membershipNo",
+            "fullName",
+            "relationship",
+            "phone",
+            "address",
+            "primaryContact",
+            "allocationPercent",
+            "documentType",
+            "storageKey",
+            "verificationStatus",
+            "kycStatus");
+    private static final Set<String> ALLOWED_METADATA_RECORD_TYPES = Set.of(
+            "next_of_kin",
+            "beneficiary",
+            "document",
+            "kyc_status");
     private static final Set<String> ALLOWED_MEMBER_TYPES = Set.of("individual", "group", "institutional", "corporate");
     private static final Set<String> ALLOWED_KYC_STATUSES = Set.of(
             "not_verified",
@@ -233,6 +254,135 @@ class MemberController {
                 0,
                 List.of(),
                 createdMembers.stream().map(MemberResponse::from).toList())));
+    }
+
+    @GetMapping("/metadata-import-template")
+    ResponseEntity<?> memberMetadataImportTemplate(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+
+        Member sampleMember = memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId).stream().findFirst().orElse(null);
+        String membershipNo = sampleMember == null ? "" : sampleMember.getMembershipNo();
+        List<MemberMetadataImportRow> sampleRows = List.of(
+                new MemberMetadataImportRow("kyc_status", membershipNo, "", "", "", "", "", "", "", "", "", "verified"),
+                new MemberMetadataImportRow("document", membershipNo, "", "", "", "", "", "", "national_id", "kyc/" + membershipNo + "/national-id.pdf", "verified", ""),
+                new MemberMetadataImportRow("next_of_kin", membershipNo, "Sample Next Of Kin", "spouse", "+256700111222", "Kampala", "true", "", "", "", "", ""),
+                new MemberMetadataImportRow("beneficiary", membershipNo, "Sample Beneficiary", "daughter", "+256700333444", "", "", "50", "", "", "", ""));
+
+        return ResponseEntity.ok(ApiResponse.of(new MemberMetadataImportTemplateResponse(
+                tenantId,
+                "member-metadata-import-template-" + tenantId + ".csv",
+                "text/csv",
+                MEMBER_METADATA_IMPORT_HEADERS,
+                sampleRows,
+                metadataCsvTemplate(sampleRows))));
+    }
+
+    @PostMapping("/metadata-import")
+    @Transactional
+    ResponseEntity<?> importMemberMetadata(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody MemberMetadataImportRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, body.tenantId());
+        if (tenantId == null) return tenantAccessDenied();
+
+        List<MemberMetadataImportRow> rows = body.rows() == null ? List.of() : body.rows();
+        boolean dryRun = body.dryRun() == null || body.dryRun();
+        List<MemberMetadataImportError> errors = validateMetadataImportRows(tenantId, rows);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.of(new MemberMetadataImportResult(
+                    tenantId,
+                    dryRun,
+                    false,
+                    rows.size(),
+                    0,
+                    rows.size(),
+                    errors,
+                    List.of())));
+        }
+
+        if (dryRun) {
+            return ResponseEntity.ok(ApiResponse.of(new MemberMetadataImportResult(
+                    tenantId,
+                    true,
+                    true,
+                    rows.size(),
+                    0,
+                    0,
+                    List.of(),
+                    List.of())));
+        }
+
+        List<MemberMetadataCreatedRecord> createdRecords = new ArrayList<>();
+        for (MemberMetadataImportRow row : rows) {
+            Member member = memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCase(tenantId, row.membershipNo().trim()).orElseThrow();
+            String recordType = normalizedOrDefault(row.recordType(), "");
+            if ("kyc_status".equals(recordType)) {
+                member.updateKycStatus(normalizedOrDefault(row.kycStatus(), "pending_verification"));
+                Member saved = memberRepository.save(member);
+                createdRecords.add(new MemberMetadataCreatedRecord("kyc_status", saved.getId(), saved.getMembershipNo(), saved.getKycStatus()));
+            } else if ("document".equals(recordType)) {
+                MemberDocument document = memberDocumentRepository.save(new MemberDocument(
+                        "member_document_" + UUID.randomUUID(),
+                        tenantId,
+                        member.getId(),
+                        normalizedOrDefault(row.documentType(), "other"),
+                        row.storageKey().trim(),
+                        normalizedOrDefault(row.verificationStatus(), "pending_verification"),
+                        currentSession.user().getId()));
+                createdRecords.add(new MemberMetadataCreatedRecord("document", document.getId(), member.getMembershipNo(), document.getVerificationStatus()));
+            } else if ("next_of_kin".equals(recordType)) {
+                MemberNextOfKin nextOfKin = memberNextOfKinRepository.save(new MemberNextOfKin(
+                        "kin_" + UUID.randomUUID(),
+                        tenantId,
+                        member.getId(),
+                        row.fullName().trim(),
+                        row.relationship().trim().toLowerCase(Locale.ROOT),
+                        row.phone().trim(),
+                        blankToDefault(row.address()),
+                        parseBoolean(row.primaryContact()),
+                        currentSession.user().getId()));
+                createdRecords.add(new MemberMetadataCreatedRecord("next_of_kin", nextOfKin.getId(), member.getMembershipNo(), nextOfKin.getRelationship()));
+            } else if ("beneficiary".equals(recordType)) {
+                MemberBeneficiary beneficiary = memberBeneficiaryRepository.save(new MemberBeneficiary(
+                        "beneficiary_" + UUID.randomUUID(),
+                        tenantId,
+                        member.getId(),
+                        row.fullName().trim(),
+                        row.relationship().trim().toLowerCase(Locale.ROOT),
+                        blankToDefault(row.phone()),
+                        amount(row.allocationPercent()),
+                        currentSession.user().getId()));
+                createdRecords.add(new MemberMetadataCreatedRecord("beneficiary", beneficiary.getId(), member.getMembershipNo(), beneficiary.getAllocationPercent().toPlainString()));
+            }
+        }
+
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Imported " + createdRecords.size() + " member metadata records",
+                "member_metadata_import",
+                tenantId,
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(new MemberMetadataImportResult(
+                tenantId,
+                false,
+                true,
+                rows.size(),
+                createdRecords.size(),
+                0,
+                List.of(),
+                createdRecords)));
     }
 
     @PostMapping
@@ -604,6 +754,26 @@ class MemberController {
         return header + "\n" + String.join("\n", rows) + "\n";
     }
 
+    private String metadataCsvTemplate(List<MemberMetadataImportRow> sampleRows) {
+        String header = String.join(",", MEMBER_METADATA_IMPORT_HEADERS);
+        List<String> rows = sampleRows.stream()
+                .map(row -> String.join(",",
+                        csv(row.recordType()),
+                        csv(row.membershipNo()),
+                        csv(row.fullName()),
+                        csv(row.relationship()),
+                        csv(row.phone()),
+                        csv(row.address()),
+                        csv(row.primaryContact()),
+                        csv(row.allocationPercent()),
+                        csv(row.documentType()),
+                        csv(row.storageKey()),
+                        csv(row.verificationStatus()),
+                        csv(row.kycStatus())))
+                .toList();
+        return header + "\n" + String.join("\n", rows) + "\n";
+    }
+
     private String csv(String value) {
         if (value == null) return "";
         if (!value.contains(",") && !value.contains("\"") && !value.contains("\n")) return value;
@@ -670,6 +840,134 @@ class MemberController {
             }
         }
         return errors;
+    }
+
+    private List<MemberMetadataImportError> validateMetadataImportRows(String tenantId, List<MemberMetadataImportRow> rows) {
+        List<MemberMetadataImportError> errors = new ArrayList<>();
+        if (rows.isEmpty()) {
+            errors.add(new MemberMetadataImportError(0, "rows", "IMPORT_EMPTY", "At least one metadata row is required."));
+            return errors;
+        }
+        if (rows.size() > 1000) {
+            errors.add(new MemberMetadataImportError(0, "rows", "IMPORT_TOO_LARGE", "A single metadata import cannot exceed 1,000 rows."));
+            return errors;
+        }
+
+        Set<String> seenMetadataKeys = new HashSet<>();
+        Map<String, BigDecimal> importedBeneficiaryAllocation = new HashMap<>();
+        for (int index = 0; index < rows.size(); index++) {
+            int rowNumber = index + 1;
+            MemberMetadataImportRow row = rows.get(index);
+            String recordType = normalizedOrDefault(row.recordType(), "");
+            if (!ALLOWED_METADATA_RECORD_TYPES.contains(recordType)) {
+                errors.add(new MemberMetadataImportError(rowNumber, "recordType", "INVALID_RECORD_TYPE", "Record type must be next_of_kin, beneficiary, document, or kyc_status."));
+                continue;
+            }
+
+            Member member = null;
+            if (row.membershipNo() == null || row.membershipNo().isBlank()) {
+                errors.add(new MemberMetadataImportError(rowNumber, "membershipNo", "REQUIRED", "Membership number is required."));
+            } else {
+                member = memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCase(tenantId, row.membershipNo().trim()).orElse(null);
+                if (member == null) {
+                    errors.add(new MemberMetadataImportError(rowNumber, "membershipNo", "INVALID_MEMBER", "Member does not exist for this tenant."));
+                }
+            }
+
+            if ("kyc_status".equals(recordType)) {
+                String kycStatus = normalizedOrDefault(row.kycStatus(), "");
+                if (!ALLOWED_KYC_STATUSES.contains(kycStatus)) {
+                    errors.add(new MemberMetadataImportError(rowNumber, "kycStatus", "INVALID_KYC_STATUS", "Unsupported KYC status."));
+                }
+                duplicateMetadataKey(rowNumber, seenMetadataKeys, row.membershipNo(), recordType, "kyc", errors);
+            } else if ("document".equals(recordType)) {
+                String documentType = normalizedOrDefault(row.documentType(), "");
+                if (!ALLOWED_DOCUMENT_TYPES.contains(documentType)) {
+                    errors.add(new MemberMetadataImportError(rowNumber, "documentType", "INVALID_DOCUMENT_TYPE", "Unsupported member document type."));
+                }
+                String verificationStatus = normalizedOrDefault(row.verificationStatus(), "pending_verification");
+                if (!ALLOWED_KYC_STATUSES.contains(verificationStatus)) {
+                    errors.add(new MemberMetadataImportError(rowNumber, "verificationStatus", "INVALID_DOCUMENT_STATUS", "Unsupported member document status."));
+                }
+                if (row.storageKey() == null || row.storageKey().isBlank()) {
+                    errors.add(new MemberMetadataImportError(rowNumber, "storageKey", "REQUIRED", "Document storage key is required."));
+                }
+                duplicateMetadataKey(rowNumber, seenMetadataKeys, row.membershipNo(), recordType, documentType + ":" + blankToDefault(row.storageKey()), errors);
+            } else if ("next_of_kin".equals(recordType)) {
+                validateRequiredMetadataField(rowNumber, "fullName", row.fullName(), errors);
+                validateRequiredMetadataField(rowNumber, "relationship", row.relationship(), errors);
+                validateRequiredMetadataField(rowNumber, "phone", row.phone(), errors);
+                if (row.primaryContact() != null && !row.primaryContact().isBlank() && !isBoolean(row.primaryContact())) {
+                    errors.add(new MemberMetadataImportError(rowNumber, "primaryContact", "INVALID_BOOLEAN", "Primary contact must be true or false."));
+                }
+                duplicateMetadataKey(rowNumber, seenMetadataKeys, row.membershipNo(), recordType, blankToDefault(row.fullName()) + ":" + blankToDefault(row.phone()), errors);
+            } else if ("beneficiary".equals(recordType)) {
+                validateRequiredMetadataField(rowNumber, "fullName", row.fullName(), errors);
+                validateRequiredMetadataField(rowNumber, "relationship", row.relationship(), errors);
+                BigDecimal allocation = validatedAmount(rowNumber, "allocationPercent", row.allocationPercent(), errors);
+                if (allocation.compareTo(BigDecimal.ZERO) <= 0 || allocation.compareTo(new BigDecimal("100")) > 0) {
+                    errors.add(new MemberMetadataImportError(rowNumber, "allocationPercent", "INVALID_ALLOCATION", "Beneficiary allocation must be greater than 0 and not exceed 100."));
+                }
+                duplicateMetadataKey(rowNumber, seenMetadataKeys, row.membershipNo(), recordType, blankToDefault(row.fullName()) + ":" + blankToDefault(row.relationship()), errors);
+                if (member != null) {
+                    importedBeneficiaryAllocation.merge(member.getId(), allocation, BigDecimal::add);
+                    BigDecimal existingAllocation = memberBeneficiaryRepository.findByMemberIdOrderByCreatedAtDesc(member.getId()).stream()
+                            .map(MemberBeneficiary::getAllocationPercent)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    if (existingAllocation.add(importedBeneficiaryAllocation.get(member.getId())).compareTo(new BigDecimal("100")) > 0) {
+                        errors.add(new MemberMetadataImportError(rowNumber, "allocationPercent", "ALLOCATION_EXCEEDED", "Beneficiary allocations cannot exceed 100 percent."));
+                    }
+                }
+            }
+        }
+        return errors;
+    }
+
+    private void validateRequiredMetadataField(int rowNumber, String field, String value, List<MemberMetadataImportError> errors) {
+        if (value == null || value.isBlank()) {
+            errors.add(new MemberMetadataImportError(rowNumber, field, "REQUIRED", field + " is required."));
+        }
+    }
+
+    private void duplicateMetadataKey(
+            int rowNumber,
+            Set<String> seenMetadataKeys,
+            String membershipNo,
+            String recordType,
+            String suffix,
+            List<MemberMetadataImportError> errors) {
+        String key = (blankToDefault(membershipNo) + ":" + recordType + ":" + blankToDefault(suffix)).toUpperCase(Locale.ROOT);
+        if (!seenMetadataKeys.add(key)) {
+            errors.add(new MemberMetadataImportError(rowNumber, "recordType", "DUPLICATE_IN_FILE", "Metadata record is repeated in this import."));
+        }
+    }
+
+    private BigDecimal validatedAmount(int rowNumber, String field, String value, List<MemberMetadataImportError> errors) {
+        if (value == null || value.isBlank()) {
+            errors.add(new MemberMetadataImportError(rowNumber, field, "REQUIRED", field + " is required."));
+            return BigDecimal.ZERO;
+        }
+        try {
+            return amount(value);
+        } catch (NumberFormatException error) {
+            errors.add(new MemberMetadataImportError(rowNumber, field, "INVALID_AMOUNT", field + " must be numeric."));
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private BigDecimal amount(String value) {
+        return new BigDecimal(value.trim().replace(",", "")).stripTrailingZeros();
+    }
+
+    private boolean isBoolean(String value) {
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return "true".equals(normalized) || "false".equals(normalized) || "yes".equals(normalized) || "no".equals(normalized);
+    }
+
+    private boolean parseBoolean(String value) {
+        if (value == null || value.isBlank()) return false;
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return "true".equals(normalized) || "yes".equals(normalized);
     }
 
     private LocalDate importJoiningDate(String joiningDate) {
@@ -917,5 +1215,60 @@ class MemberController {
             int skippedCount,
             List<MemberImportError> errors,
             List<MemberResponse> createdMembers) {
+    }
+
+    record MemberMetadataImportTemplateResponse(
+            String tenantId,
+            String filename,
+            String contentType,
+            List<String> headers,
+            List<MemberMetadataImportRow> sampleRows,
+            String csv) {
+    }
+
+    record MemberMetadataImportRequest(
+            String tenantId,
+            Boolean dryRun,
+            List<MemberMetadataImportRow> rows) {
+    }
+
+    record MemberMetadataImportRow(
+            String recordType,
+            String membershipNo,
+            String fullName,
+            String relationship,
+            String phone,
+            String address,
+            String primaryContact,
+            String allocationPercent,
+            String documentType,
+            String storageKey,
+            String verificationStatus,
+            String kycStatus) {
+    }
+
+    record MemberMetadataImportError(
+            int row,
+            String field,
+            String code,
+            String message) {
+    }
+
+    record MemberMetadataCreatedRecord(
+            String recordType,
+            String id,
+            String membershipNo,
+            String status) {
+    }
+
+    record MemberMetadataImportResult(
+            String tenantId,
+            boolean dryRun,
+            boolean valid,
+            int totalRows,
+            int createdCount,
+            int skippedCount,
+            List<MemberMetadataImportError> errors,
+            List<MemberMetadataCreatedRecord> createdRecords) {
     }
 }
