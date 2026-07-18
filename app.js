@@ -2093,10 +2093,12 @@ function renderUsersRoles() {
   const users = apiState.users || [];
   const platformUsers = users.filter((user) => user.tenantId === "tenant_platform");
   const roles = apiState.roles || [];
+  const platformRoles = roles.filter((role) => role.tenantId === "tenant_platform");
   const permissions = apiState.permissions || [];
   const canAddPlatformUsers = isPlatformSuperAdmin() && hasPermission("users:create");
   const canManageRoles = isPlatformSuperAdmin() && hasPermission("roles:create");
   const tenantLabel = apiState.user?.tenantId === "tenant_platform" ? "platform scope" : tenantName(currentApiTenantId());
+  const activeTab = state.platformUsersTab || "administrators";
   return `
     <section class="card integration-panel">
       <div class="toolbar">
@@ -2126,14 +2128,22 @@ function renderUsersRoles() {
       </div>
       <div class="grid metrics">
         ${metric("Platform users", platformUsers.length, `${platformUsers.filter((user) => user.status === "active").length} active`)}
-        ${metric("Roles", roles.length, `${roles.filter((role) => role.protectedRole || role.protected).length} protected`)}
+        ${metric("Roles", platformRoles.length, `${platformRoles.filter((role) => role.protectedRole || role.protected).length} protected`)}
         ${metric("Permissions", permissions.length, "catalogued actions")}
-        ${metric("Platform roles", roles.filter((role) => role.tenantId === "tenant_platform").length, "platform admin views")}
+        ${metric("Platform roles", platformRoles.length, "platform admin views")}
       </div>
-      ${userTable(platformUsers, "No platform administrator users found. SACCO users are not shown here.")}
-      ${roleTable(roles)}
+      <div class="filters" style="margin-top:16px">
+        ${platformUsersTabButton("administrators", "Administrators", activeTab)}
+        ${platformUsersTabButton("roles", "Roles", activeTab)}
+        ${platformUsersTabButton("permissions", "Permissions", activeTab)}
+      </div>
+      ${activeTab === "roles" ? platformRoleCards(platformRoles) : activeTab === "permissions" ? permissionCatalog(permissions) : platformUserCards(platformUsers)}
     </section>
   `;
+}
+
+function platformUsersTabButton(id, label, activeTab) {
+  return `<button class="${activeTab === id ? "primary-button" : "secondary-button"}" data-platform-users-tab="${id}" type="button">${label}</button>`;
 }
 
 function renderNotifications() {
@@ -2484,6 +2494,70 @@ function roleTable(roles) {
           `).join("") || `<tr><td colspan="4">No roles found.</td></tr>`}
         </tbody>
       </table>
+    </div>
+  `;
+}
+
+function platformUserCards(users) {
+  if (!users.length) {
+    return `<div class="notice" style="margin-top:16px">No platform administrator users found. SACCO users are not shown here.</div>`;
+  }
+  return `
+    <div class="grid two" style="margin-top:16px">
+      ${users.map((user) => {
+        const roleIds = apiState.userRoleAssignments[user.id] || [];
+        const roleNames = roleIds.map((roleId) => apiState.roles.find((role) => role.id === roleId)?.name || roleId);
+        return `
+          <article class="card">
+            <div class="toolbar">
+              <div>
+                <h3>${user.fullName || user.name}</h3>
+                <p class="eyebrow">${user.email || "No email captured"}</p>
+              </div>
+              <span class="status ${statusClass(user.status)}">${titleCase(user.status || "active")}</span>
+            </div>
+            <div class="grid two compact-facts" style="margin-top:12px">
+              ${miniFact("Assigned roles", roleNames.length ? roleNames.join(", ") : "No role assigned")}
+              ${miniFact("Phone", user.phone || "Not captured")}
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function platformRoleCards(roles) {
+  if (!roles.length) return `<div class="notice" style="margin-top:16px">No platform roles found.</div>`;
+  return `
+    <div class="grid two" style="margin-top:16px">
+      ${roles.map((role) => `
+        <article class="card">
+          <div class="toolbar">
+            <div>
+              <h3>${role.name}</h3>
+              <p class="eyebrow">${role.id}</p>
+            </div>
+            <span class="status ${(role.protectedRole || role.protected) ? "active" : "pending"}">${(role.protectedRole || role.protected) ? "Protected" : "Custom"}</span>
+          </div>
+          <div class="notice" style="margin-top:12px">${(role.permissionIds || []).join(", ") || "No permissions assigned"}</div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function permissionCatalog(permissions) {
+  if (!permissions.length) return `<div class="notice" style="margin-top:16px">No platform permissions found.</div>`;
+  return `
+    <div class="grid three" style="margin-top:16px">
+      ${permissions.map((permission) => `
+        <article class="card">
+          <h3>${permission.id}</h3>
+          <p class="eyebrow">${titleCase(permission.module || "platform")} &middot; ${titleCase(permission.action || "access")}</p>
+          <p class="muted">${permission.description || "Platform access permission"}</p>
+        </article>
+      `).join("")}
     </div>
   `;
 }
@@ -3320,6 +3394,14 @@ function bindViewActions() {
 
   document.querySelectorAll("[data-tenant-profile]").forEach((button) => {
     button.addEventListener("click", () => openSaccoProfile(button.dataset.tenantProfile));
+  });
+
+  document.querySelectorAll("[data-platform-users-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.platformUsersTab = button.dataset.platformUsersTab;
+      saveState();
+      render();
+    });
   });
 
   document.querySelectorAll("[data-approve]").forEach((button) => {

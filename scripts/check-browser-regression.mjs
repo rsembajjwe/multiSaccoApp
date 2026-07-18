@@ -137,6 +137,9 @@ async function assertStaffScreens(page) {
     for (const marker of screen.markers) {
       await expectText(page, marker, `${screen.nav} marker ${marker}`);
     }
+    if (screen.id === "usersRoles") {
+      await expectNoText(page, "User\nTenant\nAssigned roles\nContact\nStatus", "Platform Users legacy table header");
+    }
   }
 }
 
@@ -201,6 +204,14 @@ async function expectText(page, text, label) {
   const title = await page.locator("#pageTitle").textContent().catch(() => "unknown title");
   const bodyText = await page.locator("body").innerText().catch(() => "");
   throw new Error(`${label} did not render expected text: ${text}. Current title: ${title}. Body excerpt: ${bodyText.slice(0, 500)}`);
+}
+
+async function expectNoText(page, text, label) {
+  const bodyText = await page.locator("body").innerText();
+  if (bodyText.toLowerCase().includes(text.toLowerCase())) {
+    throw new Error(`${label} should not render text: ${text}`);
+  }
+  console.log(`PASS ${label} removed`);
 }
 
 function assert(condition, message) {
