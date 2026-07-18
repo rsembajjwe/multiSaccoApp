@@ -612,6 +612,35 @@ textarea {
   gap: 18px;
 }
 
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid #b8d8cf;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--green-900);
+  background: #f6fbf8;
+}
+
+.notice strong {
+  font-size: var(--text-md);
+}
+
+.notice span {
+  color: var(--muted);
+}
+
+.notice.warning {
+  border-color: #f2d48a;
+  background: #fff8e6;
+}
+
+.notice.compact {
+  justify-content: flex-start;
+}
+
 .dashboard-grid,
 .report-grid,
 .package-grid {

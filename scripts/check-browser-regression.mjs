@@ -50,8 +50,15 @@ try {
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Role filtered"]);
   await assertScreen(page, "members", ["Member list", "Member registration form sections"]);
   await assertScreen(page, "transactions", ["Transaction list", "New transaction screen"]);
+  await assertScreen(page, "savings", ["Savings product list", "Savings accounts"]);
+  await assertScreen(page, "shares", ["Share product list", "Share register"]);
+  await assertScreen(page, "welfare", ["Welfare product list", "Welfare claims"]);
   await assertScreen(page, "loans", ["Loan application list", "Loan details tabs"]);
+  await assertScreen(page, "guarantors", ["Guarantor requests"]);
   await assertScreen(page, "approvals", ["Approval queue"]);
+  await assertScreen(page, "accounting", ["Chart of accounts", "Expenses"]);
+  await assertScreen(page, "reconciliation", ["Bank and mobile-money matching", "Provider callbacks"]);
+  await assertScreen(page, "settings", ["Branch setup", "Financial product setup"]);
   await logout(page);
 
   await memberLogin(page);

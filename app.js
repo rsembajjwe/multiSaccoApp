@@ -103,6 +103,21 @@ function emptyData() {
     operations: null,
     notifications: [],
     complaints: [],
+    users: [],
+    branches: [],
+    financialProducts: [],
+    financialAccounts: [],
+    welfareClaims: [],
+    accountingPeriods: [],
+    chartOfAccounts: [],
+    journalEntries: [],
+    suppliers: [],
+    expenses: [],
+    assets: [],
+    statementLines: [],
+    reconciliation: null,
+    mobileMoneyCallbacks: [],
+    notificationTemplates: [],
     roles: [],
     permissions: [],
     auditEvents: [],
@@ -335,6 +350,7 @@ function renderShell() {
           </div>
         </section>
         <section class="content-area">
+          ${runtimeNotice()}
           ${renderView(module[0])}
         </section>
         <footer class="footer">Tereka Online</footer>
@@ -540,6 +556,7 @@ function notificationsView() {
   return `
     ${filterToolbar("Search messages by category, provider, status or related record", "New template", "Mark all as read")}
     ${recordTable("Notification centre", dataRows("notifications"), ["title", "recipient", "channel", "status", "createdAt"])}
+    ${recordTable("Notification templates", dataRows("notificationTemplates"), ["title", "channel", "eventType", "status", "updatedAt"])}
   `;
 }
 
@@ -561,18 +578,133 @@ function auditView() {
 }
 
 function moduleBlueprint(view) {
+  if (view === "savings") return savingsView();
+  if (view === "shares") return sharesView();
+  if (view === "welfare") return welfareView();
+  if (view === "accounting") return accountingView();
+  if (view === "reconciliation") return reconciliationView();
+  if (view === "settings") return settingsView();
+  if (view === "guarantors") return guarantorsView();
   const labels = {
-    savings: ["Savings product list", ["Product name", "Code", "Minimum balance", "Interest rate", "Withdrawal rules", "Active accounts", "Total balance", "Status"]],
-    shares: ["Shares module", ["Member share balance", "Number of shares", "Share price", "Transfer requests", "Dividend history", "Share certificate"]],
-    welfare: ["Welfare module", ["Products", "Contributions", "Balances", "Claims", "Pending approvals", "Claim payments", "Beneficiaries"]],
-    guarantors: ["Guarantor requests", ["Requesting member", "Loan product", "Guarantee amount", "Capacity", "Purpose", "Decision"]],
-    accounting: ["Accounting dashboard", ["Trial balance", "Assets", "Liabilities", "Income", "Expenses", "Cash position", "Suspense"]],
-    reconciliation: ["Reconciliation", ["Bank statement", "System transactions", "Matched", "Unmatched", "Variance", "Approval status"]],
     governance: ["Governance", ["Meetings", "Agendas", "Attendance", "Minutes", "Resolutions", "Action items"]],
-    settings: ["Settings", ["Branches", "Products", "Approval limits", "Financial year", "Security", "Accessibility"]]
   };
   const item = labels[view] || ["Module", ["Search", "Filters", "Tables", "Actions"]];
   return tabsCard(item[0], item[1]);
+}
+
+function savingsView() {
+  const products = productsByType("savings");
+  const accounts = accountsByType("savings");
+  return `
+    <div class="dashboard-grid">
+      ${summary("Savings products", products.length, "Configured in Java API", "Manage")}
+      ${summary("Savings accounts", accounts.length, "Member accounts", "Open")}
+      ${summary("Active products", products.filter((row) => normal(row.status) === "active").length, "Available to members", "Review")}
+      ${summary("Minimum contribution", money.format(sum(products, "contributionAmount", "minimumBalance")), "Configured product totals", "View")}
+    </div>
+    ${recordTable("Savings product list", products, ["name", "code", "contributionAmount", "minimumBalance", "interestRate", "status"])}
+    ${recordTable("Savings accounts", accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
+  `;
+}
+
+function sharesView() {
+  const products = productsByType("share");
+  const accounts = accountsByType("share");
+  return `
+    <div class="dashboard-grid">
+      ${summary("Share products", products.length, "Share capital products", "Manage")}
+      ${summary("Share accounts", accounts.length, "Member share ledgers", "Open")}
+      ${summary("Active members", uniqueCount(accounts, "memberId"), "Holding shares", "View")}
+      ${summary("Share contribution setup", money.format(sum(products, "contributionAmount")), "Configured value", "Review")}
+    </div>
+    ${recordTable("Share product list", products, ["name", "code", "contributionAmount", "minimumBalance", "status"])}
+    ${recordTable("Share register", accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
+  `;
+}
+
+function welfareView() {
+  const products = productsByType("welfare");
+  const claims = dataRows("welfareClaims");
+  return `
+    <div class="dashboard-grid">
+      ${summary("Welfare products", products.length, "Contribution rules", "Manage")}
+      ${summary("Claims", claims.length, "Submitted claims", "Open")}
+      ${summary("Pending claims", claims.filter((row) => normal(row.status).includes("pending") || normal(row.status).includes("submitted")).length, "Decision queue", "Review")}
+      ${summary("Claim value", money.format(sum(claims, "amount")), "Recorded claims", "Export")}
+    </div>
+    ${recordTable("Welfare product list", products, ["name", "code", "contributionAmount", "status"])}
+    ${recordTable("Welfare claims", claims, ["membershipNo", "memberName", "claimType", "amount", "channel", "reference", "status", "submittedAt"])}
+  `;
+}
+
+function guarantorsView() {
+  const requests = dataRows("guarantorRequests");
+  const loans = dataRows("loans").filter((loan) => normal(loan.stage).includes("guarant") || normal(loan.status).includes("guarant"));
+  return `
+    <div class="dashboard-grid">
+      ${summary("Guarantor requests", requests.length || loans.length, "From loan workflow", "Open")}
+      ${summary("Pending decisions", [...requests, ...loans].filter((row) => normal(row.status).includes("pending")).length, "Awaiting response", "Review")}
+      ${summary("Loan files with guarantors", loans.length, "Credit workflow", "View")}
+      ${summary("Member exposure", "Review", "Guarantee capacity", "Assess")}
+    </div>
+    ${recordTable("Guarantor requests", requests.length ? requests : loans, ["memberName", "product", "requestedAmount", "guaranteedAmount", "capacity", "status"])}
+  `;
+}
+
+function accountingView() {
+  const accounts = dataRows("chartOfAccounts");
+  const periods = dataRows("accountingPeriods");
+  const journals = dataRows("journalEntries");
+  const expenses = dataRows("expenses");
+  const assets = dataRows("assets");
+  return `
+    <div class="dashboard-grid">
+      ${summary("Chart accounts", accounts.length, "Ledger structure", "Open")}
+      ${summary("Accounting periods", periods.length, "Financial years", "View")}
+      ${summary("Journal entries", journals.length, "Posted entries", "Review")}
+      ${summary("Expenses", money.format(sum(expenses, "amount")), "Supplier and operating costs", "Open")}
+      ${summary("Assets", money.format(sum(assets, "netBookValue", "cost")), "Fixed asset register", "View")}
+    </div>
+    <div class="grid two">
+      ${recordTable("Chart of accounts", accounts, ["code", "name", "type", "normalBalance"])}
+      ${recordTable("Accounting periods", periods, ["name", "startDate", "endDate", "status"])}
+    </div>
+    ${recordTable("Recent journal entries", journals, ["reference", "description", "amount", "status", "postedAt"])}
+    <div class="grid two">
+      ${recordTable("Expenses", expenses, ["supplierId", "accountCode", "amount", "channel", "reference", "status"])}
+      ${recordTable("Assets", assets, ["name", "category", "cost", "netBookValue", "location", "status"])}
+    </div>
+  `;
+}
+
+function reconciliationView() {
+  const callbacks = dataRows("mobileMoneyCallbacks");
+  const reconciliation = state.data.reconciliation || {};
+  const matches = Array.isArray(reconciliation.matches) ? reconciliation.matches : [];
+  const unmatched = Array.isArray(reconciliation.unmatched) ? reconciliation.unmatched : callbacks.filter((row) => !normal(row.status).includes("posted"));
+  return `
+    <div class="dashboard-grid">
+      ${summary("Provider callbacks", callbacks.length, "Mobile money events", "Open")}
+      ${summary("Matched records", matches.length, "Bank/API matched", "Review")}
+      ${summary("Unmatched records", unmatched.length, "Needs action", "Investigate")}
+      ${summary("Duplicate callbacks", callbacks.filter((row) => row.duplicate).length, "Provider exceptions", "Resolve")}
+    </div>
+    ${recordTable("Bank and mobile-money matching", matches.length ? matches : callbacks, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"])}
+    ${recordTable("Unmatched reconciliation items", unmatched, ["externalReference", "provider", "amount", "status", "receivedAt"])}
+  `;
+}
+
+function settingsView() {
+  return `
+    <div class="dashboard-grid">
+      ${summary("Branches", dataRows("branches").length, "Tenant service points", "Manage")}
+      ${summary("Financial products", dataRows("financialProducts").length, "Savings, shares, welfare", "Configure")}
+      ${summary("Notification templates", dataRows("notificationTemplates").length, "SMS/email/push content", "Open")}
+      ${summary("Roles", dataRows("roles").length, "Access profiles", "Review")}
+    </div>
+    ${recordTable("Branch setup", dataRows("branches"), ["code", "name", "address", "status", "createdAt"])}
+    ${recordTable("Financial product setup", dataRows("financialProducts"), ["productType", "code", "name", "contributionAmount", "minimumBalance", "interestRate", "status"])}
+  `;
 }
 
 function renderMemberView(view) {
@@ -745,12 +877,28 @@ async function refreshAll() {
     ["operations", "/operations/status"],
     ["notifications", "/notifications/deliveries"],
     ["complaints", "/complaints"],
+    ["users", "/users"],
+    ["branches", "/branches"],
+    ["financialProducts", "/financial-products"],
+    ["financialAccounts", "/financial-accounts"],
+    ["welfareClaims", "/welfare-claims"],
+    ["accountingPeriods", "/accounting-periods"],
+    ["chartOfAccounts", "/chart-of-accounts"],
+    ["journalEntries", "/journal-entries"],
+    ["suppliers", "/suppliers"],
+    ["expenses", "/expenses"],
+    ["assets", "/assets"],
+    ["statementLines", "/statement-lines"],
+    ["reconciliation", "/reconciliation"],
+    ["mobileMoneyCallbacks", "/integrations/mobile-money/callbacks"],
+    ["notificationTemplates", "/notification-templates"],
     ["roles", "/roles"],
     ["permissions", "/permissions"],
     ["auditEvents", "/audit-events"],
     ["regulatoryReport", "/regulatory-report"]
   ];
-  const results = await Promise.all(endpoints.map(async ([key, path]) => [key, await optionalApi(path, key === "operations" || key === "regulatoryReport" ? null : [])]));
+  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation"]);
+  const results = await Promise.all(endpoints.map(async ([key, path]) => [key, await optionalApi(path, objectKeys.has(key) ? null : [])]));
   results.forEach(([key, value]) => {
     state.data[key] = value;
   });
@@ -779,7 +927,7 @@ async function optionalApi(path, fallback) {
   try {
     return await api(path);
   } catch (error) {
-    state.lastError = error.message;
+    if (![401, 403].includes(error.status)) state.lastError = error.message;
     return fallback;
   }
 }
@@ -794,7 +942,11 @@ async function api(path, options = {}, token = state.token) {
     }
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error?.message || payload.message || `Request failed: ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(payload.error?.message || payload.message || `Request failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
   return payload.data ?? payload;
 }
 
@@ -876,9 +1028,29 @@ async function logout() {
   renderLogin();
 }
 
+function runtimeNotice() {
+  if (state.loading) return `<section class="notice compact"><strong>Loading latest records...</strong><span>Please wait while Tereka Online refreshes this view.</span></section>`;
+  if (state.lastError) return `<section class="notice warning"><strong>Some records could not be loaded.</strong><span>${escapeHtml(state.lastError)}</span><button class="button secondary" type="button" data-action="${state.auth === "member" ? "refresh-member" : "refresh"}">Retry</button></section>`;
+  return "";
+}
+
 function dataRows(key) {
   const value = state.data[key];
   return Array.isArray(value) ? value : [];
+}
+
+function productsByType(type) {
+  const wanted = normal(type);
+  return dataRows("financialProducts").filter((product) => normal(product.productType).includes(wanted) || normal(product.name).includes(wanted));
+}
+
+function accountsByType(type) {
+  const wanted = normal(type);
+  return dataRows("financialAccounts").filter((account) => normal(account.accountType).includes(wanted) || normal(account.productName).includes(wanted) || normal(account.productCode).includes(wanted));
+}
+
+function uniqueCount(rows, key) {
+  return new Set((rows || []).map((row) => row[key]).filter(Boolean)).size;
 }
 
 function filterRows(rows) {
