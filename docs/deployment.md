@@ -74,6 +74,20 @@ npm.cmd run postgres:check
 
 The script uses an isolated Compose project, alternate ports `15432` and `18080`, and a throwaway database volume. It confirms `flyway_schema_history`, runs the API smoke test against the Java backend, then runs the security hardening checks.
 
+For a broader local production-readiness pass before a demo or deployment:
+
+```powershell
+npm.cmd run ready:check
+```
+
+This starts a separate isolated Compose project on ports `15433` and `18082`, then runs Flyway verification, Java/PostgreSQL API smoke tests, security hardening checks, static UI source/sync checks, and the Playwright Java-backed browser regression through a frontend proxy on port `5179`. The database volume is removed when the script exits.
+
+If a port is already in use, call the script directly with alternate ports:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/check-production-readiness.ps1 -BackendPort 18083 -PostgresPort 15434 -FrontendPort 5180
+```
+
 ## Backup
 
 Create a database backup:

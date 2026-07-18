@@ -88,9 +88,12 @@ This checks the JavaScript syntax for the app and local server, validates mobile
 
 ```powershell
 npm.cmd run postgres:check
+npm.cmd run ready:check
 ```
 
 This starts an isolated Docker Compose stack on PostgreSQL, applies Flyway migrations, smoke-tests login, tenants, members, transactions, loans, reports, and then runs the security hardening checks against the Java API.
+
+`ready:check` is the broader local production-readiness gate. It starts an isolated Java/PostgreSQL stack, confirms Flyway, runs the API smoke test, security hardening checks, static UI source/sync checks, and the Java-backed browser regression. It uses alternate default ports `15433`, `18082`, and `5179` to avoid common local conflicts.
 
 ```powershell
 npm.cmd run security:check
