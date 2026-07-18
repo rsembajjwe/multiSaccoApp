@@ -86,6 +86,8 @@ npm.cmd run check
 
 This checks the JavaScript syntax for the app and local server, validates mobile contracts, verifies Java proxy-mode forwarding with a mock upstream API, and runs the Java backend tests. GitHub Actions runs this same check on pushes and pull requests to `main`.
 
+CI also runs a separate release-gate job on Ubuntu using Docker Compose. That job executes the production-readiness script against PostgreSQL, API smoke tests, security checks, UI contracts, and the Java-backed browser regression.
+
 ```powershell
 npm.cmd run postgres:check
 npm.cmd run ready:check
