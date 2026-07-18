@@ -83,6 +83,15 @@ const state = {
   selectedTemplateId: "",
   selectedTemplateMessage: "",
   selectedTemplateError: "",
+  productFormMessage: "",
+  productFormError: "",
+  accountFormMessage: "",
+  accountFormError: "",
+  welfareClaimMessage: "",
+  welfareClaimError: "",
+  selectedWelfareClaimId: "",
+  selectedWelfareClaimMessage: "",
+  selectedWelfareClaimError: "",
   data: emptyData(),
   memberData: emptyMemberData()
 };
@@ -894,6 +903,8 @@ function savingsView() {
       ${summary("Active products", products.filter((row) => normal(row.status) === "active").length, "Available to members", "Review")}
       ${summary("Minimum contribution", money.format(sum(products, "contributionAmount", "minimumBalance")), "Configured product totals", "View")}
     </div>
+    ${financialProductPanel("savings")}
+    ${financialAccountPanel("savings", products)}
     ${recordTable("Savings product list", products, ["name", "code", "contributionAmount", "minimumBalance", "interestRate", "status"])}
     ${recordTable("Savings accounts", accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
   `;
@@ -909,6 +920,8 @@ function sharesView() {
       ${summary("Active members", uniqueCount(accounts, "memberId"), "Holding shares", "View")}
       ${summary("Share contribution setup", money.format(sum(products, "contributionAmount")), "Configured value", "Review")}
     </div>
+    ${financialProductPanel("shares")}
+    ${financialAccountPanel("shares", products)}
     ${recordTable("Share product list", products, ["name", "code", "contributionAmount", "minimumBalance", "status"])}
     ${recordTable("Share register", accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
   `;
@@ -924,9 +937,142 @@ function welfareView() {
       ${summary("Pending claims", claims.filter((row) => normal(row.status).includes("pending") || normal(row.status).includes("submitted")).length, "Decision queue", "Review")}
       ${summary("Claim value", money.format(sum(claims, "amount")), "Recorded claims", "Export")}
     </div>
+    ${financialProductPanel("welfare")}
+    ${financialAccountPanel("welfare", products)}
+    ${welfareClaimPanel()}
+    ${welfareClaimDetailPanel(claims)}
     ${recordTable("Welfare product list", products, ["name", "code", "contributionAmount", "status"])}
-    ${recordTable("Welfare claims", claims, ["membershipNo", "memberName", "claimType", "amount", "channel", "reference", "status", "submittedAt"])}
+    ${recordTable("Welfare claims", claims.map((claim) => ({ ...claim, action: "welfare-claim-detail", actionLabel: "Review", actionId: claim.id })), ["membershipNo", "memberName", "claimType", "amount", "channel", "reference", "status", "submittedAt"])}
   `;
+}
+
+function financialProductPanel(type) {
+  const canCreate = hasPermission("transactions:create");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${financialProductTitle(type)}</h2>
+          <p>Create Java-backed ${labelize(type).toLowerCase()} products for this SACCO.</p>
+        </div>
+      </div>
+      ${state.productFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.productFormMessage)}</strong></div>` : ""}
+      ${state.productFormError ? `<div class="notice warning"><strong>Product setup failed.</strong><span>${escapeHtml(state.productFormError)}</span></div>` : ""}
+      <form class="form-grid" data-product-form="${escapeHtml(type)}">
+        <input type="hidden" data-product-field="tenantId" value="${escapeHtml(state.user?.tenantId || "")}">
+        <input type="hidden" data-product-field="productType" value="${escapeHtml(type)}">
+        <label><span>Code</span><input data-product-field="code" required placeholder="${type.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Name</span><input data-product-field="name" required placeholder="${labelize(type)} product name" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Contribution amount</span><input data-product-field="contributionAmount" type="number" min="0" step="1" value="${type === "shares" ? "5000" : "10000"}" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Minimum balance</span><input data-product-field="minimumBalance" type="number" min="0" step="1" value="0" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Interest rate</span><input data-product-field="interestRate" type="number" min="0" step="0.01" value="0" ${canCreate ? "" : "disabled"}></label>
+        <div class="form-actions inline">${canCreate ? `<button class="button primary" type="submit">Create ${labelize(type)} product</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function financialAccountPanel(type, products) {
+  const canCreate = hasPermission("transactions:create");
+  const members = dataRows("members").filter((member) => normal(member.status) === "active");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${financialAccountTitle(type)}</h2>
+          <p>Link an active member to a configured ${labelize(type).toLowerCase()} product.</p>
+        </div>
+      </div>
+      ${state.accountFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.accountFormMessage)}</strong></div>` : ""}
+      ${state.accountFormError ? `<div class="notice warning"><strong>Account opening failed.</strong><span>${escapeHtml(state.accountFormError)}</span></div>` : ""}
+      <form class="form-grid" data-account-form="${escapeHtml(type)}">
+        <input type="hidden" data-account-field="tenantId" value="${escapeHtml(state.user?.tenantId || "")}">
+        <input type="hidden" data-account-field="accountType" value="${escapeHtml(type)}">
+        <label><span>Member</span><select data-account-field="memberId" ${canCreate ? "" : "disabled"}>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
+        <label><span>Product</span><select data-account-field="productId" ${canCreate ? "" : "disabled"}>${products.map((product) => `<option value="${escapeHtml(product.id)}">${escapeHtml(product.code)} - ${escapeHtml(product.name)}</option>`).join("")}</select></label>
+        <label><span>Account number</span><input data-account-field="accountNo" placeholder="Auto if blank" ${canCreate ? "" : "disabled"}></label>
+        <div class="form-actions inline">${canCreate ? `<button class="button secondary" type="submit">Open ${labelize(type)} account</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function welfareClaimPanel() {
+  const canCreate = hasPermission("transactions:create");
+  const members = dataRows("members").filter((member) => normal(member.status) === "active");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Welfare claim submission</h2>
+          <p>Submit member welfare claims for approval and payment.</p>
+        </div>
+      </div>
+      ${state.welfareClaimMessage ? `<div class="notice compact"><strong>${escapeHtml(state.welfareClaimMessage)}</strong></div>` : ""}
+      ${state.welfareClaimError ? `<div class="notice warning"><strong>Welfare claim failed.</strong><span>${escapeHtml(state.welfareClaimError)}</span></div>` : ""}
+      <form id="welfareClaimForm" class="form-grid">
+        <input type="hidden" id="newWelfareTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
+        <label><span>Member</span><select id="newWelfareMemberId" ${canCreate ? "" : "disabled"}>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
+        <label><span>Claim type</span><input id="newWelfareClaimType" required value="medical" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Amount</span><input id="newWelfareAmount" type="number" min="1" step="1" value="50000" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Reference</span><input id="newWelfareReference" placeholder="Auto if blank" ${canCreate ? "" : "disabled"}></label>
+        <label class="wide"><span>Description</span><textarea id="newWelfareDescription" placeholder="Claim reason and supporting details" ${canCreate ? "" : "disabled"}></textarea></label>
+        <div class="form-actions inline">${canCreate ? `<button class="button primary" type="submit">Submit welfare claim</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function welfareClaimDetailPanel(claims) {
+  const claim = claims.find((item) => item.id === state.selectedWelfareClaimId);
+  if (!claim) return "";
+  const canApprove = hasPermission("transactions:approve");
+  const canPost = hasPermission("accounting:post");
+  return `
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Welfare claim decision</h2>
+          <p>${escapeHtml(claim.reference || claim.id)} - ${escapeHtml(claim.memberName || "")}</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-welfare-claim-detail">Close</button>
+      </div>
+      ${state.selectedWelfareClaimMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedWelfareClaimMessage)}</strong></div>` : ""}
+      ${state.selectedWelfareClaimError ? `<div class="notice warning"><strong>Welfare action failed.</strong><span>${escapeHtml(state.selectedWelfareClaimError)}</span></div>` : ""}
+      <div class="source-grid">
+        ${mini("Member", `${claim.membershipNo || ""} ${claim.memberName || ""}`)}
+        ${mini("Amount", money.format(claim.amount || 0))}
+        ${mini("Claim type", claim.claimType)}
+        ${mini("Status", claim.status)}
+        ${mini("Paid channel", claim.channel)}
+        ${mini("Submitted", claim.submittedAt)}
+      </div>
+      <form id="welfareClaimDecisionForm" class="form-grid">
+        <input type="hidden" id="selectedWelfareClaimId" value="${escapeHtml(claim.id)}">
+        <label class="wide"><span>Decision reason</span><input id="welfareClaimReason" placeholder="Required for rejection"></label>
+        <label><span>Payment channel</span><select id="welfarePaymentChannel"><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option></select></label>
+        <div class="form-actions inline">
+          ${canApprove ? `<button class="button secondary" type="button" data-welfare-claim-action="approve">Approve claim</button><button class="button ghost" type="button" data-welfare-claim-action="reject">Reject claim</button>` : ""}
+          ${canPost ? `<button class="button primary" type="button" data-welfare-claim-action="pay">Pay claim</button>` : ""}
+          ${!canApprove && !canPost ? `<span class="status pending">View only</span>` : ""}
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function financialProductTitle(type) {
+  if (type === "savings") return "Savings product setup";
+  if (type === "shares") return "Shares product setup";
+  if (type === "welfare") return "Welfare product setup";
+  return `${labelize(type)} product setup`;
+}
+
+function financialAccountTitle(type) {
+  if (type === "savings") return "Open Savings account";
+  if (type === "shares") return "Open Shares account";
+  if (type === "welfare") return "Open Welfare account";
+  return `Open ${labelize(type)} account`;
 }
 
 function guarantorsView() {
@@ -2416,6 +2562,131 @@ async function createComplaintFromForm(event) {
   }
 }
 
+async function createFinancialProduct(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  state.productFormMessage = "";
+  state.productFormError = "";
+  try {
+    const product = await api("/financial-products", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: scopedValue(form, "product", "tenantId"),
+        productType: scopedValue(form, "product", "productType"),
+        code: scopedValue(form, "product", "code"),
+        name: scopedValue(form, "product", "name"),
+        contributionAmount: Number(scopedValue(form, "product", "contributionAmount")),
+        minimumBalance: Number(scopedValue(form, "product", "minimumBalance")),
+        interestRate: Number(scopedValue(form, "product", "interestRate"))
+      })
+    });
+    state.productFormMessage = `Created ${labelize(product.productType)} product ${product.code}.`;
+    await refreshAll();
+    state.productFormMessage = `Created ${labelize(product.productType)} product ${product.code}.`;
+    renderShell();
+  } catch (error) {
+    state.productFormError = error.message;
+    renderShell();
+  }
+}
+
+async function openFinancialAccount(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  state.accountFormMessage = "";
+  state.accountFormError = "";
+  try {
+    const account = await api("/financial-accounts", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: scopedValue(form, "account", "tenantId"),
+        memberId: scopedValue(form, "account", "memberId"),
+        productId: scopedValue(form, "account", "productId"),
+        accountType: scopedValue(form, "account", "accountType"),
+        accountNo: scopedValue(form, "account", "accountNo")
+      })
+    });
+    state.accountFormMessage = `Opened account ${account.accountNo}.`;
+    await refreshAll();
+    state.accountFormMessage = `Opened account ${account.accountNo}.`;
+    renderShell();
+  } catch (error) {
+    state.accountFormError = error.message;
+    renderShell();
+  }
+}
+
+async function submitWelfareClaim(event) {
+  event.preventDefault();
+  state.welfareClaimMessage = "";
+  state.welfareClaimError = "";
+  try {
+    const claim = await api("/welfare-claims", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: value("newWelfareTenantId"),
+        memberId: value("newWelfareMemberId"),
+        claimType: value("newWelfareClaimType"),
+        amount: Number(value("newWelfareAmount")),
+        reference: value("newWelfareReference"),
+        description: value("newWelfareDescription")
+      })
+    });
+    state.welfareClaimMessage = `Submitted welfare claim ${claim.reference}.`;
+    state.selectedWelfareClaimId = claim.id;
+    await refreshAll();
+    state.selectedWelfareClaimId = claim.id;
+    state.welfareClaimMessage = `Submitted welfare claim ${claim.reference}.`;
+    renderShell();
+  } catch (error) {
+    state.welfareClaimError = error.message;
+    renderShell();
+  }
+}
+
+function openWelfareClaimDetail(claimId) {
+  state.selectedWelfareClaimId = claimId;
+  state.selectedWelfareClaimMessage = "";
+  state.selectedWelfareClaimError = "";
+  renderShell();
+}
+
+async function runWelfareClaimAction(action) {
+  const claimId = value("selectedWelfareClaimId") || state.selectedWelfareClaimId;
+  if (!claimId) return;
+  state.selectedWelfareClaimMessage = "";
+  state.selectedWelfareClaimError = "";
+  try {
+    let claim;
+    if (action === "pay") {
+      claim = await api(`/welfare-claims/${encodeURIComponent(claimId)}/payment`, {
+        method: "POST",
+        body: JSON.stringify({ channel: value("welfarePaymentChannel") || "cash" })
+      });
+      state.selectedWelfareClaimMessage = `Paid welfare claim ${claim.reference}.`;
+    } else {
+      const status = action === "approve" ? "approved" : "rejected";
+      claim = await api(`/welfare-claims/${encodeURIComponent(claimId)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status, reason: value("welfareClaimReason") || "Reviewed in Tereka Online" })
+      });
+      state.selectedWelfareClaimMessage = `Welfare claim ${claim.reference} ${status}.`;
+    }
+    const message = state.selectedWelfareClaimMessage;
+    await refreshAll();
+    state.selectedWelfareClaimId = claim.id;
+    state.selectedWelfareClaimMessage = message;
+    renderShell();
+  } catch (error) {
+    state.selectedWelfareClaimError = error.message;
+    renderShell();
+  }
+}
+
+function scopedValue(form, group, field) {
+  return form.querySelector(`[data-${group}-field='${field}']`)?.value || "";
+}
+
 function openComplaintDetail(complaintId) {
   state.selectedComplaintId = complaintId;
   state.selectedComplaintMessage = "";
@@ -2616,6 +2887,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='template-detail']").forEach((button) => {
     button.addEventListener("click", () => openTemplateDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='welfare-claim-detail']").forEach((button) => {
+    button.addEventListener("click", () => openWelfareClaimDetail(button.dataset.rowId));
+  });
   document.querySelector("[data-action='close-user-detail']")?.addEventListener("click", () => {
     state.selectedUserId = "";
     state.selectedUserRoles = [];
@@ -2675,6 +2949,12 @@ function bindEvents() {
     state.selectedTemplateError = "";
     renderShell();
   });
+  document.querySelector("[data-action='close-welfare-claim-detail']")?.addEventListener("click", () => {
+    state.selectedWelfareClaimId = "";
+    state.selectedWelfareClaimMessage = "";
+    state.selectedWelfareClaimError = "";
+    renderShell();
+  });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
   document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
@@ -2689,6 +2969,9 @@ function bindEvents() {
   });
   document.querySelector("#notificationTemplateForm")?.addEventListener("submit", createNotificationTemplate);
   document.querySelector("#notificationTemplateEditForm")?.addEventListener("submit", saveNotificationTemplate);
+  document.querySelectorAll("[data-product-form]").forEach((form) => form.addEventListener("submit", createFinancialProduct));
+  document.querySelectorAll("[data-account-form]").forEach((form) => form.addEventListener("submit", openFinancialAccount));
+  document.querySelector("#welfareClaimForm")?.addEventListener("submit", submitWelfareClaim);
   document.querySelector("#memberStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     runMemberDecision("custom");
@@ -2718,6 +3001,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-complaint-status]").forEach((button) => {
     button.addEventListener("click", () => saveComplaintStatus(button.dataset.complaintStatus));
+  });
+  document.querySelectorAll("[data-welfare-claim-action]").forEach((button) => {
+    button.addEventListener("click", () => runWelfareClaimAction(button.dataset.welfareClaimAction));
   });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
@@ -2792,6 +3078,15 @@ async function logout() {
     selectedTemplateId: "",
     selectedTemplateMessage: "",
     selectedTemplateError: "",
+    productFormMessage: "",
+    productFormError: "",
+    accountFormMessage: "",
+    accountFormError: "",
+    welfareClaimMessage: "",
+    welfareClaimError: "",
+    selectedWelfareClaimId: "",
+    selectedWelfareClaimMessage: "",
+    selectedWelfareClaimError: "",
     data: emptyData(),
     memberData: emptyMemberData()
   });

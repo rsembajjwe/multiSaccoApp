@@ -67,9 +67,9 @@ try {
   await assertMemberRegistrationAndKyc(page);
   await assertScreen(page, "transactions", ["Transaction list", "New transaction screen"]);
   await assertTransactionWorkflow(page);
-  await assertScreen(page, "savings", ["Savings product list", "Savings accounts"]);
-  await assertScreen(page, "shares", ["Share product list", "Share register"]);
-  await assertScreen(page, "welfare", ["Welfare product list", "Welfare claims"]);
+  await assertScreen(page, "savings", ["Savings product list", "Savings product setup", "Open Savings account"]);
+  await assertScreen(page, "shares", ["Share product list", "Shares product setup", "Open Shares account"]);
+  await assertScreen(page, "welfare", ["Welfare product list", "Welfare product setup", "Welfare claim submission"]);
   await assertScreen(page, "loans", ["Loan application list", "Loan application form", "Loan detail and guarantors", "Add guarantor request"]);
   await assertScreen(page, "guarantors", ["Guarantor requests"]);
   await assertScreen(page, "approvals", ["Approval queue"]);
@@ -250,10 +250,12 @@ async function assertMemberRegistrationAndKyc(page) {
   await page.locator("#newMemberNationalId").fill(`CM${String(stamp).slice(-10)}`);
   await page.locator("#memberRegistrationForm button[type='submit']").click();
   await expectText(page, fullName, "created member visible");
+  await page.locator("#globalSearch").fill(fullName);
   await page.locator("tr", { hasText: fullName }).locator("[data-row-action='member-detail']").click();
   await expectText(page, "Member detail and KYC approval", "member detail panel");
   await expectText(page, "Approve member", "member approve action");
   await expectText(page, "Save KYC decision", "member KYC save action");
+  await page.locator("#globalSearch").fill("");
   console.log("PASS member registration and KYC");
 }
 
