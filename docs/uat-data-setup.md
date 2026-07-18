@@ -57,3 +57,24 @@ The generated data supports:
 - Guarantor request visibility.
 - Member Portal balance, loans, notifications, and complaint sync.
 - Operations alert and count review.
+
+## Automated Browser UAT
+
+After the Java backend is running, run the browser UAT pass:
+
+```powershell
+$env:JAVA_API_BASE = "http://127.0.0.1:8080"
+npm.cmd run uat:browser
+```
+
+By default, this starts a local UI proxy, creates fresh UAT data through `npm.cmd run uat:setup`, logs in as platform admin, SACCO staff, and member, then checks the main UAT screens.
+
+For hosted staging:
+
+```powershell
+$env:UAT_UI_BASE_URL = "https://staging.example.com"
+$env:UAT_BROWSER_SETUP = "0"
+npm.cmd run uat:browser
+```
+
+Use `UAT_BROWSER_SETUP=0` only when equivalent UAT data already exists in the hosted environment.

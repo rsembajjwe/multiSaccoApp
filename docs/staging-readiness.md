@@ -18,10 +18,10 @@ A build can be called staging-ready only when every required gate passes.
 | --- | --- | --- | --- |
 | Full local verification | `npm.cmd run check` | JavaScript syntax, UI contracts, proxy mode, mobile contract, and Java tests pass. | Ready |
 | PostgreSQL verification | `npm.cmd run postgres:check` | Docker/PostgreSQL starts, Flyway applies, API smoke test passes, and security checks pass. | Ready |
-| Production-readiness bundle | `npm.cmd run ready:check` | Isolated Java/PostgreSQL stack passes Flyway, API smoke, security, UI, and browser regression checks. | Ready |
+| Production-readiness bundle | `npm.cmd run ready:check` | Isolated Java/PostgreSQL stack passes Flyway, API smoke, security, UI, browser regression, and browser UAT checks. | Ready |
 | Seed/demo gating | `SACCO_DEMO_LOGINS_ENABLED=false` in production profile | Demo credentials are disabled unless explicitly enabled for dev/demo verification. | Ready |
 | Browser-backed UI regression | `npm.cmd run ui:browser` | Main Java-backed screens render source, sync, loading/error, and member portal panels. | Ready |
-| Manual UAT smoke test | `docs/uat-scripts.md` | Platform admin, SACCO staff, and member portal scripts pass or have accepted findings. | Required before staging handoff |
+| Browser UAT smoke test | `npm.cmd run uat:browser` plus `docs/uat-scripts.md` | Platform admin, SACCO staff, and member portal scripts pass or have accepted findings. | Ready for hosted run |
 | Staging environment secrets | `docs/staging-environment.md` plus staging host secret store | Database password, rate-limit settings, API base URL, and demo-login flag are environment-managed. | Ready for handoff |
 | Staging handoff checklist | `docs/staging-handoff-checklist.md` | Environment, secrets, release gates, operations, UAT accounts, and decision evidence are recorded. | Required before staging handoff |
 | Backup restore rehearsal | `npm.cmd run backup:rehearse` | Backup file restores cleanly on an isolated non-production database. | Ready |
@@ -63,6 +63,6 @@ Use this checklist before tagging a staging or production release.
 - No P0 security findings are open in `docs/security-review.md`.
 - Demo logins are disabled outside explicit demo verification.
 - Database backup and restore have been rehearsed on a non-production copy.
-- UAT scripts cover Dashboard, SACCO Registration, Subscriptions, Members, Transactions, Loans, Approvals, Reports, Operations, and Member Portal.
+- Browser UAT and manual UAT scripts cover Dashboard, SACCO Registration, Subscriptions, Members, Transactions, Loans, Approvals, Reports, Operations, and Member Portal.
 - Staging secrets are stored outside git.
 - Deployment owner confirms HTTPS, CORS origin, backup schedule, and monitoring destinations.

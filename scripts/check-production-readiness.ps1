@@ -98,6 +98,11 @@ try {
   Write-Host "Running Java-backed browser regression checks"
   Invoke-Checked node @("scripts/check-browser-regression.mjs")
 
+  $env:UAT_UI_PORT = "$($FrontendPort + 1)"
+
+  Write-Host "Running Java-backed browser UAT smoke checks"
+  Invoke-Checked node @("scripts/check-uat-browser.mjs")
+
   Remove-Item Env:\SKIP_RATE_LIMIT_TEST -ErrorAction SilentlyContinue
 
   Write-Host "Running security hardening checks"
@@ -111,6 +116,7 @@ try {
   Remove-Item Env:\SKIP_RATE_LIMIT_TEST -ErrorAction SilentlyContinue
   Remove-Item Env:\JAVA_API_BASE -ErrorAction SilentlyContinue
   Remove-Item Env:\UI_REGRESSION_PORT -ErrorAction SilentlyContinue
+  Remove-Item Env:\UAT_UI_PORT -ErrorAction SilentlyContinue
 
   if ($composeStarted) {
     Write-Host "Stopping production-readiness Docker Compose stack: $ProjectName"

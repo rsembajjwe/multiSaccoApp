@@ -53,6 +53,7 @@ Use this checklist before handing the SACCO platform to testers or a pilot SACCO
 | Member UAT account exists. | Account reference, not password. |  |
 | Test SACCO and member data are realistic enough for UAT. | Data setup note. |  |
 | UAT data setup has run. | `npm.cmd run uat:setup` output or equivalent manual setup evidence. |  |
+| Automated browser UAT has passed. | `npm.cmd run uat:browser` output or hosted browser evidence. |  |
 | UAT scripts are shared with testers. | Link to `docs/uat-scripts.md`. |  |
 | Defect capture process is agreed. | Issue tracker/project reference. |  |
 

@@ -63,6 +63,13 @@ $env:API_BASE_URL = "https://staging-api.example.com/api/v1"
 npm.cmd run uat:setup
 ```
 
+Run the automated browser UAT pass:
+
+```powershell
+$env:JAVA_API_BASE = "https://staging-api.example.com"
+npm.cmd run uat:browser
+```
+
 ## Hosted Staging Checklist
 
 - Store real secrets in the host secret manager or an untracked `.env`; never commit real `.env` files.
@@ -88,6 +95,7 @@ Attach or record:
 - Confirmation that `SACCO_DEMO_LOGINS_ENABLED=false`.
 - Completed staging handoff checklist.
 - UAT data setup output.
+- Automated browser UAT output.
 - UAT script result for each role.
 
 ## Rollback

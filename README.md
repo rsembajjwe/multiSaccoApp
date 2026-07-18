@@ -95,13 +95,18 @@ npm.cmd run ready:check
 
 This starts an isolated Docker Compose stack on PostgreSQL, applies Flyway migrations, smoke-tests login, tenants, members, transactions, loans, reports, and then runs the security hardening checks against the Java API.
 
-`ready:check` is the broader local production-readiness gate. It starts an isolated Java/PostgreSQL stack, confirms Flyway, runs the API smoke test, security hardening checks, static UI source/sync checks, and the Java-backed browser regression. It uses alternate default ports `15433`, `18082`, and `5179` to avoid common local conflicts.
+`ready:check` is the broader local production-readiness gate. It starts an isolated Java/PostgreSQL stack, confirms Flyway, runs the API smoke test, security hardening checks, static UI source/sync checks, the Java-backed browser regression, and the browser UAT smoke pass. It uses alternate default ports `15433`, `18082`, and `5179` to avoid common local conflicts.
 
 For hosted staging setup, use [docs/staging-environment.md](docs/staging-environment.md) and keep real `.env` values outside git.
 
 SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`; demo values remain the default until real provider adapters are wired.
 
 For staging handoff and UAT, use [docs/staging-handoff-checklist.md](docs/staging-handoff-checklist.md), [docs/uat-data-setup.md](docs/uat-data-setup.md), and [docs/uat-scripts.md](docs/uat-scripts.md).
+
+```powershell
+npm.cmd run uat:setup
+npm.cmd run uat:browser
+```
 
 ```powershell
 npm.cmd run security:check

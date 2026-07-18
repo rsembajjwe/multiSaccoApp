@@ -85,7 +85,7 @@ For a broader local production-readiness pass before a demo or deployment:
 npm.cmd run ready:check
 ```
 
-This starts a separate isolated Compose project on ports `15433` and `18082`, then runs Flyway verification, Java/PostgreSQL API smoke tests, security hardening checks, static UI source/sync checks, and the Playwright Java-backed browser regression through a frontend proxy on port `5179`. The database volume is removed when the script exits.
+This starts a separate isolated Compose project on ports `15433` and `18082`, then runs Flyway verification, Java/PostgreSQL API smoke tests, security hardening checks, static UI source/sync checks, the Playwright Java-backed browser regression through a frontend proxy on port `5179`, and the browser UAT smoke pass on the next frontend port. The database volume is removed when the script exits.
 
 If a port is already in use, call the script directly with alternate ports:
 
