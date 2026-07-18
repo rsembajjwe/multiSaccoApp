@@ -1835,6 +1835,167 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void repaymentHistoryImportTemplatesValidatesAndCreatesHistoricalRepayments() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String runId = String.valueOf(System.currentTimeMillis());
+		String membershipNo = "LRH-" + runId;
+		String tenantId = createTenantForImport(platformToken, "COOP-LRH-" + runId);
+		String branchId = createBranchForImport(platformToken, tenantId);
+		String memberId = createImportedMember(platformToken, tenantId, branchId, membershipNo, "+256700889101");
+
+		mockMvc.perform(patch("/api/v1/members/" + memberId + "/status")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "active" }
+								"""))
+				.andExpect(status().isOk());
+
+		importLoanForRepaymentHistory(platformToken, tenantId, membershipNo, runId);
+
+		mockMvc.perform(get("/api/v1/loans/repayments/import-template?tenantId=" + tenantId)
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenantId", is(tenantId)))
+				.andExpect(jsonPath("$.data.headers", hasItem("reference")))
+				.andExpect(jsonPath("$.data.sampleRows[0].membershipNo", is(membershipNo)))
+				.andExpect(jsonPath("$.data.csv", startsWith("membershipNo,product,loanDisbursedDate")));
+
+		mockMvc.perform(post("/api/v1/loans/repayments/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": true,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "product": "Development Loan",
+								      "loanDisbursedDate": "2026-04-18",
+								      "amount": "300000",
+								      "channel": "bank",
+								      "reference": "LRH-%s-001",
+								      "receivedDate": "2026-05-18",
+								      "narration": "Migrated historical repayment"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, runId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.valid", is(true)))
+				.andExpect(jsonPath("$.data.createdCount", is(0)));
+
+		mockMvc.perform(post("/api/v1/loans/repayments/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "product": "Development Loan",
+								      "loanDisbursedDate": "2026-04-18",
+								      "amount": "300000",
+								      "channel": "bank",
+								      "reference": "LRH-%s-001",
+								      "receivedDate": "2026-05-18",
+								      "narration": "Migrated historical repayment"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, runId)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.valid", is(true)))
+				.andExpect(jsonPath("$.data.createdCount", is(1)))
+				.andExpect(jsonPath("$.data.createdRepayments[0].reference", is("LRH-" + runId + "-001")))
+				.andExpect(jsonPath("$.data.createdRepayments[0].receivedAt", is("2026-05-18T00:00:00Z")));
+
+		MvcResult loans = mockMvc.perform(get("/api/v1/loans?tenantId=" + tenantId)
+				.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].balance", is(900000.0)))
+				.andExpect(jsonPath("$.data[0].repayments", is(1)))
+				.andExpect(jsonPath("$.data[0].repaymentTotal", is(300000.0)))
+				.andReturn();
+		String loanId = objectMapper.readTree(loans.getResponse().getContentAsString()).path("data").path(0).path("id").asString();
+
+		mockMvc.perform(get("/api/v1/loans/" + loanId + "/repayments")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(1)))
+				.andExpect(jsonPath("$.data[0].reference", is("LRH-" + runId + "-001")));
+	}
+
+	@Test
+	void repaymentHistoryImportRejectsInvalidRowsWithoutSaving() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String runId = String.valueOf(System.currentTimeMillis());
+		String membershipNo = "LRH-BAD-" + runId;
+		String tenantId = createTenantForImport(platformToken, "COOP-LRH-BAD-" + runId);
+		String branchId = createBranchForImport(platformToken, tenantId);
+		String memberId = createImportedMember(platformToken, tenantId, branchId, membershipNo, "+256700889201");
+
+		mockMvc.perform(patch("/api/v1/members/" + memberId + "/status")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "active" }
+								"""))
+				.andExpect(status().isOk());
+
+		importLoanForRepaymentHistory(platformToken, tenantId, membershipNo, runId);
+
+		mockMvc.perform(post("/api/v1/loans/repayments/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "product": "Development Loan",
+								      "loanDisbursedDate": "bad-date",
+								      "amount": "-1",
+								      "channel": "card",
+								      "reference": "LRH-BAD-%s",
+								      "receivedDate": "bad-date"
+								    },
+								    {
+								      "membershipNo": "%s",
+								      "product": "Development Loan",
+								      "loanDisbursedDate": "2026-04-18",
+								      "amount": "400000",
+								      "channel": "bank",
+								      "reference": "LRH-BAD-%s",
+								      "receivedDate": "2026-05-18"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, runId, membershipNo, runId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.valid", is(false)))
+				.andExpect(jsonPath("$.data.createdCount", is(0)))
+				.andExpect(jsonPath("$.data.skippedCount", is(2)))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_DATE")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("NEGATIVE_AMOUNT")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_REPAYMENT_AMOUNT")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_REPAYMENT_CHANNEL")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("DUPLICATE_REFERENCE_IN_FILE")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("REPAYMENT_HISTORY_EXCEEDS_PAID_AMOUNT")));
+
+		mockMvc.perform(get("/api/v1/loans?tenantId=" + tenantId)
+				.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].repayments", is(0)))
+				.andExpect(jsonPath("$.data[0].repaymentTotal", is(0)));
+	}
+
+	@Test
 	void activeMemberCanLoginViewProfileAndLogout() throws Exception {
 		MvcResult login = mockMvc.perform(post("/api/v1/member-auth/login")
 						.contentType("application/json")
@@ -5296,6 +5457,35 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andReturn();
 		return objectMapper.readTree(importedMember.getResponse().getContentAsString()).path("data").path("createdMembers").path(0).path("id").asString();
+	}
+
+	private String importLoanForRepaymentHistory(String token, String tenantId, String membershipNo, String runId) throws Exception {
+		MvcResult importedLoan = mockMvc.perform(post("/api/v1/loans/import")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "product": "Development Loan",
+								      "originalAmount": "1200000",
+								      "outstandingBalance": "900000",
+								      "repaymentMonths": "12",
+								      "remainingMonths": "9",
+								      "monthlyInstallment": "100000",
+								      "disbursedDate": "2026-04-18",
+								      "status": "active",
+								      "purpose": "Migrated loan for repayment history %s"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, runId)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		return objectMapper.readTree(importedLoan.getResponse().getContentAsString()).path("data").path("createdLoans").path(0).path("id").asString();
 	}
 
 }

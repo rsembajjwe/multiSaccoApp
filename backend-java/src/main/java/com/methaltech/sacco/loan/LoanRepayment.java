@@ -66,6 +66,32 @@ public class LoanRepayment {
         this.createdAt = this.receivedAt;
     }
 
+    public static LoanRepayment imported(
+            String id,
+            String tenantId,
+            String loanId,
+            String memberId,
+            BigDecimal amount,
+            String channel,
+            String reference,
+            String narration,
+            String receivedByUserId,
+            Instant receivedAt) {
+        LoanRepayment repayment = new LoanRepayment(
+                id,
+                tenantId,
+                loanId,
+                memberId,
+                amount,
+                channel,
+                reference,
+                narration,
+                receivedByUserId);
+        repayment.receivedAt = receivedAt == null ? repayment.receivedAt : receivedAt;
+        repayment.createdAt = repayment.receivedAt;
+        return repayment;
+    }
+
     public String getId() {
         return id;
     }

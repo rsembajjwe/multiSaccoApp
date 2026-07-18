@@ -7,5 +7,6 @@ public interface LoanRepository extends JpaRepository<Loan, String> {
     List<Loan> findAllByOrderByTenantIdAscCreatedAtDesc();
     List<Loan> findByTenantIdOrderByCreatedAtDesc(String tenantId);
     List<Loan> findByMemberIdOrderByCreatedAtDesc(String memberId);
+    List<Loan> findByTenantIdAndMemberIdAndProductOrderByDisbursedAtDescCreatedAtDesc(String tenantId, String memberId, String product);
     boolean existsByTenantIdAndMemberIdAndProductAndAmountAndStatusIn(String tenantId, String memberId, String product, java.math.BigDecimal amount, List<String> statuses);
 }

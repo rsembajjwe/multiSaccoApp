@@ -1319,6 +1319,7 @@ function renderLoans() {
         <div class="filters">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
           ${apiState.user ? `<button class="secondary-button" data-action="loanBookImport" type="button">Loan book import</button>` : ""}
+          ${apiState.user ? `<button class="secondary-button" data-action="repaymentHistoryImport" type="button">Repayment history</button>` : ""}
           <button class="primary-button" data-action="newLoan" type="button">New loan application</button>
         </div>
       </div>
@@ -1359,6 +1360,7 @@ function renderLoans() {
         <div class="filters">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
           ${apiState.user ? `<button class="secondary-button" data-action="loanBookImport" type="button">Loan book import</button>` : ""}
+          ${apiState.user ? `<button class="secondary-button" data-action="repaymentHistoryImport" type="button">Repayment history</button>` : ""}
           <button class="primary-button" data-action="newLoan" type="button">New loan application</button>
         </div>
       </div>
@@ -2747,6 +2749,7 @@ function bindViewActions() {
         memberImportTemplate: openMemberImportTemplate,
         openingBalanceImport: openOpeningBalanceImport,
         loanBookImport: openLoanBookImport,
+        repaymentHistoryImport: openRepaymentHistoryImport,
         newNotificationTemplate: () => openNotificationTemplateForm(),
         apiLogin: openApiLoginForm,
         memberLogin: openMemberLoginForm,
@@ -3606,6 +3609,79 @@ function renderLoanBookImportResult(result) {
     <div class="${stateClass}">
       ${result.valid ? "Loan book validation passed." : "Loan book validation failed."}
       ${result.createdCount ? ` Imported ${result.createdCount} loan record(s).` : ""}
+    </div>
+    <div class="grid three compact-facts" style="margin-top:12px">
+      ${miniFact("Rows", result.totalRows)}
+      ${miniFact("Imported", result.createdCount)}
+      ${miniFact("Skipped", result.skippedCount)}
+    </div>
+    ${rows ? `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Row</th><th>Field</th><th>Code</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+  `;
+}
+
+async function openRepaymentHistoryImport() {
+  if (!apiState.user) return;
+  try {
+    const template = await apiRequest(`/loans/repayments/import-template${apiTenantQuery()}`);
+    const sample = template.sampleRows?.[0] || {};
+    openModal("Repayment history import", `
+      <div class="grid metrics">
+        ${metric("File", template.filename, template.contentType)}
+        ${metric("Columns", template.headers.length, "repayment fields")}
+        ${metric("Tenant", tenantName(template.tenantId), sample.reference || "No sample")}
+      </div>
+      <div class="notice" style="margin-top:16px">Historical repayments explain already-paid loan amounts. They do not reduce migrated outstanding balances again.</div>
+      <label class="field full" style="margin-top:16px">
+        <span>CSV rows</span>
+        <textarea id="repaymentHistoryImportCsv" class="input" rows="8">${template.csv}</textarea>
+      </label>
+      <div id="repaymentHistoryImportResult" style="margin-top:16px"></div>
+    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyRepaymentHistoryImportTemplate" class="secondary-button" type="button">Copy CSV</button><button id="validateRepaymentHistoryImport" class="secondary-button" type="button">Validate</button><button id="runRepaymentHistoryImport" class="primary-button" type="button">Import</button>`);
+    document.getElementById("copyRepaymentHistoryImportTemplate").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(template.csv);
+        document.getElementById("repaymentHistoryImportResult").innerHTML = `<div class="notice">CSV template copied to clipboard.</div>`;
+      } catch {
+        document.getElementById("repaymentHistoryImportResult").innerHTML = `<div class="notice error">Clipboard access was not available. Use the CSV text.</div>`;
+      }
+    });
+    document.getElementById("validateRepaymentHistoryImport").addEventListener("click", () => submitRepaymentHistoryImport(template.tenantId, true));
+    document.getElementById("runRepaymentHistoryImport").addEventListener("click", () => submitRepaymentHistoryImport(template.tenantId, false));
+  } catch (error) {
+    openModal("Repayment history import", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+  }
+}
+
+async function submitRepaymentHistoryImport(tenantId, dryRun) {
+  const result = document.getElementById("repaymentHistoryImportResult");
+  try {
+    const rows = parseMemberImportCsv(value("repaymentHistoryImportCsv"));
+    result.innerHTML = `<div class="notice">${dryRun ? "Validating" : "Importing"} ${rows.length} repayment row(s)...</div>`;
+    const response = await apiRequest("/loans/repayments/import", {
+      method: "POST",
+      body: JSON.stringify({ tenantId, dryRun, rows })
+    });
+    result.innerHTML = renderRepaymentHistoryImportResult(response);
+    if (!dryRun && response.valid) await refreshApiStatus();
+  } catch (error) {
+    result.innerHTML = `<div class="notice error">${error.message}</div>`;
+  }
+}
+
+function renderRepaymentHistoryImportResult(result) {
+  const stateClass = result.valid ? "notice" : "notice error";
+  const rows = result.errors?.map((error) => `
+    <tr>
+      <td>${error.row}</td>
+      <td>${error.field}</td>
+      <td>${error.code}</td>
+      <td>${error.message}</td>
+    </tr>
+  `).join("") || "";
+  return `
+    <div class="${stateClass}">
+      ${result.valid ? "Repayment history validation passed." : "Repayment history validation failed."}
+      ${result.createdCount ? ` Imported ${result.createdCount} historical repayment(s).` : ""}
     </div>
     <div class="grid three compact-facts" style="margin-top:12px">
       ${miniFact("Rows", result.totalRows)}

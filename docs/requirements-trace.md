@@ -95,6 +95,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Phase 2 member import flow provides a CSV template, dry-run validation, all-or-nothing Java-backed member creation, tenant/branch duplicate checks, UI paste controls, and a pilot import guide.
 - Phase 2 opening balance import flow validates member-scoped savings, shares, and welfare starting balances, rejects partial batches, posts traceable ledger transactions, updates member statements, and exposes browser paste controls.
 - Phase 2 loan book import flow validates active member loans, product, principal, outstanding balance, repayment period, remaining schedule coverage, and imported active/closed states with browser paste controls.
+- Phase 2 repayment history import flow validates matching migrated loans, unique references, repayment channels, received dates, and paid-to-date limits without reducing migrated outstanding balances again.
 - Java operations status endpoint exposes authenticated platform/tenant monitoring counts, database reachability, and alert indicators with tenant isolation.
 - Operations UI consumes the Java operations status endpoint with platform-wide or tenant-scoped views based on the selected tenant.
 - User, administrator, and technical manuals document staff/member workflows, platform administration, operational monitoring, backup/restore, validation, release, and troubleshooting procedures.

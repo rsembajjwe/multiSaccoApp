@@ -133,6 +133,69 @@ Content-Type: application/json
 
 `dryRun=true` validates without saving. `dryRun=false` saves the whole batch only when every row is valid.
 
+## Repayment History Import Flow
+
+Use repayment history import after the migrated loan book is imported. This import records historical repayments that already happened before go-live.
+
+Important accounting rule: repayment history does not reduce the migrated outstanding balance again. The loan book row already carries the current outstanding balance. Repayment history only creates repayment records up to the already-paid amount, calculated as `originalAmount - outstandingBalance` minus any existing imported repayments.
+
+1. Open Loans.
+2. Select `Repayment history`.
+3. Copy or edit the CSV template.
+4. Run `Validate`.
+5. Run `Import` only after validation passes.
+6. Confirm loan repayment totals and member statements.
+
+Repayment history validation checks:
+
+- The member exists in the selected SACCO.
+- The product matches an imported active or closed loan for that member.
+- `loanDisbursedDate` is required when more than one matching loan exists.
+- Amount is numeric and greater than zero.
+- Channel is one of the supported repayment channels.
+- Reference is required, unique in the file, and not already recorded.
+- Imported history cannot exceed the paid-to-date amount for the loan.
+
+## Repayment History Columns
+
+| Column | Rule |
+| --- | --- |
+| `membershipNo` | Required, must belong to a member in the selected SACCO. |
+| `product` | Required, must match the imported loan product. |
+| `loanDisbursedDate` | Optional `YYYY-MM-DD`; required when the member has multiple matching loans. |
+| `amount` | Required numeric amount greater than `0`. |
+| `channel` | Required. Allowed: `cash`, `bank`, `mobile_money`, `payroll`. |
+| `reference` | Required unique repayment reference. |
+| `receivedDate` | Optional `YYYY-MM-DD`; defaults to current date. |
+| `narration` | Optional repayment note. |
+
+Validate or import repayment history rows:
+
+```http
+POST /api/v1/loans/repayments/import
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+```json
+{
+  "tenantId": "tenant_green",
+  "dryRun": true,
+  "rows": [
+    {
+      "membershipNo": "GVS-0100",
+      "product": "Development Loan",
+      "loanDisbursedDate": "2026-04-18",
+      "amount": "300000",
+      "channel": "bank",
+      "reference": "LRH-GVS-0100-001",
+      "receivedDate": "2026-05-18",
+      "narration": "Migrated historical repayment"
+    }
+  ]
+}
+```
+
 ## Validation Evidence
 
 Record these values in the release evidence pack before pilot onboarding:
@@ -202,6 +265,6 @@ Content-Type: application/json
 ## Next Import Slices
 
 - Opening balance import UI/API is implemented; next hardening is accounting journal evidence for each posted opening balance.
-- Loan book import UI/API is implemented; next hardening is repayment history import for partially paid loans.
+- Loan book and repayment history import UI/API are implemented; next hardening is matching imported history to statement evidence.
 - Contact, next-of-kin, beneficiary, and KYC document metadata import.
 - Spreadsheet `.xlsx` helper that exports the same CSV columns.
