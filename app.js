@@ -1012,7 +1012,7 @@ function renderMembers() {
         </div>
         <div class="filters">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh backend data"}</button>` : `<button class="secondary-button" data-action="apiLogin" type="button">API login</button>`}
-          ${apiState.user ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import template</button>` : ""}
+          ${apiState.user ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>` : ""}
         </div>
       </div>
       ${apiSyncNotice("Members screen")}
@@ -1048,7 +1048,7 @@ function renderMembers() {
         <div class="filters">
           <input class="input" id="memberSearch" placeholder="Search members">
           ${apiState.user ? `<button class="secondary-button" data-action="refreshApi" type="button" ${apiState.loading ? "disabled" : ""}>${apiState.loading ? "Refreshing..." : "Refresh API"}</button>` : ""}
-          ${apiState.user ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import template</button>` : ""}
+          ${apiState.user ? `<button class="secondary-button" data-action="memberImportTemplate" type="button">Import members</button>` : ""}
           <button class="primary-button" data-action="newMember" type="button">Register member</button>
         </div>
       </div>
@@ -3411,7 +3411,7 @@ async function openMemberImportTemplate() {
   try {
     const template = await apiRequest(`/members/import-template${apiTenantQuery()}`);
     const sample = template.sampleRows?.[0] || {};
-    openModal("Member import template", `
+    openModal("Member import", `
       <div class="grid metrics">
         ${metric("File", template.filename, template.contentType)}
         ${metric("Columns", template.headers.length, "required import fields")}
@@ -3425,19 +3425,103 @@ async function openMemberImportTemplate() {
           </tbody>
         </table>
       </div>
-      <details style="margin-top:16px" open><summary>CSV template</summary><pre class="notice" style="white-space:pre-wrap">${template.csv}</pre></details>
-    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyMemberImportTemplate" class="primary-button" type="button">Copy CSV</button>`);
+      <label class="field full" style="margin-top:16px">
+        <span>CSV rows</span>
+        <textarea id="memberImportCsv" class="input" rows="8">${template.csv}</textarea>
+      </label>
+      <div id="memberImportResult" style="margin-top:16px"></div>
+    `, `<button class="secondary-button" value="cancel" type="submit">Close</button><button id="copyMemberImportTemplate" class="secondary-button" type="button">Copy CSV</button><button id="validateMemberImport" class="secondary-button" type="button">Validate</button><button id="runMemberImport" class="primary-button" type="button">Import</button>`);
     document.getElementById("copyMemberImportTemplate").addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(template.csv);
-        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice">CSV template copied to clipboard.</div>`);
+        document.getElementById("memberImportResult").innerHTML = `<div class="notice">CSV template copied to clipboard.</div>`;
       } catch {
-        document.getElementById("modalBody").insertAdjacentHTML("afterbegin", `<div class="notice error">Clipboard access was not available. Use the CSV preview text.</div>`);
+        document.getElementById("memberImportResult").innerHTML = `<div class="notice error">Clipboard access was not available. Use the CSV text.</div>`;
       }
     });
+    document.getElementById("validateMemberImport").addEventListener("click", () => submitMemberImport(template.tenantId, true));
+    document.getElementById("runMemberImport").addEventListener("click", () => submitMemberImport(template.tenantId, false));
   } catch (error) {
-    openModal("Member import template", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
+    openModal("Member import", `<div class="notice error">${error.message}</div>`, `<button class="primary-button" value="cancel" type="submit">Close</button>`);
   }
+}
+
+async function submitMemberImport(tenantId, dryRun) {
+  const result = document.getElementById("memberImportResult");
+  try {
+    const rows = parseMemberImportCsv(value("memberImportCsv"));
+    result.innerHTML = `<div class="notice">${dryRun ? "Validating" : "Importing"} ${rows.length} row(s)...</div>`;
+    const response = await apiRequest("/members/import", {
+      method: "POST",
+      body: JSON.stringify({ tenantId, dryRun, rows })
+    });
+    result.innerHTML = renderMemberImportResult(response);
+    if (!dryRun && response.valid) await refreshApiStatus();
+  } catch (error) {
+    result.innerHTML = `<div class="notice error">${error.message}</div>`;
+  }
+}
+
+function renderMemberImportResult(result) {
+  const stateClass = result.valid ? "notice" : "notice error";
+  const rows = result.errors?.map((error) => `
+    <tr>
+      <td>${error.row}</td>
+      <td>${error.field}</td>
+      <td>${error.code}</td>
+      <td>${error.message}</td>
+    </tr>
+  `).join("") || "";
+  return `
+    <div class="${stateClass}">
+      ${result.valid ? "Import validation passed." : "Import validation failed."}
+      ${result.createdCount ? ` Created ${result.createdCount} member(s).` : ""}
+    </div>
+    <div class="grid three compact-facts" style="margin-top:12px">
+      ${miniFact("Rows", result.totalRows)}
+      ${miniFact("Created", result.createdCount)}
+      ${miniFact("Skipped", result.skippedCount)}
+    </div>
+    ${rows ? `<div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Row</th><th>Field</th><th>Code</th><th>Message</th></tr></thead><tbody>${rows}</tbody></table></div>` : ""}
+  `;
+}
+
+function parseMemberImportCsv(csvText) {
+  const rows = parseCsvRows(csvText).filter((row) => row.some((cell) => cell.trim()));
+  if (rows.length < 2) throw new Error("CSV must include a header row and at least one member row.");
+  const headers = rows[0].map((header) => header.trim());
+  return rows.slice(1).map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index]?.trim() || ""])));
+}
+
+function parseCsvRows(csvText) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < csvText.length; index += 1) {
+    const char = csvText[index];
+    const next = csvText[index + 1];
+    if (quoted && char === "\"" && next === "\"") {
+      cell += "\"";
+      index += 1;
+    } else if (char === "\"") {
+      quoted = !quoted;
+    } else if (!quoted && char === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (!quoted && (char === "\n" || char === "\r")) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+  row.push(cell);
+  rows.push(row);
+  return rows;
 }
 
 async function openMemberProfile(memberId) {

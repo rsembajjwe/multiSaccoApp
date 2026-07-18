@@ -101,7 +101,7 @@ For hosted staging setup, use [docs/staging-environment.md](docs/staging-environ
 
 SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`; demo values remain the default until real provider adapters are wired.
 
-For staging handoff and UAT, use [docs/staging-handoff-checklist.md](docs/staging-handoff-checklist.md), [docs/release-evidence-template.md](docs/release-evidence-template.md), [docs/uat-findings-template.md](docs/uat-findings-template.md), [docs/uat-data-setup.md](docs/uat-data-setup.md), and [docs/uat-scripts.md](docs/uat-scripts.md).
+For staging handoff and UAT, use [docs/staging-handoff-checklist.md](docs/staging-handoff-checklist.md), [docs/release-evidence-template.md](docs/release-evidence-template.md), [docs/uat-findings-template.md](docs/uat-findings-template.md), [docs/uat-data-setup.md](docs/uat-data-setup.md), and [docs/uat-scripts.md](docs/uat-scripts.md). For Phase 2 pilot onboarding imports, use [docs/data-import.md](docs/data-import.md).
 
 ```powershell
 npm.cmd run uat:setup

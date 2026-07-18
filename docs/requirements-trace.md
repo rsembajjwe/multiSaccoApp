@@ -92,6 +92,7 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - UAT data setup script creates a known Java-backed staging dataset for staff, member, transaction, loan, guarantor, notification, complaint, operations, and subscription acceptance testing.
 - Automated browser UAT script validates platform admin, SACCO staff, and member portal screens against Java-backed UI data.
 - Release evidence and UAT findings templates define command evidence, load-test results, sign-off ownership, defect severity, retest status, and approval/blocked release decisions.
+- Phase 2 member import flow provides a CSV template, dry-run validation, all-or-nothing Java-backed member creation, tenant/branch duplicate checks, UI paste controls, and a pilot import guide.
 - Java operations status endpoint exposes authenticated platform/tenant monitoring counts, database reachability, and alert indicators with tenant isolation.
 - Operations UI consumes the Java operations status endpoint with platform-wide or tenant-scoped views based on the selected tenant.
 - User, administrator, and technical manuals document staff/member workflows, platform administration, operational monitoring, backup/restore, validation, release, and troubleshooting procedures.

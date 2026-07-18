@@ -15,9 +15,13 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -152,6 +156,83 @@ class MemberController {
                 MEMBER_IMPORT_HEADERS,
                 sampleRows,
                 csvTemplate(sampleRows))));
+    }
+
+    @PostMapping("/import")
+    ResponseEntity<?> importMembers(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody MemberImportRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, body.tenantId());
+        if (tenantId == null) return tenantAccessDenied();
+
+        List<MemberImportRow> rows = body.rows() == null ? List.of() : body.rows();
+        boolean dryRun = body.dryRun() == null || body.dryRun();
+        List<MemberImportError> errors = validateImportRows(tenantId, rows);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.of(new MemberImportResult(
+                    tenantId,
+                    dryRun,
+                    false,
+                    rows.size(),
+                    0,
+                    rows.size(),
+                    errors,
+                    List.of())));
+        }
+
+        if (dryRun) {
+            return ResponseEntity.ok(ApiResponse.of(new MemberImportResult(
+                    tenantId,
+                    true,
+                    true,
+                    rows.size(),
+                    0,
+                    0,
+                    List.of(),
+                    List.of())));
+        }
+
+        List<Member> createdMembers = new ArrayList<>();
+        for (MemberImportRow row : rows) {
+            PasswordHasher.PasswordHash password = passwordHasher.hash(row.password().trim());
+            createdMembers.add(memberRepository.save(new Member(
+                    "member_" + UUID.randomUUID(),
+                    tenantId,
+                    row.branchId().trim(),
+                    row.membershipNo().trim().toUpperCase(Locale.ROOT),
+                    row.fullName().trim(),
+                    normalizedOrDefault(row.memberType(), "individual"),
+                    row.phone().trim(),
+                    blankToDefault(row.email()),
+                    blankToDefault(row.nationalId()),
+                    password.hash(),
+                    password.salt(),
+                    "pending_approval",
+                    normalizedOrDefault(row.kycStatus(), "pending_verification"),
+                    importJoiningDate(row.joiningDate()))));
+        }
+
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Imported " + createdMembers.size() + " members",
+                "member_import",
+                tenantId,
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(new MemberImportResult(
+                tenantId,
+                false,
+                true,
+                rows.size(),
+                createdMembers.size(),
+                0,
+                List.of(),
+                createdMembers.stream().map(MemberResponse::from).toList())));
     }
 
     @PostMapping
@@ -529,6 +610,72 @@ class MemberController {
         return "\"" + value.replace("\"", "\"\"") + "\"";
     }
 
+    private List<MemberImportError> validateImportRows(String tenantId, List<MemberImportRow> rows) {
+        List<MemberImportError> errors = new ArrayList<>();
+        if (rows.isEmpty()) {
+            errors.add(new MemberImportError(0, "rows", "IMPORT_EMPTY", "At least one member row is required."));
+            return errors;
+        }
+        if (rows.size() > 500) {
+            errors.add(new MemberImportError(0, "rows", "IMPORT_TOO_LARGE", "A single member import cannot exceed 500 rows."));
+            return errors;
+        }
+
+        Set<String> seenMembershipNos = new HashSet<>();
+        for (int index = 0; index < rows.size(); index++) {
+            int rowNumber = index + 1;
+            MemberImportRow row = rows.get(index);
+            if (row.membershipNo() == null || row.membershipNo().isBlank()) {
+                errors.add(new MemberImportError(rowNumber, "membershipNo", "REQUIRED", "Membership number is required."));
+            } else {
+                String membershipNo = row.membershipNo().trim().toUpperCase(Locale.ROOT);
+                if (!seenMembershipNos.add(membershipNo)) {
+                    errors.add(new MemberImportError(rowNumber, "membershipNo", "DUPLICATE_IN_FILE", "Membership number is repeated in this import."));
+                }
+                if (memberRepository.existsByTenantIdAndMembershipNoIgnoreCase(tenantId, membershipNo)) {
+                    errors.add(new MemberImportError(rowNumber, "membershipNo", "MEMBER_EXISTS", "A member with that membership number already exists."));
+                }
+            }
+            if (row.branchId() == null || row.branchId().isBlank()) {
+                errors.add(new MemberImportError(rowNumber, "branchId", "REQUIRED", "Branch ID is required."));
+            } else if (!branchLookup.existsInTenant(row.branchId(), tenantId)) {
+                errors.add(new MemberImportError(rowNumber, "branchId", "INVALID_BRANCH", "Branch does not exist for this tenant."));
+            }
+            if (row.fullName() == null || row.fullName().isBlank()) {
+                errors.add(new MemberImportError(rowNumber, "fullName", "REQUIRED", "Full name is required."));
+            }
+            if (row.phone() == null || row.phone().isBlank()) {
+                errors.add(new MemberImportError(rowNumber, "phone", "REQUIRED", "Phone is required."));
+            }
+            if (row.password() == null || row.password().isBlank()) {
+                errors.add(new MemberImportError(rowNumber, "password", "REQUIRED", "Temporary member portal password is required."));
+            } else if (row.password().trim().length() < 8) {
+                errors.add(new MemberImportError(rowNumber, "password", "PASSWORD_TOO_SHORT", "Password must be at least 8 characters."));
+            }
+            if (row.joiningDate() != null && !row.joiningDate().isBlank()) {
+                try {
+                    LocalDate.parse(row.joiningDate().trim());
+                } catch (DateTimeParseException error) {
+                    errors.add(new MemberImportError(rowNumber, "joiningDate", "INVALID_DATE", "Joining date must use YYYY-MM-DD format."));
+                }
+            }
+
+            String memberType = normalizedOrDefault(row.memberType(), "individual");
+            if (!ALLOWED_MEMBER_TYPES.contains(memberType)) {
+                errors.add(new MemberImportError(rowNumber, "memberType", "INVALID_MEMBER_TYPE", "Unsupported member type."));
+            }
+            String kycStatus = normalizedOrDefault(row.kycStatus(), "pending_verification");
+            if (!ALLOWED_KYC_STATUSES.contains(kycStatus)) {
+                errors.add(new MemberImportError(rowNumber, "kycStatus", "INVALID_KYC_STATUS", "Unsupported KYC status."));
+            }
+        }
+        return errors;
+    }
+
+    private LocalDate importJoiningDate(String joiningDate) {
+        return joiningDate == null || joiningDate.isBlank() ? LocalDate.now() : LocalDate.parse(joiningDate.trim());
+    }
+
     private MemberStatementResponse statementFor(Member member, LocalDate from, LocalDate to) {
         List<FinancialTransaction> postedTransactions = financialTransactionRepository
                 .findByMemberIdAndStatusOrderByPostedAtAscCreatedAtAsc(member.getId(), "posted")
@@ -733,5 +880,42 @@ class MemberController {
             String kycStatus,
             LocalDate joiningDate,
             String password) {
+    }
+
+    record MemberImportRequest(
+            String tenantId,
+            Boolean dryRun,
+            List<MemberImportRow> rows) {
+    }
+
+    record MemberImportRow(
+            String membershipNo,
+            String branchId,
+            String fullName,
+            String memberType,
+            String phone,
+            String email,
+            String nationalId,
+            String kycStatus,
+            String joiningDate,
+            String password) {
+    }
+
+    record MemberImportError(
+            int row,
+            String field,
+            String code,
+            String message) {
+    }
+
+    record MemberImportResult(
+            String tenantId,
+            boolean dryRun,
+            boolean valid,
+            int totalRows,
+            int createdCount,
+            int skippedCount,
+            List<MemberImportError> errors,
+            List<MemberResponse> createdMembers) {
     }
 }

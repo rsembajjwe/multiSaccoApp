@@ -1314,6 +1314,196 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberImportValidatesAndCreatesTenantScopedMembers() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String runId = String.valueOf(System.currentTimeMillis());
+		String membershipNo = "IMP-" + runId;
+		MvcResult createdTenant = mockMvc.perform(post("/api/v1/tenants")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Import Test SACCO",
+								  "abbreviation": "ITS",
+								  "registrationNo": "COOP-IMP-%s",
+								  "district": "Kampala",
+								  "licenseExpiry": "2027-12-31",
+								  "packageId": "starter"
+								}
+								""".formatted(runId)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String tenantId = objectMapper.readTree(createdTenant.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		MvcResult createdBranch = mockMvc.perform(post("/api/v1/branches")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "code": "MAIN",
+								  "name": "Main Branch",
+								  "address": "Import Road"
+								}
+								""".formatted(tenantId)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String branchId = objectMapper.readTree(createdBranch.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(post("/api/v1/members/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": true,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "branchId": "%s",
+								      "fullName": "Import Pilot Member",
+								      "memberType": "individual",
+								      "phone": "+256700555101",
+								      "email": "import.pilot@example.local",
+								      "nationalId": "CMIMP555101",
+								      "kycStatus": "verified",
+								      "joiningDate": "2026-07-18",
+								      "password": "Member@12345"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, branchId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.valid", is(true)))
+				.andExpect(jsonPath("$.data.dryRun", is(true)))
+				.andExpect(jsonPath("$.data.totalRows", is(1)))
+				.andExpect(jsonPath("$.data.createdCount", is(0)));
+
+		mockMvc.perform(post("/api/v1/members/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "branchId": "%s",
+								      "fullName": "Import Pilot Member",
+								      "memberType": "individual",
+								      "phone": "+256700555101",
+								      "email": "import.pilot@example.local",
+								      "nationalId": "CMIMP555101",
+								      "kycStatus": "verified",
+								      "joiningDate": "2026-07-18",
+								      "password": "Member@12345"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, branchId)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.valid", is(true)))
+				.andExpect(jsonPath("$.data.createdCount", is(1)))
+				.andExpect(jsonPath("$.data.createdMembers[0].membershipNo", is(membershipNo)))
+				.andExpect(jsonPath("$.data.createdMembers[0].status", is("pending_approval")))
+				.andExpect(jsonPath("$.data.createdMembers[0].tenantId", is(tenantId)));
+
+		mockMvc.perform(get("/api/v1/members?tenantId=" + tenantId)
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].membershipNo", hasItem(membershipNo)));
+
+		mockMvc.perform(post("/api/v1/members/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "dryRun": false,
+								  "rows": [
+								    {
+								      "membershipNo": "%s",
+								      "branchId": "%s",
+								      "fullName": "Duplicate Import Member",
+								      "phone": "+256700555102",
+								      "password": "Member@12345"
+								    }
+								  ]
+								}
+								""".formatted(tenantId, membershipNo, branchId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.valid", is(false)))
+				.andExpect(jsonPath("$.data.createdCount", is(0)))
+				.andExpect(jsonPath("$.data.errors[0].code", is("MEMBER_EXISTS")));
+	}
+
+	@Test
+	void memberImportRejectsInvalidRowsAndCrossTenantAccess() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String platformToken = loginAndReturnToken();
+
+		mockMvc.perform(post("/api/v1/members/import")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "dryRun": true,
+								  "rows": [
+								    {
+								      "membershipNo": "LFS-DENIED",
+								      "branchId": "branch_lake_main",
+								      "fullName": "Denied Import Member",
+								      "phone": "+256700555201",
+								      "password": "Member@12345"
+								    }
+								  ]
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/members/import")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "dryRun": true,
+								  "rows": [
+								    {
+								      "membershipNo": "LFS-BAD-001",
+								      "branchId": "branch_green_main",
+								      "fullName": "",
+								      "memberType": "alien",
+								      "phone": "",
+								      "kycStatus": "unknown",
+								      "password": "short"
+								    },
+								    {
+								      "membershipNo": "LFS-BAD-001",
+								      "branchId": "branch_lake_main",
+								      "fullName": "Duplicate In File",
+								      "phone": "+256700555202",
+								      "password": "Member@12345"
+								    }
+								  ]
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.valid", is(false)))
+				.andExpect(jsonPath("$.data.createdCount", is(0)))
+				.andExpect(jsonPath("$.data.skippedCount", is(2)))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_BRANCH")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("REQUIRED")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_MEMBER_TYPE")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("INVALID_KYC_STATUS")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("PASSWORD_TOO_SHORT")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("DUPLICATE_IN_FILE")));
+	}
+
+	@Test
 	void activeMemberCanLoginViewProfileAndLogout() throws Exception {
 		MvcResult login = mockMvc.perform(post("/api/v1/member-auth/login")
 						.contentType("application/json")
