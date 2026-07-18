@@ -65,6 +65,8 @@ npm.cmd run ready:check
 - Restrict CORS/reverse-proxy origins to the approved staging UI host.
 - Confirm database persistence, backup location, and restore owner before onboarding pilot data.
 - Record the successful `npm.cmd run ready:check` output or CI artifact for the release candidate.
+- Complete `docs/staging-handoff-checklist.md` before sharing the environment with testers.
+- Run `docs/uat-scripts.md` for platform admin, SACCO staff, and member portal sign-off.
 
 ## Pre-Handoff Evidence
 
@@ -75,8 +77,10 @@ Attach or record:
 - `flyway_schema_history` version count from PostgreSQL.
 - `npm.cmd run check` result.
 - `npm.cmd run ready:check` result.
+- `npm.cmd run backup:rehearse` result.
 - Confirmation that `SACCO_DEMO_LOGINS_ENABLED=false`.
-- Backup and restore rehearsal date, if completed.
+- Completed staging handoff checklist.
+- UAT script result for each role.
 
 ## Rollback
 

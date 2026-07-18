@@ -21,9 +21,10 @@ A build can be called staging-ready only when every required gate passes.
 | Production-readiness bundle | `npm.cmd run ready:check` | Isolated Java/PostgreSQL stack passes Flyway, API smoke, security, UI, and browser regression checks. | Ready |
 | Seed/demo gating | `SACCO_DEMO_LOGINS_ENABLED=false` in production profile | Demo credentials are disabled unless explicitly enabled for dev/demo verification. | Ready |
 | Browser-backed UI regression | `npm.cmd run ui:browser` | Main Java-backed screens render source, sync, loading/error, and member portal panels. | Ready |
-| Manual smoke test | Staff and member login in browser | Platform admin, SACCO admin, and member flows work from the UI with Java API enabled. | Required before staging handoff |
+| Manual UAT smoke test | `docs/uat-scripts.md` | Platform admin, SACCO staff, and member portal scripts pass or have accepted findings. | Required before staging handoff |
 | Staging environment secrets | `docs/staging-environment.md` plus staging host secret store | Database password, rate-limit settings, API base URL, and demo-login flag are environment-managed. | Ready for handoff |
-| Backup restore rehearsal | `npm.cmd run backup:db` then `npm.cmd run restore:db -- -ConfirmRestore` on non-production copy | Backup file restores cleanly and health/API checks pass afterward. | Pending |
+| Staging handoff checklist | `docs/staging-handoff-checklist.md` | Environment, secrets, release gates, operations, UAT accounts, and decision evidence are recorded. | Required before staging handoff |
+| Backup restore rehearsal | `npm.cmd run backup:rehearse` | Backup file restores cleanly on an isolated non-production database. | Ready |
 
 ## Remaining Work to Reach Production
 
@@ -39,7 +40,7 @@ These items are the main gap between the current build and live SACCO operation.
 | P1 | Monitoring | Operations runbook now defines health, database, callback, pending posting, notification, complaint, and backup rehearsal alert checks. | Alert routing is connected to the hosting/operations platform. |
 | P1 | Backups | Backup, restore, and isolated restore-rehearsal scripts exist; encrypted scheduling and release evidence remain operational setup tasks. | Restore evidence is recorded for each release candidate. |
 | P1 | CI/CD | GitHub Actions now runs local verification on Windows and a Docker/PostgreSQL production-readiness gate with browser regression on Ubuntu. | Main branch cannot be promoted if the release suite fails. |
-| P2 | UAT | Run SACCO staff/member acceptance testing with realistic data. | Signed UAT findings are closed or explicitly accepted. |
+| P2 | UAT | UAT scripts now cover platform admin, SACCO staff, and member portal acceptance paths. | Signed UAT findings are closed or explicitly accepted. |
 | P2 | Data migration | Define import templates and validation for onboarding a real SACCO from spreadsheets. | Pilot SACCO data imports without manual database edits. |
 
 ## Recommended Next Sprint
@@ -47,7 +48,7 @@ These items are the main gap between the current build and live SACCO operation.
 Focus the next sprint on turning the high-risk items into tests and enforcement.
 
 1. Provider-specific SMS/email/mobile-money adapters with callback signature verification.
-2. UAT scripts for platform admin, SACCO staff, and member acceptance testing.
+2. Run hosted staging handoff using `docs/staging-handoff-checklist.md`.
 3. Data import templates and validation for pilot SACCO onboarding.
 4. Connect monitoring alerts and encrypted backup schedules in the staging hosting environment.
 5. Provider sandbox credentials and callback-signature test fixtures.
@@ -62,6 +63,6 @@ Use this checklist before tagging a staging or production release.
 - No P0 security findings are open in `docs/security-review.md`.
 - Demo logins are disabled outside explicit demo verification.
 - Database backup and restore have been rehearsed on a non-production copy.
-- Manual UI smoke test covers Dashboard, SACCO Registration, Subscriptions, Members, Transactions, Loans, Approvals, Reports, Operations, and Member Portal.
+- UAT scripts cover Dashboard, SACCO Registration, Subscriptions, Members, Transactions, Loans, Approvals, Reports, Operations, and Member Portal.
 - Staging secrets are stored outside git.
 - Deployment owner confirms HTTPS, CORS origin, backup schedule, and monitoring destinations.

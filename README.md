@@ -101,6 +101,8 @@ For hosted staging setup, use [docs/staging-environment.md](docs/staging-environ
 
 SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`; demo values remain the default until real provider adapters are wired.
 
+For staging handoff and UAT, use [docs/staging-handoff-checklist.md](docs/staging-handoff-checklist.md) and [docs/uat-scripts.md](docs/uat-scripts.md).
+
 ```powershell
 npm.cmd run security:check
 npm.cmd run ui:check

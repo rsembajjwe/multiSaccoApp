@@ -449,6 +449,7 @@ Progress:
 - Java assigned-permission enforcement added for tenant onboarding/profile, user administration, and role/permission endpoints, with no-role staff regression tests returning `403 PERMISSION_REQUIRED`.
 - Java finance/accounting permission enforcement added for transactions, reversals, products, accounts, welfare claims, accounting periods, journals, statement lines, reconciliation, mobile-money callback history, and regulatory reports, with loans-only staff regression tests.
 - Java loan and approval permission enforcement added for loan viewing/origination/approval/disbursement/repayment, guarantors, approval workflows, and approval decisions, with loan-originator regression tests.
+- Phase 1 staging handoff started with platform admin, SACCO staff, and member portal UAT scripts plus a staging handoff checklist covering environment, secrets, release gates, operations, UAT accounts, and approval evidence.
 
 Recommended stack:
 
