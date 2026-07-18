@@ -93,6 +93,8 @@ const state = {
   memberLoanError: "",
   memberPaymentMessage: "",
   memberPaymentError: "",
+  memberComplaintMessage: "",
+  memberComplaintError: "",
   welfareClaimMessage: "",
   welfareClaimError: "",
   selectedWelfareClaimId: "",
@@ -1911,8 +1913,31 @@ function memberComplaintsView() {
         ${mini("Tracking", "Status history")}
       </div>
     </section>
-    ${formPreview("Member complaint", ["Save draft", "Submit complaint", "Category", "Subject", "Message", "Attachments", "Track status"])}
+    ${memberComplaintForm()}
     ${recordTable("My complaints", complaints, ["id", "category", "subject", "priority", "status", "createdAt"])}
+  `;
+}
+
+function memberComplaintForm() {
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member complaint submission</h2>
+          <p>Send a member case directly to the SACCO support queue from the member portal.</p>
+        </div>
+        <span class="status active">Java-backed sync</span>
+      </div>
+      ${state.memberComplaintMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberComplaintMessage)}</strong></div>` : ""}
+      ${state.memberComplaintError ? `<div class="notice warning"><strong>Complaint submission failed.</strong><span>${escapeHtml(state.memberComplaintError)}</span></div>` : ""}
+      <form id="memberComplaintForm" class="form-grid">
+        <label><span>Category</span><select id="memberComplaintCategory">${complaintCategoryOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
+        <label><span>Priority</span><select id="memberComplaintPriority"><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option><option value="low">Low</option></select></label>
+        <label class="wide"><span>Subject</span><input id="memberComplaintSubject" required placeholder="Short complaint title"></label>
+        <label class="wide"><span>Message</span><textarea id="memberComplaintDescription" required placeholder="Describe the issue, date, amount/reference if any, and expected help"></textarea></label>
+        <div class="form-actions inline"><button class="button secondary" type="button">Save draft</button><button class="button primary" type="submit">Submit complaint</button></div>
+      </form>
+    </section>
   `;
 }
 
@@ -3502,6 +3527,30 @@ async function postMemberPayment(event) {
   }
 }
 
+async function submitMemberComplaint(event) {
+  event.preventDefault();
+  state.memberComplaintMessage = "";
+  state.memberComplaintError = "";
+  try {
+    const complaint = await api("/member-auth/mobile-complaints", {
+      method: "POST",
+      body: JSON.stringify({
+        category: value("memberComplaintCategory"),
+        subject: value("memberComplaintSubject"),
+        description: value("memberComplaintDescription"),
+        priority: value("memberComplaintPriority")
+      })
+    });
+    state.memberComplaintMessage = `Submitted complaint ${complaint.id}.`;
+    await refreshMember();
+    state.memberComplaintMessage = `Submitted complaint ${complaint.id}.`;
+    renderShell();
+  } catch (error) {
+    state.memberComplaintError = error.message;
+    renderShell();
+  }
+}
+
 async function submitWelfareClaim(event) {
   event.preventDefault();
   state.welfareClaimMessage = "";
@@ -3993,6 +4042,7 @@ function bindEvents() {
   document.querySelectorAll("[data-account-form]").forEach((form) => form.addEventListener("submit", openFinancialAccount));
   document.querySelector("#memberLoanForm")?.addEventListener("submit", submitMemberLoan);
   document.querySelector("#memberPaymentForm")?.addEventListener("submit", postMemberPayment);
+  document.querySelector("#memberComplaintForm")?.addEventListener("submit", submitMemberComplaint);
   document.querySelector("#welfareClaimForm")?.addEventListener("submit", submitWelfareClaim);
   document.querySelector("#expenseForm")?.addEventListener("submit", postExpense);
   document.querySelector("#assetForm")?.addEventListener("submit", registerAsset);
@@ -4114,6 +4164,8 @@ async function logout() {
     memberLoanError: "",
     memberPaymentMessage: "",
     memberPaymentError: "",
+    memberComplaintMessage: "",
+    memberComplaintError: "",
     welfareClaimMessage: "",
     welfareClaimError: "",
     selectedWelfareClaimId: "",

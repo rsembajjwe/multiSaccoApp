@@ -104,7 +104,8 @@ try {
   await assertMemberPaymentPosting(page);
   await assertScreen(page, "statements", ["Member statement readiness", "Member statement", "Server-confirmed"]);
   await assertScreen(page, "receipts", ["Member receipts", "Receipt status", "Download receipt"]);
-  await assertScreen(page, "complaints", ["Member complaint center", "My complaints", "Offline drafts"]);
+  await assertScreen(page, "complaints", ["Member complaint center", "Member complaint submission", "My complaints"]);
+  await assertMemberComplaintSubmission(page);
   await assertScreen(page, "profile", ["Member profile and KYC", "Profile contacts", "Balance summary"]);
   await assertScreen(page, "security", ["Member security center", "SACCO code", "Security actions"]);
 
@@ -313,6 +314,20 @@ async function assertMemberPaymentPosting(page) {
   await navigateTo(page, "receipts");
   await expectText(page, reference, "member payment receipt visible");
   console.log("PASS member payment action");
+}
+
+async function assertMemberComplaintSubmission(page) {
+  const stamp = Date.now();
+  const subject = `Browser member complaint ${stamp}`;
+  await navigateTo(page, "complaints");
+  await page.locator("#memberComplaintCategory").selectOption("service");
+  await page.locator("#memberComplaintPriority").selectOption("medium");
+  await page.locator("#memberComplaintSubject").fill(subject);
+  await page.locator("#memberComplaintDescription").fill("Browser regression complaint submitted from member portal.");
+  await page.locator("#memberComplaintForm button[type='submit']").click();
+  await expectText(page, "Submitted complaint", "member complaint submitted");
+  await expectText(page, subject, "member complaint visible after submit");
+  console.log("PASS member complaint action");
 }
 
 async function canLogin(code, username, password) {

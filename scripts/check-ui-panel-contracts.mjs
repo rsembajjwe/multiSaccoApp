@@ -112,6 +112,7 @@ const contracts = [
   "Member statement readiness",
   "Member receipts",
   "Member complaint center",
+  "Member complaint submission",
   "Member profile and KYC",
   "Member security center",
   "Protected platform configuration",

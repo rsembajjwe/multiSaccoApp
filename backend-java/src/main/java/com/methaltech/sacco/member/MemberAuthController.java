@@ -3,6 +3,7 @@ package com.methaltech.sacco.member;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.complaint.Complaint;
+import com.methaltech.sacco.complaint.ComplaintRepository;
 import com.methaltech.sacco.complaint.ComplaintResponse;
 import com.methaltech.sacco.complaint.ComplaintService;
 import com.methaltech.sacco.identity.AuditService;
@@ -68,6 +69,7 @@ class MemberAuthController {
     private final LoanRepaymentRepository repaymentRepository;
     private final LoanGuarantorRepository guarantorRepository;
     private final FinancialTransactionRepository transactionRepository;
+    private final ComplaintRepository complaintRepository;
     private final ComplaintService complaintService;
     private final NotificationRepository notificationRepository;
     private final NotificationService notificationService;
@@ -88,6 +90,7 @@ class MemberAuthController {
             LoanRepaymentRepository repaymentRepository,
             LoanGuarantorRepository guarantorRepository,
             FinancialTransactionRepository transactionRepository,
+            ComplaintRepository complaintRepository,
             ComplaintService complaintService,
             NotificationRepository notificationRepository,
             NotificationService notificationService,
@@ -106,6 +109,7 @@ class MemberAuthController {
         this.repaymentRepository = repaymentRepository;
         this.guarantorRepository = guarantorRepository;
         this.transactionRepository = transactionRepository;
+        this.complaintRepository = complaintRepository;
         this.complaintService = complaintService;
         this.notificationRepository = notificationRepository;
         this.notificationService = notificationService;
@@ -369,6 +373,17 @@ class MemberAuthController {
                 complaint.getId(),
                 request.getRemoteAddr());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(ComplaintResponse.from(complaint)));
+    }
+
+    @GetMapping("/complaints")
+    ResponseEntity<?> listMemberComplaints(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        return ResponseEntity.ok(ApiResponse.of(complaintRepository.findByMemberIdOrderByCreatedAtDesc(currentSession.member().getId())
+                .stream()
+                .map(ComplaintResponse::from)
+                .toList()));
     }
 
     @GetMapping("/guarantor-requests")
