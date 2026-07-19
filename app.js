@@ -784,18 +784,27 @@ function membersView() {
 }
 
 function transactionsView() {
-  const rows = dataRows("transactions").map((transaction) => ({
-    ...transaction,
-    memberName: memberName(transaction.memberId),
-    action: "transaction-detail",
-    actionLabel: "Review",
-    actionId: transaction.id
-  }));
+  const rows = transactionRows();
+  const pending = rows.filter((row) => normal(row.status).includes("pending"));
+  const posted = rows.filter((row) => normal(row.status) === "posted");
+  const reversed = rows.filter((row) => row.originalTransactionId || normal(row.status).includes("reversed"));
   return `
+    <div class="dashboard-grid">
+      ${summary("Transactions", rows.length, "Deposits, withdrawals and corrections", "Review")}
+      ${summary("Pending approval", pending.length, "Maker-checker queue", "Approve")}
+      ${summary("Posted value", money.format(sum(posted, "amount")), "Receipt-ready transactions", "Receipts")}
+      ${summary("Reversals", reversed.length, "Corrections with reason trail", "Audit")}
+      ${summary("Mobile money", money.format(sum(rows.filter((row) => normal(row.channel).includes("mobile")), "amount")), "Provider channel", "Reconcile")}
+    </div>
+    ${rolePriorityPanel("Transaction control focus", [
+      ["Maker-checker", `${pending.length} transaction(s) are waiting for Treasurer/Admin approval.`, pending.length ? "Pending" : "Clear"],
+      ["Receipts", `${posted.length} posted transaction(s) can produce member receipts.`, posted.length ? "Ready" : "Pending"],
+      ["Reversals", "Posted original transactions require a reason before reversal is created.", "Controlled"]
+    ])}
     ${filterToolbar("Search by reference, member, channel, status, amount or user", "New transaction", "Print receipt")}
     ${transactionFormPanel()}
     ${transactionDetailPanel(rows)}
-    ${recordTable("Transaction list", rows, ["reference", "postedAt", "memberName", "type", "channel", "amount", "originalTransactionId", "status"])}
+    ${recordTable("Transaction list", rows, ["reference", "postedAt", "memberName", "type", "channel", "amount", "approvalReadiness", "receiptStatus", "reversalStatus", "status"])}
   `;
 }
 
@@ -823,16 +832,23 @@ function loansView() {
 }
 
 function approvalsView() {
-  const transactions = dataRows("transactions").filter((row) => normal(row.status).includes("pending"));
-  const loans = isPlatform() ? [] : dataRows("loans").filter((row) => normal(row.status).includes("review") || normal(row.status).includes("submitted"));
+  const transactions = transactionRows().filter((row) => normal(row.status).includes("pending"));
+  const loans = isPlatform() ? [] : dataRows("loans").filter((row) => normal(row.status).includes("review") || normal(row.status).includes("submitted")).map((row) => ({ ...row, memberName: row.memberName || memberName(row.memberId), action: "loan-detail", actionLabel: "Review loan", actionId: row.id }));
+  const members = isPlatform() ? [] : dataRows("members").filter((row) => normal(row.status).includes("pending")).map((row) => ({ ...row, type: "member_kyc", amount: 0, memberName: row.fullName, action: "member-detail", actionLabel: "Review member", actionId: row.id }));
+  const queue = [...transactions, ...loans, ...members];
   return `
     <div class="dashboard-grid">
-      ${summary("Pending member approvals", dataRows("members").filter((m) => normal(m.status).includes("pending")).length, "KYC and onboarding", "Review")}
+      ${summary("Pending member approvals", members.length, "KYC and onboarding", "Review")}
       ${summary(isPlatform() ? "Pending platform approvals" : "Pending loan approvals", loans.length, isPlatform() ? "Tenant and support workflow" : "Credit workflow", "Review")}
       ${summary("Pending transactions", transactions.length, "Finance maker-checker", "Review")}
-      ${summary("Pending reversals", "0", "Requires reason", "Review")}
+      ${summary("Total approval queue", queue.length, "Role-filtered work list", "Open")}
     </div>
-    ${recordTable("Approval queue", [...transactions, ...loans], ["reference", "memberName", "type", "amount", "stage", "status"])}
+    ${rolePriorityPanel("Approval decision center", [
+      ["Transaction approvals", `${transactions.length} transaction(s) require finance review before posting.`, transactions.length ? "Pending" : "Clear"],
+      ["Loan approvals", `${loans.length} loan application(s) require credit or chairperson decision.`, loans.length ? "Pending" : "Clear"],
+      ["Member approvals", `${members.length} member profile(s) require KYC or activation decision.`, members.length ? "Pending" : "Clear"]
+    ])}
+    ${recordTable("Approval queue", queue, ["reference", "applicationNo", "membershipNo", "memberName", "type", "amount", "stage", "approvalReadiness", "status"])}
   `;
 }
 
@@ -1989,7 +2005,8 @@ function memberReceiptsView(dash) {
       receiptNo: `RCT-${line.reference}`,
       receiptStatus: "Available",
       amount: Number(line.credit || 0) || Number(line.debit || 0)
-    }));
+    }))
+    .sort((a, b) => new Date(b.postedAt || b.createdAt || 0) - new Date(a.postedAt || a.createdAt || 0));
   return `
     <div class="dashboard-grid">
       ${summary("Receipts", receipts.length, "Posted transactions with evidence", "View")}
@@ -2753,10 +2770,31 @@ function transactionFormPanel() {
   `;
 }
 
+function transactionRows() {
+  return dataRows("transactions").map((transaction) => {
+    const status = normal(transaction.status);
+    const original = Boolean(transaction.originalTransactionId);
+    const postedOriginal = status === "posted" && !original;
+    return {
+      ...transaction,
+      memberName: memberName(transaction.memberId),
+      approvalReadiness: status.includes("pending") ? "Awaiting approval" : status === "posted" ? "Posted" : status.includes("rejected") ? "Rejected" : "Review",
+      receiptStatus: status === "posted" ? "Receipt ready" : "Post first",
+      reversalStatus: postedOriginal ? "Reversible with reason" : original ? "Reversal entry" : "Not available",
+      action: "transaction-detail",
+      actionLabel: status.includes("pending") ? "Approve" : "Review",
+      actionId: transaction.id
+    };
+  });
+}
+
 function transactionDetailPanel(rows) {
   const transaction = rows.find((item) => item.id === state.selectedTransactionId);
   if (!transaction) return "";
   const canApprove = hasPermission("transactions:approve");
+  const pending = normal(transaction.status).includes("pending");
+  const postedOriginal = normal(transaction.status) === "posted" && !transaction.originalTransactionId;
+  const receiptReady = normal(transaction.status) === "posted";
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
@@ -2768,6 +2806,12 @@ function transactionDetailPanel(rows) {
       </div>
       ${state.selectedTransactionMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedTransactionMessage)}</strong></div>` : ""}
       ${state.selectedTransactionError ? `<div class="notice warning"><strong>Transaction action failed.</strong><span>${escapeHtml(state.selectedTransactionError)}</span></div>` : ""}
+      <div class="dashboard-grid">
+        ${summary("Approval state", transaction.approvalReadiness || labelize(transaction.status || "review"), "Maker-checker status", "Review")}
+        ${summary("Receipt", transaction.receiptStatus || "Post first", "Available after posting", "Load")}
+        ${summary("Reversal", transaction.reversalStatus || "Not available", "Requires reason and balance check", "Control")}
+        ${summary("Amount", money.format(transaction.amount || 0), labelize(transaction.type || "transaction"), "Verify")}
+      </div>
       <div class="source-grid">
         ${mini("Member", transaction.memberName || transaction.memberId)}
         ${mini("Amount", money.format(transaction.amount || 0))}
@@ -2778,15 +2822,20 @@ function transactionDetailPanel(rows) {
         ${mini("Reversal reason", transaction.reversalReason)}
         ${mini("Rejection reason", transaction.rejectionReason)}
       </div>
+      ${rolePriorityPanel("Transaction decision checklist", [
+        ["Approval", pending ? "Review member, amount, channel and narration before posting or rejecting." : "Approval action is only available while pending.", pending ? "Pending" : "Done"],
+        ["Receipt", receiptReady ? "Posted transaction can generate an official receipt preview." : "Receipt becomes available after posting.", receiptReady ? "Ready" : "Waiting"],
+        ["Reversal", postedOriginal ? "Enter a reason before reversing this original posted transaction." : "Reversal is only available for posted original transactions.", postedOriginal ? "Available" : "Locked"]
+      ])}
       <form id="transactionDecisionForm" class="form-grid single">
         <input type="hidden" id="selectedTransactionId" value="${escapeHtml(transaction.id)}">
         <label><span>Decision / reversal reason</span><input id="transactionDecisionReason" placeholder="Required for rejection or reversal" ${canApprove ? "" : "disabled"}></label>
         <div class="form-actions">
           ${canApprove ? `
-            <button class="button secondary" type="button" data-transaction-action="post">Approve/post transaction</button>
-            <button class="button ghost" type="button" data-transaction-action="reject">Reject transaction</button>
-            <button class="button secondary" type="button" data-transaction-action="receipt">Load receipt</button>
-            <button class="button ghost" type="button" data-transaction-action="reverse">Reverse posted transaction</button>
+            <button class="button secondary" type="button" data-transaction-action="post" ${pending ? "" : "disabled"}>Approve/post transaction</button>
+            <button class="button ghost" type="button" data-transaction-action="reject" ${pending ? "" : "disabled"}>Reject transaction</button>
+            <button class="button secondary" type="button" data-transaction-action="receipt" ${receiptReady ? "" : "disabled"}>Load receipt</button>
+            <button class="button ghost" type="button" data-transaction-action="reverse" ${postedOriginal ? "" : "disabled"}>Reverse posted transaction</button>
           ` : `<span class="status pending">View only</span>`}
         </div>
       </form>

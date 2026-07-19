@@ -65,14 +65,14 @@ try {
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Role filtered"]);
   await assertScreen(page, "members", ["Member management focus", "Member and staff separation", "Member list", "Member registration"]);
   await assertMemberRegistrationAndKyc(page);
-  await assertScreen(page, "transactions", ["Transaction list", "New transaction screen"]);
+  await assertScreen(page, "transactions", ["Transaction control focus", "Transaction list", "New transaction screen"]);
   await assertTransactionWorkflow(page);
   await assertScreen(page, "savings", ["Savings product list", "Savings product setup", "Open Savings account"]);
   await assertScreen(page, "shares", ["Share product list", "Shares product setup", "Open Shares account"]);
   await assertScreen(page, "welfare", ["Welfare product list", "Welfare product setup", "Welfare claim submission"]);
   await assertScreen(page, "loans", ["Loan application list", "Loan application form", "Loan detail and guarantors", "Add guarantor request"]);
   await assertScreen(page, "guarantors", ["Guarantor requests"]);
-  await assertScreen(page, "approvals", ["Approval queue"]);
+  await assertScreen(page, "approvals", ["Approval decision center", "Approval queue"]);
   await assertScreen(page, "accounting", ["Chart of accounts", "Expense capture", "Fixed asset register", "Unbalanced journals"]);
   await assertScreen(page, "reconciliation", ["Reconciliation command center", "Bank and mobile-money matching", "Unmatched ledger lines", "Provider callback exceptions"]);
   await assertScreen(page, "reports", ["Report catalogue", "Report readiness", "SACCO regulatory report"]);
@@ -301,6 +301,7 @@ async function assertTransactionWorkflow(page) {
   await expectText(page, "Submitted transaction", "transaction submitted");
   await page.locator("[data-row-action='transaction-detail']").first().click();
   await expectText(page, "Transaction detail and reversal", "transaction detail panel");
+  await expectText(page, "Transaction decision checklist", "transaction decision checklist");
   await expectText(page, "Approve/post transaction", "transaction approve action");
   await expectText(page, "Reverse posted transaction", "transaction reverse action");
   console.log("PASS transaction workflow");
