@@ -331,6 +331,18 @@ textarea {
   background: #fff;
 }
 
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.table-action.danger {
+  color: #7a271a;
+  border-color: #f2b8a8;
+  background: #fff3ef;
+}
+
 .alert {
   padding: 12px 14px;
   border-radius: 8px;

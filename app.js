@@ -95,6 +95,8 @@ const state = {
   memberPaymentError: "",
   memberComplaintMessage: "",
   memberComplaintError: "",
+  memberGuarantorMessage: "",
+  memberGuarantorError: "",
   welfareClaimMessage: "",
   welfareClaimError: "",
   selectedWelfareClaimId: "",
@@ -1717,7 +1719,7 @@ function renderMemberView(view) {
   }
   if (view === "accounts") return memberAccountsView(balances);
   if (view === "loans") return memberLoansView();
-  if (view === "guarantor-requests") return recordTable("Guarantor requests", state.memberData.pendingGuarantors, ["memberName", "product", "guaranteedAmount", "capacity", "status"]);
+  if (view === "guarantor-requests") return memberGuarantorRequestsView();
   if (view === "payments") return memberPaymentsView();
   if (view === "notifications") return recordTable("Notifications", state.memberData.notifications, ["title", "message", "channel", "status", "createdAt"]);
   if (view === "complaints") return memberComplaintsView();
@@ -1832,6 +1834,54 @@ function memberPaymentsView() {
     </section>
     ${recordTable("Payable loans", payableLoans, ["product", "outstandingBalance", "nextDueDate", "status"])}
   `;
+}
+
+function memberGuarantorRequestsView() {
+  const requests = memberGuarantorRows();
+  const pending = requests.filter((row) => normal(row.status) === "pending");
+  const accepted = requests.filter((row) => normal(row.status) === "accepted");
+  const totalGuarantee = sum(requests, "guaranteedAmount");
+  const availableCapacity = requests.length ? Math.max(...requests.map((row) => Number(row.capacity || 0))) : 0;
+  return `
+    <div class="dashboard-grid">
+      ${summary("Pending requests", pending.length, "Awaiting your decision", "Review")}
+      ${summary("Accepted guarantees", accepted.length, "Active obligations", "Track")}
+      ${summary("Guarantee exposure", money.format(totalGuarantee), "Requested and accepted amount", "Assess")}
+      ${summary("Available capacity", money.format(availableCapacity), "Based on savings balance", "Confirm")}
+    </div>
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member guarantor decision center</h2>
+          <p>Accept or reject guarantor requests after reviewing loan purpose, amount and your guarantee capacity.</p>
+        </div>
+        <span class="status ${pending.length ? "pending" : "active"}">${pending.length ? "Decision needed" : "No pending requests"}</span>
+      </div>
+      ${state.memberGuarantorMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorMessage)}</strong></div>` : ""}
+      ${state.memberGuarantorError ? `<div class="notice warning"><strong>Guarantor decision failed.</strong><span>${escapeHtml(state.memberGuarantorError)}</span></div>` : ""}
+      <div class="source-grid">
+        ${mini("Member", state.member?.membershipNo)}
+        ${mini("Savings balance", money.format(state.memberData.balances?.savings || 0))}
+        ${mini("Pending decisions", pending.length)}
+        ${mini("Accepted amount", money.format(sum(accepted, "guaranteedAmount")))}
+        ${mini("Rejected requests", requests.filter((row) => normal(row.status) === "rejected").length)}
+        ${mini("Last sync", state.lastSync || "Pending")}
+      </div>
+    </section>
+    ${recordTable("Member guarantor requests", requests, ["borrower", "product", "requestedAmount", "guaranteedAmount", "capacity", "status"])}
+  `;
+}
+
+function memberGuarantorRows() {
+  return (state.memberData.pendingGuarantors || []).map((request) => ({
+    ...request,
+    borrower: request.loan?.memberName || request.loan?.membershipNo || request.loan?.memberId || "Borrower",
+    product: request.loan?.product || request.product || "Loan",
+    requestedAmount: request.loan?.amount || request.loan?.requestedAmount || 0,
+    action: normal(request.status) === "pending" ? "member-guarantor" : "",
+    actionLabel: normal(request.status) === "pending" ? "Decide" : "View",
+    actionId: request.id
+  }));
 }
 
 function memberStatementsView(dash, balances) {
@@ -2052,6 +2102,14 @@ function recordTable(title, rows, columns) {
 }
 
 function rowAction(row) {
+  if (row.action === "member-guarantor" && row.actionId) {
+    return `
+      <div class="table-actions">
+        <button class="table-action" type="button" data-member-guarantor-action="accepted" data-row-id="${escapeHtml(row.actionId)}">Accept</button>
+        <button class="table-action danger" type="button" data-member-guarantor-action="rejected" data-row-id="${escapeHtml(row.actionId)}">Reject</button>
+      </div>
+    `;
+  }
   if (row.action && row.actionId) {
     return `<button class="table-action" type="button" data-row-action="${escapeHtml(row.action)}" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "View")}</button>`;
   }
@@ -3551,6 +3609,24 @@ async function submitMemberComplaint(event) {
   }
 }
 
+async function decideMemberGuarantor(guarantorId, status) {
+  state.memberGuarantorMessage = "";
+  state.memberGuarantorError = "";
+  try {
+    const request = await api(`/member-auth/guarantor-requests/${encodeURIComponent(guarantorId)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+    state.memberGuarantorMessage = `Guarantor request ${request.status}.`;
+    await refreshMember();
+    state.memberGuarantorMessage = `Guarantor request ${request.status}.`;
+    renderShell();
+  } catch (error) {
+    state.memberGuarantorError = error.message;
+    renderShell();
+  }
+}
+
 async function submitWelfareClaim(event) {
   event.preventDefault();
   state.welfareClaimMessage = "";
@@ -4081,6 +4157,9 @@ function bindEvents() {
   document.querySelectorAll("[data-welfare-claim-action]").forEach((button) => {
     button.addEventListener("click", () => runWelfareClaimAction(button.dataset.welfareClaimAction));
   });
+  document.querySelectorAll("[data-member-guarantor-action]").forEach((button) => {
+    button.addEventListener("click", () => decideMemberGuarantor(button.dataset.rowId, button.dataset.memberGuarantorAction));
+  });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
   document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
@@ -4166,6 +4245,8 @@ async function logout() {
     memberPaymentError: "",
     memberComplaintMessage: "",
     memberComplaintError: "",
+    memberGuarantorMessage: "",
+    memberGuarantorError: "",
     welfareClaimMessage: "",
     welfareClaimError: "",
     selectedWelfareClaimId: "",

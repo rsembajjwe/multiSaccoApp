@@ -100,6 +100,8 @@ try {
   await assertScreen(page, "accounts", ["Member account overview", "Member account balances", "Server-confirmed"]);
   await assertScreen(page, "loans", ["Mobile loan application", "Submit loan application", "Member loans"]);
   await assertMemberLoanSubmission(page);
+  await assertScreen(page, "guarantor-requests", ["Member guarantor decision center", "Member guarantor requests", "Pending requests"]);
+  await assertMemberGuarantorDecision(page);
   await assertScreen(page, "payments", ["Member payment center", "Java-backed posting", "Post payment"]);
   await assertMemberPaymentPosting(page);
   await assertScreen(page, "statements", ["Member statement readiness", "Member statement", "Server-confirmed"]);
@@ -314,6 +316,18 @@ async function assertMemberPaymentPosting(page) {
   await navigateTo(page, "receipts");
   await expectText(page, reference, "member payment receipt visible");
   console.log("PASS member payment action");
+}
+
+async function assertMemberGuarantorDecision(page) {
+  await navigateTo(page, "guarantor-requests");
+  const acceptButton = page.locator("[data-member-guarantor-action='accepted']").first();
+  if (!(await acceptButton.count())) {
+    console.log("SKIP member guarantor action: no pending guarantor request in current seed data");
+    return;
+  }
+  await acceptButton.click();
+  await expectText(page, "Guarantor request accepted", "member guarantor accepted");
+  console.log("PASS member guarantor action");
 }
 
 async function assertMemberComplaintSubmission(page) {

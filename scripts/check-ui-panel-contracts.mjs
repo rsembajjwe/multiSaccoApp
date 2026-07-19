@@ -108,6 +108,7 @@ const contracts = [
   "Audit events",
   "Member account overview",
   "Mobile loan application",
+  "Member guarantor decision center",
   "Member payment center",
   "Member statement readiness",
   "Member receipts",
