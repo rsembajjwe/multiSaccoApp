@@ -1190,6 +1190,17 @@ function platformUserTabContent({ activeTab, addPanel, detailPanel, coveragePane
   return listPanel;
 }
 
+function friendlyUserError(error, platformOnly = isPlatform()) {
+  const message = error?.message || String(error || "Could not complete request.");
+  const lower = normal(message);
+  if (lower.includes("user with that email") && lower.includes("exists")) {
+    return platformOnly
+      ? "A platform administrator with that email already exists. Open the Platform administrator list to manage that user, or use a different email."
+      : "A SACCO staff user with that email already exists. Open the SACCO staff access list to manage that user, or use a different email.";
+  }
+  return message.replace(/\btenants\b/gi, platformOnly ? "platform accounts" : "SACCOs").replace(/\btenant\b/gi, platformOnly ? "platform account" : "SACCO");
+}
+
 function auditView() {
   const rows = dataRows("auditEvents").map((event) => ({
     ...event,
@@ -3496,6 +3507,7 @@ async function refreshMember() {
 
 async function createUserFromForm(event) {
   event.preventDefault();
+  const platformOnly = isPlatform();
   state.userFormMessage = "";
   state.userFormError = "";
   const submit = event.currentTarget.querySelector("button[type='submit']");
@@ -3522,13 +3534,15 @@ async function createUserFromForm(event) {
           body: JSON.stringify({ roleIds: [roleId] })
         });
       } catch (roleError) {
-        state.userFormError = `User was created, but role assignment needs review: ${roleError.message}`;
+        state.userFormError = `User was created, but role assignment needs review: ${friendlyUserError(roleError, platformOnly)}`;
       }
     }
     state.userFormMessage = state.userFormError ? `Created ${created.fullName || created.email}.` : `Created ${created.fullName || created.email} and assigned role.`;
+    state.userAdminTab = "list";
+    state.search = created.email || created.fullName || "";
     await refreshAll();
   } catch (error) {
-    state.userFormError = error.message;
+    state.userFormError = friendlyUserError(error, platformOnly);
     renderShell();
   } finally {
     if (submit) {
