@@ -15,7 +15,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -62,7 +64,10 @@ class UserController {
                 ? userRepository.findAllByOrderByFullNameAsc()
                 : userRepository.findByTenantIdOrderByFullNameAsc(currentSession.user().getTenantId());
 
-        return ResponseEntity.ok(ApiResponse.of(users.stream().map(UserResponse::from).toList()));
+        return ResponseEntity.ok(ApiResponse.of(users.stream()
+                .filter(user -> !"deleted".equalsIgnoreCase(user.getStatus()))
+                .map(UserResponse::from)
+                .toList()));
     }
 
     @PostMapping
@@ -118,6 +123,130 @@ class UserController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(UserResponse.from(savedUser)));
     }
 
+    @PutMapping("/{userId}")
+    ResponseEntity<?> updateUser(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String userId,
+            @Valid @RequestBody UpdateUserRequest request,
+            HttpServletRequest httpRequest) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
+
+        User targetUser = userRepository.findById(userId).orElse(null);
+        if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
+            return userNotFound();
+        }
+        if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
+        if (!canManagePlatformUser(currentSession, targetUser)) {
+            return platformSuperAdminRequired("update platform users");
+        }
+
+        String email = request.email().trim().toLowerCase();
+        User existingUser = userRepository.findByTenantIdAndEmailIgnoreCase(targetUser.getTenantId(), email).orElse(null);
+        if (existingUser != null && !existingUser.getId().equals(targetUser.getId()) && !"deleted".equalsIgnoreCase(existingUser.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "USER_EXISTS", "A user with that email already exists in this SACCO or platform account."));
+        }
+
+        targetUser.updateProfile(
+                request.fullName().trim(),
+                email,
+                request.phone() == null ? "" : request.phone().trim());
+        User savedUser = userRepository.save(targetUser);
+        auditService.record(
+                targetUser.getTenantId(),
+                currentSession.user(),
+                "Updated user " + savedUser.getEmail(),
+                "user",
+                savedUser.getId(),
+                httpRequest.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(UserResponse.from(savedUser)));
+    }
+
+    @PatchMapping("/{userId}/status")
+    ResponseEntity<?> updateUserStatus(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String userId,
+            @Valid @RequestBody UpdateUserStatusRequest request,
+            HttpServletRequest httpRequest) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
+
+        User targetUser = userRepository.findById(userId).orElse(null);
+        if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
+            return userNotFound();
+        }
+        if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
+        if (!canManagePlatformUser(currentSession, targetUser)) {
+            return platformSuperAdminRequired("update platform users");
+        }
+        String status = normalizedStatus(request.status());
+        if (status == null || "deleted".equals(status)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_STATUS", "Status must be active or suspended."));
+        }
+        if (targetUser.getId().equals(currentSession.user().getId()) && !"active".equals(status)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "CANNOT_DISABLE_SELF", "You cannot disable your own active administrator account."));
+        }
+
+        targetUser.changeStatus(status);
+        User savedUser = userRepository.save(targetUser);
+        auditService.record(
+                targetUser.getTenantId(),
+                currentSession.user(),
+                "Changed user status to " + status + " for " + savedUser.getEmail(),
+                "user",
+                savedUser.getId(),
+                httpRequest.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(UserResponse.from(savedUser)));
+    }
+
+    @DeleteMapping("/{userId}")
+    ResponseEntity<?> deleteUser(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String userId,
+            HttpServletRequest httpRequest) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
+
+        User targetUser = userRepository.findById(userId).orElse(null);
+        if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
+            return userNotFound();
+        }
+        if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
+        if (!canManagePlatformUser(currentSession, targetUser)) {
+            return platformSuperAdminRequired("delete platform users");
+        }
+        if (targetUser.getId().equals(currentSession.user().getId())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "CANNOT_DELETE_SELF", "You cannot delete your own administrator account."));
+        }
+
+        targetUser.changeStatus("deleted");
+        User savedUser = userRepository.save(targetUser);
+        auditService.record(
+                targetUser.getTenantId(),
+                currentSession.user(),
+                "Deleted user " + savedUser.getEmail(),
+                "user",
+                savedUser.getId(),
+                httpRequest.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(UserResponse.from(savedUser)));
+    }
+
     @GetMapping("/{userId}/roles")
     ResponseEntity<?> listUserRoles(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -129,9 +258,8 @@ class UserController {
         }
 
         User targetUser = userRepository.findById(userId).orElse(null);
-        if (targetUser == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiErrorResponse.of(404, "USER_NOT_FOUND", "User was not found."));
+        if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
+            return userNotFound();
         }
         if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
         if (targetUser.getTenantId().equals("tenant_platform") && !hasRole(currentSession.user(), "Platform Super Admin")) {
@@ -156,9 +284,8 @@ class UserController {
         }
 
         User targetUser = userRepository.findById(userId).orElse(null);
-        if (targetUser == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiErrorResponse.of(404, "USER_NOT_FOUND", "User was not found."));
+        if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
+            return userNotFound();
         }
         if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
 
@@ -222,6 +349,19 @@ class UserController {
         return authService.isPlatform(currentSession.user()) || targetUser.getTenantId().equals(currentSession.user().getTenantId());
     }
 
+    private boolean canManagePlatformUser(AuthService.CurrentSession currentSession, User targetUser) {
+        return !targetUser.getTenantId().equals("tenant_platform") || hasRole(currentSession.user(), "Platform Super Admin");
+    }
+
+    private String normalizedStatus(String status) {
+        if (status == null) return null;
+        String value = status.trim().toLowerCase();
+        return switch (value) {
+            case "active", "suspended", "deleted" -> value;
+            default -> null;
+        };
+    }
+
     private boolean hasRole(User user, String roleName) {
         List<String> roleIds = userRoleRepository.findByIdUserId(user.getId()).stream()
                 .map(userRole -> userRole.getId().getRoleId())
@@ -236,12 +376,31 @@ class UserController {
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access users for another tenant."));
     }
 
+    private ResponseEntity<ApiErrorResponse> userNotFound() {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiErrorResponse.of(404, "USER_NOT_FOUND", "User was not found."));
+    }
+
+    private ResponseEntity<ApiErrorResponse> platformSuperAdminRequired(String action) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(403, "PLATFORM_SUPER_ADMIN_REQUIRED", "Only the Platform Super Admin can " + action + "."));
+    }
+
     record CreateUserRequest(
             String tenantId,
             @NotBlank String fullName,
             @Email @NotBlank String email,
             String phone,
             @NotBlank String password) {
+    }
+
+    record UpdateUserRequest(
+            @NotBlank String fullName,
+            @Email @NotBlank String email,
+            String phone) {
+    }
+
+    record UpdateUserStatusRequest(@NotBlank String status) {
     }
 
     record ReplaceUserRolesRequest(List<String> roleIds) {

@@ -106,6 +106,16 @@ public class User {
         this.passwordSalt = passwordSalt;
     }
 
+    void updateProfile(String fullName, String email, String phone) {
+        this.fullName = fullName;
+        this.email = email;
+        this.phone = phone;
+    }
+
+    void changeStatus(String status) {
+        this.status = status;
+    }
+
     void enableMfa() {
         this.mfaEnabled = true;
     }

@@ -2657,6 +2657,8 @@ function userDetailPanel(users, canManageRoles) {
   const assigned = state.selectedUserRoles[0] || "";
   const selectedRole = roles.find((role) => role.id === assigned) || roles[0] || {};
   const platformUser = selected.tenantId === "tenant_platform";
+  const canManageUser = canManageRoles && (!platformUser || roleKind() === "super");
+  const nextStatus = normal(selected.status) === "active" ? "suspended" : "active";
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
@@ -2667,7 +2669,7 @@ function userDetailPanel(users, canManageRoles) {
         <button class="button ghost" type="button" data-action="close-user-detail">Close</button>
       </div>
       ${state.selectedUserMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedUserMessage)}</strong></div>` : ""}
-      ${state.selectedUserError ? `<div class="notice warning"><strong>Role update failed.</strong><span>${escapeHtml(state.selectedUserError)}</span></div>` : ""}
+      ${state.selectedUserError ? `<div class="notice warning"><strong>User update failed.</strong><span>${escapeHtml(state.selectedUserError)}</span></div>` : ""}
       <div class="source-grid">
         ${mini("SACCO", platformUser ? "Platform Administration" : selected.tenantId)}
         ${mini("Status", selected.status)}
@@ -2678,11 +2680,20 @@ function userDetailPanel(users, canManageRoles) {
         ${mini("Module scope", roleModuleScope(selectedRole.name || selected.role || "", platformUser))}
         ${mini("User type", platformUser ? "Platform administrator" : "SACCO staff")}
       </div>
+      <form id="userProfileForm" class="form-grid">
+        <input type="hidden" id="profileUserId" value="${escapeHtml(selected.id)}">
+        <label><span>Full name</span><input id="profileUserFullName" value="${escapeHtml(selected.fullName || "")}" ${canManageUser ? "" : "disabled"} required></label>
+        <label><span>Email / username</span><input id="profileUserEmail" type="email" value="${escapeHtml(selected.email || "")}" ${canManageUser ? "" : "disabled"} required></label>
+        <label><span>Phone</span><input id="profileUserPhone" value="${escapeHtml(selected.phone || "")}" ${canManageUser ? "" : "disabled"}></label>
+        <div class="form-actions inline">
+          ${canManageUser ? `<button class="button primary" type="submit">Save user details</button>` : `<span class="status pending">Profile view only</span>`}
+        </div>
+      </form>
       <form id="userRoleForm" class="form-grid single">
         <input type="hidden" id="selectedUserId" value="${escapeHtml(selected.id)}">
         <label>
           <span>${platformUser ? "Assigned platform role" : "Assigned SACCO staff role"}</span>
-          <select id="selectedUserRoleId" ${canManageRoles ? "" : "disabled"}>
+          <select id="selectedUserRoleId" ${canManageUser ? "" : "disabled"}>
             ${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === assigned ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}
           </select>
         </label>
@@ -2691,9 +2702,21 @@ function userDetailPanel(users, canManageRoles) {
           <strong id="selectedUserRolePreview">${escapeHtml(rolePurpose(selectedRole.name || "Staff", platformUser))} - ${escapeHtml(roleModuleScope(selectedRole.name || "Staff", platformUser))}</strong>
         </div>
         <div class="form-actions">
-          ${canManageRoles ? `<button class="button primary" type="submit">Save role</button>` : `<span class="status pending">View only</span>`}
+          ${canManageUser ? `<button class="button primary" type="submit">Save role</button>` : `<span class="status pending">Role view only</span>`}
         </div>
       </form>
+      <div class="danger-zone">
+        <div>
+          <strong>Administrator status</strong>
+          <span>${canManageUser ? "Suspend, reactivate or delete this login while preserving audit history." : "Only Platform Super Admin can manage platform administrator status."}</span>
+        </div>
+        <div class="table-actions">
+          ${canManageUser ? `
+            <button class="table-action" type="button" data-user-status="${nextStatus}" data-row-id="${escapeHtml(selected.id)}">${normal(selected.status) === "active" ? "Suspend user" : "Reactivate user"}</button>
+            <button class="table-action danger" type="button" data-user-delete="${escapeHtml(selected.id)}">Delete user</button>
+          ` : `<span class="status pending">Restricted</span>`}
+        </div>
+      </div>
     </section>
   `;
 }
@@ -3664,6 +3687,69 @@ async function saveSelectedUserRole(event) {
     renderShell();
   } catch (error) {
     state.selectedUserError = error.message;
+    renderShell();
+  }
+}
+
+async function saveSelectedUserProfile(event) {
+  event.preventDefault();
+  state.selectedUserMessage = "";
+  state.selectedUserError = "";
+  const userId = value("profileUserId");
+  try {
+    const updated = await api(`/users/${encodeURIComponent(userId)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        fullName: value("profileUserFullName"),
+        email: value("profileUserEmail"),
+        phone: value("profileUserPhone")
+      })
+    });
+    state.selectedUserMessage = `Saved ${updated.fullName || updated.email}.`;
+    await refreshAll();
+    state.selectedUserId = userId;
+    state.selectedUserMessage = `Saved ${updated.fullName || updated.email}.`;
+    renderShell();
+  } catch (error) {
+    state.selectedUserError = friendlyUserError(error, isPlatform());
+    renderShell();
+  }
+}
+
+async function updateSelectedUserStatus(userId, status) {
+  state.selectedUserMessage = "";
+  state.selectedUserError = "";
+  try {
+    const updated = await api(`/users/${encodeURIComponent(userId)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status })
+    });
+    state.selectedUserMessage = `${updated.fullName || updated.email} is now ${updated.status}.`;
+    await refreshAll();
+    state.selectedUserId = userId;
+    state.selectedUserMessage = `${updated.fullName || updated.email} is now ${updated.status}.`;
+    renderShell();
+  } catch (error) {
+    state.selectedUserError = friendlyUserError(error, isPlatform());
+    renderShell();
+  }
+}
+
+async function deleteSelectedUser(userId) {
+  const selected = dataRows("users").find((user) => user.id === userId);
+  const label = selected?.fullName || selected?.email || "this user";
+  if (!window.confirm(`Delete ${label}? This disables the login and removes it from active administrator lists.`)) return;
+  state.selectedUserMessage = "";
+  state.selectedUserError = "";
+  try {
+    await api(`/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
+    state.selectedUserId = "";
+    state.selectedUserRoles = [];
+    state.userAdminTab = "list";
+    state.search = "";
+    await refreshAll();
+  } catch (error) {
+    state.selectedUserError = friendlyUserError(error, isPlatform());
     renderShell();
   }
 }
@@ -4837,7 +4923,14 @@ function bindEvents() {
     renderShell();
   });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
+  document.querySelector("#userProfileForm")?.addEventListener("submit", saveSelectedUserProfile);
   document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
+  document.querySelectorAll("[data-user-status]").forEach((button) => {
+    button.addEventListener("click", () => updateSelectedUserStatus(button.dataset.rowId, button.dataset.userStatus));
+  });
+  document.querySelectorAll("[data-user-delete]").forEach((button) => {
+    button.addEventListener("click", () => deleteSelectedUser(button.dataset.userDelete));
+  });
   document.querySelector("#newUserRoleId")?.addEventListener("change", (event) => {
     const preview = document.getElementById("newUserRolePreview");
     if (preview) preview.textContent = rolePreviewText(event.target.value, isPlatform());
