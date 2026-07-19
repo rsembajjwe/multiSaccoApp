@@ -1,6 +1,7 @@
 const API_BASE = "/api/v1";
 const STAFF_TOKEN_KEY = "tereka-staff-token";
 const MEMBER_TOKEN_KEY = "tereka-member-token";
+const MEMBER_DRAFTS_KEY = "tereka-member-offline-drafts-v1";
 const SHOW_DEMO_TOOLS = new URLSearchParams(window.location.search).has("demo");
 
 const money = new Intl.NumberFormat("en-UG", {
@@ -303,6 +304,7 @@ async function restoreMember() {
     state.tenant = session.tenant;
     state.memberData.balances = session.balances;
     state.memberData.sessionExpiresAt = session.expiresAt || "";
+    state.memberData.drafts = loadMemberDrafts(session.member);
     await refreshMember();
   } catch {
     localStorage.removeItem(MEMBER_TOKEN_KEY);
@@ -1806,12 +1808,13 @@ function memberLoanApplicationPanel() {
 function memberPaymentsView() {
   const loans = state.memberData.loans || [];
   const payableLoans = loans.filter((loan) => ["active", "disbursed"].includes(normal(loan.status)));
+  const paymentDrafts = memberDraftRows("payment");
   return `
     <div class="dashboard-grid">
       ${summary("Payment options", 4, "Savings, shares, welfare and loans", "Pay")}
       ${summary("Payable loans", payableLoans.length, "Active loan balances", "Repay")}
       ${summary("Mobile money", "Enabled", "Provider callback posting", "Use")}
-      ${summary("Receipts", "After posting", "Visible in receipts screen", "Open")}
+      ${summary("Payment drafts", paymentDrafts.length, "Saved locally before sync", "Sync")}
     </div>
     <section class="panel">
       <div class="panel-heading">
@@ -1829,9 +1832,10 @@ function memberPaymentsView() {
         <label><span>Provider</span><select id="memberPaymentProvider"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option><option value="demo">Demo provider</option></select></label>
         <label><span>Reference</span><input id="memberPaymentReference" value="MM-${Date.now()}"></label>
         <label class="wide"><span>Loan for repayment</span><select id="memberPaymentLoanId"><option value="">Not a loan repayment</option>${payableLoans.map((loan) => `<option value="${escapeHtml(loan.id)}">${escapeHtml(loan.product || loan.applicationNo || loan.id)} - ${money.format(loan.outstandingBalance || loan.balance || 0)}</option>`).join("")}</select></label>
-        <div class="form-actions inline"><button class="button primary" type="submit">Post payment</button></div>
+        <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="payment">Save draft</button><button class="button primary" type="submit">Post payment</button></div>
       </form>
     </section>
+    ${memberDraftPanel("Payment offline drafts", paymentDrafts)}
     ${recordTable("Payable loans", payableLoans, ["product", "outstandingBalance", "nextDueDate", "status"])}
   `;
 }
@@ -1939,12 +1943,13 @@ function memberReceiptsView(dash) {
 function memberComplaintsView() {
   const complaints = state.memberData.complaints || [];
   const open = complaints.filter((row) => !["closed", "resolved"].includes(normal(row.status)));
+  const complaintDrafts = memberDraftRows("complaint");
   return `
     <div class="dashboard-grid">
       ${summary("My complaints", complaints.length, "Submitted support cases", "Track")}
       ${summary("Open cases", open.length, "Awaiting action", "Follow up")}
       ${summary("Resolved cases", complaints.length - open.length, "Closed support history", "Review")}
-      ${summary("Offline drafts", state.memberData.drafts.length, "Saved before sync", "Sync")}
+      ${summary("Offline drafts", complaintDrafts.length, "Saved before sync", "Sync")}
     </div>
     <section class="panel">
       <div class="panel-heading">
@@ -1964,6 +1969,7 @@ function memberComplaintsView() {
       </div>
     </section>
     ${memberComplaintForm()}
+    ${memberDraftPanel("Complaint offline drafts", complaintDrafts)}
     ${recordTable("My complaints", complaints, ["id", "category", "subject", "priority", "status", "createdAt"])}
   `;
 }
@@ -1985,10 +1991,49 @@ function memberComplaintForm() {
         <label><span>Priority</span><select id="memberComplaintPriority"><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option><option value="low">Low</option></select></label>
         <label class="wide"><span>Subject</span><input id="memberComplaintSubject" required placeholder="Short complaint title"></label>
         <label class="wide"><span>Message</span><textarea id="memberComplaintDescription" required placeholder="Describe the issue, date, amount/reference if any, and expected help"></textarea></label>
-        <div class="form-actions inline"><button class="button secondary" type="button">Save draft</button><button class="button primary" type="submit">Submit complaint</button></div>
+        <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="complaint">Save draft</button><button class="button primary" type="submit">Submit complaint</button></div>
       </form>
     </section>
   `;
+}
+
+function memberDraftPanel(title, drafts) {
+  const filtered = filterRows(drafts || []);
+  const columns = ["type", "title", "amount", "details", "status", "updatedAt"];
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${title}</h2>
+          <p>Drafts are saved on this device and can be synced when the backend is reachable.</p>
+        </div>
+        <span class="status ${drafts.some((draft) => normal(draft.status) === "failed") ? "danger" : drafts.length ? "pending" : "active"}">${drafts.length ? "Drafts available" : "No drafts"}</span>
+      </div>
+      ${filtered.length ? `
+        <div class="table-wrap">
+          <table>
+            <thead><tr>${columns.map((column) => `<th>${labelize(column)}</th>`).join("")}<th>Actions</th></tr></thead>
+            <tbody>${filtered.slice(0, 12).map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td>${rowAction(row)}</td></tr>`).join("")}</tbody>
+          </table>
+        </div>
+      ` : emptyState("No offline drafts", "Use Save draft to keep a payment or complaint on this device before syncing.")}
+    </section>
+  `;
+}
+
+function memberDraftRows(type = "") {
+  return (state.memberData.drafts || [])
+    .filter((draft) => !type || draft.type === type)
+    .map((draft) => ({
+      ...draft,
+      amount: draft.payload?.amount || 0,
+      details: draft.type === "payment"
+        ? `${labelize(draft.payload?.purpose || "payment")} / ${draft.payload?.provider || "provider"} / ${draft.payload?.externalReference || "no reference"}`
+        : draft.payload?.description || "Complaint case",
+      action: "member-draft",
+      actionId: draft.id,
+      actionLabel: "Sync"
+    }));
 }
 
 function memberProfileView(balances) {
@@ -2102,6 +2147,14 @@ function recordTable(title, rows, columns) {
 }
 
 function rowAction(row) {
+  if (row.action === "member-draft" && row.actionId) {
+    return `
+      <div class="table-actions">
+        <button class="table-action" type="button" data-member-draft-sync="${escapeHtml(row.actionId)}">Sync</button>
+        <button class="table-action danger" type="button" data-member-draft-discard="${escapeHtml(row.actionId)}">Discard</button>
+      </div>
+    `;
+  }
   if (row.action === "member-guarantor" && row.actionId) {
     return `
       <div class="table-actions">
@@ -2827,6 +2880,7 @@ async function login(code, username, password) {
     state.tenant = member.tenant;
     state.memberData.balances = member.balances;
     state.memberData.sessionExpiresAt = member.expiresAt || "";
+    state.memberData.drafts = loadMemberDrafts(member.member);
     localStorage.setItem(MEMBER_TOKEN_KEY, member.token);
     localStorage.removeItem(STAFF_TOKEN_KEY);
     state.currentView = "home";
@@ -2913,6 +2967,7 @@ async function refreshMember() {
   state.memberData.notifications = dashboard?.notifications || [];
   state.memberData.pendingGuarantors = dashboard?.pendingGuarantorRequests || dashboard?.pendingGuarantors || [];
   state.memberData.complaints = await optionalApi("/member-auth/complaints", []);
+  state.memberData.drafts = loadMemberDrafts();
   state.lastSync = new Date().toISOString();
   state.loading = false;
   renderShell();
@@ -3557,24 +3612,7 @@ async function postMemberPayment(event) {
   state.memberPaymentMessage = "";
   state.memberPaymentError = "";
   try {
-    const purpose = value("memberPaymentPurpose");
-    const callback = await api("/integrations/mobile-money/callback", {
-      method: "POST",
-      body: JSON.stringify({
-        tenantId: state.member?.tenantId,
-        memberId: state.member?.id,
-        memberIdentifier: state.member?.membershipNo,
-        loanId: purpose === "loan_repayment" ? value("memberPaymentLoanId") : "",
-        purpose,
-        amount: Number(value("memberPaymentAmount")),
-        externalReference: value("memberPaymentReference"),
-        provider: value("memberPaymentProvider"),
-        providerPayload: {
-          source: "member_portal",
-          member: state.member?.membershipNo
-        }
-      })
-    }, "");
+    const callback = await submitMemberPaymentPayload(memberPaymentPayload());
     state.memberPaymentMessage = `Payment posted: ${callback.externalReference || callback.id}.`;
     await refreshMember();
     state.memberPaymentMessage = `Payment posted: ${callback.externalReference || callback.id}.`;
@@ -3590,15 +3628,7 @@ async function submitMemberComplaint(event) {
   state.memberComplaintMessage = "";
   state.memberComplaintError = "";
   try {
-    const complaint = await api("/member-auth/mobile-complaints", {
-      method: "POST",
-      body: JSON.stringify({
-        category: value("memberComplaintCategory"),
-        subject: value("memberComplaintSubject"),
-        description: value("memberComplaintDescription"),
-        priority: value("memberComplaintPriority")
-      })
-    });
+    const complaint = await submitMemberComplaintPayload(memberComplaintPayload());
     state.memberComplaintMessage = `Submitted complaint ${complaint.id}.`;
     await refreshMember();
     state.memberComplaintMessage = `Submitted complaint ${complaint.id}.`;
@@ -3607,6 +3637,98 @@ async function submitMemberComplaint(event) {
     state.memberComplaintError = error.message;
     renderShell();
   }
+}
+
+function memberPaymentPayload() {
+  const purpose = value("memberPaymentPurpose");
+  return {
+    tenantId: state.member?.tenantId,
+    memberId: state.member?.id,
+    memberIdentifier: state.member?.membershipNo,
+    loanId: purpose === "loan_repayment" ? value("memberPaymentLoanId") : "",
+    purpose,
+    amount: Number(value("memberPaymentAmount")),
+    externalReference: value("memberPaymentReference"),
+    provider: value("memberPaymentProvider"),
+    providerPayload: {
+      source: "member_portal",
+      member: state.member?.membershipNo
+    }
+  };
+}
+
+function memberComplaintPayload() {
+  return {
+    category: value("memberComplaintCategory"),
+    subject: value("memberComplaintSubject"),
+    description: value("memberComplaintDescription"),
+    priority: value("memberComplaintPriority")
+  };
+}
+
+async function submitMemberPaymentPayload(payload) {
+  return api("/integrations/mobile-money/callback", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  }, "");
+}
+
+async function submitMemberComplaintPayload(payload) {
+  return api("/member-auth/mobile-complaints", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+function saveMemberDraftFromForm(type) {
+  const payload = type === "payment" ? memberPaymentPayload() : memberComplaintPayload();
+  const timestamp = formatDateTime(new Date().toISOString());
+  const draft = {
+    id: `draft-${Date.now()}`,
+    type,
+    title: type === "payment" ? `${labelize(payload.purpose)} ${money.format(payload.amount || 0)}` : payload.subject || "Complaint draft",
+    payload,
+    status: "Draft",
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+  state.memberData.drafts = [draft, ...loadMemberDrafts()];
+  persistMemberDrafts();
+  if (type === "payment") state.memberPaymentMessage = "Payment draft saved on this device.";
+  if (type === "complaint") state.memberComplaintMessage = "Complaint draft saved on this device.";
+  renderShell();
+}
+
+async function syncMemberDraft(draftId) {
+  const draft = state.memberData.drafts.find((item) => item.id === draftId);
+  if (!draft) return;
+  updateMemberDraft(draftId, { status: "Syncing", updatedAt: formatDateTime(new Date().toISOString()) });
+  renderShell();
+  try {
+    const result = draft.type === "payment"
+      ? await submitMemberPaymentPayload(draft.payload)
+      : await submitMemberComplaintPayload(draft.payload);
+    updateMemberDraft(draftId, {
+      status: "Synced",
+      serverReference: result.externalReference || result.id || "Synced",
+      updatedAt: formatDateTime(new Date().toISOString())
+    });
+    if (draft.type === "payment") state.memberPaymentMessage = `Draft synced: ${result.externalReference || result.id}.`;
+    if (draft.type === "complaint") state.memberComplaintMessage = `Draft synced: ${result.id}.`;
+    await refreshMember();
+    renderShell();
+  } catch (error) {
+    updateMemberDraft(draftId, { status: "Failed", error: error.message, updatedAt: formatDateTime(new Date().toISOString()) });
+    if (draft.type === "payment") state.memberPaymentError = error.message;
+    if (draft.type === "complaint") state.memberComplaintError = error.message;
+    renderShell();
+  }
+}
+
+function discardMemberDraft(draftId) {
+  state.memberData.drafts = state.memberData.drafts.filter((draft) => draft.id !== draftId);
+  persistMemberDrafts();
+  renderShell();
 }
 
 async function decideMemberGuarantor(guarantorId, status) {
@@ -4160,6 +4282,15 @@ function bindEvents() {
   document.querySelectorAll("[data-member-guarantor-action]").forEach((button) => {
     button.addEventListener("click", () => decideMemberGuarantor(button.dataset.rowId, button.dataset.memberGuarantorAction));
   });
+  document.querySelectorAll("[data-member-draft-save]").forEach((button) => {
+    button.addEventListener("click", () => saveMemberDraftFromForm(button.dataset.memberDraftSave));
+  });
+  document.querySelectorAll("[data-member-draft-sync]").forEach((button) => {
+    button.addEventListener("click", () => syncMemberDraft(button.dataset.memberDraftSync));
+  });
+  document.querySelectorAll("[data-member-draft-discard]").forEach((button) => {
+    button.addEventListener("click", () => discardMemberDraft(button.dataset.memberDraftDiscard));
+  });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
   document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
@@ -4388,6 +4519,35 @@ function value(id) {
   return document.getElementById(id)?.value.trim() || "";
 }
 
+function memberDraftScope(member = state.member) {
+  return member?.id || member?.membershipNo || "anonymous";
+}
+
+function loadMemberDrafts(member = state.member) {
+  try {
+    const allDrafts = JSON.parse(localStorage.getItem(MEMBER_DRAFTS_KEY) || "{}");
+    return Array.isArray(allDrafts[memberDraftScope(member)]) ? allDrafts[memberDraftScope(member)] : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistMemberDrafts() {
+  let allDrafts = {};
+  try {
+    allDrafts = JSON.parse(localStorage.getItem(MEMBER_DRAFTS_KEY) || "{}");
+  } catch {
+    allDrafts = {};
+  }
+  allDrafts[memberDraftScope()] = state.memberData.drafts || [];
+  localStorage.setItem(MEMBER_DRAFTS_KEY, JSON.stringify(allDrafts));
+}
+
+function updateMemberDraft(draftId, patch) {
+  state.memberData.drafts = state.memberData.drafts.map((draft) => draft.id === draftId ? { ...draft, ...patch } : draft);
+  persistMemberDrafts();
+}
+
 function field(label, id, type, placeholder, hint) {
   return `<label><span>${label}</span><input id="${id}" type="${type}" placeholder="${placeholder || ""}" autocomplete="${type === "password" ? "current-password" : "on"}">${hint ? `<small>${hint}</small>` : ""}</label>`;
 }
@@ -4430,7 +4590,7 @@ function initials(name) {
 }
 
 function labelize(value) {
-  return String(value).replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
+  return String(value).replace(/[_-]+/g, " ").replace(/([A-Z])/g, " $1").replace(/\s+/g, " ").trim().replace(/^./, (char) => char.toUpperCase());
 }
 
 function normal(value) {
@@ -4446,6 +4606,19 @@ function formatValue(row, column) {
   if (column.toLowerCase().includes("amount") || column.toLowerCase().includes("balance") || ["debit", "credit", "savings", "shares", "welfare", "loanPortfolio", "loansAtRisk", "expenseTotal", "assetCost", "assetNetBookValue"].includes(column)) return money.format(Number(value || 0));
   if (column.toLowerCase().includes("status") || column.toLowerCase().includes("severity")) return `<span class="status ${statusClass(value)}">${escapeHtml(String(value || "Pending"))}</span>`;
   return escapeHtml(String(value || "-"));
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("en-UG", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 function snake(column) {

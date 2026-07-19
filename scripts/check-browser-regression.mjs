@@ -165,6 +165,7 @@ async function clearSession(page) {
   await page.evaluate(() => {
     localStorage.removeItem("tereka-staff-token");
     localStorage.removeItem("tereka-member-token");
+    localStorage.removeItem("tereka-member-offline-drafts-v1");
     localStorage.removeItem("sacco-platform-api-session-v1");
     localStorage.removeItem("sacco-platform-member-session-v1");
   });
@@ -307,10 +308,16 @@ async function assertMemberPaymentPosting(page) {
   const stamp = Date.now();
   const reference = `MM-BROWSER-${stamp}`;
   await navigateTo(page, "payments");
+  await expectText(page, "Payment offline drafts", "member payment offline drafts panel");
   await page.locator("#memberPaymentPurpose").selectOption("savings_deposit");
   await page.locator("#memberPaymentAmount").fill("5000");
   await page.locator("#memberPaymentProvider").selectOption({ index: 0 });
   await page.locator("#memberPaymentReference").fill(reference);
+  await page.locator("[data-member-draft-save='payment']").click();
+  await expectText(page, "Payment draft saved on this device", "member payment draft saved");
+  await expectText(page, reference, "member payment draft visible");
+  await page.locator("[data-member-draft-sync]").first().click();
+  await expectText(page, "Draft synced", "member payment draft synced");
   await page.locator("#memberPaymentForm button[type='submit']").click();
   await expectText(page, "Payment posted", "member payment posted");
   await navigateTo(page, "receipts");
@@ -334,6 +341,16 @@ async function assertMemberComplaintSubmission(page) {
   const stamp = Date.now();
   const subject = `Browser member complaint ${stamp}`;
   await navigateTo(page, "complaints");
+  await expectText(page, "Complaint offline drafts", "member complaint offline drafts panel");
+  await page.locator("#memberComplaintCategory").selectOption("service");
+  await page.locator("#memberComplaintPriority").selectOption("medium");
+  await page.locator("#memberComplaintSubject").fill(subject);
+  await page.locator("#memberComplaintDescription").fill("Browser regression complaint submitted from member portal.");
+  await page.locator("[data-member-draft-save='complaint']").click();
+  await expectText(page, "Complaint draft saved on this device", "member complaint draft saved");
+  await expectText(page, subject, "member complaint draft visible");
+  await page.locator("[data-member-draft-discard]").first().click();
+  await expectText(page, "No offline drafts", "member complaint draft discarded");
   await page.locator("#memberComplaintCategory").selectOption("service");
   await page.locator("#memberComplaintPriority").selectOption("medium");
   await page.locator("#memberComplaintSubject").fill(subject);
