@@ -780,6 +780,9 @@ function platformSaccoRegistrationPanel() {
         <label><span>SACCO code</span><input id="newTenantCode" readonly placeholder="Generated automatically"></label>
         <label><span>Registration number</span><input id="newTenantRegistrationNo" placeholder="Cooperative or UMRA registration"></label>
         <label><span>District</span><input id="newTenantDistrict" required placeholder="e.g. Kampala"></label>
+        <label><span>Parish</span><input id="newTenantParish" required placeholder="e.g. Central Parish"></label>
+        <label><span>Village</span><input id="newTenantVillage" required placeholder="e.g. Market Zone"></label>
+        <label><span>Contact number</span><input id="newTenantContactNumber" required placeholder="+256..."></label>
         <label><span>License expiry</span><input id="newTenantLicenseExpiry" type="date" required></label>
         <label><span>Subscription package</span><select id="newTenantPackageId">${packages.map((pkg) => `<option value="${escapeHtml(pkg.id || pkg.code || "")}">${escapeHtml(pkg.name || pkg.code || "Package")}</option>`).join("") || `<option value="">Assign later</option>`}</select></label>
         <div class="mini-fact wide">
@@ -2924,11 +2927,13 @@ function tenantDetailPanel() {
         ${mini("Activation state", tenantStatusLabel(tenant.status))}
         ${mini("SACCO code", tenant.abbreviation)}
         ${mini("District", tenant.district)}
+        ${mini("Parish", profileLocationPart(profile, "Parish"))}
+        ${mini("Village", profileLocationPart(profile, "Village"))}
         ${mini("Registration", tenant.registrationNo)}
         ${mini("License expiry", tenant.licenseExpiry)}
         ${mini("Onboarding", `${tenant.onboarding || 0}%`)}
         ${mini("Email", profile.email)}
-        ${mini("Phone", profile.phone)}
+        ${mini("Contact number", profile.phone)}
       </div>
       <div class="grid two">
         ${recordTable("Registration profile", [profile], ["legalName", "tin", "umraLicenseNo", "cooperativeRegistrationNo", "address", "website"])}
@@ -3600,6 +3605,19 @@ function updateGeneratedSaccoCode() {
   if (input) input.value = generatedSaccoCode(name);
 }
 
+function saccoLocationAddress(district, parish, village) {
+  return [
+    district ? `District: ${district}` : "",
+    parish ? `Parish: ${parish}` : "",
+    village ? `Village: ${village}` : ""
+  ].filter(Boolean).join("; ");
+}
+
+function profileLocationPart(profile, label) {
+  const match = String(profile?.address || "").match(new RegExp(`${label}:\\\\s*([^;]+)`, "i"));
+  return match ? match[1].trim() : "";
+}
+
 function packageCards() {
   const packages = dataRows("subscriptionPackages");
   return `<section class="panel"><h2>Subscription package configuration</h2><div class="package-grid">${(packages.length ? packages : fallbackPackages()).map((pkg) => `<article><h3>${pkg.name}</h3><strong>${money.format(pkg.price || pkg.amount || 0)}</strong><p>${pkg.maxMembers || pkg.members || "Configured"} members / ${pkg.maxBranches || pkg.branches || "Configured"} branches</p><span>${pkg.modules || "Included modules, SMS, storage and support level"}</span><button class="button secondary" type="button">Configure</button></article>`).join("")}</div></section>`;
@@ -3918,6 +3936,10 @@ async function createPlatformSacco(event) {
   state.tenantFormMessage = "";
   state.tenantFormError = "";
   try {
+    const district = value("newTenantDistrict");
+    const parish = value("newTenantParish");
+    const village = value("newTenantVillage");
+    const contactNumber = value("newTenantContactNumber");
     const saccoCode = generatedSaccoCode(value("newTenantName"));
     const codeInput = document.getElementById("newTenantCode");
     if (codeInput) codeInput.value = saccoCode;
@@ -3927,7 +3949,7 @@ async function createPlatformSacco(event) {
         name: value("newTenantName"),
         abbreviation: saccoCode,
         registrationNo: value("newTenantRegistrationNo"),
-        district: value("newTenantDistrict"),
+        district,
         licenseExpiry: value("newTenantLicenseExpiry"),
         packageId: value("newTenantPackageId")
       })
@@ -3935,6 +3957,15 @@ async function createPlatformSacco(event) {
     tenant = await api(`/tenants/${encodeURIComponent(tenant.id)}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status: "active" })
+    });
+    await api(`/tenants/${encodeURIComponent(tenant.id)}/profile`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        legalName: tenant.name,
+        cooperativeRegistrationNo: tenant.registrationNo,
+        address: saccoLocationAddress(district, parish, village),
+        phone: contactNumber
+      })
     });
     state.tenantFormMessage = `${tenant.name} registered as ${tenantStatusLabel(tenant.status)}.`;
     state.search = "";
