@@ -873,13 +873,19 @@ function reportsView() {
   const rows = regulatoryReportRows(platform);
   const consolidated = regulatoryConsolidated(rows);
   const catalogue = reportCatalogue(platform);
+  const exceptions = Number(consolidated.reconciliationExceptions || 0) + Number(consolidated.unbalancedJournalEntries || 0);
   return `
     <div class="dashboard-grid">
       ${summary(platform ? "Reporting SACCOs" : "Members in report", platform ? rows.length : consolidated.memberCount, platform ? "Regulatory rows available" : "Active and inactive members", "Review")}
       ${summary("Savings reported", money.format(consolidated.savings || 0), "Member deposit balances", "Export")}
       ${summary(platform ? "Subscription revenue" : "Loan portfolio", money.format(platform ? sum(dataRows("subscriptions"), "amount") : consolidated.loanPortfolio || 0), platform ? "Billing reports" : "Credit exposure", "Open")}
-      ${summary("Compliance exceptions", Number(consolidated.reconciliationExceptions || 0) + Number(consolidated.unbalancedJournalEntries || 0), "Reconciliation and journal checks", "Investigate")}
+      ${summary("Compliance exceptions", exceptions, "Reconciliation and journal checks", "Investigate")}
     </div>
+    ${rolePriorityPanel("Reporting evidence control", [
+      ["Ledger evidence", `${consolidated.journalEntries || 0} journal entr${Number(consolidated.journalEntries || 0) === 1 ? "y" : "ies"} available for report support.`, Number(consolidated.unbalancedJournalEntries || 0) ? "Review" : "Clear"],
+      ["Reconciliation evidence", `${consolidated.reconciliationExceptions || 0} reconciliation exception(s) affect export confidence.`, Number(consolidated.reconciliationExceptions || 0) ? "Investigate" : "Clear"],
+      ["Compliance status", `Current report status is ${labelize(consolidated.complianceStatus || (exceptions ? "review" : "clear"))}.`, exceptions ? "Review" : "Ready"]
+    ])}
     ${filterToolbar(platform ? "Search reports by SACCO, module, compliance status or export type" : "Search reports by module, member group, product or compliance status", "Export report", "Schedule report")}
     <section class="panel">
       <div class="panel-heading">
@@ -929,7 +935,7 @@ function regulatoryReportRows(platform) {
     openComplaints: dataRows("complaints").filter((complaint) => complaint.tenantId === tenant.id && !["resolved", "closed"].includes(normal(complaint.status))).length,
     complianceStatus: "local fallback"
   }));
-  const scopedRows = platform ? rows : rows.filter((row) => !row.tenantId || row.tenantId === state.currentTenantId);
+  const scopedRows = platform ? rows : rows.filter((row) => !row.tenantId || row.tenantId === state.user?.tenantId || row.tenantId === state.tenant?.id);
   return scopedRows.map((row) => ({
     ...row,
     tenantName: row.tenantName || tenantName(row.tenantId)
@@ -1496,6 +1502,8 @@ function accountingView() {
   const expenses = dataRows("expenses");
   const assets = dataRows("assets");
   const unbalanced = journals.filter((journal) => journal.isBalanced === false || Number(journal.debitTotal || 0) !== Number(journal.creditTotal || 0));
+  const closedPeriods = periods.filter((period) => normal(period.status) === "closed");
+  const openPeriods = periods.filter((period) => normal(period.status) === "open");
   return `
     <div class="dashboard-grid">
       ${summary("Chart accounts", accounts.length, "Ledger structure", "Open")}
@@ -1505,6 +1513,11 @@ function accountingView() {
       ${summary("Expenses", money.format(sum(expenses, "amount")), "Supplier and operating costs", "Open")}
       ${summary("Assets", money.format(sum(assets, "netBookValue", "cost")), "Fixed asset register", "View")}
     </div>
+    ${rolePriorityPanel("Accounting ledger confidence", [
+      ["Trial balance", unbalanced.length ? `${unbalanced.length} unbalanced journal entr${unbalanced.length === 1 ? "y" : "ies"} need correction.` : "All loaded journal entries are balanced.", unbalanced.length ? "Review" : "Clear"],
+      ["Period control", `${openPeriods.length} open period(s), ${closedPeriods.length} closed period(s). Closed periods block ordinary postings.`, openPeriods.length ? "Open" : "Review"],
+      ["Asset and expense evidence", `${expenses.length} expense record(s) and ${assets.length} asset record(s) support management reports.`, "Ready"]
+    ])}
     <div class="grid two">
       ${expenseCapturePanel()}
       ${assetCapturePanel()}
@@ -1529,6 +1542,7 @@ function reconciliationView() {
   const unmatchedStatementLines = Array.isArray(reconciliation.unmatchedStatementLines) ? reconciliation.unmatchedStatementLines : [];
   const unmatchedLedgerLines = Array.isArray(reconciliation.unmatchedLedgerLines) ? reconciliation.unmatchedLedgerLines : [];
   const callbackExceptions = callbacks.filter((row) => !normal(row.status).includes("posted") || row.duplicate);
+  const exceptionCount = Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) + Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) + callbackExceptions.length;
   return `
     <div class="dashboard-grid">
       ${summary("Provider callbacks", callbacks.length, "Mobile money events", "Open")}
@@ -1538,6 +1552,12 @@ function reconciliationView() {
       ${summary("Callback exceptions", callbackExceptions.length, "Failed or duplicate provider events", "Resolve")}
     </div>
     ${reconciliationControlPanel(summaryData)}
+    ${rolePriorityPanel("Reconciliation readiness checks", [
+      ["Statement matching", `${summaryData.matched ?? matches.length} matched record(s) against ${summaryData.statementLines || unmatchedStatementLines.length + matches.length} statement line(s).`, Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) ? "Review" : "Clear"],
+      ["Ledger exceptions", `${summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length} ledger line(s) remain unmatched.`, Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) ? "Investigate" : "Clear"],
+      ["Provider callbacks", `${callbackExceptions.length} callback exception(s) need provider or posting review.`, callbackExceptions.length ? "Resolve" : "Clear"],
+      ["Close readiness", exceptionCount ? "Resolve reconciliation exceptions before period close or regulatory export." : "Reconciliation evidence is ready for reporting.", exceptionCount ? "Blocked" : "Ready"]
+    ])}
     <div class="grid two">
       ${recordTable("Bank and mobile-money matching", reconciliationMatchRows(matches), ["externalReference", "statementAmount", "ledgerAmount", "accountCode", "sourceType", "postedAt"])}
       ${recordTable("Provider callback exceptions", callbackExceptions, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"])}
