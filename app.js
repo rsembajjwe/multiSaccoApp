@@ -25,6 +25,7 @@ const demoAccounts = [
 
 const state = {
   auth: "none",
+  authTab: "login",
   token: "",
   user: null,
   member: null,
@@ -53,6 +54,8 @@ const state = {
   tenantFormMessage: "",
   tenantFormError: "",
   saccoRegistrationTab: "platform",
+  publicRegistrationMessage: "",
+  publicRegistrationError: "",
   selectedSubscriptionId: "",
   selectedSubscriptionMessage: "",
   selectedSubscriptionError: "",
@@ -378,25 +381,7 @@ function renderLogin() {
         </div>
       </section>
       <section class="login-card">
-        <div class="form-heading">
-          <p class="eyebrow">Secure access</p>
-          <h2>Login to your portal</h2>
-          <p>Code identifies the SACCO or Platform Administration. Username and password identify the role: platform user, SACCO staff or member.</p>
-        </div>
-        <form id="loginForm" class="form-grid single">
-          ${field("SACCO or platform code", "code", "text", "PLATFORM", "Use PLATFORM or a SACCO code such as GVS")}
-          ${field("Username, email, phone or membership number", "username", "text", "admin@platform.local", "")}
-          <label>
-            <span>Password</span>
-            <div class="password-row">
-              <input id="password" type="password" placeholder="Enter password" autocomplete="current-password">
-              <button type="button" data-action="toggle-password">Show</button>
-            </div>
-          </label>
-          <label class="check-row"><input id="remember" type="checkbox" checked> <span>Remember this device</span></label>
-          <div id="loginError" class="alert error" hidden></div>
-          <button id="loginButton" class="button primary" type="submit">Login</button>
-        </form>
+        ${authPanelContent()}
         ${SHOW_DEMO_TOOLS ? `<section class="demo-panel">
           <div>
             <strong>Demo access</strong>
@@ -417,6 +402,76 @@ function renderLogin() {
       </section>
     </main>
   `);
+}
+
+function authPanelContent() {
+  if (state.authTab === "register") return publicSaccoRegistrationPanel();
+  if (state.authTab === "forgot") return authInfoPanel("Password recovery", "Enter your SACCO code and username on the support channel so an authorized administrator can verify and reset your access.");
+  if (state.authTab === "support") return authInfoPanel("Support", "For onboarding, payment or login support, contact the Tereka Online platform support desk with your SACCO code and phone number.");
+  return loginPanel();
+}
+
+function loginPanel() {
+  return `
+    <div class="form-heading">
+      <p class="eyebrow">Secure access</p>
+      <h2>Login to your portal</h2>
+      <p>Code identifies the SACCO or Platform Administration. Username and password identify the role: platform user, SACCO staff or member.</p>
+    </div>
+    <form id="loginForm" class="form-grid single">
+      ${field("SACCO or platform code", "code", "text", "PLATFORM", "Use PLATFORM or a SACCO code such as GVS")}
+      ${field("Username, email, phone or membership number", "username", "text", "admin@platform.local", "")}
+      <label>
+        <span>Password</span>
+        <div class="password-row">
+          <input id="password" type="password" placeholder="Enter password" autocomplete="current-password">
+          <button type="button" data-action="toggle-password">Show</button>
+        </div>
+      </label>
+      <label class="check-row"><input id="remember" type="checkbox" checked> <span>Remember this device</span></label>
+      <div id="loginError" class="alert error" hidden></div>
+      <button id="loginButton" class="button primary" type="submit">Login</button>
+    </form>
+  `;
+}
+
+function publicSaccoRegistrationPanel() {
+  return `
+    <div class="form-heading">
+      <p class="eyebrow">Self-registration</p>
+      <h2>Register SACCO</h2>
+      <p>Complete SACCO details. Mobile-money payment is initiated after submission, then platform approval activates the SACCO.</p>
+    </div>
+    ${state.publicRegistrationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.publicRegistrationMessage)}</strong></div>` : ""}
+    ${state.publicRegistrationError ? `<div class="notice warning"><strong>Registration failed.</strong><span>${escapeHtml(state.publicRegistrationError)}</span></div>` : ""}
+    <form id="publicSaccoRegistrationForm" class="form-grid">
+      <label><span>SACCO name</span><input id="publicTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
+      <label><span>SACCO code</span><input id="publicTenantCode" readonly placeholder="Generated automatically"></label>
+      <label><span>Registration number</span><input id="publicTenantRegistrationNo" required placeholder="Cooperative or UMRA registration"></label>
+      <label><span>District</span><input id="publicTenantDistrict" required></label>
+      <label><span>Parish</span><input id="publicTenantParish" required></label>
+      <label><span>Village</span><input id="publicTenantVillage" required></label>
+      <label><span>Contact number</span><input id="publicTenantContactNumber" required placeholder="+256..."></label>
+      <label><span>Member range</span><select id="publicTenantMemberRange">${memberRangeOptions()}</select></label>
+      <label class="wide"><span>Mobile money number</span><input id="publicTenantPaymentPhone" required placeholder="+256..."></label>
+      <div class="mini-fact wide">
+        <span>Payment step</span>
+        <strong>Mobile-money payment prompt is initiated after submission.</strong>
+      </div>
+      <button class="button primary wide" type="submit">Submit and initiate payment</button>
+    </form>
+  `;
+}
+
+function authInfoPanel(title, copy) {
+  return `
+    <div class="form-heading">
+      <p class="eyebrow">Tereka Online</p>
+      <h2>${title}</h2>
+      <p>${copy}</p>
+    </div>
+    <button class="button primary" type="button" data-auth-tab="login">Back to login</button>
+  `;
 }
 
 function renderShell() {
@@ -770,7 +825,7 @@ function platformSaccoRegistrationPanel() {
       <div class="panel-heading">
         <div>
           <h2>Register SACCO inside platform</h2>
-          <p>Platform administrators can create and activate a SACCO record directly. Public self-registration still goes through approval.</p>
+          <p>Platform administrators can create a SACCO record directly. Paid registrations activate immediately; unpaid registrations remain pending payment.</p>
         </div>
       </div>
       ${state.tenantFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.tenantFormMessage)}</strong></div>` : ""}
@@ -783,12 +838,13 @@ function platformSaccoRegistrationPanel() {
         <label><span>Parish</span><input id="newTenantParish" required placeholder="e.g. Central Parish"></label>
         <label><span>Village</span><input id="newTenantVillage" required placeholder="e.g. Market Zone"></label>
         <label><span>Contact number</span><input id="newTenantContactNumber" required placeholder="+256..."></label>
+        <label><span>Member range</span><select id="newTenantMemberRange">${memberRangeOptions()}</select></label>
+        <label><span>Payment status</span><select id="newTenantPaymentStatus">
+          <option value="paid">Paid - activate SACCO</option>
+          <option value="pending">Not paid - keep pending payment</option>
+        </select></label>
         <label><span>License expiry</span><input id="newTenantLicenseExpiry" type="date" required></label>
         <label><span>Subscription package</span><select id="newTenantPackageId">${packages.map((pkg) => `<option value="${escapeHtml(pkg.id || pkg.code || "")}">${escapeHtml(pkg.name || pkg.code || "Package")}</option>`).join("") || `<option value="">Assign later</option>`}</select></label>
-        <div class="mini-fact wide">
-          <span>Creation mode</span>
-          <strong>Automatic platform creation and activation</strong>
-        </div>
         <div class="form-actions inline">
           <button class="button primary" type="submit">Register SACCO</button>
           <button class="button secondary" type="button" data-action="refresh">Refresh applications</button>
@@ -2929,6 +2985,7 @@ function tenantDetailPanel() {
         ${mini("District", tenant.district)}
         ${mini("Parish", profileLocationPart(profile, "Parish"))}
         ${mini("Village", profileLocationPart(profile, "Village"))}
+        ${mini("Member range", profileLocationPart(profile, "Member range"))}
         ${mini("Registration", tenant.registrationNo)}
         ${mini("License expiry", tenant.licenseExpiry)}
         ${mini("Onboarding", `${tenant.onboarding || 0}%`)}
@@ -3605,17 +3662,28 @@ function updateGeneratedSaccoCode() {
   if (input) input.value = generatedSaccoCode(name);
 }
 
-function saccoLocationAddress(district, parish, village) {
+function saccoLocationAddress(district, parish, village, memberRange = "") {
   return [
     district ? `District: ${district}` : "",
     parish ? `Parish: ${parish}` : "",
-    village ? `Village: ${village}` : ""
+    village ? `Village: ${village}` : "",
+    memberRange ? `Member range: ${memberRange}` : ""
   ].filter(Boolean).join("; ");
 }
 
 function profileLocationPart(profile, label) {
   const match = String(profile?.address || "").match(new RegExp(`${label}:\\\\s*([^;]+)`, "i"));
   return match ? match[1].trim() : "";
+}
+
+function memberRangeOptions() {
+  return [
+    ["100-250", "100 to 250 members"],
+    ["251-500", "251 to 500 members"],
+    ["501-2500", "501 to 2,500 members"],
+    ["2501-10000", "2,501 to 10,000 members"],
+    ["10000+", "Above 10,000 members"]
+  ].map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
 }
 
 function packageCards() {
@@ -3940,6 +4008,8 @@ async function createPlatformSacco(event) {
     const parish = value("newTenantParish");
     const village = value("newTenantVillage");
     const contactNumber = value("newTenantContactNumber");
+    const memberRange = value("newTenantMemberRange");
+    const paymentStatus = value("newTenantPaymentStatus");
     const saccoCode = generatedSaccoCode(value("newTenantName"));
     const codeInput = document.getElementById("newTenantCode");
     if (codeInput) codeInput.value = saccoCode;
@@ -3954,29 +4024,52 @@ async function createPlatformSacco(event) {
         packageId: value("newTenantPackageId")
       })
     });
-    tenant = await api(`/tenants/${encodeURIComponent(tenant.id)}/status`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "active" })
-    });
+    if (paymentStatus === "paid") {
+      tenant = await api(`/tenants/${encodeURIComponent(tenant.id)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "active" })
+      });
+    }
     await api(`/tenants/${encodeURIComponent(tenant.id)}/profile`, {
       method: "PATCH",
       body: JSON.stringify({
         legalName: tenant.name,
         cooperativeRegistrationNo: tenant.registrationNo,
-        address: saccoLocationAddress(district, parish, village),
+        address: saccoLocationAddress(district, parish, village, memberRange),
         phone: contactNumber
       })
     });
-    state.tenantFormMessage = `${tenant.name} registered as ${tenantStatusLabel(tenant.status)}.`;
+    state.tenantFormMessage = paymentStatus === "paid"
+      ? `${tenant.name} registered and activated.`
+      : `${tenant.name} registered pending payment confirmation.`;
     state.search = "";
     state.tableState = {};
     state.saccoRegistrationTab = "applications";
     await refreshAll();
-    state.tenantFormMessage = `${tenant.name} registered as ${tenantStatusLabel(tenant.status)}.`;
+    state.tenantFormMessage = paymentStatus === "paid"
+      ? `${tenant.name} registered and activated.`
+      : `${tenant.name} registered pending payment confirmation.`;
     renderShell();
   } catch (error) {
     state.tenantFormError = friendlyUserError(error, true);
     renderShell();
+  }
+}
+
+async function submitPublicSaccoRegistration(event) {
+  event.preventDefault();
+  state.publicRegistrationMessage = "";
+  state.publicRegistrationError = "";
+  try {
+    const saccoCode = generatedSaccoCode(value("publicTenantName"));
+    const codeInput = document.getElementById("publicTenantCode");
+    if (codeInput) codeInput.value = saccoCode;
+    const reference = `MM-${saccoCode}-${Date.now().toString().slice(-6)}`;
+    state.publicRegistrationMessage = `SACCO code ${saccoCode} reserved. Mobile-money payment prompt initiated to ${value("publicTenantPaymentPhone") || value("publicTenantContactNumber")} with reference ${reference}. Platform approval follows payment confirmation.`;
+    renderLogin();
+  } catch (error) {
+    state.publicRegistrationError = error.message;
+    renderLogin();
   }
 }
 
@@ -4970,6 +5063,12 @@ async function api(path, options = {}, token = state.token) {
 }
 
 function bindEvents() {
+  document.querySelectorAll("[data-auth-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.authTab = button.dataset.authTab;
+      renderLogin();
+    });
+  });
   document.querySelector("#loginForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const button = document.getElementById("loginButton");
@@ -5156,6 +5255,11 @@ function bindEvents() {
   document.querySelector("#platformSaccoForm")?.addEventListener("submit", createPlatformSacco);
   document.querySelector("#newTenantName")?.addEventListener("input", updateGeneratedSaccoCode);
   updateGeneratedSaccoCode();
+  document.querySelector("#publicSaccoRegistrationForm")?.addEventListener("submit", submitPublicSaccoRegistration);
+  document.querySelector("#publicTenantName")?.addEventListener("input", () => {
+    const input = document.getElementById("publicTenantCode");
+    if (input) input.value = generatedSaccoCode(value("publicTenantName"));
+  });
   document.querySelector("#transactionForm")?.addEventListener("submit", createTransactionFromForm);
   document.querySelector("#loanApplicationForm")?.addEventListener("submit", createLoanFromForm);
   document.querySelector("#loanGuarantorForm")?.addEventListener("submit", addLoanGuarantor);
@@ -5262,6 +5366,7 @@ async function logout() {
   localStorage.removeItem(MEMBER_TOKEN_KEY);
   Object.assign(state, {
     auth: "none",
+    authTab: "login",
     token: "",
     user: null,
     member: null,
@@ -5284,6 +5389,8 @@ async function logout() {
     tenantFormMessage: "",
     tenantFormError: "",
     saccoRegistrationTab: "platform",
+    publicRegistrationMessage: "",
+    publicRegistrationError: "",
     selectedSubscriptionId: "",
     selectedSubscriptionMessage: "",
     selectedSubscriptionError: "",
