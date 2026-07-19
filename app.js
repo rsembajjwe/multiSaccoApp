@@ -1243,18 +1243,31 @@ function complaintsView() {
   const open = rows.filter((row) => !["closed", "resolved"].includes(normal(row.status)));
   const urgent = rows.filter((row) => normal(row.priority) === "urgent");
   const assigned = rows.filter((row) => row.assignedUserId);
+  if (isPlatform()) {
+    return `
+      <div class="dashboard-grid">
+        ${summary("Complaints from SACCO admins", open.length, "Open platform support cases", "Review")}
+        ${summary("Urgent complaints", urgent.length, "Needs same-day action", "Escalate")}
+        ${summary("In progress", rows.filter((row) => normal(row.status) === "in_progress").length, "Being handled", "Track")}
+        ${summary("Resolved", rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", "Review")}
+      </div>
+      ${filterToolbar("Search complaints by SACCO, category, priority, status or officer", "Export complaints", "Assign officer")}
+      ${complaintDetailPanel(rows)}
+      ${recordTable("Complaints from SACCO admins", rows, ["tenantName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
+    `;
+  }
   return `
     <div class="dashboard-grid">
-      ${summary(isPlatform() ? "SACCO admin complaints" : "Open complaints", open.length, isPlatform() ? "Raised by SACCO administrators" : "Member support workload", "Assign")}
-      ${summary(isPlatform() ? "Urgent SACCO complaints" : "Urgent complaints", urgent.length, "Needs same-day action", "Escalate")}
+      ${summary("Open complaints", open.length, "Member support workload", "Assign")}
+      ${summary("Urgent complaints", urgent.length, "Needs same-day action", "Escalate")}
       ${summary("In progress", rows.filter((row) => normal(row.status) === "in_progress").length, "Being handled", "Track")}
       ${summary("Resolved", rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", "Review")}
     </div>
     ${complaintServiceControlPanel(rows, open, urgent, assigned)}
-    ${filterToolbar(isPlatform() ? "Search SACCO admin complaints by SACCO, category, priority, status or officer" : "Search complaints by member, category, priority, status or officer", isPlatform() ? "New SACCO admin complaint" : "New complaint", "Assign officer")}
+    ${filterToolbar("Search complaints by member, category, priority, status or officer", "New complaint", "Assign officer")}
     ${complaintCapturePanel()}
     ${complaintDetailPanel(rows)}
-    ${recordTable(isPlatform() ? "Platform SACCO admin complaint desk" : "SACCO member complaint desk", rows, isPlatform() ? ["tenantName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"] : ["memberName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
+    ${recordTable("SACCO member complaint desk", rows, ["memberName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
   `;
 }
 
