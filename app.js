@@ -3550,9 +3550,10 @@ async function tryStaffLogin(code, username, password) {
   try {
     return await api("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ saccoCode: code, username, password })
+      body: JSON.stringify({ code, saccoCode: code, username, password })
     }, "");
-  } catch {
+  } catch (error) {
+    state.lastError = error.message;
     return null;
   }
 }
@@ -4808,7 +4809,7 @@ function bindEvents() {
     try {
       await login(value("code"), value("username"), value("password"));
     } catch (loginError) {
-      error.textContent = "Invalid code, username, or password.";
+      error.textContent = state.lastError || loginError.message || "Invalid code, username, or password.";
       error.hidden = false;
     } finally {
       button.disabled = false;
