@@ -756,7 +756,7 @@ function saccoRegistrationTabContent(applications) {
   if (state.saccoRegistrationTab === "applications") {
     return `
       ${tenantDetailPanel()}
-      ${recordTable("SACCO application list", applications, ["id", "name", "district", "registrationNo", "licenseExpiry", "onboarding", "status"])}
+      ${recordTable("SACCO application list", applications, ["saccoCode", "name", "district", "registrationNo", "licenseExpiry", "onboarding", "status"])}
     `;
   }
   if (state.saccoRegistrationTab === "self") return selfRegistrationApprovalPanel();
@@ -777,7 +777,7 @@ function platformSaccoRegistrationPanel() {
       ${state.tenantFormError ? `<div class="notice warning"><strong>Could not register SACCO.</strong><span>${escapeHtml(state.tenantFormError)}</span></div>` : ""}
       <form id="platformSaccoForm" class="form-grid">
         <label><span>SACCO name</span><input id="newTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
-        <label><span>SACCO code</span><input id="newTenantCode" required maxlength="12" placeholder="e.g. TFS"></label>
+        <label><span>SACCO code</span><input id="newTenantCode" readonly placeholder="Generated automatically"></label>
         <label><span>Registration number</span><input id="newTenantRegistrationNo" placeholder="Cooperative or UMRA registration"></label>
         <label><span>District</span><input id="newTenantDistrict" required placeholder="e.g. Kampala"></label>
         <label><span>License expiry</span><input id="newTenantLicenseExpiry" type="date" required></label>
@@ -3573,6 +3573,33 @@ function checkedRoleIds(name) {
   return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((input) => input.value);
 }
 
+function generatedSaccoCode(name) {
+  const words = String(name || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((word) => !["SACCO", "COOPERATIVE", "COOP", "LIMITED", "LTD", "THE", "AND", "OF"].includes(word));
+  const base = (words.length > 1 ? words.map((word) => word[0]).join("") : (words[0] || "SACCO").slice(0, 5))
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8) || "SACCO";
+  const existingCodes = new Set(tenantRows().map((tenant) => normal(tenant.saccoCode || tenant.abbreviation || tenant.code)));
+  let code = base.length >= 3 ? base : `${base}S`.slice(0, 3);
+  let suffix = 2;
+  while (existingCodes.has(normal(code))) {
+    const suffixText = String(suffix);
+    code = `${base.slice(0, Math.max(1, 8 - suffixText.length))}${suffixText}`;
+    suffix += 1;
+  }
+  return code.slice(0, 12);
+}
+
+function updateGeneratedSaccoCode() {
+  const input = document.getElementById("newTenantCode");
+  const name = value("newTenantName");
+  if (input) input.value = generatedSaccoCode(name);
+}
+
 function packageCards() {
   const packages = dataRows("subscriptionPackages");
   return `<section class="panel"><h2>Subscription package configuration</h2><div class="package-grid">${(packages.length ? packages : fallbackPackages()).map((pkg) => `<article><h3>${pkg.name}</h3><strong>${money.format(pkg.price || pkg.amount || 0)}</strong><p>${pkg.maxMembers || pkg.members || "Configured"} members / ${pkg.maxBranches || pkg.branches || "Configured"} branches</p><span>${pkg.modules || "Included modules, SMS, storage and support level"}</span><button class="button secondary" type="button">Configure</button></article>`).join("")}</div></section>`;
@@ -3891,11 +3918,14 @@ async function createPlatformSacco(event) {
   state.tenantFormMessage = "";
   state.tenantFormError = "";
   try {
+    const saccoCode = generatedSaccoCode(value("newTenantName"));
+    const codeInput = document.getElementById("newTenantCode");
+    if (codeInput) codeInput.value = saccoCode;
     let tenant = await api("/tenants", {
       method: "POST",
       body: JSON.stringify({
         name: value("newTenantName"),
-        abbreviation: value("newTenantCode"),
+        abbreviation: saccoCode,
         registrationNo: value("newTenantRegistrationNo"),
         district: value("newTenantDistrict"),
         licenseExpiry: value("newTenantLicenseExpiry"),
@@ -5093,6 +5123,8 @@ function bindEvents() {
   });
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
   document.querySelector("#platformSaccoForm")?.addEventListener("submit", createPlatformSacco);
+  document.querySelector("#newTenantName")?.addEventListener("input", updateGeneratedSaccoCode);
+  updateGeneratedSaccoCode();
   document.querySelector("#transactionForm")?.addEventListener("submit", createTransactionFromForm);
   document.querySelector("#loanApplicationForm")?.addEventListener("submit", createLoanFromForm);
   document.querySelector("#loanGuarantorForm")?.addEventListener("submit", addLoanGuarantor);
@@ -5303,7 +5335,9 @@ function dataRows(key) {
 }
 
 function tenantRows() {
-  return dataRows("tenants").filter((tenant) => tenant.id !== "tenant_platform");
+  return dataRows("tenants")
+    .filter((tenant) => tenant.id !== "tenant_platform")
+    .map((tenant) => ({ ...tenant, saccoCode: tenant.abbreviation || tenant.code || tenant.id }));
 }
 
 function pendingTenants() {
