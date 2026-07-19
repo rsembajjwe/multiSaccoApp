@@ -221,8 +221,38 @@ function app() {
 }
 
 function setHtml(markup) {
+  const focusState = captureFocusState();
   app().innerHTML = markup;
   bindEvents();
+  restoreFocusState(focusState);
+}
+
+function captureFocusState() {
+  const element = document.activeElement;
+  if (!element || !["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName)) return null;
+  const selector = element.id
+    ? `#${CSS.escape(element.id)}`
+    : element.dataset.tableSearch
+      ? `[data-table-search="${CSS.escape(element.dataset.tableSearch)}"]`
+      : element.dataset.searchInput !== undefined
+        ? "[data-search-input]"
+        : null;
+  if (!selector) return null;
+  return {
+    selector,
+    start: typeof element.selectionStart === "number" ? element.selectionStart : null,
+    end: typeof element.selectionEnd === "number" ? element.selectionEnd : null
+  };
+}
+
+function restoreFocusState(focusState) {
+  if (!focusState) return;
+  const element = document.querySelector(focusState.selector);
+  if (!element) return;
+  element.focus({ preventScroll: true });
+  if (typeof element.setSelectionRange === "function" && focusState.start !== null && focusState.end !== null) {
+    element.setSelectionRange(focusState.start, focusState.end);
+  }
 }
 
 function hasPermission(permission) {
