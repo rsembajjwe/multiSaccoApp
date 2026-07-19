@@ -2636,10 +2636,20 @@ function addUserPanel(platformOnly) {
         <label><span>Email / username</span><input id="newUserEmail" type="email" required placeholder="name@tereka.online"></label>
         <label><span>Phone</span><input id="newUserPhone" placeholder="+256..."></label>
         <label><span>Temporary password</span><input id="newUserPassword" type="password" required minlength="10" placeholder="At least 10 characters"></label>
-        <label><span>Role</span><select id="newUserRoleId" required>${roles.map((role) => `<option value="${escapeHtml(role.id)}">${escapeHtml(role.name)}</option>`).join("")}</select></label>
+        <div class="wide">
+          <span class="field-label">Roles</span>
+          <div class="role-checkbox-grid">
+            ${roles.map((role, index) => `
+              <label class="check-row">
+                <input type="checkbox" name="newUserRoleIds" value="${escapeHtml(role.id)}" data-role-checkbox="new" ${index === 0 ? "checked" : ""}>
+                <span>${escapeHtml(role.name)}</span>
+              </label>
+            `).join("")}
+          </div>
+        </div>
         <div class="mini-fact wide">
           <span>Role access preview</span>
-          <strong id="newUserRolePreview">${escapeHtml(rolePurpose(defaultRole.name || "SACCO staff", platformOnly))} - ${escapeHtml(roleModuleScope(defaultRole.name || "SACCO staff", platformOnly))}</strong>
+          <strong id="newUserRolePreview">${escapeHtml(roleSummaryText(defaultRole.id ? [defaultRole.id] : [], platformOnly))}</strong>
         </div>
         <div class="form-actions inline">
           <button class="button primary" type="submit">Create user</button>
@@ -2654,8 +2664,9 @@ function userDetailPanel(users, canManageRoles) {
   const selected = users.find((user) => user.id === state.selectedUserId);
   if (!selected) return "";
   const roles = userRoleOptions(selected.tenantId === "tenant_platform");
-  const assigned = state.selectedUserRoles[0] || "";
-  const selectedRole = roles.find((role) => role.id === assigned) || roles[0] || {};
+  const assignedRoleIds = state.selectedUserRoles || [];
+  const assignedRoles = roles.filter((role) => assignedRoleIds.includes(role.id));
+  const primaryRole = assignedRoles[0] || roles[0] || {};
   const platformUser = selected.tenantId === "tenant_platform";
   const canManageUser = canManageRoles && (!platformUser || roleKind() === "super");
   const nextStatus = normal(selected.status) === "active" ? "suspended" : "active";
@@ -2675,9 +2686,9 @@ function userDetailPanel(users, canManageRoles) {
         ${mini("Status", selected.status)}
         ${mini("Phone", selected.phone)}
         ${mini("User ID", selected.id)}
-        ${mini("Current role", selectedRole.name || "Unassigned")}
-        ${mini("Access purpose", rolePurpose(selectedRole.name || selected.role || "", platformUser))}
-        ${mini("Module scope", roleModuleScope(selectedRole.name || selected.role || "", platformUser))}
+        ${mini("Current roles", assignedRoles.length ? assignedRoles.map((role) => role.name).join(", ") : "Unassigned")}
+        ${mini("Access purpose", rolePurpose(primaryRole.name || selected.role || "", platformUser))}
+        ${mini("Module scope", roleModuleScope(primaryRole.name || selected.role || "", platformUser))}
         ${mini("User type", platformUser ? "Platform administrator" : "SACCO staff")}
       </div>
       <form id="userProfileForm" class="form-grid">
@@ -2691,15 +2702,20 @@ function userDetailPanel(users, canManageRoles) {
       </form>
       <form id="userRoleForm" class="form-grid single">
         <input type="hidden" id="selectedUserId" value="${escapeHtml(selected.id)}">
-        <label>
-          <span>${platformUser ? "Assigned platform role" : "Assigned SACCO staff role"}</span>
-          <select id="selectedUserRoleId" ${canManageUser ? "" : "disabled"}>
-            ${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === assigned ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}
-          </select>
-        </label>
+        <div>
+          <span class="field-label">${platformUser ? "Assigned platform roles" : "Assigned SACCO staff roles"}</span>
+          <div class="role-checkbox-grid">
+            ${roles.map((role) => `
+              <label class="check-row">
+                <input type="checkbox" name="selectedUserRoleIds" value="${escapeHtml(role.id)}" data-role-checkbox="selected" ${assignedRoleIds.includes(role.id) ? "checked" : ""} ${canManageUser ? "" : "disabled"}>
+                <span>${escapeHtml(role.name)}</span>
+              </label>
+            `).join("")}
+          </div>
+        </div>
         <div class="mini-fact">
           <span>Selected access</span>
-          <strong id="selectedUserRolePreview">${escapeHtml(rolePurpose(selectedRole.name || "Staff", platformUser))} - ${escapeHtml(roleModuleScope(selectedRole.name || "Staff", platformUser))}</strong>
+          <strong id="selectedUserRolePreview">${escapeHtml(roleSummaryText(assignedRoleIds, platformUser))}</strong>
         </div>
         <div class="form-actions">
           ${canManageUser ? `<button class="button primary" type="submit">Save role</button>` : `<span class="status pending">Role view only</span>`}
@@ -3469,6 +3485,18 @@ function rolePreviewText(roleId, platformOnly) {
   return `${rolePurpose(roleName, platformOnly)} - ${roleModuleScope(roleName, platformOnly)}`;
 }
 
+function roleSummaryText(roleIds, platformOnly) {
+  const roles = userRoleOptions(platformOnly).filter((role) => (roleIds || []).includes(role.id));
+  if (!roles.length) return "Select at least one role.";
+  return roles
+    .map((role) => `${role.name}: ${rolePurpose(role.name, platformOnly)} / ${roleModuleScope(role.name, platformOnly)}`)
+    .join(" | ");
+}
+
+function checkedRoleIds(name) {
+  return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((input) => input.value);
+}
+
 function packageCards() {
   const packages = dataRows("subscriptionPackages");
   return `<section class="panel"><h2>Subscription package configuration</h2><div class="package-grid">${(packages.length ? packages : fallbackPackages()).map((pkg) => `<article><h3>${pkg.name}</h3><strong>${money.format(pkg.price || pkg.amount || 0)}</strong><p>${pkg.maxMembers || pkg.members || "Configured"} members / ${pkg.maxBranches || pkg.branches || "Configured"} branches</p><span>${pkg.modules || "Included modules, SMS, storage and support level"}</span><button class="button secondary" type="button">Configure</button></article>`).join("")}</div></section>`;
@@ -3612,7 +3640,8 @@ async function createUserFromForm(event) {
     submit.textContent = "Creating...";
   }
   try {
-    const roleId = value("newUserRoleId");
+    const roleIds = checkedRoleIds("newUserRoleIds");
+    if (!roleIds.length) throw new Error("Select at least one role for this user.");
     const created = await api("/users", {
       method: "POST",
       body: JSON.stringify({
@@ -3623,11 +3652,11 @@ async function createUserFromForm(event) {
         password: value("newUserPassword")
       })
     });
-    if (roleId) {
+    if (roleIds.length) {
       try {
         await api(`/users/${encodeURIComponent(created.id)}/roles`, {
           method: "PUT",
-          body: JSON.stringify({ roleIds: [roleId] })
+          body: JSON.stringify({ roleIds })
         });
       } catch (roleError) {
         state.userFormError = `User was created, but role assignment needs review: ${friendlyUserError(roleError, platformOnly)}`;
@@ -3672,18 +3701,23 @@ async function saveSelectedUserRole(event) {
   state.selectedUserMessage = "";
   state.selectedUserError = "";
   const userId = value("selectedUserId");
-  const roleId = value("selectedUserRoleId");
+  const roleIds = checkedRoleIds("selectedUserRoleIds");
+  if (!roleIds.length) {
+    state.selectedUserError = "Assign at least one role to the user.";
+    renderShell();
+    return;
+  }
   try {
     const assignment = await api(`/users/${encodeURIComponent(userId)}/roles`, {
       method: "PUT",
-      body: JSON.stringify({ roleIds: [roleId] })
+      body: JSON.stringify({ roleIds })
     });
-    state.selectedUserRoles = assignment.roleIds || [roleId];
-    state.selectedUserMessage = "Role assignment saved.";
+    state.selectedUserRoles = assignment.roleIds || roleIds;
+    state.selectedUserMessage = "Role assignments saved.";
     await refreshAll();
     state.selectedUserId = userId;
-    state.selectedUserRoles = assignment.roleIds || [roleId];
-    state.selectedUserMessage = "Role assignment saved.";
+    state.selectedUserRoles = assignment.roleIds || roleIds;
+    state.selectedUserMessage = "Role assignments saved.";
     renderShell();
   } catch (error) {
     state.selectedUserError = error.message;
@@ -4931,14 +4965,14 @@ function bindEvents() {
   document.querySelectorAll("[data-user-delete]").forEach((button) => {
     button.addEventListener("click", () => deleteSelectedUser(button.dataset.userDelete));
   });
-  document.querySelector("#newUserRoleId")?.addEventListener("change", (event) => {
-    const preview = document.getElementById("newUserRolePreview");
-    if (preview) preview.textContent = rolePreviewText(event.target.value, isPlatform());
-  });
-  document.querySelector("#selectedUserRoleId")?.addEventListener("change", (event) => {
-    const selected = dataRows("users").find((user) => user.id === state.selectedUserId);
-    const preview = document.getElementById("selectedUserRolePreview");
-    if (preview) preview.textContent = rolePreviewText(event.target.value, selected?.tenantId === "tenant_platform");
+  document.querySelectorAll("[data-role-checkbox]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const selected = dataRows("users").find((user) => user.id === state.selectedUserId);
+      const platformOnly = input.dataset.roleCheckbox === "selected" ? selected?.tenantId === "tenant_platform" : isPlatform();
+      const name = input.dataset.roleCheckbox === "selected" ? "selectedUserRoleIds" : "newUserRoleIds";
+      const preview = document.getElementById(input.dataset.roleCheckbox === "selected" ? "selectedUserRolePreview" : "newUserRolePreview");
+      if (preview) preview.textContent = roleSummaryText(checkedRoleIds(name), platformOnly);
+    });
   });
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
   document.querySelector("#transactionForm")?.addEventListener("submit", createTransactionFromForm);

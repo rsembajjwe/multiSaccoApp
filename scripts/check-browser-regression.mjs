@@ -241,20 +241,26 @@ async function assertPlatformUserCreation(page) {
   await page.locator("#newUserEmail").fill(`browser.platform.${stamp}@tereka.local`);
   await page.locator("#newUserPhone").fill("+256700009999");
   await page.locator("#newUserPassword").fill("TempPass@12345");
-  await page.locator("#newUserRoleId").selectOption({ label: "Platform Support Officer" }).catch(async () => {
-    await page.locator("#newUserRoleId").selectOption({ index: 0 });
-  });
+  const createSupportRole = page.locator("label.check-row", { hasText: "Platform Support Officer" }).locator("input[name='newUserRoleIds']");
+  if (await createSupportRole.count()) {
+    await createSupportRole.check();
+  } else {
+    await page.locator("input[name='newUserRoleIds']").first().check();
+  }
   await page.locator("#addUserForm button[type='submit']").click();
   await expectText(page, fullName, "created platform user visible");
   await page.locator("[data-user-tab='list']").click();
   await page.locator("#globalSearch").fill(fullName);
   await page.locator("tr", { hasText: fullName }).locator("[data-row-action='user-detail']").click();
   await expectText(page, "User detail and role assignment", "platform user detail panel");
-  await page.locator("#selectedUserRoleId").selectOption({ label: "Platform Administrator" }).catch(async () => {
-    await page.locator("#selectedUserRoleId").selectOption({ index: 0 });
-  });
+  const platformAdminRole = page.locator("label.check-row", { hasText: "Platform Administrator" }).locator("input[name='selectedUserRoleIds']");
+  if (await platformAdminRole.count()) {
+    await platformAdminRole.check();
+  } else {
+    await page.locator("input[name='selectedUserRoleIds']").first().check();
+  }
   await page.locator("#userRoleForm button[type='submit']").click();
-  await expectAnyText(page, ["Role assignment saved", "Role update failed"], "platform user role assignment response");
+  await expectAnyText(page, ["Role assignments saved", "Role update failed"], "platform user role assignment response");
   await page.locator("#globalSearch").fill("");
   console.log("PASS platform user creation");
 }
