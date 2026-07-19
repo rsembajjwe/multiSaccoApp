@@ -42,6 +42,7 @@ try {
   await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
   await assertPlatformDashboardCardNavigation(page);
   await assertScreen(page, "sacco-applications", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
+  await assertSaccoRegistrationTabs(page);
   await assertSaccoApplicationReview(page);
   await assertScreen(page, "subscriptions", ["Subscription list", "Subscription package configuration"]);
   await assertSubscriptionControl(page);
@@ -230,6 +231,17 @@ async function assertPlatformDashboardCardNavigation(page) {
   await expectText(page, "Subscription list", "Platform dashboard subscription card navigation");
   await navigateTo(page, "dashboard");
   console.log("PASS Platform dashboard card navigation");
+}
+
+async function assertSaccoRegistrationTabs(page) {
+  await page.locator("[data-sacco-registration-tab='platform']").click();
+  await expectText(page, "Register SACCO", "platform SACCO registration tab");
+  await page.locator("[data-sacco-registration-tab='applications']").click();
+  await expectText(page, "SACCO application list", "SACCO application list tab");
+  await page.locator("[data-sacco-registration-tab='self']").click();
+  await expectText(page, "Self-registration approval path", "self-registration approval tab");
+  await page.locator("[data-sacco-registration-tab='applications']").click();
+  console.log("PASS SACCO registration tabs");
 }
 
 async function assertPlatformUserCreation(page) {

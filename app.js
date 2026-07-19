@@ -52,6 +52,7 @@ const state = {
   selectedTenantError: "",
   tenantFormMessage: "",
   tenantFormError: "",
+  saccoRegistrationTab: "platform",
   selectedSubscriptionId: "",
   selectedSubscriptionMessage: "",
   selectedSubscriptionError: "",
@@ -730,11 +731,36 @@ function saccoApplications() {
   const applications = tenantRows().map((tenant) => ({ ...tenant, action: "tenant-detail", actionLabel: "Review", actionId: tenant.id }));
   return `
     ${filterToolbar("Search applications by SACCO, district, contact or status", "Assign reviewer", "Export applications")}
-    ${platformSaccoRegistrationPanel()}
-    ${tenantDetailPanel()}
-    ${recordTable("SACCO application list", applications, ["id", "name", "district", "registrationNo", "licenseExpiry", "onboarding", "status"])}
-    ${selfRegistrationApprovalPanel()}
+    ${saccoRegistrationTabs()}
+    ${saccoRegistrationTabContent(applications)}
   `;
+}
+
+function saccoRegistrationTabs() {
+  const tabs = [
+    ["platform", "Register SACCO inside platform"],
+    ["applications", "SACCO application list"],
+    ["self", "Self-registration approval path"]
+  ];
+  if (!tabs.some(([id]) => id === state.saccoRegistrationTab)) state.saccoRegistrationTab = "platform";
+  return `
+    <section class="panel compact-panel">
+      <div class="tabs management-tabs">
+        ${tabs.map(([id, label]) => `<button class="${state.saccoRegistrationTab === id ? "active" : ""}" type="button" data-sacco-registration-tab="${id}">${label}</button>`).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function saccoRegistrationTabContent(applications) {
+  if (state.saccoRegistrationTab === "applications") {
+    return `
+      ${tenantDetailPanel()}
+      ${recordTable("SACCO application list", applications, ["id", "name", "district", "registrationNo", "licenseExpiry", "onboarding", "status"])}
+    `;
+  }
+  if (state.saccoRegistrationTab === "self") return selfRegistrationApprovalPanel();
+  return platformSaccoRegistrationPanel();
 }
 
 function platformSaccoRegistrationPanel() {
@@ -3887,6 +3913,7 @@ async function createPlatformSacco(event) {
     state.tenantFormMessage = `${tenant.name} registered as ${tenantStatusLabel(tenant.status)}.`;
     state.search = "";
     state.tableState = {};
+    state.saccoRegistrationTab = "applications";
     await refreshAll();
     state.tenantFormMessage = `${tenant.name} registered as ${tenantStatusLabel(tenant.status)}.`;
     renderShell();
@@ -4943,6 +4970,12 @@ function bindEvents() {
       renderShell();
     });
   });
+  document.querySelectorAll("[data-sacco-registration-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.saccoRegistrationTab = button.dataset.saccoRegistrationTab;
+      renderShell();
+    });
+  });
   document.querySelectorAll("[data-row-action='user-detail']").forEach((button) => {
     button.addEventListener("click", () => openUserDetail(button.dataset.rowId));
   });
@@ -5191,6 +5224,7 @@ async function logout() {
     selectedTenantError: "",
     tenantFormMessage: "",
     tenantFormError: "",
+    saccoRegistrationTab: "platform",
     selectedSubscriptionId: "",
     selectedSubscriptionMessage: "",
     selectedSubscriptionError: "",
