@@ -3665,7 +3665,8 @@ async function createUserFromForm(event) {
     }
     state.userFormMessage = state.userFormError ? `Created ${created.fullName || created.email}.` : `Created ${created.fullName || created.email} and assigned role.`;
     state.userAdminTab = "list";
-    state.search = created.email || created.fullName || "";
+    state.search = "";
+    state.tableState = {};
     await refreshAll();
   } catch (error) {
     state.userFormError = friendlyUserError(error, platformOnly);

@@ -248,9 +248,11 @@ async function assertPlatformUserCreation(page) {
     await page.locator("input[name='newUserRoleIds']").first().check();
   }
   await page.locator("#addUserForm button[type='submit']").click();
-  await expectText(page, fullName, "created platform user visible");
-  await page.locator("[data-user-tab='list']").click();
+  await page.waitForSelector("[data-user-tab='list'].active", { timeout: 15000 });
+  const postCreateSearch = await page.locator("#globalSearch").inputValue();
+  if (postCreateSearch) throw new Error(`Expected global search to be cleared after platform user creation, got ${postCreateSearch}`);
   await page.locator("#globalSearch").fill(fullName);
+  await expectText(page, fullName, "created platform user visible");
   await page.locator("tr", { hasText: fullName }).locator("[data-row-action='user-detail']").click();
   await expectText(page, "User detail and role assignment", "platform user detail panel");
   const platformAdminRole = page.locator("label.check-row", { hasText: "Platform Administrator" }).locator("input[name='selectedUserRoleIds']");
