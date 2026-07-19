@@ -1023,7 +1023,7 @@ function usersView() {
   const platformOnly = isPlatform();
   const users = platformOnly ? dataRows("users").filter((user) => user.tenantId === "tenant_platform") : dataRows("users");
   const canCreate = hasPermission("users:create") || hasPermission("roles:create");
-  const rows = users.map((user) => ({ ...user, action: "user-detail", actionLabel: "View", actionId: user.id }));
+  const rows = users.map((user) => ({ ...staffAccessRow(user, platformOnly), action: "user-detail", actionLabel: "Manage access", actionId: user.id }));
   const roles = userRoleOptions(platformOnly);
   return `
     <div class="role-banner">
@@ -1036,10 +1036,11 @@ function usersView() {
       ${summary("Configured roles", roles.length, "Available assignments", "Manage")}
       ${summary("Role coverage", roleCoverage(users, roles), "Users with assigned roles", "Audit")}
     </div>
+    ${!platformOnly ? saccoStaffAccessGuide(roles) : ""}
     ${canCreate ? addUserPanel(platformOnly) : ""}
     ${userDetailPanel(users, canCreate)}
     ${roleCoveragePanel(users, roles, platformOnly)}
-    ${recordTable("User list", rows, ["fullName", "username", "email", "phone", "role", "branchName", "lastLogin", "status"])}
+    ${recordTable(platformOnly ? "Platform administrator list" : "SACCO staff access list", rows, ["fullName", "email", "phone", "role", "accessPurpose", "moduleScope", "lastLogin", "status"])}
     ${permissionMatrix()}
   `;
 }
@@ -2273,12 +2274,13 @@ function formPreview(title, fields) {
 
 function addUserPanel(platformOnly) {
   const roles = userRoleOptions(platformOnly);
+  const defaultRole = roles[0] || {};
   return `
     <section class="panel">
       <div class="panel-heading">
         <div>
           <h2>${platformOnly ? "Add platform user" : "Add SACCO staff user"}</h2>
-          <p>${platformOnly ? "Create a platform administrator and assign the role that controls their views." : "Create a SACCO staff login and assign their operational role."}</p>
+          <p>${platformOnly ? "Create a platform administrator and assign the role that controls their views." : "Create a SACCO staff login for Treasurer, Secretary, Chairperson or another staff role. Members are managed in the Members screen."}</p>
         </div>
       </div>
       ${state.userFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.userFormMessage)}</strong></div>` : ""}
@@ -2290,6 +2292,10 @@ function addUserPanel(platformOnly) {
         <label><span>Phone</span><input id="newUserPhone" placeholder="+256..."></label>
         <label><span>Temporary password</span><input id="newUserPassword" type="password" required minlength="10" placeholder="At least 10 characters"></label>
         <label><span>Role</span><select id="newUserRoleId" required>${roles.map((role) => `<option value="${escapeHtml(role.id)}">${escapeHtml(role.name)}</option>`).join("")}</select></label>
+        <div class="mini-fact wide">
+          <span>Role access preview</span>
+          <strong id="newUserRolePreview">${escapeHtml(rolePurpose(defaultRole.name || "SACCO staff", platformOnly))} - ${escapeHtml(roleModuleScope(defaultRole.name || "SACCO staff", platformOnly))}</strong>
+        </div>
         <div class="form-actions inline">
           <button class="button primary" type="submit">Create user</button>
           <button class="button secondary" type="button" data-action="refresh">Refresh list</button>
@@ -2304,6 +2310,8 @@ function userDetailPanel(users, canManageRoles) {
   if (!selected) return "";
   const roles = userRoleOptions(selected.tenantId === "tenant_platform");
   const assigned = state.selectedUserRoles[0] || "";
+  const selectedRole = roles.find((role) => role.id === assigned) || roles[0] || {};
+  const platformUser = selected.tenantId === "tenant_platform";
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
@@ -2316,19 +2324,27 @@ function userDetailPanel(users, canManageRoles) {
       ${state.selectedUserMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedUserMessage)}</strong></div>` : ""}
       ${state.selectedUserError ? `<div class="notice warning"><strong>Role update failed.</strong><span>${escapeHtml(state.selectedUserError)}</span></div>` : ""}
       <div class="source-grid">
-        ${mini("Tenant", selected.tenantId === "tenant_platform" ? "Platform Administration" : selected.tenantId)}
+        ${mini("Tenant", platformUser ? "Platform Administration" : selected.tenantId)}
         ${mini("Status", selected.status)}
         ${mini("Phone", selected.phone)}
         ${mini("User ID", selected.id)}
+        ${mini("Current role", selectedRole.name || "Unassigned")}
+        ${mini("Access purpose", rolePurpose(selectedRole.name || selected.role || "", platformUser))}
+        ${mini("Module scope", roleModuleScope(selectedRole.name || selected.role || "", platformUser))}
+        ${mini("User type", platformUser ? "Platform administrator" : "SACCO staff")}
       </div>
       <form id="userRoleForm" class="form-grid single">
         <input type="hidden" id="selectedUserId" value="${escapeHtml(selected.id)}">
         <label>
-          <span>${selected.tenantId === "tenant_platform" ? "Assigned platform role" : "Assigned SACCO staff role"}</span>
+          <span>${platformUser ? "Assigned platform role" : "Assigned SACCO staff role"}</span>
           <select id="selectedUserRoleId" ${canManageRoles ? "" : "disabled"}>
             ${roles.map((role) => `<option value="${escapeHtml(role.id)}" ${role.id === assigned ? "selected" : ""}>${escapeHtml(role.name)}</option>`).join("")}
           </select>
         </label>
+        <div class="mini-fact">
+          <span>Selected access</span>
+          <strong id="selectedUserRolePreview">${escapeHtml(rolePurpose(selectedRole.name || "Staff", platformUser))} - ${escapeHtml(roleModuleScope(selectedRole.name || "Staff", platformUser))}</strong>
+        </div>
         <div class="form-actions">
           ${canManageRoles ? `<button class="button primary" type="submit">Save role</button>` : `<span class="status pending">View only</span>`}
         </div>
@@ -2345,10 +2361,11 @@ function roleCoveragePanel(users, roles, platformOnly) {
       scope: platformOnly ? "Platform administration" : "SACCO staff",
       assignedUsers: assignedUsers.length,
       accessPurpose: rolePurpose(role.name, platformOnly),
+      moduleScope: roleModuleScope(role.name, platformOnly),
       status: role.status || "active"
     };
   });
-  return recordTable(platformOnly ? "Platform role coverage" : "SACCO staff role coverage", rows, ["roleName", "scope", "assignedUsers", "accessPurpose", "status"]);
+  return recordTable(platformOnly ? "Platform role coverage" : "SACCO staff role coverage", rows, ["roleName", "scope", "assignedUsers", "accessPurpose", "moduleScope", "status"]);
 }
 
 function roleCoverage(users, roles) {
@@ -2375,6 +2392,56 @@ function rolePurpose(roleName, platformOnly) {
   if (name.includes("auditor")) return "Read-only audit review";
   if (name.includes("loan")) return "Loan origination";
   return "SACCO administration";
+}
+
+function roleModuleScope(roleName, platformOnly) {
+  const name = normal(roleName);
+  if (platformOnly) {
+    if (name.includes("super")) return "All platform modules";
+    if (name.includes("billing")) return "Dashboard, subscriptions, reports";
+    if (name.includes("compliance")) return "Dashboard, reports, operations, audit";
+    if (name.includes("support")) return "Dashboard, SACCOs, members, complaints";
+    if (name.includes("operations")) return "Dashboard, SACCOs, operations, reports";
+    return "Platform administration";
+  }
+  if (name.includes("administrator") || name.includes("admin")) return "All SACCO modules";
+  if (name.includes("treasurer")) return "Transactions, savings, shares, welfare, approvals, accounting, reconciliation, reports";
+  if (name.includes("secretary")) return "Members, shares, welfare, approvals, reports, governance, complaints";
+  if (name.includes("chair")) return "Loans, guarantors, approvals, operations, reports, governance";
+  if (name.includes("accountant")) return "Transactions, accounting, reconciliation, reports";
+  if (name.includes("teller")) return "Transactions and receipts";
+  if (name.includes("auditor")) return "Read-only reports and audit";
+  if (name.includes("loan")) return "Members, loans, guarantors, approvals, reports";
+  return "Configured SACCO modules";
+}
+
+function staffAccessRow(user, platformOnly) {
+  const role = user.role || user.roleName || roleNameFromId(user.roleId, platformOnly) || "Unassigned";
+  return {
+    ...user,
+    role,
+    accessPurpose: rolePurpose(role, platformOnly),
+    moduleScope: roleModuleScope(role, platformOnly),
+    status: user.status || "active"
+  };
+}
+
+function roleNameFromId(roleId, platformOnly) {
+  return userRoleOptions(platformOnly).find((role) => role.id === roleId)?.name || "";
+}
+
+function saccoStaffAccessGuide(roles) {
+  const preferred = ["SACCO Administrator", "SACCO Chairperson", "SACCO Treasurer", "SACCO Secretary", "Loans Officer", "Accountant", "Teller", "Auditor"];
+  const rows = preferred.map((name) => {
+    const configured = roles.find((role) => normal(role.name) === normal(name) || normal(role.name).includes(normal(name.replace("SACCO ", ""))));
+    return {
+      roleName: configured?.name || name,
+      accessPurpose: rolePurpose(configured?.name || name, false),
+      moduleScope: roleModuleScope(configured?.name || name, false),
+      configured: configured ? "Available" : "Template"
+    };
+  });
+  return recordTable("SACCO staff role guide", rows, ["roleName", "accessPurpose", "moduleScope", "configured"]);
 }
 
 function tenantDetailPanel() {
@@ -2917,6 +2984,12 @@ function userRoleOptions(platformOnly) {
   ] : [];
   const filtered = preferred.length ? roles.filter((role) => preferred.includes(role.name)) : roles;
   return filtered.length ? filtered : [{ id: platformOnly ? "role_platform_support_officer" : "", name: platformOnly ? "Platform Support Officer" : "Default staff role" }];
+}
+
+function rolePreviewText(roleId, platformOnly) {
+  const role = userRoleOptions(platformOnly).find((item) => item.id === roleId) || {};
+  const roleName = role.name || "Staff";
+  return `${rolePurpose(roleName, platformOnly)} - ${roleModuleScope(roleName, platformOnly)}`;
 }
 
 function packageCards() {
@@ -4301,6 +4374,15 @@ function bindEvents() {
   });
   document.querySelector("#addUserForm")?.addEventListener("submit", createUserFromForm);
   document.querySelector("#userRoleForm")?.addEventListener("submit", saveSelectedUserRole);
+  document.querySelector("#newUserRoleId")?.addEventListener("change", (event) => {
+    const preview = document.getElementById("newUserRolePreview");
+    if (preview) preview.textContent = rolePreviewText(event.target.value, isPlatform());
+  });
+  document.querySelector("#selectedUserRoleId")?.addEventListener("change", (event) => {
+    const selected = dataRows("users").find((user) => user.id === state.selectedUserId);
+    const preview = document.getElementById("selectedUserRolePreview");
+    if (preview) preview.textContent = rolePreviewText(event.target.value, selected?.tenantId === "tenant_platform");
+  });
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
   document.querySelector("#transactionForm")?.addEventListener("submit", createTransactionFromForm);
   document.querySelector("#loanApplicationForm")?.addEventListener("submit", createLoanFromForm);

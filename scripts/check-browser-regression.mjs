@@ -78,7 +78,7 @@ try {
   await assertScreen(page, "reports", ["Report catalogue", "Report readiness", "SACCO regulatory report"]);
   await assertScreen(page, "governance", ["Governance meeting setup", "Governance meeting register", "Resolution action list"]);
   await assertScreen(page, "settings", ["SACCO operating settings", "Branch setup", "Contribution product setup", "Create branch", "Create product"]);
-  await assertScreen(page, "users", ["SACCO staff access", "Add SACCO staff user", "SACCO staff role coverage"]);
+  await assertScreen(page, "users", ["SACCO staff access", "Add SACCO staff user", "SACCO staff role guide", "Role access preview", "SACCO staff access list", "SACCO staff role coverage"]);
   await assertScreen(page, "audit", ["SACCO audit evidence", "Approvals", "Access control", "SACCO audit trail"]);
   await logout(page);
 
