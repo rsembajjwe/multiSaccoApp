@@ -45,14 +45,14 @@ try {
   await assertScreen(page, "subscriptions", ["Subscription list", "Subscription package configuration"]);
   await assertSubscriptionControl(page);
   await assertScreen(page, "sacco-accounts", ["SACCO account health", "Active accounts", "Without subscription"]);
-  await assertScreen(page, "operations", ["Operations command center", "Payment monitoring"]);
+  await assertScreen(page, "operations", ["Operations readiness control", "Operations command center", "Payment monitoring"]);
   await assertScreen(page, "reports", ["Reporting evidence control", "Report catalogue", "Report readiness", "Platform regulatory report"]);
-  await assertScreen(page, "audit", ["Platform audit evidence", "Sensitive audit queue", "Platform audit trail"]);
-  await assertScreen(page, "settings", ["Protected platform configuration", "Platform subscription packages", "Platform role catalogue"]);
+  await assertScreen(page, "audit", ["Audit evidence control", "Platform audit evidence", "Sensitive audit queue", "Platform audit trail"]);
+  await assertScreen(page, "settings", ["Platform settings control", "Protected platform configuration", "Platform subscription packages", "Platform role catalogue"]);
   await assertScreen(page, "users", ["Platform administrators only", "Platform role coverage", "Permission matrix"]);
   await assertPlatformUserCreation(page);
-  await assertScreen(page, "complaints", ["Platform support desk", "Support ticket capture", "Open complaints"]);
-  await assertScreen(page, "notifications", ["Notification delivery monitor", "Notification template setup", "Notification templates"]);
+  await assertScreen(page, "complaints", ["Complaint service control", "Platform support desk", "Support ticket capture", "Open complaints"]);
+  await assertScreen(page, "notifications", ["Notification delivery control", "Notification delivery monitor", "Notification template setup", "Notification templates"]);
   await expectNoVisibleText(page, "Dashboard data source", "debug source panel hidden");
   await logout(page);
 
@@ -76,10 +76,10 @@ try {
   await assertScreen(page, "accounting", ["Accounting ledger confidence", "Chart of accounts", "Expense capture", "Fixed asset register", "Unbalanced journals"]);
   await assertScreen(page, "reconciliation", ["Reconciliation readiness checks", "Reconciliation command center", "Bank and mobile-money matching", "Unmatched ledger lines", "Provider callback exceptions"]);
   await assertScreen(page, "reports", ["Reporting evidence control", "Report catalogue", "Report readiness", "SACCO regulatory report"]);
-  await assertScreen(page, "governance", ["Governance meeting setup", "Governance meeting register", "Resolution action list"]);
-  await assertScreen(page, "settings", ["SACCO operating settings", "Branch setup", "Contribution product setup", "Create branch", "Create product"]);
+  await assertScreen(page, "governance", ["Governance action control", "Governance meeting setup", "Governance meeting register", "Resolution action list"]);
+  await assertScreen(page, "settings", ["SACCO settings control", "SACCO operating settings", "Branch setup", "Contribution product setup", "Create branch", "Create product"]);
   await assertScreen(page, "users", ["SACCO staff access", "Add SACCO staff user", "SACCO staff role guide", "Role access preview", "SACCO staff access list", "SACCO staff role coverage"]);
-  await assertScreen(page, "audit", ["SACCO audit evidence", "Approvals", "Access control", "SACCO audit trail"]);
+  await assertScreen(page, "audit", ["Audit evidence control", "SACCO audit evidence", "Approvals", "Access control", "SACCO audit trail"]);
   await logout(page);
 
   await assertRoleDashboard(page, "GVS", "chairperson@greenvalley.local", "Chair@12345", "SACCO Chairperson", ["SACCO Chairperson", "Chairperson decision focus", "Chairperson approval queue"]);

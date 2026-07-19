@@ -863,8 +863,36 @@ function operationsView() {
       ${summary("Notification delivery", dataRows("notifications").length, "SMS/email/push", "Open")}
       ${summary("User sessions", "Active", "Security monitor", "View")}
     </div>
+    ${operationsReadinessPanel(alerts)}
     ${recordTable("Operations command center", alerts, ["title", "provider", "severity", "status", "checkedAt"])}
     ${tabsCard("Operations coverage", ["Payment monitoring", "Failed transactions", "Notification delivery", "Integration status", "Scheduled jobs", "Data-import monitoring", "User-session monitoring", "Maintenance notices"])}
+  `;
+}
+
+function operationsReadinessPanel(alerts) {
+  const callbacks = dataRows("mobileMoneyCallbacks");
+  const failedCallbacks = callbacks.filter((row) => normal(row.status).includes("failed")).length;
+  const failedDeliveries = dataRows("notifications").filter((row) => normal(row.status).includes("failed")).length;
+  const openSupport = openComplaints().length;
+  const incidentCount = alerts.filter((row) => ["failed", "warning", "error", "pending"].some((word) => normal(`${row.status} ${row.severity}`).includes(word))).length + failedCallbacks + failedDeliveries + openSupport;
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Operations readiness control</h2>
+          <p>Live production watch for API health, payment callbacks, notification delivery and support workload.</p>
+        </div>
+        <span class="status ${incidentCount ? "pending" : "active"}">${incidentCount ? "Attention needed" : "Clear"}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("System checks", alerts.length)}
+        ${mini("Failed callbacks", failedCallbacks)}
+        ${mini("Failed notifications", failedDeliveries)}
+        ${mini("Open support cases", openSupport)}
+        ${mini("Database", state.data.operations?.database || "Online")}
+        ${mini("Last check", state.lastSync || "Pending")}
+      </div>
+    </section>
   `;
 }
 
@@ -1023,18 +1051,31 @@ function complaintsView() {
     actionId: complaint.id
   }));
   const open = rows.filter((row) => !["closed", "resolved"].includes(normal(row.status)));
+  const urgent = rows.filter((row) => normal(row.priority) === "urgent");
+  const assigned = rows.filter((row) => row.assignedUserId);
   return `
     <div class="dashboard-grid">
       ${summary("Open complaints", open.length, "Support workload", "Assign")}
-      ${summary("Urgent complaints", rows.filter((row) => normal(row.priority) === "urgent").length, "Needs same-day action", "Escalate")}
+      ${summary("Urgent complaints", urgent.length, "Needs same-day action", "Escalate")}
       ${summary("In progress", rows.filter((row) => normal(row.status) === "in_progress").length, "Being handled", "Track")}
       ${summary("Resolved", rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", "Review")}
     </div>
+    ${complaintServiceControlPanel(rows, open, urgent, assigned)}
     ${filterToolbar("Search complaints by SACCO, member, category, priority, status or officer", "New complaint", "Assign officer")}
     ${complaintCapturePanel()}
     ${complaintDetailPanel(rows)}
     ${recordTable(isPlatform() ? "Platform support desk" : "Complaint list", rows, ["tenantName", "memberName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
   `;
+}
+
+function complaintServiceControlPanel(rows, open, urgent, assigned) {
+  const memberLinked = rows.filter((row) => row.memberId).length;
+  const unassigned = open.filter((row) => !row.assignedUserId).length;
+  return rolePriorityPanel("Complaint service control", [
+    ["Urgent queue", `${urgent.length} urgent complaint(s) need same-day follow-up.`, urgent.length ? "Escalate" : "Clear"],
+    ["Assignment coverage", `${assigned.length} complaint(s) have a named officer; ${unassigned} open case(s) are unassigned.`, unassigned ? "Assign" : "Covered"],
+    ["Member impact", `${memberLinked} complaint(s) are linked to member records for traceable resolution.`, memberLinked ? "Traceable" : "SACCO-level"]
+  ]);
 }
 
 function notificationsView() {
@@ -1057,12 +1098,25 @@ function notificationsView() {
       ${summary("Active templates", templates.filter((row) => normal(row.status) === "active").length, "Reusable message rules", "Edit")}
       ${summary("Global templates", templates.filter((row) => !row.tenantId).length, "Platform defaults", "Review")}
     </div>
+    ${notificationDeliveryControlPanel(deliveries, templates)}
     ${filterToolbar("Search by SACCO, member, provider, recipient, channel, status or event", "New template", "Export delivery log")}
     ${notificationTemplatePanel()}
     ${notificationTemplateDetailPanel(templates)}
     ${recordTable("Notification delivery monitor", deliveries, ["tenantName", "memberName", "channel", "provider", "recipient", "status", "message", "sentAt", "createdAt"])}
     ${recordTable("Notification templates", templates, ["tenantName", "eventType", "channel", "title", "status", "updatedAt"])}
   `;
+}
+
+function notificationDeliveryControlPanel(deliveries, templates) {
+  const failed = deliveries.filter((row) => normal(row.status).includes("failed"));
+  const activeTemplates = templates.filter((row) => normal(row.status) === "active");
+  const channels = ["sms", "email", "in_app"];
+  const missingChannels = channels.filter((channel) => !activeTemplates.some((template) => normal(template.channel) === channel));
+  return rolePriorityPanel("Notification delivery control", [
+    ["Delivery exceptions", `${failed.length} failed notification(s) require provider or recipient review.`, failed.length ? "Investigate" : "Clear"],
+    ["Template coverage", `${activeTemplates.length} active template(s) are available across ${uniqueCount(activeTemplates, "channel")} channel(s).`, missingChannels.length ? "Incomplete" : "Ready"],
+    ["Missing channels", missingChannels.length ? `No active template for ${missingChannels.map(labelize).join(", ")}.` : "SMS, email and in-app template coverage is ready.", missingChannels.length ? "Configure" : "Ready"]
+  ]);
 }
 
 function usersView() {
@@ -1115,11 +1169,20 @@ function auditView() {
       ${summary(isPlatform() ? "Tenants affected" : "Actors involved", isPlatform() ? uniqueCount(rows, "tenantId") : uniqueCount(rows, "actorUserId"), isPlatform() ? "Across visible SACCOs" : "Within this SACCO", "Filter")}
       ${summary("Actors", uniqueCount(rows, "actorUserId"), "Users and system actions", "Trace")}
     </div>
+    ${auditControlPanel(rows, highRisk, approvals, reversals, access, finance)}
     ${filterToolbar("Search audit logs by SACCO, actor, action, module, IP address or record ID", "Export audit log", "Print report")}
     ${auditEvidencePanel(rows, sensitive, approvals, reversals, access, finance)}
     ${recordTable("Sensitive audit queue", sensitive, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "riskLevel"])}
     ${recordTable(isPlatform() ? "Platform audit trail" : "SACCO audit trail", rows, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "result"])}
   `;
+}
+
+function auditControlPanel(rows, highRisk, approvals, reversals, access, finance) {
+  return rolePriorityPanel("Audit evidence control", [
+    ["High-risk review", `${highRisk.length} event(s) involve sessions, roles, reversals or sensitive state changes.`, highRisk.length ? "Review" : "Clear"],
+    ["Decision evidence", `${approvals.length} approval event(s) and ${reversals.length} reversal event(s) are available for follow-up.`, approvals.length || reversals.length ? "Trace" : "Empty"],
+    ["Access and finance", `${access.length} access event(s) and ${finance.length} finance event(s) can be filtered for audit review.`, rows.length ? "Available" : "No events"]
+  ]);
 }
 
 function auditEvidencePanel(rows, sensitive, approvals, reversals, access, finance) {
@@ -1620,18 +1683,31 @@ function governanceView() {
     meetingTitle: meeting.title,
     ownerName: userName(resolution.ownerUserId)
   })));
+  const scheduled = meetings.filter((row) => normal(row.status) === "scheduled");
+  const openResolutions = resolutions.filter((row) => normal(row.status) !== "closed");
   return `
     <div class="dashboard-grid">
       ${summary("Meetings", meetings.length, "Board, AGM and committee records", "Open")}
-      ${summary("Scheduled meetings", meetings.filter((row) => normal(row.status) === "scheduled").length, "Upcoming governance events", "Prepare")}
-      ${summary("Open resolutions", resolutions.filter((row) => normal(row.status) !== "closed").length, "Action items needing follow-up", "Track")}
+      ${summary("Scheduled meetings", scheduled.length, "Upcoming governance events", "Prepare")}
+      ${summary("Open resolutions", openResolutions.length, "Action items needing follow-up", "Track")}
       ${summary("Completed meetings", meetings.filter((row) => normal(row.status) === "completed").length, "Minutes and decisions", "Review")}
     </div>
+    ${governanceActionControlPanel(meetings, scheduled, resolutions, openResolutions)}
     ${governanceMeetingPanel()}
     ${governanceMeetingDetailPanel(meetings)}
     ${recordTable("Governance meeting register", meetings, ["title", "meetingType", "scheduledAt", "chairName", "status", "openResolutions"])}
     ${recordTable("Resolution action list", resolutions, ["meetingTitle", "title", "ownerName", "dueDate", "status", "createdAt"])}
   `;
+}
+
+function governanceActionControlPanel(meetings, scheduled, resolutions, openResolutions) {
+  const withMinutes = meetings.filter((meeting) => meeting.minutes).length;
+  const overdue = openResolutions.filter((resolution) => resolution.dueDate && new Date(resolution.dueDate) < new Date()).length;
+  return rolePriorityPanel("Governance action control", [
+    ["Meeting preparedness", `${scheduled.length} scheduled meeting(s) need agenda, chairperson and attendance readiness.`, scheduled.length ? "Prepare" : "Clear"],
+    ["Resolution follow-up", `${openResolutions.length} open resolution(s), including ${overdue} overdue action(s).`, overdue ? "Escalate" : openResolutions.length ? "Track" : "Clear"],
+    ["Minutes evidence", `${withMinutes}/${meetings.length || 0} meeting(s) have captured minutes for audit and member trust.`, withMinutes === meetings.length && meetings.length ? "Complete" : "Capture"]
+  ]);
 }
 
 function governanceMeetingPanel() {
@@ -1723,6 +1799,7 @@ function settingsView() {
       ${summary("Product coverage", missingProducts.length ? `${productTypes.length - missingProducts.length}/${productTypes.length}` : "Complete", missingProducts.length ? `Missing ${missingProducts.map(labelize).join(", ")}` : "Core contribution types ready", "Review")}
       ${summary("Roles", dataRows("roles").length, "Access profiles", "Review")}
     </div>
+    ${saccoSettingsControlPanel(branches, products, accounts, missingProducts)}
     ${settingsReadinessPanel(branches, products, accounts)}
     <div class="two-column">
       ${branchSetupPanel()}
@@ -1731,6 +1808,16 @@ function settingsView() {
     ${recordTable("Branch setup", branches.map((branch) => ({ ...branch, manager: userName(branch.managerUserId) })), ["code", "name", "manager", "address", "status", "createdAt"])}
     ${recordTable("Financial product setup", products, ["productType", "code", "name", "contributionAmount", "minimumBalance", "interestRate", "status"])}
   `;
+}
+
+function saccoSettingsControlPanel(branches, products, accounts, missingProducts) {
+  const inactiveBranches = branches.filter((branch) => normal(branch.status) !== "active").length;
+  const inactiveProducts = products.filter((product) => normal(product.status) !== "active").length;
+  return rolePriorityPanel("SACCO settings control", [
+    ["Branch readiness", `${branches.length} branch record(s), with ${inactiveBranches} inactive service point(s).`, inactiveBranches ? "Review" : "Ready"],
+    ["Contribution setup", missingProducts.length ? `Missing ${missingProducts.map(labelize).join(", ")} product setup.` : "Savings, shares and welfare product coverage is configured.", missingProducts.length ? "Configure" : "Ready"],
+    ["Ledger linkage", `${accounts.length} financial account(s) support product and reporting setup; ${inactiveProducts} product(s) are inactive.`, accounts.length ? "Linked" : "Setup"]
+  ]);
 }
 
 function settingsReadinessPanel(branches, products, accounts) {
@@ -1825,6 +1912,7 @@ function platformSettingsView() {
       ${summary("Permission controls", permissions.length, "Route and action permissions", "Audit")}
       ${summary("Global templates", templates.length, "Default notification content", "Edit")}
     </div>
+    ${platformSettingsControlPanel(packages, roles, permissions, templates, canManage)}
     <section class="panel">
       <div class="panel-heading">
         <div>
@@ -1851,6 +1939,17 @@ function platformSettingsView() {
       ${recordTable("Global notification templates", templates, ["eventType", "channel", "title", "status", "updatedAt"])}
     </div>
   `;
+}
+
+function platformSettingsControlPanel(packages, roles, permissions, templates, canManage) {
+  const inactivePackages = packages.filter((item) => normal(item.status) !== "active").length;
+  const inactiveTemplates = templates.filter((item) => normal(item.status) !== "active").length;
+  return rolePriorityPanel("Platform settings control", [
+    ["Billing readiness", `${packages.length} subscription package(s), with ${inactivePackages} inactive plan(s).`, inactivePackages ? "Review" : "Ready"],
+    ["Administrator roles", `${roles.length} platform role(s) mapped to ${permissions.length} permission control(s).`, roles.length && permissions.length ? "Ready" : "Configure"],
+    ["Protected changes", canManage ? "Current role can update protected platform configuration with audit trail." : "Current role is view-only for protected platform configuration.", canManage ? "Allowed" : "Restricted"],
+    ["Global messages", `${templates.length} global template(s), with ${inactiveTemplates} inactive template(s).`, inactiveTemplates ? "Review" : "Ready"]
+  ]);
 }
 
 function renderMemberView(view) {
