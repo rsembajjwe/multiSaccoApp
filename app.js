@@ -752,12 +752,34 @@ function saccoAccounts() {
 }
 
 function membersView() {
-  const rows = dataRows("members").map((member) => ({ ...member, action: "member-detail", actionLabel: "Review", actionId: member.id }));
+  const members = dataRows("members");
+  const pendingKyc = members.filter((member) => normal(member.kycStatus).includes("pending") || normal(member.status).includes("pending"));
+  const active = members.filter((member) => normal(member.status) === "active");
+  const rows = members.map((member) => ({
+    ...member,
+    totalBalance: Number(member.savingsBalance || 0) + Number(member.sharesBalance || 0) + Number(member.welfareBalance || 0),
+    kycReadiness: memberKycReadiness(member),
+    action: "member-detail",
+    actionLabel: "Open profile",
+    actionId: member.id
+  }));
   return `
+    <div class="dashboard-grid">
+      ${summary("Registered members", members.length, "Member register only, not staff users", "Review")}
+      ${summary("Active members", active.length, "Can transact and use portal", "Monitor")}
+      ${summary("Pending KYC", pendingKyc.length, "Needs document or approval follow-up", "Review")}
+      ${summary("Total balances", money.format(sum(rows, "totalBalance")), "Savings, shares and welfare", "Statements")}
+      ${summary("Portal-ready", rows.filter((member) => normal(member.status) === "active" && normal(member.kycStatus) === "verified").length, "Can use member login", "Audit")}
+    </div>
+    ${rolePriorityPanel("Member management focus", [
+      ["Member and staff separation", "Members are managed here. SACCO staff logins are managed under Users and Roles.", "Clear"],
+      ["KYC workflow", `${pendingKyc.length} member profile(s) need verification, document review or approval action.`, pendingKyc.length ? "Pending" : "Clear"],
+      ["Balances and statements", "Open a member profile to review balances, contacts, beneficiaries, documents and statement lines.", "Ready"]
+    ])}
     ${filterToolbar("Search by member number, name, phone, branch, KYC or status", "Register member", "Download statement")}
     ${memberRegistrationPanel()}
     ${memberDetailPanel()}
-    ${recordTable("Member list", rows, ["membershipNo", "fullName", "phone", "email", "nationalId", "savingsBalance", "sharesBalance", "welfareBalance", "kycStatus", "status"])}
+    ${recordTable("Member list", rows, ["membershipNo", "fullName", "phone", "email", "totalBalance", "kycReadiness", "kycStatus", "status"])}
   `;
 }
 
@@ -2599,27 +2621,40 @@ function memberDetailPanel() {
   const member = state.selectedMember || dataRows("members").find((item) => item.id === state.selectedMemberId);
   if (!member) return "";
   const canManage = hasPermission("members:approve") || roleKind() === "admin" || roleKind() === "secretary";
+  const statementLines = state.selectedMemberStatement?.lines || [];
+  const totalBalance = Number(member.savingsBalance || 0) + Number(member.sharesBalance || 0) + Number(member.welfareBalance || 0);
+  const lastMovement = statementLines[0]?.postedAt || statementLines[0]?.createdAt || "No statement activity";
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
         <div>
           <h2>Member detail and KYC approval</h2>
-          <p>${escapeHtml(member.membershipNo || "")} - ${escapeHtml(member.fullName || "")}</p>
+          <p>${escapeHtml(member.membershipNo || "")} - ${escapeHtml(member.fullName || "")}. This is a SACCO member profile, not a staff login.</p>
         </div>
         <button class="button ghost" type="button" data-action="close-member-detail">Close</button>
       </div>
       ${state.selectedMemberMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedMemberMessage)}</strong></div>` : ""}
       ${state.selectedMemberError ? `<div class="notice warning"><strong>Member update failed.</strong><span>${escapeHtml(state.selectedMemberError)}</span></div>` : ""}
+      <div class="dashboard-grid">
+        ${summary("Total balance", money.format(totalBalance), "Savings, shares and welfare", "View")}
+        ${summary("Statement lines", statementLines.length, "Java-backed ledger activity", "Review")}
+        ${summary("Documents", state.selectedMemberDocuments.length, "KYC evidence files", "Verify")}
+        ${summary("Contacts", state.selectedMemberNextOfKin.length, "Next-of-kin records", "Review")}
+        ${summary("Beneficiaries", state.selectedMemberBeneficiaries.length, "Allocation records", "Review")}
+      </div>
       <div class="source-grid">
         ${mini("Status", member.status)}
         ${mini("KYC", member.kycStatus)}
+        ${mini("KYC readiness", memberKycReadiness(member))}
         ${mini("Savings", money.format(member.savingsBalance || 0))}
         ${mini("Shares", money.format(member.sharesBalance || 0))}
         ${mini("Welfare", money.format(member.welfareBalance || 0))}
         ${mini("Phone", member.phone)}
         ${mini("Email", member.email)}
         ${mini("National ID", member.nationalId)}
+        ${mini("Last movement", lastMovement)}
       </div>
+      ${memberKycChecklist(member)}
       <form id="memberStatusForm" class="form-grid single">
         <input type="hidden" id="selectedMemberId" value="${escapeHtml(member.id)}">
         <label><span>Member status</span><select id="selectedMemberStatus" ${canManage ? "" : "disabled"}>${memberStatusOptions().map((status) => `<option value="${status.value}" ${status.value === member.status ? "selected" : ""}>${status.label}</option>`).join("")}</select></label>
@@ -2634,12 +2669,12 @@ function memberDetailPanel() {
         </div>
       </form>
       <div class="grid two">
-        ${recordTable("Member documents", state.selectedMemberDocuments, ["documentType", "storageKey", "verificationStatus", "createdAt"])}
-        ${recordTable("Next of kin", state.selectedMemberNextOfKin, ["fullName", "relationship", "phone", "address", "primaryContact"])}
+        ${recordTable("Member KYC documents", state.selectedMemberDocuments, ["documentType", "storageKey", "verificationStatus", "createdAt"])}
+        ${recordTable("Member contacts and next of kin", state.selectedMemberNextOfKin, ["fullName", "relationship", "phone", "address", "primaryContact"])}
       </div>
       <div class="grid two">
-        ${recordTable("Beneficiaries", state.selectedMemberBeneficiaries, ["fullName", "relationship", "phone", "allocationPercent"])}
-        ${recordTable("Member statement", state.selectedMemberStatement?.lines || [], ["reference", "type", "channel", "amount", "savingsBalance", "sharesBalance", "welfareBalance", "postedAt"])}
+        ${recordTable("Member beneficiaries", state.selectedMemberBeneficiaries, ["fullName", "relationship", "phone", "allocationPercent"])}
+        ${recordTable("Member balance statement", statementLines, ["reference", "type", "channel", "amount", "savingsBalance", "sharesBalance", "welfareBalance", "postedAt"])}
       </div>
     </section>
   `;
@@ -2655,6 +2690,29 @@ function memberStatusOptions() {
     { value: "suspended", label: "Suspended" },
     { value: "exited", label: "Exited" }
   ];
+}
+
+function memberKycReadiness(member) {
+  const missing = [];
+  if (!member.phone) missing.push("phone");
+  if (!member.nationalId) missing.push("national ID");
+  if (!member.fullName) missing.push("name");
+  if (normal(member.kycStatus) === "verified" && normal(member.status) === "active") return "Portal ready";
+  if (missing.length) return `Missing ${missing.join(", ")}`;
+  if (normal(member.kycStatus).includes("pending")) return "Ready for review";
+  if (normal(member.status).includes("pending")) return "Approval needed";
+  return "Review";
+}
+
+function memberKycChecklist(member) {
+  const checks = [
+    ["Identity", member.nationalId ? "National ID captured" : "National ID missing", member.nationalId ? "Complete" : "Pending"],
+    ["Contact", member.phone ? "Phone number captured" : "Phone number missing", member.phone ? "Complete" : "Pending"],
+    ["KYC decision", labelize(member.kycStatus || "pending"), normal(member.kycStatus) === "verified" ? "Complete" : "Review"],
+    ["Member status", labelize(member.status || "pending"), normal(member.status) === "active" ? "Active" : "Review"],
+    ["Portal login", normal(member.status) === "active" ? "Member can access portal after credential setup" : "Activate member before portal access", normal(member.status) === "active" ? "Ready" : "Pending"]
+  ];
+  return rolePriorityPanel("Member KYC checklist", checks);
 }
 
 function kycStatusOptions() {

@@ -63,7 +63,7 @@ try {
 
   await staffLogin(page, "GVS", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Role filtered"]);
-  await assertScreen(page, "members", ["Member list", "Member registration"]);
+  await assertScreen(page, "members", ["Member management focus", "Member and staff separation", "Member list", "Member registration"]);
   await assertMemberRegistrationAndKyc(page);
   await assertScreen(page, "transactions", ["Transaction list", "New transaction screen"]);
   await assertTransactionWorkflow(page);
@@ -286,6 +286,8 @@ async function assertMemberRegistrationAndKyc(page) {
   await page.locator("#globalSearch").fill(fullName);
   await page.locator("tr", { hasText: fullName }).locator("[data-row-action='member-detail']").click();
   await expectText(page, "Member detail and KYC approval", "member detail panel");
+  await expectText(page, "Member KYC checklist", "member KYC checklist");
+  await expectText(page, "Member balance statement", "member balance statement");
   await expectText(page, "Approve member", "member approve action");
   await expectText(page, "Save KYC decision", "member KYC save action");
   await page.locator("#globalSearch").fill("");
