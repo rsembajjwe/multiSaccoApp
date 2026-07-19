@@ -41,7 +41,7 @@ try {
   await expectNoVisibleText(page, "Read-only SACCO member support", "Platform Members navigation hidden");
   await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
   await assertPlatformDashboardCardNavigation(page);
-  await assertScreen(page, "sacco-applications", ["SACCO application list", "Public SACCO registration wizard"]);
+  await assertScreen(page, "sacco-applications", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
   await assertSaccoApplicationReview(page);
   await assertScreen(page, "subscriptions", ["Subscription list", "Subscription package configuration"]);
   await assertSubscriptionControl(page);

@@ -50,6 +50,8 @@ const state = {
   selectedTenantProfile: null,
   selectedTenantMessage: "",
   selectedTenantError: "",
+  tenantFormMessage: "",
+  tenantFormError: "",
   selectedSubscriptionId: "",
   selectedSubscriptionMessage: "",
   selectedSubscriptionError: "",
@@ -728,9 +730,58 @@ function saccoApplications() {
   const applications = tenantRows().map((tenant) => ({ ...tenant, action: "tenant-detail", actionLabel: "Review", actionId: tenant.id }));
   return `
     ${filterToolbar("Search applications by SACCO, district, contact or status", "Assign reviewer", "Export applications")}
+    ${platformSaccoRegistrationPanel()}
     ${tenantDetailPanel()}
     ${recordTable("SACCO application list", applications, ["id", "name", "district", "registrationNo", "licenseExpiry", "onboarding", "status"])}
-    ${wizardCard("Public SACCO registration wizard", ["SACCO Information", "Location and Contact", "Authorized Contact", "Leadership Details", "Document Upload", "Subscription Package", "Review and Submit"])}
+    ${selfRegistrationApprovalPanel()}
+  `;
+}
+
+function platformSaccoRegistrationPanel() {
+  const packages = dataRows("subscriptionPackages");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Register SACCO inside platform</h2>
+          <p>Platform administrators can create a SACCO record directly, then either keep it in review or activate it after internal checks.</p>
+        </div>
+      </div>
+      ${state.tenantFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.tenantFormMessage)}</strong></div>` : ""}
+      ${state.tenantFormError ? `<div class="notice warning"><strong>Could not register SACCO.</strong><span>${escapeHtml(state.tenantFormError)}</span></div>` : ""}
+      <form id="platformSaccoForm" class="form-grid">
+        <label><span>SACCO name</span><input id="newTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
+        <label><span>SACCO code</span><input id="newTenantCode" required maxlength="12" placeholder="e.g. TFS"></label>
+        <label><span>Registration number</span><input id="newTenantRegistrationNo" placeholder="Cooperative or UMRA registration"></label>
+        <label><span>District</span><input id="newTenantDistrict" required placeholder="e.g. Kampala"></label>
+        <label><span>License expiry</span><input id="newTenantLicenseExpiry" type="date" required></label>
+        <label><span>Subscription package</span><select id="newTenantPackageId">${packages.map((pkg) => `<option value="${escapeHtml(pkg.id || pkg.code || "")}">${escapeHtml(pkg.name || pkg.code || "Package")}</option>`).join("") || `<option value="">Assign later</option>`}</select></label>
+        <label class="wide"><span>Registration path</span><select id="newTenantInitialStatus">
+          <option value="pending_review">Create for approval review</option>
+          <option value="approved">Create as approved</option>
+          <option value="active">Create and activate immediately</option>
+        </select></label>
+        <div class="form-actions inline">
+          <button class="button primary" type="submit">Register SACCO</button>
+          <button class="button secondary" type="button" data-action="refresh">Refresh applications</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function selfRegistrationApprovalPanel() {
+  const steps = ["SACCO Information", "Location and Contact", "Authorized Contact", "Leadership Details", "Document Upload", "Subscription Package", "Review and Submit"];
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Self-registration approval path</h2>
+          <p>SACCOs can submit their own application publicly, but they cannot operate until platform review, approval, subscription confirmation and activation are completed.</p>
+        </div>
+      </div>
+      <div class="stepper">${steps.map((step, index) => `<div><span>${index + 1}</span><strong>${step}</strong></div>`).join("")}</div>
+    </section>
   `;
 }
 
@@ -3810,6 +3861,41 @@ async function openTenantDetail(tenantId) {
   renderShell();
 }
 
+async function createPlatformSacco(event) {
+  event.preventDefault();
+  state.tenantFormMessage = "";
+  state.tenantFormError = "";
+  try {
+    const initialStatus = value("newTenantInitialStatus") || "pending_review";
+    let tenant = await api("/tenants", {
+      method: "POST",
+      body: JSON.stringify({
+        name: value("newTenantName"),
+        abbreviation: value("newTenantCode"),
+        registrationNo: value("newTenantRegistrationNo"),
+        district: value("newTenantDistrict"),
+        licenseExpiry: value("newTenantLicenseExpiry"),
+        packageId: value("newTenantPackageId")
+      })
+    });
+    if (initialStatus !== "pending_review") {
+      tenant = await api(`/tenants/${encodeURIComponent(tenant.id)}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: initialStatus })
+      });
+    }
+    state.tenantFormMessage = `${tenant.name} registered as ${tenantStatusLabel(tenant.status)}.`;
+    state.search = "";
+    state.tableState = {};
+    await refreshAll();
+    state.tenantFormMessage = `${tenant.name} registered as ${tenantStatusLabel(tenant.status)}.`;
+    renderShell();
+  } catch (error) {
+    state.tenantFormError = friendlyUserError(error, true);
+    renderShell();
+  }
+}
+
 async function saveTenantStatus(status) {
   const tenantId = value("selectedTenantId") || state.selectedTenantId;
   if (!tenantId || !status) return;
@@ -4977,6 +5063,7 @@ function bindEvents() {
     });
   });
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
+  document.querySelector("#platformSaccoForm")?.addEventListener("submit", createPlatformSacco);
   document.querySelector("#transactionForm")?.addEventListener("submit", createTransactionFromForm);
   document.querySelector("#loanApplicationForm")?.addEventListener("submit", createLoanFromForm);
   document.querySelector("#loanGuarantorForm")?.addEventListener("submit", addLoanGuarantor);
@@ -5102,6 +5189,8 @@ async function logout() {
     selectedTenantProfile: null,
     selectedTenantMessage: "",
     selectedTenantError: "",
+    tenantFormMessage: "",
+    tenantFormError: "",
     selectedSubscriptionId: "",
     selectedSubscriptionMessage: "",
     selectedSubscriptionError: "",
