@@ -50,7 +50,7 @@ try {
   await assertScreen(page, "reports", ["Reporting evidence control", "Report catalogue", "Report readiness", "Platform regulatory report"]);
   await assertScreen(page, "audit", ["Audit evidence control", "Platform audit evidence", "Sensitive audit queue", "Platform audit trail"]);
   await assertScreen(page, "settings", ["Platform settings control", "Protected platform configuration", "Platform subscription packages", "Platform role catalogue"]);
-  await assertScreen(page, "users", ["Platform administrators only", "Platform role coverage", "Permission matrix"]);
+  await assertScreen(page, "users", ["Add platform user", "User detail and role assignment", "Platform role coverage", "Platform administrator list", "Permission matrix"]);
   await assertPlatformUserCreation(page);
   await assertScreen(page, "complaints", ["Complaint service control", "Platform SACCO support desk", "SACCO support ticket capture", "SACCO support tickets"]);
   await assertScreen(page, "notifications", ["Notification delivery control", "Notification delivery monitor", "Notification template setup", "Notification templates"]);
@@ -235,6 +235,7 @@ async function assertPlatformDashboardCardNavigation(page) {
 async function assertPlatformUserCreation(page) {
   const stamp = Date.now();
   const fullName = `Browser Platform User ${stamp}`;
+  await page.locator("[data-user-tab='add']").click();
   await expectText(page, "Add platform user", "platform add-user panel");
   await page.locator("#newUserFullName").fill(fullName);
   await page.locator("#newUserEmail").fill(`browser.platform.${stamp}@tereka.local`);
@@ -245,6 +246,7 @@ async function assertPlatformUserCreation(page) {
   });
   await page.locator("#addUserForm button[type='submit']").click();
   await expectText(page, fullName, "created platform user visible");
+  await page.locator("[data-user-tab='list']").click();
   await page.locator("#globalSearch").fill(fullName);
   await page.locator("tr", { hasText: fullName }).locator("[data-row-action='user-detail']").click();
   await expectText(page, "User detail and role assignment", "platform user detail panel");

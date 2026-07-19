@@ -43,6 +43,7 @@ const state = {
   selectedUserLoading: false,
   selectedUserMessage: "",
   selectedUserError: "",
+  userAdminTab: "list",
   selectedTenantId: "",
   selectedTenant: null,
   selectedTenantProfile: null,
@@ -127,7 +128,7 @@ const platformModules = [
   ["reports", "Reports", "Registration and compliance", "reports:view", ["super", "operations", "billing", "compliance"]],
   ["complaints", "Complaints", "Support tickets and escalations", "complaints:view", ["super", "operations", "support"]],
   ["notifications", "Notifications", "SMS, email and in-app", "notifications:view", ["super", "operations"]],
-  ["users", "Users and Roles", "Platform administrators only", "roles:view", ["super"]],
+  ["users", "Users and Roles", "Administrator access", "roles:view", ["super"]],
   ["audit", "Audit Logs", "Read-only platform audit trail", "reports:view", ["super", "compliance"]],
   ["settings", "System Settings", "Protected platform configuration", "roles:create", ["super"]]
 ];
@@ -1124,13 +1125,31 @@ function usersView() {
   const canCreate = hasPermission("users:create") || hasPermission("roles:create");
   const rows = users.map((user) => ({ ...staffAccessRow(user, platformOnly), action: "user-detail", actionLabel: "Manage access", actionId: user.id }));
   const roles = userRoleOptions(platformOnly);
+  const listPanel = recordTable(platformOnly ? "Platform administrator list" : "SACCO staff access list", rows, ["fullName", "email", "phone", "role", "accessPurpose", "moduleScope", "lastLogin", "status"]);
+  const detailPanel = userDetailPanel(users, canCreate) || emptyState("User detail and role assignment", "Select Manage access from the administrator list to review roles and module access.");
+  if (platformOnly) {
+    return `
+      <div class="dashboard-grid">
+        ${summary("Platform users", users.length, "Administrators only", "Review")}
+        ${summary("Active users", users.filter((user) => normal(user.status) === "active").length, "Can sign in", "Monitor")}
+        ${summary("Configured roles", roles.length, "Available assignments", "Manage")}
+        ${summary("Role coverage", roleCoverage(users, roles), "Users with assigned roles", "Audit")}
+      </div>
+      ${userManagementTabs(canCreate)}
+      ${platformUserTabContent({
+        activeTab: state.userAdminTab,
+        canCreate,
+        addPanel: canCreate ? addUserPanel(true) : emptyState("Add platform user", "Only Platform Super Admin users can add platform administrators."),
+        detailPanel,
+        coveragePanel: roleCoveragePanel(users, roles, true),
+        listPanel,
+        permissionPanel: permissionMatrix()
+      })}
+    `;
+  }
   return `
-    <div class="role-banner">
-      <div><p class="eyebrow">Users and Roles</p><h2>${platformOnly ? "Platform administrators only. SACCO members are not platform users." : "SACCO staff access for this SACCO."}</h2></div>
-      ${canCreate ? `<span class="status active">Super Admin</span>` : `<span class="status pending">View only</span>`}
-    </div>
     <div class="dashboard-grid">
-      ${summary(platformOnly ? "Platform users" : "SACCO staff users", users.length, platformOnly ? "Administrators only" : "Staff accounts only, not members", "Review")}
+      ${summary("SACCO staff users", users.length, "Staff accounts only, not members", "Review")}
       ${summary("Active users", users.filter((user) => normal(user.status) === "active").length, "Can sign in", "Monitor")}
       ${summary("Configured roles", roles.length, "Available assignments", "Manage")}
       ${summary("Role coverage", roleCoverage(users, roles), "Users with assigned roles", "Audit")}
@@ -1139,9 +1158,36 @@ function usersView() {
     ${canCreate ? addUserPanel(platformOnly) : ""}
     ${userDetailPanel(users, canCreate)}
     ${roleCoveragePanel(users, roles, platformOnly)}
-    ${recordTable(platformOnly ? "Platform administrator list" : "SACCO staff access list", rows, ["fullName", "email", "phone", "role", "accessPurpose", "moduleScope", "lastLogin", "status"])}
+    ${listPanel}
     ${permissionMatrix()}
   `;
+}
+
+function userManagementTabs(canCreate) {
+  const tabs = [
+    ["add", "Add platform user", canCreate],
+    ["detail", "User detail and role assignment", true],
+    ["coverage", "Platform role coverage", true],
+    ["list", "Platform administrator list", true],
+    ["matrix", "Permission matrix", true]
+  ];
+  if (!tabs.some(([id]) => id === state.userAdminTab)) state.userAdminTab = "list";
+  if (state.userAdminTab === "add" && !canCreate) state.userAdminTab = "list";
+  return `
+    <section class="panel compact-panel">
+      <div class="tabs management-tabs">
+        ${tabs.map(([id, label, enabled]) => `<button class="${state.userAdminTab === id ? "active" : ""}" type="button" data-user-tab="${id}" ${enabled ? "" : "disabled"}>${label}</button>`).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function platformUserTabContent({ activeTab, addPanel, detailPanel, coveragePanel, listPanel, permissionPanel }) {
+  if (activeTab === "add") return addPanel;
+  if (activeTab === "detail") return detailPanel;
+  if (activeTab === "coverage") return coveragePanel;
+  if (activeTab === "matrix") return permissionPanel;
+  return listPanel;
 }
 
 function auditView() {
@@ -3498,6 +3544,7 @@ async function openUserDetail(userId) {
   state.selectedUserMessage = "";
   state.selectedUserError = "";
   state.selectedUserLoading = true;
+  state.userAdminTab = "detail";
   renderShell();
   try {
     const assignment = await api(`/users/${encodeURIComponent(userId)}/roles`);
@@ -4592,6 +4639,12 @@ function bindEvents() {
   document.querySelectorAll("[data-summary-view]").forEach((button) => {
     button.addEventListener("click", () => {
       state.currentView = button.dataset.summaryView;
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-user-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.userAdminTab = button.dataset.userTab;
       renderShell();
     });
   });
