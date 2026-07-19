@@ -47,8 +47,9 @@ try {
   await assertScreen(page, "subscriptions", ["Subscription list", "Subscription package configuration"]);
   await assertSubscriptionControl(page);
   await assertScreen(page, "sacco-accounts", ["SACCO account health", "Active accounts", "Without subscription"]);
-  await assertScreen(page, "operations", ["Operations readiness control", "Operations command center", "Payment monitoring"]);
-  await assertScreen(page, "reports", ["Reporting evidence control", "Report catalogue", "Report readiness", "Platform regulatory report"]);
+  await expectNoVisibleText(page, "Platform approval queues", "Platform Approvals navigation hidden");
+  await expectNoVisibleText(page, "Health, callbacks, jobs, support access", "Platform Operations navigation hidden");
+  await assertScreen(page, "reports", ["Super admin reporting control", "Super Admin report catalogue", "Report readiness", "Super Admin SACCO report"]);
   await assertScreen(page, "audit", ["Audit evidence control", "Platform audit evidence", "Sensitive audit queue", "Platform audit trail"]);
   await assertScreen(page, "settings", ["Platform settings control", "Protected platform configuration", "Platform subscription packages", "Platform role catalogue"]);
   await assertScreen(page, "users", ["Add platform user", "User detail and role assignment", "Platform role coverage", "Platform administrator list", "Permission matrix"]);

@@ -130,9 +130,7 @@ const platformModules = [
   ["subscriptions", "Subscriptions", "Packages and renewals", "subscriptions:view", ["super", "billing"]],
   ["sacco-accounts", "SACCO Accounts", "SACCO account health", "tenants:view", ["super", "billing", "compliance"]],
   ["transactions", "Transactions", "Platform finance monitoring", "transactions:view", ["super"]],
-  ["approvals", "Approvals", "Platform approval queues", "approvals:view", ["super"]],
-  ["operations", "Operations", "Health, callbacks, jobs, support access", "operations:view", ["super", "operations", "compliance", "support"]],
-  ["reports", "Reports", "Registration and compliance", "reports:view", ["super", "operations", "billing", "compliance"]],
+  ["reports", "Reports", "Super admin reporting", "reports:view", ["super"]],
   ["complaints", "Complaints", "Support tickets and escalations", "complaints:view", ["super", "operations", "support"]],
   ["notifications", "Notifications", "SMS, email and in-app", "notifications:view", ["super", "operations"]],
   ["users", "Users and Roles", "Administrator access", "roles:view", ["super"]],
@@ -571,7 +569,7 @@ function platformDashboard() {
       ${summaryLink("Expired subscriptions", subs.filter((s) => normal(s.status).includes("expired")).length, "Billing risk", "Renew", "subscriptions")}
       ${summaryLink("Total subscription revenue", money.format(sum(subs, "amount")), "Current records", "Open billing", "subscriptions")}
       ${summaryLink("SACCO support tickets", platformSupportTickets.filter((c) => !["closed", "resolved"].includes(normal(c.status))).length, "SACCO admin escalations", "Open", "complaints")}
-      ${summaryLink("Failed payment transactions", transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", "Investigate", "operations")}
+      ${summaryLink("Failed payment transactions", transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", "Review", "transactions")}
       ${summaryLink("Active platform users", users.filter((user) => normal(user.status) === "active").length || users.length, "Administrators and roles", "Manage access", "users")}
     </div>
     <div class="split-layout">
@@ -1067,11 +1065,12 @@ function reportsView() {
   const consolidated = regulatoryConsolidated(rows);
   const catalogue = reportCatalogue(platform);
   const exceptions = Number(consolidated.reconciliationExceptions || 0) + Number(consolidated.unbalancedJournalEntries || 0);
+  if (platform) return platformSuperAdminReportsView(rows, consolidated, catalogue, exceptions);
   return `
     <div class="dashboard-grid">
-      ${summary(platform ? "Reporting SACCOs" : "Members in report", platform ? rows.length : consolidated.memberCount, platform ? "Regulatory rows available" : "Active and inactive members", "Review")}
+      ${summary("Members in report", consolidated.memberCount, "Active and inactive members", "Review")}
       ${summary("Savings reported", money.format(consolidated.savings || 0), "Member deposit balances", "Export")}
-      ${summary(platform ? "Subscription revenue" : "Loan portfolio", money.format(platform ? sum(dataRows("subscriptions"), "amount") : consolidated.loanPortfolio || 0), platform ? "Billing reports" : "Credit exposure", "Open")}
+      ${summary("Loan portfolio", money.format(consolidated.loanPortfolio || 0), "Credit exposure", "Open")}
       ${summary("Compliance exceptions", exceptions, "Reconciliation and journal checks", "Investigate")}
     </div>
     ${rolePriorityPanel("Reporting evidence control", [
@@ -1079,12 +1078,12 @@ function reportsView() {
       ["Reconciliation evidence", `${consolidated.reconciliationExceptions || 0} reconciliation exception(s) affect export confidence.`, Number(consolidated.reconciliationExceptions || 0) ? "Investigate" : "Clear"],
       ["Compliance status", `Current report status is ${labelize(consolidated.complianceStatus || (exceptions ? "review" : "clear"))}.`, exceptions ? "Review" : "Ready"]
     ])}
-    ${filterToolbar(platform ? "Search reports by SACCO, module, compliance status or export type" : "Search reports by module, member group, product or compliance status", "Export report", "Schedule report")}
+    ${filterToolbar("Search reports by module, member group, product or compliance status", "Export report", "Schedule report")}
     <section class="panel">
       <div class="panel-heading">
         <div>
           <h2>Report catalogue</h2>
-          <p>${platform ? "Platform reports focus on SACCOs, subscriptions, operations, compliance and audit evidence." : "SACCO reports focus on members, finance, accounting, governance and statutory evidence."}</p>
+          <p>SACCO reports focus on members, finance, accounting, governance and statutory evidence.</p>
         </div>
         <span>${catalogue.length} report group(s)</span>
       </div>
@@ -1103,9 +1102,57 @@ function reportsView() {
       </div>
     </section>
     ${reportReadinessPanel(consolidated)}
-    ${recordTable(platform ? "Platform regulatory report" : "SACCO regulatory report", rows, platform
-      ? ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "loanPortfolio", "reconciliationExceptions", "openComplaints", "complianceStatus"]
-      : ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "loanPortfolio", "activeLoans", "expenseTotal", "assetNetBookValue", "complianceStatus"])}
+    ${recordTable("SACCO regulatory report", rows, ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "loanPortfolio", "activeLoans", "expenseTotal", "assetNetBookValue", "complianceStatus"])}
+  `;
+}
+
+function platformSuperAdminReportsView(rows, consolidated, catalogue, exceptions) {
+  const tenants = tenantRows();
+  const subscriptions = dataRows("subscriptions");
+  const users = platformUsers();
+  const supportTickets = saccoSupportTickets();
+  return `
+    <div class="dashboard-grid">
+      ${summary("Registered SACCOs", tenants.length, "All SACCO accounts", "Review")}
+      ${summary("Active SACCOs", tenants.filter((tenant) => normal(tenant.status) === "active").length, "Allowed to operate", "Open")}
+      ${summary("Subscription revenue", money.format(sum(subscriptions, "amount")), "Platform billing", "Export")}
+      ${summary("Platform administrators", users.length, "Users and roles", "Audit")}
+      ${summary("Pending registrations", tenants.filter((tenant) => normal(tenant.status).includes("pending")).length, "Onboarding decisions", "Review")}
+      ${summary("Open SACCO complaints", supportTickets.filter((ticket) => !["closed", "resolved"].includes(normal(ticket.status))).length, "Escalations from SACCO admins", "Review")}
+      ${summary("Failed payments", dataRows("transactions").filter((transaction) => normal(transaction.status).includes("failed")).length, "Provider exceptions", "Review")}
+      ${summary("Compliance exceptions", exceptions, "Reconciliation and journal checks", "Investigate")}
+    </div>
+    ${rolePriorityPanel("Super admin reporting control", [
+      ["SACCO account status", `${tenants.length} SACCO account(s) tracked for activation, suspension and payment eligibility.`, tenants.some((tenant) => normal(tenant.status).includes("pending")) ? "Review" : "Clear"],
+      ["Billing control", `${subscriptions.length} subscription record(s) available for renewal, arrears and package reporting.`, subscriptions.some((row) => normal(row.status).includes("expired")) ? "Review" : "Current"],
+      ["Access governance", `${users.length} platform administrator account(s) included in role and permission reporting.`, users.length ? "Monitored" : "Setup needed"]
+    ])}
+    ${filterToolbar("Search Super Admin reports by SACCO, billing status, administrator, compliance status or export type", "Export report", "Schedule report")}
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Super Admin report catalogue</h2>
+          <p>Platform reports focus on SACCO account ownership, subscriptions, administrator access, support escalation, compliance and audit evidence.</p>
+        </div>
+        <span>${catalogue.length} report group(s)</span>
+      </div>
+      <div class="report-grid">
+        ${catalogue.map((report) => `
+          <article class="report-card">
+            <h3>${escapeHtml(report.title)}</h3>
+            <p>${escapeHtml(report.copy)}</p>
+            <div class="mini-grid">
+              ${mini("Owner", report.owner)}
+              ${mini("Output", report.output)}
+            </div>
+            <button class="button secondary" type="button">${escapeHtml(report.action)}</button>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+    ${reportReadinessPanel(consolidated)}
+    ${recordTable("Super Admin SACCO report", rows, ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "reconciliationExceptions", "openComplaints", "complianceStatus"])}
+    ${recordTable("Platform administrator access report", users, ["fullName", "email", "rolesLabel", "moduleScope", "status", "lastLogin"])}
   `;
 }
 
@@ -1162,12 +1209,12 @@ function regulatoryConsolidated(rows) {
 function reportCatalogue(platform) {
   if (platform) {
     return [
-      { title: "SACCO registration", copy: "Applications, approval turnaround, active SACCOs and onboarding exceptions.", owner: "Operations", output: "PDF / Excel", action: "Open applications" },
-      { title: "Subscriptions", copy: "Packages, billable members, received payments, arrears and renewal risk.", owner: "Billing", output: "Invoice pack", action: "Open billing" },
-      { title: "Transactions", copy: "Platform-wide transaction monitoring without exposing SACCO-only loan workflows.", owner: "Operations", output: "Excel", action: "Open transactions" },
-      { title: "Operations", copy: "Health checks, provider callbacks, scheduled jobs and support workload.", owner: "Support", output: "Dashboard export", action: "Open operations" },
-      { title: "Compliance", copy: "Regulatory consolidation, reconciliation exceptions and SACCO evidence status.", owner: "Compliance", output: "Regulatory file", action: "Open evidence" },
-      { title: "Audit", copy: "Sensitive activity, login history, password reset requests and role changes.", owner: "Compliance", output: "Audit pack", action: "Open audit" }
+      { title: "SACCO account register", copy: "Registered SACCOs, generated codes, activation status, contact details and member ranges.", owner: "Super Admin", output: "PDF / Excel", action: "Open SACCO accounts" },
+      { title: "Registration pipeline", copy: "Platform-created registrations, self-service applications, payment status and approval outcomes.", owner: "Super Admin", output: "Onboarding pack", action: "Open applications" },
+      { title: "Subscription control", copy: "Packages, billable members, received payments, arrears, renewals and operating eligibility.", owner: "Super Admin", output: "Billing pack", action: "Open billing" },
+      { title: "Platform administrator access", copy: "Administrator accounts, assigned roles, module access, status and last-login review.", owner: "Super Admin", output: "Access review", action: "Open users" },
+      { title: "SACCO support escalations", copy: "Complaints raised by SACCO administrators, unresolved cases and escalation status.", owner: "Super Admin", output: "Support report", action: "Open complaints" },
+      { title: "Compliance and audit", copy: "Regulatory consolidation, reconciliation exceptions, sensitive activity and role changes.", owner: "Super Admin", output: "Audit pack", action: "Open audit" }
     ];
   }
   return [
@@ -2918,9 +2965,9 @@ function roleModuleScope(roleName, platformOnly) {
   if (platformOnly) {
     if (name.includes("super")) return "All platform modules";
     if (name.includes("billing")) return "Dashboard, subscriptions, reports";
-    if (name.includes("compliance")) return "Dashboard, reports, operations, audit";
+    if (name.includes("compliance")) return "Dashboard, reports, audit";
     if (name.includes("support")) return "Dashboard, SACCOs, complaints";
-    if (name.includes("operations")) return "Dashboard, SACCOs, operations, reports";
+    if (name.includes("operations")) return "Dashboard, SACCOs, complaints, notifications";
     return "Platform administration";
   }
   if (name.includes("administrator") || name.includes("admin")) return "All SACCO modules";
