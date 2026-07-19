@@ -770,7 +770,7 @@ function platformSaccoRegistrationPanel() {
       <div class="panel-heading">
         <div>
           <h2>Register SACCO inside platform</h2>
-          <p>Platform administrators can create a SACCO record directly, then either keep it in review or activate it after internal checks.</p>
+          <p>Platform administrators can create and activate a SACCO record directly. Public self-registration still goes through approval.</p>
         </div>
       </div>
       ${state.tenantFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.tenantFormMessage)}</strong></div>` : ""}
@@ -782,11 +782,10 @@ function platformSaccoRegistrationPanel() {
         <label><span>District</span><input id="newTenantDistrict" required placeholder="e.g. Kampala"></label>
         <label><span>License expiry</span><input id="newTenantLicenseExpiry" type="date" required></label>
         <label><span>Subscription package</span><select id="newTenantPackageId">${packages.map((pkg) => `<option value="${escapeHtml(pkg.id || pkg.code || "")}">${escapeHtml(pkg.name || pkg.code || "Package")}</option>`).join("") || `<option value="">Assign later</option>`}</select></label>
-        <label class="wide"><span>Registration path</span><select id="newTenantInitialStatus">
-          <option value="pending_review">Create for approval review</option>
-          <option value="approved">Create as approved</option>
-          <option value="active">Create and activate immediately</option>
-        </select></label>
+        <div class="mini-fact wide">
+          <span>Creation mode</span>
+          <strong>Automatic platform creation and activation</strong>
+        </div>
         <div class="form-actions inline">
           <button class="button primary" type="submit">Register SACCO</button>
           <button class="button secondary" type="button" data-action="refresh">Refresh applications</button>
@@ -3892,7 +3891,6 @@ async function createPlatformSacco(event) {
   state.tenantFormMessage = "";
   state.tenantFormError = "";
   try {
-    const initialStatus = value("newTenantInitialStatus") || "pending_review";
     let tenant = await api("/tenants", {
       method: "POST",
       body: JSON.stringify({
@@ -3904,12 +3902,10 @@ async function createPlatformSacco(event) {
         packageId: value("newTenantPackageId")
       })
     });
-    if (initialStatus !== "pending_review") {
-      tenant = await api(`/tenants/${encodeURIComponent(tenant.id)}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: initialStatus })
-      });
-    }
+    tenant = await api(`/tenants/${encodeURIComponent(tenant.id)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "active" })
+    });
     state.tenantFormMessage = `${tenant.name} registered as ${tenantStatusLabel(tenant.status)}.`;
     state.search = "";
     state.tableState = {};
