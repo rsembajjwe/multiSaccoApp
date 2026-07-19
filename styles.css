@@ -18,12 +18,12 @@
   --shadow: 0 14px 34px rgba(20, 40, 31, 0.08);
   --text-xs: 12px;
   --text-sm: 13px;
-  --text-md: 15px;
-  --text-lg: 16px;
-  --text-xl: 20px;
-  --text-page: 28px;
-  --text-hero: 36px;
-  --text-metric: 22px;
+  --text-md: 14px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-page: 24px;
+  --text-hero: 32px;
+  --text-metric: 20px;
 }
 
 * {
@@ -37,7 +37,7 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
   font-size: var(--text-md);
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 button,
@@ -409,7 +409,7 @@ textarea {
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 286px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
 }
 
 .sidebar {
@@ -418,7 +418,7 @@ textarea {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 13px;
   padding: 16px;
   color: #fff;
   background: var(--green-900);
@@ -450,6 +450,10 @@ textarea {
   color: #cfe4dc;
 }
 
+.sidebar strong {
+  line-height: 1.18;
+}
+
 .context-card {
   display: grid;
   gap: 4px;
@@ -461,7 +465,7 @@ textarea {
 
 .nav-list {
   display: grid;
-  gap: 4px;
+  gap: 5px;
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-width: thin;
@@ -482,35 +486,40 @@ textarea {
   gap: 3px;
   border: 0;
   border-radius: 8px;
-  padding: 9px 12px;
+  padding: 10px 12px;
   color: #fff;
   background: transparent;
   text-align: left;
 }
 
 .nav-link span {
+  color: #f6fffb;
   font-size: var(--text-md);
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .nav-link small {
+  color: #b9d6cc;
   font-size: var(--text-xs);
   line-height: 1.35;
 }
 
 .nav-link.active,
 .nav-link:hover {
-  color: #10231f;
-  background: #cff4e3;
+  color: #0f241f;
+  background: #e6fff4;
+  box-shadow: inset 4px 0 0 var(--green-700);
 }
 
 .nav-link.active span,
 .nav-link:hover span {
-  color: #10231f;
+  color: #0f241f;
 }
 
 .nav-link.active small,
 .nav-link:hover small {
-  color: #38524a;
+  color: #35554b;
 }
 
 .logout-button {
@@ -528,13 +537,13 @@ textarea {
   position: sticky;
   top: 0;
   z-index: 2;
-  min-height: 64px;
+  min-height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid var(--line);
-  padding: 11px 24px;
+  padding: 10px 24px;
   background: rgba(255, 255, 255, 0.94);
 }
 
@@ -582,7 +591,7 @@ textarea {
   align-items: flex-end;
   justify-content: space-between;
   gap: 18px;
-  padding: 22px 24px 14px;
+  padding: 20px 24px 12px;
 }
 
 .page-header h1 {
@@ -592,7 +601,7 @@ textarea {
 }
 
 .content-area {
-  margin: 0 24px 16px;
+  margin: 0 24px 18px;
 }
 
 .source-panel {
@@ -697,7 +706,7 @@ textarea {
 .report-grid,
 .package-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
 
@@ -709,11 +718,11 @@ textarea {
 }
 
 .summary-card {
-  min-height: 112px;
+  min-height: 104px;
   display: grid;
   align-content: space-between;
   gap: 6px;
-  padding: 14px;
+  padding: 13px 14px;
 }
 
 .summary-card span {
@@ -724,7 +733,7 @@ textarea {
 .summary-card strong {
   overflow-wrap: anywhere;
   font-size: var(--text-metric);
-  line-height: 1.18;
+  line-height: 1.2;
 }
 
 .summary-card small {
@@ -754,14 +763,18 @@ textarea {
 }
 
 .panel {
-  padding: 16px 18px;
+  padding: 15px 17px;
 }
 
 .panel-heading {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 13px;
+}
+
+.panel-heading h2 {
+  line-height: 1.25;
 }
 
 .table-wrap {
@@ -777,7 +790,7 @@ table {
 
 th,
 td {
-  padding: 12px 10px;
+  padding: 10px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
@@ -849,7 +862,7 @@ th {
   justify-content: space-between;
   gap: 14px;
   align-items: center;
-  padding: 14px;
+  padding: 13px 14px;
 }
 
 .activity-list li {
@@ -865,9 +878,9 @@ th {
 
 .filter-toolbar {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) 160px 150px auto auto;
+  grid-template-columns: minmax(280px, 1fr) 150px 140px auto auto;
   gap: 12px;
-  padding: 14px;
+  padding: 13px 14px;
   align-items: end;
 }
 
