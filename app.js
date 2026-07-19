@@ -2325,7 +2325,7 @@ function memberDraftPanel(title, drafts) {
         <div class="table-wrap">
           <table>
             <thead><tr>${columns.map((column) => `<th>${labelize(column)}</th>`).join("")}<th>Actions</th></tr></thead>
-            <tbody>${filtered.slice(0, 12).map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td>${rowAction(row)}</td></tr>`).join("")}</tbody>
+            <tbody>${filtered.map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td>${rowAction(row)}</td></tr>`).join("")}</tbody>
           </table>
         </div>
       ` : emptyState("No offline drafts", "Use Save draft to keep a payment or complaint on this device before syncing.")}
@@ -2498,7 +2498,7 @@ function recordTable(title, rows, columns) {
         <div class="table-wrap">
           <table>
             <thead><tr>${columns.map((column) => `<th>${labelize(column)}</th>`).join("")}<th>Actions</th></tr></thead>
-            <tbody>${filtered.slice(0, 12).map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td>${rowAction(row)}</td></tr>`).join("")}</tbody>
+            <tbody>${filtered.map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td>${rowAction(row)}</td></tr>`).join("")}</tbody>
           </table>
         </div>
       ` : emptyState("No records found", "Use refresh, adjust filters, or add the first record where your role allows it.")}
