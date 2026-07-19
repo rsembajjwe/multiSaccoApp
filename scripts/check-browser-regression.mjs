@@ -82,9 +82,9 @@ try {
   await assertScreen(page, "audit", ["SACCO audit evidence", "Approvals", "Access control", "SACCO audit trail"]);
   await logout(page);
 
-  await assertRoleDashboard(page, "GVS", "chairperson@greenvalley.local", "Chair@12345", "SACCO Chairperson", ["SACCO Chairperson", "Loans awaiting approval", "Chairperson approval queue"]);
-  await assertRoleDashboard(page, "GVS", "treasurer@greenvalley.local", "Treasurer@12345", "SACCO Treasurer", ["SACCO Treasurer", "Pending finance approvals", "Mobile-money callbacks"]);
-  await assertRoleDashboard(page, "GVS", "secretary@greenvalley.local", "Secretary@12345", "SACCO Secretary", ["SACCO Secretary", "Pending KYC", "Member follow-up list"]);
+  await assertRoleDashboard(page, "GVS", "chairperson@greenvalley.local", "Chair@12345", "SACCO Chairperson", ["SACCO Chairperson", "Chairperson decision focus", "Chairperson approval queue"]);
+  await assertRoleDashboard(page, "GVS", "treasurer@greenvalley.local", "Treasurer@12345", "SACCO Treasurer", ["SACCO Treasurer", "Treasurer daily control", "Treasurer reconciliation watch"]);
+  await assertRoleDashboard(page, "GVS", "secretary@greenvalley.local", "Secretary@12345", "SACCO Secretary", ["SACCO Secretary", "Secretary office focus", "Member follow-up list"]);
 
   await memberLogin(page);
   for (const marker of [

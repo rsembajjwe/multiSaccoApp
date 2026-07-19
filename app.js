@@ -602,18 +602,29 @@ function saccoDashboard() {
 function saccoChairpersonDashboard() {
   const loans = dataRows("loans");
   const transactions = dataRows("transactions");
+  const members = dataRows("members");
+  const approvalLoans = loans.filter((row) => ["pending", "review", "approval", "submitted"].some((word) => normal(`${row.status} ${row.stage}`).includes(word)));
+  const arrearsLoans = loans.filter((row) => ["arrears", "overdue", "default"].some((word) => normal(`${row.status} ${row.riskLevel}`).includes(word)));
+  const highValueTransactions = transactions.filter((row) => Number(row.amount || row.credit || row.debit || 0) >= 1000000);
+  const governance = dataRows("governanceMeetings");
   return `
     ${dashboardIntro("SACCO Chairperson", "Oversight dashboard for approvals, portfolio health, governance actions and high-value exceptions.")}
     <div class="dashboard-grid">
-      ${summary("Total members", dataRows("members").length, "SACCO membership", "Open")}
-      ${summary("Outstanding loans", money.format(sum(loans, "outstandingBalance", "balance")), "Portfolio exposure", "Review")}
-      ${summary("Loans awaiting approval", loans.filter((row) => normal(row.status).includes("review") || normal(row.stage).includes("approval")).length, "Chairperson queue", "Decide")}
-      ${summary("Pending transactions", pendingTransactions().length, "High-value controls", "Review")}
-      ${summary("Open complaints", openComplaints().length, "Member issues", "Open")}
+      ${summaryLink("Total members", members.length, "SACCO membership base", "Open", "members")}
+      ${summaryLink("Loans awaiting approval", approvalLoans.length, "Chairperson approval queue", "Decide", "approvals")}
+      ${summaryLink("Outstanding portfolio", money.format(sum(loans, "outstandingBalance", "balance")), "Credit exposure", "Review", "loans")}
+      ${summaryLink("Arrears watch", arrearsLoans.length, "Loans requiring board attention", "Assess", "loans")}
+      ${summaryLink("High-value transactions", highValueTransactions.length, "Large movements to review", "Review", "transactions")}
+      ${summaryLink("Governance actions", governance.length, "Meetings and resolutions", "Open", "governance")}
     </div>
+    ${rolePriorityPanel("Chairperson decision focus", [
+      ["Approval discipline", `${approvalLoans.length} loan item(s) require board-level review before disbursement.`, approvalLoans.length ? "Pending" : "Clear"],
+      ["Portfolio risk", `${arrearsLoans.length} loan account(s) are marked for arrears or default follow-up.`, arrearsLoans.length ? "Review" : "Healthy"],
+      ["Member confidence", `${openComplaints().length} open complaint(s) may need leadership escalation.`, openComplaints().length ? "Follow up" : "Stable"]
+    ])}
     <div class="grid two">
-      ${recordTable("Chairperson approval queue", [...pendingTransactions(), ...loans], ["reference", "applicationNo", "memberName", "type", "requestedAmount", "amount", "status"])}
-      ${recordTable("Recent transactions", transactions, ["reference", "memberName", "type", "amount", "status"])}
+      ${recordTable("Chairperson approval queue", [...approvalLoans, ...pendingTransactions()], ["reference", "applicationNo", "memberName", "type", "requestedAmount", "amount", "status"])}
+      ${recordTable("Board risk watch", [...arrearsLoans, ...highValueTransactions], ["applicationNo", "reference", "memberName", "product", "amount", "outstandingBalance", "status"])}
     </div>
   `;
 }
@@ -621,36 +632,56 @@ function saccoChairpersonDashboard() {
 function saccoTreasurerDashboard() {
   const transactions = dataRows("transactions");
   const callbacks = dataRows("mobileMoneyCallbacks");
+  const accounts = dataRows("financialAccounts");
+  const reconciliation = state.data.reconciliation || {};
+  const expenses = dataRows("expenses");
+  const cashAccounts = accounts.filter((row) => ["cash", "bank", "mobile"].some((word) => normal(`${row.accountType} ${row.productType} ${row.name}`).includes(word)));
+  const failedCallbacks = callbacks.filter((row) => ["failed", "exception", "pending"].some((word) => normal(row.status).includes(word)));
   return `
     ${dashboardIntro("SACCO Treasurer", "Cash, collections, withdrawals, reconciliation and finance approvals for daily control.")}
     <div class="dashboard-grid">
-      ${summary("Total savings", money.format(sum(dataRows("members"), "savingsBalance", "savings")), "Member deposits", "Statements")}
-      ${summary("Collections", money.format(sum(transactions.filter((row) => Number(row.credit || 0) > 0), "credit", "amount")), "Posted inflows", "Open")}
-      ${summary("Withdrawals", money.format(sum(transactions.filter((row) => Number(row.debit || 0) > 0), "debit", "amount")), "Posted outflows", "Review")}
-      ${summary("Pending finance approvals", pendingTransactions().length, "Maker-checker", "Approve")}
-      ${summary("Provider callbacks", callbacks.length, "Mobile money", "Reconcile")}
+      ${summaryLink("Total savings", money.format(sum(dataRows("members"), "savingsBalance", "savings")), "Member deposits", "Statements", "savings")}
+      ${summaryLink("Collections", money.format(sum(transactions.filter((row) => Number(row.credit || 0) > 0), "credit", "amount")), "Posted inflows", "Open", "transactions")}
+      ${summaryLink("Withdrawals", money.format(sum(transactions.filter((row) => Number(row.debit || 0) > 0), "debit", "amount")), "Posted outflows", "Review", "transactions")}
+      ${summaryLink("Pending finance approvals", pendingTransactions().length, "Maker-checker queue", "Approve", "approvals")}
+      ${summaryLink("Mobile-money exceptions", failedCallbacks.length, "Provider callbacks needing action", "Reconcile", "reconciliation")}
+      ${summaryLink("Expenses posted", money.format(sum(expenses, "amount", "totalAmount")), "Operating spend", "Review", "accounting")}
     </div>
+    ${rolePriorityPanel("Treasurer daily control", [
+      ["Cash position", `${cashAccounts.length || accounts.length} account(s) available for cash, bank or mobile-money review.`, cashAccounts.length ? "Review" : "Setup"],
+      ["Reconciliation", `${Number(reconciliation.unmatchedBankLines || reconciliation.unmatchedLedgerLines || 0)} unmatched item(s) reported by reconciliation data.`, Number(reconciliation.unmatchedBankLines || reconciliation.unmatchedLedgerLines || 0) ? "Match" : "Clear"],
+      ["Payment exceptions", `${failedCallbacks.length} mobile-money callback(s) need follow-up before reports are final.`, failedCallbacks.length ? "Investigate" : "Clear"]
+    ])}
     <div class="grid two">
       ${recordTable("Finance approval queue", pendingTransactions(), ["reference", "memberName", "type", "amount", "channel", "status"])}
-      ${recordTable("Mobile-money callbacks", callbacks, ["externalReference", "provider", "purpose", "amount", "status", "receivedAt"])}
+      ${recordTable("Treasurer reconciliation watch", [...failedCallbacks, ...callbacks].slice(0, 12), ["externalReference", "provider", "purpose", "amount", "status", "receivedAt"])}
     </div>
   `;
 }
 
 function saccoSecretaryDashboard() {
   const members = dataRows("members");
+  const pendingKyc = members.filter((row) => normal(row.kycStatus).includes("pending") || normal(row.status).includes("pending"));
+  const governance = dataRows("governanceMeetings");
+  const recentNotifications = dataRows("notifications");
   return `
     ${dashboardIntro("SACCO Secretary", "Membership, KYC, records, complaints and governance follow-up for the SACCO office.")}
     <div class="dashboard-grid">
-      ${summary("Total members", members.length, "Member register", "Open")}
-      ${summary("Pending KYC", members.filter((row) => normal(row.kycStatus).includes("pending") || normal(row.status).includes("pending")).length, "Needs verification", "Review")}
-      ${summary("Open complaints", openComplaints().length, "Member support", "Assign")}
-      ${summary("Branches", dataRows("branches").length, "Service points", "View")}
-      ${summary("Notifications", dataRows("notifications").length, "Member communication", "Open")}
+      ${summaryLink("Total members", members.length, "Member register", "Open", "members")}
+      ${summaryLink("Pending KYC", pendingKyc.length, "Needs verification", "Review", "members")}
+      ${summaryLink("Open complaints", openComplaints().length, "Member support queue", "Assign", "complaints")}
+      ${summaryLink("Governance records", governance.length, "Meetings and minutes", "Open", "governance")}
+      ${summaryLink("Branches", dataRows("branches").length, "Service points", "View", "operations")}
+      ${summaryLink("Notifications", recentNotifications.length, "Member communication", "Open", "reports")}
     </div>
+    ${rolePriorityPanel("Secretary office focus", [
+      ["KYC completion", `${pendingKyc.length} member profile(s) need verification or follow-up documents.`, pendingKyc.length ? "Pending" : "Clear"],
+      ["Member cases", `${openComplaints().length} open complaint(s) require tracking notes or assignment.`, openComplaints().length ? "Follow up" : "Stable"],
+      ["Governance records", `${governance.length} meeting record(s) are available for minutes and resolutions.`, governance.length ? "Maintain" : "Schedule"]
+    ])}
     <div class="grid two">
-      ${recordTable("Member follow-up list", members, ["membershipNo", "fullName", "phone", "branchName", "kycStatus", "status"])}
-      ${recordTable("Complaint follow-up", openComplaints(), ["id", "memberName", "category", "subject", "priority", "status"])}
+      ${recordTable("Member follow-up list", pendingKyc.length ? pendingKyc : members, ["membershipNo", "fullName", "phone", "branchName", "kycStatus", "status"])}
+      ${recordTable("Secretary governance and complaint follow-up", [...openComplaints(), ...governance], ["id", "memberName", "category", "subject", "scheduledAt", "priority", "status"])}
     </div>
   `;
 }
@@ -2105,6 +2136,23 @@ function dashboardIntro(title, copy) {
       <div><p class="eyebrow">${escapeHtml(title)}</p><h2>${escapeHtml(copy)}</h2></div>
       <span class="status active">Role filtered</span>
     </div>
+  `;
+}
+
+function rolePriorityPanel(title, rows) {
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${title}</h2>
+          <p>Role-specific work areas based on the current Java-backed records and permissions.</p>
+        </div>
+        <span class="status active">Role dashboard</span>
+      </div>
+      <ul class="activity-list">
+        ${rows.map((row) => `<li><strong>${escapeHtml(row[0])}</strong><span>${escapeHtml(row[1])}</span><em>${escapeHtml(row[2])}</em></li>`).join("")}
+      </ul>
+    </section>
   `;
 }
 
