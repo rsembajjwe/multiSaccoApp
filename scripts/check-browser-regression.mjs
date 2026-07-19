@@ -70,8 +70,8 @@ try {
   await assertScreen(page, "savings", ["Savings product list", "Savings product setup", "Open Savings account"]);
   await assertScreen(page, "shares", ["Share product list", "Shares product setup", "Open Shares account"]);
   await assertScreen(page, "welfare", ["Welfare product list", "Welfare product setup", "Welfare claim submission"]);
-  await assertScreen(page, "loans", ["Loan application list", "Loan application form", "Loan detail and guarantors", "Add guarantor request"]);
-  await assertScreen(page, "guarantors", ["Guarantor requests"]);
+  await assertScreen(page, "loans", ["Loan lifecycle control", "Loan application list", "Loan application form", "Loan detail and guarantors", "Loan decision checklist", "Add guarantor request"]);
+  await assertScreen(page, "guarantors", ["Guarantor control focus", "Guarantor requests"]);
   await assertScreen(page, "approvals", ["Approval decision center", "Approval queue"]);
   await assertScreen(page, "accounting", ["Chart of accounts", "Expense capture", "Fixed asset register", "Unbalanced journals"]);
   await assertScreen(page, "reconciliation", ["Reconciliation command center", "Bank and mobile-money matching", "Unmatched ledger lines", "Provider callback exceptions"]);
