@@ -1065,7 +1065,7 @@ function reportsView() {
   const consolidated = regulatoryConsolidated(rows);
   const catalogue = reportCatalogue(platform);
   const exceptions = Number(consolidated.reconciliationExceptions || 0) + Number(consolidated.unbalancedJournalEntries || 0);
-  if (platform) return platformSuperAdminReportsView(rows, consolidated, catalogue, exceptions);
+  if (platform) return platformSuperAdminReportsView(rows, exceptions);
   return `
     <div class="dashboard-grid">
       ${summary("Members in report", consolidated.memberCount, "Active and inactive members", "Review")}
@@ -1106,7 +1106,7 @@ function reportsView() {
   `;
 }
 
-function platformSuperAdminReportsView(rows, consolidated, catalogue, exceptions) {
+function platformSuperAdminReportsView(rows, exceptions) {
   const tenants = tenantRows();
   const subscriptions = dataRows("subscriptions");
   const users = platformUsers();
@@ -1128,29 +1128,6 @@ function platformSuperAdminReportsView(rows, consolidated, catalogue, exceptions
       ["Access governance", `${users.length} platform administrator account(s) included in role and permission reporting.`, users.length ? "Monitored" : "Setup needed"]
     ])}
     ${filterToolbar("Search Super Admin reports by SACCO, billing status, administrator, compliance status or export type", "Export report", "Schedule report")}
-    <section class="panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Super Admin report catalogue</h2>
-          <p>Platform reports focus on SACCO account ownership, subscriptions, administrator access, support escalation, compliance and audit evidence.</p>
-        </div>
-        <span>${catalogue.length} report group(s)</span>
-      </div>
-      <div class="report-grid">
-        ${catalogue.map((report) => `
-          <article class="report-card">
-            <h3>${escapeHtml(report.title)}</h3>
-            <p>${escapeHtml(report.copy)}</p>
-            <div class="mini-grid">
-              ${mini("Owner", report.owner)}
-              ${mini("Output", report.output)}
-            </div>
-            <button class="button secondary" type="button">${escapeHtml(report.action)}</button>
-          </article>
-        `).join("")}
-      </div>
-    </section>
-    ${reportReadinessPanel(consolidated)}
     ${recordTable("Super Admin SACCO report", rows, ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "reconciliationExceptions", "openComplaints", "complianceStatus"])}
     ${recordTable("Platform administrator access report", users, ["fullName", "email", "rolesLabel", "moduleScope", "status", "lastLogin"])}
   `;
