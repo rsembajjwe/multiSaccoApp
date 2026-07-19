@@ -54,7 +54,7 @@ try {
   await assertScreen(page, "settings", ["Platform settings control", "Protected platform configuration", "Platform subscription packages", "Platform role catalogue"]);
   await assertScreen(page, "users", ["Add platform user", "User detail and role assignment", "Platform role coverage", "Platform administrator list", "Permission matrix"]);
   await assertPlatformUserCreation(page);
-  await assertScreen(page, "complaints", ["Complaint service control", "Platform SACCO support desk", "SACCO support ticket capture", "SACCO support tickets"]);
+  await assertScreen(page, "complaints", ["SACCO admin complaint control", "Platform SACCO admin complaint desk", "SACCO admin complaint capture", "SACCO admin complaints"]);
   await assertScreen(page, "notifications", ["Notification delivery control", "Notification delivery monitor", "Notification template setup", "Notification templates"]);
   await expectNoVisibleText(page, "Dashboard data source", "debug source panel hidden");
   await logout(page);
