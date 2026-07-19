@@ -33,6 +33,7 @@ const state = {
   permissionIds: [],
   currentView: "dashboard",
   search: "",
+  tableState: {},
   loading: false,
   lastSync: "",
   lastError: "",
@@ -2481,10 +2482,23 @@ function activityPanel(title, rows) {
 }
 
 function recordTable(title, rows, columns) {
+  const tableKey = tableStateKey(title);
+  const tableState = state.tableState[tableKey] || { search: "", page: 1, pageSize: 10 };
   const allRows = rows || [];
-  const filtered = filterRows(allRows);
-  const searching = Boolean(state.search.trim());
+  const globalFiltered = filterRows(allRows);
+  const tableSearch = tableState.search || "";
+  const filtered = filterRowsByQuery(globalFiltered, tableSearch);
+  const pageSize = Number(tableState.pageSize || 10);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(Math.max(1, Number(tableState.page || 1)), totalPages);
+  if (currentPage !== tableState.page) state.tableState[tableKey] = { ...tableState, page: currentPage };
+  const start = filtered.length ? (currentPage - 1) * pageSize : 0;
+  const pagedRows = filtered.slice(start, start + pageSize);
+  const hasGlobalSearch = Boolean(state.search.trim());
+  const hasTableSearch = Boolean(tableSearch.trim());
+  const searching = hasGlobalSearch || hasTableSearch;
   const countLabel = searching ? `${filtered.length} of ${allRows.length} shown` : `${filtered.length} record(s)`;
+  const rangeLabel = filtered.length ? `Showing ${start + 1}-${Math.min(start + pageSize, filtered.length)} of ${filtered.length}` : "No rows to show";
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -2494,12 +2508,32 @@ function recordTable(title, rows, columns) {
           ${searching ? `<button class="table-action" type="button" data-action="clear-search">Clear search</button>` : ""}
         </div>
       </div>
+      <div class="table-tools">
+        <label>
+          <span>Search this table</span>
+          <input value="${escapeHtml(tableSearch)}" data-table-search="${escapeHtml(tableKey)}" placeholder="Search ${escapeHtml(title.toLowerCase())}">
+        </label>
+        <label>
+          <span>Rows per page</span>
+          <select data-table-page-size="${escapeHtml(tableKey)}">
+            ${[10, 25, 50, 100].map((size) => `<option value="${size}" ${pageSize === size ? "selected" : ""}>${size}</option>`).join("")}
+          </select>
+        </label>
+      </div>
       ${filtered.length ? `
         <div class="table-wrap">
           <table>
             <thead><tr>${columns.map((column) => `<th>${labelize(column)}</th>`).join("")}<th>Actions</th></tr></thead>
-            <tbody>${filtered.map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td>${rowAction(row)}</td></tr>`).join("")}</tbody>
+            <tbody>${pagedRows.map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td>${rowAction(row)}</td></tr>`).join("")}</tbody>
           </table>
+        </div>
+        <div class="pagination">
+          <span>${rangeLabel}</span>
+          <div>
+            <button class="table-action" type="button" data-table-page="${escapeHtml(tableKey)}" data-page="${currentPage - 1}" ${currentPage <= 1 ? "disabled" : ""}>Previous</button>
+            <strong>Page ${currentPage} of ${totalPages}</strong>
+            <button class="table-action" type="button" data-table-page="${escapeHtml(tableKey)}" data-page="${currentPage + 1}" ${currentPage >= totalPages ? "disabled" : ""}>Next</button>
+          </div>
         </div>
       ` : emptyState("No records found", "Use refresh, adjust filters, or add the first record where your role allows it.")}
     </section>
@@ -4856,6 +4890,22 @@ function bindEvents() {
   document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
   document.querySelectorAll("[data-action='clear-search']").forEach((button) => button.addEventListener("click", () => {
     state.search = "";
+    state.tableState = {};
+    renderShell();
+  }));
+  document.querySelectorAll("[data-table-search]").forEach((input) => input.addEventListener("input", (event) => {
+    const tableKey = event.target.dataset.tableSearch;
+    state.tableState[tableKey] = { ...(state.tableState[tableKey] || {}), search: event.target.value, page: 1, pageSize: state.tableState[tableKey]?.pageSize || 10 };
+    renderShell();
+  }));
+  document.querySelectorAll("[data-table-page-size]").forEach((select) => select.addEventListener("change", (event) => {
+    const tableKey = event.target.dataset.tablePageSize;
+    state.tableState[tableKey] = { ...(state.tableState[tableKey] || {}), pageSize: Number(event.target.value || 10), page: 1 };
+    renderShell();
+  }));
+  document.querySelectorAll("[data-table-page]").forEach((button) => button.addEventListener("click", () => {
+    const tableKey = button.dataset.tablePage;
+    state.tableState[tableKey] = { ...(state.tableState[tableKey] || {}), page: Number(button.dataset.page || 1), pageSize: state.tableState[tableKey]?.pageSize || 10 };
     renderShell();
   }));
   document.querySelectorAll("[data-action='toggle-sidebar']").forEach((button) => button.addEventListener("click", () => document.querySelector(".app-shell")?.classList.toggle("sidebar-open")));
@@ -5064,9 +5114,17 @@ function uniqueCount(rows, key) {
 }
 
 function filterRows(rows) {
-  const q = state.search.trim().toLowerCase();
-  if (!q) return rows;
-  return rows.filter((row) => JSON.stringify(row).toLowerCase().includes(q));
+  return filterRowsByQuery(rows, state.search);
+}
+
+function filterRowsByQuery(rows, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return rows || [];
+  return (rows || []).filter((row) => JSON.stringify(row).toLowerCase().includes(q));
+}
+
+function tableStateKey(title) {
+  return String(title || "table").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "table";
 }
 
 function operationAlerts() {

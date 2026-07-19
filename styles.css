@@ -835,6 +835,35 @@ textarea {
   gap: 10px;
 }
 
+.table-tools {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 150px;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 12px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.pagination > div {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pagination strong {
+  color: var(--ink);
+}
+
 .table-wrap {
   overflow-x: auto;
 }
@@ -1079,6 +1108,7 @@ th {
   .source-panel,
   .split-layout,
   .grid.two,
+  .table-tools,
   .two-column {
     grid-template-columns: 1fr;
   }
