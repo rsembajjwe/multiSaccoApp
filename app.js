@@ -120,8 +120,8 @@ const platformModules = [
   ["dashboard", "Dashboard", "Platform performance and alerts", "dashboard:view", ["super", "operations", "billing", "compliance", "support"]],
   ["sacco-applications", "SACCO Registration", "Applications and approvals", "tenants:view", ["super", "operations", "billing", "compliance", "support"]],
   ["subscriptions", "Subscriptions", "Packages and renewals", "subscriptions:view", ["super", "billing"]],
-  ["sacco-accounts", "SACCO Accounts", "Tenant account health", "tenants:view", ["super", "billing", "compliance"]],
-  ["members", "Members", "Read-only tenant member support", "members:view", ["super", "support"]],
+  ["sacco-accounts", "SACCO Accounts", "SACCO account health", "tenants:view", ["super", "billing", "compliance"]],
+  ["members", "Members", "Read-only SACCO member support", "members:view", ["super", "support"]],
   ["transactions", "Transactions", "Platform finance monitoring", "transactions:view", ["super"]],
   ["approvals", "Approvals", "Platform approval queues", "approvals:view", ["super"]],
   ["operations", "Operations", "Health, callbacks, jobs, support access", "operations:view", ["super", "operations", "compliance", "support"]],
@@ -476,8 +476,8 @@ function platformDashboard() {
   const users = platformUsers();
   return `
     <div class="dashboard-grid">
-      ${summaryLink("Total SACCOs", tenants.length, "All registered tenants", "Open applications", "sacco-applications")}
-      ${summaryLink("Active SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Operational tenants", "View accounts", "sacco-accounts")}
+      ${summaryLink("Total SACCOs", tenants.length, "All registered SACCOs", "Open applications", "sacco-applications")}
+      ${summaryLink("Active SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Operating SACCOs", "View accounts", "sacco-accounts")}
       ${summaryLink("Pending registrations", tenants.filter((t) => normal(t.status).includes("pending")).length, "Reviewer queue", "Review", "sacco-applications")}
       ${summaryLink("Expired subscriptions", subs.filter((s) => normal(s.status).includes("expired")).length, "Billing risk", "Renew", "subscriptions")}
       ${summaryLink("Total platform members", members.length, "Across visible SACCOs", "Open members", "members")}
@@ -501,9 +501,9 @@ function platformOperationsDashboard() {
   const tenants = tenantRows();
   const complaints = openComplaints();
   return `
-    ${dashboardIntro("Platform Operations Officer", "Monitor service health, onboarding queues, callbacks, incidents and tenant operational status.")}
+    ${dashboardIntro("Platform Operations Officer", "Monitor service health, onboarding queues, callbacks, incidents and SACCO operating status.")}
     <div class="dashboard-grid">
-      ${summary("Operating SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Live tenants", "Monitor")}
+      ${summary("Operating SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Live SACCOs", "Monitor")}
       ${summary("Pending onboarding", pendingTenants().length, "Applications needing follow-up", "Open queue")}
       ${summary("Open support tickets", complaints.length, "Operational workload", "Assign")}
       ${summary("Failed callbacks", dataRows("mobileMoneyCallbacks").filter((row) => normal(row.status).includes("failed")).length, "Provider exceptions", "Retry")}
@@ -525,7 +525,7 @@ function platformBillingDashboard() {
       ${summary("Pending payments", subs.filter((row) => normal(row.paymentStatus || row.status).includes("pending")).length, "Awaiting confirmation", "Record")}
       ${summary("Expired subscriptions", subs.filter((row) => normal(row.status).includes("expired")).length, "Access risk", "Renew")}
       ${summary("Subscription revenue", money.format(sum(subs, "amount")), "Current records", "Export")}
-      ${summary("Billable SACCOs", tenantRows().length, "Registered tenants", "Open")}
+      ${summary("Billable SACCOs", tenantRows().length, "Registered SACCOs", "Open")}
     </div>
     ${recordTable("Subscription list", subs, ["tenantName", "packageName", "billingPeriod", "expiryDate", "amount", "memberCount", "status"])}
     ${recordTable("SACCO billing access", tenantRows(), ["name", "district", "memberCount", "status"])}
@@ -534,7 +534,7 @@ function platformBillingDashboard() {
 
 function platformComplianceDashboard() {
   return `
-    ${dashboardIntro("Platform Compliance Officer", "Oversight view for tenant approvals, audit events, reports and operating exceptions.")}
+    ${dashboardIntro("Platform Compliance Officer", "Oversight view for SACCO approvals, audit events, reports and operating exceptions.")}
     <div class="dashboard-grid">
       ${summary("Pending registrations", pendingTenants().length, "Approval oversight", "Review")}
       ${summary("Audit events", dataRows("auditEvents").length, "Sensitive actions", "Inspect")}
@@ -544,7 +544,7 @@ function platformComplianceDashboard() {
     </div>
     <div class="grid two">
       ${recordTable("Audit log", dataRows("auditEvents"), ["createdAt", "actor", "role", "tenantName", "action", "module", "result"])}
-      ${recordTable("Tenant approval oversight", tenantRows(), ["name", "district", "contactPerson", "memberCount", "status"])}
+      ${recordTable("SACCO approval oversight", tenantRows(), ["name", "district", "contactPerson", "memberCount", "status"])}
     </div>
   `;
 }
@@ -554,14 +554,14 @@ function platformSupportDashboard() {
     ${dashboardIntro("Platform Support Officer", "Help SACCOs resolve member, onboarding and operating issues without platform administration rights.")}
     <div class="dashboard-grid">
       ${summary("Open complaints", openComplaints().length, "Support queue", "Open")}
-      ${summary("Visible SACCOs", tenantRows().length, "Tenant support context", "View")}
+      ${summary("Visible SACCOs", tenantRows().length, "SACCO support context", "View")}
       ${summary("Visible members", dataRows("members").length, "Read-only support", "Search")}
       ${summary("Pending onboarding", pendingTenants().length, "Applicant follow-up", "Assist")}
       ${summary("Notifications", dataRows("notifications").length, "Recent messages", "Open")}
     </div>
     <div class="grid two">
       ${recordTable("Open support tickets", openComplaints(), ["id", "memberName", "category", "subject", "assignedOfficer", "priority", "status"])}
-      ${recordTable("Tenant support list", tenantRows(), ["name", "district", "contactPerson", "phone", "status"])}
+      ${recordTable("SACCO support list", tenantRows(), ["name", "district", "contactPerson", "phone", "status"])}
     </div>
   `;
 }
@@ -841,7 +841,7 @@ function approvalsView() {
   return `
     <div class="dashboard-grid">
       ${summary("Pending member approvals", members.length, "KYC and onboarding", "Review")}
-      ${summary(isPlatform() ? "Pending platform approvals" : "Pending loan approvals", loans.length, isPlatform() ? "Tenant and support workflow" : "Credit workflow", "Review")}
+      ${summary(isPlatform() ? "Pending platform approvals" : "Pending loan approvals", loans.length, isPlatform() ? "SACCO and support workflow" : "Credit workflow", "Review")}
       ${summary("Pending transactions", transactions.length, "Finance maker-checker", "Review")}
       ${summary("Total approval queue", queue.length, "Role-filtered work list", "Open")}
     </div>
@@ -919,7 +919,7 @@ function reportsView() {
       <div class="panel-heading">
         <div>
           <h2>Report catalogue</h2>
-          <p>${platform ? "Platform reports focus on tenants, subscriptions, operations, compliance and audit evidence." : "SACCO reports focus on members, finance, accounting, governance and statutory evidence."}</p>
+          <p>${platform ? "Platform reports focus on SACCOs, subscriptions, operations, compliance and audit evidence." : "SACCO reports focus on members, finance, accounting, governance and statutory evidence."}</p>
         </div>
         <span>${catalogue.length} report group(s)</span>
       </div>
@@ -997,11 +997,11 @@ function regulatoryConsolidated(rows) {
 function reportCatalogue(platform) {
   if (platform) {
     return [
-      { title: "SACCO registration", copy: "Applications, approval turnaround, active tenants and onboarding exceptions.", owner: "Operations", output: "PDF / Excel", action: "Open applications" },
+      { title: "SACCO registration", copy: "Applications, approval turnaround, active SACCOs and onboarding exceptions.", owner: "Operations", output: "PDF / Excel", action: "Open applications" },
       { title: "Subscriptions", copy: "Packages, billable members, received payments, arrears and renewal risk.", owner: "Billing", output: "Invoice pack", action: "Open billing" },
       { title: "Transactions", copy: "Platform-wide transaction monitoring without exposing SACCO-only loan workflows.", owner: "Operations", output: "Excel", action: "Open transactions" },
       { title: "Operations", copy: "Health checks, provider callbacks, scheduled jobs and support workload.", owner: "Support", output: "Dashboard export", action: "Open operations" },
-      { title: "Compliance", copy: "Regulatory consolidation, reconciliation exceptions and tenant evidence status.", owner: "Compliance", output: "Regulatory file", action: "Open evidence" },
+      { title: "Compliance", copy: "Regulatory consolidation, reconciliation exceptions and SACCO evidence status.", owner: "Compliance", output: "Regulatory file", action: "Open evidence" },
       { title: "Audit", copy: "Sensitive activity, login history, password reset requests and role changes.", owner: "Compliance", output: "Audit pack", action: "Open audit" }
     ];
   }
@@ -1127,7 +1127,7 @@ function usersView() {
   const roles = userRoleOptions(platformOnly);
   return `
     <div class="role-banner">
-      <div><p class="eyebrow">Users and Roles</p><h2>${platformOnly ? "Platform administrators only. SACCO members are not platform users." : "SACCO staff access for this tenant."}</h2></div>
+      <div><p class="eyebrow">Users and Roles</p><h2>${platformOnly ? "Platform administrators only. SACCO members are not platform users." : "SACCO staff access for this SACCO."}</h2></div>
       ${canCreate ? `<span class="status active">Super Admin</span>` : `<span class="status pending">View only</span>`}
     </div>
     <div class="dashboard-grid">
@@ -1166,7 +1166,7 @@ function auditView() {
     <div class="dashboard-grid">
       ${summary("Audit events", rows.length, "Immutable activity trail", "Inspect")}
       ${summary("High-risk events", highRisk.length, "Roles, sessions and reversals", "Review")}
-      ${summary(isPlatform() ? "Tenants affected" : "Actors involved", isPlatform() ? uniqueCount(rows, "tenantId") : uniqueCount(rows, "actorUserId"), isPlatform() ? "Across visible SACCOs" : "Within this SACCO", "Filter")}
+      ${summary(isPlatform() ? "SACCOs affected" : "Actors involved", isPlatform() ? uniqueCount(rows, "tenantId") : uniqueCount(rows, "actorUserId"), isPlatform() ? "Across visible SACCOs" : "Within this SACCO", "Filter")}
       ${summary("Actors", uniqueCount(rows, "actorUserId"), "Users and system actions", "Trace")}
     </div>
     ${auditControlPanel(rows, highRisk, approvals, reversals, access, finance)}
@@ -1192,7 +1192,7 @@ function auditEvidencePanel(rows, sensitive, approvals, reversals, access, finan
       <div class="panel-heading">
         <div>
           <h2>${isPlatform() ? "Platform audit evidence" : "SACCO audit evidence"}</h2>
-          <p>${isPlatform() ? "System-wide oversight for administrator actions, tenant changes and sensitive access." : "Read-only evidence for SACCO approvals, finance actions, reversals, role changes and session activity."}</p>
+          <p>${isPlatform() ? "System-wide oversight for administrator actions, SACCO account changes and sensitive access." : "Read-only evidence for SACCO approvals, finance actions, reversals, role changes and session activity."}</p>
         </div>
         <span class="status ${sensitive.length ? "pending" : "active"}">${sensitive.length ? "Review queue" : "Clear"}</span>
       </div>
@@ -1926,7 +1926,7 @@ function platformSettingsView() {
         ${mini("Default platform code", "PLATFORM")}
         ${mini("Production demo access", "Disabled outside dev/demo")}
         ${mini("SACCO code login", "Required")}
-        ${mini("Tenant isolation", "Role and token enforced")}
+        ${mini("SACCO isolation", "Role and token enforced")}
         ${mini("Audit coverage", `${dataRows("auditEvents").length} events`)}
       </div>
     </section>
@@ -2540,7 +2540,7 @@ function userDetailPanel(users, canManageRoles) {
       ${state.selectedUserMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedUserMessage)}</strong></div>` : ""}
       ${state.selectedUserError ? `<div class="notice warning"><strong>Role update failed.</strong><span>${escapeHtml(state.selectedUserError)}</span></div>` : ""}
       <div class="source-grid">
-        ${mini("Tenant", platformUser ? "Platform Administration" : selected.tenantId)}
+        ${mini("SACCO", platformUser ? "Platform Administration" : selected.tenantId)}
         ${mini("Status", selected.status)}
         ${mini("Phone", selected.phone)}
         ${mini("User ID", selected.id)}
@@ -2596,7 +2596,7 @@ function rolePurpose(roleName, platformOnly) {
     if (name.includes("super")) return "Full platform control";
     if (name.includes("billing")) return "Subscriptions and payments";
     if (name.includes("compliance")) return "Audit and oversight";
-    if (name.includes("support")) return "Tenant support";
+    if (name.includes("support")) return "SACCO support";
     if (name.includes("operations")) return "Monitoring and operations";
     return "Platform administration";
   }
@@ -5074,6 +5074,13 @@ function initials(name) {
 }
 
 function labelize(value) {
+  const displayLabels = {
+    tenantId: "SACCO ID",
+    tenantName: "SACCO",
+    tenant: "SACCO",
+    tenants: "SACCOs"
+  };
+  if (displayLabels[value]) return displayLabels[value];
   return String(value).replace(/[_-]+/g, " ").replace(/([A-Z])/g, " $1").replace(/\s+/g, " ").trim().replace(/^./, (char) => char.toUpperCase());
 }
 
