@@ -121,7 +121,6 @@ const platformModules = [
   ["sacco-applications", "SACCO Registration", "Applications and approvals", "tenants:view", ["super", "operations", "billing", "compliance", "support"]],
   ["subscriptions", "Subscriptions", "Packages and renewals", "subscriptions:view", ["super", "billing"]],
   ["sacco-accounts", "SACCO Accounts", "SACCO account health", "tenants:view", ["super", "billing", "compliance"]],
-  ["members", "Members", "Read-only SACCO member support", "members:view", ["super", "support"]],
   ["transactions", "Transactions", "Platform finance monitoring", "transactions:view", ["super"]],
   ["approvals", "Approvals", "Platform approval queues", "approvals:view", ["super"]],
   ["operations", "Operations", "Health, callbacks, jobs, support access", "operations:view", ["super", "operations", "compliance", "support"]],
@@ -471,18 +470,17 @@ function platformDashboard() {
   if (role === "support") return platformSupportDashboard();
   const tenants = dataRows("tenants").filter((tenant) => tenant.id !== "tenant_platform");
   const subs = dataRows("subscriptions");
-  const members = dataRows("members");
   const transactions = dataRows("transactions");
   const users = platformUsers();
+  const platformSupportTickets = saccoSupportTickets();
   return `
     <div class="dashboard-grid">
       ${summaryLink("Total SACCOs", tenants.length, "All registered SACCOs", "Open applications", "sacco-applications")}
       ${summaryLink("Active SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Operating SACCOs", "View accounts", "sacco-accounts")}
       ${summaryLink("Pending registrations", tenants.filter((t) => normal(t.status).includes("pending")).length, "Reviewer queue", "Review", "sacco-applications")}
       ${summaryLink("Expired subscriptions", subs.filter((s) => normal(s.status).includes("expired")).length, "Billing risk", "Renew", "subscriptions")}
-      ${summaryLink("Total platform members", members.length, "Across visible SACCOs", "Open members", "members")}
       ${summaryLink("Total subscription revenue", money.format(sum(subs, "amount")), "Current records", "Open billing", "subscriptions")}
-      ${summaryLink("Pending support tickets", dataRows("complaints").filter((c) => !["closed", "resolved"].includes(normal(c.status))).length, "Support workload", "Open", "complaints")}
+      ${summaryLink("SACCO support tickets", platformSupportTickets.filter((c) => !["closed", "resolved"].includes(normal(c.status))).length, "SACCO admin escalations", "Open", "complaints")}
       ${summaryLink("Failed payment transactions", transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", "Investigate", "operations")}
       ${summaryLink("Active platform users", users.filter((user) => normal(user.status) === "active").length || users.length, "Administrators and roles", "Manage access", "users")}
     </div>
@@ -499,7 +497,7 @@ function platformDashboard() {
 
 function platformOperationsDashboard() {
   const tenants = tenantRows();
-  const complaints = openComplaints();
+  const complaints = openSaccoSupportTickets();
   return `
     ${dashboardIntro("Platform Operations Officer", "Monitor service health, onboarding queues, callbacks, incidents and SACCO operating status.")}
     <div class="dashboard-grid">
@@ -511,7 +509,7 @@ function platformOperationsDashboard() {
     </div>
     <div class="grid two">
       ${recordTable("Operations command center", operationAlerts(), ["title", "provider", "severity", "status", "checkedAt"])}
-      ${recordTable("Open support tickets", complaints, ["id", "memberName", "category", "subject", "priority", "status"])}
+      ${recordTable("SACCO admin support tickets", complaints, ["id", "tenantName", "category", "subject", "priority", "status"])}
     </div>
   `;
 }
@@ -538,7 +536,7 @@ function platformComplianceDashboard() {
     <div class="dashboard-grid">
       ${summary("Pending registrations", pendingTenants().length, "Approval oversight", "Review")}
       ${summary("Audit events", dataRows("auditEvents").length, "Sensitive actions", "Inspect")}
-      ${summary("Open complaints", openComplaints().length, "Compliance cases", "Open")}
+      ${summary("SACCO support tickets", openSaccoSupportTickets().length, "SACCO escalation cases", "Open")}
       ${summary("Operations alerts", operationAlerts().length, "System exceptions", "Review")}
       ${summary("Regulatory report", state.data.regulatoryReport ? "Ready" : "Pending", "Export readiness", "Open")}
     </div>
@@ -550,17 +548,17 @@ function platformComplianceDashboard() {
 }
 
 function platformSupportDashboard() {
+  const tickets = openSaccoSupportTickets();
   return `
-    ${dashboardIntro("Platform Support Officer", "Help SACCOs resolve member, onboarding and operating issues without platform administration rights.")}
+    ${dashboardIntro("Platform Support Officer", "Help SACCO admins resolve onboarding, subscription and operating issues without member-level access.")}
     <div class="dashboard-grid">
-      ${summary("Open complaints", openComplaints().length, "Support queue", "Open")}
+      ${summary("SACCO support tickets", tickets.length, "SACCO admin escalations", "Open")}
       ${summary("Visible SACCOs", tenantRows().length, "SACCO support context", "View")}
-      ${summary("Visible members", dataRows("members").length, "Read-only support", "Search")}
       ${summary("Pending onboarding", pendingTenants().length, "Applicant follow-up", "Assist")}
       ${summary("Notifications", dataRows("notifications").length, "Recent messages", "Open")}
     </div>
     <div class="grid two">
-      ${recordTable("Open support tickets", openComplaints(), ["id", "memberName", "category", "subject", "assignedOfficer", "priority", "status"])}
+      ${recordTable("SACCO admin support tickets", tickets, ["id", "tenantName", "category", "subject", "assignedOfficer", "priority", "status"])}
       ${recordTable("SACCO support list", tenantRows(), ["name", "district", "contactPerson", "phone", "status"])}
     </div>
   `;
@@ -1041,10 +1039,11 @@ function reportReadinessPanel(consolidated) {
 }
 
 function complaintsView() {
-  const rows = dataRows("complaints").map((complaint) => ({
+  const sourceRows = isPlatform() ? saccoSupportTickets() : dataRows("complaints");
+  const rows = sourceRows.map((complaint) => ({
     ...complaint,
     tenantName: tenantName(complaint.tenantId),
-    memberName: complaint.memberId ? memberName(complaint.memberId) : "SACCO-level case",
+    memberName: complaint.memberId ? memberName(complaint.memberId) : (isPlatform() ? "SACCO admin escalation" : "SACCO-level case"),
     assignedOfficer: userName(complaint.assignedUserId),
     action: "complaint-detail",
     actionLabel: "Review",
@@ -1055,16 +1054,16 @@ function complaintsView() {
   const assigned = rows.filter((row) => row.assignedUserId);
   return `
     <div class="dashboard-grid">
-      ${summary("Open complaints", open.length, "Support workload", "Assign")}
-      ${summary("Urgent complaints", urgent.length, "Needs same-day action", "Escalate")}
+      ${summary(isPlatform() ? "SACCO support tickets" : "Open complaints", open.length, isPlatform() ? "SACCO admin escalations" : "Member support workload", "Assign")}
+      ${summary(isPlatform() ? "Urgent tickets" : "Urgent complaints", urgent.length, "Needs same-day action", "Escalate")}
       ${summary("In progress", rows.filter((row) => normal(row.status) === "in_progress").length, "Being handled", "Track")}
       ${summary("Resolved", rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", "Review")}
     </div>
     ${complaintServiceControlPanel(rows, open, urgent, assigned)}
-    ${filterToolbar("Search complaints by SACCO, member, category, priority, status or officer", "New complaint", "Assign officer")}
+    ${filterToolbar(isPlatform() ? "Search SACCO support tickets by SACCO, category, priority, status or officer" : "Search complaints by member, category, priority, status or officer", isPlatform() ? "New SACCO ticket" : "New complaint", "Assign officer")}
     ${complaintCapturePanel()}
     ${complaintDetailPanel(rows)}
-    ${recordTable(isPlatform() ? "Platform support desk" : "Complaint list", rows, ["tenantName", "memberName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
+    ${recordTable(isPlatform() ? "Platform SACCO support desk" : "SACCO member complaint desk", rows, isPlatform() ? ["tenantName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"] : ["memberName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
   `;
 }
 
@@ -1074,7 +1073,7 @@ function complaintServiceControlPanel(rows, open, urgent, assigned) {
   return rolePriorityPanel("Complaint service control", [
     ["Urgent queue", `${urgent.length} urgent complaint(s) need same-day follow-up.`, urgent.length ? "Escalate" : "Clear"],
     ["Assignment coverage", `${assigned.length} complaint(s) have a named officer; ${unassigned} open case(s) are unassigned.`, unassigned ? "Assign" : "Covered"],
-    ["Member impact", `${memberLinked} complaint(s) are linked to member records for traceable resolution.`, memberLinked ? "Traceable" : "SACCO-level"]
+    [isPlatform() ? "SACCO escalation" : "Member impact", isPlatform() ? "Platform support handles SACCO-admin tickets, not individual member complaint ownership." : `${memberLinked} complaint(s) are linked to member records for traceable resolution.`, isPlatform() ? "Platform scope" : memberLinked ? "Traceable" : "SACCO-level"]
   ]);
 }
 
@@ -2616,7 +2615,7 @@ function roleModuleScope(roleName, platformOnly) {
     if (name.includes("super")) return "All platform modules";
     if (name.includes("billing")) return "Dashboard, subscriptions, reports";
     if (name.includes("compliance")) return "Dashboard, reports, operations, audit";
-    if (name.includes("support")) return "Dashboard, SACCOs, members, complaints";
+    if (name.includes("support")) return "Dashboard, SACCOs, complaints";
     if (name.includes("operations")) return "Dashboard, SACCOs, operations, reports";
     return "Platform administration";
   }
@@ -3160,25 +3159,26 @@ function complaintCapturePanel() {
   const tenants = tenantRows();
   const tenantId = isPlatform() ? tenants[0]?.id || "" : state.user?.tenantId || "";
   const members = dataRows("members").filter((member) => !tenantId || member.tenantId === tenantId || !isPlatform());
+  const platformScope = isPlatform();
   return `
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Support ticket capture</h2>
-          <p>Create a Java-backed complaint for a SACCO or a specific member.</p>
+          <h2>${platformScope ? "SACCO support ticket capture" : "Member complaint intake"}</h2>
+          <p>${platformScope ? "Create a Java-backed support ticket submitted by or on behalf of a SACCO administrator." : "SACCO admins receive, assign and resolve complaints submitted by SACCO members."}</p>
         </div>
       </div>
       ${state.complaintFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.complaintFormMessage)}</strong></div>` : ""}
       ${state.complaintFormError ? `<div class="notice warning"><strong>Complaint capture failed.</strong><span>${escapeHtml(state.complaintFormError)}</span></div>` : ""}
       <form id="complaintForm" class="form-grid">
         <label><span>SACCO</span><select id="newComplaintTenantId" ${isPlatform() && canManage ? "" : "disabled"}>${tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${tenant.id === tenantId ? "selected" : ""}>${escapeHtml(tenant.abbreviation || tenant.code || tenant.name)} - ${escapeHtml(tenant.name || tenant.id)}</option>`).join("")}</select></label>
-        <label><span>Member</span><select id="newComplaintMemberId" ${canManage ? "" : "disabled"}><option value="">SACCO-level case</option>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
+        ${platformScope ? `<input type="hidden" id="newComplaintMemberId" value="">` : `<label><span>Member</span><select id="newComplaintMemberId" ${canManage ? "" : "disabled"}><option value="">SACCO-level case</option>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>`}
         <label><span>Category</span><select id="newComplaintCategory" ${canManage ? "" : "disabled"}>${complaintCategoryOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
         <label><span>Priority</span><select id="newComplaintPriority" ${canManage ? "" : "disabled"}><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option><option value="low">Low</option></select></label>
         <label><span>Channel</span><select id="newComplaintChannel" ${canManage ? "" : "disabled"}><option value="branch">Branch</option><option value="phone">Phone</option><option value="email">Email</option><option value="web">Web</option><option value="mobile">Mobile</option></select></label>
-        <label><span>Subject</span><input id="newComplaintSubject" required placeholder="Short complaint title" ${canManage ? "" : "disabled"}></label>
-        <label class="wide"><span>Description</span><textarea id="newComplaintDescription" placeholder="What happened, when, and what action is expected" ${canManage ? "" : "disabled"}></textarea></label>
-        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">Create support ticket</button>` : `<span class="status pending">View only</span>`}</div>
+        <label><span>Subject</span><input id="newComplaintSubject" required placeholder="${platformScope ? "SACCO admin support request" : "Short complaint title"}" ${canManage ? "" : "disabled"}></label>
+        <label class="wide"><span>Description</span><textarea id="newComplaintDescription" placeholder="${platformScope ? "What does this SACCO need from platform support?" : "What happened, when, and what action is expected"}" ${canManage ? "" : "disabled"}></textarea></label>
+        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">${platformScope ? "Create SACCO ticket" : "Create member complaint"}</button>` : `<span class="status pending">View only</span>`}</div>
       </form>
     </section>
   `;
@@ -4922,6 +4922,14 @@ function platformUsers() {
 
 function openComplaints() {
   return dataRows("complaints").filter((complaint) => !["closed", "resolved", "cancelled"].includes(normal(complaint.status)));
+}
+
+function saccoSupportTickets() {
+  return dataRows("complaints").filter((complaint) => !complaint.memberId);
+}
+
+function openSaccoSupportTickets() {
+  return saccoSupportTickets().filter((complaint) => !["closed", "resolved", "cancelled"].includes(normal(complaint.status)));
 }
 
 function pendingTransactions() {

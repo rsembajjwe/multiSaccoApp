@@ -38,6 +38,7 @@ try {
 
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
   await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
+  await expectNoVisibleText(page, "Read-only SACCO member support", "Platform Members navigation hidden");
   await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
   await assertPlatformDashboardCardNavigation(page);
   await assertScreen(page, "sacco-applications", ["SACCO application list", "Public SACCO registration wizard"]);
@@ -51,7 +52,7 @@ try {
   await assertScreen(page, "settings", ["Platform settings control", "Protected platform configuration", "Platform subscription packages", "Platform role catalogue"]);
   await assertScreen(page, "users", ["Platform administrators only", "Platform role coverage", "Permission matrix"]);
   await assertPlatformUserCreation(page);
-  await assertScreen(page, "complaints", ["Complaint service control", "Platform support desk", "Support ticket capture", "Open complaints"]);
+  await assertScreen(page, "complaints", ["Complaint service control", "Platform SACCO support desk", "SACCO support ticket capture", "SACCO support tickets"]);
   await assertScreen(page, "notifications", ["Notification delivery control", "Notification delivery monitor", "Notification template setup", "Notification templates"]);
   await expectNoVisibleText(page, "Dashboard data source", "debug source panel hidden");
   await logout(page);
@@ -59,7 +60,7 @@ try {
   await assertRoleDashboard(page, "PLATFORM", "operations@platform.local", "Operations@12345", "Platform Operations", ["Platform Operations Officer", "Operating SACCOs", "Open support tickets"]);
   await assertRoleDashboard(page, "PLATFORM", "billing@platform.local", "Billing@12345", "Platform Billing", ["Platform Billing Officer", "Active subscriptions", "Pending payments"]);
   await assertRoleDashboard(page, "PLATFORM", "compliance@platform.local", "Compliance@12345", "Platform Compliance", ["Platform Compliance Officer", "Audit events", "SACCO approval oversight"]);
-  await assertRoleDashboard(page, "PLATFORM", "support@platform.local", "Support@12345", "Platform Support", ["Platform Support Officer", "Open complaints", "SACCO support list"]);
+  await assertRoleDashboard(page, "PLATFORM", "support@platform.local", "Support@12345", "Platform Support", ["Platform Support Officer", "SACCO support tickets", "SACCO support list"]);
 
   await staffLogin(page, "GVS", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Role filtered"]);
