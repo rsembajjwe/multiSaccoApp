@@ -118,16 +118,16 @@ const state = {
 
 const platformModules = [
   ["dashboard", "Dashboard", "Platform performance and alerts", "dashboard:view", ["super", "operations", "billing", "compliance", "support"]],
-  ["sacco-applications", "SACCO Registration", "Applications, reviewer queue, approvals", "tenants:view", ["super", "operations", "billing", "compliance", "support"]],
-  ["subscriptions", "Subscriptions", "Packages, invoices, renewals", "subscriptions:view", ["super", "billing"]],
+  ["sacco-applications", "SACCO Registration", "Applications and approvals", "tenants:view", ["super", "operations", "billing", "compliance", "support"]],
+  ["subscriptions", "Subscriptions", "Packages and renewals", "subscriptions:view", ["super", "billing"]],
   ["sacco-accounts", "SACCO Accounts", "Tenant account health", "tenants:view", ["super", "billing", "compliance"]],
   ["members", "Members", "Read-only tenant member support", "members:view", ["super", "support"]],
-  ["transactions", "Transactions", "Platform transaction monitoring", "transactions:view", ["super"]],
+  ["transactions", "Transactions", "Platform finance monitoring", "transactions:view", ["super"]],
   ["approvals", "Approvals", "Platform approval queues", "approvals:view", ["super"]],
   ["operations", "Operations", "Health, callbacks, jobs, support access", "operations:view", ["super", "operations", "compliance", "support"]],
-  ["reports", "Reports", "Registration, billing, compliance exports", "reports:view", ["super", "operations", "billing", "compliance"]],
+  ["reports", "Reports", "Registration and compliance", "reports:view", ["super", "operations", "billing", "compliance"]],
   ["complaints", "Complaints", "Support tickets and escalations", "complaints:view", ["super", "operations", "support"]],
-  ["notifications", "Notifications", "SMS, email and push delivery", "notifications:view", ["super", "operations"]],
+  ["notifications", "Notifications", "SMS, email and in-app", "notifications:view", ["super", "operations"]],
   ["users", "Users and Roles", "Platform administrators only", "roles:view", ["super"]],
   ["audit", "Audit Logs", "Read-only platform audit trail", "reports:view", ["super", "compliance"]],
   ["settings", "System Settings", "Protected platform configuration", "roles:create", ["super"]]
@@ -135,17 +135,17 @@ const platformModules = [
 
 const saccoModules = [
   ["dashboard", "Dashboard", "Role-specific SACCO operating view", "dashboard:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "teller", "auditor"]],
-  ["members", "Members", "KYC, approvals, profiles, statements", "members:view", ["admin", "secretary", "loans", "auditor"]],
-  ["transactions", "Transactions", "Deposits, withdrawals, receipts, reversals", "transactions:view", ["admin", "treasurer", "accountant", "teller", "auditor"]],
+  ["members", "Members", "KYC, profiles, statements", "members:view", ["admin", "secretary", "loans", "auditor"]],
+  ["transactions", "Transactions", "Deposits and reversals", "transactions:view", ["admin", "treasurer", "accountant", "teller", "auditor"]],
   ["savings", "Savings", "Products, accounts and statements", "transactions:view", ["admin", "treasurer", "accountant", "auditor"]],
   ["shares", "Shares", "Share register and certificates", "transactions:view", ["admin", "treasurer", "secretary", "auditor"]],
   ["welfare", "Welfare", "Contributions, balances and claims", "transactions:view", ["admin", "treasurer", "secretary"]],
-  ["loans", "Loans", "Applications, appraisal, guarantors, repayments", "loans:view", ["admin", "chairperson", "loans", "auditor"]],
+  ["loans", "Loans", "Applications and repayments", "loans:view", ["admin", "chairperson", "loans", "auditor"]],
   ["guarantors", "Guarantors", "Guarantee requests and obligations", "loans:view", ["admin", "chairperson", "loans"]],
   ["approvals", "Approvals", "Maker-checker decisions", "approvals:view", ["admin", "chairperson", "treasurer", "secretary", "loans"]],
   ["operations", "Operations", "Branch, import and service status", "operations:view", ["admin", "chairperson", "treasurer", "auditor"]],
   ["accounting", "Accounting", "Trial balance, journals and reports", "transactions:view", ["admin", "treasurer", "accountant"]],
-  ["reconciliation", "Reconciliation", "Bank and mobile-money matching", "transactions:view", ["admin", "treasurer", "accountant"]],
+  ["reconciliation", "Reconciliation", "Bank and mobile money", "transactions:view", ["admin", "treasurer", "accountant"]],
   ["reports", "Reports", "Operational and financial reporting", "reports:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "auditor"]],
   ["governance", "Governance", "Meetings, minutes and resolutions", "governance:view", ["admin", "chairperson", "secretary"]],
   ["complaints", "Complaints", "Member cases and support", "complaints:view", ["admin", "secretary"]],
@@ -159,7 +159,7 @@ const memberModules = [
   ["accounts", "My Accounts", "Savings, shares and welfare"],
   ["loans", "Loans", "Active loans and applications"],
   ["guarantor-requests", "Guarantor Requests", "Accept or reject requests"],
-  ["payments", "Payments", "Deposit, repay, buy shares, pay welfare"],
+  ["payments", "Payments", "Deposit, repay, shares, welfare"],
   ["statements", "Statements", "Download PDF, Excel or print"],
   ["receipts", "Receipts", "Posted transaction receipts"],
   ["notifications", "Notifications", "Messages and alerts"],
@@ -395,7 +395,7 @@ function renderShell() {
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-top">
           <div class="logo-lockup compact">${logo()}<div><strong>Tereka Online</strong><span>${portal}</span></div></div>
-          <button class="icon-button" type="button" data-action="toggle-sidebar" aria-label="Collapse sidebar">M</button>
+          <button class="icon-button menu-button" type="button" data-action="toggle-sidebar" aria-label="Toggle sidebar"><span class="menu-bars" aria-hidden="true"></span></button>
         </div>
         <div class="context-card">
           <small>${state.auth === "member" ? "SACCO" : isPlatform() ? "Context" : "SACCO"}</small>
@@ -413,7 +413,7 @@ function renderShell() {
       </aside>
       <main class="main">
         <header class="topbar">
-          <button class="icon-button mobile-only" type="button" data-action="toggle-sidebar" aria-label="Open menu">Menu</button>
+          <button class="icon-button mobile-only menu-button" type="button" data-action="toggle-sidebar" aria-label="Open menu"><span class="menu-bars" aria-hidden="true"></span></button>
           <div class="breadcrumbs">Home / ${portal} / <strong>${module[1]}</strong></div>
           <div class="topbar-actions">
             <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs"></label>

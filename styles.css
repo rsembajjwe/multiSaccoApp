@@ -51,6 +51,15 @@ button {
   cursor: pointer;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .login-page {
   background: linear-gradient(180deg, #f7fbf9 0%, #eef6f2 100%);
 }
@@ -214,6 +223,7 @@ button {
 .source-panel p,
 .fine-print,
 small {
+  margin: 6px 0 0;
   color: var(--muted);
   line-height: 1.45;
 }
@@ -312,6 +322,38 @@ textarea {
   padding: 0 14px;
   font-size: var(--text-sm);
   font-weight: 800;
+}
+
+.menu-button {
+  display: inline-grid;
+  place-items: center;
+}
+
+.menu-bars {
+  position: relative;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.menu-bars::before,
+.menu-bars::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 18px;
+  height: 2px;
+  border-radius: inherit;
+  background: currentColor;
+}
+
+.menu-bars::before {
+  top: -6px;
+}
+
+.menu-bars::after {
+  top: 6px;
 }
 
 .button.primary {
@@ -598,6 +640,10 @@ textarea {
   font-size: var(--text-page);
   line-height: 1.2;
   letter-spacing: 0;
+}
+
+.page-header p {
+  max-width: 760px;
 }
 
 .content-area {
@@ -1057,6 +1103,14 @@ th {
   .search-box {
     width: 100%;
   }
+
+  .page-actions {
+    width: 100%;
+  }
+
+  .page-actions .button {
+    flex: 1 1 150px;
+  }
 }
 
 @media (max-width: 560px) {
@@ -1070,6 +1124,12 @@ th {
   .panel,
   .filter-toolbar {
     padding: 14px;
+  }
+
+  .page-header,
+  .topbar {
+    padding-left: 14px;
+    padding-right: 14px;
   }
 
   .dashboard-grid,
