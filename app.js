@@ -1178,13 +1178,21 @@ function moduleBlueprint(view) {
 function savingsView() {
   const products = productsByType("savings");
   const accounts = accountsByType("savings");
+  const members = dataRows("members");
+  const activeProducts = products.filter((row) => normal(row.status) === "active");
   return `
     <div class="dashboard-grid">
       ${summary("Savings products", products.length, "Configured in Java API", "Manage")}
       ${summary("Savings accounts", accounts.length, "Member accounts", "Open")}
-      ${summary("Active products", products.filter((row) => normal(row.status) === "active").length, "Available to members", "Review")}
+      ${summary("Active products", activeProducts.length, "Available to members", "Review")}
       ${summary("Minimum contribution", money.format(sum(products, "contributionAmount", "minimumBalance")), "Configured product totals", "View")}
+      ${summary("Savings balances", money.format(sum(members, "savingsBalance", "savings")), "Member ledger total", "Statements")}
     </div>
+    ${rolePriorityPanel("Savings operations control", [
+      ["Product setup", `${activeProducts.length} active savings product(s) are available for account opening.`, activeProducts.length ? "Ready" : "Setup"],
+      ["Member accounts", `${accounts.length} savings account(s) are open for active members.`, accounts.length ? "Active" : "Open"],
+      ["Contribution flow", "Savings deposits post through Transactions and member mobile payments.", "Connected"]
+    ])}
     ${financialProductPanel("savings")}
     ${financialAccountPanel("savings", products)}
     ${recordTable("Savings product list", products, ["name", "code", "contributionAmount", "minimumBalance", "interestRate", "status"])}
@@ -1195,13 +1203,21 @@ function savingsView() {
 function sharesView() {
   const products = productsByType("share");
   const accounts = accountsByType("share");
+  const members = dataRows("members");
+  const activeProducts = products.filter((row) => normal(row.status) === "active");
   return `
     <div class="dashboard-grid">
       ${summary("Share products", products.length, "Share capital products", "Manage")}
       ${summary("Share accounts", accounts.length, "Member share ledgers", "Open")}
       ${summary("Active members", uniqueCount(accounts, "memberId"), "Holding shares", "View")}
       ${summary("Share contribution setup", money.format(sum(products, "contributionAmount")), "Configured value", "Review")}
+      ${summary("Share balances", money.format(sum(members, "sharesBalance", "shares")), "Member share capital", "Register")}
     </div>
+    ${rolePriorityPanel("Shares capital control", [
+      ["Product setup", `${activeProducts.length} active share product(s) define contribution rules.`, activeProducts.length ? "Ready" : "Setup"],
+      ["Share register", `${accounts.length} member share account(s) are available for reporting.`, accounts.length ? "Active" : "Open"],
+      ["Contribution flow", "Share purchases post through Transactions and member mobile payments.", "Connected"]
+    ])}
     ${financialProductPanel("shares")}
     ${financialAccountPanel("shares", products)}
     ${recordTable("Share product list", products, ["name", "code", "contributionAmount", "minimumBalance", "status"])}
@@ -1212,13 +1228,24 @@ function sharesView() {
 function welfareView() {
   const products = productsByType("welfare");
   const claims = dataRows("welfareClaims");
+  const accounts = accountsByType("welfare");
+  const submitted = claims.filter((row) => ["submitted", "pending", "pending_approval"].some((word) => normal(row.status).includes(word)));
+  const approved = claims.filter((row) => normal(row.status) === "approved");
+  const paid = claims.filter((row) => normal(row.status) === "paid");
   return `
     <div class="dashboard-grid">
       ${summary("Welfare products", products.length, "Contribution rules", "Manage")}
+      ${summary("Welfare accounts", accounts.length, "Member welfare ledgers", "Open")}
       ${summary("Claims", claims.length, "Submitted claims", "Open")}
-      ${summary("Pending claims", claims.filter((row) => normal(row.status).includes("pending") || normal(row.status).includes("submitted")).length, "Decision queue", "Review")}
-      ${summary("Claim value", money.format(sum(claims, "amount")), "Recorded claims", "Export")}
+      ${summary("Pending claims", submitted.length, "Decision queue", "Review")}
+      ${summary("Approved for payment", approved.length, "Payment queue", "Pay")}
+      ${summary("Paid claims", money.format(sum(paid, "amount")), "Settled welfare support", "Report")}
     </div>
+    ${rolePriorityPanel("Welfare fund control", [
+      ["Contribution setup", `${products.length} welfare product(s) and ${accounts.length} welfare account(s) support member balances.`, products.length && accounts.length ? "Ready" : "Setup"],
+      ["Claim decisions", `${submitted.length} submitted claim(s) need approval or rejection.`, submitted.length ? "Pending" : "Clear"],
+      ["Claim payments", `${approved.length} approved claim(s) are ready for payment if member welfare balance is sufficient.`, approved.length ? "Ready" : "Clear"]
+    ])}
     ${financialProductPanel("welfare")}
     ${financialAccountPanel("welfare", products)}
     ${welfareClaimPanel()}
@@ -1230,13 +1257,15 @@ function welfareView() {
 
 function financialProductPanel(type) {
   const canCreate = hasPermission("transactions:create");
+  const products = productsByType(type === "shares" ? "share" : type);
   return `
     <section class="panel">
       <div class="panel-heading">
         <div>
           <h2>${financialProductTitle(type)}</h2>
-          <p>Create Java-backed ${labelize(type).toLowerCase()} products for this SACCO.</p>
+          <p>Create Java-backed ${labelize(type).toLowerCase()} products for this SACCO. Product codes must be unique per SACCO.</p>
         </div>
+        <span class="status ${products.length ? "active" : "pending"}">${products.length ? "Configured" : "Setup needed"}</span>
       </div>
       ${state.productFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.productFormMessage)}</strong></div>` : ""}
       ${state.productFormError ? `<div class="notice warning"><strong>Product setup failed.</strong><span>${escapeHtml(state.productFormError)}</span></div>` : ""}
@@ -1257,13 +1286,15 @@ function financialProductPanel(type) {
 function financialAccountPanel(type, products) {
   const canCreate = hasPermission("transactions:create");
   const members = dataRows("members").filter((member) => normal(member.status) === "active");
+  const accounts = accountsByType(type === "shares" ? "share" : type);
   return `
     <section class="panel">
       <div class="panel-heading">
         <div>
           <h2>${financialAccountTitle(type)}</h2>
-          <p>Link an active member to a configured ${labelize(type).toLowerCase()} product.</p>
+          <p>Link an active member to a configured ${labelize(type).toLowerCase()} product. Duplicate member-product accounts are rejected by the backend.</p>
         </div>
+        <span class="status ${products.length && members.length ? "active" : "pending"}">${accounts.length} account(s)</span>
       </div>
       ${state.accountFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.accountFormMessage)}</strong></div>` : ""}
       ${state.accountFormError ? `<div class="notice warning"><strong>Account opening failed.</strong><span>${escapeHtml(state.accountFormError)}</span></div>` : ""}
@@ -1310,6 +1341,11 @@ function welfareClaimDetailPanel(claims) {
   if (!claim) return "";
   const canApprove = hasPermission("transactions:approve");
   const canPost = hasPermission("accounting:post");
+  const submitted = ["submitted", "pending", "pending_approval"].some((word) => normal(claim.status).includes(word));
+  const payable = normal(claim.status) === "approved";
+  const paid = normal(claim.status) === "paid";
+  const member = dataRows("members").find((item) => item.id === claim.memberId) || {};
+  const welfareBalance = Number(member.welfareBalance || claim.welfareBalance || 0);
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
@@ -1321,6 +1357,12 @@ function welfareClaimDetailPanel(claims) {
       </div>
       ${state.selectedWelfareClaimMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedWelfareClaimMessage)}</strong></div>` : ""}
       ${state.selectedWelfareClaimError ? `<div class="notice warning"><strong>Welfare action failed.</strong><span>${escapeHtml(state.selectedWelfareClaimError)}</span></div>` : ""}
+      <div class="dashboard-grid">
+        ${summary("Claim amount", money.format(claim.amount || 0), "Requested welfare support", "Review")}
+        ${summary("Member welfare balance", money.format(welfareBalance), "Available contribution balance", "Check")}
+        ${summary("Decision state", payable ? "Approved" : paid ? "Paid" : submitted ? "Submitted" : labelize(claim.status || "Review"), "Approval workflow", "Decide")}
+        ${summary("Payment readiness", payable ? "Ready to pay" : paid ? "Paid" : "Approve first", "Backend validates balance", "Pay")}
+      </div>
       <div class="source-grid">
         ${mini("Member", `${claim.membershipNo || ""} ${claim.memberName || ""}`)}
         ${mini("Amount", money.format(claim.amount || 0))}
@@ -1329,13 +1371,18 @@ function welfareClaimDetailPanel(claims) {
         ${mini("Paid channel", claim.channel)}
         ${mini("Submitted", claim.submittedAt)}
       </div>
+      ${rolePriorityPanel("Welfare claim checklist", [
+        ["Eligibility", "Only active members can receive welfare claims.", "Checked"],
+        ["Decision", submitted ? "Approve or reject the submitted claim with a reason where needed." : "Decision step is complete or unavailable.", submitted ? "Pending" : "Done"],
+        ["Payment", payable ? "Approved claim can be paid through cash, mobile money or bank if balance is sufficient." : "Payment is locked until approval.", payable ? "Ready" : "Locked"]
+      ])}
       <form id="welfareClaimDecisionForm" class="form-grid">
         <input type="hidden" id="selectedWelfareClaimId" value="${escapeHtml(claim.id)}">
         <label class="wide"><span>Decision reason</span><input id="welfareClaimReason" placeholder="Required for rejection"></label>
         <label><span>Payment channel</span><select id="welfarePaymentChannel"><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option></select></label>
         <div class="form-actions inline">
-          ${canApprove ? `<button class="button secondary" type="button" data-welfare-claim-action="approve">Approve claim</button><button class="button ghost" type="button" data-welfare-claim-action="reject">Reject claim</button>` : ""}
-          ${canPost ? `<button class="button primary" type="button" data-welfare-claim-action="pay">Pay claim</button>` : ""}
+          ${canApprove ? `<button class="button secondary" type="button" data-welfare-claim-action="approve" ${submitted ? "" : "disabled"}>Approve claim</button><button class="button ghost" type="button" data-welfare-claim-action="reject" ${submitted ? "" : "disabled"}>Reject claim</button>` : ""}
+          ${canPost ? `<button class="button primary" type="button" data-welfare-claim-action="pay" ${payable ? "" : "disabled"}>Pay claim</button>` : ""}
           ${!canApprove && !canPost ? `<span class="status pending">View only</span>` : ""}
         </div>
       </form>

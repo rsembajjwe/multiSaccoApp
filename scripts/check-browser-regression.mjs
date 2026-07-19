@@ -67,9 +67,9 @@ try {
   await assertMemberRegistrationAndKyc(page);
   await assertScreen(page, "transactions", ["Transaction control focus", "Transaction list", "New transaction screen"]);
   await assertTransactionWorkflow(page);
-  await assertScreen(page, "savings", ["Savings product list", "Savings product setup", "Open Savings account"]);
-  await assertScreen(page, "shares", ["Share product list", "Shares product setup", "Open Shares account"]);
-  await assertScreen(page, "welfare", ["Welfare product list", "Welfare product setup", "Welfare claim submission"]);
+  await assertScreen(page, "savings", ["Savings operations control", "Savings product list", "Savings product setup", "Open Savings account"]);
+  await assertScreen(page, "shares", ["Shares capital control", "Share product list", "Shares product setup", "Open Shares account"]);
+  await assertScreen(page, "welfare", ["Welfare fund control", "Welfare product list", "Welfare product setup", "Welfare claim submission"]);
   await assertScreen(page, "loans", ["Loan lifecycle control", "Loan application list", "Loan application form", "Loan detail and guarantors", "Loan decision checklist", "Add guarantor request"]);
   await assertScreen(page, "guarantors", ["Guarantor control focus", "Guarantor requests"]);
   await assertScreen(page, "approvals", ["Approval decision center", "Approval queue"]);
