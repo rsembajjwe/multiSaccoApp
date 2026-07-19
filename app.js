@@ -2481,10 +2481,19 @@ function activityPanel(title, rows) {
 }
 
 function recordTable(title, rows, columns) {
-  const filtered = filterRows(rows || []);
+  const allRows = rows || [];
+  const filtered = filterRows(allRows);
+  const searching = Boolean(state.search.trim());
+  const countLabel = searching ? `${filtered.length} of ${allRows.length} shown` : `${filtered.length} record(s)`;
   return `
     <section class="panel">
-      <div class="panel-heading"><h2>${title}</h2><span>${filtered.length} record(s)</span></div>
+      <div class="panel-heading">
+        <h2>${title}</h2>
+        <div class="table-count">
+          <span>${countLabel}</span>
+          ${searching ? `<button class="table-action" type="button" data-action="clear-search">Clear search</button>` : ""}
+        </div>
+      </div>
       ${filtered.length ? `
         <div class="table-wrap">
           <table>
@@ -4845,6 +4854,10 @@ function bindEvents() {
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
   document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
+  document.querySelectorAll("[data-action='clear-search']").forEach((button) => button.addEventListener("click", () => {
+    state.search = "";
+    renderShell();
+  }));
   document.querySelectorAll("[data-action='toggle-sidebar']").forEach((button) => button.addEventListener("click", () => document.querySelector(".app-shell")?.classList.toggle("sidebar-open")));
   document.querySelectorAll("#globalSearch,[data-search-input]").forEach((input) => input.addEventListener("input", (event) => {
     state.search = event.target.value;
