@@ -205,8 +205,23 @@ async function assertRoleDashboard(page, code, username, password, label, marker
   for (const marker of markers) {
     await expectText(page, marker, `${label} dashboard marker ${marker}`);
   }
+  await assertRoleNavigation(page, label);
   console.log(`PASS ${label} dashboard`);
   await logout(page);
+}
+
+async function assertRoleNavigation(page, label) {
+  const hiddenByRole = {
+    "SACCO Chairperson": ["transactions", "accounting", "reconciliation", "users", "settings"],
+    "SACCO Treasurer": ["members", "loans", "guarantors", "governance", "users", "settings"],
+    "SACCO Secretary": ["transactions", "savings", "loans", "guarantors", "accounting", "reconciliation", "users", "settings"]
+  };
+  const hiddenViews = hiddenByRole[label] || [];
+  for (const viewId of hiddenViews) {
+    const count = await page.locator(`[data-view="${viewId}"]`).count();
+    if (count) throw new Error(`${label} should not see navigation view: ${viewId}`);
+  }
+  if (hiddenViews.length) console.log(`PASS ${label} role navigation restrictions`);
 }
 
 async function assertPlatformDashboardCardNavigation(page) {

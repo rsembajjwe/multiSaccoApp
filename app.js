@@ -263,6 +263,10 @@ function visibleModules() {
   return source.filter((item) => item[4].includes(kind) && hasPermission(item[3]));
 }
 
+function canAccessView(view) {
+  return visibleModules().some((item) => item[0] === view);
+}
+
 function currentModule() {
   return visibleModules().find((item) => item[0] === state.currentView) || visibleModules()[0];
 }
@@ -582,6 +586,7 @@ function saccoDashboard() {
   };
   return `
     ${dashboardIntro(roleLabel(), roleCopy[role] || roleCopy.admin)}
+    ${roleAccessPanel("SACCO role access")}
     <div class="dashboard-grid">
       ${summary("Total members", members.length, "Membership register", "Open members")}
       ${summary("Active members", members.filter((m) => normal(m.status) === "active").length, "Can transact", "Review")}
@@ -609,12 +614,13 @@ function saccoChairpersonDashboard() {
   const governance = dataRows("governanceMeetings");
   return `
     ${dashboardIntro("SACCO Chairperson", "Oversight dashboard for approvals, portfolio health, governance actions and high-value exceptions.")}
+    ${roleAccessPanel("Chairperson access")}
     <div class="dashboard-grid">
       ${summaryLink("Total members", members.length, "SACCO membership base", "Open", "members")}
       ${summaryLink("Loans awaiting approval", approvalLoans.length, "Chairperson approval queue", "Decide", "approvals")}
       ${summaryLink("Outstanding portfolio", money.format(sum(loans, "outstandingBalance", "balance")), "Credit exposure", "Review", "loans")}
       ${summaryLink("Arrears watch", arrearsLoans.length, "Loans requiring board attention", "Assess", "loans")}
-      ${summaryLink("High-value transactions", highValueTransactions.length, "Large movements to review", "Review", "transactions")}
+      ${summaryLink("High-value transactions", highValueTransactions.length, "Large movements to review", "Review", "approvals")}
       ${summaryLink("Governance actions", governance.length, "Meetings and resolutions", "Open", "governance")}
     </div>
     ${rolePriorityPanel("Chairperson decision focus", [
@@ -639,6 +645,7 @@ function saccoTreasurerDashboard() {
   const failedCallbacks = callbacks.filter((row) => ["failed", "exception", "pending"].some((word) => normal(row.status).includes(word)));
   return `
     ${dashboardIntro("SACCO Treasurer", "Cash, collections, withdrawals, reconciliation and finance approvals for daily control.")}
+    ${roleAccessPanel("Treasurer access")}
     <div class="dashboard-grid">
       ${summaryLink("Total savings", money.format(sum(dataRows("members"), "savingsBalance", "savings")), "Member deposits", "Statements", "savings")}
       ${summaryLink("Collections", money.format(sum(transactions.filter((row) => Number(row.credit || 0) > 0), "credit", "amount")), "Posted inflows", "Open", "transactions")}
@@ -666,6 +673,7 @@ function saccoSecretaryDashboard() {
   const recentNotifications = dataRows("notifications");
   return `
     ${dashboardIntro("SACCO Secretary", "Membership, KYC, records, complaints and governance follow-up for the SACCO office.")}
+    ${roleAccessPanel("Secretary access")}
     <div class="dashboard-grid">
       ${summaryLink("Total members", members.length, "Member register", "Open", "members")}
       ${summaryLink("Pending KYC", pendingKyc.length, "Needs verification", "Review", "members")}
@@ -2156,12 +2164,34 @@ function rolePriorityPanel(title, rows) {
   `;
 }
 
+function roleAccessPanel(title = "My role access") {
+  const visible = visibleModules();
+  const source = state.auth === "member" ? memberModules : isPlatform() ? platformModules : saccoModules;
+  const hidden = source.filter((item) => !visible.some((allowed) => allowed[0] === item[0]));
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${title}</h2>
+          <p>${escapeHtml(roleLabel())} can use ${visible.length} module(s). Protected modules are hidden from the menu and dashboard actions.</p>
+        </div>
+        <span class="status active">Access filtered</span>
+      </div>
+      <div class="access-grid">
+        ${visible.map((item) => `<div><strong>${escapeHtml(item[1])}</strong><span>${escapeHtml(item[2])}</span></div>`).join("")}
+      </div>
+      ${hidden.length ? `<p class="muted-note">Hidden for this role: ${hidden.map((item) => escapeHtml(item[1])).join(", ")}.</p>` : ""}
+    </section>
+  `;
+}
+
 function summary(label, value, detail, action) {
   return `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small>${detail}</small><button type="button">${action}</button></article>`;
 }
 
 function summaryLink(label, value, detail, action, view) {
-  return `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small>${detail}</small><button type="button" data-summary-view="${escapeHtml(view)}">${action}</button></article>`;
+  const allowed = canAccessView(view);
+  return `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small>${detail}</small><button type="button" ${allowed ? `data-summary-view="${escapeHtml(view)}"` : "disabled"}>${allowed ? action : "Dashboard only"}</button></article>`;
 }
 
 function mini(label, value) {
