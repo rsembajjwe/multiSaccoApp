@@ -2,6 +2,7 @@ package com.methaltech.sacco.notification;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -28,6 +29,7 @@ class NotificationController {
     private final NotificationDeliveryRepository deliveryRepository;
     private final NotificationRepository notificationRepository;
     private final AuthService authService;
+    private final AuditService auditService;
 
     @GetMapping("/deliveries")
     ResponseEntity<?> listDeliveries(
@@ -79,6 +81,13 @@ class NotificationController {
         }
         notification.markRead();
         Notification saved = notificationRepository.save(notification);
+        auditService.record(
+                saved.getTenantId(),
+                currentSession.user(),
+                "Acknowledged notification " + saved.getTitle(),
+                "notification",
+                saved.getId(),
+                request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(NotificationResponse.from(saved)));
     }
 
@@ -115,7 +124,24 @@ class NotificationController {
         }
         allowed.forEach(Notification::markRead);
         notificationRepository.saveAll(allowed);
+        auditBulkAcknowledgement(currentSession, allowed, request);
         return ResponseEntity.ok(ApiResponse.of(new BulkAcknowledgeResponse(allowed.size())));
+    }
+
+    private void auditBulkAcknowledgement(
+            AuthService.CurrentSession currentSession,
+            List<Notification> notifications,
+            HttpServletRequest request) {
+        if (notifications.isEmpty()) return;
+        notifications.stream()
+                .collect(Collectors.groupingBy(Notification::getTenantId))
+                .forEach((tenantId, tenantNotifications) -> auditService.record(
+                        tenantId,
+                        currentSession.user(),
+                        "Acknowledged " + tenantNotifications.size() + " notification alert(s)",
+                        "notification",
+                        tenantNotifications.size() == 1 ? tenantNotifications.get(0).getId() : "bulk_" + tenantNotifications.size(),
+                        request.getRemoteAddr()));
     }
 
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
