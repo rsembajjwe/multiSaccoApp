@@ -2929,6 +2929,8 @@ function renderMemberView(view) {
   const balances = state.memberData.balances || dash.balances || {};
   if (view === "home") {
     const monthlyPerformance = memberMonthlyPerformanceRows(dash);
+    const tabs = [["overview", "Overview"], ["monthly", "Monthly savings"], ["loans", "Loans"], ["messages", "Messages"], ["mobile-money", "Mobile money"], ["transactions", "Transactions"]];
+    const tab = activeModuleTab("home", tabs);
     return `
       <div class="member-hero">
         <div><p class="eyebrow">Member dashboard</p><h2>${displayName()}, welcome back</h2><p>Balances and requests update after every refresh.</p></div>
@@ -2944,15 +2946,13 @@ function renderMemberView(view) {
         ${summary("Guarantee requests", state.memberData.pendingGuarantors.length, "PendingGuarantors", "Respond")}
         ${summary("Offline drafts", state.memberData.drafts.length, "Sync drafts", "Sync")}
       </div>
-      ${memberCommandCenter(dash, balances, monthlyPerformance)}
-      ${memberPaymentRoutePanel()}
-      ${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["month", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}
-      <div class="grid two">
-        ${recordTable("SACCO admin messages", memberAdminMessageRows(), ["title", "message", "channel", "status", "createdAt"])}
-        ${recordTable("Mobile money deposit activity", memberMobileMoneyRows(dash), ["postedAt", "reference", "description", "credit", "status"])}
-      </div>
-      ${recordTable("Member loan position", state.memberData.loans || [], ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"])}
-      ${recordTable("Recent transactions", dash.recentTransactions || [], ["reference", "description", "debit", "credit", "runningBalance"])}
+      ${moduleTabs("home", tabs, tab)}
+      ${tab === "overview" ? `${memberCommandCenter(dash, balances, monthlyPerformance)}${memberPaymentRoutePanel()}` : ""}
+      ${tab === "monthly" ? recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"]) : ""}
+      ${tab === "loans" ? recordTable("Member loan position", state.memberData.loans || [], ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"]) : ""}
+      ${tab === "messages" ? recordTable("SACCO admin messages", memberAdminMessageRows(), ["title", "message", "channel", "status", "createdAt"]) : ""}
+      ${tab === "mobile-money" ? recordTable("Mobile money deposit activity", memberMobileMoneyRows(dash), ["postedAt", "reference", "description", "credit", "status"]) : ""}
+      ${tab === "transactions" ? recordTable("Recent transactions", dash.recentTransactions || [], ["reference", "description", "debit", "credit", "runningBalance", "postedAt"]) : ""}
     `;
   }
   if (view === "accounts") return memberAccountsView(balances);
@@ -7546,6 +7546,7 @@ function memberMonthlyPerformanceRows(dash) {
     if (!rows.has(month)) {
       rows.set(month, {
         month,
+        date: monthEndDateLabel(month),
         savingsDeposits: 0,
         shareDeposits: 0,
         welfareDeposits: 0,
@@ -7578,6 +7579,12 @@ function monthLabel(value) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function monthEndDateLabel(month) {
+  const [year, monthNumber] = String(month || "").split("-").map(Number);
+  if (!year || !monthNumber) return month || "";
+  return new Date(year, monthNumber, 0).toISOString();
+}
+
 function initials(name) {
   return String(name || "TO").split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
@@ -7605,7 +7612,31 @@ function formatValue(row, column) {
   const value = row[column] ?? row[snake(column)] ?? row[camelFallback(column)] ?? "";
   if (column.toLowerCase().includes("amount") || column.toLowerCase().includes("balance") || ["debit", "credit", "savings", "shares", "welfare", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "loanPortfolio", "loansAtRisk", "expenseTotal", "assetCost", "assetNetBookValue"].includes(column)) return money.format(Number(value || 0));
   if (column.toLowerCase().includes("status") || column.toLowerCase().includes("severity")) return `<span class="status ${statusClass(value)}">${escapeHtml(String(value || "Pending"))}</span>`;
+  if (isDateColumn(column)) return escapeHtml(formatTableDate(value, column));
   return escapeHtml(String(value || "-"));
+}
+
+function isDateColumn(column) {
+  const text = column.toLowerCase();
+  return text === "date" || text.endsWith("date") || text.endsWith("at") || ["createdat", "updatedat", "postedat", "sentat", "readat", "expiresat", "usedat"].includes(text);
+}
+
+function formatTableDate(value, column) {
+  if (!value) return "-";
+  const text = String(value);
+  const isDateOnly = column.toLowerCase() === "date" || column.toLowerCase().endsWith("date") || /^\d{4}-\d{2}-\d{2}$/.test(text);
+  return isDateOnly ? formatDate(value) : formatDateTime(value);
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString("en-UG", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
 }
 
 function formatDateTime(value) {
