@@ -5934,6 +5934,7 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
+  document.querySelectorAll("[data-action='extend-session']").forEach((button) => button.addEventListener("click", extendSession));
   document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
   document.querySelectorAll("[data-action='clear-search']").forEach((button) => button.addEventListener("click", () => {
     state.search = "";
@@ -6085,6 +6086,24 @@ async function logout() {
   renderLogin();
 }
 
+async function extendSession() {
+  if (state.auth === "none") return;
+  state.loading = true;
+  state.lastError = "";
+  renderShell();
+  try {
+    const response = await api(state.auth === "member" ? "/member-auth/extend-session" : "/auth/extend-session", { method: "POST" });
+    state.sessionExpiresAt = response.expiresAt || "";
+    if (state.auth === "member") state.memberData.sessionExpiresAt = response.expiresAt || "";
+    await (state.auth === "member" ? refreshMember() : refreshAll());
+  } catch (error) {
+    state.lastError = error.message || "Could not extend the current session.";
+  } finally {
+    state.loading = false;
+    renderShell();
+  }
+}
+
 function runtimeNotice() {
   if (state.loading) return `<section class="notice compact"><strong>Loading latest records...</strong><span>Please wait while Tereka Online refreshes this view.</span></section>`;
   const sessionMinutes = sessionMinutesRemaining();
@@ -6092,7 +6111,7 @@ function runtimeNotice() {
     return `<section class="notice danger"><strong>Session expired.</strong><span>Please login again to continue working.</span><button class="button secondary" type="button" data-action="logout">Return to login</button></section>`;
   }
   if (state.auth !== "none" && sessionMinutes !== null && sessionMinutes <= 15) {
-    return `<section class="notice warning"><strong>Session expires soon.</strong><span>${escapeHtml(sessionTimeLabel())}. Save your work or refresh your login before continuing sensitive actions.</span></section>`;
+    return `<section class="notice warning"><strong>Session expires soon.</strong><span>${escapeHtml(sessionTimeLabel())}. Save your work or extend the session before continuing sensitive actions.</span><button class="button secondary" type="button" data-action="extend-session">Extend session</button></section>`;
   }
   if (state.lastError) return `<section class="notice warning"><strong>Some records could not be loaded.</strong><span>${escapeHtml(state.lastError)}</span><button class="button secondary" type="button" data-action="${state.auth === "member" ? "refresh-member" : "refresh"}">Retry</button></section>`;
   return "";

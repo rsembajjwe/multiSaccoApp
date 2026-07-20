@@ -297,6 +297,17 @@ class AuthController {
         return ResponseEntity.ok(ApiResponse.of(new LogoutResponse(true)));
     }
 
+    @PostMapping("/extend-session")
+    ResponseEntity<?> extendSession(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        Instant expiresAt = Instant.now().plus(Duration.ofHours(8));
+        currentSession.session().extendTo(expiresAt);
+        authSessionRepository.save(currentSession.session());
+        return ResponseEntity.ok(ApiResponse.of(new SessionExtensionResponse(expiresAt)));
+    }
+
     @PostMapping("/password-reset/request")
     ResponseEntity<?> requestPasswordReset(@Valid @RequestBody PasswordResetRequestBody body, HttpServletRequest request) {
         User user = userRepository.findByEmailIgnoreCase(body.email().trim())
@@ -389,6 +400,9 @@ class AuthController {
     }
 
     record LogoutResponse(boolean loggedOut) {
+    }
+
+    record SessionExtensionResponse(Instant expiresAt) {
     }
 
     record PasswordResetRequestBody(@Email @NotBlank String email) {

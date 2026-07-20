@@ -51,6 +51,10 @@ class AuthSession {
         return expiresAt;
     }
 
+    void extendTo(Instant expiresAt) {
+        this.expiresAt = expiresAt;
+    }
+
     void revoke() {
         this.revokedAt = Instant.now();
     }

@@ -233,6 +233,17 @@ class MemberAuthController {
         return ResponseEntity.ok(ApiResponse.of(new LogoutResponse(true)));
     }
 
+    @PostMapping("/extend-session")
+    ResponseEntity<?> extendSession(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Instant expiresAt = Instant.now().plus(Duration.ofHours(8));
+        currentSession.session().extendTo(expiresAt);
+        memberSessionRepository.save(currentSession.session());
+        return ResponseEntity.ok(ApiResponse.of(new SessionExtensionResponse(expiresAt)));
+    }
+
     @GetMapping("/mobile-dashboard")
     ResponseEntity<?> mobileDashboard(@RequestHeader(name = "Authorization", required = false) String authorization) {
         MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
@@ -529,6 +540,9 @@ class MemberAuthController {
             BranchLookup.BranchSummary branch,
             Balances balances,
             Instant expiresAt) {
+    }
+
+    record SessionExtensionResponse(Instant expiresAt) {
     }
 
     record MobileDashboardResponse(
