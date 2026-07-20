@@ -701,6 +701,7 @@ function platformDashboard() {
       ${summaryLink("Failed payment transactions", transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", "Review", "transactions")}
       ${summaryLink("Active platform users", users.filter((user) => normal(user.status) === "active").length || users.length, "Administrators and roles", "Manage access", "users")}
     </div>
+    ${loginRiskSummaryPanel(true)}
     <div class="split-layout">
       ${chartCard("SACCO registrations by month", ["Jan", "Feb", "Mar", "Apr", "May", "Jun"], [2, 3, 4, 5, 7, tenants.length || 3])}
       ${activityPanel("Recent SACCO applications", tenants.slice(0, 5).map((tenant) => [tenant.name || tenant.legalName, tenant.district || "Uganda", tenant.status || "Pending"]))}
@@ -724,6 +725,7 @@ function platformOperationsDashboard() {
       ${summary("Failed callbacks", dataRows("mobileMoneyCallbacks").filter((row) => normal(row.status).includes("failed")).length, "Provider exceptions", "Retry")}
       ${summary("System alerts", operationAlerts().length, "Health checks", "Open")}
     </div>
+    ${loginRiskSummaryPanel(true)}
     <div class="grid two">
       ${recordTable("Operations command center", operationAlerts(), ["title", "provider", "severity", "status", "checkedAt"])}
       ${recordTable("SACCO admin support tickets", complaints, ["id", "tenantName", "category", "subject", "priority", "status"])}
@@ -757,6 +759,7 @@ function platformComplianceDashboard() {
       ${summary("Operations alerts", operationAlerts().length, "System exceptions", "Review")}
       ${summary("Regulatory report", state.data.regulatoryReport ? "Ready" : "Pending", "Export readiness", "Open")}
     </div>
+    ${loginRiskSummaryPanel(true)}
     <div class="grid two">
       ${recordTable("Audit log", dataRows("auditEvents"), ["createdAt", "actor", "role", "tenantName", "action", "module", "result"])}
       ${recordTable("SACCO approval oversight", tenantRows(), ["name", "district", "contactPerson", "memberCount", "status"])}
@@ -800,6 +803,7 @@ function saccoDashboard() {
       ${summary("Pending approvals", dataRows("approvals").length || transactions.filter((t) => normal(t.status).includes("pending")).length, "Maker-checker", "Approve")}
       ${summary("Mobile-money collections", money.format(sum(transactions.filter((t) => normal(t.channel).includes("mobile")), "amount")), "Provider channel", "Reconcile")}
     </div>
+    ${loginRiskSummaryPanel(false)}
     ${paymentRoutePanel()}
     ${recordTable("Member monthly performance", saccoMonthlyPerformanceRows(), ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
     <div class="grid two">
@@ -1600,6 +1604,62 @@ function platformUserTabContent({ activeTab, addPanel, detailPanel, coveragePane
   return listPanel;
 }
 
+function normalizedAuditRows() {
+  return dataRows("auditEvents").map((event) => ({
+    ...event,
+    tenantName: tenantName(event.tenantId),
+    actor: event.actorName || userName(event.actorUserId),
+    module: event.resourceType || event.module || "system",
+    recordReference: event.resourceId || event.recordReference || event.recordId || "",
+    category: auditCategory(event),
+    riskLevel: auditRiskLevel(event),
+    result: event.result || "Recorded"
+  }));
+}
+
+function loginRiskEvents() {
+  return normalizedAuditRows().filter((event) => {
+    const text = normal(`${event.action || ""} ${event.resourceType || ""} ${event.module || ""}`);
+    return text.includes("login") && ["failed", "blocked", "invalid"].some((word) => text.includes(word));
+  });
+}
+
+function loginRiskSummaryPanel(platformScope) {
+  const events = loginRiskEvents();
+  const blocked = events.filter((event) => normal(event.action).includes("blocked"));
+  const failed = events.filter((event) => normal(event.action).includes("failed"));
+  const staff = events.filter((event) => normal(event.resourceType || event.module).includes("auth_login"));
+  const members = events.filter((event) => normal(event.resourceType || event.module).includes("member_login"));
+  const rows = events.slice(0, 6).map((event) => ({
+    createdAt: formatDateTime(event.createdAt),
+    sacco: event.tenantName,
+    portal: normal(event.resourceType || event.module).includes("member") ? "Member" : "Staff",
+    identity: event.recordReference || "Hidden",
+    action: event.action,
+    ipAddress: event.ipAddress || "-"
+  }));
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${platformScope ? "Platform login risk" : "SACCO login risk"}</h2>
+          <p>${platformScope ? "Failed and blocked sign-in attempts across platform and SACCO portals." : "Failed and blocked sign-in attempts affecting this SACCO."}</p>
+        </div>
+        <span class="status ${events.length ? "pending" : "active"}">${events.length ? "Review" : "Clear"}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Risk events", events.length)}
+        ${mini("Blocked attempts", blocked.length)}
+        ${mini("Failed credentials", failed.length)}
+        ${mini(platformScope ? "SACCOs affected" : "IP addresses", platformScope ? uniqueCount(events, "tenantId") : uniqueCount(events, "ipAddress"))}
+        ${mini("Staff portal", staff.length)}
+        ${mini("Member portal", members.length)}
+      </div>
+      ${recordTable("Recent login risk events", rows, ["createdAt", "sacco", "portal", "identity", "action", "ipAddress"])}
+    </section>
+  `;
+}
+
 function friendlyUserError(error, platformOnly = isPlatform()) {
   const message = error?.message || String(error || "Could not complete request.");
   const lower = normal(message);
@@ -1612,18 +1672,10 @@ function friendlyUserError(error, platformOnly = isPlatform()) {
 }
 
 function auditView() {
-  const rows = dataRows("auditEvents").map((event) => ({
-    ...event,
-    tenantName: tenantName(event.tenantId),
-    actor: event.actorName || userName(event.actorUserId),
-    module: event.resourceType || event.module || "system",
-    recordReference: event.resourceId || event.recordReference || event.recordId || "",
-    category: auditCategory(event),
-    riskLevel: auditRiskLevel(event),
-    result: event.result || "Recorded"
-  }));
+  const rows = normalizedAuditRows();
   const sensitive = rows.filter((event) => event.riskLevel !== "Normal");
   const highRisk = rows.filter((event) => event.riskLevel === "High");
+  const loginRisks = loginRiskEvents();
   const approvals = rows.filter((event) => event.category === "Approvals");
   const reversals = rows.filter((event) => event.category === "Reversals");
   const access = rows.filter((event) => event.category === "Access control");
@@ -1634,6 +1686,7 @@ function auditView() {
     <div class="dashboard-grid">
       ${summary("Audit events", rows.length, "Immutable activity trail", "Inspect")}
       ${summary("High-risk events", highRisk.length, "Roles, sessions and reversals", "Review")}
+      ${summary("Login risk events", loginRisks.length, "Failed and blocked sign-ins", "Review")}
       ${summary(isPlatform() ? "SACCOs affected" : "Actors involved", isPlatform() ? uniqueCount(rows, "tenantId") : uniqueCount(rows, "actorUserId"), isPlatform() ? "Across visible SACCOs" : "Within this SACCO", "Filter")}
       ${summary("Actors", uniqueCount(rows, "actorUserId"), "Users and system actions", "Trace")}
     </div>
