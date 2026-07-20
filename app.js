@@ -3048,6 +3048,7 @@ function memberPaymentsView() {
   const loans = state.memberData.loans || [];
   const payableLoans = loans.filter((loan) => ["active", "disbursed"].includes(normal(loan.status)));
   const paymentDrafts = memberDraftRows("payment");
+  const monthlyPerformance = memberMonthlyPerformanceRows(state.memberData.dashboard || {});
   return `
     <div class="dashboard-grid">
       ${summary("Payment options", 4, "Savings, shares, welfare and loans", "Pay")}
@@ -3057,18 +3058,19 @@ function memberPaymentsView() {
       ${summary("Payment drafts", paymentDrafts.length, "Saved locally before sync", "Sync")}
     </div>
     ${memberPaymentRoutePanel()}
+    ${memberPaymentControlPanel(payableLoans.length, paymentDrafts.length)}
     <section class="panel">
       <div class="panel-heading">
         <div>
           <h2>Member payment center</h2>
-          <p>Choose mobile money for self-service posting, or take cash to the Treasurer for office receipting.</p>
+          <p>Deposit savings, shares, welfare contributions or loan repayments by mobile money, or prepare a Treasurer cash handoff for office receipting.</p>
         </div>
         <span class="status active">Ready to post</span>
       </div>
       ${state.memberPaymentMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberPaymentMessage)}</strong></div>` : ""}
       ${state.memberPaymentError ? `<div class="notice warning"><strong>Payment failed.</strong><span>${escapeHtml(state.memberPaymentError)}</span></div>` : ""}
       <form id="memberPaymentForm" class="form-grid">
-        <label><span>Payment route</span><select id="memberPaymentRoute"><option value="mobile_money">Mobile money self payment</option><option value="treasurer_cash">Treasurer cash deposit</option></select><small>Treasurer cash is recorded by SACCO staff and appears after approval/posting.</small></label>
+        <label><span>Payment route</span><select id="memberPaymentRoute"><option value="mobile_money">Mobile money self payment</option><option value="treasurer_cash">Treasurer cash deposit</option></select><small>Mobile money posts from provider callback. Treasurer cash is receipted by SACCO staff.</small></label>
         <label><span>Payment purpose</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="loan_repayment">Loan repayment</option></select></label>
         <label><span>Amount</span><input id="memberPaymentAmount" type="number" min="1" step="1" value="5000"></label>
         <label><span>Provider</span><select id="memberPaymentProvider"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option><option value="demo">Demo provider</option></select></label>
@@ -3077,6 +3079,7 @@ function memberPaymentsView() {
         <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="payment">Save draft</button><button class="button primary" type="submit">Post payment</button></div>
       </form>
     </section>
+    ${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["month", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}
     ${memberDraftPanel("Payment offline drafts", paymentDrafts)}
     ${recordTable("Payable loans", payableLoans, ["product", "outstandingBalance", "nextDueDate", "status"])}
   `;
@@ -6477,11 +6480,12 @@ function bindEvents() {
     state.authTab = "login";
     renderLogin();
   });
-  document.querySelectorAll("[data-view]").forEach((button) => {
-    button.addEventListener("click", () => {
+  document.querySelector(".nav-list")?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-view]");
+    if (button) {
       state.currentView = button.dataset.view;
       renderShell();
-    });
+    }
   });
   document.querySelectorAll("[data-summary-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -7366,6 +7370,31 @@ function memberPaymentRoutePanel() {
     ["Mobile money", "Use the member portal payment form for savings, shares, welfare or active loan repayments through mobile money.", "Self-service"],
     ["Monthly tracking", "Your monthly deposits and repayments appear below from posted statement activity.", "Statement view"]
   ]);
+}
+
+function memberPaymentControlPanel(payableLoanCount, draftCount) {
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Payment posting rules</h2>
+          <p>Production controls for member deposits, Treasurer cash handoff and loan repayment tracking.</p>
+        </div>
+        <span class="status active">Controlled</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Mobile money result", "Posts after provider callback")}
+        ${mini("Treasurer cash result", "Receipt after staff posting")}
+        ${mini("Loan repayment gate", `${payableLoanCount} active loan(s)`)}
+        ${mini("Offline drafts", `${draftCount} saved`)}
+      </div>
+      <ul class="activity-list">
+        <li><strong>Mobile money deposit</strong><span>Member submits the payment, provider callback posts the transaction, then the receipt appears in member statements.</span><em>Self-service</em></li>
+        <li><strong>Treasurer cash deposit</strong><span>Member takes cash to the Treasurer; SACCO staff records the savings deposit or loan repayment and issues a receipt.</span><em>Office receipt</em></li>
+        <li><strong>Monthly performance</strong><span>Posted deposits and repayments feed both the member monthly view and SACCO Admin/Treasurer performance tables.</span><em>Shared view</em></li>
+      </ul>
+    </section>
+  `;
 }
 
 function saccoMonthlyPerformanceRows() {

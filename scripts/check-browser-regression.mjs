@@ -663,6 +663,9 @@ async function assertMemberPaymentPosting(page) {
   const stamp = Date.now();
   const reference = `MM-BROWSER-${stamp}`;
   await navigateTo(page, "payments");
+  await expectText(page, "Payment posting rules", "member payment posting rules");
+  await expectText(page, "Treasurer cash result", "member treasurer cash result");
+  await expectText(page, "Monthly savings and deposit performance", "member payment monthly performance");
   await expectText(page, "Payment offline drafts", "member payment offline drafts panel");
   await page.locator("#memberPaymentPurpose").selectOption("savings_deposit");
   await page.locator("#memberPaymentAmount").fill("5000");
@@ -743,9 +746,35 @@ async function canMemberLogin(code, identifier, password) {
 }
 
 async function navigateTo(page, viewId) {
-  await page.locator(`[data-view="${viewId}"]`).waitFor({ state: "attached" });
-  await page.locator(`[data-view="${viewId}"]`).first().click();
-  await delay(300);
+  const target = page.locator(`button.nav-link[data-view="${viewId}"]`).first();
+  await target.waitFor({ state: "attached" });
+  await target.scrollIntoViewIfNeeded();
+  await target.click({ force: true });
+  await target.evaluate((button) => {
+    if (!button.classList.contains("active")) {
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    }
+  });
+  try {
+    await page.waitForFunction((targetView) => {
+      const active = document.querySelector(`.nav-link.active[data-view="${targetView}"]`);
+      return Boolean(active);
+    }, viewId);
+  } catch (error) {
+    const details = await page.evaluate((targetView) => {
+      const button = document.querySelector(`button.nav-link[data-view="${targetView}"]`);
+      const rect = button?.getBoundingClientRect();
+      return {
+        targetView,
+        activeView: document.querySelector(".nav-link.active")?.getAttribute("data-view") || "",
+        buttonText: button?.textContent || "",
+        buttonRect: rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null,
+        bodyExcerpt: document.body.textContent.slice(0, 350)
+      };
+    }, viewId);
+    throw new Error(`Navigation to ${viewId} did not activate: ${JSON.stringify(details)}`);
+  }
+  await delay(150);
 }
 
 async function logout(page) {
