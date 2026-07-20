@@ -4,12 +4,14 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -80,6 +82,42 @@ class NotificationController {
         return ResponseEntity.ok(ApiResponse.of(NotificationResponse.from(saved)));
     }
 
+    @PatchMapping("/acknowledge")
+    ResponseEntity<?> acknowledgeBulk(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestBody BulkAcknowledgeRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "notifications:view")) {
+            return authService.permissionRequired("notifications:view");
+        }
+
+        List<String> notificationIds = body == null || body.notificationIds() == null
+                ? List.of()
+                : body.notificationIds().stream()
+                        .filter(id -> id != null && !id.isBlank())
+                        .map(String::trim)
+                        .distinct()
+                        .toList();
+        if (notificationIds.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "NOTIFICATION_IDS_REQUIRED", "Select at least one notification to acknowledge."));
+        }
+
+        List<Notification> notifications = notificationRepository.findAllById(notificationIds);
+        List<Notification> allowed = notifications.stream()
+                .filter(notification -> authService.isPlatform(currentSession.user()) || notification.getTenantId().equals(currentSession.user().getTenantId()))
+                .toList();
+        if (allowed.size() != notifications.size()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot acknowledge notifications for another SACCO."));
+        }
+        allowed.forEach(Notification::markRead);
+        notificationRepository.saveAll(allowed);
+        return ResponseEntity.ok(ApiResponse.of(new BulkAcknowledgeResponse(allowed.size())));
+    }
+
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
         if (authService.isPlatform(currentSession.user()) && (requestedTenantId == null || requestedTenantId.isBlank())) {
             return null;
@@ -89,5 +127,11 @@ class NotificationController {
                 : requestedTenantId.trim();
         if (!authService.isPlatform(currentSession.user()) && !tenantId.equals(currentSession.user().getTenantId())) return null;
         return tenantId;
+    }
+
+    record BulkAcknowledgeRequest(List<String> notificationIds) {
+    }
+
+    record BulkAcknowledgeResponse(int acknowledged) {
     }
 }

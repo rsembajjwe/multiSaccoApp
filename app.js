@@ -1517,6 +1517,10 @@ function notificationsView() {
       : tab === "all"
         ? deliveries
         : unreadAlerts;
+  const bulkAcknowledgeIds = visibleDeliveries
+    .filter((delivery) => delivery.notificationId && !delivery.readAt)
+    .map((delivery) => delivery.notificationId)
+    .filter((id, index, ids) => ids.indexOf(id) === index);
   const templates = dataRows("notificationTemplates").map((template) => ({
     ...template,
     tenantName: template.tenantId ? tenantName(template.tenantId) : "Global template",
@@ -1537,6 +1541,15 @@ function notificationsView() {
     ${state.notificationError ? `<div class="notice warning"><strong>Notification action failed.</strong><span>${escapeHtml(state.notificationError)}</span></div>` : ""}
     ${notificationDeliveryControlPanel(deliveries, templates)}
     ${moduleTabs("notifications", tabs, tab)}
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(tabs.find(([id]) => id === tab)?.[1] || "Unread")} alerts</h2>
+          <p>${bulkAcknowledgeIds.length} visible unread alert(s) can be acknowledged from this tab.</p>
+        </div>
+        <button class="button secondary" type="button" data-notification-bulk-ack="${escapeHtml(bulkAcknowledgeIds.join(","))}" ${bulkAcknowledgeIds.length ? "" : "disabled"}>Acknowledge visible alerts</button>
+      </div>
+    </section>
     ${filterToolbar("Search by SACCO, member, provider, recipient, channel, status or event", "New template", "Export delivery log")}
     ${notificationTemplatePanel()}
     ${notificationTemplateDetailPanel(templates)}
@@ -6007,6 +6020,31 @@ async function acknowledgeNotification(notificationId) {
   }
 }
 
+async function acknowledgeVisibleNotifications(notificationIdsText) {
+  const notificationIds = String(notificationIdsText || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (!notificationIds.length) return;
+  if (!window.confirm(`Acknowledge ${notificationIds.length} visible alert(s)?`)) return;
+  state.notificationMessage = "";
+  state.notificationError = "";
+  try {
+    const result = await api("/notifications/acknowledge", {
+      method: "PATCH",
+      body: JSON.stringify({ notificationIds })
+    });
+    state.notificationMessage = `${result.acknowledged || notificationIds.length} notification(s) acknowledged.`;
+    await refreshAll();
+    state.currentView = "notifications";
+    state.notificationMessage = `${result.acknowledged || notificationIds.length} notification(s) acknowledged.`;
+    renderShell();
+  } catch (error) {
+    state.notificationError = error.message;
+    renderShell();
+  }
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -6173,6 +6211,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-row-action='notification-acknowledge']").forEach((button) => {
     button.addEventListener("click", () => acknowledgeNotification(button.dataset.rowId));
+  });
+  document.querySelectorAll("[data-notification-bulk-ack]").forEach((button) => {
+    button.addEventListener("click", () => acknowledgeVisibleNotifications(button.dataset.notificationBulkAck));
   });
   document.querySelectorAll("[data-row-action='welfare-claim-detail']").forEach((button) => {
     button.addEventListener("click", () => openWelfareClaimDetail(button.dataset.rowId));
