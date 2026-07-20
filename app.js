@@ -3140,6 +3140,8 @@ function memberPaymentsView() {
   const payableLoans = loans.filter((loan) => ["active", "disbursed"].includes(normal(loan.status)));
   const paymentDrafts = memberDraftRows("payment");
   const monthlyPerformance = memberMonthlyPerformanceRows(state.memberData.dashboard || {});
+  const tabs = [["mobile-money", "Mobile money"], ["treasurer-cash", "Treasurer cash"], ["drafts", "Drafts"], ["loans", "Loan repayments"], ["tracking", "Tracking"]];
+  const tab = activeModuleTab("payments", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Payment options", 4, "Savings, shares, welfare and loans", "Pay")}
@@ -3148,8 +3150,17 @@ function memberPaymentsView() {
       ${summary("Treasurer cash", "Available", "Deposits and loan repayments", "Visit office")}
       ${summary("Payment drafts", paymentDrafts.length, "Saved locally before sync", "Sync")}
     </div>
-    ${memberPaymentRoutePanel()}
-    ${memberPaymentControlPanel(payableLoans.length, paymentDrafts.length)}
+    ${moduleTabs("payments", tabs, tab)}
+    ${tab === "mobile-money" ? `${memberPaymentControlPanel(payableLoans.length, paymentDrafts.length)}${memberPaymentFormPanel(payableLoans)}` : ""}
+    ${tab === "treasurer-cash" ? `${memberTabReadinessPanel("Treasurer cash handoff", "Prepare cash deposits or loan repayments for SACCO Treasurer office receipting.", [["Route", "Visit SACCO office"], ["Receipt", "After staff posting"], ["Loan repayment", payableLoans.length ? "Available" : "No active loan"]])}${memberPaymentRoutePanel()}` : ""}
+    ${tab === "drafts" ? `${memberTabReadinessPanel("Payment draft workspace", "Save incomplete mobile-money payment details on this device and sync them when ready.", [["Drafts saved", paymentDrafts.length], ["Storage", "Local device"], ["Sync status", paymentDrafts.length ? "Action needed" : "Clear"]])}${memberDraftPanel("Payment offline drafts", paymentDrafts)}` : ""}
+    ${tab === "loans" ? `${memberTabReadinessPanel("Loan repayment workspace", "Review payable loan balances before choosing mobile money or Treasurer cash repayment.", [["Payable loans", payableLoans.length], ["Route options", "Mobile/Treasurer"], ["Receipt", "After posting"]])}${recordTable("Payable loans", payableLoans, ["product", "outstandingBalance", "nextDueDate", "status"])}` : ""}
+    ${tab === "tracking" ? `${memberTabReadinessPanel("Payment tracking workspace", "Track monthly deposits, repayments and receipt-ready posted activity.", [["Monthly rows", monthlyPerformance.length], ["Statement source", "Posted activity"], ["Date display", "Full date with year"]])}${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}` : ""}
+  `;
+}
+
+function memberPaymentFormPanel(payableLoans) {
+  return `
     <section class="panel">
       <div class="panel-heading">
         <div>
@@ -3170,9 +3181,6 @@ function memberPaymentsView() {
         <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="payment">Save draft</button><button class="button primary" type="submit">Post payment</button></div>
       </form>
     </section>
-    ${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["month", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}
-    ${memberDraftPanel("Payment offline drafts", paymentDrafts)}
-    ${recordTable("Payable loans", payableLoans, ["product", "outstandingBalance", "nextDueDate", "status"])}
   `;
 }
 
