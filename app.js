@@ -3260,6 +3260,9 @@ function memberMobileMoneyRows(dash) {
 
 function memberStatementsView(dash, balances) {
   const lines = memberStatementLines(dash);
+  const monthlyRows = memberMonthlyPerformanceRows(dash);
+  const tabs = [["readiness", "Readiness"], ["activity", "Statement activity"], ["monthly", "Monthly savings"], ["exports", "Exports"]];
+  const tab = activeModuleTab("statements", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Statement lines", lines.length, "Posted statement activity", "Review")}
@@ -3267,7 +3270,16 @@ function memberStatementsView(dash, balances) {
       ${summary("Share balance", money.format(balances.shares || 0), "Verified balance", "Download")}
       ${summary("Welfare balance", money.format(balances.welfare || 0), "Verified balance", "Download")}
     </div>
-    ${filterToolbar("Filter by reference, account, channel, narration or date", "Download PDF", "Download Excel")}
+    ${moduleTabs("statements", tabs, tab)}
+    ${tab === "readiness" ? memberStatementEvidencePanel(lines, balances) : ""}
+    ${tab === "activity" ? `${filterToolbar("Filter by reference, account, channel, narration or date", "Download PDF", "Download Excel")}${recordTable("Member statement", lines, ["reference", "description", "debit", "credit", "runningBalance", "postedAt"])}` : ""}
+    ${tab === "monthly" ? `${memberTabReadinessPanel("Statement monthly evidence", "Review monthly deposits and repayments using full-date statement grouping.", [["Monthly rows", monthlyRows.length], ["Date format", "Full date with year"], ["Source", "Posted transactions"]])}${recordTable("Monthly savings and deposit performance", monthlyRows, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}` : ""}
+    ${tab === "exports" ? memberStatementExportPanel(lines) : ""}
+  `;
+}
+
+function memberStatementEvidencePanel(lines, balances) {
+  return `
     <section class="panel">
       <div class="panel-heading">
         <div>
@@ -3284,9 +3296,34 @@ function memberStatementsView(dash, balances) {
         ${mini("Closing balance", money.format(lines.at(-1)?.runningBalance || Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0)))}
         ${mini("Export formats", "PDF / Excel")}
       </div>
+      <ul class="activity-list">
+        <li><strong>Statement evidence</strong><span>Only posted transactions appear in the member statement and receipt trail.</span><em>Verified</em></li>
+        <li><strong>Full-date display</strong><span>Statement dates include the year so members can distinguish current and historical activity.</span><em>Production</em></li>
+        <li><strong>Support path</strong><span>If a line is unclear, the member can raise a complaint with the transaction reference.</span><em>Traceable</em></li>
+      </ul>
     </section>
-    ${recordTable("Member statement", lines, ["reference", "description", "debit", "credit", "runningBalance", "postedAt"])}
-    ${recordTable("Monthly savings and deposit performance", memberMonthlyPerformanceRows(dash), ["month", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}
+  `;
+}
+
+function memberStatementExportPanel(lines) {
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Statement export controls</h2>
+          <p>Download or print statement evidence after confirming posted activity and balances.</p>
+        </div>
+        <span class="status active">Export ready</span>
+      </div>
+      <div class="source-grid">
+        ${mini("PDF", "Available")}
+        ${mini("Excel", "Available")}
+        ${mini("Print", "Available")}
+        ${mini("Statement rows", lines.length)}
+        ${mini("Date format", "Full date")}
+        ${mini("Reference trail", "Included")}
+      </div>
+    </section>
   `;
 }
 
@@ -3300,6 +3337,8 @@ function memberReceiptsView(dash) {
       amount: Number(line.credit || 0) || Number(line.debit || 0)
     }))
     .sort((a, b) => new Date(b.postedAt || b.createdAt || 0) - new Date(a.postedAt || a.createdAt || 0));
+  const tabs = [["receipts", "Receipts"], ["evidence", "Evidence"], ["exports", "Export/print"]];
+  const tab = activeModuleTab("receipts", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Receipts", receipts.length, "Posted transactions with evidence", "View")}
@@ -3307,8 +3346,52 @@ function memberReceiptsView(dash) {
       ${summary("Withdrawals", money.format(sum(receipts.filter((row) => Number(row.debit || 0) > 0), "debit")), "Cash-out evidence", "Review")}
       ${summary("Receipt status", receipts.length ? "Available" : "Pending", "Only posted transactions", "Refresh")}
     </div>
-    ${filterToolbar("Search receipts by number, reference, narration or date", "Download receipt", "Print")}
-    ${recordTable("Member receipts", receipts, ["receiptNo", "reference", "description", "amount", "receiptStatus", "postedAt"])}
+    ${moduleTabs("receipts", tabs, tab)}
+    ${tab === "receipts" ? `${filterToolbar("Search receipts by number, reference, narration or date", "Download receipt", "Print")}${recordTable("Member receipts", receipts, ["receiptNo", "reference", "description", "amount", "receiptStatus", "postedAt"])}` : ""}
+    ${tab === "evidence" ? memberReceiptEvidencePanel(receipts) : ""}
+    ${tab === "exports" ? memberReceiptExportPanel(receipts) : ""}
+  `;
+}
+
+function memberReceiptEvidencePanel(receipts) {
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Receipt evidence controls</h2>
+          <p>Receipts are produced from posted transactions and carry reference numbers for SACCO follow-up.</p>
+        </div>
+        <span class="status active">Evidence ready</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Receipt count", receipts.length)}
+        ${mini("Posted only", "Yes")}
+        ${mini("Reference trail", "Required")}
+        ${mini("Full dates", "Enabled")}
+        ${mini("Support ready", "Use complaints")}
+        ${mini("Last sync", state.lastSync ? formatDateTime(state.lastSync) : "Pending")}
+      </div>
+    </section>
+  `;
+}
+
+function memberReceiptExportPanel(receipts) {
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Receipt export and print</h2>
+          <p>Members can download or print receipt evidence for mobile-money deposits, Treasurer cash deposits and repayments.</p>
+        </div>
+        <span class="status active">Print ready</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Download receipt", receipts.length ? "Available" : "No receipt yet")}
+        ${mini("Print", "Available")}
+        ${mini("Mobile money", "Included")}
+        ${mini("Treasurer cash", "After posting")}
+      </div>
+    </section>
   `;
 }
 

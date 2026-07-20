@@ -199,8 +199,8 @@ try {
     await assertMemberGuarantorDecision(page);
     await assertScreen(page, "payments", ["Member payment center", "Ready to post", "Post payment"]);
     await assertMemberPaymentPosting(page);
-    await assertScreen(page, "statements", ["Member statement readiness", "Member statement", "Verified"]);
-    await assertScreen(page, "receipts", ["Member receipts", "Receipt status", "Download receipt"]);
+    await assertMemberStatementEvidence(page);
+    await assertMemberReceiptEvidence(page);
     await assertScreen(page, "complaints", ["Member complaint center", "Member complaint submission", "My complaints"]);
     await assertMemberComplaintSubmission(page);
     await assertScreen(page, "profile", ["Member profile and KYC", "Profile contacts", "Balance summary"]);
@@ -712,6 +712,29 @@ async function assertMemberPaymentPosting(page) {
   await navigateTo(page, "receipts");
   await expectText(page, reference, "member payment receipt visible");
   console.log("PASS member payment action");
+}
+
+async function assertMemberStatementEvidence(page) {
+  await navigateTo(page, "statements");
+  await expectText(page, "Member statement readiness", "member statement readiness panel");
+  await expectText(page, "Full-date display", "member statement full date evidence");
+  await page.locator("[data-module-tab-view='statements'][data-module-tab='activity']").click();
+  await expectText(page, "Member statement", "member statement activity tab");
+  await page.locator("[data-module-tab-view='statements'][data-module-tab='monthly']").click();
+  await expectText(page, "Statement monthly evidence", "member statement monthly evidence");
+  await page.locator("[data-module-tab-view='statements'][data-module-tab='exports']").click();
+  await expectText(page, "Statement export controls", "member statement export controls");
+  console.log("PASS member statement evidence");
+}
+
+async function assertMemberReceiptEvidence(page) {
+  await navigateTo(page, "receipts");
+  await expectText(page, "Member receipts", "member receipts table");
+  await page.locator("[data-module-tab-view='receipts'][data-module-tab='evidence']").click();
+  await expectText(page, "Receipt evidence controls", "member receipt evidence controls");
+  await page.locator("[data-module-tab-view='receipts'][data-module-tab='exports']").click();
+  await expectText(page, "Receipt export and print", "member receipt export controls");
+  console.log("PASS member receipt evidence");
 }
 
 async function assertMemberGuarantorDecision(page) {
