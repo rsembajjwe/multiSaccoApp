@@ -113,6 +113,8 @@ const state = {
   selectedComplaintError: "",
   notificationTemplateMessage: "",
   notificationTemplateError: "",
+  notificationMessage: "",
+  notificationError: "",
   selectedTemplateId: "",
   selectedTemplateMessage: "",
   selectedTemplateError: "",
@@ -1496,9 +1498,15 @@ function notificationsView() {
   const deliveries = dataRows("notifications").map((delivery) => ({
     ...delivery,
     tenantName: tenantName(delivery.tenantId),
-    memberName: delivery.memberId ? memberName(delivery.memberId) : delivery.userId ? userName(delivery.userId) : "SACCO broadcast"
+    memberName: delivery.memberId ? memberName(delivery.memberId) : delivery.userId ? userName(delivery.userId) : "SACCO broadcast",
+    alertStatus: delivery.readAt ? "acknowledged" : delivery.notificationStatus || delivery.status,
+    acknowledgedAt: delivery.readAt ? formatDateTime(delivery.readAt) : "-",
+    action: delivery.notificationId && !delivery.readAt ? "notification-acknowledge" : "none",
+    actionLabel: "Acknowledge",
+    actionId: delivery.notificationId || delivery.id
   }));
   const securityAlerts = deliveries.filter((delivery) => normal(`${delivery.message} ${delivery.provider} ${delivery.channel}`).includes("login"));
+  const unreadAlerts = deliveries.filter((delivery) => !delivery.readAt && normal(delivery.alertStatus).includes("unread"));
   const templates = dataRows("notificationTemplates").map((template) => ({
     ...template,
     tenantName: template.tenantId ? tenantName(template.tenantId) : "Global template",
@@ -1511,14 +1519,17 @@ function notificationsView() {
       ${summary("Deliveries", deliveries.length, "SMS, email and in-app events", "Monitor")}
       ${summary("Failed deliveries", deliveries.filter((row) => normal(row.status).includes("failed")).length, "Provider exceptions", "Investigate")}
       ${summary("Login risk alerts", securityAlerts.length, "In-app admin security alerts", "Review")}
+      ${summary("Unread alerts", unreadAlerts.length, "Need acknowledgement", "Clear")}
       ${summary("Active templates", templates.filter((row) => normal(row.status) === "active").length, "Reusable message rules", "Edit")}
       ${summary("Global templates", templates.filter((row) => !row.tenantId).length, "Platform defaults", "Review")}
     </div>
+    ${state.notificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.notificationMessage)}</strong></div>` : ""}
+    ${state.notificationError ? `<div class="notice warning"><strong>Notification action failed.</strong><span>${escapeHtml(state.notificationError)}</span></div>` : ""}
     ${notificationDeliveryControlPanel(deliveries, templates)}
     ${filterToolbar("Search by SACCO, member, provider, recipient, channel, status or event", "New template", "Export delivery log")}
     ${notificationTemplatePanel()}
     ${notificationTemplateDetailPanel(templates)}
-    ${recordTable("Notification delivery monitor", deliveries, ["tenantName", "memberName", "channel", "provider", "recipient", "status", "message", "sentAt", "createdAt"])}
+    ${recordTable("Notification delivery monitor", deliveries, ["tenantName", "memberName", "channel", "provider", "recipient", "alertStatus", "message", "acknowledgedAt", "sentAt", "createdAt"])}
     ${recordTable("Notification templates", templates, ["tenantName", "eventType", "channel", "title", "status", "updatedAt"])}
   `;
 }
@@ -3200,6 +3211,9 @@ function rowAction(row) {
         <button class="table-action danger" type="button" data-member-guarantor-action="rejected" data-row-id="${escapeHtml(row.actionId)}">Reject</button>
       </div>
     `;
+  }
+  if (row.action === "notification-acknowledge" && row.actionId) {
+    return `<button class="table-action" type="button" data-row-action="notification-acknowledge" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Acknowledge")}</button>`;
   }
   if (row.action && row.actionId) {
     return `<button class="table-action" type="button" data-row-action="${escapeHtml(row.action)}" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "View")}</button>`;
@@ -5965,6 +5979,23 @@ async function saveNotificationTemplate(event) {
   }
 }
 
+async function acknowledgeNotification(notificationId) {
+  if (!notificationId) return;
+  state.notificationMessage = "";
+  state.notificationError = "";
+  try {
+    await api(`/notifications/${encodeURIComponent(notificationId)}/acknowledge`, { method: "PATCH" });
+    state.notificationMessage = "Notification acknowledged.";
+    await refreshAll();
+    state.currentView = "notifications";
+    state.notificationMessage = "Notification acknowledged.";
+    renderShell();
+  } catch (error) {
+    state.notificationError = error.message;
+    renderShell();
+  }
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -6128,6 +6159,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-row-action='template-detail']").forEach((button) => {
     button.addEventListener("click", () => openTemplateDetail(button.dataset.rowId));
+  });
+  document.querySelectorAll("[data-row-action='notification-acknowledge']").forEach((button) => {
+    button.addEventListener("click", () => acknowledgeNotification(button.dataset.rowId));
   });
   document.querySelectorAll("[data-row-action='welfare-claim-detail']").forEach((button) => {
     button.addEventListener("click", () => openWelfareClaimDetail(button.dataset.rowId));
@@ -6445,6 +6479,8 @@ async function logout() {
     selectedComplaintError: "",
     notificationTemplateMessage: "",
     notificationTemplateError: "",
+    notificationMessage: "",
+    notificationError: "",
     selectedTemplateId: "",
     selectedTemplateMessage: "",
     selectedTemplateError: "",

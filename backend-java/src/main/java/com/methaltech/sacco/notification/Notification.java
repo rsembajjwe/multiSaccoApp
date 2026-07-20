@@ -94,4 +94,9 @@ public class Notification {
         this.resourceId = resourceId;
         this.createdAt = Instant.now();
     }
+
+    void markRead() {
+        this.status = "read";
+        this.readAt = Instant.now();
+    }
 }

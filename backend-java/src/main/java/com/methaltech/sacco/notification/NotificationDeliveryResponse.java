@@ -14,9 +14,15 @@ record NotificationDeliveryResponse(
         String status,
         String message,
         Instant sentAt,
-        Instant createdAt) {
+        Instant createdAt,
+        String notificationStatus,
+        Instant readAt) {
 
     static NotificationDeliveryResponse from(NotificationDelivery delivery) {
+        return from(delivery, null);
+    }
+
+    static NotificationDeliveryResponse from(NotificationDelivery delivery, Notification notification) {
         return new NotificationDeliveryResponse(
                 delivery.getId(),
                 delivery.getTenantId(),
@@ -29,6 +35,8 @@ record NotificationDeliveryResponse(
                 delivery.getStatus(),
                 delivery.getMessage(),
                 delivery.getSentAt(),
-                delivery.getCreatedAt());
+                delivery.getCreatedAt(),
+                notification == null ? null : notification.getStatus(),
+                notification == null ? null : notification.getReadAt());
     }
 }
