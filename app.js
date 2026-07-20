@@ -4403,6 +4403,7 @@ function memberDetailPanel(mode = "kyc") {
       </div>` : ""}
       ${mode === "statement" ? `
         ${memberStatementControlPanel(member, statementLines, totalBalance, statementCreditTotal, statementDebitTotal, lastMovement)}
+        ${memberStatementReceiptPanel(statementLines)}
         ${recordTable("Member balance statement", statementLines, ["reference", "type", "channel", "amount", "savingsBalance", "sharesBalance", "welfareBalance", "postedAt"])}
       ` : ""}
     </section>
@@ -4445,6 +4446,30 @@ function statementDebit(line) {
   const amount = Number(line.amount || 0);
   const debit = line.debit ?? (amount < 0 ? Math.abs(amount) : 0);
   return Number(debit || 0);
+}
+
+function memberStatementReceiptPanel(lines) {
+  const receiptRows = lines.filter((line) => line.reference || line.receiptNo || normal(line.status) === "posted");
+  const mobileRows = receiptRows.filter((line) => isMobileMoneyLine(line));
+  const treasurerRows = receiptRows.filter((line) => !isMobileMoneyLine(line));
+  const lastReceipt = receiptRows[0]?.receiptNo || receiptRows[0]?.reference || "No receipt yet";
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Receipt evidence summary</h2>
+          <p>Receipt readiness by posted statement line, mobile-money evidence and Treasurer office posting.</p>
+        </div>
+        <span class="status ${receiptRows.length ? "active" : "pending"}">${receiptRows.length ? "Receipts ready" : "Awaiting receipts"}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Receipt-ready lines", receiptRows.length)}
+        ${mini("Mobile-money evidence", mobileRows.length)}
+        ${mini("Treasurer receipt evidence", treasurerRows.length)}
+        ${mini("Last receipt reference", lastReceipt)}
+      </div>
+    </section>
+  `;
 }
 
 function memberStatusOptions() {
