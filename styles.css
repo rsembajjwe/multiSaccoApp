@@ -808,6 +808,32 @@ textarea {
   padding: 0 12px;
 }
 
+.session-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid #b8d8cf;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: var(--green-800);
+  background: #f6fbf8;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.session-chip.pending {
+  border-color: #f2d48a;
+  color: #7a5200;
+  background: #fff8e6;
+}
+
+.session-chip.danger {
+  border-color: #f2b3a6;
+  color: #8f2414;
+  background: #fff1ee;
+}
+
 .page-header {
   display: flex;
   align-items: flex-end;
@@ -922,6 +948,11 @@ textarea {
 .notice.warning {
   border-color: #f2d48a;
   background: #fff8e6;
+}
+
+.notice.danger {
+  border-color: #f2b3a6;
+  background: #fff1ee;
 }
 
 .notice.compact {

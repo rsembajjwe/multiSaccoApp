@@ -188,12 +188,13 @@ class AuthController {
 
     private LoginResponse loginResponseFor(User user) {
         String token = tokenGenerator.createToken();
+        Instant expiresAt = Instant.now().plus(Duration.ofHours(8));
         authSessionRepository.save(new AuthSession(
                 "session_" + UUID.randomUUID(),
                 user.getId(),
                 user.getTenantId(),
                 tokenGenerator.hashToken(token),
-                Instant.now().plus(Duration.ofHours(8))));
+                expiresAt));
 
         UserAccessResponse access = accessFor(user);
         return new LoginResponse(
@@ -202,7 +203,8 @@ class AuthController {
                 UserResponse.from(user),
                 access.roleIds(),
                 access.roleNames(),
-                access.permissionIds());
+                access.permissionIds(),
+                expiresAt);
     }
 
     private boolean isPrivileged(User user) {
@@ -281,7 +283,8 @@ class AuthController {
                 tenant,
                 access.roleIds(),
                 access.roleNames(),
-                access.permissionIds())));
+                access.permissionIds(),
+                currentSession.session().getExpiresAt())));
     }
 
     @PostMapping("/logout")
@@ -367,7 +370,7 @@ class AuthController {
     record LoginRequest(String saccoCode, String username, @Email String email, @NotBlank String password) {
     }
 
-    record LoginResponse(String token, String tokenType, UserResponse user, List<String> roleIds, List<String> roleNames, List<String> permissionIds) {
+    record LoginResponse(String token, String tokenType, UserResponse user, List<String> roleIds, List<String> roleNames, List<String> permissionIds, Instant expiresAt) {
     }
 
     record MfaRequiredResponse(boolean mfaRequired, String challengeId, String deliveryChannel, String demoCode, Instant expiresAt) {
@@ -379,7 +382,7 @@ class AuthController {
     record MfaVerifyRequest(@NotBlank String challengeId, @NotBlank String code) {
     }
 
-    record CurrentUserResponse(UserResponse user, TenantResponse tenant, List<String> roleIds, List<String> roleNames, List<String> permissionIds) {
+    record CurrentUserResponse(UserResponse user, TenantResponse tenant, List<String> roleIds, List<String> roleNames, List<String> permissionIds, Instant expiresAt) {
     }
 
     record UserAccessResponse(List<String> roleIds, List<String> roleNames, List<String> permissionIds) {

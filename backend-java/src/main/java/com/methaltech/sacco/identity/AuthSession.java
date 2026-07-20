@@ -47,6 +47,10 @@ class AuthSession {
         return userId;
     }
 
+    Instant getExpiresAt() {
+        return expiresAt;
+    }
+
     void revoke() {
         this.revokedAt = Instant.now();
     }

@@ -219,7 +219,8 @@ class MemberAuthController {
                 MemberResponse.from(member),
                 tenantService.findById(member.getTenantId()).orElse(null),
                 branchLookup.findSummary(member.getBranchId()).orElse(null),
-                Balances.from(member))));
+                Balances.from(member),
+                currentSession.session().getExpiresAt())));
     }
 
     @PostMapping("/logout")
@@ -526,7 +527,8 @@ class MemberAuthController {
             MemberResponse member,
             TenantResponse tenant,
             BranchLookup.BranchSummary branch,
-            Balances balances) {
+            Balances balances,
+            Instant expiresAt) {
     }
 
     record MobileDashboardResponse(

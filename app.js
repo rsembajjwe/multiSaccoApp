@@ -36,6 +36,7 @@ const state = {
   search: "",
   tableState: {},
   moduleTabs: {},
+  sessionExpiresAt: "",
   loading: false,
   lastSync: "",
   lastError: "",
@@ -360,6 +361,7 @@ async function restoreMember() {
     state.tenant = session.tenant;
     state.memberData.balances = session.balances;
     state.memberData.sessionExpiresAt = session.expiresAt || "";
+    state.sessionExpiresAt = session.expiresAt || "";
     state.memberData.drafts = loadMemberDrafts(session.member);
     await refreshMember();
   } catch {
@@ -485,6 +487,7 @@ function loginPanel() {
       <h2>Login to Tereka Online</h2>
       <p>Enter the code, user identity and password. The system opens only the views allowed for that role.</p>
     </div>
+    ${state.lastError ? `<div class="alert error">${escapeHtml(state.lastError)}</div>` : ""}
     <div class="login-context-strip">
       <div><span>Platform code</span><strong>PLATFORM</strong></div>
       <div><span>SACCO code</span><strong>Example: GVS</strong></div>
@@ -621,6 +624,7 @@ function renderShell() {
           <div class="breadcrumbs">Home / ${portal} / <strong>${module[1]}</strong></div>
           <div class="topbar-actions">
             <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs"></label>
+            <span class="session-chip ${sessionStatusClass()}">${sessionTimeLabel()}</span>
             <button class="icon-button" type="button" title="Notifications">!</button>
             <button class="icon-button" type="button" title="Help">?</button>
             <button class="profile-chip" type="button">${initials(displayName())}</button>
@@ -4084,6 +4088,7 @@ function renderLoading(message) {
 async function login(code, username, password) {
   state.loading = true;
   try {
+    state.lastError = "";
     const staff = await tryStaffLogin(code, username, password);
     if (staff) {
       if (staff.mfaRequired) {
@@ -4112,6 +4117,7 @@ async function login(code, username, password) {
     state.tenant = member.tenant;
     state.memberData.balances = member.balances;
     state.memberData.sessionExpiresAt = member.expiresAt || "";
+    state.sessionExpiresAt = member.expiresAt || "";
     state.memberData.drafts = loadMemberDrafts(member.member);
     localStorage.setItem(MEMBER_TOKEN_KEY, member.token);
     localStorage.removeItem(STAFF_TOKEN_KEY);
@@ -4237,6 +4243,7 @@ function applyStaffSession(session) {
   state.roleNames = session.roleNames || [];
   state.permissionIds = session.permissionIds || [];
   state.tenant = session.tenant || null;
+  state.sessionExpiresAt = session.expiresAt || "";
   state.currentView = visibleModules()[0]?.[0] || "dashboard";
 }
 
@@ -5608,6 +5615,9 @@ async function api(path, options = {}, token = state.token) {
   if (!response.ok) {
     const error = new Error(payload.error?.message || payload.message || `Request failed: ${response.status}`);
     error.status = response.status;
+    if (response.status === 401 && token && token === state.token && state.auth !== "none") {
+      expireLocalSession("Your session has expired. Please login again.");
+    }
     throw error;
   }
   return payload.data ?? payload;
@@ -5970,6 +5980,7 @@ async function logout() {
     permissionIds: [],
     currentView: "dashboard",
     moduleTabs: {},
+    sessionExpiresAt: "",
     passwordResetMessage: "",
     passwordResetError: "",
     passwordResetToken: "",
@@ -6076,8 +6087,70 @@ async function logout() {
 
 function runtimeNotice() {
   if (state.loading) return `<section class="notice compact"><strong>Loading latest records...</strong><span>Please wait while Tereka Online refreshes this view.</span></section>`;
+  const sessionMinutes = sessionMinutesRemaining();
+  if (state.auth !== "none" && sessionMinutes !== null && sessionMinutes <= 0) {
+    return `<section class="notice danger"><strong>Session expired.</strong><span>Please login again to continue working.</span><button class="button secondary" type="button" data-action="logout">Return to login</button></section>`;
+  }
+  if (state.auth !== "none" && sessionMinutes !== null && sessionMinutes <= 15) {
+    return `<section class="notice warning"><strong>Session expires soon.</strong><span>${escapeHtml(sessionTimeLabel())}. Save your work or refresh your login before continuing sensitive actions.</span></section>`;
+  }
   if (state.lastError) return `<section class="notice warning"><strong>Some records could not be loaded.</strong><span>${escapeHtml(state.lastError)}</span><button class="button secondary" type="button" data-action="${state.auth === "member" ? "refresh-member" : "refresh"}">Retry</button></section>`;
   return "";
+}
+
+function expireLocalSession(message) {
+  localStorage.removeItem(STAFF_TOKEN_KEY);
+  localStorage.removeItem(MEMBER_TOKEN_KEY);
+  Object.assign(state, {
+    auth: "none",
+    authTab: "login",
+    token: "",
+    user: null,
+    member: null,
+    tenant: null,
+    roleNames: [],
+    permissionIds: [],
+    currentView: "dashboard",
+    sessionExpiresAt: "",
+    data: emptyData(),
+    memberData: emptyMemberData(),
+    lastError: message || "Your session has expired. Please login again."
+  });
+  renderLogin();
+}
+
+function sessionExpiryValue() {
+  if (state.auth === "member") {
+    return state.sessionExpiresAt || state.memberData.sessionExpiresAt || state.memberData.dashboard?.sessionExpiresAt || "";
+  }
+  return state.sessionExpiresAt || "";
+}
+
+function sessionMinutesRemaining() {
+  const expiresAt = sessionExpiryValue();
+  if (!expiresAt) return null;
+  const expiry = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiry)) return null;
+  return Math.ceil((expiry - Date.now()) / 60000);
+}
+
+function sessionTimeLabel() {
+  if (state.auth === "none") return "";
+  const minutes = sessionMinutesRemaining();
+  if (minutes === null) return "Session active";
+  if (minutes <= 0) return "Session expired";
+  if (minutes < 60) return `Session ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  return remaining ? `Session ${hours}h ${remaining}m` : `Session ${hours}h`;
+}
+
+function sessionStatusClass() {
+  const minutes = sessionMinutesRemaining();
+  if (minutes === null) return "active";
+  if (minutes <= 0) return "danger";
+  if (minutes <= 15) return "pending";
+  return "active";
 }
 
 function dataRows(key) {
