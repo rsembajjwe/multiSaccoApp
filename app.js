@@ -80,6 +80,8 @@ const state = {
   selectedPackageId: "",
   selectedPackageMessage: "",
   selectedPackageError: "",
+  platformPolicyMessage: "",
+  platformPolicyError: "",
   memberFormMessage: "",
   memberFormError: "",
   memberTab: "overview",
@@ -226,7 +228,8 @@ function emptyData() {
     permissions: [],
     auditEvents: [],
     regulatoryReport: null,
-    securitySummary: null
+    securitySummary: null,
+    platformSecurityPolicy: null
   };
 }
 
@@ -2482,6 +2485,7 @@ function platformSettingsControlPanel(packages, roles, permissions, templates, c
 function staffSecuritySettingsPanel(security, platformScope) {
   const sessions = Array.isArray(security.activeSessions) ? security.activeSessions : [];
   const resets = Array.isArray(security.recentPasswordResets) ? security.recentPasswordResets : [];
+  const policy = state.data.platformSecurityPolicy || defaultPlatformSecurityPolicy();
   const currentExpiry = security.currentSessionExpiresAt || state.sessionExpiresAt;
   const activeCount = security.activeSessionCount ?? sessions.length;
   const resetCount = security.passwordResetRequestCount ?? resets.length;
@@ -2535,7 +2539,56 @@ function staffSecuritySettingsPanel(security, platformScope) {
       ${recordTable("Active administrator sessions", sessionRows, ["id", "createdAt", "expiresAt", "status"])}
       ${recordTable("Password reset history", resetRows, ["id", "status", "createdAt", "expiresAt", "usedAt"])}
     </div>
+    ${platformScope ? platformPasswordPolicyPanel(policy) : ""}
   `;
+}
+
+function platformPasswordPolicyPanel(policy) {
+  const canManage = hasPermission("roles:create") || roleKind() === "super";
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Password and lockout policy</h2>
+          <p>Controls staff password strength, reset validation and failed-login lockout thresholds.</p>
+        </div>
+        ${canManage ? `<span class="status active">Super Admin editable</span>` : `<span class="status pending">View only</span>`}
+      </div>
+      ${state.platformPolicyMessage ? `<div class="notice compact"><strong>${escapeHtml(state.platformPolicyMessage)}</strong></div>` : ""}
+      ${state.platformPolicyError ? `<div class="notice warning"><strong>Policy update failed.</strong><span>${escapeHtml(state.platformPolicyError)}</span></div>` : ""}
+      <form id="platformSecurityPolicyForm" class="form-grid">
+        <label><span>Minimum password length</span><input id="policyMinimumPasswordLength" type="number" min="8" max="64" value="${escapeHtml(policy.minimumPasswordLength ?? 10)}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Password expiry days</span><input id="policyPasswordExpiryDays" type="number" min="0" max="365" value="${escapeHtml(policy.passwordExpiryDays ?? 90)}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Failed attempts before lockout</span><input id="policyLockoutFailedAttempts" type="number" min="3" max="20" value="${escapeHtml(policy.lockoutFailedAttempts ?? 5)}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Lockout minutes</span><input id="policyLockoutMinutes" type="number" min="1" max="1440" value="${escapeHtml(policy.lockoutMinutes ?? 15)}" ${canManage ? "" : "disabled"}></label>
+        <label class="check-row"><input id="policyRequireUppercase" type="checkbox" ${policy.requireUppercase ? "checked" : ""} ${canManage ? "" : "disabled"}><span>Require uppercase letter</span></label>
+        <label class="check-row"><input id="policyRequireLowercase" type="checkbox" ${policy.requireLowercase ? "checked" : ""} ${canManage ? "" : "disabled"}><span>Require lowercase letter</span></label>
+        <label class="check-row"><input id="policyRequireNumber" type="checkbox" ${policy.requireNumber ? "checked" : ""} ${canManage ? "" : "disabled"}><span>Require number</span></label>
+        <label class="check-row"><input id="policyRequireSymbol" type="checkbox" ${policy.requireSymbol ? "checked" : ""} ${canManage ? "" : "disabled"}><span>Require symbol</span></label>
+        <div class="mini-fact wide">
+          <span>Last updated</span>
+          <strong>${policy.updatedAt ? formatDateTime(policy.updatedAt) : "Not recorded"}</strong>
+        </div>
+        <div class="form-actions wide">
+          ${canManage ? `<button class="button primary" type="submit">Save security policy</button>` : `<span class="status pending">Only Platform Super Admin can save policy changes</span>`}
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function defaultPlatformSecurityPolicy() {
+  return {
+    minimumPasswordLength: 10,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireNumber: true,
+    requireSymbol: false,
+    passwordExpiryDays: 90,
+    lockoutFailedAttempts: 5,
+    lockoutMinutes: 15,
+    updatedAt: ""
+  };
 }
 
 function renderMemberView(view) {
@@ -4413,7 +4466,8 @@ async function refreshAll() {
     ["regulatoryReport", "/regulatory-report"],
     ["securitySummary", "/auth/security-summary"]
   ];
-  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary"]);
+  if (isPlatform()) endpoints.push(["platformSecurityPolicy", "/platform-security-policy"]);
+  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy"]);
   const results = await Promise.all(endpoints.map(async ([key, path]) => [key, await optionalApi(path, objectKeys.has(key) ? null : [])]));
   results.forEach(([key, value]) => {
     state.data[key] = value;
@@ -4881,6 +4935,35 @@ function savePackageSetup(event) {
   state.selectedPackageError = "";
   state.selectedPackageMessage = `${updated.name || "Package"} updated in this session.`;
   renderShell();
+}
+
+async function savePlatformSecurityPolicy(event) {
+  event.preventDefault();
+  state.platformPolicyMessage = "";
+  state.platformPolicyError = "";
+  try {
+    const policy = await api("/platform-security-policy", {
+      method: "PUT",
+      body: JSON.stringify({
+        minimumPasswordLength: Number(value("policyMinimumPasswordLength") || 10),
+        requireUppercase: Boolean(document.getElementById("policyRequireUppercase")?.checked),
+        requireLowercase: Boolean(document.getElementById("policyRequireLowercase")?.checked),
+        requireNumber: Boolean(document.getElementById("policyRequireNumber")?.checked),
+        requireSymbol: Boolean(document.getElementById("policyRequireSymbol")?.checked),
+        passwordExpiryDays: Number(value("policyPasswordExpiryDays") || 0),
+        lockoutFailedAttempts: Number(value("policyLockoutFailedAttempts") || 5),
+        lockoutMinutes: Number(value("policyLockoutMinutes") || 15)
+      })
+    });
+    state.data.platformSecurityPolicy = policy;
+    state.platformPolicyMessage = "Security policy saved.";
+    await refreshAll();
+    state.platformPolicyMessage = "Security policy saved.";
+    renderShell();
+  } catch (error) {
+    state.platformPolicyError = error.message;
+    renderShell();
+  }
 }
 
 async function recordSubscriptionPayment(amountOverride = null) {
@@ -6126,6 +6209,7 @@ function bindEvents() {
   });
   document.querySelector("#notificationTemplateForm")?.addEventListener("submit", createNotificationTemplate);
   document.querySelector("#notificationTemplateEditForm")?.addEventListener("submit", saveNotificationTemplate);
+  document.querySelector("#platformSecurityPolicyForm")?.addEventListener("submit", savePlatformSecurityPolicy);
   document.querySelector("#branchSetupForm")?.addEventListener("submit", createBranchFromForm);
   document.querySelectorAll("[data-product-form]").forEach((form) => form.addEventListener("submit", createFinancialProduct));
   document.querySelectorAll("[data-account-form]").forEach((form) => form.addEventListener("submit", openFinancialAccount));
@@ -6273,6 +6357,8 @@ async function logout() {
     selectedPackageId: "",
     selectedPackageMessage: "",
     selectedPackageError: "",
+    platformPolicyMessage: "",
+    platformPolicyError: "",
     memberFormMessage: "",
     memberFormError: "",
     memberTab: "overview",

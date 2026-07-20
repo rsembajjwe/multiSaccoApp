@@ -47,6 +47,7 @@ class AuthController {
     private final TenantService tenantService;
     private final LoginAttemptService loginAttemptService;
     private final DemoCredentialPolicy demoCredentialPolicy;
+    private final PlatformSecurityPolicyService platformSecurityPolicyService;
 
     AuthController(
             UserRepository userRepository,
@@ -63,7 +64,8 @@ class AuthController {
             TenantRepository tenantRepository,
             TenantService tenantService,
             LoginAttemptService loginAttemptService,
-            DemoCredentialPolicy demoCredentialPolicy) {
+            DemoCredentialPolicy demoCredentialPolicy,
+            PlatformSecurityPolicyService platformSecurityPolicyService) {
         this.userRepository = userRepository;
         this.authSessionRepository = authSessionRepository;
         this.passwordResetRequestRepository = passwordResetRequestRepository;
@@ -79,6 +81,7 @@ class AuthController {
         this.tenantService = tenantService;
         this.loginAttemptService = loginAttemptService;
         this.demoCredentialPolicy = demoCredentialPolicy;
+        this.platformSecurityPolicyService = platformSecurityPolicyService;
     }
 
     @PostMapping("/login")
@@ -410,9 +413,10 @@ class AuthController {
 
     @PostMapping("/password-reset/confirm")
     ResponseEntity<?> confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmRequest body, HttpServletRequest request) {
-        if (body.newPassword().length() < 10) {
+        List<String> violations = platformSecurityPolicyService.passwordViolations(body.newPassword());
+        if (!violations.isEmpty()) {
             return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "WEAK_PASSWORD", "New password must be at least 10 characters."));
+                    .body(ApiErrorResponse.of(400, "WEAK_PASSWORD", platformSecurityPolicyService.passwordPolicyMessage(violations)));
         }
 
         PasswordResetRequest resetRequest = passwordResetRequestRepository

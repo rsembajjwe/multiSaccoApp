@@ -44,6 +44,7 @@ class UserController {
     private final PasswordResetRequestRepository passwordResetRequestRepository;
     private final TokenGenerator tokenGenerator;
     private final DemoCredentialPolicy demoCredentialPolicy;
+    private final PlatformSecurityPolicyService platformSecurityPolicyService;
 
     UserController(
             UserRepository userRepository,
@@ -55,7 +56,8 @@ class UserController {
             AuthSessionRepository authSessionRepository,
             PasswordResetRequestRepository passwordResetRequestRepository,
             TokenGenerator tokenGenerator,
-            DemoCredentialPolicy demoCredentialPolicy) {
+            DemoCredentialPolicy demoCredentialPolicy,
+            PlatformSecurityPolicyService platformSecurityPolicyService) {
         this.userRepository = userRepository;
         this.authService = authService;
         this.passwordHasher = passwordHasher;
@@ -66,6 +68,7 @@ class UserController {
         this.passwordResetRequestRepository = passwordResetRequestRepository;
         this.tokenGenerator = tokenGenerator;
         this.demoCredentialPolicy = demoCredentialPolicy;
+        this.platformSecurityPolicyService = platformSecurityPolicyService;
     }
 
     @GetMapping
@@ -121,6 +124,11 @@ class UserController {
         if (userRepository.existsByTenantIdAndEmailIgnoreCase(tenantId, email)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "USER_EXISTS", "A user with that email already exists in this tenant."));
+        }
+        List<String> passwordViolations = platformSecurityPolicyService.passwordViolations(request.password());
+        if (!passwordViolations.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "WEAK_PASSWORD", platformSecurityPolicyService.passwordPolicyMessage(passwordViolations)));
         }
 
         PasswordHasher.PasswordHash password = passwordHasher.hash(request.password());
