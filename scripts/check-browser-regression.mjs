@@ -171,19 +171,25 @@ try {
       "Notifications",
       "Guarantee requests",
       "Offline drafts",
+      "Member service assurance",
+      "Service ready",
       "Member command center",
       "Monthly savings"
     ]) {
       await expectText(page, marker, `member portal marker ${marker}`);
     }
     await page.locator("[data-module-tab-view='home'][data-module-tab='monthly']").click();
+    await expectText(page, "Monthly savings workspace", "member monthly workspace readiness");
     await expectText(page, "Monthly savings and deposit performance", "member home monthly savings tab");
     await expectText(page, "2026", "member home full date year");
     await page.locator("[data-module-tab-view='home'][data-module-tab='loans']").click();
+    await expectText(page, "Loan servicing workspace", "member loans workspace readiness");
     await expectText(page, "Member loan position", "member home loans tab");
     await page.locator("[data-module-tab-view='home'][data-module-tab='messages']").click();
+    await expectText(page, "SACCO admin message center", "member messages workspace readiness");
     await expectText(page, "SACCO admin messages", "member home messages tab");
     await page.locator("[data-module-tab-view='home'][data-module-tab='mobile-money']").click();
+    await expectText(page, "Mobile money deposit workspace", "member mobile money workspace readiness");
     await expectText(page, "Mobile money deposit activity", "member home mobile money tab");
     await page.locator("[data-module-tab-view='home'][data-module-tab='overview']").click();
     await assertScreen(page, "accounts", ["Member account overview", "Member account balances", "Verified"]);

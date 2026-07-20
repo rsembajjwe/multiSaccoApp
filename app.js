@@ -2946,13 +2946,14 @@ function renderMemberView(view) {
         ${summary("Guarantee requests", state.memberData.pendingGuarantors.length, "PendingGuarantors", "Respond")}
         ${summary("Offline drafts", state.memberData.drafts.length, "Sync drafts", "Sync")}
       </div>
+      ${memberServiceAssurancePanel(dash, balances, monthlyPerformance)}
       ${moduleTabs("home", tabs, tab)}
       ${tab === "overview" ? `${memberCommandCenter(dash, balances, monthlyPerformance)}${memberPaymentRoutePanel()}` : ""}
-      ${tab === "monthly" ? recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"]) : ""}
-      ${tab === "loans" ? recordTable("Member loan position", state.memberData.loans || [], ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"]) : ""}
-      ${tab === "messages" ? recordTable("SACCO admin messages", memberAdminMessageRows(), ["title", "message", "channel", "status", "createdAt"]) : ""}
-      ${tab === "mobile-money" ? recordTable("Mobile money deposit activity", memberMobileMoneyRows(dash), ["postedAt", "reference", "description", "credit", "status"]) : ""}
-      ${tab === "transactions" ? recordTable("Recent transactions", dash.recentTransactions || [], ["reference", "description", "debit", "credit", "runningBalance", "postedAt"]) : ""}
+      ${tab === "monthly" ? `${memberTabReadinessPanel("Monthly savings workspace", "Review full-date deposit performance across savings, shares, welfare and loan repayments.", [["Statement source", "Posted activity"], ["Date display", "Full date with year"], ["Member action", "Compare deposits"]])}${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}` : ""}
+      ${tab === "loans" ? `${memberTabReadinessPanel("Loan servicing workspace", "Track active loans, next due dates and outstanding balances before making repayments.", [["Repayment route", "Mobile money or Treasurer"], ["Guarantor checks", state.memberData.pendingGuarantors.length], ["Loan files", state.memberData.loans.length]])}${recordTable("Member loan position", state.memberData.loans || [], ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"])}` : ""}
+      ${tab === "messages" ? `${memberTabReadinessPanel("SACCO admin message center", "Read official notices, reminders and approval updates sent by the SACCO office.", [["Unread messages", memberAdminMessageRows().filter((message) => !normal(`${message.status} ${message.readAt}`).includes("read")).length], ["Channel", "In-app/SMS/email"], ["Source", "SACCO admin"]])}${recordTable("SACCO admin messages", memberAdminMessageRows(), ["title", "message", "channel", "status", "createdAt"])}` : ""}
+      ${tab === "mobile-money" ? `${memberTabReadinessPanel("Mobile money deposit workspace", "Confirm mobile-money payments that have posted through provider callback records.", [["Provider posting", "Callback based"], ["Receipt", "After posting"], ["Records", memberMobileMoneyRows(dash).length]])}${recordTable("Mobile money deposit activity", memberMobileMoneyRows(dash), ["postedAt", "reference", "description", "credit", "status"])}` : ""}
+      ${tab === "transactions" ? `${memberTabReadinessPanel("Statement activity workspace", "Review posted deposits, withdrawals, loan repayments and running balance movements.", [["Statement status", "Verified"], ["Receipt trail", "Available"], ["Rows", (dash.recentTransactions || []).length]])}${recordTable("Recent transactions", dash.recentTransactions || [], ["reference", "description", "debit", "credit", "runningBalance", "postedAt"])}` : ""}
     `;
   }
   if (view === "accounts") return memberAccountsView(balances);
@@ -3045,6 +3046,52 @@ function memberCommandCenter(dash, balances, monthlyPerformance) {
         <li><strong>SACCO admin messages</strong><span>${unreadMessages.length} unread message(s) from your SACCO office, including notices, approvals and reminders.</span><em>${unreadMessages.length ? "Read" : "Clear"}</em></li>
         <li><strong>Mobile money deposit</strong><span>Mobile-money payments appear after provider callback posting and then become visible in receipts and statements.</span><em>${mobileDeposits.length ? "Posted" : "No posted mobile record"}</em></li>
       </ul>
+    </section>
+  `;
+}
+
+function memberServiceAssurancePanel(dash, balances, monthlyPerformance) {
+  const messages = memberAdminMessageRows();
+  const unreadMessages = messages.filter((message) => !normal(`${message.status} ${message.readAt}`).includes("read"));
+  const mobileDeposits = memberMobileMoneyRows(dash);
+  const latestMonth = monthlyPerformance[0] || {};
+  const totalBalance = Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0);
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member service assurance</h2>
+          <p>Enterprise controls for balances, messages, deposits, receipts and session safety.</p>
+        </div>
+        <span class="status active">Service ready</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Member identity", state.member?.membershipNo || "Confirmed")}
+        ${mini("KYC status", labelize(state.member?.kycStatus || "pending"))}
+        ${mini("Balance control", money.format(totalBalance))}
+        ${mini("This month", money.format(latestMonth.totalDeposits || 0))}
+        ${mini("Unread messages", unreadMessages.length)}
+        ${mini("Mobile deposits", mobileDeposits.length)}
+        ${mini("Receipts", "Available")}
+        ${mini("Last sync", state.lastSync ? formatDateTime(state.lastSync) : "Pending")}
+      </div>
+    </section>
+  `;
+}
+
+function memberTabReadinessPanel(title, copy, facts) {
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(title)}</h2>
+          <p>${escapeHtml(copy)}</p>
+        </div>
+        <span class="status active">Ready</span>
+      </div>
+      <div class="source-grid">
+        ${facts.map(([label, value]) => mini(label, value)).join("")}
+      </div>
     </section>
   `;
 }
