@@ -631,8 +631,12 @@ async function assertMemberRegistrationAndKyc(page) {
 
 async function assertTransactionWorkflow(page) {
   await page.locator("[data-module-tab-view='transactions'][data-module-tab='capture']").click();
+  await expectText(page, "Office receipt controls", "transaction office receipt controls");
+  await expectText(page, "Loan repayment", "transaction loan repayment option");
+  await page.locator("#newTransactionType").selectOption("savings_deposit");
+  await page.locator("#newTransactionChannel").selectOption("cash");
   await page.locator("#newTransactionAmount").fill("15000");
-  await page.locator("#newTransactionNarration").fill("Browser regression savings deposit");
+  await page.locator("#newTransactionNarration").fill("Browser regression Treasurer cash savings deposit");
   await page.locator("#transactionForm button[type='submit']").click();
   await expectText(page, "Submitted transaction", "transaction submitted");
   await page.locator("[data-module-tab-view='transactions'][data-module-tab='list']").click();

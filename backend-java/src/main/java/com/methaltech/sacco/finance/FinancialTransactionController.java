@@ -47,6 +47,7 @@ class FinancialTransactionController {
             "savings_deposit",
             "share_purchase",
             "welfare_contribution",
+            "loan_repayment",
             "withdrawal");
     private static final Set<String> ALLOWED_CHANNELS = Set.of(
             "mobile_money",

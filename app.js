@@ -1393,6 +1393,8 @@ function transactionsView() {
     ${tab === "overview" ? rolePriorityPanel("Transaction control focus", [
       ["Maker-checker", `${pending.length} transaction(s) are waiting for Treasurer/Admin approval.`, pending.length ? "Pending" : "Clear"],
       ["Receipts", `${posted.length} posted transaction(s) can produce member receipts.`, posted.length ? "Ready" : "Pending"],
+      ["Treasurer cash", "Cash savings deposits and loan repayments are captured here, approved, then receipted for the member.", "Office route"],
+      ["Mobile money", "Member self-service payments arrive through provider callbacks and are reconciled against posted transactions.", "Provider route"],
       ["Reversals", "Posted original transactions require a reason before reversal is created.", "Controlled"]
     ]) : ""}
     ${tab === "capture" ? transactionFormPanel() : ""}
@@ -4072,11 +4074,12 @@ function transactionFormPanel() {
   const members = dataRows("members");
   const branches = dataRows("branches");
   return `
+    ${transactionCaptureControlPanel()}
     <section class="panel">
       <div class="panel-heading">
         <div>
           <h2>New transaction screen</h2>
-          <p>Submit savings, shares, welfare or withdrawal transactions for approval.</p>
+          <p>Capture Treasurer cash receipts, office bank deposits, mobile-money adjustments and withdrawals for approval.</p>
         </div>
       </div>
       ${state.transactionFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.transactionFormMessage)}</strong></div>` : ""}
@@ -4085,12 +4088,37 @@ function transactionFormPanel() {
         <input type="hidden" id="newTransactionTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
         <label><span>Member</span><select id="newTransactionMemberId" ${canCreate ? "" : "disabled"}>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
         <label><span>Branch</span><select id="newTransactionBranchId" ${canCreate ? "" : "disabled"}><option value="">Use member branch</option>${branches.map((branch) => `<option value="${escapeHtml(branch.id)}">${escapeHtml(branch.name || branch.code)}</option>`).join("")}</select></label>
-        <label><span>Transaction type</span><select id="newTransactionType" ${canCreate ? "" : "disabled"}><option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="withdrawal">Withdrawal</option></select></label>
+        <label><span>Transaction type</span><select id="newTransactionType" ${canCreate ? "" : "disabled"}><option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="loan_repayment">Loan repayment</option><option value="withdrawal">Withdrawal</option></select><small>Use Loan repayment when the member pays a loan through Treasurer cash, bank or mobile money.</small></label>
         <label><span>Payment channel</span><select id="newTransactionChannel" ${canCreate ? "" : "disabled"}><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option><option value="payroll_deduction">Payroll deduction</option></select></label>
         <label><span>Amount</span><input id="newTransactionAmount" type="number" min="1" step="1" required value="10000" ${canCreate ? "" : "disabled"}></label>
-        <label><span>Narration</span><input id="newTransactionNarration" placeholder="Reason or receipt note" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Receipt note</span><input id="newTransactionNarration" placeholder="Cash receipt, loan repayment note or provider reference" ${canCreate ? "" : "disabled"}></label>
         <div class="form-actions inline">${canCreate ? `<button class="button primary" type="submit">Submit transaction</button>` : `<span class="status pending">View only</span>`}</div>
       </form>
+    </section>
+  `;
+}
+
+function transactionCaptureControlPanel() {
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Office receipt controls</h2>
+          <p>Treasurer/Admin capture rules for deposits, loan repayments and member receipts.</p>
+        </div>
+        <span class="status active">Maker-checker</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Treasurer cash", "Capture here")}
+        ${mini("Loan repayment", "Allowed")}
+        ${mini("Receipt status", "After posting")}
+        ${mini("Monthly performance", "Updates reports")}
+      </div>
+      <ul class="activity-list">
+        <li><strong>Cash deposit at office</strong><span>Treasurer records savings, shares, welfare or loan repayment cash and submits it for approval before issuing a receipt.</span><em>Staff route</em></li>
+        <li><strong>Mobile money adjustment</strong><span>Use mobile money channel only when staff are reconciling a provider callback or verified mobile payment reference.</span><em>Reconcile</em></li>
+        <li><strong>Loan repayment receipt</strong><span>Loan repayments captured here feed member monthly performance; use the Loans detail screen when guarantor or repayment schedule review is needed.</span><em>Loan route</em></li>
+      </ul>
     </section>
   `;
 }
