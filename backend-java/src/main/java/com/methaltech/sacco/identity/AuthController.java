@@ -288,23 +288,41 @@ class AuthController {
     }
 
     @PostMapping("/logout")
-    ResponseEntity<?> logout(@RequestHeader(name = "Authorization", required = false) String authorization) {
+    ResponseEntity<?> logout(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
 
         currentSession.session().revoke();
         authSessionRepository.save(currentSession.session());
+        auditService.record(
+                currentSession.user().getTenantId(),
+                currentSession.user(),
+                "Logged out staff session",
+                "auth_session",
+                currentSession.user().getId(),
+                request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(new LogoutResponse(true)));
     }
 
     @PostMapping("/extend-session")
-    ResponseEntity<?> extendSession(@RequestHeader(name = "Authorization", required = false) String authorization) {
+    ResponseEntity<?> extendSession(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
 
         Instant expiresAt = Instant.now().plus(Duration.ofHours(8));
         currentSession.session().extendTo(expiresAt);
         authSessionRepository.save(currentSession.session());
+        auditService.record(
+                currentSession.user().getTenantId(),
+                currentSession.user(),
+                "Extended staff session",
+                "auth_session",
+                currentSession.user().getId(),
+                request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(new SessionExtensionResponse(expiresAt)));
     }
 

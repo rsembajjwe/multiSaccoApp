@@ -224,23 +224,43 @@ class MemberAuthController {
     }
 
     @PostMapping("/logout")
-    ResponseEntity<?> logout(@RequestHeader(name = "Authorization", required = false) String authorization) {
+    ResponseEntity<?> logout(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            HttpServletRequest request) {
         MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
         if (currentSession == null) return memberAuthService.authRequired();
 
         currentSession.session().revoke();
         memberSessionRepository.save(currentSession.session());
+        auditService.record(
+                currentSession.member().getTenantId(),
+                (String) null,
+                currentSession.member().getFullName(),
+                "Logged out member session",
+                "member_session",
+                currentSession.member().getId(),
+                request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(new LogoutResponse(true)));
     }
 
     @PostMapping("/extend-session")
-    ResponseEntity<?> extendSession(@RequestHeader(name = "Authorization", required = false) String authorization) {
+    ResponseEntity<?> extendSession(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            HttpServletRequest request) {
         MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
         if (currentSession == null) return memberAuthService.authRequired();
 
         Instant expiresAt = Instant.now().plus(Duration.ofHours(8));
         currentSession.session().extendTo(expiresAt);
         memberSessionRepository.save(currentSession.session());
+        auditService.record(
+                currentSession.member().getTenantId(),
+                (String) null,
+                currentSession.member().getFullName(),
+                "Extended member session",
+                "member_session",
+                currentSession.member().getId(),
+                request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(new SessionExtensionResponse(expiresAt)));
     }
 
