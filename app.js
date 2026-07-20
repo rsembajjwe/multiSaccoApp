@@ -676,6 +676,8 @@ function saccoDashboard() {
       ${summary("Pending approvals", dataRows("approvals").length || transactions.filter((t) => normal(t.status).includes("pending")).length, "Maker-checker", "Approve")}
       ${summary("Mobile-money collections", money.format(sum(transactions.filter((t) => normal(t.channel).includes("mobile")), "amount")), "Provider channel", "Reconcile")}
     </div>
+    ${paymentRoutePanel()}
+    ${recordTable("Member monthly performance", saccoMonthlyPerformanceRows(), ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
     <div class="grid two">
       ${recordTable("Recent transactions", transactions, ["reference", "memberName", "type", "amount", "status"])}
       ${recordTable("Loan work queue", loans, ["applicationNo", "memberName", "product", "requestedAmount", "status"])}
@@ -738,6 +740,8 @@ function saccoTreasurerDashboard() {
       ["Reconciliation", `${Number(reconciliation.unmatchedBankLines || reconciliation.unmatchedLedgerLines || 0)} unmatched item(s) reported by reconciliation data.`, Number(reconciliation.unmatchedBankLines || reconciliation.unmatchedLedgerLines || 0) ? "Match" : "Clear"],
       ["Payment exceptions", `${failedCallbacks.length} mobile-money callback(s) need follow-up before reports are final.`, failedCallbacks.length ? "Investigate" : "Clear"]
     ])}
+    ${paymentRoutePanel()}
+    ${recordTable("Member monthly performance", saccoMonthlyPerformanceRows(), ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
     <div class="grid two">
       ${recordTable("Finance approval queue", pendingTransactions(), ["reference", "memberName", "type", "amount", "channel", "status"])}
       ${recordTable("Treasurer reconciliation watch", [...failedCallbacks, ...callbacks].slice(0, 12), ["externalReference", "provider", "purpose", "amount", "status", "receivedAt"])}
@@ -1592,7 +1596,7 @@ function savingsView() {
   const accounts = accountsByType("savings");
   const members = dataRows("members");
   const activeProducts = products.filter((row) => normal(row.status) === "active");
-  const tabs = [["overview", "Savings control"], ["products", "Savings product setup"], ["accounts", "Open Savings account"], ["lists", "Savings records"]];
+  const tabs = [["overview", "Savings control"], ["monthly", "Monthly performance"], ["products", "Savings product setup"], ["accounts", "Open Savings account"], ["lists", "Savings records"]];
   const tab = activeModuleTab("savings", tabs);
   return `
     <div class="dashboard-grid">
@@ -1608,6 +1612,10 @@ function savingsView() {
       ["Member accounts", `${accounts.length} savings account(s) are open for active members.`, accounts.length ? "Active" : "Open"],
       ["Contribution flow", "Savings deposits post through Transactions and member mobile payments.", "Connected"]
     ]) : ""}
+    ${tab === "monthly" ? `
+      ${paymentRoutePanel()}
+      ${recordTable("Member monthly performance", saccoMonthlyPerformanceRows(), ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
+    ` : ""}
     ${tab === "products" ? financialProductPanel("savings") : ""}
     ${tab === "accounts" ? financialAccountPanel("savings", products) : ""}
     ${tab === "lists" ? `
@@ -2360,6 +2368,8 @@ function renderMemberView(view) {
         ${summary("Guarantee requests", state.memberData.pendingGuarantors.length, "PendingGuarantors", "Respond")}
         ${summary("Offline drafts", state.memberData.drafts.length, "Sync drafts", "Sync")}
       </div>
+      ${memberPaymentRoutePanel()}
+      ${recordTable("Monthly savings and deposit performance", memberMonthlyPerformanceRows(dash), ["month", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}
       ${recordTable("Recent transactions", dash.recentTransactions || [], ["reference", "description", "debit", "credit", "runningBalance"])}
     `;
   }
@@ -2458,19 +2468,22 @@ function memberPaymentsView() {
       ${summary("Payment options", 4, "Savings, shares, welfare and loans", "Pay")}
       ${summary("Payable loans", payableLoans.length, "Active loan balances", "Repay")}
       ${summary("Mobile money", "Enabled", "Provider callback posting", "Use")}
+      ${summary("Treasurer cash", "Available", "Deposits and loan repayments", "Visit office")}
       ${summary("Payment drafts", paymentDrafts.length, "Saved locally before sync", "Sync")}
     </div>
+    ${memberPaymentRoutePanel()}
     <section class="panel">
       <div class="panel-heading">
         <div>
           <h2>Member payment center</h2>
-          <p>Post mobile-money payments for deposits, shares, welfare and active loan repayments.</p>
+          <p>Choose mobile money for self-service posting, or take cash to the Treasurer for office receipting.</p>
         </div>
         <span class="status active">Ready to post</span>
       </div>
       ${state.memberPaymentMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberPaymentMessage)}</strong></div>` : ""}
       ${state.memberPaymentError ? `<div class="notice warning"><strong>Payment failed.</strong><span>${escapeHtml(state.memberPaymentError)}</span></div>` : ""}
       <form id="memberPaymentForm" class="form-grid">
+        <label><span>Payment route</span><select id="memberPaymentRoute"><option value="mobile_money">Mobile money self payment</option><option value="treasurer_cash">Treasurer cash deposit</option></select><small>Treasurer cash is recorded by SACCO staff and appears after approval/posting.</small></label>
         <label><span>Payment purpose</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="loan_repayment">Loan repayment</option></select></label>
         <label><span>Amount</span><input id="memberPaymentAmount" type="number" min="1" step="1" value="5000"></label>
         <label><span>Provider</span><select id="memberPaymentProvider"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option><option value="demo">Demo provider</option></select></label>
@@ -2560,6 +2573,7 @@ function memberStatementsView(dash, balances) {
       </div>
     </section>
     ${recordTable("Member statement", lines, ["reference", "description", "debit", "credit", "runningBalance", "postedAt"])}
+    ${recordTable("Monthly savings and deposit performance", memberMonthlyPerformanceRows(dash), ["month", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}
   `;
 }
 
@@ -3628,7 +3642,7 @@ function loanDetailPanel(rows) {
         </form>
       </div>
       <form id="loanRepaymentForm" class="form-grid">
-        <h3 class="wide">Record loan repayment</h3>
+        <h3 class="wide">Record loan repayment via Treasurer cash, bank or mobile money</h3>
         <label><span>Amount</span><input id="loanRepaymentAmount" type="number" min="1" step="1" value="50000" ${canApprove ? "" : "disabled"}></label>
         <label><span>Channel</span><select id="loanRepaymentChannel" ${canApprove ? "" : "disabled"}><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option><option value="payroll_deduction">Payroll deduction</option></select></label>
         <label><span>Reference</span><input id="loanRepaymentReference" value="LR-${Date.now()}" ${canApprove ? "" : "disabled"}></label>
@@ -4914,6 +4928,11 @@ async function postMemberPayment(event) {
   event.preventDefault();
   state.memberPaymentMessage = "";
   state.memberPaymentError = "";
+  if (value("memberPaymentRoute") === "treasurer_cash") {
+    state.memberPaymentMessage = "Treasurer cash route selected. Please take the cash to the SACCO Treasurer; staff will receipt it under Transactions or Loan servicing.";
+    renderShell();
+    return;
+  }
   try {
     const callback = await submitMemberPaymentPayload(memberPaymentPayload());
     state.memberPaymentMessage = `Payment posted: ${callback.externalReference || callback.id}.`;
@@ -4944,6 +4963,7 @@ async function submitMemberComplaint(event) {
 
 function memberPaymentPayload() {
   const purpose = value("memberPaymentPurpose");
+  const route = value("memberPaymentRoute") || "mobile_money";
   return {
     tenantId: state.member?.tenantId,
     memberId: state.member?.id,
@@ -4955,6 +4975,7 @@ function memberPaymentPayload() {
     provider: value("memberPaymentProvider"),
     providerPayload: {
       source: "member_portal",
+      route,
       member: state.member?.membershipNo
     }
   };
@@ -6014,6 +6035,107 @@ function memberStatementLines(dash) {
   }));
 }
 
+function paymentRoutePanel() {
+  return rolePriorityPanel("Member payment routes", [
+    ["Treasurer cash deposit", "Members can deposit savings, shares, welfare contributions or loan repayments at the SACCO office. Treasurer/Admin records the cash and issues a receipt after posting.", "Staff receipting"],
+    ["Mobile money self payment", "Members can pay from the member portal. The payment posts through the mobile-money callback and appears in statements after successful posting.", "Self-service"],
+    ["Monthly performance", "Admin and Treasurer can review member monthly deposits, cash collections, mobile-money collections and loan repayments.", "Visible"]
+  ]);
+}
+
+function memberPaymentRoutePanel() {
+  return rolePriorityPanel("How members can pay", [
+    ["Treasurer cash deposit", "Take cash to the SACCO Treasurer for savings deposits or loan repayments. The Treasurer records and receipts it in the SACCO portal.", "Office route"],
+    ["Mobile money", "Use the member portal payment form for savings, shares, welfare or active loan repayments through mobile money.", "Self-service"],
+    ["Monthly tracking", "Your monthly deposits and repayments appear below from posted statement activity.", "Statement view"]
+  ]);
+}
+
+function saccoMonthlyPerformanceRows() {
+  const rows = new Map();
+  const ensure = (month, memberId, memberLabel) => {
+    const key = `${month}:${memberId || memberLabel || "unknown"}`;
+    if (!rows.has(key)) {
+      rows.set(key, {
+        month,
+        memberName: memberLabel || memberName(memberId),
+        savingsDeposits: 0,
+        shareDeposits: 0,
+        welfareDeposits: 0,
+        loanRepayments: 0,
+        treasurerCash: 0,
+        mobileMoney: 0,
+        totalDeposits: 0
+      });
+    }
+    return rows.get(key);
+  };
+
+  transactionRows()
+    .filter((row) => normal(row.status) === "posted")
+    .forEach((transaction) => {
+      const month = monthLabel(transaction.postedAt || transaction.createdAt);
+      const target = ensure(month, transaction.memberId, transaction.memberName);
+      const amount = Number(transaction.amount || transaction.credit || 0);
+      addPerformanceAmount(target, transaction.type, amount);
+      if (normal(transaction.channel).includes("mobile")) target.mobileMoney += amount;
+      else target.treasurerCash += amount;
+    });
+
+  dataRows("mobileMoneyCallbacks")
+    .filter((callback) => normal(callback.status) === "posted")
+    .forEach((callback) => {
+      const month = monthLabel(callback.receivedAt || callback.createdAt);
+      const target = ensure(month, callback.memberId, memberName(callback.memberId));
+      const amount = Number(callback.amount || 0);
+      addPerformanceAmount(target, callback.purpose, amount);
+      target.mobileMoney += amount;
+    });
+
+  return [...rows.values()]
+    .map((row) => ({ ...row, totalDeposits: row.savingsDeposits + row.shareDeposits + row.welfareDeposits + row.loanRepayments }))
+    .sort((a, b) => b.month.localeCompare(a.month) || a.memberName.localeCompare(b.memberName));
+}
+
+function memberMonthlyPerformanceRows(dash) {
+  const rows = new Map();
+  memberStatementLines(dash).forEach((line) => {
+    const month = monthLabel(line.postedAt || line.createdAt);
+    if (!rows.has(month)) {
+      rows.set(month, {
+        month,
+        savingsDeposits: 0,
+        shareDeposits: 0,
+        welfareDeposits: 0,
+        loanRepayments: 0,
+        totalDeposits: 0,
+        closingBalance: 0
+      });
+    }
+    const target = rows.get(month);
+    const amount = Number(line.credit || 0);
+    addPerformanceAmount(target, `${line.description || ""} ${line.type || ""}`, amount);
+    target.totalDeposits = target.savingsDeposits + target.shareDeposits + target.welfareDeposits + target.loanRepayments;
+    target.closingBalance = Number(line.runningBalance || target.closingBalance || 0);
+  });
+  return [...rows.values()].sort((a, b) => b.month.localeCompare(a.month));
+}
+
+function addPerformanceAmount(target, purpose, amount) {
+  const text = normal(purpose);
+  if (!amount) return;
+  if (text.includes("loan") || text.includes("repayment")) target.loanRepayments += amount;
+  else if (text.includes("share")) target.shareDeposits += amount;
+  else if (text.includes("welfare")) target.welfareDeposits += amount;
+  else target.savingsDeposits += amount;
+}
+
+function monthLabel(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "Unknown month";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function initials(name) {
   return String(name || "TO").split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }
@@ -6039,7 +6161,7 @@ function sum(rows, ...keys) {
 
 function formatValue(row, column) {
   const value = row[column] ?? row[snake(column)] ?? row[camelFallback(column)] ?? "";
-  if (column.toLowerCase().includes("amount") || column.toLowerCase().includes("balance") || ["debit", "credit", "savings", "shares", "welfare", "loanPortfolio", "loansAtRisk", "expenseTotal", "assetCost", "assetNetBookValue"].includes(column)) return money.format(Number(value || 0));
+  if (column.toLowerCase().includes("amount") || column.toLowerCase().includes("balance") || ["debit", "credit", "savings", "shares", "welfare", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "loanPortfolio", "loansAtRisk", "expenseTotal", "assetCost", "assetNetBookValue"].includes(column)) return money.format(Number(value || 0));
   if (column.toLowerCase().includes("status") || column.toLowerCase().includes("severity")) return `<span class="status ${statusClass(value)}">${escapeHtml(String(value || "Pending"))}</span>`;
   return escapeHtml(String(value || "-"));
 }
