@@ -4,6 +4,7 @@ const app = readFileSync("app.js", "utf8");
 
 const contracts = [
   "Login to your portal",
+  "Username, email, phone or membership number",
   "Register SACCO",
   "Forgot password",
   "Platform Administration Portal",

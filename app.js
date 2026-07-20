@@ -417,11 +417,11 @@ function loginPanel() {
     <div class="form-heading">
       <p class="eyebrow">Secure access</p>
       <h2>Login to your portal</h2>
-      <p>Code identifies the SACCO or Platform Administration. Username and password identify the role: platform user, SACCO staff or member.</p>
+      <p>Code identifies the SACCO or Platform Administration. Username, email, phone or membership number identifies the user, then password confirms access.</p>
     </div>
     <form id="loginForm" class="form-grid single">
       ${field("SACCO or platform code", "code", "text", "PLATFORM", "Use PLATFORM or a SACCO code such as GVS")}
-      ${field("Username, email, phone or membership number", "username", "text", "admin@platform.local", "")}
+      ${field("Username, email, phone or membership number", "username", "text", "Username, email, phone or membership number", "")}
       <label>
         <span>Password</span>
         <div class="password-row">
