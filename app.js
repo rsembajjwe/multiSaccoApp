@@ -59,6 +59,9 @@ const state = {
   selectedSubscriptionId: "",
   selectedSubscriptionMessage: "",
   selectedSubscriptionError: "",
+  selectedPackageId: "",
+  selectedPackageMessage: "",
+  selectedPackageError: "",
   memberFormMessage: "",
   memberFormError: "",
   selectedMemberId: "",
@@ -897,6 +900,7 @@ function subscriptionsView() {
     ${subscriptionDetailPanel(rows)}
     ${recordTable("Subscription list", tableRows, ["saccoCode", "tenantName", "packageName", "billingDescription", "billableMembers", "amount", "paid", "balanceDue", "paymentStatus", "operatingAccess", "expiry"])}
     ${packageCards()}
+    ${packageSetupPanel()}
   `;
 }
 
@@ -3774,6 +3778,7 @@ function packageCards() {
       </div>
       <div class="package-grid">
         ${rows.map((pkg) => {
+          const packageId = pkg.id || pkg.packageId || pkg.name;
           const amount = pkg.price || pkg.amount || 0;
           const memberLimit = pkg.memberRange || pkg.members || (pkg.maxMembers ? `Up to ${pkg.maxMembers}` : "Configured range");
           const branchLimit = pkg.maxBranches || pkg.branches || "Configured";
@@ -3787,11 +3792,44 @@ function packageCards() {
               <strong>${money.format(amount)}</strong>
               <p>${escapeHtml(memberLimit)} members / ${escapeHtml(branchLimit)} branch${String(branchLimit) === "1" ? "" : "es"}</p>
               <span>${escapeHtml(pkg.modules || pkg.description || "Included modules, SMS, storage and support level")}</span>
-              <button class="button secondary" type="button">Manage package</button>
+              <button class="button secondary" type="button" data-package-manage="${escapeHtml(packageId)}">Manage package</button>
             </article>
           `;
         }).join("")}
       </div>
+    </section>
+  `;
+}
+
+function packageSetupPanel() {
+  const packages = dataRows("subscriptionPackages").length ? dataRows("subscriptionPackages") : fallbackPackages();
+  const pkg = packages.find((item) => String(item.id || item.packageId || item.name) === String(state.selectedPackageId));
+  if (!pkg) return "";
+  const canManage = isPlatform() && (roleKind() === "super" || roleKind() === "billing" || hasPermission("subscriptions:manage"));
+  return `
+    <section class="panel detail-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Package Setup</h2>
+          <p>Update the subscription package used for SACCO billing and registration pricing.</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-package-setup">Close</button>
+      </div>
+      ${state.selectedPackageMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedPackageMessage)}</strong></div>` : ""}
+      ${state.selectedPackageError ? `<div class="notice warning"><strong>Package update failed.</strong><span>${escapeHtml(state.selectedPackageError)}</span></div>` : ""}
+      <form id="packageSetupForm" class="form-grid">
+        <input type="hidden" id="selectedPackageId" value="${escapeHtml(pkg.id || pkg.packageId || pkg.name)}">
+        <label><span>Package name</span><input id="packageSetupName" value="${escapeHtml(pkg.name || pkg.packageName || "")}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Member range</span><input id="packageSetupTierLabel" value="${escapeHtml(pkg.tierLabel || pkg.memberRange || pkg.name || "")}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Annual amount</span><input id="packageSetupPrice" type="number" min="0" step="1000" value="${Number(pkg.price || pkg.amount || 0)}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Minimum members</span><input id="packageSetupMinMembers" type="number" min="0" step="1" value="${Number(pkg.minMembers || 100)}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Maximum members</span><input id="packageSetupMembers" type="number" min="0" step="1" value="${Number(pkg.members || pkg.maxMembers || 0)}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Branches</span><input id="packageSetupBranches" type="number" min="0" step="1" value="${Number(pkg.branches || pkg.maxBranches || 0)}" ${canManage ? "" : "disabled"}></label>
+        <label><span>User accounts</span><input id="packageSetupUsers" type="number" min="0" step="1" value="${Number(pkg.users || 0)}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Status</span><select id="packageSetupStatus" ${canManage ? "" : "disabled"}><option value="active" ${normal(pkg.status || "active") === "active" ? "selected" : ""}>Active</option><option value="inactive" ${normal(pkg.status) === "inactive" ? "selected" : ""}>Inactive</option></select></label>
+        <label class="wide"><span>Included modules</span><textarea id="packageSetupModules" ${canManage ? "" : "disabled"}>${escapeHtml(pkg.modules || pkg.description || "")}</textarea></label>
+        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">Save package</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
     </section>
   `;
 }
@@ -4206,6 +4244,47 @@ function openSubscriptionDetail(subscriptionId) {
   state.selectedSubscriptionId = subscriptionId;
   state.selectedSubscriptionMessage = "";
   state.selectedSubscriptionError = "";
+  renderShell();
+}
+
+function openPackageSetup(packageId) {
+  state.selectedPackageId = packageId;
+  state.selectedPackageMessage = "";
+  state.selectedPackageError = "";
+  renderShell();
+}
+
+function savePackageSetup(event) {
+  event.preventDefault();
+  const packageId = value("selectedPackageId") || state.selectedPackageId;
+  const currentRows = dataRows("subscriptionPackages").length ? dataRows("subscriptionPackages") : fallbackPackages();
+  const packageIndex = currentRows.findIndex((pkg) => String(pkg.id || pkg.packageId || pkg.name) === String(packageId));
+  if (packageIndex < 0) {
+    state.selectedPackageError = "Package could not be found.";
+    renderShell();
+    return;
+  }
+  const current = currentRows[packageIndex];
+  const updated = {
+    ...current,
+    id: current.id || current.packageId || packageId,
+    name: value("packageSetupName"),
+    tierLabel: value("packageSetupTierLabel"),
+    price: Number(value("packageSetupPrice") || 0),
+    amount: Number(value("packageSetupPrice") || 0),
+    minMembers: Number(value("packageSetupMinMembers") || 0),
+    members: Number(value("packageSetupMembers") || 0),
+    maxMembers: Number(value("packageSetupMembers") || 0),
+    branches: Number(value("packageSetupBranches") || 0),
+    maxBranches: Number(value("packageSetupBranches") || 0),
+    users: Number(value("packageSetupUsers") || 0),
+    status: value("packageSetupStatus") || "active",
+    modules: value("packageSetupModules")
+  };
+  state.data.subscriptionPackages = currentRows.map((pkg, index) => index === packageIndex ? updated : pkg);
+  state.selectedPackageId = updated.id;
+  state.selectedPackageError = "";
+  state.selectedPackageMessage = `${updated.name || "Package"} updated in this session.`;
   renderShell();
 }
 
@@ -5246,6 +5325,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='subscription-detail']").forEach((button) => {
     button.addEventListener("click", () => openSubscriptionDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-package-manage]").forEach((button) => {
+    button.addEventListener("click", () => openPackageSetup(button.dataset.packageManage));
+  });
   document.querySelectorAll("[data-row-action='member-detail']").forEach((button) => {
     button.addEventListener("click", () => openMemberDetail(button.dataset.rowId));
   });
@@ -5286,6 +5368,12 @@ function bindEvents() {
     state.selectedSubscriptionId = "";
     state.selectedSubscriptionMessage = "";
     state.selectedSubscriptionError = "";
+    renderShell();
+  });
+  document.querySelector("[data-action='close-package-setup']")?.addEventListener("click", () => {
+    state.selectedPackageId = "";
+    state.selectedPackageMessage = "";
+    state.selectedPackageError = "";
     renderShell();
   });
   document.querySelector("[data-action='close-member-detail']")?.addEventListener("click", () => {
@@ -5399,6 +5487,7 @@ function bindEvents() {
     event.preventDefault();
     recordSubscriptionPayment();
   });
+  document.querySelector("#packageSetupForm")?.addEventListener("submit", savePackageSetup);
   document.querySelectorAll("[data-tenant-status]").forEach((button) => {
     button.addEventListener("click", () => saveTenantStatus(button.dataset.tenantStatus));
   });
@@ -5499,6 +5588,9 @@ async function logout() {
     selectedSubscriptionId: "",
     selectedSubscriptionMessage: "",
     selectedSubscriptionError: "",
+    selectedPackageId: "",
+    selectedPackageMessage: "",
+    selectedPackageError: "",
     memberFormMessage: "",
     memberFormError: "",
     selectedMemberId: "",

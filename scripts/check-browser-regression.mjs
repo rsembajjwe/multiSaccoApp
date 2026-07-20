@@ -290,6 +290,13 @@ async function assertSaccoApplicationReview(page) {
 }
 
 async function assertSubscriptionControl(page) {
+  await page.locator("[data-package-manage]").first().click();
+  await expectText(page, "Update the subscription package", "package setup dialogue");
+  await page.locator("#packageSetupName").fill(`Starter ${Date.now()}`);
+  await page.locator("#packageSetupPrice").fill("550000");
+  await page.locator("#packageSetupForm button[type='submit']").click();
+  await expectText(page, "updated in this session", "package setup save action");
+  await page.locator("[data-action='close-package-setup']").click();
   await page.locator("[data-row-action='subscription-detail']").first().click();
   await expectText(page, "Subscription control", "subscription detail panel");
   await expectText(page, "Operating access", "subscription operating access");
