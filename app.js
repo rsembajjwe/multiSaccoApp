@@ -2946,6 +2946,7 @@ function renderMemberView(view) {
         ${summary("Guarantee requests", state.memberData.pendingGuarantors.length, "PendingGuarantors", "Respond")}
         ${summary("Offline drafts", state.memberData.drafts.length, "Sync drafts", "Sync")}
       </div>
+      ${memberQuickActionsPanel()}
       ${memberServiceAssurancePanel(dash, balances, monthlyPerformance)}
       ${moduleTabs("home", tabs, tab)}
       ${tab === "overview" ? `${memberCommandCenter(dash, balances, monthlyPerformance)}${memberPaymentRoutePanel()}` : ""}
@@ -2967,6 +2968,37 @@ function renderMemberView(view) {
   if (view === "profile") return memberProfileView(balances);
   if (view === "security") return memberSecurityView();
   return moduleBlueprint(view);
+}
+
+function memberQuickActionsPanel() {
+  const actions = [
+    ["Pay by mobile money", "Start a mobile-money savings, shares, welfare or loan payment.", "payments", "mobile-money"],
+    ["Treasurer cash handoff", "Review cash deposit rules before paying through the Treasurer.", "payments", "treasurer-cash"],
+    ["View statement", "Open posted activity, monthly savings and export controls.", "statements", "activity"],
+    ["View receipts", "Confirm posted receipts and printable payment evidence.", "receipts", "receipts"],
+    ["Read SACCO messages", "Open notices and reminders from the SACCO admin office.", "notifications", "inbox"],
+    ["Submit complaint", "Raise a service issue for SACCO admin follow-up.", "complaints", "submit"]
+  ];
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member quick actions</h2>
+          <p>Common member tasks open directly in the right workspace.</p>
+        </div>
+        <span class="status active">Self-service</span>
+      </div>
+      <div class="access-grid">
+        ${actions.map(([label, detail, view, tab]) => `
+          <div>
+            <strong>${escapeHtml(label)}</strong>
+            <span>${escapeHtml(detail)}</span>
+            <button class="button secondary" type="button" data-member-shortcut-view="${escapeHtml(view)}" data-member-shortcut-tab="${escapeHtml(tab)}">${escapeHtml(label)}</button>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
 }
 
 function memberAccountsView(balances) {
@@ -6857,6 +6889,15 @@ function bindEvents() {
   document.querySelectorAll("[data-summary-view]").forEach((button) => {
     button.addEventListener("click", () => {
       state.currentView = button.dataset.summaryView;
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-member-shortcut-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const view = button.dataset.memberShortcutView;
+      const tab = button.dataset.memberShortcutTab;
+      if (tab) state.moduleTabs[view] = tab;
+      state.currentView = view;
       renderShell();
     });
   });

@@ -174,7 +174,11 @@ try {
       "Member service assurance",
       "Service ready",
       "Member command center",
-      "Monthly savings"
+      "Monthly savings",
+      "Member quick actions",
+      "Pay by mobile money",
+      "Read SACCO messages",
+      "Submit complaint"
     ]) {
       await expectText(page, marker, `member portal marker ${marker}`);
     }
@@ -192,6 +196,7 @@ try {
     await expectText(page, "Mobile money deposit workspace", "member mobile money workspace readiness");
     await expectText(page, "Mobile money deposit activity", "member home mobile money tab");
     await page.locator("[data-module-tab-view='home'][data-module-tab='overview']").click();
+    await assertMemberQuickActions(page);
     await assertScreen(page, "accounts", ["Member account overview", "Member account balances", "Verified"]);
     await assertScreen(page, "loans", ["Mobile loan application", "Submit loan application", "Member loans"]);
     await assertMemberLoanSubmission(page);
@@ -713,6 +718,21 @@ async function assertMemberPaymentPosting(page) {
   await navigateTo(page, "receipts");
   await expectText(page, reference, "member payment receipt visible");
   console.log("PASS member payment action");
+}
+
+async function assertMemberQuickActions(page) {
+  await navigateTo(page, "home");
+  await page.locator("[data-member-shortcut-view='payments'][data-member-shortcut-tab='mobile-money']").click();
+  await expectText(page, "Member payment center", "member quick action payment screen");
+  await expectText(page, "Mobile money", "member quick action payment tab");
+  await navigateTo(page, "home");
+  await page.locator("[data-member-shortcut-view='notifications'][data-member-shortcut-tab='inbox']").click();
+  await expectText(page, "Member message inbox", "member quick action messages");
+  await navigateTo(page, "home");
+  await page.locator("[data-member-shortcut-view='complaints'][data-member-shortcut-tab='submit']").click();
+  await expectText(page, "Member complaint submission", "member quick action complaint");
+  await navigateTo(page, "home");
+  console.log("PASS member quick actions");
 }
 
 async function assertMemberStatementEvidence(page) {
