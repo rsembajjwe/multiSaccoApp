@@ -891,6 +891,17 @@ function accountProfileMenu() {
   `;
 }
 
+function closeTopbarMenus({ clearSearch = false } = {}) {
+  state.sessionMenuOpen = false;
+  state.helpMenuOpen = false;
+  state.accountMenuOpen = false;
+  state.quickSearchActiveId = "";
+  if (clearSearch) {
+    state.search = "";
+    state.tableState = {};
+  }
+}
+
 function renderView(view) {
   if (state.auth === "member") return renderMemberView(view);
   if (view === "dashboard") return isPlatform() ? platformDashboard() : saccoDashboard();
@@ -6746,18 +6757,21 @@ function bindEvents() {
     state.sessionMenuOpen = !state.sessionMenuOpen;
     state.helpMenuOpen = false;
     state.accountMenuOpen = false;
+    state.quickSearchActiveId = "";
     renderShell();
   }));
   document.querySelectorAll("[data-action='toggle-help-menu']").forEach((button) => button.addEventListener("click", () => {
     state.helpMenuOpen = !state.helpMenuOpen;
     state.sessionMenuOpen = false;
     state.accountMenuOpen = false;
+    state.quickSearchActiveId = "";
     renderShell();
   }));
   document.querySelectorAll("[data-action='toggle-account-menu']").forEach((button) => button.addEventListener("click", () => {
     state.accountMenuOpen = !state.accountMenuOpen;
     state.sessionMenuOpen = false;
     state.helpMenuOpen = false;
+    state.quickSearchActiveId = "";
     renderShell();
   }));
   document.querySelectorAll("[data-action='open-security-settings']").forEach((button) => button.addEventListener("click", openSecuritySettings));
@@ -6817,15 +6831,35 @@ function bindEvents() {
     }
     if (event.key === "Escape" && state.search) {
       event.preventDefault();
-      state.search = "";
-      state.quickSearchActiveId = "";
-      state.tableState = {};
+      closeTopbarMenus({ clearSearch: true });
       renderShell();
     }
   });
   document.querySelectorAll("[data-quick-result]").forEach((button) => {
     button.addEventListener("click", () => openQuickSearchResult(button.dataset.quickResult));
   });
+  document.removeEventListener("keydown", handleGlobalDismissKey);
+  document.removeEventListener("click", handleGlobalDismissClick);
+  document.addEventListener("keydown", handleGlobalDismissKey);
+  document.addEventListener("click", handleGlobalDismissClick);
+}
+
+function hasOpenTopbarMenu() {
+  return state.sessionMenuOpen || state.helpMenuOpen || state.accountMenuOpen || Boolean(state.search.trim());
+}
+
+function handleGlobalDismissKey(event) {
+  if (event.key !== "Escape" || !hasOpenTopbarMenu()) return;
+  event.preventDefault();
+  closeTopbarMenus({ clearSearch: Boolean(state.search.trim()) });
+  renderShell();
+}
+
+function handleGlobalDismissClick(event) {
+  if (!hasOpenTopbarMenu()) return;
+  if (event.target.closest(".topbar-actions")) return;
+  closeTopbarMenus({ clearSearch: Boolean(state.search.trim()) });
+  renderShell();
 }
 
 async function logout() {

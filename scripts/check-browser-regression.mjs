@@ -43,6 +43,7 @@ try {
   await assertStaffSessionMenu(page);
   await assertPlatformHelpMenu(page);
   await assertStaffAccountMenu(page);
+  await assertTopbarMenuDismissal(page);
   await assertNotificationBadgeRouting(page, "Notification delivery control", "staff notification badge routing");
   await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
   await expectNoVisibleText(page, "Read-only SACCO member support", "Platform Members navigation hidden");
@@ -366,6 +367,23 @@ async function assertStaffAccountMenu(page) {
   await page.locator("[data-action='close-user-detail']").click();
   await navigateTo(page, "dashboard");
   console.log("PASS staff account menu");
+}
+
+async function assertTopbarMenuDismissal(page) {
+  await page.locator("[data-action='toggle-help-menu']").click();
+  await expectText(page, "Help and support", "topbar help menu before Escape");
+  await page.keyboard.press("Escape");
+  await expectNoVisibleText(page, "Help and support", "topbar Escape closes menu");
+  await page.locator("[data-action='toggle-account-menu']").click();
+  await expectText(page, "admin@platform.local", "topbar account menu before outside click");
+  await page.locator(".page-header").click();
+  await expectNoVisibleText(page, "admin@platform.local", "topbar outside click closes menu");
+  await page.locator("#globalSearch").fill("Green Valley");
+  await page.locator(".quick-search-panel").waitFor({ state: "visible" });
+  await page.mouse.click(40, 420);
+  const searchValue = await page.locator("#globalSearch").inputValue();
+  if (searchValue) throw new Error(`topbar outside click should clear quick search, got ${searchValue}`);
+  console.log("PASS topbar menu dismissal");
 }
 
 async function assertMemberAccountMenu(page) {
