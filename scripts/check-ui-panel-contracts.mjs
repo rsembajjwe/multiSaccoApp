@@ -23,7 +23,6 @@ const contracts = [
   "Chairperson decision focus",
   "Treasurer daily control",
   "Secretary office focus",
-  "SACCO role access",
   "Chairperson access",
   "Treasurer access",
   "Secretary access",

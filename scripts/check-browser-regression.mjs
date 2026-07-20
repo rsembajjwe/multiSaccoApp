@@ -66,7 +66,9 @@ try {
   await assertRoleDashboard(page, "PLATFORM", "support@platform.local", "Support@12345", "Platform Support", ["Platform Support Officer", "SACCO support tickets", "SACCO support list"]);
 
   await staffLogin(page, "GVS", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
-  await assertScreen(page, "dashboard", ["Total members", "Total savings", "Role filtered"]);
+  await expectNoVisibleText(page, "SACCO Administrator", "SACCO Administrator label hidden");
+  await expectNoVisibleText(page, "SACCO role access", "SACCO role access panel hidden");
+  await assertScreen(page, "dashboard", ["Total members", "Total savings", "Recent transactions", "Loan work queue"]);
   await assertScreen(page, "members", ["Member management focus", "Member and staff separation", "Member list", "Member registration"]);
   await assertMemberRegistrationAndKyc(page);
   await assertScreen(page, "transactions", ["Transaction control focus", "Transaction list", "New transaction screen"]);

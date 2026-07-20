@@ -16,7 +16,7 @@ const demoAccounts = [
   { label: "Platform Billing", code: "PLATFORM", username: "billing@platform.local", password: "Billing@12345", portal: "Platform" },
   { label: "Platform Compliance", code: "PLATFORM", username: "compliance@platform.local", password: "Compliance@12345", portal: "Platform" },
   { label: "Platform Support", code: "PLATFORM", username: "support@platform.local", password: "Support@12345", portal: "Platform" },
-  { label: "SACCO Administrator", code: "GVS", username: "admin@greenvalley.local", password: "Sacco@12345", portal: "SACCO" },
+  { label: "SACCO Admin", code: "GVS", username: "admin@greenvalley.local", password: "Sacco@12345", portal: "SACCO" },
   { label: "Treasurer", code: "GVS", username: "treasurer@greenvalley.local", password: "Treasurer@12345", portal: "SACCO" },
   { label: "Secretary", code: "GVS", username: "secretary@greenvalley.local", password: "Secretary@12345", portal: "SACCO" },
   { label: "Chairperson", code: "GVS", username: "chairperson@greenvalley.local", password: "Chair@12345", portal: "SACCO" },
@@ -664,19 +664,7 @@ function saccoDashboard() {
   const members = dataRows("members");
   const transactions = dataRows("transactions");
   const loans = dataRows("loans");
-  const roleCopy = {
-    admin: "Full SACCO performance, new members, approvals, subscription status, branch activity and system alerts.",
-    chairperson: "Loan portfolio, final approvals, arrears, governance meetings, high-value transactions and operational risks.",
-    treasurer: "Cash position, bank balances, mobile-money collections, finance approvals, withdrawals and reconciliation status.",
-    secretary: "Member applications, KYC documents, meetings, minutes, complaints and governance approvals.",
-    loans: "New applications, appraisal queues, guarantors, arrears, repayments due and loan product performance.",
-    accountant: "Trial balance, unposted transactions, reconciliation, suspense accounts, expenses and period closing.",
-    teller: "Opening balance, daily collections, withdrawals, receipts, recent teller transactions and member lookup.",
-    auditor: "Read-only financial summary, approvals, reversals, user activity and audit exceptions."
-  };
   return `
-    ${dashboardIntro(roleLabel(), roleCopy[role] || roleCopy.admin)}
-    ${roleAccessPanel("SACCO role access")}
     <div class="dashboard-grid">
       ${summary("Total members", members.length, "Membership register", "Open members")}
       ${summary("Active members", members.filter((m) => normal(m.status) === "active").length, "Can transact", "Review")}
@@ -3034,7 +3022,7 @@ function roleNameFromId(roleId, platformOnly) {
 }
 
 function saccoStaffAccessGuide(roles) {
-  const preferred = ["SACCO Administrator", "SACCO Chairperson", "SACCO Treasurer", "SACCO Secretary", "Loans Officer", "Accountant", "Teller", "Auditor"];
+  const preferred = ["SACCO Chairperson", "SACCO Treasurer", "SACCO Secretary", "Loans Officer", "Accountant", "Teller", "Auditor"];
   const rows = preferred.map((name) => {
     const configured = roles.find((role) => normal(role.name) === normal(name) || normal(role.name).includes(normal(name.replace("SACCO ", ""))));
     return {
@@ -5879,7 +5867,8 @@ function displayName() {
 }
 
 function roleLabel() {
-  return state.auth === "member" ? "Member" : state.roleNames.join(", ") || "Staff";
+  if (state.auth === "member") return "Member";
+  return state.roleNames.map((role) => role === "SACCO Administrator" ? "SACCO Admin" : role).join(", ") || "Staff";
 }
 
 function contextName() {
