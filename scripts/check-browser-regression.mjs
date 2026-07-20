@@ -81,7 +81,8 @@ try {
   await assertScreen(page, "reconciliation", ["Reconciliation readiness checks", "Reconciliation command center", "Bank and mobile-money matching", "Unmatched ledger lines", "Provider callback exceptions"]);
   await assertScreen(page, "reports", ["Reporting evidence control", "Report catalogue", "Report readiness", "SACCO regulatory report"]);
   await assertScreen(page, "governance", ["Governance action control", "Governance meeting setup", "Governance meeting register", "Resolution action list"]);
-  await assertScreen(page, "settings", ["SACCO settings control", "SACCO operating settings", "Branch setup", "Contribution product setup", "Create branch", "Create product"]);
+  await assertScreen(page, "settings", ["Settings Overview", "Branch Setup", "Product Setup", "Setup Records", "SACCO settings control", "SACCO operating settings"]);
+  await assertSaccoSettingsTabs(page);
   await assertScreen(page, "users", ["SACCO staff access", "Add SACCO staff user", "SACCO staff role guide", "Role access preview", "SACCO staff access list", "SACCO staff role coverage"]);
   await assertScreen(page, "audit", ["Audit evidence control", "SACCO audit evidence", "Approvals", "Access control", "SACCO audit trail"]);
   await logout(page);
@@ -324,6 +325,20 @@ async function assertSubscriptionControl(page) {
   await expectText(page, "Record payment", "subscription record payment action");
   await expectText(page, "Renew full year", "subscription renew action");
   console.log("PASS subscription control");
+}
+
+async function assertSaccoSettingsTabs(page) {
+  await page.locator("[data-sacco-settings-tab='branches']").click();
+  await expectText(page, "Branch setup", "SACCO branch setup tab");
+  await expectText(page, "Create branch", "SACCO branch setup action");
+  await page.locator("[data-sacco-settings-tab='products']").click();
+  await expectText(page, "Contribution product setup", "SACCO product setup tab");
+  await expectText(page, "Create product", "SACCO product setup action");
+  await page.locator("[data-sacco-settings-tab='records']").click();
+  await expectText(page, "Financial product setup", "SACCO setup records tab");
+  await page.locator("[data-sacco-settings-tab='overview']").click();
+  await expectText(page, "SACCO operating settings", "SACCO settings overview tab");
+  console.log("PASS SACCO settings tabs");
 }
 
 async function assertMemberRegistrationAndKyc(page) {

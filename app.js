@@ -99,6 +99,7 @@ const state = {
   branchFormError: "",
   productFormMessage: "",
   productFormError: "",
+  saccoSettingsTab: "overview",
   accountFormMessage: "",
   accountFormError: "",
   memberLoanMessage: "",
@@ -2079,6 +2080,7 @@ function settingsView() {
   const activeProducts = products.filter((product) => normal(product.status) === "active");
   const productTypes = ["savings", "shares", "welfare"];
   const missingProducts = productTypes.filter((type) => !products.some((product) => normal(product.productType) === type));
+  const tab = state.saccoSettingsTab || "overview";
   return `
     <div class="dashboard-grid">
       ${summary("Active branches", activeBranches.length, "Service points ready for use", "Manage")}
@@ -2086,14 +2088,31 @@ function settingsView() {
       ${summary("Product coverage", missingProducts.length ? `${productTypes.length - missingProducts.length}/${productTypes.length}` : "Complete", missingProducts.length ? `Missing ${missingProducts.map(labelize).join(", ")}` : "Core contribution types ready", "Review")}
       ${summary("Roles", dataRows("roles").length, "Access profiles", "Review")}
     </div>
-    ${saccoSettingsControlPanel(branches, products, accounts, missingProducts)}
-    ${settingsReadinessPanel(branches, products, accounts)}
-    <div class="two-column">
-      ${branchSetupPanel()}
-      ${financialProductSetupPanel()}
+    ${saccoSettingsTabs(tab)}
+    ${tab === "overview" ? `
+      ${saccoSettingsControlPanel(branches, products, accounts, missingProducts)}
+      ${settingsReadinessPanel(branches, products, accounts)}
+    ` : ""}
+    ${tab === "branches" ? branchSetupPanel() : ""}
+    ${tab === "products" ? financialProductSetupPanel() : ""}
+    ${tab === "records" ? `
+      ${recordTable("Branch setup", branches.map((branch) => ({ ...branch, manager: userName(branch.managerUserId) })), ["code", "name", "manager", "address", "status", "createdAt"])}
+      ${recordTable("Financial product setup", products, ["productType", "code", "name", "contributionAmount", "minimumBalance", "interestRate", "status"])}
+    ` : ""}
+  `;
+}
+
+function saccoSettingsTabs(activeTab) {
+  const tabs = [
+    ["overview", "Settings Overview"],
+    ["branches", "Branch Setup"],
+    ["products", "Product Setup"],
+    ["records", "Setup Records"]
+  ];
+  return `
+    <div class="tabs management-tabs">
+      ${tabs.map(([id, label]) => `<button class="${activeTab === id ? "active" : ""}" type="button" data-sacco-settings-tab="${id}">${label}</button>`).join("")}
     </div>
-    ${recordTable("Branch setup", branches.map((branch) => ({ ...branch, manager: userName(branch.managerUserId) })), ["code", "name", "manager", "address", "status", "createdAt"])}
-    ${recordTable("Financial product setup", products, ["productType", "code", "name", "contributionAmount", "minimumBalance", "interestRate", "status"])}
   `;
 }
 
@@ -5330,6 +5349,12 @@ function bindEvents() {
       renderShell();
     });
   });
+  document.querySelectorAll("[data-sacco-settings-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.saccoSettingsTab = button.dataset.saccoSettingsTab;
+      renderShell();
+    });
+  });
   document.querySelectorAll("[data-row-action='user-detail']").forEach((button) => {
     button.addEventListener("click", () => openUserDetail(button.dataset.rowId));
   });
@@ -5642,6 +5667,7 @@ async function logout() {
     branchFormError: "",
     productFormMessage: "",
     productFormError: "",
+    saccoSettingsTab: "overview",
     accountFormMessage: "",
     accountFormError: "",
     memberLoanMessage: "",
