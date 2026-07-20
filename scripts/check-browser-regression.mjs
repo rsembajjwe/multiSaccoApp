@@ -47,6 +47,7 @@ try {
   await assertPlatformDashboardCardNavigation(page);
   await assertScreen(page, "sacco-applications", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
   await assertSaccoRegistrationTabs(page);
+  await assertQuickSearchResult(page, "Green Valley", "SACCO application review", "platform SACCO quick search");
   await assertSaccoApplicationReview(page);
   await assertScreen(page, "subscriptions", ["Subscription list", "Package Setup", "Manage package"]);
   await assertSubscriptionControl(page);
@@ -74,6 +75,7 @@ try {
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Recent transactions", "Loan work queue"]);
   await assertScreen(page, "members", ["Member Overview", "Register Member", "Member List", "KYC Detail", "Contacts & Documents", "Statement", "Member management focus"]);
   await assertMemberRegistrationAndKyc(page);
+  await assertQuickSearchResult(page, "GVS-0001", "Member detail and KYC approval", "SACCO member quick search");
   await assertModuleTabs(page, "transactions", [
     ["overview", ["Transaction control focus"]],
     ["capture", ["New transaction screen"]],
@@ -305,6 +307,16 @@ async function assertNotificationBadgeRouting(page, destinationMarker, label) {
   }
   await badge.click();
   await expectText(page, destinationMarker, `${label} destination`);
+  console.log(`PASS ${label}`);
+}
+
+async function assertQuickSearchResult(page, query, destinationMarker, label) {
+  await page.locator("#globalSearch").fill(query);
+  await page.locator(".quick-search-panel").waitFor({ state: "visible" });
+  await page.locator("[data-quick-result]").first().click();
+  await expectText(page, destinationMarker, `${label} destination`);
+  const remainingSearch = await page.locator("#globalSearch").inputValue();
+  if (remainingSearch) throw new Error(`${label} should clear global search after opening a result, got ${remainingSearch}`);
   console.log(`PASS ${label}`);
 }
 

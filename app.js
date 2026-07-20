@@ -610,6 +610,7 @@ function renderShell() {
   const modules = visibleModules();
   const portal = state.auth === "member" ? "Member Self-Service Portal" : isPlatform() ? "Platform Administration Portal" : "SACCO Administration Portal";
   const notificationButton = topbarNotificationButton(modules);
+  const quickResults = quickSearchResults();
   setHtml(`
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
@@ -636,7 +637,10 @@ function renderShell() {
           <button class="icon-button mobile-only menu-button" type="button" data-action="toggle-sidebar" aria-label="Open menu"><span class="menu-bars" aria-hidden="true"></span></button>
           <div class="breadcrumbs">Home / ${portal} / <strong>${module[1]}</strong></div>
           <div class="topbar-actions">
-            <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs"></label>
+            <div class="quick-search">
+              <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs" autocomplete="off"></label>
+              ${quickSearchPanel(quickResults)}
+            </div>
             <span class="session-chip ${sessionStatusClass()}">${sessionTimeLabel()}</span>
             ${notificationButton}
             <button class="icon-button" type="button" title="Help">?</button>
@@ -662,6 +666,84 @@ function renderShell() {
       </main>
     </div>
   `);
+}
+
+function quickSearchPanel(results) {
+  if (!state.search.trim()) return "";
+  const grouped = results.reduce((groups, result) => {
+    groups[result.group] = [...(groups[result.group] || []), result];
+    return groups;
+  }, {});
+  return `
+    <div class="quick-search-panel" role="listbox" aria-label="Quick search results">
+      ${results.length ? Object.entries(grouped).map(([group, rows]) => `
+        <div class="quick-search-group">
+          <strong>${escapeHtml(group)}</strong>
+          ${rows.map((result) => `
+            <button type="button" data-quick-result="${escapeHtml(result.id)}">
+              <span>${escapeHtml(result.title)}</span>
+              <small>${escapeHtml(result.meta)}</small>
+            </button>
+          `).join("")}
+        </div>
+      `).join("") : `<div class="quick-search-empty">No quick results. Tables below still filter by this search.</div>`}
+    </div>
+  `;
+}
+
+function quickSearchResults() {
+  const query = state.search.trim();
+  if (query.length < 2) return [];
+  return quickSearchIndex()
+    .filter((result) => normal(`${result.group} ${result.title} ${result.meta}`).includes(normal(query)))
+    .slice(0, 8);
+}
+
+function quickSearchIndex() {
+  if (state.auth === "member") {
+    return [
+      ...state.memberData.loans.map((loan) => quickResult("Loans", loan.id, "loans", loan.applicationNo || loan.product || "Loan", `${loan.product || ""} ${money.format(loan.requestedAmount || loan.outstandingBalance || 0)} ${loan.status || ""}`)),
+      ...state.memberData.notifications.map((notification) => quickResult("Notifications", notification.id, "notifications", notification.title || "Notification", `${notification.status || ""} ${formatDateTime(notification.createdAt)}`)),
+      ...state.memberData.pendingGuarantors.map((request) => quickResult("Guarantor Requests", request.id, "guarantor-requests", request.loan?.applicationNo || request.borrower || "Guarantor request", `${request.status || ""} ${money.format(request.guaranteedAmount || 0)}`)),
+      ...state.memberData.complaints.map((complaint) => quickResult("Complaints", complaint.id, "complaints", complaint.subject || complaint.category || "Complaint", `${complaint.status || ""} ${complaint.priority || ""}`))
+    ];
+  }
+  const visible = new Set(visibleModules().map((module) => module[0]));
+  const results = [];
+  if (visible.has("sacco-applications")) {
+    results.push(...tenantRows().map((tenant) => quickResult("SACCOs", tenant.id, "sacco-applications", tenant.name, `${tenant.saccoCode || tenant.abbreviation || ""} ${tenant.status || ""}`, { selectedTenantId: tenant.id, saccoRegistrationTab: "applications" })));
+  }
+  if (visible.has("subscriptions")) {
+    results.push(...dataRows("subscriptions").map((subscription) => quickResult("Subscriptions", subscription.id, "subscriptions", subscription.tenantName || tenantName(subscription.tenantId), `${subscription.packageName || ""} ${subscription.status || ""}`, { selectedSubscriptionId: subscription.id })));
+  }
+  if (visible.has("members")) {
+    results.push(...dataRows("members").map((member) => quickResult("Members", member.id, "members", member.fullName, `${member.membershipNo || ""} ${member.phone || ""}`, { selectedMemberId: member.id, memberTab: "kyc" })));
+  }
+  if (visible.has("transactions")) {
+    results.push(...dataRows("transactions").map((transaction) => quickResult("Transactions", transaction.id, "transactions", transaction.reference || transaction.id, `${memberName(transaction.memberId)} ${money.format(transaction.amount || 0)} ${transaction.status || ""}`)));
+  }
+  if (visible.has("loans")) {
+    results.push(...dataRows("loans").map((loan) => quickResult("Loans", loan.id, "loans", loan.applicationNo || loan.id, `${loan.memberName || memberName(loan.memberId)} ${money.format(loan.requestedAmount || loan.outstandingBalance || 0)} ${loan.status || ""}`, { selectedLoanId: loan.id, moduleTabView: "loans", moduleTab: "detail" })));
+  }
+  if (visible.has("users")) {
+    results.push(...dataRows("users").map((user) => quickResult(isPlatform() ? "Platform Users" : "SACCO Users", user.id, "users", user.fullName || user.email, `${user.email || ""} ${user.status || ""}`, { selectedUserId: user.id, userAdminTab: "detail" })));
+  }
+  if (visible.has("complaints")) {
+    results.push(...dataRows("complaints").map((complaint) => quickResult("Complaints", complaint.id, "complaints", complaint.subject || complaint.category || complaint.id, `${complaint.status || ""} ${complaint.priority || ""}`, { selectedComplaintId: complaint.id })));
+  }
+  return results;
+}
+
+function quickResult(group, recordId, view, title, meta, options = {}) {
+  return {
+    id: `${view}:${recordId}`,
+    recordId,
+    group,
+    view,
+    title: title || recordId || "Record",
+    meta: meta || view,
+    ...options
+  };
 }
 
 function topbarNotificationButton(modules) {
@@ -6104,6 +6186,51 @@ async function acknowledgeMemberNotification(notificationId) {
   }
 }
 
+async function openQuickSearchResult(resultId) {
+  const result = quickSearchResults().find((item) => item.id === resultId);
+  if (!result) return;
+  state.currentView = result.view;
+  if (result.saccoRegistrationTab) state.saccoRegistrationTab = result.saccoRegistrationTab;
+  if (result.memberTab) state.memberTab = result.memberTab;
+  if (result.userAdminTab) state.userAdminTab = result.userAdminTab;
+  if (result.moduleTabView && result.moduleTab) state.moduleTabs[result.moduleTabView] = result.moduleTab;
+
+  if (result.selectedTenantId) {
+    state.search = "";
+    await openTenantDetail(result.selectedTenantId);
+    return;
+  }
+  if (result.selectedMemberId) {
+    state.search = "";
+    await openMemberDetail(result.selectedMemberId);
+    return;
+  }
+  if (result.selectedLoanId) {
+    state.search = "";
+    await openLoanDetail(result.selectedLoanId);
+    return;
+  }
+  if (result.selectedUserId) {
+    state.search = "";
+    await openUserDetail(result.selectedUserId);
+    return;
+  }
+  if (result.selectedSubscriptionId) {
+    state.selectedSubscriptionId = result.selectedSubscriptionId;
+    state.search = "";
+    renderShell();
+    return;
+  }
+  if (result.selectedComplaintId) {
+    state.selectedComplaintId = result.selectedComplaintId;
+    state.search = "";
+    renderShell();
+    return;
+  }
+  state.search = result.title;
+  renderShell();
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -6504,6 +6631,9 @@ function bindEvents() {
     state.search = event.target.value;
     renderShell();
   }));
+  document.querySelectorAll("[data-quick-result]").forEach((button) => {
+    button.addEventListener("click", () => openQuickSearchResult(button.dataset.quickResult));
+  });
 }
 
 async function logout() {
