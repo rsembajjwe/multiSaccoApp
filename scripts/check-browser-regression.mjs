@@ -201,6 +201,7 @@ try {
     await assertMemberPaymentPosting(page);
     await assertMemberStatementEvidence(page);
     await assertMemberReceiptEvidence(page);
+    await assertMemberNotificationCenter(page);
     await assertScreen(page, "complaints", ["Member complaint center", "Member complaint submission", "My complaints"]);
     await assertMemberComplaintSubmission(page);
     await assertScreen(page, "profile", ["Member profile and KYC", "Profile contacts", "Balance summary"]);
@@ -737,6 +738,17 @@ async function assertMemberReceiptEvidence(page) {
   console.log("PASS member receipt evidence");
 }
 
+async function assertMemberNotificationCenter(page) {
+  await navigateTo(page, "notifications");
+  await expectText(page, "Member message inbox", "member notification inbox");
+  await expectText(page, "SACCO admin messages", "member notification admin messages");
+  await page.locator("[data-module-tab-view='notifications'][data-module-tab='unread']").click();
+  await expectText(page, "Unread message queue", "member notification unread queue");
+  await page.locator("[data-module-tab-view='notifications'][data-module-tab='evidence']").click();
+  await expectText(page, "Message delivery evidence", "member notification delivery evidence");
+  console.log("PASS member notification center");
+}
+
 async function assertMemberGuarantorDecision(page) {
   await navigateTo(page, "guarantor-requests");
   const acceptButton = page.locator("[data-member-guarantor-action='accepted']").first();
@@ -753,23 +765,33 @@ async function assertMemberComplaintSubmission(page) {
   const stamp = Date.now();
   const subject = `Browser member complaint ${stamp}`;
   await navigateTo(page, "complaints");
+  await expectText(page, "Member complaint center", "member complaint center panel");
+  await page.locator("[data-module-tab-view='complaints'][data-module-tab='drafts']").click();
+  await expectText(page, "Complaint draft workspace", "member complaint draft workspace");
   await expectText(page, "Complaint offline drafts", "member complaint offline drafts panel");
+  await page.locator("[data-module-tab-view='complaints'][data-module-tab='submit']").click();
   await page.locator("#memberComplaintCategory").selectOption("service");
   await page.locator("#memberComplaintPriority").selectOption("medium");
   await page.locator("#memberComplaintSubject").fill(subject);
   await page.locator("#memberComplaintDescription").fill("Browser regression complaint submitted from member portal.");
   await page.locator("[data-member-draft-save='complaint']").click();
   await expectText(page, "Complaint draft saved on this device", "member complaint draft saved");
+  await page.locator("[data-module-tab-view='complaints'][data-module-tab='drafts']").click();
   await expectText(page, subject, "member complaint draft visible");
   await page.locator("[data-member-draft-discard]").first().click();
   await expectText(page, "No offline drafts", "member complaint draft discarded");
+  await page.locator("[data-module-tab-view='complaints'][data-module-tab='submit']").click();
   await page.locator("#memberComplaintCategory").selectOption("service");
   await page.locator("#memberComplaintPriority").selectOption("medium");
   await page.locator("#memberComplaintSubject").fill(subject);
   await page.locator("#memberComplaintDescription").fill("Browser regression complaint submitted from member portal.");
   await page.locator("#memberComplaintForm button[type='submit']").click();
   await expectText(page, "Submitted complaint", "member complaint submitted");
+  await page.locator("[data-module-tab-view='complaints'][data-module-tab='tracking']").click();
+  await expectText(page, "Complaint tracking workspace", "member complaint tracking workspace");
   await expectText(page, subject, "member complaint visible after submit");
+  await page.locator("[data-module-tab-view='complaints'][data-module-tab='evidence']").click();
+  await expectText(page, "Complaint evidence controls", "member complaint evidence controls");
   console.log("PASS member complaint action");
 }
 

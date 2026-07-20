@@ -2960,19 +2960,7 @@ function renderMemberView(view) {
   if (view === "loans") return memberLoansView();
   if (view === "guarantor-requests") return memberGuarantorRequestsView();
   if (view === "payments") return memberPaymentsView();
-  if (view === "notifications") {
-    const rows = state.memberData.notifications.map((notification) => ({
-      ...notification,
-      action: !notification.readAt && !normal(notification.status).includes("read") ? "member-notification-acknowledge" : "none",
-      actionLabel: "Acknowledge",
-      actionId: notification.id
-    }));
-    return `
-      ${state.memberNotificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberNotificationMessage)}</strong></div>` : ""}
-      ${state.memberNotificationError ? `<div class="notice warning"><strong>Notification update failed.</strong><span>${escapeHtml(state.memberNotificationError)}</span></div>` : ""}
-      ${recordTable("Notifications", rows, ["title", "message", "channel", "status", "createdAt", "readAt"])}
-    `;
-  }
+  if (view === "notifications") return memberNotificationsView();
   if (view === "complaints") return memberComplaintsView();
   if (view === "statements") return memberStatementsView(dash, balances);
   if (view === "receipts") return memberReceiptsView(dash);
@@ -3395,10 +3383,60 @@ function memberReceiptExportPanel(receipts) {
   `;
 }
 
+function memberNotificationsView() {
+  const rows = memberAdminMessageRows().map((notification) => ({
+    ...notification,
+    action: !notification.readAt && !normal(notification.status).includes("read") ? "member-notification-acknowledge" : "none",
+    actionLabel: "Acknowledge",
+    actionId: notification.id
+  }));
+  const unread = rows.filter((row) => !normal(`${row.status} ${row.readAt}`).includes("read"));
+  const tabs = [["inbox", "Inbox"], ["unread", "Unread"], ["evidence", "Delivery evidence"]];
+  const tab = activeModuleTab("notifications", tabs);
+  return `
+    <div class="dashboard-grid">
+      ${summary("SACCO admin messages", rows.length, "Official SACCO communication", "Read")}
+      ${summary("Unread", unread.length, "Needs acknowledgement", "Acknowledge")}
+      ${summary("Channels", uniqueCount(rows, "channel"), "SMS, email and in-app", "Review")}
+      ${summary("Last message", rows[0]?.createdAt ? formatDateTime(rows[0].createdAt) : "None", "Latest communication", "Open")}
+    </div>
+    ${moduleTabs("notifications", tabs, tab)}
+    ${state.memberNotificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberNotificationMessage)}</strong></div>` : ""}
+    ${state.memberNotificationError ? `<div class="notice warning"><strong>Notification update failed.</strong><span>${escapeHtml(state.memberNotificationError)}</span></div>` : ""}
+    ${tab === "inbox" ? `${memberTabReadinessPanel("Member message inbox", "Read SACCO admin notices, reminders and approval updates in one controlled inbox.", [["Messages", rows.length], ["Unread", unread.length], ["Source", "SACCO admin"]])}${recordTable("Notifications", rows, ["title", "message", "channel", "status", "createdAt", "readAt"])}` : ""}
+    ${tab === "unread" ? `${memberTabReadinessPanel("Unread message queue", "Acknowledge unread SACCO admin messages so the SACCO can confirm delivery.", [["Unread", unread.length], ["Action", "Acknowledge"], ["Audit", "Read timestamp"]])}${recordTable("Unread SACCO admin messages", unread, ["title", "message", "channel", "status", "createdAt", "readAt"])}` : ""}
+    ${tab === "evidence" ? memberNotificationEvidencePanel(rows) : ""}
+  `;
+}
+
+function memberNotificationEvidencePanel(rows) {
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Message delivery evidence</h2>
+          <p>Member messages keep channel, status and acknowledgement dates for SACCO follow-up.</p>
+        </div>
+        <span class="status active">Traceable</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Messages", rows.length)}
+        ${mini("Channels", uniqueCount(rows, "channel"))}
+        ${mini("Acknowledgement", "Read timestamp")}
+        ${mini("Full dates", "Enabled")}
+        ${mini("Support path", "Complaints")}
+        ${mini("Last sync", state.lastSync ? formatDateTime(state.lastSync) : "Pending")}
+      </div>
+    </section>
+  `;
+}
+
 function memberComplaintsView() {
   const complaints = state.memberData.complaints || [];
   const open = complaints.filter((row) => !["closed", "resolved"].includes(normal(row.status)));
   const complaintDrafts = memberDraftRows("complaint");
+  const tabs = [["submit", "Submit"], ["drafts", "Drafts"], ["tracking", "Tracking"], ["evidence", "Evidence"]];
+  const tab = activeModuleTab("complaints", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("My complaints", complaints.length, "Submitted support cases", "Track")}
@@ -3423,9 +3461,33 @@ function memberComplaintsView() {
         ${mini("Tracking", "Status history")}
       </div>
     </section>
-    ${memberComplaintForm()}
-    ${memberDraftPanel("Complaint offline drafts", complaintDrafts)}
-    ${recordTable("My complaints", complaints, ["id", "category", "subject", "priority", "status", "createdAt"])}
+    ${moduleTabs("complaints", tabs, tab)}
+    ${tab === "submit" ? memberComplaintForm() : ""}
+    ${tab === "drafts" ? `${memberTabReadinessPanel("Complaint draft workspace", "Save support cases locally and sync them when you are ready.", [["Drafts", complaintDrafts.length], ["Storage", "Local device"], ["Sync", complaintDrafts.length ? "Action available" : "Clear"]])}${memberDraftPanel("Complaint offline drafts", complaintDrafts)}` : ""}
+    ${tab === "tracking" ? `${memberTabReadinessPanel("Complaint tracking workspace", "Track submitted cases, priority and SACCO support status with full dates.", [["Open cases", open.length], ["Resolved", complaints.length - open.length], ["Support desk", "SACCO admin"]])}${recordTable("My complaints", complaints, ["id", "category", "subject", "priority", "status", "createdAt"])}` : ""}
+    ${tab === "evidence" ? memberComplaintEvidencePanel(complaints, open) : ""}
+  `;
+}
+
+function memberComplaintEvidencePanel(complaints, open) {
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Complaint evidence controls</h2>
+          <p>Use references, dates, priority and status to follow up with SACCO administration.</p>
+        </div>
+        <span class="status ${open.length ? "pending" : "active"}">${open.length ? "Follow-up active" : "Clear"}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Submitted cases", complaints.length)}
+        ${mini("Open cases", open.length)}
+        ${mini("Full dates", "Enabled")}
+        ${mini("Attachments", "Supported")}
+        ${mini("Support owner", "SACCO admin")}
+        ${mini("Last sync", state.lastSync ? formatDateTime(state.lastSync) : "Pending")}
+      </div>
+    </section>
   `;
 }
 
