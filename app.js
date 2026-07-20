@@ -6416,7 +6416,7 @@ async function optionalApi(path, fallback) {
   try {
     return await api(path);
   } catch (error) {
-    if (![401, 403].includes(error.status)) state.lastError = error.message;
+    if (![401, 403, 404].includes(error.status)) state.lastError = error.message;
     return fallback;
   }
 }

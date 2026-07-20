@@ -49,6 +49,7 @@ try {
   await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
   await expectNoVisibleText(page, "Read-only SACCO member support", "Platform Members navigation hidden");
   await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
+  await expectNoVisibleText(page, "Some records could not be loaded", "optional platform fallback warning hidden");
   await assertPlatformDashboardCardNavigation(page);
   await assertScreen(page, "sacco-applications", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
   await assertSaccoRegistrationTabs(page);
@@ -750,15 +751,26 @@ async function canMemberLogin(code, identifier, password) {
 }
 
 async function navigateTo(page, viewId) {
-  const target = page.locator(`button.nav-link[data-view="${viewId}"]`).first();
-  await target.waitFor({ state: "attached" });
-  await target.scrollIntoViewIfNeeded();
-  await target.click({ force: true });
-  await target.evaluate((button) => {
-    if (!button.classList.contains("active")) {
-      button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const clicked = await page.evaluate((targetView) => {
+      const button = document.querySelector(`button.nav-link[data-view="${targetView}"]`);
+      if (!button) return false;
+      button.scrollIntoView({ block: "center", inline: "nearest" });
+      button.click();
+      return true;
+    }, viewId);
+    if (!clicked) {
+      await delay(150);
+      continue;
     }
-  });
+    const active = await page.evaluate((targetView) => Boolean(document.querySelector(`.nav-link.active[data-view="${targetView}"]`)), viewId);
+    if (active) {
+      await delay(150);
+      return;
+    }
+    await delay(150);
+  }
   try {
     await page.waitForFunction((targetView) => {
       const active = document.querySelector(`.nav-link.active[data-view="${targetView}"]`);
