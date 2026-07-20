@@ -131,7 +131,7 @@ class AuthController {
                             challenge.getExpiresAt())));
         }
 
-        return ResponseEntity.ok(ApiResponse.of(loginResponseFor(user)));
+        return ResponseEntity.ok(ApiResponse.of(loginResponseFor(user, servletRequest)));
     }
 
     @PostMapping("/mfa/enable")
@@ -183,10 +183,10 @@ class AuthController {
                 "mfa",
                 challenge.getId(),
                 request.getRemoteAddr());
-        return ResponseEntity.ok(ApiResponse.of(loginResponseFor(user)));
+        return ResponseEntity.ok(ApiResponse.of(loginResponseFor(user, request)));
     }
 
-    private LoginResponse loginResponseFor(User user) {
+    private LoginResponse loginResponseFor(User user, HttpServletRequest request) {
         String token = tokenGenerator.createToken();
         Instant expiresAt = Instant.now().plus(Duration.ofHours(8));
         authSessionRepository.save(new AuthSession(
@@ -194,7 +194,9 @@ class AuthController {
                 user.getId(),
                 user.getTenantId(),
                 tokenGenerator.hashToken(token),
-                expiresAt));
+                expiresAt,
+                request.getRemoteAddr(),
+                truncate(request.getHeader("User-Agent"), 500)));
 
         UserAccessResponse access = accessFor(user);
         return new LoginResponse(
@@ -205,6 +207,12 @@ class AuthController {
                 access.roleNames(),
                 access.permissionIds(),
                 expiresAt);
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.isBlank()) return "";
+        String trimmed = value.trim();
+        return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
     }
 
     private boolean isPrivileged(User user) {

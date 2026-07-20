@@ -22,6 +22,12 @@ class AuthSession {
     @Column(name = "token_hash")
     private String tokenHash;
 
+    @Column(name = "ip_address")
+    private String ipAddress;
+
+    @Column(name = "user_agent")
+    private String userAgent;
+
     @Column(name = "expires_at")
     private Instant expiresAt;
 
@@ -35,11 +41,17 @@ class AuthSession {
     }
 
     AuthSession(String id, String userId, String tenantId, String tokenHash, Instant expiresAt) {
+        this(id, userId, tenantId, tokenHash, expiresAt, null, null);
+    }
+
+    AuthSession(String id, String userId, String tenantId, String tokenHash, Instant expiresAt, String ipAddress, String userAgent) {
         this.id = id;
         this.userId = userId;
         this.tenantId = tenantId;
         this.tokenHash = tokenHash;
         this.expiresAt = expiresAt;
+        this.ipAddress = ipAddress;
+        this.userAgent = userAgent;
         this.createdAt = Instant.now();
     }
 
@@ -57,6 +69,14 @@ class AuthSession {
 
     Instant getCreatedAt() {
         return createdAt;
+    }
+
+    String getIpAddress() {
+        return ipAddress;
+    }
+
+    String getUserAgent() {
+        return userAgent;
     }
 
     void extendTo(Instant expiresAt) {

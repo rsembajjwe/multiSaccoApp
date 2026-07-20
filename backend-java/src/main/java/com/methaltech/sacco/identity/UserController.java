@@ -381,6 +381,77 @@ class UserController {
         return ResponseEntity.ok(ApiResponse.of(new SessionRevocationResponse(targetUser.getId(), sessions.size())));
     }
 
+    @GetMapping("/{userId}/sessions")
+    ResponseEntity<?> listUserSessions(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String userId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
+
+        User targetUser = userRepository.findById(userId).orElse(null);
+        if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
+            return userNotFound();
+        }
+        if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
+        if (!canManagePlatformUser(currentSession, targetUser)) {
+            return platformSuperAdminRequired("view platform user sessions");
+        }
+
+        Instant now = Instant.now();
+        List<SessionDetailResponse> sessions = authSessionRepository.findByUserIdAndRevokedAtIsNull(targetUser.getId()).stream()
+                .filter(session -> session.getExpiresAt().isAfter(now))
+                .map(SessionDetailResponse::from)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.of(sessions));
+    }
+
+    @PostMapping("/{userId}/sessions/{sessionId}/revoke")
+    ResponseEntity<?> revokeUserSession(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String userId,
+            @PathVariable String sessionId,
+            HttpServletRequest httpRequest) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
+
+        User targetUser = userRepository.findById(userId).orElse(null);
+        if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
+            return userNotFound();
+        }
+        if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
+        if (!canManagePlatformUser(currentSession, targetUser)) {
+            return platformSuperAdminRequired("revoke platform user sessions");
+        }
+        if (targetUser.getId().equals(currentSession.user().getId())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "CANNOT_FORCE_LOGOUT_SELF", "Use Logout to end your own current session."));
+        }
+
+        AuthSession session = authSessionRepository.findById(sessionId).orElse(null);
+        if (session == null || !targetUser.getId().equals(session.getUserId()) || !session.getExpiresAt().isAfter(Instant.now())) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "SESSION_NOT_FOUND", "Active session was not found."));
+        }
+        session.revoke();
+        authSessionRepository.save(session);
+
+        auditService.record(
+                targetUser.getTenantId(),
+                currentSession.user(),
+                "Revoked staff session " + session.getId() + " for " + targetUser.getEmail(),
+                "auth_session",
+                session.getId(),
+                httpRequest.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(new SessionRevocationResponse(targetUser.getId(), 1)));
+    }
+
     private UserRoleAssignmentResponse assignmentResponse(User user) {
         List<String> roleIds = userRoleRepository.findByIdUserId(user.getId()).stream()
                 .map(userRole -> userRole.getId().getRoleId())
@@ -466,5 +537,16 @@ class UserController {
     }
 
     record SessionRevocationResponse(String userId, int revokedSessions) {
+    }
+
+    record SessionDetailResponse(String id, String ipAddress, String userAgent, Instant createdAt, Instant expiresAt) {
+        static SessionDetailResponse from(AuthSession session) {
+            return new SessionDetailResponse(
+                    session.getId(),
+                    session.getIpAddress(),
+                    session.getUserAgent(),
+                    session.getCreatedAt(),
+                    session.getExpiresAt());
+        }
     }
 }

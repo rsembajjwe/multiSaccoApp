@@ -56,6 +56,7 @@ const state = {
   userFormError: "",
   selectedUserId: "",
   selectedUserRoles: [],
+  selectedUserSessions: [],
   selectedUserLoading: false,
   selectedUserMessage: "",
   selectedUserError: "",
@@ -3069,6 +3070,7 @@ function recordTable(title, rows, columns) {
 }
 
 function rowAction(row) {
+  if (row.action === "none") return `<span class="status pending">No action</span>`;
   if (row.action === "member-draft" && row.actionId) {
     return `
       <div class="table-actions">
@@ -3168,6 +3170,16 @@ function userDetailPanel(users, canManageRoles) {
   const platformUser = selected.tenantId === "tenant_platform";
   const canManageUser = canManageRoles && (!platformUser || roleKind() === "super");
   const nextStatus = normal(selected.status) === "active" ? "suspended" : "active";
+  const sessionRows = (state.selectedUserSessions || []).map((session) => ({
+    id: session.id,
+    ipAddress: session.ipAddress || "Not captured",
+    device: deviceLabel(session.userAgent),
+    createdAt: formatDateTime(session.createdAt),
+    expiresAt: formatDateTime(session.expiresAt),
+    action: canManageUser && selected.id !== state.user?.id ? "user-session-revoke" : "none",
+    actionLabel: "Revoke",
+    actionId: `${selected.id}|${session.id}`
+  }));
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
@@ -3233,6 +3245,7 @@ function userDetailPanel(users, canManageRoles) {
           ` : `<span class="status pending">Restricted</span>`}
         </div>
       </div>
+      ${canManageUser ? recordTable("Active session detail", sessionRows, ["ipAddress", "device", "createdAt", "expiresAt"]) : ""}
     </section>
   `;
 }
@@ -3309,6 +3322,23 @@ function staffAccessRow(user, platformOnly) {
     moduleScope: roleModuleScope(role, platformOnly),
     status: user.status || "active"
   };
+}
+
+function deviceLabel(userAgent) {
+  const value = String(userAgent || "").trim();
+  if (!value) return "Not captured";
+  const browser = value.includes("Edg/") ? "Edge"
+    : value.includes("Chrome/") ? "Chrome"
+    : value.includes("Firefox/") ? "Firefox"
+    : value.includes("Safari/") ? "Safari"
+    : "Browser";
+  const os = value.includes("Windows") ? "Windows"
+    : value.includes("Android") ? "Android"
+    : value.includes("iPhone") || value.includes("iPad") ? "iOS"
+    : value.includes("Mac OS") ? "macOS"
+    : value.includes("Linux") ? "Linux"
+    : "Device";
+  return `${browser} on ${os}`;
 }
 
 function roleNameFromId(roleId, platformOnly) {
@@ -4431,14 +4461,19 @@ async function createUserFromForm(event) {
 async function openUserDetail(userId) {
   state.selectedUserId = userId;
   state.selectedUserRoles = [];
+  state.selectedUserSessions = [];
   state.selectedUserMessage = "";
   state.selectedUserError = "";
   state.selectedUserLoading = true;
   state.userAdminTab = "detail";
   renderShell();
   try {
-    const assignment = await api(`/users/${encodeURIComponent(userId)}/roles`);
+    const [assignment, sessions] = await Promise.all([
+      api(`/users/${encodeURIComponent(userId)}/roles`),
+      optionalApi(`/users/${encodeURIComponent(userId)}/sessions`, [])
+    ]);
     state.selectedUserRoles = assignment.roleIds || [];
+    state.selectedUserSessions = sessions || [];
   } catch (error) {
     state.selectedUserError = error.message;
   } finally {
@@ -4555,6 +4590,28 @@ async function revokeSelectedUserSessions(userId) {
     await refreshAll();
     state.selectedUserId = userId;
     state.selectedUserMessage = message;
+    renderShell();
+  } catch (error) {
+    state.selectedUserError = friendlyUserError(error, isPlatform());
+    renderShell();
+  }
+}
+
+async function revokeSelectedUserSession(actionId) {
+  const [userId, sessionId] = String(actionId || "").split("|");
+  if (!userId || !sessionId) return;
+  const selected = dataRows("users").find((user) => user.id === userId);
+  const label = selected?.fullName || selected?.email || "this user";
+  if (!window.confirm(`Revoke this active session for ${label}?`)) return;
+  state.selectedUserMessage = "";
+  state.selectedUserError = "";
+  try {
+    await api(`/users/${encodeURIComponent(userId)}/sessions/${encodeURIComponent(sessionId)}/revoke`, { method: "POST" });
+    state.selectedUserMessage = `Revoked one active session for ${label}.`;
+    state.selectedUserSessions = await optionalApi(`/users/${encodeURIComponent(userId)}/sessions`, []);
+    await refreshAll();
+    state.selectedUserId = userId;
+    state.selectedUserMessage = `Revoked one active session for ${label}.`;
     renderShell();
   } catch (error) {
     state.selectedUserError = friendlyUserError(error, isPlatform());
@@ -5822,6 +5879,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='user-detail']").forEach((button) => {
     button.addEventListener("click", () => openUserDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='user-session-revoke']").forEach((button) => {
+    button.addEventListener("click", () => revokeSelectedUserSession(button.dataset.rowId));
+  });
   document.querySelectorAll("[data-row-action='tenant-detail']").forEach((button) => {
     button.addEventListener("click", () => openTenantDetail(button.dataset.rowId));
   });
@@ -5855,6 +5915,7 @@ function bindEvents() {
   document.querySelector("[data-action='close-user-detail']")?.addEventListener("click", () => {
     state.selectedUserId = "";
     state.selectedUserRoles = [];
+    state.selectedUserSessions = [];
     state.selectedUserMessage = "";
     state.selectedUserError = "";
     renderShell();
@@ -6094,6 +6155,7 @@ async function logout() {
     userFormError: "",
     selectedUserId: "",
     selectedUserRoles: [],
+    selectedUserSessions: [],
     selectedUserMessage: "",
     selectedUserError: "",
     userAdminTab: "add",

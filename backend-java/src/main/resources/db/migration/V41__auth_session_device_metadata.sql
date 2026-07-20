@@ -1,0 +1,2 @@
+ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS ip_address VARCHAR(100);
+ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_agent VARCHAR(500);
