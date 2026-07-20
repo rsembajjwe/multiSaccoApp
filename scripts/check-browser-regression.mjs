@@ -525,7 +525,9 @@ async function assertSaccoMonthlyPerformanceDrilldown(page) {
   if (await statementButton.count()) {
     await statementButton.click();
     await expectText(page, "Statement", "SACCO monthly performance member statement tab");
-    await expectText(page, "Member statement", "SACCO monthly performance member statement detail");
+    await expectText(page, "Member balance statement", "SACCO monthly performance member statement detail");
+    await expectText(page, "Statement control summary", "SACCO monthly performance member statement summary");
+    await expectText(page, "Statement ready", "SACCO monthly performance member statement ready");
     await navigateTo(page, "dashboard");
     await page.locator("[data-row-action='monthly-performance-detail']").first().click();
   }
@@ -681,6 +683,8 @@ async function assertMemberRegistrationAndKyc(page) {
   await expectText(page, "Member KYC documents", "member KYC documents tab");
   await page.locator("[data-member-tab='statement']").click();
   await expectText(page, "Member balance statement", "member balance statement tab");
+  await expectText(page, "Statement control summary", "member statement control summary");
+  await expectText(page, "Posted credits", "member statement posted credits");
   await page.locator("#globalSearch").fill("");
   console.log("PASS member registration and KYC");
 }

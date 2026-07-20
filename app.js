@@ -4347,6 +4347,8 @@ function memberDetailPanel(mode = "kyc") {
   const statementLines = state.selectedMemberStatement?.lines || [];
   const totalBalance = Number(member.savingsBalance || 0) + Number(member.sharesBalance || 0) + Number(member.welfareBalance || 0);
   const lastMovement = statementLines[0]?.postedAt || statementLines[0]?.createdAt || "No statement activity";
+  const statementCreditTotal = statementLines.reduce((total, line) => total + statementCredit(line), 0);
+  const statementDebitTotal = statementLines.reduce((total, line) => total + statementDebit(line), 0);
   const title = mode === "contacts" ? "Member contacts and documents" : mode === "statement" ? "Member balance statement" : "Member detail and KYC approval";
   return `
     <section class="panel detail-panel">
@@ -4399,9 +4401,50 @@ function memberDetailPanel(mode = "kyc") {
         ${recordTable("Member contacts and next of kin", state.selectedMemberNextOfKin, ["fullName", "relationship", "phone", "address", "primaryContact"])}
         ${recordTable("Member beneficiaries", state.selectedMemberBeneficiaries, ["fullName", "relationship", "phone", "allocationPercent"])}
       </div>` : ""}
-      ${mode === "statement" ? recordTable("Member balance statement", statementLines, ["reference", "type", "channel", "amount", "savingsBalance", "sharesBalance", "welfareBalance", "postedAt"]) : ""}
+      ${mode === "statement" ? `
+        ${memberStatementControlPanel(member, statementLines, totalBalance, statementCreditTotal, statementDebitTotal, lastMovement)}
+        ${recordTable("Member balance statement", statementLines, ["reference", "type", "channel", "amount", "savingsBalance", "sharesBalance", "welfareBalance", "postedAt"])}
+      ` : ""}
     </section>
   `;
+}
+
+function memberStatementControlPanel(member, lines, totalBalance, creditTotal, debitTotal, lastMovement) {
+  const mobileRows = lines.filter((line) => isMobileMoneyLine(line)).length;
+  const officeRows = Math.max(0, lines.length - mobileRows);
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Statement control summary</h2>
+          <p>Staff view for balances, posted activity, payment channel coverage and receipt follow-up.</p>
+        </div>
+        <span class="status active">Statement ready</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Member", member.membershipNo || member.fullName)}
+        ${mini("Total balance", money.format(totalBalance))}
+        ${mini("Posted credits", money.format(creditTotal))}
+        ${mini("Posted debits", money.format(debitTotal))}
+        ${mini("Statement lines", lines.length)}
+        ${mini("Mobile money rows", mobileRows)}
+        ${mini("Office/Treasurer rows", officeRows)}
+        ${mini("Last movement", lastMovement)}
+      </div>
+    </section>
+  `;
+}
+
+function statementCredit(line) {
+  const amount = Number(line.amount || 0);
+  const credit = line.credit ?? (amount > 0 ? amount : 0);
+  return Number(credit || 0);
+}
+
+function statementDebit(line) {
+  const amount = Number(line.amount || 0);
+  const debit = line.debit ?? (amount < 0 ? Math.abs(amount) : 0);
+  return Number(debit || 0);
 }
 
 function memberStatusOptions() {
@@ -6965,7 +7008,10 @@ function bindEvents() {
     });
   });
   document.querySelectorAll("[data-action='open-monthly-performance-member']").forEach((button) => {
-    button.addEventListener("click", () => openMemberDetail(button.dataset.memberId, "statement"));
+    button.addEventListener("click", () => {
+      state.currentView = "members";
+      openMemberDetail(button.dataset.memberId, "statement");
+    });
   });
   document.querySelectorAll("[data-row-action='transaction-detail']").forEach((button) => {
     button.addEventListener("click", () => openTransactionDetail(button.dataset.rowId));
