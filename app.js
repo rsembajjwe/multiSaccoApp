@@ -64,6 +64,7 @@ const state = {
   selectedPackageError: "",
   memberFormMessage: "",
   memberFormError: "",
+  memberTab: "overview",
   selectedMemberId: "",
   selectedMember: null,
   selectedMemberStatement: null,
@@ -943,6 +944,7 @@ function membersView() {
     actionLabel: "Open profile",
     actionId: member.id
   }));
+  const tab = state.memberTab || "overview";
   return `
     <div class="dashboard-grid">
       ${summary("Registered members", members.length, "Member register only, not staff users", "Review")}
@@ -951,15 +953,36 @@ function membersView() {
       ${summary("Total balances", money.format(sum(rows, "totalBalance")), "Savings, shares and welfare", "Statements")}
       ${summary("Portal-ready", rows.filter((member) => normal(member.status) === "active" && normal(member.kycStatus) === "verified").length, "Can use member login", "Audit")}
     </div>
-    ${rolePriorityPanel("Member management focus", [
+    ${memberTabs(tab)}
+    ${tab === "overview" ? rolePriorityPanel("Member management focus", [
       ["Member and staff separation", "Members are managed here. SACCO staff logins are managed under Users and Roles.", "Clear"],
       ["KYC workflow", `${pendingKyc.length} member profile(s) need verification, document review or approval action.`, pendingKyc.length ? "Pending" : "Clear"],
       ["Balances and statements", "Open a member profile to review balances, contacts, beneficiaries, documents and statement lines.", "Ready"]
-    ])}
-    ${filterToolbar("Search by member number, name, phone, branch, KYC or status", "Register member", "Download statement")}
-    ${memberRegistrationPanel()}
-    ${memberDetailPanel()}
-    ${recordTable("Member list", rows, ["membershipNo", "fullName", "phone", "email", "totalBalance", "kycReadiness", "kycStatus", "status"])}
+    ]) : ""}
+    ${tab === "register" ? memberRegistrationPanel() : ""}
+    ${tab === "list" ? `
+      ${filterToolbar("Search by member number, name, phone, branch, KYC or status", "Register member", "Download statement")}
+      ${recordTable("Member list", rows, ["membershipNo", "fullName", "phone", "email", "totalBalance", "kycReadiness", "kycStatus", "status"])}
+    ` : ""}
+    ${tab === "kyc" ? memberDetailPanel("kyc") : ""}
+    ${tab === "contacts" ? memberDetailPanel("contacts") : ""}
+    ${tab === "statement" ? memberDetailPanel("statement") : ""}
+  `;
+}
+
+function memberTabs(activeTab) {
+  const tabs = [
+    ["overview", "Member Overview"],
+    ["register", "Register Member"],
+    ["list", "Member List"],
+    ["kyc", "KYC Detail"],
+    ["contacts", "Contacts & Documents"],
+    ["statement", "Statement"]
+  ];
+  return `
+    <div class="tabs management-tabs">
+      ${tabs.map(([id, label]) => `<button class="${activeTab === id ? "active" : ""}" type="button" data-member-tab="${id}">${label}</button>`).join("")}
+    </div>
   `;
 }
 
@@ -3202,18 +3225,24 @@ function memberRegistrationPanel() {
   `;
 }
 
-function memberDetailPanel() {
+function memberDetailPanel(mode = "kyc") {
   const member = state.selectedMember || dataRows("members").find((item) => item.id === state.selectedMemberId);
-  if (!member) return "";
+  if (!member) {
+    return emptyState(
+      mode === "statement" ? "No member selected for statement" : mode === "contacts" ? "No member selected for contacts" : "No member selected for KYC",
+      "Open a member from the Member List tab to review this section."
+    );
+  }
   const canManage = hasPermission("members:approve") || roleKind() === "admin" || roleKind() === "secretary";
   const statementLines = state.selectedMemberStatement?.lines || [];
   const totalBalance = Number(member.savingsBalance || 0) + Number(member.sharesBalance || 0) + Number(member.welfareBalance || 0);
   const lastMovement = statementLines[0]?.postedAt || statementLines[0]?.createdAt || "No statement activity";
+  const title = mode === "contacts" ? "Member contacts and documents" : mode === "statement" ? "Member balance statement" : "Member detail and KYC approval";
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
         <div>
-          <h2>Member detail and KYC approval</h2>
+          <h2>${title}</h2>
           <p>${escapeHtml(member.membershipNo || "")} - ${escapeHtml(member.fullName || "")}. This is a SACCO member profile, not a staff login.</p>
         </div>
         <button class="button ghost" type="button" data-action="close-member-detail">Close</button>
@@ -3239,28 +3268,28 @@ function memberDetailPanel() {
         ${mini("National ID", member.nationalId)}
         ${mini("Last movement", lastMovement)}
       </div>
-      ${memberKycChecklist(member)}
-      <form id="memberStatusForm" class="form-grid single">
-        <input type="hidden" id="selectedMemberId" value="${escapeHtml(member.id)}">
-        <label><span>Member status</span><select id="selectedMemberStatus" ${canManage ? "" : "disabled"}>${memberStatusOptions().map((status) => `<option value="${status.value}" ${status.value === member.status ? "selected" : ""}>${status.label}</option>`).join("")}</select></label>
-        <label><span>KYC decision</span><select id="selectedMemberKycStatus" ${canManage ? "" : "disabled"}>${kycStatusOptions().map((status) => `<option value="${status.value}" ${status.value === member.kycStatus ? "selected" : ""}>${status.label}</option>`).join("")}</select></label>
-        <div class="form-actions">
-          ${canManage ? `
-            <button class="button primary" type="submit">Save KYC decision</button>
-            <button class="button secondary" type="button" data-member-decision="approve">Approve member</button>
-            <button class="button secondary" type="button" data-member-decision="changes">Request changes</button>
-            <button class="button ghost" type="button" data-member-decision="suspend">Suspend member</button>
-          ` : `<span class="status pending">View only</span>`}
-        </div>
-      </form>
-      <div class="grid two">
+      ${mode === "kyc" ? `
+        ${memberKycChecklist(member)}
+        <form id="memberStatusForm" class="form-grid single">
+          <input type="hidden" id="selectedMemberId" value="${escapeHtml(member.id)}">
+          <label><span>Member status</span><select id="selectedMemberStatus" ${canManage ? "" : "disabled"}>${memberStatusOptions().map((status) => `<option value="${status.value}" ${status.value === member.status ? "selected" : ""}>${status.label}</option>`).join("")}</select></label>
+          <label><span>KYC decision</span><select id="selectedMemberKycStatus" ${canManage ? "" : "disabled"}>${kycStatusOptions().map((status) => `<option value="${status.value}" ${status.value === member.kycStatus ? "selected" : ""}>${status.label}</option>`).join("")}</select></label>
+          <div class="form-actions">
+            ${canManage ? `
+              <button class="button primary" type="submit">Save KYC decision</button>
+              <button class="button secondary" type="button" data-member-decision="approve">Approve member</button>
+              <button class="button secondary" type="button" data-member-decision="changes">Request changes</button>
+              <button class="button ghost" type="button" data-member-decision="suspend">Suspend member</button>
+            ` : `<span class="status pending">View only</span>`}
+          </div>
+        </form>
+      ` : ""}
+      ${mode === "contacts" ? `<div class="grid two">
         ${recordTable("Member KYC documents", state.selectedMemberDocuments, ["documentType", "storageKey", "verificationStatus", "createdAt"])}
         ${recordTable("Member contacts and next of kin", state.selectedMemberNextOfKin, ["fullName", "relationship", "phone", "address", "primaryContact"])}
-      </div>
-      <div class="grid two">
         ${recordTable("Member beneficiaries", state.selectedMemberBeneficiaries, ["fullName", "relationship", "phone", "allocationPercent"])}
-        ${recordTable("Member balance statement", statementLines, ["reference", "type", "channel", "amount", "savingsBalance", "sharesBalance", "welfareBalance", "postedAt"])}
-      </div>
+      </div>` : ""}
+      ${mode === "statement" ? recordTable("Member balance statement", statementLines, ["reference", "type", "channel", "amount", "savingsBalance", "sharesBalance", "welfareBalance", "postedAt"]) : ""}
     </section>
   `;
 }
@@ -4396,6 +4425,7 @@ async function createMemberFromForm(event) {
 
 async function openMemberDetail(memberId) {
   state.selectedMemberId = memberId;
+  state.memberTab = "kyc";
   state.selectedMember = null;
   state.selectedMemberStatement = null;
   state.selectedMemberNextOfKin = [];
@@ -5343,6 +5373,12 @@ function bindEvents() {
       renderShell();
     });
   });
+  document.querySelectorAll("[data-member-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.memberTab = button.dataset.memberTab;
+      renderShell();
+    });
+  });
   document.querySelectorAll("[data-row-action='user-detail']").forEach((button) => {
     button.addEventListener("click", () => openUserDetail(button.dataset.rowId));
   });
@@ -5412,6 +5448,7 @@ function bindEvents() {
     state.selectedMemberDocuments = [];
     state.selectedMemberMessage = "";
     state.selectedMemberError = "";
+    state.memberTab = "list";
     renderShell();
   });
   document.querySelector("[data-action='close-transaction-detail']")?.addEventListener("click", () => {
@@ -5620,6 +5657,7 @@ async function logout() {
     selectedPackageError: "",
     memberFormMessage: "",
     memberFormError: "",
+    memberTab: "overview",
     selectedMemberId: "",
     selectedMember: null,
     selectedMemberStatement: null,
