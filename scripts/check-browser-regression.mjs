@@ -521,8 +521,19 @@ async function assertSaccoMonthlyPerformanceDrilldown(page) {
   await reviewButton.click();
   await expectText(page, "Selected member performance", "SACCO monthly performance selected detail");
   await expectText(page, "Collection split", "SACCO monthly performance collection split");
+  const statementButton = page.locator("[data-action='open-monthly-performance-member']").first();
+  if (await statementButton.count()) {
+    await statementButton.click();
+    await expectText(page, "Statement", "SACCO monthly performance member statement tab");
+    await expectText(page, "Member statement", "SACCO monthly performance member statement detail");
+    await navigateTo(page, "dashboard");
+    await page.locator("[data-row-action='monthly-performance-detail']").first().click();
+  }
   await page.locator("[data-action='close-monthly-performance-detail']").click();
   await expectText(page, "Use Review on a monthly performance row", "SACCO monthly performance detail closed");
+  await navigateTo(page, "members");
+  await page.locator("[data-member-tab='overview']").click();
+  await navigateTo(page, "dashboard");
   console.log("PASS SACCO monthly performance drilldown");
 }
 

@@ -5811,9 +5811,9 @@ async function createMemberFromForm(event) {
   }
 }
 
-async function openMemberDetail(memberId) {
+async function openMemberDetail(memberId, targetTab = "kyc") {
   state.selectedMemberId = memberId;
-  state.memberTab = "kyc";
+  state.memberTab = targetTab;
   state.selectedMember = null;
   state.selectedMemberStatement = null;
   state.selectedMemberNextOfKin = [];
@@ -6964,6 +6964,9 @@ function bindEvents() {
       renderShell();
     });
   });
+  document.querySelectorAll("[data-action='open-monthly-performance-member']").forEach((button) => {
+    button.addEventListener("click", () => openMemberDetail(button.dataset.memberId, "statement"));
+  });
   document.querySelectorAll("[data-row-action='transaction-detail']").forEach((button) => {
     button.addEventListener("click", () => openTransactionDetail(button.dataset.rowId));
   });
@@ -7852,7 +7855,7 @@ function saccoMonthlyPerformancePanel(rows) {
             <h3>Selected member performance</h3>
             <p>${escapeHtml(selected.memberName)} for ${escapeHtml(selected.month)}.</p>
           </div>
-          <span class="status active">Reviewing</span>
+          ${selected.memberId ? `<button class="button secondary" type="button" data-action="open-monthly-performance-member" data-member-id="${escapeHtml(selected.memberId)}">Open member statement</button>` : `<span class="status active">Reviewing</span>`}
         </div>
         <div class="source-grid">
           ${mini("Savings deposits", money.format(selected.savingsDeposits))}
@@ -7876,6 +7879,7 @@ function saccoMonthlyPerformanceRows() {
     if (!rows.has(key)) {
       rows.set(key, {
         month,
+        memberId,
         memberName: memberLabel || memberName(memberId),
         savingsDeposits: 0,
         shareDeposits: 0,
