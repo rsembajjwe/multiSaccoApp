@@ -669,7 +669,7 @@ function saccoDashboard() {
     <div class="dashboard-grid">
       ${summary("Total members", members.length, "Membership register", "Open members")}
       ${summary("Active members", members.filter((m) => normal(m.status) === "active").length, "Can transact", "Review")}
-      ${summary("Total savings", money.format(sum(members, "savingsBalance", "savings")), "Server-confirmed balances", "Statements")}
+      ${summary("Total savings", money.format(sum(members, "savingsBalance", "savings")), "Verified member balances", "Statements")}
       ${summary("Total shares", money.format(sum(members, "sharesBalance", "shares")), "Share capital", "Share register")}
       ${summary("Welfare fund", money.format(sum(members, "welfareBalance", "welfare")), "Claims coverage", "Claims")}
       ${summary("Outstanding loans", money.format(sum(loans, "outstandingBalance", "balance")), "Loan portfolio", "Open loans")}
@@ -1550,7 +1550,7 @@ function savingsView() {
   const activeProducts = products.filter((row) => normal(row.status) === "active");
   return `
     <div class="dashboard-grid">
-      ${summary("Savings products", products.length, "Configured in Java API", "Manage")}
+      ${summary("Savings products", products.length, "Configured products", "Manage")}
       ${summary("Savings accounts", accounts.length, "Member accounts", "Open")}
       ${summary("Active products", activeProducts.length, "Available to members", "Review")}
       ${summary("Minimum contribution", money.format(sum(products, "contributionAmount", "minimumBalance")), "Configured product totals", "View")}
@@ -1631,7 +1631,7 @@ function financialProductPanel(type) {
       <div class="panel-heading">
         <div>
           <h2>${financialProductTitle(type)}</h2>
-          <p>Create Java-backed ${labelize(type).toLowerCase()} products for this SACCO. Product codes must be unique per SACCO.</p>
+          <p>Create ${labelize(type).toLowerCase()} products for this SACCO. Product codes must be unique per SACCO.</p>
         </div>
         <span class="status ${products.length ? "active" : "pending"}">${products.length ? "Configured" : "Setup needed"}</span>
       </div>
@@ -2275,7 +2275,7 @@ function renderMemberView(view) {
   if (view === "home") {
     return `
       <div class="member-hero">
-        <div><p class="eyebrow">Member dashboard</p><h2>${displayName()}, welcome back</h2><p>SERVER-CONFIRMED BALANCES and requests will update after every refresh.</p></div>
+        <div><p class="eyebrow">Member dashboard</p><h2>${displayName()}, welcome back</h2><p>Balances and requests update after every refresh.</p></div>
         <span class="status active">Member portal</span>
       </div>
       <div class="dashboard-grid">
@@ -2321,9 +2321,9 @@ function memberAccountsView(balances) {
       <div class="panel-heading">
         <div>
           <h2>Member account overview</h2>
-          <p>Savings, shares and welfare balances are confirmed by the Java member API.</p>
+          <p>Savings, shares and welfare balances are refreshed from your SACCO records.</p>
         </div>
-        <span class="status active">Server-confirmed</span>
+        <span class="status active">Verified</span>
       </div>
       <div class="source-grid">
         ${mini("Member", state.member?.membershipNo)}
@@ -2394,7 +2394,7 @@ function memberPaymentsView() {
           <h2>Member payment center</h2>
           <p>Post mobile-money payments for deposits, shares, welfare and active loan repayments.</p>
         </div>
-        <span class="status active">Java-backed posting</span>
+        <span class="status active">Ready to post</span>
       </div>
       ${state.memberPaymentMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberPaymentMessage)}</strong></div>` : ""}
       ${state.memberPaymentError ? `<div class="notice warning"><strong>Payment failed.</strong><span>${escapeHtml(state.memberPaymentError)}</span></div>` : ""}
@@ -2464,19 +2464,19 @@ function memberStatementsView(dash, balances) {
   const lines = memberStatementLines(dash);
   return `
     <div class="dashboard-grid">
-      ${summary("Statement lines", lines.length, "Posted member ledger activity", "Review")}
-      ${summary("Savings balance", money.format(balances.savings || 0), "Server-confirmed balance", "Download")}
-      ${summary("Share balance", money.format(balances.shares || 0), "Server-confirmed balance", "Download")}
-      ${summary("Welfare balance", money.format(balances.welfare || 0), "Server-confirmed balance", "Download")}
+      ${summary("Statement lines", lines.length, "Posted statement activity", "Review")}
+      ${summary("Savings balance", money.format(balances.savings || 0), "Verified balance", "Download")}
+      ${summary("Share balance", money.format(balances.shares || 0), "Verified balance", "Download")}
+      ${summary("Welfare balance", money.format(balances.welfare || 0), "Verified balance", "Download")}
     </div>
     ${filterToolbar("Filter by reference, account, channel, narration or date", "Download PDF", "Download Excel")}
     <section class="panel">
       <div class="panel-heading">
         <div>
           <h2>Member statement readiness</h2>
-          <p>Balances and statement lines are refreshed from the Java member API.</p>
+          <p>Balances and statement lines are refreshed from SACCO records.</p>
         </div>
-        <span class="status active">Server-confirmed</span>
+        <span class="status active">Verified</span>
       </div>
       <div class="source-grid">
         ${mini("Member", state.member?.membershipNo)}
@@ -2555,7 +2555,7 @@ function memberComplaintForm() {
           <h2>Member complaint submission</h2>
           <p>Send a member case directly to the SACCO support queue from the member portal.</p>
         </div>
-        <span class="status active">Java-backed sync</span>
+        <span class="status active">Ready to sync</span>
       </div>
       ${state.memberComplaintMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberComplaintMessage)}</strong></div>` : ""}
       ${state.memberComplaintError ? `<div class="notice warning"><strong>Complaint submission failed.</strong><span>${escapeHtml(state.memberComplaintError)}</span></div>` : ""}
@@ -2622,7 +2622,7 @@ function memberProfileView(balances) {
       <div class="panel-heading">
         <div>
           <h2>Member profile and KYC</h2>
-          <p>Personal details shown here come from the Java member session and SACCO KYC record.</p>
+          <p>Personal details shown here come from the member session and SACCO KYC record.</p>
         </div>
         <span class="status ${normal(member.kycStatus) === "approved" ? "active" : "pending"}">${labelize(member.kycStatus || "pending")}</span>
       </div>
@@ -2687,7 +2687,7 @@ function rolePriorityPanel(title, rows) {
       <div class="panel-heading">
         <div>
           <h2>${title}</h2>
-          <p>Role-specific work areas based on the current Java-backed records and permissions.</p>
+          <p>Role-specific work areas based on current records and permissions.</p>
         </div>
         <span class="status active">Role dashboard</span>
       </div>
@@ -2840,7 +2840,7 @@ function wizardCard(title, steps) {
 }
 
 function tabsCard(title, tabs) {
-  return `<section class="panel"><h2>${title}</h2><div class="tabs">${tabs.map((tab, index) => `<button class="${index === 0 ? "active" : ""}" type="button">${tab}</button>`).join("")}</div><div class="blueprint">This screen follows the uploaded UI/UX requirement and is ready for deeper Java API actions, validation, confirmations and exports.</div></section>`;
+  return `<section class="panel"><h2>${title}</h2><div class="tabs">${tabs.map((tab, index) => `<button class="${index === 0 ? "active" : ""}" type="button">${tab}</button>`).join("")}</div><div class="blueprint">This screen follows the uploaded UI/UX requirement and is ready for deeper actions, validation, confirmations and exports.</div></section>`;
 }
 
 function formPreview(title, fields) {
@@ -3251,7 +3251,7 @@ function memberDetailPanel(mode = "kyc") {
       ${state.selectedMemberError ? `<div class="notice warning"><strong>Member update failed.</strong><span>${escapeHtml(state.selectedMemberError)}</span></div>` : ""}
       <div class="dashboard-grid">
         ${summary("Total balance", money.format(totalBalance), "Savings, shares and welfare", "View")}
-        ${summary("Statement lines", statementLines.length, "Java-backed ledger activity", "Review")}
+        ${summary("Statement lines", statementLines.length, "Posted statement activity", "Review")}
         ${summary("Documents", state.selectedMemberDocuments.length, "KYC evidence files", "Verify")}
         ${summary("Contacts", state.selectedMemberNextOfKin.length, "Next-of-kin records", "Review")}
         ${summary("Beneficiaries", state.selectedMemberBeneficiaries.length, "Allocation records", "Review")}
@@ -3449,7 +3449,7 @@ function loanApplicationPanel() {
       <div class="panel-heading">
         <div>
           <h2>Loan application form</h2>
-          <p>Create a SACCO loan application with member eligibility checks handled by the Java backend.</p>
+          <p>Create a SACCO loan application with member eligibility checks and approval routing.</p>
         </div>
       </div>
       ${state.loanFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.loanFormMessage)}</strong></div>` : ""}
@@ -3586,7 +3586,7 @@ function complaintCapturePanel() {
       <div class="panel-heading">
         <div>
           <h2>${platformScope ? "SACCO admin complaint capture" : "Member complaint intake"}</h2>
-          <p>${platformScope ? "Create a Java-backed complaint submitted by or on behalf of a SACCO administrator only." : "SACCO admins receive, assign and resolve complaints submitted by SACCO members."}</p>
+          <p>${platformScope ? "Create a complaint submitted by or on behalf of a SACCO administrator only." : "SACCO admins receive, assign and resolve complaints submitted by SACCO members."}</p>
         </div>
       </div>
       ${state.complaintFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.complaintFormMessage)}</strong></div>` : ""}
@@ -3663,7 +3663,7 @@ function notificationTemplatePanel() {
       <div class="panel-heading">
         <div>
           <h2>Notification template setup</h2>
-          <p>Create global platform templates or SACCO-specific overrides for Java notification delivery.</p>
+          <p>Create global platform templates or SACCO-specific overrides for notification delivery.</p>
         </div>
       </div>
       ${state.notificationTemplateMessage ? `<div class="notice compact"><strong>${escapeHtml(state.notificationTemplateMessage)}</strong></div>` : ""}
@@ -5845,7 +5845,7 @@ function operationAlerts() {
   const alerts = operations.alerts || operations.integrationStatuses || [];
   return Array.isArray(alerts) && alerts.length ? alerts : [
     { title: "Database", provider: "PostgreSQL", severity: "Healthy", status: "Healthy", checkedAt: state.lastSync },
-    { title: "Java API", provider: "Spring Boot", severity: "Healthy", status: "Healthy", checkedAt: state.lastSync },
+    { title: "Application service", provider: "Backend service", severity: "Healthy", status: "Healthy", checkedAt: state.lastSync },
     { title: "Mobile money callbacks", provider: "Provider gateway", severity: "Warning", status: "Pending", checkedAt: state.lastSync }
   ];
 }

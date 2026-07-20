@@ -170,7 +170,7 @@ const contracts = [
   "Protected platform configuration",
   "Platform subscription packages",
   "Platform role catalogue",
-  "SERVER-CONFIRMED BALANCES",
+  "Balances and requests update",
   "pendingGuarantors",
   "notifications"
 ];
