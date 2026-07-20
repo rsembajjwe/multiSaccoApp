@@ -97,6 +97,7 @@ const state = {
   selectedMemberDocuments: [],
   selectedMemberMessage: "",
   selectedMemberError: "",
+  selectedMonthlyPerformanceId: "",
   transactionFormMessage: "",
   transactionFormError: "",
   selectedTransactionId: "",
@@ -6957,6 +6958,12 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='member-detail']").forEach((button) => {
     button.addEventListener("click", () => openMemberDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='monthly-performance-detail']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedMonthlyPerformanceId = button.dataset.rowId;
+      renderShell();
+    });
+  });
   document.querySelectorAll("[data-row-action='transaction-detail']").forEach((button) => {
     button.addEventListener("click", () => openTransactionDetail(button.dataset.rowId));
   });
@@ -7022,6 +7029,10 @@ function bindEvents() {
     state.selectedMemberMessage = "";
     state.selectedMemberError = "";
     state.memberTab = "list";
+    renderShell();
+  });
+  document.querySelector("[data-action='close-monthly-performance-detail']")?.addEventListener("click", () => {
+    state.selectedMonthlyPerformanceId = "";
     renderShell();
   });
   document.querySelector("[data-action='close-transaction-detail']")?.addEventListener("click", () => {
@@ -7816,6 +7827,7 @@ function memberPaymentControlPanel(payableLoanCount, draftCount) {
 function saccoMonthlyPerformancePanel(rows) {
   const membersReported = new Set(rows.map((row) => row.memberName).filter(Boolean)).size;
   const latestMonth = rows[0]?.month || "No posted month";
+  const selected = rows.find((row) => row.performanceId === state.selectedMonthlyPerformanceId);
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
@@ -7823,7 +7835,7 @@ function saccoMonthlyPerformancePanel(rows) {
           <h2>SACCO monthly performance control</h2>
           <p>Compare member deposits by savings, shares, welfare, loan repayments, Treasurer cash and mobile money.</p>
         </div>
-        <span class="status active">Staff reporting</span>
+        ${selected ? `<button class="button ghost" type="button" data-action="close-monthly-performance-detail">Close detail</button>` : `<span class="status active">Staff reporting</span>`}
       </div>
       <div class="source-grid">
         ${mini("Latest month", latestMonth)}
@@ -7833,6 +7845,26 @@ function saccoMonthlyPerformancePanel(rows) {
         ${mini("Loan repayments", money.format(sum(rows, "loanRepayments")))}
         ${mini("Total deposits", money.format(sum(rows, "totalDeposits")))}
       </div>
+      ${selected ? `
+        <div class="divider"></div>
+        <div class="panel-heading">
+          <div>
+            <h3>Selected member performance</h3>
+            <p>${escapeHtml(selected.memberName)} for ${escapeHtml(selected.month)}.</p>
+          </div>
+          <span class="status active">Reviewing</span>
+        </div>
+        <div class="source-grid">
+          ${mini("Savings deposits", money.format(selected.savingsDeposits))}
+          ${mini("Share deposits", money.format(selected.shareDeposits))}
+          ${mini("Welfare deposits", money.format(selected.welfareDeposits))}
+          ${mini("Loan repayments", money.format(selected.loanRepayments))}
+          ${mini("Treasurer cash", money.format(selected.treasurerCash))}
+          ${mini("Mobile money", money.format(selected.mobileMoney))}
+          ${mini("Total deposits", money.format(selected.totalDeposits))}
+          ${mini("Collection split", `${selected.mobileMoney ? "Mobile money used" : "Office cash only"}`)}
+        </div>
+      ` : `<p class="muted-note">Use Review on a monthly performance row to inspect one member and month.</p>`}
     </section>
   `;
 }
@@ -7879,8 +7911,19 @@ function saccoMonthlyPerformanceRows() {
     });
 
   return [...rows.values()]
-    .map((row) => ({ ...row, totalDeposits: row.savingsDeposits + row.shareDeposits + row.welfareDeposits + row.loanRepayments }))
+    .map((row) => ({
+      ...row,
+      performanceId: monthlyPerformanceId(row),
+      action: "monthly-performance-detail",
+      actionLabel: "Review",
+      actionId: monthlyPerformanceId(row),
+      totalDeposits: row.savingsDeposits + row.shareDeposits + row.welfareDeposits + row.loanRepayments
+    }))
     .sort((a, b) => b.month.localeCompare(a.month) || a.memberName.localeCompare(b.memberName));
+}
+
+function monthlyPerformanceId(row) {
+  return `${row.month || ""}::${row.memberName || ""}`;
 }
 
 function memberMonthlyPerformanceRows(dash) {

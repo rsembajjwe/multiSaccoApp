@@ -80,6 +80,7 @@ try {
   await expectNoVisibleText(page, "SACCO Administrator", "SACCO Administrator label hidden");
   await expectNoVisibleText(page, "SACCO role access", "SACCO role access panel hidden");
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Recent transactions", "Loan work queue", "SACCO monthly performance control", "Treasurer cash collections", "Mobile money collections"]);
+  await assertSaccoMonthlyPerformanceDrilldown(page);
   await assertScreen(page, "members", ["Member Overview", "Register Member", "Member List", "KYC Detail", "Contacts & Documents", "Statement", "Member management focus"]);
   await assertMemberRegistrationAndKyc(page);
   await assertQuickSearchResult(page, "GVS-0001", "Member detail and KYC approval", "SACCO member quick search");
@@ -508,6 +509,21 @@ async function assertModuleTabs(page, viewId, tabAssertions) {
     }
   }
   console.log(`PASS ${viewId} tabs`);
+}
+
+async function assertSaccoMonthlyPerformanceDrilldown(page) {
+  await navigateTo(page, "dashboard");
+  const reviewButton = page.locator("[data-row-action='monthly-performance-detail']").first();
+  if (!(await reviewButton.count())) {
+    console.log("SKIP SACCO monthly performance drilldown: no monthly performance rows");
+    return;
+  }
+  await reviewButton.click();
+  await expectText(page, "Selected member performance", "SACCO monthly performance selected detail");
+  await expectText(page, "Collection split", "SACCO monthly performance collection split");
+  await page.locator("[data-action='close-monthly-performance-detail']").click();
+  await expectText(page, "Use Review on a monthly performance row", "SACCO monthly performance detail closed");
+  console.log("PASS SACCO monthly performance drilldown");
 }
 
 async function assertRoleDashboard(page, code, username, password, label, markers) {

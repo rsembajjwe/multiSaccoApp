@@ -1126,6 +1126,12 @@ textarea {
   margin: 12px 0 0;
 }
 
+.divider {
+  height: 1px;
+  margin: 14px 0;
+  background: var(--line);
+}
+
 .content-area {
   display: grid;
   gap: 18px;
