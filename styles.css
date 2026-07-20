@@ -589,6 +589,18 @@ textarea {
   gap: 10px;
 }
 
+.token-box {
+  display: block;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--green-800);
+  background: #f9fcfa;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
 .demo-account {
   display: grid;
   gap: 4px;

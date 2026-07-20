@@ -5,6 +5,8 @@ const app = readFileSync("app.js", "utf8");
 const contracts = [
   "Login to Tereka Online",
   "Enterprise SACCO access gateway",
+  "Password recovery",
+  "Request password reset",
   "Username, email, phone or membership number",
   "Register SACCO",
   "Forgot password",

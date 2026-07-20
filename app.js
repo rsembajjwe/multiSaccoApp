@@ -39,6 +39,12 @@ const state = {
   loading: false,
   lastSync: "",
   lastError: "",
+  passwordResetMessage: "",
+  passwordResetError: "",
+  passwordResetToken: "",
+  passwordResetExpiresAt: "",
+  passwordResetConfirmMessage: "",
+  passwordResetConfirmError: "",
   userFormMessage: "",
   userFormError: "",
   selectedUserId: "",
@@ -437,7 +443,7 @@ function portalRouteCard(title, code, copy) {
 
 function authPanelContent() {
   if (state.authTab === "register") return publicSaccoRegistrationPanel();
-  if (state.authTab === "forgot") return authInfoPanel("Password recovery", "Use your SACCO code and username, email, phone or membership number. Platform users are verified by Platform Super Admin; SACCO staff and members are verified by authorized SACCO administrators.", "Request password reset");
+  if (state.authTab === "forgot") return passwordRecoveryPanel();
   if (state.authTab === "support") return authInfoPanel("Support", "For onboarding, payment, login or member-access support, share your SACCO code, role, phone number and the error shown on this screen.", "Open support request");
   return loginPanel();
 }
@@ -496,6 +502,44 @@ function publicSaccoRegistrationPanel() {
       </div>
       <button class="button primary wide" type="submit">Submit and initiate payment</button>
     </form>
+  `;
+}
+
+function passwordRecoveryPanel() {
+  return `
+    <div class="form-heading">
+      <p class="eyebrow">Account recovery</p>
+      <h2>Password recovery</h2>
+      <p>Platform and SACCO staff can request a reset by email. SACCO members should contact their SACCO administrator for member-password reset.</p>
+    </div>
+    <section class="support-checklist">
+      <div><strong>1</strong><span>Enter the staff email registered on Tereka Online.</span></div>
+      <div><strong>2</strong><span>If the user exists and is active, a reset request is recorded without exposing whether the email exists.</span></div>
+      <div><strong>3</strong><span>After reset, active staff sessions are revoked for safety.</span></div>
+    </section>
+    ${state.passwordResetMessage ? `<div class="notice compact"><strong>${escapeHtml(state.passwordResetMessage)}</strong>${state.passwordResetExpiresAt ? `<span>Expires ${escapeHtml(formatDateTime(state.passwordResetExpiresAt))}</span>` : ""}</div>` : ""}
+    ${state.passwordResetError ? `<div class="notice warning"><strong>Password reset request failed.</strong><span>${escapeHtml(state.passwordResetError)}</span></div>` : ""}
+    <form id="passwordResetRequestForm" class="form-grid single">
+      <label><span>Staff email</span><input id="passwordResetEmail" type="email" required placeholder="name@sacco.org"></label>
+      <button class="button primary" type="submit">Request password reset</button>
+    </form>
+    ${state.passwordResetToken ? `
+      <section class="demo-panel">
+        <div>
+          <strong>Development reset token</strong>
+          <span>This token is shown only when demo logins are enabled.</span>
+        </div>
+        <code class="token-box">${escapeHtml(state.passwordResetToken)}</code>
+      </section>
+      ${state.passwordResetConfirmMessage ? `<div class="notice compact"><strong>${escapeHtml(state.passwordResetConfirmMessage)}</strong></div>` : ""}
+      ${state.passwordResetConfirmError ? `<div class="notice warning"><strong>Password reset failed.</strong><span>${escapeHtml(state.passwordResetConfirmError)}</span></div>` : ""}
+      <form id="passwordResetConfirmForm" class="form-grid single">
+        <label><span>Reset token</span><input id="passwordResetToken" required value="${escapeHtml(state.passwordResetToken)}"></label>
+        <label><span>New password</span><input id="passwordResetNewPassword" type="password" required minlength="10" placeholder="At least 10 characters"></label>
+        <button class="button secondary" type="submit">Set new password</button>
+      </form>
+    ` : ""}
+    <button class="button ghost" type="button" data-auth-tab="login">Back to login</button>
   `;
 }
 
@@ -4050,6 +4094,60 @@ async function tryStaffLogin(code, username, password) {
   }
 }
 
+async function requestPasswordResetFromForm(event) {
+  event.preventDefault();
+  state.passwordResetMessage = "";
+  state.passwordResetError = "";
+  state.passwordResetToken = "";
+  state.passwordResetExpiresAt = "";
+  state.passwordResetConfirmMessage = "";
+  state.passwordResetConfirmError = "";
+  try {
+    const response = await api("/auth/password-reset/request", {
+      method: "POST",
+      body: JSON.stringify({ email: value("passwordResetEmail") })
+    }, "");
+    state.passwordResetMessage = "If the staff email is active, a password reset request has been recorded.";
+    state.passwordResetToken = response.resetToken || "";
+    state.passwordResetExpiresAt = response.expiresAt || "";
+    renderLogin();
+  } catch (error) {
+    state.passwordResetError = error.message;
+    renderLogin();
+  }
+}
+
+async function confirmPasswordResetFromForm(event) {
+  event.preventDefault();
+  state.passwordResetConfirmMessage = "";
+  state.passwordResetConfirmError = "";
+  try {
+    await api("/auth/password-reset/confirm", {
+      method: "POST",
+      body: JSON.stringify({
+        token: value("passwordResetToken"),
+        newPassword: value("passwordResetNewPassword")
+      })
+    }, "");
+    state.passwordResetConfirmMessage = "Password reset complete. You can login with the new password.";
+    state.passwordResetToken = "";
+    state.passwordResetExpiresAt = "";
+    renderLogin();
+  } catch (error) {
+    state.passwordResetConfirmError = error.message;
+    renderLogin();
+  }
+}
+
+function clearPasswordResetState() {
+  state.passwordResetMessage = "";
+  state.passwordResetError = "";
+  state.passwordResetToken = "";
+  state.passwordResetExpiresAt = "";
+  state.passwordResetConfirmMessage = "";
+  state.passwordResetConfirmError = "";
+}
+
 function applyStaffSession(session) {
   state.auth = "staff";
   state.token = session.token || state.token;
@@ -5437,6 +5535,7 @@ function bindEvents() {
   document.querySelectorAll("[data-auth-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.authTab = button.dataset.authTab;
+      if (state.authTab !== "forgot") clearPasswordResetState();
       renderLogin();
     });
   });
@@ -5484,6 +5583,8 @@ function bindEvents() {
     password.type = showing ? "password" : "text";
     event.currentTarget.textContent = showing ? "Show" : "Hide";
   });
+  document.querySelector("#passwordResetRequestForm")?.addEventListener("submit", requestPasswordResetFromForm);
+  document.querySelector("#passwordResetConfirmForm")?.addEventListener("submit", confirmPasswordResetFromForm);
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       state.currentView = button.dataset.view;
@@ -5780,6 +5881,12 @@ async function logout() {
     permissionIds: [],
     currentView: "dashboard",
     moduleTabs: {},
+    passwordResetMessage: "",
+    passwordResetError: "",
+    passwordResetToken: "",
+    passwordResetExpiresAt: "",
+    passwordResetConfirmMessage: "",
+    passwordResetConfirmError: "",
     userFormMessage: "",
     userFormError: "",
     selectedUserId: "",

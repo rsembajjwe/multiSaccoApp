@@ -36,6 +36,7 @@ try {
   await expectText(page, "Register SACCO", "public SACCO registration link");
   await expectText(page, "Forgot password", "forgot password link");
   await expectNoVisibleText(page, "Demo access", "demo tools hidden by default");
+  await assertPasswordRecovery(page);
   await assertPublicSaccoRegistration(page);
 
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
@@ -250,7 +251,7 @@ async function assertPublicSaccoRegistration(page) {
   await page.locator("#publicSaccoRegistrationForm button[type='submit']").click();
   await expectText(page, "Registration received", "public SACCO registration submitted");
   await expectText(page, "Mobile-money payment prompt initiated", "public SACCO payment initiated");
-  await page.locator("[data-auth-tab='login']").click();
+  await page.getByRole("button", { name: "Login", exact: true }).click();
   await expectText(page, "Login to Tereka Online", "public SACCO registration returns to login");
   console.log("PASS public SACCO registration");
 }
@@ -278,6 +279,18 @@ async function assertScreen(page, viewId, markers) {
     await expectText(page, marker, `${viewId} marker ${marker}`);
   }
   console.log(`PASS ${viewId}`);
+}
+
+async function assertPasswordRecovery(page) {
+  await page.locator("[data-auth-tab='forgot']").click();
+  await expectText(page, "Password recovery", "password recovery panel");
+  await expectText(page, "Request password reset", "password recovery action");
+  await page.locator("#passwordResetEmail").fill("admin@platform.local");
+  await page.locator("#passwordResetRequestForm button[type='submit']").click();
+  await expectText(page, "password reset request has been recorded", "password reset request response");
+  await page.getByRole("button", { name: "Back to login" }).click();
+  await expectText(page, "Login to Tereka Online", "password recovery returns to login");
+  console.log("PASS password recovery");
 }
 
 async function assertModuleTabs(page, viewId, tabAssertions) {
