@@ -530,6 +530,8 @@ async function assertSaccoMonthlyPerformanceDrilldown(page) {
     await expectText(page, "Statement ready", "SACCO monthly performance member statement ready");
     await expectText(page, "Receipt evidence summary", "SACCO monthly performance receipt evidence summary");
     await expectText(page, "Receipt-ready lines", "SACCO monthly performance receipt-ready lines");
+    await expectText(page, "Staff statement export controls", "SACCO monthly performance statement export controls");
+    await expectText(page, "Receipt bundle", "SACCO monthly performance receipt bundle");
     await navigateTo(page, "dashboard");
     await page.locator("[data-row-action='monthly-performance-detail']").first().click();
   }
@@ -689,6 +691,8 @@ async function assertMemberRegistrationAndKyc(page) {
   await expectText(page, "Posted credits", "member statement posted credits");
   await expectText(page, "Receipt evidence summary", "member statement receipt evidence summary");
   await expectText(page, "Treasurer receipt evidence", "member statement treasurer receipt evidence");
+  await expectText(page, "Staff statement export controls", "member statement export controls");
+  await expectText(page, "Export PDF", "member statement export PDF action");
   await page.locator("#globalSearch").fill("");
   console.log("PASS member registration and KYC");
 }

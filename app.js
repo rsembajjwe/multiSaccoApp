@@ -4404,6 +4404,8 @@ function memberDetailPanel(mode = "kyc") {
       ${mode === "statement" ? `
         ${memberStatementControlPanel(member, statementLines, totalBalance, statementCreditTotal, statementDebitTotal, lastMovement)}
         ${memberStatementReceiptPanel(statementLines)}
+        ${staffStatementExportPanel(statementLines)}
+        ${filterToolbar("Search statement by reference, channel, type, amount or date", "Export PDF", "Print statement")}
         ${recordTable("Member balance statement", statementLines, ["reference", "type", "channel", "amount", "savingsBalance", "sharesBalance", "welfareBalance", "postedAt"])}
       ` : ""}
     </section>
@@ -4467,6 +4469,29 @@ function memberStatementReceiptPanel(lines) {
         ${mini("Mobile-money evidence", mobileRows.length)}
         ${mini("Treasurer receipt evidence", treasurerRows.length)}
         ${mini("Last receipt reference", lastReceipt)}
+      </div>
+    </section>
+  `;
+}
+
+function staffStatementExportPanel(lines) {
+  const receiptRows = lines.filter((line) => line.reference || line.receiptNo || normal(line.status) === "posted");
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Staff statement export controls</h2>
+          <p>Export or print the selected member statement with balances, receipt references and payment channels.</p>
+        </div>
+        <span class="status active">Export ready</span>
+      </div>
+      <div class="source-grid">
+        ${mini("PDF statement", "Available")}
+        ${mini("Excel schedule", "Available")}
+        ${mini("Print statement", "Available")}
+        ${mini("Receipt bundle", receiptRows.length ? "Available" : "No receipts yet")}
+        ${mini("Statement rows", lines.length)}
+        ${mini("Audit trail", "Included")}
       </div>
     </section>
   `;
