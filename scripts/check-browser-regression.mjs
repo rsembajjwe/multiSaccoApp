@@ -71,22 +71,74 @@ try {
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Recent transactions", "Loan work queue"]);
   await assertScreen(page, "members", ["Member Overview", "Register Member", "Member List", "KYC Detail", "Contacts & Documents", "Statement", "Member management focus"]);
   await assertMemberRegistrationAndKyc(page);
-  await assertScreen(page, "transactions", ["Transaction control focus", "Transaction list", "New transaction screen"]);
+  await assertModuleTabs(page, "transactions", [
+    ["overview", ["Transaction control focus"]],
+    ["capture", ["New transaction screen"]],
+    ["list", ["Transaction list"]]
+  ]);
   await assertTransactionWorkflow(page);
-  await assertScreen(page, "savings", ["Savings operations control", "Savings product list", "Savings product setup", "Open Savings account"]);
-  await assertScreen(page, "shares", ["Shares capital control", "Share product list", "Shares product setup", "Open Shares account"]);
-  await assertScreen(page, "welfare", ["Welfare fund control", "Welfare product list", "Welfare product setup", "Welfare claim submission"]);
-  await assertScreen(page, "loans", ["Loan lifecycle control", "Loan application list", "Loan application form", "Loan detail and guarantors", "Loan decision checklist", "Add guarantor request"]);
-  await assertScreen(page, "guarantors", ["Guarantor control focus", "Guarantor requests"]);
-  await assertScreen(page, "approvals", ["Approval decision center", "Approval queue"]);
-  await assertScreen(page, "accounting", ["Accounting ledger confidence", "Chart of accounts", "Expense capture", "Fixed asset register", "Unbalanced journals"]);
-  await assertScreen(page, "reconciliation", ["Reconciliation readiness checks", "Reconciliation command center", "Bank and mobile-money matching", "Unmatched ledger lines", "Provider callback exceptions"]);
-  await assertScreen(page, "reports", ["Reporting evidence control", "Report catalogue", "Report readiness", "SACCO regulatory report"]);
-  await assertScreen(page, "governance", ["Governance action control", "Governance meeting setup", "Governance meeting register", "Resolution action list"]);
+  await assertModuleTabs(page, "savings", [
+    ["overview", ["Savings operations control"]],
+    ["products", ["Savings product setup"]],
+    ["accounts", ["Open Savings account"]],
+    ["lists", ["Savings product list", "Savings accounts"]]
+  ]);
+  await assertModuleTabs(page, "shares", [
+    ["overview", ["Shares capital control"]],
+    ["products", ["Shares product setup"]],
+    ["accounts", ["Open Shares account"]],
+    ["register", ["Share product list", "Share register"]]
+  ]);
+  await assertModuleTabs(page, "welfare", [
+    ["overview", ["Welfare fund control"]],
+    ["products", ["Welfare product setup"]],
+    ["claims", ["Welfare claim submission", "Welfare claims"]],
+    ["detail", ["Welfare claim decision"]]
+  ]);
+  await assertModuleTabs(page, "loans", [
+    ["overview", ["Loan lifecycle control"]],
+    ["application", ["Loan application form"]],
+    ["list", ["Loan application list"]]
+  ]);
+  await assertModuleTabs(page, "guarantors", [
+    ["overview", ["Guarantor control focus"]],
+    ["requests", ["Guarantor requests"]]
+  ]);
+  await assertModuleTabs(page, "approvals", [
+    ["overview", ["Approval decision center"]],
+    ["queue", ["Approval queue"]]
+  ]);
+  await assertModuleTabs(page, "accounting", [
+    ["overview", ["Accounting ledger confidence"]],
+    ["capture", ["Expense capture", "Fixed asset register"]],
+    ["setup", ["Chart of accounts"]],
+    ["journals", ["Recent journal entries"]]
+  ]);
+  await assertModuleTabs(page, "reconciliation", [
+    ["overview", ["Reconciliation readiness checks", "Reconciliation command center"]],
+    ["matches", ["Bank and mobile-money matching", "Provider callback exceptions"]],
+    ["exceptions", ["Unmatched bank statement lines", "Unmatched ledger lines"]]
+  ]);
+  await assertModuleTabs(page, "reports", [
+    ["overview", ["Reporting evidence control"]],
+    ["catalogue", ["Report catalogue"]],
+    ["readiness", ["Report readiness"]],
+    ["regulatory", ["SACCO regulatory report"]]
+  ]);
+  await assertModuleTabs(page, "governance", [
+    ["overview", ["Governance action control"]],
+    ["setup", ["Governance meeting setup"]],
+    ["register", ["Governance meeting register"]],
+    ["resolutions", ["Resolution action list"]]
+  ]);
   await assertScreen(page, "settings", ["Settings Overview", "Branch Setup", "Product Setup", "Setup Records", "SACCO settings control", "SACCO operating settings"]);
   await assertSaccoSettingsTabs(page);
   await assertScreen(page, "users", ["SACCO staff access", "Add SACCO staff user", "SACCO staff role guide", "Role access preview", "SACCO staff access list", "SACCO staff role coverage"]);
-  await assertScreen(page, "audit", ["Audit evidence control", "SACCO audit evidence", "Approvals", "Access control", "SACCO audit trail"]);
+  await assertModuleTabs(page, "audit", [
+    ["overview", ["Audit evidence control"]],
+    ["evidence", ["SACCO audit evidence", "Approvals", "Access control"]],
+    ["trail", ["SACCO audit trail"]]
+  ]);
   await logout(page);
 
   await assertRoleDashboard(page, "GVS", "chairperson@greenvalley.local", "Chair@12345", "SACCO Chairperson", ["SACCO Chairperson", "Chairperson decision focus", "Chairperson approval queue"]);
@@ -225,6 +277,17 @@ async function assertScreen(page, viewId, markers) {
     await expectText(page, marker, `${viewId} marker ${marker}`);
   }
   console.log(`PASS ${viewId}`);
+}
+
+async function assertModuleTabs(page, viewId, tabAssertions) {
+  await navigateTo(page, viewId);
+  for (const [tabId, markers] of tabAssertions) {
+    await page.locator(`[data-module-tab-view="${viewId}"][data-module-tab="${tabId}"]`).click();
+    for (const marker of markers) {
+      await expectText(page, marker, `${viewId}/${tabId} marker ${marker}`);
+    }
+  }
+  console.log(`PASS ${viewId} tabs`);
 }
 
 async function assertRoleDashboard(page, code, username, password, label, markers) {
@@ -376,10 +439,12 @@ async function assertMemberRegistrationAndKyc(page) {
 }
 
 async function assertTransactionWorkflow(page) {
+  await page.locator("[data-module-tab-view='transactions'][data-module-tab='capture']").click();
   await page.locator("#newTransactionAmount").fill("15000");
   await page.locator("#newTransactionNarration").fill("Browser regression savings deposit");
   await page.locator("#transactionForm button[type='submit']").click();
   await expectText(page, "Submitted transaction", "transaction submitted");
+  await page.locator("[data-module-tab-view='transactions'][data-module-tab='list']").click();
   await page.locator("[data-row-action='transaction-detail']").first().click();
   await expectText(page, "Transaction detail and reversal", "transaction detail panel");
   await expectText(page, "Transaction decision checklist", "transaction decision checklist");

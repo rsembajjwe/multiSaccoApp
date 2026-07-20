@@ -35,6 +35,7 @@ const state = {
   currentView: "dashboard",
   search: "",
   tableState: {},
+  moduleTabs: {},
   loading: false,
   lastSync: "",
   lastError: "",
@@ -153,7 +154,6 @@ const saccoModules = [
   ["loans", "Loans", "Applications and repayments", "loans:view", ["admin", "chairperson", "loans", "auditor"]],
   ["guarantors", "Guarantors", "Guarantee requests and obligations", "loans:view", ["admin", "chairperson", "loans"]],
   ["approvals", "Approvals", "Maker-checker decisions", "approvals:view", ["admin", "chairperson", "treasurer", "secretary", "loans"]],
-  ["operations", "Operations", "Branch, import and service status", "operations:view", ["admin", "chairperson", "treasurer", "auditor"]],
   ["accounting", "Accounting", "Trial balance, journals and reports", "transactions:view", ["admin", "treasurer", "accountant"]],
   ["reconciliation", "Reconciliation", "Bank and mobile money", "transactions:view", ["admin", "treasurer", "accountant"]],
   ["reports", "Reports", "Operational and financial reporting", "reports:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "auditor"]],
@@ -758,7 +758,7 @@ function saccoSecretaryDashboard() {
       ${summaryLink("Pending KYC", pendingKyc.length, "Needs verification", "Review", "members")}
       ${summaryLink("Open complaints", openComplaints().length, "Member support queue", "Assign", "complaints")}
       ${summaryLink("Governance records", governance.length, "Meetings and minutes", "Open", "governance")}
-      ${summaryLink("Branches", dataRows("branches").length, "Service points", "View", "operations")}
+      ${summaryLink("Branches", dataRows("branches").length, "Service points", "View", "settings")}
       ${summaryLink("Notifications", recentNotifications.length, "Member communication", "Open", "reports")}
     </div>
     ${rolePriorityPanel("Secretary office focus", [
@@ -986,11 +986,26 @@ function memberTabs(activeTab) {
   `;
 }
 
+function activeModuleTab(view, tabs) {
+  const fallback = tabs[0]?.[0] || "overview";
+  return tabs.some(([id]) => id === state.moduleTabs[view]) ? state.moduleTabs[view] : fallback;
+}
+
+function moduleTabs(view, tabs, activeTab = activeModuleTab(view, tabs)) {
+  return `
+    <div class="tabs management-tabs">
+      ${tabs.map(([id, label]) => `<button class="${activeTab === id ? "active" : ""}" type="button" data-module-tab-view="${escapeHtml(view)}" data-module-tab="${escapeHtml(id)}">${escapeHtml(label)}</button>`).join("")}
+    </div>
+  `;
+}
+
 function transactionsView() {
   const rows = transactionRows();
   const pending = rows.filter((row) => normal(row.status).includes("pending"));
   const posted = rows.filter((row) => normal(row.status) === "posted");
   const reversed = rows.filter((row) => row.originalTransactionId || normal(row.status).includes("reversed"));
+  const tabs = [["overview", "Control"], ["capture", "New transaction screen"], ["detail", "Transaction detail"], ["list", "Transaction list"]];
+  const tab = activeModuleTab("transactions", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Transactions", rows.length, "Deposits, withdrawals and corrections", "Review")}
@@ -999,15 +1014,18 @@ function transactionsView() {
       ${summary("Reversals", reversed.length, "Corrections with reason trail", "Audit")}
       ${summary("Mobile money", money.format(sum(rows.filter((row) => normal(row.channel).includes("mobile")), "amount")), "Provider channel", "Reconcile")}
     </div>
-    ${rolePriorityPanel("Transaction control focus", [
+    ${moduleTabs("transactions", tabs, tab)}
+    ${tab === "overview" ? rolePriorityPanel("Transaction control focus", [
       ["Maker-checker", `${pending.length} transaction(s) are waiting for Treasurer/Admin approval.`, pending.length ? "Pending" : "Clear"],
       ["Receipts", `${posted.length} posted transaction(s) can produce member receipts.`, posted.length ? "Ready" : "Pending"],
       ["Reversals", "Posted original transactions require a reason before reversal is created.", "Controlled"]
-    ])}
-    ${filterToolbar("Search by reference, member, channel, status, amount or user", "New transaction", "Print receipt")}
-    ${transactionFormPanel()}
-    ${transactionDetailPanel(rows)}
-    ${recordTable("Transaction list", rows, ["reference", "postedAt", "memberName", "type", "channel", "amount", "approvalReadiness", "receiptStatus", "reversalStatus", "status"])}
+    ]) : ""}
+    ${tab === "capture" ? transactionFormPanel() : ""}
+    ${tab === "detail" ? (transactionDetailPanel(rows) || emptyState("Transaction detail and reversal", "Select a transaction from the list to review receipt, approval and reversal actions.")) : ""}
+    ${tab === "list" ? `
+      ${filterToolbar("Search by reference, member, channel, status, amount or user", "New transaction", "Print receipt")}
+      ${recordTable("Transaction list", rows, ["reference", "postedAt", "memberName", "type", "channel", "amount", "approvalReadiness", "receiptStatus", "reversalStatus", "status"])}
+    ` : ""}
   `;
 }
 
@@ -1017,6 +1035,8 @@ function loansView() {
   const approved = loans.filter((loan) => normal(loan.status) === "approved");
   const active = loans.filter((loan) => normal(loan.status) === "active");
   const atRisk = loans.filter((loan) => Number(loan.dsr || 0) >= 40 || ["arrears", "overdue", "default"].some((word) => normal(`${loan.status} ${loan.stage}`).includes(word)));
+  const tabs = [["overview", "Lifecycle"], ["application", "Loan application form"], ["detail", "Loan detail and guarantors"], ["list", "Loan application list"]];
+  const tab = activeModuleTab("loans", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Active loans", active.length, "Disbursed portfolio", "Open")}
@@ -1025,14 +1045,15 @@ function loansView() {
       ${summary("Ready to disburse", approved.length, "Approved but not active", "Disburse")}
       ${summary("Portfolio at risk", atRisk.length, "Arrears and DSR risk", "Report")}
     </div>
-    ${rolePriorityPanel("Loan lifecycle control", [
+    ${moduleTabs("loans", tabs, tab)}
+    ${tab === "overview" ? rolePriorityPanel("Loan lifecycle control", [
       ["Application", `${submitted.length} loan file(s) are in application, guarantor or approval review.`, submitted.length ? "Pending" : "Clear"],
       ["Disbursement", `${approved.length} approved loan(s) are ready for disbursement after final checks.`, approved.length ? "Ready" : "Clear"],
       ["Servicing", `${active.length} active loan(s) can receive repayments and arrears monitoring.`, active.length ? "Active" : "Pending"]
-    ])}
-    ${loanApplicationPanel()}
-    ${loanDetailPanel(loans)}
-    ${recordTable("Loan application list", loans, ["applicationNo", "memberName", "product", "requestedAmount", "outstandingBalance", "repaymentMonths", "guarantorReadiness", "approvalReadiness", "servicingStatus", "status"])}
+    ]) : ""}
+    ${tab === "application" ? loanApplicationPanel() : ""}
+    ${tab === "detail" ? (loanDetailPanel(loans) || emptyState("Loan detail and guarantors", "Select a loan application from the list to review guarantors, decisions and repayments.")) : ""}
+    ${tab === "list" ? recordTable("Loan application list", loans, ["applicationNo", "memberName", "product", "requestedAmount", "outstandingBalance", "repaymentMonths", "guarantorReadiness", "approvalReadiness", "servicingStatus", "status"]) : ""}
   `;
 }
 
@@ -1041,6 +1062,8 @@ function approvalsView() {
   const loans = isPlatform() ? [] : dataRows("loans").filter((row) => normal(row.status).includes("review") || normal(row.status).includes("submitted")).map((row) => ({ ...row, memberName: row.memberName || memberName(row.memberId), action: "loan-detail", actionLabel: "Review loan", actionId: row.id }));
   const members = isPlatform() ? [] : dataRows("members").filter((row) => normal(row.status).includes("pending")).map((row) => ({ ...row, type: "member_kyc", amount: 0, memberName: row.fullName, action: "member-detail", actionLabel: "Review member", actionId: row.id }));
   const queue = [...transactions, ...loans, ...members];
+  const tabs = [["overview", "Decision center"], ["queue", "Approval queue"]];
+  const tab = activeModuleTab("approvals", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Pending member approvals", members.length, "KYC and onboarding", "Review")}
@@ -1048,12 +1071,13 @@ function approvalsView() {
       ${summary("Pending transactions", transactions.length, "Finance maker-checker", "Review")}
       ${summary("Total approval queue", queue.length, "Role-filtered work list", "Open")}
     </div>
-    ${rolePriorityPanel("Approval decision center", [
+    ${moduleTabs("approvals", tabs, tab)}
+    ${tab === "overview" ? rolePriorityPanel("Approval decision center", [
       ["Transaction approvals", `${transactions.length} transaction(s) require finance review before posting.`, transactions.length ? "Pending" : "Clear"],
       ["Loan approvals", `${loans.length} loan application(s) require credit or chairperson decision.`, loans.length ? "Pending" : "Clear"],
       ["Member approvals", `${members.length} member profile(s) require KYC or activation decision.`, members.length ? "Pending" : "Clear"]
-    ])}
-    ${recordTable("Approval queue", queue, ["reference", "applicationNo", "membershipNo", "memberName", "type", "amount", "stage", "approvalReadiness", "status"])}
+    ]) : ""}
+    ${tab === "queue" ? recordTable("Approval queue", queue, ["reference", "applicationNo", "membershipNo", "memberName", "type", "amount", "stage", "approvalReadiness", "status"]) : ""}
   `;
 }
 
@@ -1106,6 +1130,8 @@ function reportsView() {
   const catalogue = reportCatalogue(platform);
   const exceptions = Number(consolidated.reconciliationExceptions || 0) + Number(consolidated.unbalancedJournalEntries || 0);
   if (platform) return platformSuperAdminReportsView(rows, exceptions);
+  const tabs = [["overview", "Reporting control"], ["catalogue", "Report catalogue"], ["readiness", "Report readiness"], ["regulatory", "SACCO regulatory report"]];
+  const tab = activeModuleTab("reports", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Members in report", consolidated.memberCount, "Active and inactive members", "Review")}
@@ -1113,13 +1139,15 @@ function reportsView() {
       ${summary("Loan portfolio", money.format(consolidated.loanPortfolio || 0), "Credit exposure", "Open")}
       ${summary("Compliance exceptions", exceptions, "Reconciliation and journal checks", "Investigate")}
     </div>
-    ${rolePriorityPanel("Reporting evidence control", [
+    ${moduleTabs("reports", tabs, tab)}
+    ${tab === "overview" ? rolePriorityPanel("Reporting evidence control", [
       ["Ledger evidence", `${consolidated.journalEntries || 0} journal entr${Number(consolidated.journalEntries || 0) === 1 ? "y" : "ies"} available for report support.`, Number(consolidated.unbalancedJournalEntries || 0) ? "Review" : "Clear"],
       ["Reconciliation evidence", `${consolidated.reconciliationExceptions || 0} reconciliation exception(s) affect export confidence.`, Number(consolidated.reconciliationExceptions || 0) ? "Investigate" : "Clear"],
       ["Compliance status", `Current report status is ${labelize(consolidated.complianceStatus || (exceptions ? "review" : "clear"))}.`, exceptions ? "Review" : "Ready"]
-    ])}
-    ${filterToolbar("Search reports by module, member group, product or compliance status", "Export report", "Schedule report")}
-    <section class="panel">
+    ]) : ""}
+    ${tab === "catalogue" ? `
+      ${filterToolbar("Search reports by module, member group, product or compliance status", "Export report", "Schedule report")}
+      <section class="panel">
       <div class="panel-heading">
         <div>
           <h2>Report catalogue</h2>
@@ -1141,8 +1169,9 @@ function reportsView() {
         `).join("")}
       </div>
     </section>
-    ${reportReadinessPanel(consolidated)}
-    ${recordTable("SACCO regulatory report", rows, ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "loanPortfolio", "activeLoans", "expenseTotal", "assetNetBookValue", "complianceStatus"])}
+    ` : ""}
+    ${tab === "readiness" ? reportReadinessPanel(consolidated) : ""}
+    ${tab === "regulatory" ? recordTable("SACCO regulatory report", rows, ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "loanPortfolio", "activeLoans", "expenseTotal", "assetNetBookValue", "complianceStatus"]) : ""}
   `;
 }
 
@@ -1284,6 +1313,8 @@ function complaintsView() {
   const urgent = rows.filter((row) => normal(row.priority) === "urgent");
   const assigned = rows.filter((row) => row.assignedUserId);
   if (isPlatform()) {
+    const tabs = [["list", "Complaints from SACCO admins"], ["detail", "Complaint review"]];
+    const tab = activeModuleTab("complaints", tabs);
     return `
       <div class="dashboard-grid">
         ${summary("Complaints from SACCO admins", open.length, "Open platform support cases", "Review")}
@@ -1291,11 +1322,16 @@ function complaintsView() {
         ${summary("In progress", rows.filter((row) => normal(row.status) === "in_progress").length, "Being handled", "Track")}
         ${summary("Resolved", rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", "Review")}
       </div>
-      ${filterToolbar("Search complaints by SACCO, category, priority, status or officer", "Export complaints", "Assign officer")}
-      ${complaintDetailPanel(rows)}
-      ${recordTable("Complaints from SACCO admins", rows, ["tenantName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
+      ${moduleTabs("complaints", tabs, tab)}
+      ${tab === "list" ? `
+        ${filterToolbar("Search complaints by SACCO, category, priority, status or officer", "Export complaints", "Assign officer")}
+        ${recordTable("Complaints from SACCO admins", rows, ["tenantName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
+      ` : ""}
+      ${tab === "detail" ? (complaintDetailPanel(rows) || emptyState("Complaint review", "Select a SACCO admin complaint from the list to review status and assignment.")) : ""}
     `;
   }
+  const tabs = [["overview", "Complaint control"], ["capture", "Member complaint intake"], ["detail", "Complaint review"], ["list", "SACCO member complaint desk"]];
+  const tab = activeModuleTab("complaints", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Open complaints", open.length, "Member support workload", "Assign")}
@@ -1303,11 +1339,14 @@ function complaintsView() {
       ${summary("In progress", rows.filter((row) => normal(row.status) === "in_progress").length, "Being handled", "Track")}
       ${summary("Resolved", rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", "Review")}
     </div>
-    ${complaintServiceControlPanel(rows, open, urgent, assigned)}
-    ${filterToolbar("Search complaints by member, category, priority, status or officer", "New complaint", "Assign officer")}
-    ${complaintCapturePanel()}
-    ${complaintDetailPanel(rows)}
-    ${recordTable("SACCO member complaint desk", rows, ["memberName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
+    ${moduleTabs("complaints", tabs, tab)}
+    ${tab === "overview" ? complaintServiceControlPanel(rows, open, urgent, assigned) : ""}
+    ${tab === "capture" ? complaintCapturePanel() : ""}
+    ${tab === "detail" ? (complaintDetailPanel(rows) || emptyState("Complaint review", "Select a complaint from the list to review priority, assignment and closure.")) : ""}
+    ${tab === "list" ? `
+      ${filterToolbar("Search complaints by member, category, priority, status or officer", "New complaint", "Assign officer")}
+      ${recordTable("SACCO member complaint desk", rows, ["memberName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
+    ` : ""}
   `;
 }
 
@@ -1461,6 +1500,8 @@ function auditView() {
   const reversals = rows.filter((event) => event.category === "Reversals");
   const access = rows.filter((event) => event.category === "Access control");
   const finance = rows.filter((event) => event.category === "Financial activity");
+  const tabs = [["overview", "Audit control"], ["evidence", isPlatform() ? "Platform audit evidence" : "SACCO audit evidence"], ["sensitive", "Sensitive audit queue"], ["trail", isPlatform() ? "Platform audit trail" : "SACCO audit trail"]];
+  const tab = activeModuleTab("audit", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Audit events", rows.length, "Immutable activity trail", "Inspect")}
@@ -1468,11 +1509,14 @@ function auditView() {
       ${summary(isPlatform() ? "SACCOs affected" : "Actors involved", isPlatform() ? uniqueCount(rows, "tenantId") : uniqueCount(rows, "actorUserId"), isPlatform() ? "Across visible SACCOs" : "Within this SACCO", "Filter")}
       ${summary("Actors", uniqueCount(rows, "actorUserId"), "Users and system actions", "Trace")}
     </div>
-    ${auditControlPanel(rows, highRisk, approvals, reversals, access, finance)}
-    ${filterToolbar("Search audit logs by SACCO, actor, action, module, IP address or record ID", "Export audit log", "Print report")}
-    ${auditEvidencePanel(rows, sensitive, approvals, reversals, access, finance)}
-    ${recordTable("Sensitive audit queue", sensitive, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "riskLevel"])}
-    ${recordTable(isPlatform() ? "Platform audit trail" : "SACCO audit trail", rows, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "result"])}
+    ${moduleTabs("audit", tabs, tab)}
+    ${tab === "overview" ? auditControlPanel(rows, highRisk, approvals, reversals, access, finance) : ""}
+    ${tab === "evidence" ? `
+      ${filterToolbar("Search audit logs by SACCO, actor, action, module, IP address or record ID", "Export audit log", "Print report")}
+      ${auditEvidencePanel(rows, sensitive, approvals, reversals, access, finance)}
+    ` : ""}
+    ${tab === "sensitive" ? recordTable("Sensitive audit queue", sensitive, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "riskLevel"]) : ""}
+    ${tab === "trail" ? recordTable(isPlatform() ? "Platform audit trail" : "SACCO audit trail", rows, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "result"]) : ""}
   `;
 }
 
@@ -1548,6 +1592,8 @@ function savingsView() {
   const accounts = accountsByType("savings");
   const members = dataRows("members");
   const activeProducts = products.filter((row) => normal(row.status) === "active");
+  const tabs = [["overview", "Savings control"], ["products", "Savings product setup"], ["accounts", "Open Savings account"], ["lists", "Savings records"]];
+  const tab = activeModuleTab("savings", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Savings products", products.length, "Configured products", "Manage")}
@@ -1556,15 +1602,18 @@ function savingsView() {
       ${summary("Minimum contribution", money.format(sum(products, "contributionAmount", "minimumBalance")), "Configured product totals", "View")}
       ${summary("Savings balances", money.format(sum(members, "savingsBalance", "savings")), "Member ledger total", "Statements")}
     </div>
-    ${rolePriorityPanel("Savings operations control", [
+    ${moduleTabs("savings", tabs, tab)}
+    ${tab === "overview" ? rolePriorityPanel("Savings operations control", [
       ["Product setup", `${activeProducts.length} active savings product(s) are available for account opening.`, activeProducts.length ? "Ready" : "Setup"],
       ["Member accounts", `${accounts.length} savings account(s) are open for active members.`, accounts.length ? "Active" : "Open"],
       ["Contribution flow", "Savings deposits post through Transactions and member mobile payments.", "Connected"]
-    ])}
-    ${financialProductPanel("savings")}
-    ${financialAccountPanel("savings", products)}
-    ${recordTable("Savings product list", products, ["name", "code", "contributionAmount", "minimumBalance", "interestRate", "status"])}
-    ${recordTable("Savings accounts", accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
+    ]) : ""}
+    ${tab === "products" ? financialProductPanel("savings") : ""}
+    ${tab === "accounts" ? financialAccountPanel("savings", products) : ""}
+    ${tab === "lists" ? `
+      ${recordTable("Savings product list", products, ["name", "code", "contributionAmount", "minimumBalance", "interestRate", "status"])}
+      ${recordTable("Savings accounts", accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
+    ` : ""}
   `;
 }
 
@@ -1573,6 +1622,8 @@ function sharesView() {
   const accounts = accountsByType("share");
   const members = dataRows("members");
   const activeProducts = products.filter((row) => normal(row.status) === "active");
+  const tabs = [["overview", "Shares control"], ["products", "Shares product setup"], ["accounts", "Open Shares account"], ["register", "Share register"]];
+  const tab = activeModuleTab("shares", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Share products", products.length, "Share capital products", "Manage")}
@@ -1581,15 +1632,18 @@ function sharesView() {
       ${summary("Share contribution setup", money.format(sum(products, "contributionAmount")), "Configured value", "Review")}
       ${summary("Share balances", money.format(sum(members, "sharesBalance", "shares")), "Member share capital", "Register")}
     </div>
-    ${rolePriorityPanel("Shares capital control", [
+    ${moduleTabs("shares", tabs, tab)}
+    ${tab === "overview" ? rolePriorityPanel("Shares capital control", [
       ["Product setup", `${activeProducts.length} active share product(s) define contribution rules.`, activeProducts.length ? "Ready" : "Setup"],
       ["Share register", `${accounts.length} member share account(s) are available for reporting.`, accounts.length ? "Active" : "Open"],
       ["Contribution flow", "Share purchases post through Transactions and member mobile payments.", "Connected"]
-    ])}
-    ${financialProductPanel("shares")}
-    ${financialAccountPanel("shares", products)}
-    ${recordTable("Share product list", products, ["name", "code", "contributionAmount", "minimumBalance", "status"])}
-    ${recordTable("Share register", accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
+    ]) : ""}
+    ${tab === "products" ? financialProductPanel("shares") : ""}
+    ${tab === "accounts" ? financialAccountPanel("shares", products) : ""}
+    ${tab === "register" ? `
+      ${recordTable("Share product list", products, ["name", "code", "contributionAmount", "minimumBalance", "status"])}
+      ${recordTable("Share register", accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
+    ` : ""}
   `;
 }
 
@@ -1600,6 +1654,8 @@ function welfareView() {
   const submitted = claims.filter((row) => ["submitted", "pending", "pending_approval"].some((word) => normal(row.status).includes(word)));
   const approved = claims.filter((row) => normal(row.status) === "approved");
   const paid = claims.filter((row) => normal(row.status) === "paid");
+  const tabs = [["overview", "Welfare control"], ["products", "Welfare product setup"], ["accounts", "Open Welfare account"], ["claims", "Welfare claims"], ["detail", "Welfare claim decision"]];
+  const tab = activeModuleTab("welfare", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Welfare products", products.length, "Contribution rules", "Manage")}
@@ -1609,17 +1665,20 @@ function welfareView() {
       ${summary("Approved for payment", approved.length, "Payment queue", "Pay")}
       ${summary("Paid claims", money.format(sum(paid, "amount")), "Settled welfare support", "Report")}
     </div>
-    ${rolePriorityPanel("Welfare fund control", [
+    ${moduleTabs("welfare", tabs, tab)}
+    ${tab === "overview" ? rolePriorityPanel("Welfare fund control", [
       ["Contribution setup", `${products.length} welfare product(s) and ${accounts.length} welfare account(s) support member balances.`, products.length && accounts.length ? "Ready" : "Setup"],
       ["Claim decisions", `${submitted.length} submitted claim(s) need approval or rejection.`, submitted.length ? "Pending" : "Clear"],
       ["Claim payments", `${approved.length} approved claim(s) are ready for payment if member welfare balance is sufficient.`, approved.length ? "Ready" : "Clear"]
-    ])}
-    ${financialProductPanel("welfare")}
-    ${financialAccountPanel("welfare", products)}
-    ${welfareClaimPanel()}
-    ${welfareClaimDetailPanel(claims)}
-    ${recordTable("Welfare product list", products, ["name", "code", "contributionAmount", "status"])}
-    ${recordTable("Welfare claims", claims.map((claim) => ({ ...claim, action: "welfare-claim-detail", actionLabel: "Review", actionId: claim.id })), ["membershipNo", "memberName", "claimType", "amount", "channel", "reference", "status", "submittedAt"])}
+    ]) : ""}
+    ${tab === "products" ? financialProductPanel("welfare") : ""}
+    ${tab === "accounts" ? financialAccountPanel("welfare", products) : ""}
+    ${tab === "claims" ? `
+      ${welfareClaimPanel()}
+      ${recordTable("Welfare product list", products, ["name", "code", "contributionAmount", "status"])}
+      ${recordTable("Welfare claims", claims.map((claim) => ({ ...claim, action: "welfare-claim-detail", actionLabel: "Review", actionId: claim.id })), ["membershipNo", "memberName", "claimType", "amount", "channel", "reference", "status", "submittedAt"])}
+    ` : ""}
+    ${tab === "detail" ? (welfareClaimDetailPanel(claims) || emptyState("Welfare claim decision", "Select a welfare claim from the list to approve, reject or pay.")) : ""}
   `;
 }
 
@@ -1840,6 +1899,8 @@ function guarantorsView() {
   const rows = requests.length ? requests : loans;
   const pending = rows.filter((row) => normal(row.status).includes("pending") || normal(row.guarantorReadiness).includes("pending"));
   const accepted = rows.filter((row) => normal(row.status).includes("accepted") || normal(row.guarantorReadiness).includes("accepted"));
+  const tabs = [["overview", "Guarantor control"], ["requests", "Guarantor requests"]];
+  const tab = activeModuleTab("guarantors", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Guarantor requests", rows.length, "From loan workflow", "Open")}
@@ -1848,12 +1909,13 @@ function guarantorsView() {
       ${summary("Loan files with guarantors", loans.length, "Credit workflow", "View")}
       ${summary("Member exposure", "Review", "Guarantee capacity", "Assess")}
     </div>
-    ${rolePriorityPanel("Guarantor control focus", [
+    ${moduleTabs("guarantors", tabs, tab)}
+    ${tab === "overview" ? rolePriorityPanel("Guarantor control focus", [
       ["Borrower protection", "Borrowers cannot guarantee their own loan and guarantors must be active members.", "Controlled"],
       ["Member consent", `${pending.length} guarantor request(s) still need member acceptance before approval.`, pending.length ? "Pending" : "Clear"],
       ["Approval readiness", `${accepted.length} guarantee record(s) can support loan approval decisions.`, accepted.length ? "Ready" : "Waiting"]
-    ])}
-    ${recordTable("Guarantor requests", rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "capacity", "guarantorReadiness", "status"])}
+    ]) : ""}
+    ${tab === "requests" ? recordTable("Guarantor requests", rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "capacity", "guarantorReadiness", "status"]) : ""}
   `;
 }
 
@@ -1866,6 +1928,8 @@ function accountingView() {
   const unbalanced = journals.filter((journal) => journal.isBalanced === false || Number(journal.debitTotal || 0) !== Number(journal.creditTotal || 0));
   const closedPeriods = periods.filter((period) => normal(period.status) === "closed");
   const openPeriods = periods.filter((period) => normal(period.status) === "open");
+  const tabs = [["overview", "Ledger control"], ["capture", "Expense and asset capture"], ["setup", "Chart and periods"], ["journals", "Recent journal entries"], ["registers", "Expense and asset registers"]];
+  const tab = activeModuleTab("accounting", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Chart accounts", accounts.length, "Ledger structure", "Open")}
@@ -1875,24 +1939,25 @@ function accountingView() {
       ${summary("Expenses", money.format(sum(expenses, "amount")), "Supplier and operating costs", "Open")}
       ${summary("Assets", money.format(sum(assets, "netBookValue", "cost")), "Fixed asset register", "View")}
     </div>
-    ${rolePriorityPanel("Accounting ledger confidence", [
+    ${moduleTabs("accounting", tabs, tab)}
+    ${tab === "overview" ? rolePriorityPanel("Accounting ledger confidence", [
       ["Trial balance", unbalanced.length ? `${unbalanced.length} unbalanced journal entr${unbalanced.length === 1 ? "y" : "ies"} need correction.` : "All loaded journal entries are balanced.", unbalanced.length ? "Review" : "Clear"],
       ["Period control", `${openPeriods.length} open period(s), ${closedPeriods.length} closed period(s). Closed periods block ordinary postings.`, openPeriods.length ? "Open" : "Review"],
       ["Asset and expense evidence", `${expenses.length} expense record(s) and ${assets.length} asset record(s) support management reports.`, "Ready"]
-    ])}
-    <div class="grid two">
+    ]) : ""}
+    ${tab === "capture" ? `<div class="grid two">
       ${expenseCapturePanel()}
       ${assetCapturePanel()}
-    </div>
-    <div class="grid two">
+    </div>` : ""}
+    ${tab === "setup" ? `<div class="grid two">
       ${recordTable("Chart of accounts", accounts, ["code", "name", "type", "normalBalance"])}
       ${recordTable("Accounting periods", periods, ["name", "startDate", "endDate", "status"])}
-    </div>
-    ${recordTable("Recent journal entries", journals, ["reference", "description", "amount", "status", "postedAt"])}
-    <div class="grid two">
+    </div>` : ""}
+    ${tab === "journals" ? recordTable("Recent journal entries", journals, ["reference", "description", "amount", "status", "postedAt"]) : ""}
+    ${tab === "registers" ? `<div class="grid two">
       ${recordTable("Expenses", expenses, ["supplierId", "accountCode", "amount", "channel", "reference", "status"])}
       ${recordTable("Assets", assets, ["name", "category", "cost", "netBookValue", "location", "status"])}
-    </div>
+    </div>` : ""}
   `;
 }
 
@@ -1905,6 +1970,8 @@ function reconciliationView() {
   const unmatchedLedgerLines = Array.isArray(reconciliation.unmatchedLedgerLines) ? reconciliation.unmatchedLedgerLines : [];
   const callbackExceptions = callbacks.filter((row) => !normal(row.status).includes("posted") || row.duplicate);
   const exceptionCount = Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) + Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) + callbackExceptions.length;
+  const tabs = [["overview", "Reconciliation control"], ["matches", "Bank and mobile-money matching"], ["exceptions", "Exceptions"], ["callbacks", "Provider callbacks"]];
+  const tab = activeModuleTab("reconciliation", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Provider callbacks", callbacks.length, "Mobile money events", "Open")}
@@ -1913,22 +1980,24 @@ function reconciliationView() {
       ${summary("Unmatched ledger lines", summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length, money.format(summaryData.unmatchedLedgerAmount || 0), "Investigate")}
       ${summary("Callback exceptions", callbackExceptions.length, "Failed or duplicate provider events", "Resolve")}
     </div>
-    ${reconciliationControlPanel(summaryData)}
-    ${rolePriorityPanel("Reconciliation readiness checks", [
+    ${moduleTabs("reconciliation", tabs, tab)}
+    ${tab === "overview" ? `
+      ${reconciliationControlPanel(summaryData)}
+      ${rolePriorityPanel("Reconciliation readiness checks", [
       ["Statement matching", `${summaryData.matched ?? matches.length} matched record(s) against ${summaryData.statementLines || unmatchedStatementLines.length + matches.length} statement line(s).`, Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) ? "Review" : "Clear"],
       ["Ledger exceptions", `${summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length} ledger line(s) remain unmatched.`, Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) ? "Investigate" : "Clear"],
       ["Provider callbacks", `${callbackExceptions.length} callback exception(s) need provider or posting review.`, callbackExceptions.length ? "Resolve" : "Clear"],
       ["Close readiness", exceptionCount ? "Resolve reconciliation exceptions before period close or regulatory export." : "Reconciliation evidence is ready for reporting.", exceptionCount ? "Blocked" : "Ready"]
-    ])}
-    <div class="grid two">
+    ])}` : ""}
+    ${tab === "matches" ? `<div class="grid two">
       ${recordTable("Bank and mobile-money matching", reconciliationMatchRows(matches), ["externalReference", "statementAmount", "ledgerAmount", "accountCode", "sourceType", "postedAt"])}
       ${recordTable("Provider callback exceptions", callbackExceptions, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"])}
-    </div>
-    <div class="grid two">
+    </div>` : ""}
+    ${tab === "exceptions" ? `<div class="grid two">
       ${recordTable("Unmatched bank statement lines", unmatchedStatementLines, ["externalReference", "accountCode", "channel", "amount", "description", "statementDate"])}
       ${recordTable("Unmatched ledger lines", unmatchedLedgerLines, ["reference", "accountCode", "accountName", "sourceType", "amount", "postedAt"])}
-    </div>
-    ${recordTable("Provider callbacks", callbacks, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"])}
+    </div>` : ""}
+    ${tab === "callbacks" ? recordTable("Provider callbacks", callbacks, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"]) : ""}
   `;
 }
 
@@ -1984,6 +2053,8 @@ function governanceView() {
   })));
   const scheduled = meetings.filter((row) => normal(row.status) === "scheduled");
   const openResolutions = resolutions.filter((row) => normal(row.status) !== "closed");
+  const tabs = [["overview", "Governance control"], ["setup", "Governance meeting setup"], ["detail", "Governance meeting detail"], ["register", "Governance meeting register"], ["resolutions", "Resolution action list"]];
+  const tab = activeModuleTab("governance", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Meetings", meetings.length, "Board, AGM and committee records", "Open")}
@@ -1991,11 +2062,12 @@ function governanceView() {
       ${summary("Open resolutions", openResolutions.length, "Action items needing follow-up", "Track")}
       ${summary("Completed meetings", meetings.filter((row) => normal(row.status) === "completed").length, "Minutes and decisions", "Review")}
     </div>
-    ${governanceActionControlPanel(meetings, scheduled, resolutions, openResolutions)}
-    ${governanceMeetingPanel()}
-    ${governanceMeetingDetailPanel(meetings)}
-    ${recordTable("Governance meeting register", meetings, ["title", "meetingType", "scheduledAt", "chairName", "status", "openResolutions"])}
-    ${recordTable("Resolution action list", resolutions, ["meetingTitle", "title", "ownerName", "dueDate", "status", "createdAt"])}
+    ${moduleTabs("governance", tabs, tab)}
+    ${tab === "overview" ? governanceActionControlPanel(meetings, scheduled, resolutions, openResolutions) : ""}
+    ${tab === "setup" ? governanceMeetingPanel() : ""}
+    ${tab === "detail" ? (governanceMeetingDetailPanel(meetings) || emptyState("Governance meeting detail", "Select a meeting from the register to record resolutions and decisions.")) : ""}
+    ${tab === "register" ? recordTable("Governance meeting register", meetings, ["title", "meetingType", "scheduledAt", "chairName", "status", "openResolutions"]) : ""}
+    ${tab === "resolutions" ? recordTable("Resolution action list", resolutions, ["meetingTitle", "title", "ownerName", "dueDate", "status", "createdAt"]) : ""}
   `;
 }
 
@@ -3021,7 +3093,7 @@ function roleModuleScope(roleName, platformOnly) {
   if (name.includes("administrator") || name.includes("admin")) return "All SACCO modules";
   if (name.includes("treasurer")) return "Transactions, savings, shares, welfare, approvals, accounting, reconciliation, reports";
   if (name.includes("secretary")) return "Members, shares, welfare, approvals, reports, governance, complaints";
-  if (name.includes("chair")) return "Loans, guarantors, approvals, operations, reports, governance";
+  if (name.includes("chair")) return "Loans, guarantors, approvals, reports, governance";
   if (name.includes("accountant")) return "Transactions, accounting, reconciliation, reports";
   if (name.includes("teller")) return "Transactions and receipts";
   if (name.includes("auditor")) return "Read-only reports and audit";
@@ -4531,6 +4603,7 @@ async function createTransactionFromForm(event) {
 
 function openTransactionDetail(transactionId) {
   state.selectedTransactionId = transactionId;
+  state.moduleTabs.transactions = "detail";
   state.selectedTransactionReceipt = null;
   state.selectedTransactionMessage = "";
   state.selectedTransactionError = "";
@@ -4602,6 +4675,7 @@ async function createLoanFromForm(event) {
 
 async function openLoanDetail(loanId, shouldRender = true) {
   state.selectedLoanId = loanId;
+  state.moduleTabs.loans = "detail";
   state.selectedLoanGuarantors = [];
   state.selectedLoanRepayments = [];
   state.selectedLoanMessage = "";
@@ -5008,6 +5082,7 @@ async function submitWelfareClaim(event) {
 
 function openWelfareClaimDetail(claimId) {
   state.selectedWelfareClaimId = claimId;
+  state.moduleTabs.welfare = "detail";
   state.selectedWelfareClaimMessage = "";
   state.selectedWelfareClaimError = "";
   renderShell();
@@ -5139,6 +5214,7 @@ async function createGovernanceMeeting(event) {
 
 function openGovernanceMeetingDetail(meetingId) {
   state.selectedMeetingId = meetingId;
+  state.moduleTabs.governance = "detail";
   state.selectedMeetingMessage = "";
   state.selectedMeetingError = "";
   renderShell();
@@ -5175,6 +5251,7 @@ async function createGovernanceResolution(event) {
 
 function openComplaintDetail(complaintId) {
   state.selectedComplaintId = complaintId;
+  state.moduleTabs.complaints = "detail";
   state.selectedComplaintMessage = "";
   state.selectedComplaintError = "";
   renderShell();
@@ -5376,6 +5453,12 @@ function bindEvents() {
   document.querySelectorAll("[data-member-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.memberTab = button.dataset.memberTab;
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-module-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.moduleTabs[button.dataset.moduleTabView] = button.dataset.moduleTab;
       renderShell();
     });
   });
@@ -5632,6 +5715,7 @@ async function logout() {
     roleNames: [],
     permissionIds: [],
     currentView: "dashboard",
+    moduleTabs: {},
     userFormMessage: "",
     userFormError: "",
     selectedUserId: "",
