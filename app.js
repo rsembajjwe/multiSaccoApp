@@ -2928,6 +2928,7 @@ function renderMemberView(view) {
   const dash = state.memberData.dashboard || {};
   const balances = state.memberData.balances || dash.balances || {};
   if (view === "home") {
+    const monthlyPerformance = memberMonthlyPerformanceRows(dash);
     return `
       <div class="member-hero">
         <div><p class="eyebrow">Member dashboard</p><h2>${displayName()}, welcome back</h2><p>Balances and requests update after every refresh.</p></div>
@@ -2943,8 +2944,14 @@ function renderMemberView(view) {
         ${summary("Guarantee requests", state.memberData.pendingGuarantors.length, "PendingGuarantors", "Respond")}
         ${summary("Offline drafts", state.memberData.drafts.length, "Sync drafts", "Sync")}
       </div>
+      ${memberCommandCenter(dash, balances, monthlyPerformance)}
       ${memberPaymentRoutePanel()}
-      ${recordTable("Monthly savings and deposit performance", memberMonthlyPerformanceRows(dash), ["month", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}
+      ${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["month", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}
+      <div class="grid two">
+        ${recordTable("SACCO admin messages", memberAdminMessageRows(), ["title", "message", "channel", "status", "createdAt"])}
+        ${recordTable("Mobile money deposit activity", memberMobileMoneyRows(dash), ["postedAt", "reference", "description", "credit", "status"])}
+      </div>
+      ${recordTable("Member loan position", state.memberData.loans || [], ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"])}
       ${recordTable("Recent transactions", dash.recentTransactions || [], ["reference", "description", "debit", "credit", "runningBalance"])}
     `;
   }
@@ -3004,6 +3011,41 @@ function memberAccountsView(balances) {
       </div>
     </section>
     ${recordTable("Member account balances", accounts, ["account", "accountType", "balance", "purpose", "action"])}
+  `;
+}
+
+function memberCommandCenter(dash, balances, monthlyPerformance) {
+  const loans = state.memberData.loans || [];
+  const activeLoans = loans.filter((loan) => ["active", "approved", "disbursed"].includes(normal(loan.status)));
+  const messages = memberAdminMessageRows();
+  const unreadMessages = messages.filter((message) => !normal(`${message.status} ${message.readAt}`).includes("read"));
+  const mobileDeposits = memberMobileMoneyRows(dash);
+  const latestMonth = monthlyPerformance[0] || {};
+  const totalBalance = Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0);
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member command center</h2>
+          <p>One view for monthly savings, loans, SACCO admin messages and mobile-money deposit status.</p>
+        </div>
+        <span class="status active">Member-ready</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Total balance", money.format(totalBalance))}
+        ${mini("This month deposits", money.format(latestMonth.totalDeposits || 0))}
+        ${mini("Monthly savings", money.format(latestMonth.savingsDeposits || 0))}
+        ${mini("Loan balance", money.format(sum(loans, "outstandingBalance", "balance")))}
+        ${mini("SACCO admin messages", `${messages.length} message(s)`)}
+        ${mini("Mobile money deposits", `${mobileDeposits.length} record(s)`)}
+      </div>
+      <ul class="activity-list">
+        <li><strong>Monthly savings</strong><span>Your posted savings, shares, welfare and loan repayments are grouped by month for quick review.</span><em>${latestMonth.month || "No month yet"}</em></li>
+        <li><strong>Loans</strong><span>${activeLoans.length} active or approved loan file(s), with next repayment dates visible in the loan position table.</span><em>${activeLoans.length ? "Track" : "No active loan"}</em></li>
+        <li><strong>SACCO admin messages</strong><span>${unreadMessages.length} unread message(s) from your SACCO office, including notices, approvals and reminders.</span><em>${unreadMessages.length ? "Read" : "Clear"}</em></li>
+        <li><strong>Mobile money deposit</strong><span>Mobile-money payments appear after provider callback posting and then become visible in receipts and statements.</span><em>${mobileDeposits.length ? "Posted" : "No posted mobile record"}</em></li>
+      </ul>
+    </section>
   `;
 }
 
@@ -3133,6 +3175,32 @@ function memberGuarantorRows() {
     actionLabel: normal(request.status) === "pending" ? "Decide" : "View",
     actionId: request.id
   }));
+}
+
+function memberAdminMessageRows() {
+  return (state.memberData.notifications || []).map((notification) => ({
+    ...notification,
+    title: notification.title || "SACCO admin message",
+    message: notification.message || notification.body || "Message from SACCO administration",
+    channel: notification.channel || "in-app",
+    status: notification.status || (notification.readAt ? "read" : "unread"),
+    createdAt: notification.createdAt || notification.sentAt || ""
+  }));
+}
+
+function memberMobileMoneyRows(dash) {
+  return memberStatementLines(dash)
+    .filter((line) => {
+      const text = normal(`${line.channel || ""} ${line.provider || ""} ${line.reference || ""} ${line.description || ""} ${line.type || ""}`);
+      return text.includes("mobile") || text.includes("mtn") || text.includes("airtel") || text.includes("mm-");
+    })
+    .map((line) => ({
+      postedAt: line.postedAt || line.createdAt || "",
+      reference: line.reference,
+      description: line.description || "Mobile money deposit",
+      credit: line.credit || line.amount || 0,
+      status: line.status || "posted"
+    }));
 }
 
 function memberStatementsView(dash, balances) {

@@ -170,7 +170,12 @@ try {
       "Loans",
       "Notifications",
       "Guarantee requests",
-      "Offline drafts"
+      "Offline drafts",
+      "Member command center",
+      "Monthly savings",
+      "SACCO admin messages",
+      "Mobile money deposit activity",
+      "Member loan position"
     ]) {
       await expectText(page, marker, `member portal marker ${marker}`);
     }
