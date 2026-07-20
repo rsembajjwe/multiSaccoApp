@@ -3226,6 +3226,7 @@ function userDetailPanel(users, canManageRoles) {
         </div>
         <div class="table-actions">
           ${canManageUser ? `
+            ${selected.id !== state.user?.id ? `<button class="table-action" type="button" data-user-revoke-sessions="${escapeHtml(selected.id)}">Force logout sessions</button>` : ""}
             <button class="table-action" type="button" data-user-status="${nextStatus}" data-row-id="${escapeHtml(selected.id)}">${normal(selected.status) === "active" ? "Suspend user" : "Reactivate user"}</button>
             <button class="table-action danger" type="button" data-user-delete="${escapeHtml(selected.id)}">Delete user</button>
           ` : `<span class="status pending">Restricted</span>`}
@@ -4530,6 +4531,29 @@ async function deleteSelectedUser(userId) {
     state.userAdminTab = "list";
     state.search = "";
     await refreshAll();
+  } catch (error) {
+    state.selectedUserError = friendlyUserError(error, isPlatform());
+    renderShell();
+  }
+}
+
+async function revokeSelectedUserSessions(userId) {
+  const selected = dataRows("users").find((user) => user.id === userId);
+  const label = selected?.fullName || selected?.email || "this user";
+  if (!window.confirm(`Force logout ${label} from all active sessions? They will need to login again.`)) return;
+  state.selectedUserMessage = "";
+  state.selectedUserError = "";
+  try {
+    const result = await api(`/users/${encodeURIComponent(userId)}/sessions/revoke`, { method: "POST" });
+    const count = Number(result.revokedSessions || 0);
+    const message = count
+      ? `Revoked ${count} active session${count === 1 ? "" : "s"} for ${label}.`
+      : `${label} has no active sessions to revoke.`;
+    state.selectedUserMessage = message;
+    await refreshAll();
+    state.selectedUserId = userId;
+    state.selectedUserMessage = message;
+    renderShell();
   } catch (error) {
     state.selectedUserError = friendlyUserError(error, isPlatform());
     renderShell();
@@ -5912,6 +5936,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-user-delete]").forEach((button) => {
     button.addEventListener("click", () => deleteSelectedUser(button.dataset.userDelete));
+  });
+  document.querySelectorAll("[data-user-revoke-sessions]").forEach((button) => {
+    button.addEventListener("click", () => revokeSelectedUserSessions(button.dataset.userRevokeSessions));
   });
   document.querySelectorAll("[data-role-checkbox]").forEach((input) => {
     input.addEventListener("change", () => {

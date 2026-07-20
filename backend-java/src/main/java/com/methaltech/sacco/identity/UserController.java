@@ -8,6 +8,7 @@ import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -36,6 +37,7 @@ class UserController {
     private final AuditService auditService;
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
+    private final AuthSessionRepository authSessionRepository;
 
     UserController(
             UserRepository userRepository,
@@ -43,13 +45,15 @@ class UserController {
             PasswordHasher passwordHasher,
             AuditService auditService,
             RoleRepository roleRepository,
-            UserRoleRepository userRoleRepository) {
+            UserRoleRepository userRoleRepository,
+            AuthSessionRepository authSessionRepository) {
         this.userRepository = userRepository;
         this.authService = authService;
         this.passwordHasher = passwordHasher;
         this.auditService = auditService;
         this.roleRepository = roleRepository;
         this.userRoleRepository = userRoleRepository;
+        this.authSessionRepository = authSessionRepository;
     }
 
     @GetMapping
@@ -325,6 +329,48 @@ class UserController {
         return ResponseEntity.ok(ApiResponse.of(new UserRoleAssignmentResponse(targetUser.getId(), targetUser.getTenantId(), roleIds)));
     }
 
+    @PostMapping("/{userId}/sessions/revoke")
+    ResponseEntity<?> revokeUserSessions(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String userId,
+            HttpServletRequest httpRequest) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
+
+        User targetUser = userRepository.findById(userId).orElse(null);
+        if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
+            return userNotFound();
+        }
+        if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
+        if (!canManagePlatformUser(currentSession, targetUser)) {
+            return platformSuperAdminRequired("force logout platform users");
+        }
+        if (targetUser.getId().equals(currentSession.user().getId())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "CANNOT_FORCE_LOGOUT_SELF", "Use Logout to end your own current session."));
+        }
+
+        Instant now = Instant.now();
+        List<AuthSession> sessions = authSessionRepository.findByUserIdAndRevokedAtIsNull(targetUser.getId()).stream()
+                .filter(session -> session.getExpiresAt().isAfter(now))
+                .toList();
+        sessions.forEach(AuthSession::revoke);
+        authSessionRepository.saveAll(sessions);
+
+        auditService.record(
+                targetUser.getTenantId(),
+                currentSession.user(),
+                "Force logged out " + targetUser.getEmail() + " from " + sessions.size() + " active session(s)",
+                "auth_session",
+                targetUser.getId(),
+                httpRequest.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(new SessionRevocationResponse(targetUser.getId(), sessions.size())));
+    }
+
     private UserRoleAssignmentResponse assignmentResponse(User user) {
         List<String> roleIds = userRoleRepository.findByIdUserId(user.getId()).stream()
                 .map(userRole -> userRole.getId().getRoleId())
@@ -407,5 +453,8 @@ class UserController {
     }
 
     record UserRoleAssignmentResponse(String userId, String tenantId, List<String> roleIds) {
+    }
+
+    record SessionRevocationResponse(String userId, int revokedSessions) {
     }
 }
