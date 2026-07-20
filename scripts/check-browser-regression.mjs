@@ -40,6 +40,7 @@ try {
   await assertPublicSaccoRegistration(page);
 
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
+  await assertStaffSessionMenu(page);
   await assertNotificationBadgeRouting(page, "Notification delivery control", "staff notification badge routing");
   await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
   await expectNoVisibleText(page, "Read-only SACCO member support", "Platform Members navigation hidden");
@@ -153,6 +154,7 @@ try {
 
   if (await canMemberLogin("GVS", "GVS-0001", "Member@12345")) {
     await memberLogin(page);
+    await assertMemberSessionMenu(page);
     await assertNotificationBadgeRouting(page, "Read at", "member notification badge routing");
     await navigateTo(page, "home");
     for (const marker of [
@@ -309,6 +311,26 @@ async function assertNotificationBadgeRouting(page, destinationMarker, label) {
   await badge.click();
   await expectText(page, destinationMarker, `${label} destination`);
   console.log(`PASS ${label}`);
+}
+
+async function assertStaffSessionMenu(page) {
+  await page.locator("[data-action='toggle-session-menu']").click();
+  await expectText(page, "Session and security", "staff session menu");
+  await expectText(page, "Lockout after", "staff lockout policy summary");
+  await page.locator("[data-action='open-security-settings']").click();
+  await expectText(page, "Password and lockout policy", "staff security settings route");
+  await page.locator("[data-module-tab-view='settings'][data-module-tab='configuration']").click();
+  await navigateTo(page, "dashboard");
+  console.log("PASS staff session security menu");
+}
+
+async function assertMemberSessionMenu(page) {
+  await page.locator("[data-action='toggle-session-menu']").click();
+  await expectText(page, "Session and security", "member session menu");
+  await page.locator("[data-action='open-member-security']").click();
+  await expectText(page, "Member security center", "member security route");
+  await navigateTo(page, "home");
+  console.log("PASS member session security menu");
 }
 
 async function assertQuickSearchResult(page, query, destinationMarker, label) {

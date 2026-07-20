@@ -35,6 +35,7 @@ const state = {
   currentView: "dashboard",
   search: "",
   quickSearchActiveId: "",
+  sessionMenuOpen: false,
   tableState: {},
   moduleTabs: {},
   sessionExpiresAt: "",
@@ -612,6 +613,7 @@ function renderShell() {
   const portal = state.auth === "member" ? "Member Self-Service Portal" : isPlatform() ? "Platform Administration Portal" : "SACCO Administration Portal";
   const notificationButton = topbarNotificationButton(modules);
   const quickResults = quickSearchResults();
+  const sessionMenu = sessionSecurityMenu();
   setHtml(`
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
@@ -642,7 +644,10 @@ function renderShell() {
               <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs" autocomplete="off" aria-autocomplete="list" aria-controls="quickSearchResults"></label>
               ${quickSearchPanel(quickResults)}
             </div>
-            <span class="session-chip ${sessionStatusClass()}">${sessionTimeLabel()}</span>
+            <div class="session-control">
+              <button class="session-chip ${sessionStatusClass()}" type="button" data-action="toggle-session-menu" aria-expanded="${state.sessionMenuOpen ? "true" : "false"}">${sessionTimeLabel()}</button>
+              ${sessionMenu}
+            </div>
             ${notificationButton}
             <button class="icon-button" type="button" title="Help">?</button>
             <button class="profile-chip" type="button">${initials(displayName())}</button>
@@ -773,6 +778,36 @@ function unreadNotificationCount() {
     .map((row) => row.notificationId)
     .filter((id, index, ids) => ids.indexOf(id) === index)
     .length;
+}
+
+function sessionSecurityMenu() {
+  if (!state.sessionMenuOpen || state.auth === "none") return "";
+  const minutes = sessionMinutesRemaining();
+  const expiresAt = sessionExpiryValue();
+  const security = state.data.securitySummary || {};
+  const policy = state.data.platformSecurityPolicy || defaultPlatformSecurityPolicy();
+  const mfaLabel = state.auth === "staff" ? (security.mfaEnabled || state.user?.mfaEnabled ? "Enabled" : "Not enabled") : "Member password";
+  const expiryLabel = expiresAt ? formatDateTime(expiresAt) : "Not reported";
+  const urgency = minutes === null ? "Active" : minutes <= 0 ? "Expired" : minutes <= 15 ? "Expires soon" : "Active";
+  return `
+    <div class="session-menu">
+      <div class="session-menu-heading">
+        <strong>Session and security</strong>
+        <span class="status ${sessionStatusClass()}">${escapeHtml(urgency)}</span>
+      </div>
+      <div class="source-grid compact-source-grid">
+        ${mini("Expires", expiryLabel)}
+        ${mini("MFA", mfaLabel)}
+        ${mini("Login", state.auth === "member" ? state.member?.membershipNo || "Member" : state.user?.email || "Staff")}
+        ${mini("Role", roleLabel())}
+      </div>
+      ${isPlatform() ? `<p class="session-policy">Lockout after ${escapeHtml(policy.lockoutFailedAttempts ?? 5)} failed login attempts for ${escapeHtml(policy.lockoutMinutes ?? 15)} minute(s).</p>` : ""}
+      <div class="session-menu-actions">
+        <button class="button secondary" type="button" data-action="extend-session">Extend session</button>
+        ${state.auth === "staff" ? `<button class="button ghost" type="button" data-action="open-security-settings">Security settings</button>` : `<button class="button ghost" type="button" data-action="open-member-security">Member security</button>`}
+      </div>
+    </div>
+  `;
 }
 
 function renderView(view) {
@@ -6626,6 +6661,12 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
+  document.querySelectorAll("[data-action='toggle-session-menu']").forEach((button) => button.addEventListener("click", () => {
+    state.sessionMenuOpen = !state.sessionMenuOpen;
+    renderShell();
+  }));
+  document.querySelectorAll("[data-action='open-security-settings']").forEach((button) => button.addEventListener("click", openSecuritySettings));
+  document.querySelectorAll("[data-action='open-member-security']").forEach((button) => button.addEventListener("click", openMemberSecurity));
   document.querySelectorAll("[data-action='extend-session']").forEach((button) => button.addEventListener("click", extendSession));
   document.querySelectorAll("[data-action='toggle-current-mfa']").forEach((button) => button.addEventListener("click", () => updateCurrentUserMfa(button.dataset.mfaEnabled === "true")));
   document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
@@ -6705,6 +6746,7 @@ async function logout() {
     roleNames: [],
     permissionIds: [],
     currentView: "dashboard",
+    sessionMenuOpen: false,
     moduleTabs: {},
     sessionExpiresAt: "",
     passwordResetMessage: "",
@@ -6825,6 +6867,7 @@ async function extendSession() {
   if (state.auth === "none") return;
   state.loading = true;
   state.lastError = "";
+  state.sessionMenuOpen = false;
   renderShell();
   try {
     const response = await api(state.auth === "member" ? "/member-auth/extend-session" : "/auth/extend-session", { method: "POST" });
@@ -6854,6 +6897,19 @@ async function updateCurrentUserMfa(enabled) {
     state.loading = false;
     renderShell();
   }
+}
+
+function openSecuritySettings() {
+  state.sessionMenuOpen = false;
+  state.currentView = "settings";
+  state.moduleTabs.settings = "security";
+  renderShell();
+}
+
+function openMemberSecurity() {
+  state.sessionMenuOpen = false;
+  state.currentView = "security";
+  renderShell();
 }
 
 function runtimeNotice() {
@@ -7299,7 +7355,7 @@ function statusClass(value) {
 }
 
 function escapeHtml(value) {
-  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char]));
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char]));
 }
 
 init();
