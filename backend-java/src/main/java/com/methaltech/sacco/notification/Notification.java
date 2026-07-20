@@ -95,7 +95,7 @@ public class Notification {
         this.createdAt = Instant.now();
     }
 
-    void markRead() {
+    public void markRead() {
         this.status = "read";
         this.readAt = Instant.now();
     }

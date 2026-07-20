@@ -344,6 +344,38 @@ class MemberAuthController {
                 .toList()));
     }
 
+    @PatchMapping("/notifications/{notificationId}/acknowledge")
+    ResponseEntity<?> acknowledgeNotification(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String notificationId,
+            HttpServletRequest request) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        Notification notification = notificationRepository.findById(notificationId).orElse(null);
+        if (notification == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "NOTIFICATION_NOT_FOUND", "Notification was not found."));
+        }
+        if (!member.getId().equals(notification.getMemberId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "MEMBER_ACCESS_DENIED", "Cannot acknowledge another member's notification."));
+        }
+
+        notification.markRead();
+        Notification saved = notificationRepository.save(notification);
+        auditService.record(
+                member.getTenantId(),
+                member.getId(),
+                member.getFullName(),
+                "Member acknowledged notification " + saved.getTitle(),
+                "member_notification",
+                saved.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(NotificationResponse.from(saved)));
+    }
+
     @PostMapping("/mobile-loans")
     ResponseEntity<?> createMobileLoan(
             @RequestHeader(name = "Authorization", required = false) String authorization,

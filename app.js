@@ -131,6 +131,8 @@ const state = {
   memberPaymentError: "",
   memberComplaintMessage: "",
   memberComplaintError: "",
+  memberNotificationMessage: "",
+  memberNotificationError: "",
   memberGuarantorMessage: "",
   memberGuarantorError: "",
   welfareClaimMessage: "",
@@ -2734,7 +2736,19 @@ function renderMemberView(view) {
   if (view === "loans") return memberLoansView();
   if (view === "guarantor-requests") return memberGuarantorRequestsView();
   if (view === "payments") return memberPaymentsView();
-  if (view === "notifications") return recordTable("Notifications", state.memberData.notifications, ["title", "message", "channel", "status", "createdAt"]);
+  if (view === "notifications") {
+    const rows = state.memberData.notifications.map((notification) => ({
+      ...notification,
+      action: !notification.readAt && !normal(notification.status).includes("read") ? "member-notification-acknowledge" : "none",
+      actionLabel: "Acknowledge",
+      actionId: notification.id
+    }));
+    return `
+      ${state.memberNotificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberNotificationMessage)}</strong></div>` : ""}
+      ${state.memberNotificationError ? `<div class="notice warning"><strong>Notification update failed.</strong><span>${escapeHtml(state.memberNotificationError)}</span></div>` : ""}
+      ${recordTable("Notifications", rows, ["title", "message", "channel", "status", "createdAt", "readAt"])}
+    `;
+  }
   if (view === "complaints") return memberComplaintsView();
   if (view === "statements") return memberStatementsView(dash, balances);
   if (view === "receipts") return memberReceiptsView(dash);
@@ -3263,6 +3277,9 @@ function rowAction(row) {
   }
   if (row.action === "notification-acknowledge" && row.actionId) {
     return `<button class="table-action" type="button" data-row-action="notification-acknowledge" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Acknowledge")}</button>`;
+  }
+  if (row.action === "member-notification-acknowledge" && row.actionId) {
+    return `<button class="table-action" type="button" data-member-notification-acknowledge="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Acknowledge")}</button>`;
   }
   if (row.action && row.actionId) {
     return `<button class="table-action" type="button" data-row-action="${escapeHtml(row.action)}" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "View")}</button>`;
@@ -6070,6 +6087,23 @@ async function acknowledgeVisibleNotifications(notificationIdsText) {
   }
 }
 
+async function acknowledgeMemberNotification(notificationId) {
+  if (!notificationId) return;
+  state.memberNotificationMessage = "";
+  state.memberNotificationError = "";
+  try {
+    await api(`/member-auth/notifications/${encodeURIComponent(notificationId)}/acknowledge`, { method: "PATCH" });
+    state.memberNotificationMessage = "Notification acknowledged.";
+    await refreshMember();
+    state.currentView = "notifications";
+    state.memberNotificationMessage = "Notification acknowledged.";
+    renderShell();
+  } catch (error) {
+    state.memberNotificationError = error.message;
+    renderShell();
+  }
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -6428,6 +6462,9 @@ function bindEvents() {
   document.querySelectorAll("[data-member-guarantor-action]").forEach((button) => {
     button.addEventListener("click", () => decideMemberGuarantor(button.dataset.rowId, button.dataset.memberGuarantorAction));
   });
+  document.querySelectorAll("[data-member-notification-acknowledge]").forEach((button) => {
+    button.addEventListener("click", () => acknowledgeMemberNotification(button.dataset.memberNotificationAcknowledge));
+  });
   document.querySelectorAll("[data-member-draft-save]").forEach((button) => {
     button.addEventListener("click", () => saveMemberDraftFromForm(button.dataset.memberDraftSave));
   });
@@ -6578,6 +6615,8 @@ async function logout() {
     memberPaymentError: "",
     memberComplaintMessage: "",
     memberComplaintError: "",
+    memberNotificationMessage: "",
+    memberNotificationError: "",
     memberGuarantorMessage: "",
     memberGuarantorError: "",
     welfareClaimMessage: "",
