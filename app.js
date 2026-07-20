@@ -2950,7 +2950,7 @@ function renderMemberView(view) {
       ${memberServiceAssurancePanel(dash, balances, monthlyPerformance)}
       ${moduleTabs("home", tabs, tab)}
       ${tab === "overview" ? `${memberCommandCenter(dash, balances, monthlyPerformance)}${memberPaymentRoutePanel()}` : ""}
-      ${tab === "monthly" ? `${memberTabReadinessPanel("Monthly savings workspace", "Review full-date deposit performance across savings, shares, welfare and loan repayments.", [["Statement source", "Posted activity"], ["Date display", "Full date with year"], ["Member action", "Compare deposits"]])}${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}` : ""}
+      ${tab === "monthly" ? `${memberTabReadinessPanel("Monthly savings workspace", "Review full-date deposit performance across savings, shares, welfare, loan repayments and payment channel.", [["Statement source", "Posted activity"], ["Date display", "Full date with year"], ["Payment channels", "Treasurer/Mobile"]])}${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"])}` : ""}
       ${tab === "loans" ? `${memberTabReadinessPanel("Loan servicing workspace", "Track active loans, next due dates and outstanding balances before making repayments.", [["Repayment route", "Mobile money or Treasurer"], ["Guarantor checks", state.memberData.pendingGuarantors.length], ["Loan files", state.memberData.loans.length]])}${recordTable("Member loan position", state.memberData.loans || [], ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"])}` : ""}
       ${tab === "messages" ? `${memberTabReadinessPanel("SACCO admin message center", "Read official notices, reminders and approval updates sent by the SACCO office.", [["Unread messages", memberAdminMessageRows().filter((message) => !normal(`${message.status} ${message.readAt}`).includes("read")).length], ["Channel", "In-app/SMS/email"], ["Source", "SACCO admin"]])}${recordTable("SACCO admin messages", memberAdminMessageRows(), ["title", "message", "channel", "status", "createdAt"])}` : ""}
       ${tab === "mobile-money" ? `${memberTabReadinessPanel("Mobile money deposit workspace", "Confirm mobile-money payments that have posted through provider callback records.", [["Provider posting", "Callback based"], ["Receipt", "After posting"], ["Records", memberMobileMoneyRows(dash).length]])}${recordTable("Mobile money deposit activity", memberMobileMoneyRows(dash), ["postedAt", "reference", "description", "credit", "status"])}` : ""}
@@ -3175,7 +3175,7 @@ function memberPaymentsView() {
     ${tab === "treasurer-cash" ? `${memberTabReadinessPanel("Treasurer cash handoff", "Prepare cash deposits or loan repayments for SACCO Treasurer office receipting.", [["Route", "Visit SACCO office"], ["Receipt", "After staff posting"], ["Loan repayment", payableLoans.length ? "Available" : "No active loan"]])}${memberPaymentRoutePanel()}` : ""}
     ${tab === "drafts" ? `${memberTabReadinessPanel("Payment draft workspace", "Save incomplete mobile-money payment details on this device and sync them when ready.", [["Drafts saved", paymentDrafts.length], ["Storage", "Local device"], ["Sync status", paymentDrafts.length ? "Action needed" : "Clear"]])}${memberDraftPanel("Payment offline drafts", paymentDrafts)}` : ""}
     ${tab === "loans" ? `${memberTabReadinessPanel("Loan repayment workspace", "Review payable loan balances before choosing mobile money or Treasurer cash repayment.", [["Payable loans", payableLoans.length], ["Route options", "Mobile/Treasurer"], ["Receipt", "After posting"]])}${recordTable("Payable loans", payableLoans, ["product", "outstandingBalance", "nextDueDate", "status"])}` : ""}
-    ${tab === "tracking" ? `${memberTabReadinessPanel("Payment tracking workspace", "Track monthly deposits, repayments and receipt-ready posted activity.", [["Monthly rows", monthlyPerformance.length], ["Statement source", "Posted activity"], ["Date display", "Full date with year"]])}${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}` : ""}
+    ${tab === "tracking" ? `${memberTabReadinessPanel("Payment tracking workspace", "Track monthly deposits, repayments, Treasurer cash and mobile-money collections.", [["Monthly rows", monthlyPerformance.length], ["Treasurer cash", money.format(sum(monthlyPerformance, "treasurerCash"))], ["Mobile money", money.format(sum(monthlyPerformance, "mobileMoney"))]])}${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"])}` : ""}
   `;
 }
 
@@ -3265,10 +3265,7 @@ function memberAdminMessageRows() {
 
 function memberMobileMoneyRows(dash) {
   return memberStatementLines(dash)
-    .filter((line) => {
-      const text = normal(`${line.channel || ""} ${line.provider || ""} ${line.reference || ""} ${line.description || ""} ${line.type || ""}`);
-      return text.includes("mobile") || text.includes("mtn") || text.includes("airtel") || text.includes("mm-");
-    })
+    .filter((line) => isMobileMoneyLine(line))
     .map((line) => ({
       postedAt: line.postedAt || line.createdAt || "",
       reference: line.reference,
@@ -3276,6 +3273,11 @@ function memberMobileMoneyRows(dash) {
       credit: line.credit || line.amount || 0,
       status: line.status || "posted"
     }));
+}
+
+function isMobileMoneyLine(line) {
+  const text = normal(`${line.channel || ""} ${line.provider || ""} ${line.reference || ""} ${line.description || ""} ${line.type || ""}`);
+  return text.includes("mobile") || text.includes("mtn") || text.includes("airtel") || text.includes("mm-");
 }
 
 function memberStatementsView(dash, balances) {
@@ -3293,7 +3295,7 @@ function memberStatementsView(dash, balances) {
     ${moduleTabs("statements", tabs, tab)}
     ${tab === "readiness" ? memberStatementEvidencePanel(lines, balances) : ""}
     ${tab === "activity" ? `${filterToolbar("Filter by reference, account, channel, narration or date", "Download PDF", "Download Excel")}${recordTable("Member statement", lines, ["reference", "description", "debit", "credit", "runningBalance", "postedAt"])}` : ""}
-    ${tab === "monthly" ? `${memberTabReadinessPanel("Statement monthly evidence", "Review monthly deposits and repayments using full-date statement grouping.", [["Monthly rows", monthlyRows.length], ["Date format", "Full date with year"], ["Source", "Posted transactions"]])}${recordTable("Monthly savings and deposit performance", monthlyRows, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "totalDeposits", "closingBalance"])}` : ""}
+    ${tab === "monthly" ? `${memberTabReadinessPanel("Statement monthly evidence", "Review monthly deposits and repayments using full-date statement grouping and payment channels.", [["Monthly rows", monthlyRows.length], ["Treasurer cash", money.format(sum(monthlyRows, "treasurerCash"))], ["Mobile money", money.format(sum(monthlyRows, "mobileMoney"))]])}${recordTable("Monthly savings and deposit performance", monthlyRows, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"])}` : ""}
     ${tab === "exports" ? memberStatementExportPanel(lines) : ""}
   `;
 }
@@ -7863,6 +7865,8 @@ function memberMonthlyPerformanceRows(dash) {
         shareDeposits: 0,
         welfareDeposits: 0,
         loanRepayments: 0,
+        treasurerCash: 0,
+        mobileMoney: 0,
         totalDeposits: 0,
         closingBalance: 0
       });
@@ -7870,6 +7874,10 @@ function memberMonthlyPerformanceRows(dash) {
     const target = rows.get(month);
     const amount = Number(line.credit || 0);
     addPerformanceAmount(target, `${line.description || ""} ${line.type || ""}`, amount);
+    if (amount) {
+      if (isMobileMoneyLine(line)) target.mobileMoney += amount;
+      else target.treasurerCash += amount;
+    }
     target.totalDeposits = target.savingsDeposits + target.shareDeposits + target.welfareDeposits + target.loanRepayments;
     target.closingBalance = Number(line.runningBalance || target.closingBalance || 0);
   });

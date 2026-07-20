@@ -184,7 +184,10 @@ try {
     }
     await page.locator("[data-module-tab-view='home'][data-module-tab='monthly']").click();
     await expectText(page, "Monthly savings workspace", "member monthly workspace readiness");
+    await expectText(page, "Payment channels", "member monthly payment channel readiness");
     await expectText(page, "Monthly savings and deposit performance", "member home monthly savings tab");
+    await expectText(page, "Treasurer cash", "member home treasurer cash monthly column");
+    await expectText(page, "Mobile money", "member home mobile money monthly column");
     await expectText(page, "2026", "member home full date year");
     await page.locator("[data-module-tab-view='home'][data-module-tab='loans']").click();
     await expectText(page, "Loan servicing workspace", "member loans workspace readiness");
@@ -697,6 +700,8 @@ async function assertMemberPaymentPosting(page) {
   await expectText(page, "Member payment center", "member payment mobile money tab");
   await page.locator("[data-module-tab-view='payments'][data-module-tab='tracking']").click();
   await expectText(page, "Payment tracking workspace", "member payment tracking tab");
+  await expectText(page, "Treasurer cash", "member payment tracking treasurer cash");
+  await expectText(page, "Mobile money", "member payment tracking mobile money");
   await expectText(page, "Monthly savings and deposit performance", "member payment monthly performance");
   await page.locator("[data-module-tab-view='payments'][data-module-tab='drafts']").click();
   await expectText(page, "Payment draft workspace", "member payment drafts tab");
@@ -743,6 +748,8 @@ async function assertMemberStatementEvidence(page) {
   await expectText(page, "Member statement", "member statement activity tab");
   await page.locator("[data-module-tab-view='statements'][data-module-tab='monthly']").click();
   await expectText(page, "Statement monthly evidence", "member statement monthly evidence");
+  await expectText(page, "Treasurer cash", "member statement treasurer cash evidence");
+  await expectText(page, "Mobile money", "member statement mobile money evidence");
   await page.locator("[data-module-tab-view='statements'][data-module-tab='exports']").click();
   await expectText(page, "Statement export controls", "member statement export controls");
   console.log("PASS member statement evidence");
