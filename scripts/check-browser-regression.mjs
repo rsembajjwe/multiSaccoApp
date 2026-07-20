@@ -79,7 +79,7 @@ try {
   await staffLogin(page, "GVS", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
   await expectNoVisibleText(page, "SACCO Administrator", "SACCO Administrator label hidden");
   await expectNoVisibleText(page, "SACCO role access", "SACCO role access panel hidden");
-  await assertScreen(page, "dashboard", ["Total members", "Total savings", "Recent transactions", "Loan work queue"]);
+  await assertScreen(page, "dashboard", ["Total members", "Total savings", "Recent transactions", "Loan work queue", "SACCO monthly performance control", "Treasurer cash collections", "Mobile money collections"]);
   await assertScreen(page, "members", ["Member Overview", "Register Member", "Member List", "KYC Detail", "Contacts & Documents", "Statement", "Member management focus"]);
   await assertMemberRegistrationAndKyc(page);
   await assertQuickSearchResult(page, "GVS-0001", "Member detail and KYC approval", "SACCO member quick search");
@@ -91,6 +91,7 @@ try {
   await assertTransactionWorkflow(page);
   await assertModuleTabs(page, "savings", [
     ["overview", ["Savings operations control"]],
+    ["monthly", ["SACCO monthly performance control", "Member monthly performance", "Treasurer cash collections", "Mobile money collections"]],
     ["products", ["Savings product setup"]],
     ["accounts", ["Open Savings account"]],
     ["lists", ["Savings product list", "Savings accounts"]]
@@ -154,7 +155,7 @@ try {
   await logout(page);
 
   await assertRoleDashboard(page, "GVS", "chairperson@greenvalley.local", "Chair@12345", "SACCO Chairperson", ["SACCO Chairperson", "Chairperson decision focus", "Chairperson approval queue"]);
-  await assertRoleDashboard(page, "GVS", "treasurer@greenvalley.local", "Treasurer@12345", "SACCO Treasurer", ["SACCO Treasurer", "Treasurer daily control", "Treasurer reconciliation watch"]);
+  await assertRoleDashboard(page, "GVS", "treasurer@greenvalley.local", "Treasurer@12345", "SACCO Treasurer", ["SACCO Treasurer", "Treasurer daily control", "SACCO monthly performance control", "Treasurer reconciliation watch"]);
   await assertRoleDashboard(page, "GVS", "secretary@greenvalley.local", "Secretary@12345", "SACCO Secretary", ["SACCO Secretary", "Secretary office focus", "Member follow-up list"]);
 
   if (await canMemberLogin("GVS", "GVS-0001", "Member@12345")) {

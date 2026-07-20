@@ -1035,6 +1035,7 @@ function saccoDashboard() {
   const members = dataRows("members");
   const transactions = dataRows("transactions");
   const loans = dataRows("loans");
+  const monthlyPerformance = saccoMonthlyPerformanceRows();
   return `
     <div class="dashboard-grid">
       ${summary("Total members", members.length, "Membership register", "Open members")}
@@ -1048,7 +1049,8 @@ function saccoDashboard() {
     </div>
     ${loginRiskSummaryPanel(false)}
     ${paymentRoutePanel()}
-    ${recordTable("Member monthly performance", saccoMonthlyPerformanceRows(), ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
+    ${saccoMonthlyPerformancePanel(monthlyPerformance)}
+    ${recordTable("Member monthly performance", monthlyPerformance, ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
     <div class="grid two">
       ${recordTable("Recent transactions", transactions, ["reference", "memberName", "type", "amount", "status"])}
       ${recordTable("Loan work queue", loans, ["applicationNo", "memberName", "product", "requestedAmount", "status"])}
@@ -1095,6 +1097,7 @@ function saccoTreasurerDashboard() {
   const expenses = dataRows("expenses");
   const cashAccounts = accounts.filter((row) => ["cash", "bank", "mobile"].some((word) => normal(`${row.accountType} ${row.productType} ${row.name}`).includes(word)));
   const failedCallbacks = callbacks.filter((row) => ["failed", "exception", "pending"].some((word) => normal(row.status).includes(word)));
+  const monthlyPerformance = saccoMonthlyPerformanceRows();
   return `
     ${dashboardIntro("SACCO Treasurer", "Cash, collections, withdrawals, reconciliation and finance approvals for daily control.")}
     ${roleAccessPanel("Treasurer access")}
@@ -1112,7 +1115,8 @@ function saccoTreasurerDashboard() {
       ["Payment exceptions", `${failedCallbacks.length} mobile-money callback(s) need follow-up before reports are final.`, failedCallbacks.length ? "Investigate" : "Clear"]
     ])}
     ${paymentRoutePanel()}
-    ${recordTable("Member monthly performance", saccoMonthlyPerformanceRows(), ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
+    ${saccoMonthlyPerformancePanel(monthlyPerformance)}
+    ${recordTable("Member monthly performance", monthlyPerformance, ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
     <div class="grid two">
       ${recordTable("Finance approval queue", pendingTransactions(), ["reference", "memberName", "type", "amount", "channel", "status"])}
       ${recordTable("Treasurer reconciliation watch", [...failedCallbacks, ...callbacks].slice(0, 12), ["externalReference", "provider", "purpose", "amount", "status", "receivedAt"])}
@@ -2053,6 +2057,7 @@ function savingsView() {
   const accounts = accountsByType("savings");
   const members = dataRows("members");
   const activeProducts = products.filter((row) => normal(row.status) === "active");
+  const monthlyPerformance = saccoMonthlyPerformanceRows();
   const tabs = [["overview", "Savings control"], ["monthly", "Monthly performance"], ["products", "Savings product setup"], ["accounts", "Open Savings account"], ["lists", "Savings records"]];
   const tab = activeModuleTab("savings", tabs);
   return `
@@ -2071,7 +2076,8 @@ function savingsView() {
     ]) : ""}
     ${tab === "monthly" ? `
       ${paymentRoutePanel()}
-      ${recordTable("Member monthly performance", saccoMonthlyPerformanceRows(), ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
+      ${saccoMonthlyPerformancePanel(monthlyPerformance)}
+      ${recordTable("Member monthly performance", monthlyPerformance, ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
     ` : ""}
     ${tab === "products" ? financialProductPanel("savings") : ""}
     ${tab === "accounts" ? financialAccountPanel("savings", products) : ""}
@@ -7807,6 +7813,30 @@ function memberPaymentControlPanel(payableLoanCount, draftCount) {
   `;
 }
 
+function saccoMonthlyPerformancePanel(rows) {
+  const membersReported = new Set(rows.map((row) => row.memberName).filter(Boolean)).size;
+  const latestMonth = rows[0]?.month || "No posted month";
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>SACCO monthly performance control</h2>
+          <p>Compare member deposits by savings, shares, welfare, loan repayments, Treasurer cash and mobile money.</p>
+        </div>
+        <span class="status active">Staff reporting</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Latest month", latestMonth)}
+        ${mini("Members reported", membersReported)}
+        ${mini("Treasurer cash collections", money.format(sum(rows, "treasurerCash")))}
+        ${mini("Mobile money collections", money.format(sum(rows, "mobileMoney")))}
+        ${mini("Loan repayments", money.format(sum(rows, "loanRepayments")))}
+        ${mini("Total deposits", money.format(sum(rows, "totalDeposits")))}
+      </div>
+    </section>
+  `;
+}
+
 function saccoMonthlyPerformanceRows() {
   const rows = new Map();
   const ensure = (month, memberId, memberLabel) => {
@@ -7834,7 +7864,7 @@ function saccoMonthlyPerformanceRows() {
       const target = ensure(month, transaction.memberId, transaction.memberName);
       const amount = Number(transaction.amount || transaction.credit || 0);
       addPerformanceAmount(target, transaction.type, amount);
-      if (normal(transaction.channel).includes("mobile")) target.mobileMoney += amount;
+      if (isMobileMoneyLine(transaction)) target.mobileMoney += amount;
       else target.treasurerCash += amount;
     });
 
