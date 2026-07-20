@@ -935,8 +935,13 @@ textarea {
   position: relative;
 }
 
+.account-control {
+  position: relative;
+}
+
 .session-menu,
-.help-menu {
+.help-menu,
+.account-menu {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
@@ -951,6 +956,44 @@ textarea {
 
 .help-menu {
   width: min(440px, 84vw);
+}
+
+.account-menu {
+  width: min(420px, 84vw);
+}
+
+.account-menu-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.account-menu-heading strong,
+.account-menu-heading small {
+  display: block;
+}
+
+.account-menu-heading small {
+  color: var(--muted);
+}
+
+.profile-avatar {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--green-800);
+  font-weight: 900;
+}
+
+.danger-text {
+  color: #9b1c13;
+  border-color: #f1b8ae;
+  background: #fff7f5;
 }
 
 .session-menu-heading,

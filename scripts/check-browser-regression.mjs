@@ -42,6 +42,7 @@ try {
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
   await assertStaffSessionMenu(page);
   await assertPlatformHelpMenu(page);
+  await assertStaffAccountMenu(page);
   await assertNotificationBadgeRouting(page, "Notification delivery control", "staff notification badge routing");
   await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
   await expectNoVisibleText(page, "Read-only SACCO member support", "Platform Members navigation hidden");
@@ -157,6 +158,7 @@ try {
     await memberLogin(page);
     await assertMemberSessionMenu(page);
     await assertMemberHelpMenu(page);
+    await assertMemberAccountMenu(page);
     await assertNotificationBadgeRouting(page, "Read at", "member notification badge routing");
     await navigateTo(page, "home");
     for (const marker of [
@@ -353,6 +355,27 @@ async function assertMemberHelpMenu(page) {
   await expectText(page, "Member complaint center", "member help complaints destination");
   await navigateTo(page, "home");
   console.log("PASS member help menu");
+}
+
+async function assertStaffAccountMenu(page) {
+  await page.locator("[data-action='toggle-account-menu']").click();
+  await expectText(page, "admin@platform.local", "staff account identity");
+  await expectText(page, "Platform Administrator", "staff account role");
+  await page.locator("[data-action='open-account-profile']").click();
+  await expectText(page, "User detail and role assignment", "staff account profile route");
+  await page.locator("[data-action='close-user-detail']").click();
+  await navigateTo(page, "dashboard");
+  console.log("PASS staff account menu");
+}
+
+async function assertMemberAccountMenu(page) {
+  await page.locator("[data-action='toggle-account-menu']").click();
+  await expectText(page, "GVS-0001", "member account identity");
+  await expectText(page, "Member", "member account role");
+  await page.locator("[data-action='open-account-profile']").click();
+  await expectText(page, "Member profile and KYC", "member account profile route");
+  await navigateTo(page, "home");
+  console.log("PASS member account menu");
 }
 
 async function assertQuickSearchResult(page, query, destinationMarker, label) {
