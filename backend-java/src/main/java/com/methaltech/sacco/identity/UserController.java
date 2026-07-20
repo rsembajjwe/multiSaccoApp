@@ -3,11 +3,13 @@ package com.methaltech.sacco.identity;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.security.PasswordHasher;
+import com.methaltech.sacco.security.TokenGenerator;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,6 +41,9 @@ class UserController {
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
     private final AuthSessionRepository authSessionRepository;
+    private final PasswordResetRequestRepository passwordResetRequestRepository;
+    private final TokenGenerator tokenGenerator;
+    private final DemoCredentialPolicy demoCredentialPolicy;
 
     UserController(
             UserRepository userRepository,
@@ -47,7 +52,10 @@ class UserController {
             AuditService auditService,
             RoleRepository roleRepository,
             UserRoleRepository userRoleRepository,
-            AuthSessionRepository authSessionRepository) {
+            AuthSessionRepository authSessionRepository,
+            PasswordResetRequestRepository passwordResetRequestRepository,
+            TokenGenerator tokenGenerator,
+            DemoCredentialPolicy demoCredentialPolicy) {
         this.userRepository = userRepository;
         this.authService = authService;
         this.passwordHasher = passwordHasher;
@@ -55,6 +63,9 @@ class UserController {
         this.roleRepository = roleRepository;
         this.userRoleRepository = userRoleRepository;
         this.authSessionRepository = authSessionRepository;
+        this.passwordResetRequestRepository = passwordResetRequestRepository;
+        this.tokenGenerator = tokenGenerator;
+        this.demoCredentialPolicy = demoCredentialPolicy;
     }
 
     @GetMapping
@@ -417,6 +428,75 @@ class UserController {
         return ResponseEntity.ok(ApiResponse.of(UserResponse.from(savedUser, activeSessionCount(savedUser.getId(), Instant.now()))));
     }
 
+    @PostMapping("/{userId}/password-reset")
+    ResponseEntity<?> requestUserPasswordReset(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String userId,
+            HttpServletRequest httpRequest) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
+
+        User targetUser = userRepository.findById(userId).orElse(null);
+        if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
+            return userNotFound();
+        }
+        if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
+        if (!canManagePlatformUser(currentSession, targetUser)) {
+            return platformSuperAdminRequired("request platform user password reset");
+        }
+
+        String resetToken = tokenGenerator.createToken();
+        Instant expiresAt = Instant.now().plus(Duration.ofMinutes(30));
+        PasswordResetRequest resetRequest = passwordResetRequestRepository.save(new PasswordResetRequest(
+                "reset_" + UUID.randomUUID(),
+                targetUser.getTenantId(),
+                targetUser.getId(),
+                tokenGenerator.hashToken(resetToken),
+                expiresAt));
+        auditService.record(
+                targetUser.getTenantId(),
+                currentSession.user(),
+                "Requested password reset for user " + targetUser.getEmail(),
+                "password_reset",
+                resetRequest.getId(),
+                httpRequest.getRemoteAddr());
+
+        String responseToken = demoCredentialPolicy.demoLoginsEnabled() ? resetToken : null;
+        return ResponseEntity.ok(ApiResponse.of(new UserPasswordResetResponse(
+                targetUser.getId(),
+                resetRequest.getId(),
+                expiresAt,
+                responseToken)));
+    }
+
+    @GetMapping("/{userId}/password-resets")
+    ResponseEntity<?> listUserPasswordResets(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String userId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
+
+        User targetUser = userRepository.findById(userId).orElse(null);
+        if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
+            return userNotFound();
+        }
+        if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
+        if (!canManagePlatformUser(currentSession, targetUser)) {
+            return platformSuperAdminRequired("view platform user password reset history");
+        }
+
+        return ResponseEntity.ok(ApiResponse.of(passwordResetRequestRepository.findByUserIdOrderByCreatedAtDesc(targetUser.getId()).stream()
+                .limit(10)
+                .map(PasswordResetSummaryResponse::from)
+                .toList()));
+    }
+
     @GetMapping("/{userId}/sessions")
     ResponseEntity<?> listUserSessions(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -582,6 +662,20 @@ class UserController {
     }
 
     record SessionRevocationResponse(String userId, int revokedSessions) {
+    }
+
+    record UserPasswordResetResponse(String userId, String resetRequestId, Instant expiresAt, String resetToken) {
+    }
+
+    record PasswordResetSummaryResponse(String id, String status, Instant createdAt, Instant expiresAt, Instant usedAt) {
+        static PasswordResetSummaryResponse from(PasswordResetRequest request) {
+            return new PasswordResetSummaryResponse(
+                    request.getId(),
+                    request.getStatus(),
+                    request.getCreatedAt(),
+                    request.getExpiresAt(),
+                    request.getUsedAt());
+        }
     }
 
     record SessionDetailResponse(String id, String ipAddress, String userAgent, Instant createdAt, Instant expiresAt) {

@@ -57,6 +57,9 @@ const state = {
   selectedUserId: "",
   selectedUserRoles: [],
   selectedUserSessions: [],
+  selectedUserPasswordResets: [],
+  selectedUserResetToken: "",
+  selectedUserResetExpiresAt: "",
   selectedUserLoading: false,
   selectedUserMessage: "",
   selectedUserError: "",
@@ -3183,6 +3186,14 @@ function userDetailPanel(users, canManageRoles) {
     actionLabel: "Revoke",
     actionId: `${selected.id}|${session.id}`
   }));
+  const resetRows = (state.selectedUserPasswordResets || []).map((request) => ({
+    id: request.id,
+    status: request.status,
+    createdAt: formatDateTime(request.createdAt),
+    expiresAt: formatDateTime(request.expiresAt),
+    usedAt: request.usedAt ? formatDateTime(request.usedAt) : "-"
+  }));
+  const latestReset = resetRows[0];
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
@@ -3193,6 +3204,7 @@ function userDetailPanel(users, canManageRoles) {
         <button class="button ghost" type="button" data-action="close-user-detail">Close</button>
       </div>
       ${state.selectedUserMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedUserMessage)}</strong></div>` : ""}
+      ${state.selectedUserResetToken ? `<div class="notice compact"><strong>Development reset token</strong><span>${escapeHtml(state.selectedUserResetToken)} expires ${escapeHtml(formatDateTime(state.selectedUserResetExpiresAt))}</span></div>` : ""}
       ${state.selectedUserError ? `<div class="notice warning"><strong>User update failed.</strong><span>${escapeHtml(state.selectedUserError)}</span></div>` : ""}
       <div class="source-grid">
         ${mini("SACCO", platformUser ? "Platform Administration" : selected.tenantId)}
@@ -3201,6 +3213,7 @@ function userDetailPanel(users, canManageRoles) {
         ${mini("User ID", selected.id)}
         ${mini("Current roles", assignedRoles.length ? assignedRoles.map((role) => role.name).join(", ") : "Unassigned")}
         ${mini("MFA", selected.mfaEnabled ? "Enabled" : "Not enabled")}
+        ${mini("Password reset", latestReset ? `${latestReset.status} until ${latestReset.expiresAt}` : "No pending reset")}
         ${mini("Active sessions", selected.activeSessionCount || 0)}
         ${mini("Access purpose", rolePurpose(primaryRole.name || selected.role || "", platformUser))}
         ${mini("Module scope", roleModuleScope(primaryRole.name || selected.role || "", platformUser))}
@@ -3244,6 +3257,7 @@ function userDetailPanel(users, canManageRoles) {
         <div class="table-actions">
           ${canManageUser ? `
             <button class="table-action" type="button" data-user-mfa="${selected.mfaEnabled ? "false" : "true"}" data-row-id="${escapeHtml(selected.id)}">${selected.mfaEnabled ? "Disable MFA" : "Enable MFA"}</button>
+            <button class="table-action" type="button" data-user-password-reset="${escapeHtml(selected.id)}">Request password reset</button>
             ${selected.id !== state.user?.id ? `<button class="table-action" type="button" data-user-revoke-sessions="${escapeHtml(selected.id)}">Force logout sessions</button>` : ""}
             <button class="table-action" type="button" data-user-status="${nextStatus}" data-row-id="${escapeHtml(selected.id)}">${normal(selected.status) === "active" ? "Suspend user" : "Reactivate user"}</button>
             <button class="table-action danger" type="button" data-user-delete="${escapeHtml(selected.id)}">Delete user</button>
@@ -3251,6 +3265,7 @@ function userDetailPanel(users, canManageRoles) {
         </div>
       </div>
       ${canManageUser ? recordTable("Active session detail", sessionRows, ["ipAddress", "device", "createdAt", "expiresAt"]) : ""}
+      ${canManageUser ? recordTable("Password reset history", resetRows, ["status", "createdAt", "expiresAt", "usedAt"]) : ""}
     </section>
   `;
 }
@@ -4468,18 +4483,23 @@ async function openUserDetail(userId) {
   state.selectedUserId = userId;
   state.selectedUserRoles = [];
   state.selectedUserSessions = [];
+  state.selectedUserPasswordResets = [];
+  state.selectedUserResetToken = "";
+  state.selectedUserResetExpiresAt = "";
   state.selectedUserMessage = "";
   state.selectedUserError = "";
   state.selectedUserLoading = true;
   state.userAdminTab = "detail";
   renderShell();
   try {
-    const [assignment, sessions] = await Promise.all([
+    const [assignment, sessions, resets] = await Promise.all([
       api(`/users/${encodeURIComponent(userId)}/roles`),
-      optionalApi(`/users/${encodeURIComponent(userId)}/sessions`, [])
+      optionalApi(`/users/${encodeURIComponent(userId)}/sessions`, []),
+      optionalApi(`/users/${encodeURIComponent(userId)}/password-resets`, [])
     ]);
     state.selectedUserRoles = assignment.roleIds || [];
     state.selectedUserSessions = sessions || [];
+    state.selectedUserPasswordResets = resets || [];
   } catch (error) {
     state.selectedUserError = error.message;
   } finally {
@@ -4617,6 +4637,33 @@ async function revokeSelectedUserSessions(userId) {
     await refreshAll();
     state.selectedUserId = userId;
     state.selectedUserMessage = message;
+    renderShell();
+  } catch (error) {
+    state.selectedUserError = friendlyUserError(error, isPlatform());
+    renderShell();
+  }
+}
+
+async function requestSelectedUserPasswordReset(userId) {
+  const selected = dataRows("users").find((user) => user.id === userId);
+  const label = selected?.fullName || selected?.email || "this user";
+  if (!window.confirm(`Request password reset for ${label}?`)) return;
+  state.selectedUserMessage = "";
+  state.selectedUserError = "";
+  state.selectedUserResetToken = "";
+  state.selectedUserResetExpiresAt = "";
+  try {
+    const response = await api(`/users/${encodeURIComponent(userId)}/password-reset`, { method: "POST" });
+    state.selectedUserResetToken = response.resetToken || "";
+    state.selectedUserResetExpiresAt = response.expiresAt || "";
+    state.selectedUserPasswordResets = await optionalApi(`/users/${encodeURIComponent(userId)}/password-resets`, []);
+    const successMessage = response.resetToken
+      ? `Password reset token generated for ${label}.`
+      : `Password reset request recorded for ${label}.`;
+    state.selectedUserMessage = successMessage;
+    await refreshAll();
+    state.selectedUserId = userId;
+    state.selectedUserMessage = successMessage;
     renderShell();
   } catch (error) {
     state.selectedUserError = friendlyUserError(error, isPlatform());
@@ -5943,6 +5990,9 @@ function bindEvents() {
     state.selectedUserId = "";
     state.selectedUserRoles = [];
     state.selectedUserSessions = [];
+    state.selectedUserPasswordResets = [];
+    state.selectedUserResetToken = "";
+    state.selectedUserResetExpiresAt = "";
     state.selectedUserMessage = "";
     state.selectedUserError = "";
     renderShell();
@@ -6032,6 +6082,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-user-revoke-sessions]").forEach((button) => {
     button.addEventListener("click", () => revokeSelectedUserSessions(button.dataset.userRevokeSessions));
+  });
+  document.querySelectorAll("[data-user-password-reset]").forEach((button) => {
+    button.addEventListener("click", () => requestSelectedUserPasswordReset(button.dataset.userPasswordReset));
   });
   document.querySelectorAll("[data-role-checkbox]").forEach((input) => {
     input.addEventListener("change", () => {
@@ -6187,6 +6240,9 @@ async function logout() {
     selectedUserId: "",
     selectedUserRoles: [],
     selectedUserSessions: [],
+    selectedUserPasswordResets: [],
+    selectedUserResetToken: "",
+    selectedUserResetExpiresAt: "",
     selectedUserMessage: "",
     selectedUserError: "",
     userAdminTab: "add",
