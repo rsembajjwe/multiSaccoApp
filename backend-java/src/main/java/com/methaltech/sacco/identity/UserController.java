@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotBlank;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -68,9 +69,18 @@ class UserController {
                 ? userRepository.findAllByOrderByFullNameAsc()
                 : userRepository.findByTenantIdOrderByFullNameAsc(currentSession.user().getTenantId());
 
+        Instant now = Instant.now();
+        Map<String, Long> activeSessionsByUser = users.stream()
+                .collect(Collectors.toMap(
+                        User::getId,
+                        user -> authSessionRepository.findByUserIdAndRevokedAtIsNull(user.getId()).stream()
+                                .filter(session -> session.getExpiresAt().isAfter(now))
+                                .count(),
+                        Long::sum));
+
         return ResponseEntity.ok(ApiResponse.of(users.stream()
                 .filter(user -> !"deleted".equalsIgnoreCase(user.getStatus()))
-                .map(UserResponse::from)
+                .map(user -> UserResponse.from(user, activeSessionsByUser.getOrDefault(user.getId(), 0L)))
                 .toList()));
     }
 

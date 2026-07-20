@@ -6,15 +6,21 @@ record UserResponse(
         String fullName,
         String email,
         String phone,
-        String status) {
+        String status,
+        long activeSessionCount) {
 
     static UserResponse from(User user) {
+        return from(user, 0);
+    }
+
+    static UserResponse from(User user, long activeSessionCount) {
         return new UserResponse(
                 user.getId(),
                 user.getTenantId(),
                 user.getFullName(),
                 user.getEmail(),
                 user.getPhone(),
-                user.getStatus());
+                user.getStatus(),
+                activeSessionCount);
     }
 }

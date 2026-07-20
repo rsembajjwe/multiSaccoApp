@@ -1528,7 +1528,7 @@ function usersView() {
   const canCreate = hasPermission("users:create") || hasPermission("roles:create");
   const rows = users.map((user) => ({ ...staffAccessRow(user, platformOnly), action: "user-detail", actionLabel: "Manage access", actionId: user.id }));
   const roles = userRoleOptions(platformOnly);
-  const listPanel = recordTable(platformOnly ? "Platform administrator list" : "SACCO staff access list", rows, ["fullName", "email", "phone", "role", "accessPurpose", "moduleScope", "lastLogin", "status"]);
+  const listPanel = recordTable(platformOnly ? "Platform administrator list" : "SACCO staff access list", rows, ["fullName", "email", "phone", "role", "activeSessions", "accessPurpose", "moduleScope", "lastLogin", "status"]);
   const detailPanel = userDetailPanel(users, canCreate) || emptyState("User detail and role assignment", "Select Manage access from the administrator list to review roles and module access.");
   if (platformOnly) {
     return `
@@ -3185,6 +3185,7 @@ function userDetailPanel(users, canManageRoles) {
         ${mini("Phone", selected.phone)}
         ${mini("User ID", selected.id)}
         ${mini("Current roles", assignedRoles.length ? assignedRoles.map((role) => role.name).join(", ") : "Unassigned")}
+        ${mini("Active sessions", selected.activeSessionCount || 0)}
         ${mini("Access purpose", rolePurpose(primaryRole.name || selected.role || "", platformUser))}
         ${mini("Module scope", roleModuleScope(primaryRole.name || selected.role || "", platformUser))}
         ${mini("User type", platformUser ? "Platform administrator" : "SACCO staff")}
@@ -3303,6 +3304,7 @@ function staffAccessRow(user, platformOnly) {
   return {
     ...user,
     role,
+    activeSessions: user.activeSessionCount || 0,
     accessPurpose: rolePurpose(role, platformOnly),
     moduleScope: roleModuleScope(role, platformOnly),
     status: user.status || "active"
