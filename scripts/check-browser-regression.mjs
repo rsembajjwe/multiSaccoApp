@@ -31,7 +31,8 @@ try {
   await page.goto(uiBaseUrl, { waitUntil: "domcontentloaded" });
   await clearSession(page);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expectText(page, "Login to your portal", "login-first screen");
+  await expectText(page, "Login to Tereka Online", "login-first screen");
+  await expectText(page, "Enterprise SACCO access gateway", "enterprise login gateway");
   await expectText(page, "Register SACCO", "public SACCO registration link");
   await expectText(page, "Forgot password", "forgot password link");
   await expectNoVisibleText(page, "Demo access", "demo tools hidden by default");
@@ -250,7 +251,7 @@ async function assertPublicSaccoRegistration(page) {
   await expectText(page, "Registration received", "public SACCO registration submitted");
   await expectText(page, "Mobile-money payment prompt initiated", "public SACCO payment initiated");
   await page.locator("[data-auth-tab='login']").click();
-  await expectText(page, "Login to your portal", "public SACCO registration returns to login");
+  await expectText(page, "Login to Tereka Online", "public SACCO registration returns to login");
   console.log("PASS public SACCO registration");
 }
 

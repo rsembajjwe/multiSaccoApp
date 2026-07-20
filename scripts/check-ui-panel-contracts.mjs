@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 const app = readFileSync("app.js", "utf8");
 
 const contracts = [
-  "Login to your portal",
+  "Login to Tereka Online",
+  "Enterprise SACCO access gateway",
   "Username, email, phone or membership number",
   "Register SACCO",
   "Forgot password",

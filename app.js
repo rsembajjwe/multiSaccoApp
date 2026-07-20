@@ -363,24 +363,33 @@ function renderLogin() {
   setHtml(`
     <main class="login-layout">
       <section class="login-hero">
-        <div class="logo-lockup">
-          ${logo("large")}
-          <div>
-            <p class="eyebrow">Tereka Online</p>
-            <h1>Save Together. Grow Together.</h1>
+        <div class="login-hero-top">
+          <div class="logo-lockup">
+            ${logo("large")}
+            <div>
+              <p class="eyebrow">Tereka Online</p>
+              <h1>Enterprise SACCO access gateway</h1>
+            </div>
           </div>
+          <span class="environment-pill">Secure portal</span>
         </div>
-        <p class="hero-copy">A secure, low-bandwidth SACCO operating platform for Uganda. One login directs each user to the correct platform, SACCO or member portal.</p>
+        <p class="hero-copy">One controlled entry point for Platform Administrators, SACCO staff, and members. The SACCO code routes the user, and role permissions decide the workspace after authentication.</p>
+        <div class="portal-route-grid">
+          ${portalRouteCard("Platform Admin", "PLATFORM", "Super Admin, Billing, Compliance, Operations and Support roles")}
+          ${portalRouteCard("SACCO Staff", "SACCO code", "Chairperson, Treasurer, Secretary, Accountant, Teller and admin roles")}
+          ${portalRouteCard("Member", "Membership no.", "Balances, deposits, loans, statements, guarantors and complaints")}
+        </div>
         <div class="trust-list">
-          <span>Role-based access</span>
-          <span>Secure approvals</span>
-          <span>UGX financial clarity</span>
+          <span>Role-based access and tenant isolation</span>
+          <span>Maker-checker approvals and audit trail</span>
+          <span>Mobile-money, cash and loan repayment controls</span>
+          <span>Low-bandwidth screens for branch operations</span>
         </div>
         <div class="login-links">
-          <button type="button" data-auth-tab="login">Login</button>
-          <button type="button" data-auth-tab="register">Register SACCO</button>
-          <button type="button" data-auth-tab="forgot">Forgot password</button>
-          <button type="button" data-auth-tab="support">Support</button>
+          ${authTabButton("login", "Login")}
+          ${authTabButton("register", "Register SACCO")}
+          ${authTabButton("forgot", "Forgot password")}
+          ${authTabButton("support", "Support")}
         </div>
       </section>
       <section class="login-card">
@@ -397,6 +406,11 @@ function renderLogin() {
             <button class="button secondary" type="button" data-action="fill-demo">Fill demo</button>
           </div>
         </section>` : ""}
+        <section class="login-assurance">
+          <div><strong>Protected session</strong><span>Tokens are stored server-side and expire automatically.</span></div>
+          <div><strong>Correct portal</strong><span>Code + username decides Platform, SACCO staff or member access.</span></div>
+          <div><strong>Production ready</strong><span>Demo accounts stay profile-gated outside dev/demo mode.</span></div>
+        </section>
         <div class="login-footer-links">
           <button type="button">Privacy policy</button>
           <button type="button">Terms and conditions</button>
@@ -407,10 +421,24 @@ function renderLogin() {
   `);
 }
 
+function authTabButton(tab, label) {
+  return `<button class="${state.authTab === tab ? "active" : ""}" type="button" data-auth-tab="${tab}">${label}</button>`;
+}
+
+function portalRouteCard(title, code, copy) {
+  return `
+    <article class="portal-route-card">
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(code)}</span>
+      <p>${escapeHtml(copy)}</p>
+    </article>
+  `;
+}
+
 function authPanelContent() {
   if (state.authTab === "register") return publicSaccoRegistrationPanel();
-  if (state.authTab === "forgot") return authInfoPanel("Password recovery", "Enter your SACCO code and username on the support channel so an authorized administrator can verify and reset your access.");
-  if (state.authTab === "support") return authInfoPanel("Support", "For onboarding, payment or login support, contact the Tereka Online platform support desk with your SACCO code and phone number.");
+  if (state.authTab === "forgot") return authInfoPanel("Password recovery", "Use your SACCO code and username, email, phone or membership number. Platform users are verified by Platform Super Admin; SACCO staff and members are verified by authorized SACCO administrators.", "Request password reset");
+  if (state.authTab === "support") return authInfoPanel("Support", "For onboarding, payment, login or member-access support, share your SACCO code, role, phone number and the error shown on this screen.", "Open support request");
   return loginPanel();
 }
 
@@ -418,22 +446,27 @@ function loginPanel() {
   return `
     <div class="form-heading">
       <p class="eyebrow">Secure access</p>
-      <h2>Login to your portal</h2>
-      <p>Code identifies the SACCO or Platform Administration. Username, email, phone or membership number identifies the user, then password confirms access.</p>
+      <h2>Login to Tereka Online</h2>
+      <p>Enter the code, user identity and password. The system opens only the views allowed for that role.</p>
+    </div>
+    <div class="login-context-strip">
+      <div><span>Platform code</span><strong>PLATFORM</strong></div>
+      <div><span>SACCO code</span><strong>Example: GVS</strong></div>
+      <div><span>Member login</span><strong>Membership no. / phone / email</strong></div>
     </div>
     <form id="loginForm" class="form-grid single">
-      ${field("SACCO or platform code", "code", "text", "PLATFORM", "Use PLATFORM or a SACCO code such as GVS")}
-      ${field("Username, email, phone or membership number", "username", "text", "Username, email, phone or membership number", "")}
+      ${field("Code", "code", "text", "PLATFORM or SACCO code", "Required. Use PLATFORM for platform users or a SACCO code such as GVS.")}
+      ${field("Username, email, phone or membership number", "username", "text", "Username, email, phone or membership number", "Platform and SACCO staff may use email. Members may use membership number, phone or email.")}
       <label>
         <span>Password</span>
         <div class="password-row">
-          <input id="password" type="password" placeholder="Enter password" autocomplete="current-password">
+          <input id="password" type="password" placeholder="Enter password" autocomplete="current-password" required>
           <button type="button" data-action="toggle-password">Show</button>
         </div>
       </label>
       <label class="check-row"><input id="remember" type="checkbox" checked> <span>Remember this device</span></label>
       <div id="loginError" class="alert error" hidden></div>
-      <button id="loginButton" class="button primary" type="submit">Login</button>
+      <button id="loginButton" class="button primary" type="submit">Login securely</button>
     </form>
   `;
 }
@@ -466,14 +499,19 @@ function publicSaccoRegistrationPanel() {
   `;
 }
 
-function authInfoPanel(title, copy) {
+function authInfoPanel(title, copy, action = "Back to login") {
   return `
     <div class="form-heading">
       <p class="eyebrow">Tereka Online</p>
       <h2>${title}</h2>
       <p>${copy}</p>
     </div>
-    <button class="button primary" type="button" data-auth-tab="login">Back to login</button>
+    <section class="support-checklist">
+      <div><strong>1</strong><span>Confirm the SACCO code or PLATFORM code.</span></div>
+      <div><strong>2</strong><span>Confirm username, email, phone or membership number.</span></div>
+      <div><strong>3</strong><span>Authorized admin verifies identity before reset or support action.</span></div>
+    </section>
+    <button class="button primary" type="button" data-auth-tab="login">${escapeHtml(action)}</button>
   `;
 }
 
@@ -5406,8 +5444,13 @@ function bindEvents() {
     event.preventDefault();
     const button = document.getElementById("loginButton");
     const error = document.getElementById("loginError");
+    if (!value("code") || !value("username") || !value("password")) {
+      error.textContent = "Code, username and password are required.";
+      error.hidden = false;
+      return;
+    }
     button.disabled = true;
-    button.textContent = "Checking...";
+    button.textContent = "Verifying access...";
     error.hidden = true;
     try {
       await login(value("code"), value("username"), value("password"));
@@ -5416,7 +5459,7 @@ function bindEvents() {
       error.hidden = false;
     } finally {
       button.disabled = false;
-      button.textContent = "Login";
+      button.textContent = "Login securely";
     }
   });
   document.querySelectorAll("[data-demo]").forEach((button) => {
