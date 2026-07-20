@@ -782,12 +782,17 @@ textarea {
   gap: 10px;
 }
 
+.topbar-actions {
+  justify-content: flex-end;
+}
+
 .search-box {
   width: min(360px, 38vw);
 }
 
 .quick-search {
   position: relative;
+  min-width: 220px;
 }
 
 .search-box span {
@@ -1582,8 +1587,38 @@ th {
   }
 
   .topbar-actions,
+  .quick-search,
   .search-box {
     width: 100%;
+  }
+
+  .topbar-actions {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto auto;
+    align-items: center;
+  }
+
+  .quick-search {
+    min-width: 0;
+  }
+
+  .session-chip {
+    min-width: 0;
+    max-width: 132px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .quick-search-panel,
+  .session-menu,
+  .help-menu,
+  .account-menu {
+    position: fixed;
+    top: 76px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: min(70vh, 480px);
   }
 
   .page-actions {
@@ -1621,6 +1656,45 @@ th {
   .topbar {
     padding-left: 14px;
     padding-right: 14px;
+  }
+
+  .topbar-actions {
+    grid-template-columns: 1fr repeat(4, 40px);
+    gap: 8px;
+  }
+
+  .session-control .session-chip {
+    width: 40px;
+    padding: 0;
+    color: transparent;
+    font-size: 0;
+  }
+
+  .session-control .session-chip::before {
+    content: "S";
+    color: var(--green-800);
+    font-size: var(--text-sm);
+  }
+
+  .session-control .session-chip.pending::before {
+    color: #7a5200;
+  }
+
+  .session-control .session-chip.danger::before {
+    color: #8f2414;
+  }
+
+  .profile-chip {
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+  }
+
+  .quick-search-panel,
+  .session-menu,
+  .help-menu,
+  .account-menu {
+    top: 118px;
   }
 
   .dashboard-grid,

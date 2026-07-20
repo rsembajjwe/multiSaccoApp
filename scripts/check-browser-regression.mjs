@@ -44,6 +44,7 @@ try {
   await assertPlatformHelpMenu(page);
   await assertStaffAccountMenu(page);
   await assertTopbarMenuDismissal(page);
+  await assertMobileTopbarMenus(page);
   await assertNotificationBadgeRouting(page, "Notification delivery control", "staff notification badge routing");
   await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
   await expectNoVisibleText(page, "Read-only SACCO member support", "Platform Members navigation hidden");
@@ -384,6 +385,40 @@ async function assertTopbarMenuDismissal(page) {
   const searchValue = await page.locator("#globalSearch").inputValue();
   if (searchValue) throw new Error(`topbar outside click should clear quick search, got ${searchValue}`);
   console.log("PASS topbar menu dismissal");
+}
+
+async function assertMobileTopbarMenus(page) {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectText(page, "Dashboard", "mobile dashboard still visible");
+  await assertWithinViewport(page, ".topbar-actions", "mobile topbar actions");
+  await page.locator("[data-action='toggle-session-menu']").click();
+  await expectText(page, "Session and security", "mobile session menu");
+  await assertWithinViewport(page, ".session-menu", "mobile session menu");
+  await page.keyboard.press("Escape");
+  await page.locator("[data-action='toggle-help-menu']").click();
+  await expectText(page, "Help and support", "mobile help menu");
+  await assertWithinViewport(page, ".help-menu", "mobile help menu");
+  await page.keyboard.press("Escape");
+  await page.locator("[data-action='toggle-account-menu']").click();
+  await expectText(page, "admin@platform.local", "mobile account menu");
+  await assertWithinViewport(page, ".account-menu", "mobile account menu");
+  await page.keyboard.press("Escape");
+  await page.locator("#globalSearch").fill("Green Valley");
+  await page.locator(".quick-search-panel").waitFor({ state: "visible" });
+  await assertWithinViewport(page, ".quick-search-panel", "mobile quick search panel");
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  console.log("PASS mobile topbar menus");
+}
+
+async function assertWithinViewport(page, selector, label) {
+  const box = await page.locator(selector).first().boundingBox();
+  if (!box) throw new Error(`${label} did not produce a bounding box`);
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error(`${label} could not read viewport size`);
+  if (box.x < -1 || box.y < -1 || box.x + box.width > viewport.width + 1 || box.y + box.height > viewport.height + 1) {
+    throw new Error(`${label} overflows viewport ${viewport.width}x${viewport.height}: ${JSON.stringify(box)}`);
+  }
 }
 
 async function assertMemberAccountMenu(page) {
