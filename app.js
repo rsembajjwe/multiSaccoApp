@@ -1507,6 +1507,16 @@ function notificationsView() {
   }));
   const securityAlerts = deliveries.filter((delivery) => normal(`${delivery.message} ${delivery.provider} ${delivery.channel}`).includes("login"));
   const unreadAlerts = deliveries.filter((delivery) => !delivery.readAt && normal(delivery.alertStatus).includes("unread"));
+  const failedDeliveries = deliveries.filter((row) => normal(row.status).includes("failed"));
+  const tabs = [["unread", "Unread"], ["login-risk", "Login Risk"], ["failed", "Failed Delivery"], ["all", "All"]];
+  const tab = activeModuleTab("notifications", tabs);
+  const visibleDeliveries = tab === "login-risk"
+    ? securityAlerts
+    : tab === "failed"
+      ? failedDeliveries
+      : tab === "all"
+        ? deliveries
+        : unreadAlerts;
   const templates = dataRows("notificationTemplates").map((template) => ({
     ...template,
     tenantName: template.tenantId ? tenantName(template.tenantId) : "Global template",
@@ -1517,7 +1527,7 @@ function notificationsView() {
   return `
     <div class="dashboard-grid">
       ${summary("Deliveries", deliveries.length, "SMS, email and in-app events", "Monitor")}
-      ${summary("Failed deliveries", deliveries.filter((row) => normal(row.status).includes("failed")).length, "Provider exceptions", "Investigate")}
+      ${summary("Failed deliveries", failedDeliveries.length, "Provider exceptions", "Investigate")}
       ${summary("Login risk alerts", securityAlerts.length, "In-app admin security alerts", "Review")}
       ${summary("Unread alerts", unreadAlerts.length, "Need acknowledgement", "Clear")}
       ${summary("Active templates", templates.filter((row) => normal(row.status) === "active").length, "Reusable message rules", "Edit")}
@@ -1526,10 +1536,11 @@ function notificationsView() {
     ${state.notificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.notificationMessage)}</strong></div>` : ""}
     ${state.notificationError ? `<div class="notice warning"><strong>Notification action failed.</strong><span>${escapeHtml(state.notificationError)}</span></div>` : ""}
     ${notificationDeliveryControlPanel(deliveries, templates)}
+    ${moduleTabs("notifications", tabs, tab)}
     ${filterToolbar("Search by SACCO, member, provider, recipient, channel, status or event", "New template", "Export delivery log")}
     ${notificationTemplatePanel()}
     ${notificationTemplateDetailPanel(templates)}
-    ${recordTable("Notification delivery monitor", deliveries, ["tenantName", "memberName", "channel", "provider", "recipient", "alertStatus", "message", "acknowledgedAt", "sentAt", "createdAt"])}
+    ${recordTable(`Notification delivery monitor - ${tabs.find(([id]) => id === tab)?.[1] || "Unread"}`, visibleDeliveries, ["tenantName", "memberName", "channel", "provider", "recipient", "alertStatus", "message", "acknowledgedAt", "sentAt", "createdAt"])}
     ${recordTable("Notification templates", templates, ["tenantName", "eventType", "channel", "title", "status", "updatedAt"])}
   `;
 }
