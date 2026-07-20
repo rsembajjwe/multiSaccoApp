@@ -45,6 +45,12 @@ const state = {
   passwordResetExpiresAt: "",
   passwordResetConfirmMessage: "",
   passwordResetConfirmError: "",
+  mfaChallengeId: "",
+  mfaDeliveryChannel: "",
+  mfaDemoCode: "",
+  mfaExpiresAt: "",
+  mfaMessage: "",
+  mfaError: "",
   userFormMessage: "",
   userFormError: "",
   selectedUserId: "",
@@ -442,10 +448,34 @@ function portalRouteCard(title, code, copy) {
 }
 
 function authPanelContent() {
+  if (state.mfaChallengeId) return mfaVerificationPanel();
   if (state.authTab === "register") return publicSaccoRegistrationPanel();
   if (state.authTab === "forgot") return passwordRecoveryPanel();
   if (state.authTab === "support") return authInfoPanel("Support", "For onboarding, payment, login or member-access support, share your SACCO code, role, phone number and the error shown on this screen.", "Open support request");
   return loginPanel();
+}
+
+function mfaVerificationPanel() {
+  return `
+    <div class="form-heading">
+      <p class="eyebrow">Step-up verification</p>
+      <h2>Verify secure login</h2>
+      <p>This staff account requires a second verification code before the portal opens.</p>
+    </div>
+    <section class="support-checklist">
+      <div><strong>1</strong><span>Enter the verification code from ${escapeHtml(labelize(state.mfaDeliveryChannel || "verification channel"))}.</span></div>
+      <div><strong>2</strong><span>The challenge expires ${state.mfaExpiresAt ? escapeHtml(formatDateTime(state.mfaExpiresAt)) : "soon"}.</span></div>
+      <div><strong>3</strong><span>Successful verification creates the staff session and records an audit event.</span></div>
+    </section>
+    ${state.mfaDemoCode ? `<div class="notice compact"><strong>Development MFA code</strong><span>${escapeHtml(state.mfaDemoCode)}</span></div>` : ""}
+    ${state.mfaMessage ? `<div class="notice compact"><strong>${escapeHtml(state.mfaMessage)}</strong></div>` : ""}
+    ${state.mfaError ? `<div class="notice warning"><strong>MFA verification failed.</strong><span>${escapeHtml(state.mfaError)}</span></div>` : ""}
+    <form id="mfaVerifyForm" class="form-grid single">
+      <label><span>Verification code</span><input id="mfaCode" required inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code"></label>
+      <button id="mfaVerifyButton" class="button primary" type="submit">Verify and continue</button>
+    </form>
+    <button class="button ghost" type="button" data-action="cancel-mfa">Cancel login</button>
+  `;
 }
 
 function loginPanel() {
@@ -4056,6 +4086,16 @@ async function login(code, username, password) {
   try {
     const staff = await tryStaffLogin(code, username, password);
     if (staff) {
+      if (staff.mfaRequired) {
+        state.mfaChallengeId = staff.challengeId || "";
+        state.mfaDeliveryChannel = staff.deliveryChannel || "";
+        state.mfaDemoCode = staff.demoCode || "";
+        state.mfaExpiresAt = staff.expiresAt || "";
+        state.mfaMessage = "Enter the verification code to complete staff login.";
+        state.mfaError = "";
+        renderLogin();
+        return;
+      }
       applyStaffSession(staff);
       localStorage.setItem(STAFF_TOKEN_KEY, staff.token);
       localStorage.removeItem(MEMBER_TOKEN_KEY);
@@ -4080,6 +4120,48 @@ async function login(code, username, password) {
   } finally {
     state.loading = false;
   }
+}
+
+async function verifyMfaFromForm(event) {
+  event.preventDefault();
+  state.mfaMessage = "";
+  state.mfaError = "";
+  const button = document.getElementById("mfaVerifyButton");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Verifying...";
+  }
+  try {
+    const session = await api("/auth/mfa/verify", {
+      method: "POST",
+      body: JSON.stringify({
+        challengeId: state.mfaChallengeId,
+        code: value("mfaCode")
+      })
+    }, "");
+    clearMfaState();
+    applyStaffSession(session);
+    localStorage.setItem(STAFF_TOKEN_KEY, session.token);
+    localStorage.removeItem(MEMBER_TOKEN_KEY);
+    await refreshAll();
+  } catch (error) {
+    state.mfaError = error.message;
+    renderLogin();
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Verify and continue";
+    }
+  }
+}
+
+function clearMfaState() {
+  state.mfaChallengeId = "";
+  state.mfaDeliveryChannel = "";
+  state.mfaDemoCode = "";
+  state.mfaExpiresAt = "";
+  state.mfaMessage = "";
+  state.mfaError = "";
 }
 
 async function tryStaffLogin(code, username, password) {
@@ -5536,6 +5618,7 @@ function bindEvents() {
     button.addEventListener("click", () => {
       state.authTab = button.dataset.authTab;
       if (state.authTab !== "forgot") clearPasswordResetState();
+      clearMfaState();
       renderLogin();
     });
   });
@@ -5585,6 +5668,12 @@ function bindEvents() {
   });
   document.querySelector("#passwordResetRequestForm")?.addEventListener("submit", requestPasswordResetFromForm);
   document.querySelector("#passwordResetConfirmForm")?.addEventListener("submit", confirmPasswordResetFromForm);
+  document.querySelector("#mfaVerifyForm")?.addEventListener("submit", verifyMfaFromForm);
+  document.querySelector("[data-action='cancel-mfa']")?.addEventListener("click", () => {
+    clearMfaState();
+    state.authTab = "login";
+    renderLogin();
+  });
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       state.currentView = button.dataset.view;
@@ -5887,6 +5976,12 @@ async function logout() {
     passwordResetExpiresAt: "",
     passwordResetConfirmMessage: "",
     passwordResetConfirmError: "",
+    mfaChallengeId: "",
+    mfaDeliveryChannel: "",
+    mfaDemoCode: "",
+    mfaExpiresAt: "",
+    mfaMessage: "",
+    mfaError: "",
     userFormMessage: "",
     userFormError: "",
     selectedUserId: "",

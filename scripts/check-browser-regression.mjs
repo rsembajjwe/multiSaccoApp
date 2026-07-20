@@ -261,6 +261,14 @@ async function staffLogin(page, code, username, password, label) {
   await page.locator("#username").fill(username);
   await page.locator("#password").fill(password);
   await page.locator("#loginButton").click();
+  if (await page.locator("#mfaVerifyForm").count()) {
+    await expectText(page, "Verify secure login", `${label} MFA challenge`);
+    const bodyText = await page.locator("body").innerText();
+    const code = bodyText.match(/\b\d{6}\b/)?.[0];
+    if (!code) throw new Error(`${label} MFA challenge did not expose a development code`);
+    await page.locator("#mfaCode").fill(code);
+    await page.locator("#mfaVerifyButton").click();
+  }
   await page.locator(".app-shell").waitFor({ state: "attached" });
   await expectText(page, label.includes("Platform") ? "Platform Administration Portal" : "SACCO Administration Portal", `${label} portal shell`);
 }

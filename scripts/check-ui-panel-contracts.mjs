@@ -7,6 +7,7 @@ const contracts = [
   "Enterprise SACCO access gateway",
   "Password recovery",
   "Request password reset",
+  "Verify secure login",
   "Username, email, phone or membership number",
   "Register SACCO",
   "Forgot password",
