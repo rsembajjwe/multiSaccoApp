@@ -40,6 +40,7 @@ try {
   await assertPublicSaccoRegistration(page);
 
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
+  await assertNotificationBadgeRouting(page, "Notification delivery control", "staff notification badge routing");
   await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
   await expectNoVisibleText(page, "Read-only SACCO member support", "Platform Members navigation hidden");
   await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
@@ -149,6 +150,8 @@ try {
 
   if (await canMemberLogin("GVS", "GVS-0001", "Member@12345")) {
     await memberLogin(page);
+    await assertNotificationBadgeRouting(page, "Read at", "member notification badge routing");
+    await navigateTo(page, "home");
     for (const marker of [
       "Balances and requests update",
       "Total balance",
@@ -287,6 +290,22 @@ async function assertScreen(page, viewId, markers) {
     await expectText(page, marker, `${viewId} marker ${marker}`);
   }
   console.log(`PASS ${viewId}`);
+}
+
+async function assertNotificationBadgeRouting(page, destinationMarker, label) {
+  const badge = page.locator("[data-action='open-notifications']");
+  await badge.waitFor({ state: "visible" });
+  const title = await badge.getAttribute("title");
+  if (!title || !title.includes("notification")) {
+    throw new Error(`${label} does not expose an accessible notification title. Current title: ${title || "<empty>"}`);
+  }
+  const countText = await badge.locator(".notification-badge").first().textContent().catch(() => "");
+  if (countText && !/^\d+\+?$/.test(countText.trim())) {
+    throw new Error(`${label} badge count is not numeric: ${countText}`);
+  }
+  await badge.click();
+  await expectText(page, destinationMarker, `${label} destination`);
+  console.log(`PASS ${label}`);
 }
 
 async function assertPasswordRecovery(page) {
