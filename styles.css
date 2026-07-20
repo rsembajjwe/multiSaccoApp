@@ -839,9 +839,14 @@ textarea {
 }
 
 .quick-search-group button:hover,
-.quick-search-group button:focus {
+.quick-search-group button:focus,
+.quick-search-group button.active {
   border-color: #a8d8cb;
   background: #eef9f5;
+}
+
+.quick-search-group button.active {
+  box-shadow: inset 3px 0 0 var(--green-700);
 }
 
 .quick-search-group button span {

@@ -48,6 +48,7 @@ try {
   await assertScreen(page, "sacco-applications", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
   await assertSaccoRegistrationTabs(page);
   await assertQuickSearchResult(page, "Green Valley", "SACCO application review", "platform SACCO quick search");
+  await assertQuickSearchKeyboard(page, "Lake Farmers", "SACCO application review", "platform SACCO keyboard quick search");
   await assertSaccoApplicationReview(page);
   await assertScreen(page, "subscriptions", ["Subscription list", "Package Setup", "Manage package"]);
   await assertSubscriptionControl(page);
@@ -317,6 +318,23 @@ async function assertQuickSearchResult(page, query, destinationMarker, label) {
   await expectText(page, destinationMarker, `${label} destination`);
   const remainingSearch = await page.locator("#globalSearch").inputValue();
   if (remainingSearch) throw new Error(`${label} should clear global search after opening a result, got ${remainingSearch}`);
+  console.log(`PASS ${label}`);
+}
+
+async function assertQuickSearchKeyboard(page, query, destinationMarker, label) {
+  await page.locator("#globalSearch").fill(query);
+  await page.locator(".quick-search-panel").waitFor({ state: "visible" });
+  await page.keyboard.press("ArrowDown");
+  const activeCount = await page.locator("[data-quick-result].active").count();
+  if (!activeCount) throw new Error(`${label} did not highlight a result after ArrowDown`);
+  await page.keyboard.press("Escape");
+  const clearedSearch = await page.locator("#globalSearch").inputValue();
+  if (clearedSearch) throw new Error(`${label} Escape should clear search, got ${clearedSearch}`);
+  await page.locator("#globalSearch").fill(query);
+  await page.locator(".quick-search-panel").waitFor({ state: "visible" });
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expectText(page, destinationMarker, `${label} destination`);
   console.log(`PASS ${label}`);
 }
 

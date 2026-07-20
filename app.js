@@ -34,6 +34,7 @@ const state = {
   permissionIds: [],
   currentView: "dashboard",
   search: "",
+  quickSearchActiveId: "",
   tableState: {},
   moduleTabs: {},
   sessionExpiresAt: "",
@@ -638,7 +639,7 @@ function renderShell() {
           <div class="breadcrumbs">Home / ${portal} / <strong>${module[1]}</strong></div>
           <div class="topbar-actions">
             <div class="quick-search">
-              <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs" autocomplete="off"></label>
+              <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs" autocomplete="off" aria-autocomplete="list" aria-controls="quickSearchResults"></label>
               ${quickSearchPanel(quickResults)}
             </div>
             <span class="session-chip ${sessionStatusClass()}">${sessionTimeLabel()}</span>
@@ -675,12 +676,12 @@ function quickSearchPanel(results) {
     return groups;
   }, {});
   return `
-    <div class="quick-search-panel" role="listbox" aria-label="Quick search results">
+    <div class="quick-search-panel" id="quickSearchResults" role="listbox" aria-label="Quick search results">
       ${results.length ? Object.entries(grouped).map(([group, rows]) => `
         <div class="quick-search-group">
           <strong>${escapeHtml(group)}</strong>
           ${rows.map((result) => `
-            <button type="button" data-quick-result="${escapeHtml(result.id)}">
+            <button class="${result.id === state.quickSearchActiveId ? "active" : ""}" type="button" role="option" aria-selected="${result.id === state.quickSearchActiveId ? "true" : "false"}" data-quick-result="${escapeHtml(result.id)}">
               <span>${escapeHtml(result.title)}</span>
               <small>${escapeHtml(result.meta)}</small>
             </button>
@@ -694,9 +695,13 @@ function quickSearchPanel(results) {
 function quickSearchResults() {
   const query = state.search.trim();
   if (query.length < 2) return [];
-  return quickSearchIndex()
+  const results = quickSearchIndex()
     .filter((result) => normal(`${result.group} ${result.title} ${result.meta}`).includes(normal(query)))
     .slice(0, 8);
+  if (state.quickSearchActiveId && !results.some((result) => result.id === state.quickSearchActiveId)) {
+    state.quickSearchActiveId = "";
+  }
+  return results;
 }
 
 function quickSearchIndex() {
@@ -6231,6 +6236,24 @@ async function openQuickSearchResult(resultId) {
   renderShell();
 }
 
+function moveQuickSearchSelection(direction) {
+  const results = quickSearchResults();
+  if (!results.length) return;
+  const currentIndex = results.findIndex((result) => result.id === state.quickSearchActiveId);
+  const nextIndex = currentIndex === -1
+    ? (direction > 0 ? 0 : results.length - 1)
+    : (currentIndex + direction + results.length) % results.length;
+  state.quickSearchActiveId = results[nextIndex].id;
+  renderShell();
+}
+
+async function activateQuickSearchSelection() {
+  const results = quickSearchResults();
+  if (!results.length) return;
+  const resultId = state.quickSearchActiveId || results[0].id;
+  await openQuickSearchResult(resultId);
+}
+
 async function optionalApi(path, fallback) {
   try {
     return await api(path);
@@ -6627,10 +6650,39 @@ function bindEvents() {
     renderShell();
   }));
   document.querySelectorAll("[data-action='toggle-sidebar']").forEach((button) => button.addEventListener("click", () => document.querySelector(".app-shell")?.classList.toggle("sidebar-open")));
-  document.querySelectorAll("#globalSearch,[data-search-input]").forEach((input) => input.addEventListener("input", (event) => {
+  document.querySelector("#globalSearch")?.addEventListener("input", (event) => {
+    state.search = event.target.value;
+    state.quickSearchActiveId = "";
+    renderShell();
+  });
+  document.querySelectorAll("[data-search-input]").forEach((input) => input.addEventListener("input", (event) => {
     state.search = event.target.value;
     renderShell();
   }));
+  document.querySelector("#globalSearch")?.addEventListener("keydown", async (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      moveQuickSearchSelection(1);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      moveQuickSearchSelection(-1);
+      return;
+    }
+    if (event.key === "Enter" && state.search.trim()) {
+      event.preventDefault();
+      await activateQuickSearchSelection();
+      return;
+    }
+    if (event.key === "Escape" && state.search) {
+      event.preventDefault();
+      state.search = "";
+      state.quickSearchActiveId = "";
+      state.tableState = {};
+      renderShell();
+    }
+  });
   document.querySelectorAll("[data-quick-result]").forEach((button) => {
     button.addEventListener("click", () => openQuickSearchResult(button.dataset.quickResult));
   });
