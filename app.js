@@ -6598,6 +6598,7 @@ function userName(userId) {
 
 function auditRiskLevel(event) {
   const text = normal(`${event.action || ""} ${event.resourceType || ""} ${event.module || ""}`);
+  if (["failed", "blocked", "too many", "invalid sacco"].some((word) => text.includes(word)) && text.includes("login")) return "High";
   if (["password", "role", "permission", "session", "reversal", "disbursed", "suspended", "terminated"].some((word) => text.includes(word))) return "High";
   if (["approved", "rejected", "status", "payment", "template", "complaint", "loan"].some((word) => text.includes(word))) return "Review";
   return "Normal";

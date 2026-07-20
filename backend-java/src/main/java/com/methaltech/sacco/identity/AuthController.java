@@ -94,12 +94,16 @@ class AuthController {
 
         Tenant requestedTenant = resolveTenant(request.saccoCode());
         if (request.saccoCode() != null && !request.saccoCode().isBlank() && requestedTenant == null) {
+            recordLoginAudit("tenant_platform", "Blocked staff login with invalid SACCO/platform code " + request.saccoCode().trim(), identifier, servletRequest);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiErrorResponse.of(401, "AUTH_INVALID", "Invalid SACCO code, username, or password."));
         }
 
         String rateLimitKey = "staff:" + servletRequest.getRemoteAddr() + ":" + (requestedTenant == null ? "legacy" : requestedTenant.getId());
-        if (loginAttemptService.isLimited(rateLimitKey)) return rateLimited(rateLimitKey);
+        if (loginAttemptService.isLimited(rateLimitKey)) {
+            recordLoginAudit(auditTenantId(requestedTenant), "Blocked staff login after too many failed attempts", identifier, servletRequest);
+            return rateLimited(rateLimitKey);
+        }
         if (!demoCredentialPolicy.staffLoginAllowed(identifier)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "DEMO_LOGIN_DISABLED", "Seeded demo staff accounts are disabled outside the development/demo profile."));
@@ -112,6 +116,7 @@ class AuthController {
 
         if (user == null) {
             loginAttemptService.recordFailure(rateLimitKey);
+            recordLoginAudit(auditTenantId(requestedTenant), "Failed staff login credentials", identifier, servletRequest);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiErrorResponse.of(401, "AUTH_INVALID", "Invalid email or password."));
         }
@@ -304,6 +309,21 @@ class AuthController {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, String.valueOf(loginAttemptService.retryAfterSeconds(key)))
                 .body(ApiErrorResponse.of(429, "LOGIN_RATE_LIMITED", "Too many failed login attempts. Try again later."));
+    }
+
+    private String auditTenantId(Tenant tenant) {
+        return tenant == null ? "tenant_platform" : tenant.getId();
+    }
+
+    private void recordLoginAudit(String tenantId, String action, String identifier, HttpServletRequest request) {
+        auditService.record(
+                tenantId,
+                null,
+                "Login Gateway",
+                action,
+                "auth_login",
+                truncate(identifier, 120),
+                request.getRemoteAddr());
     }
 
     @GetMapping("/me")

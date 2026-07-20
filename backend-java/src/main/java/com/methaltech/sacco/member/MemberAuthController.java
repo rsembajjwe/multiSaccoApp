@@ -129,12 +129,16 @@ class MemberAuthController {
         String identifier = request.identifier().trim();
         Tenant requestedTenant = resolveTenant(request.saccoCode());
         if (request.saccoCode() != null && !request.saccoCode().isBlank() && requestedTenant == null) {
+            recordLoginAudit("tenant_platform", "Blocked member login with invalid SACCO code " + request.saccoCode().trim(), identifier, servletRequest);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiErrorResponse.of(401, "INVALID_MEMBER_CREDENTIALS", "Invalid SACCO code, username, or password."));
         }
 
         String rateLimitKey = "member:" + servletRequest.getRemoteAddr() + ":" + (requestedTenant == null ? "legacy" : requestedTenant.getId());
-        if (loginAttemptService.isLimited(rateLimitKey)) return rateLimited(rateLimitKey);
+        if (loginAttemptService.isLimited(rateLimitKey)) {
+            recordLoginAudit(auditTenantId(requestedTenant), "Blocked member login after too many failed attempts", identifier, servletRequest);
+            return rateLimited(rateLimitKey);
+        }
         if (!demoCredentialPolicy.memberLoginAllowed(identifier)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "DEMO_LOGIN_DISABLED", "Seeded demo member accounts are disabled outside the development/demo profile."));
@@ -147,6 +151,7 @@ class MemberAuthController {
 
         if (member == null) {
             loginAttemptService.recordFailure(rateLimitKey);
+            recordLoginAudit(auditTenantId(requestedTenant), "Failed member login credentials", identifier, servletRequest);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiErrorResponse.of(
                             401,
@@ -207,6 +212,27 @@ class MemberAuthController {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, String.valueOf(loginAttemptService.retryAfterSeconds(key)))
                 .body(ApiErrorResponse.of(429, "LOGIN_RATE_LIMITED", "Too many failed login attempts. Try again later."));
+    }
+
+    private String auditTenantId(Tenant tenant) {
+        return tenant == null ? "tenant_platform" : tenant.getId();
+    }
+
+    private void recordLoginAudit(String tenantId, String action, String identifier, HttpServletRequest request) {
+        auditService.record(
+                tenantId,
+                null,
+                "Login Gateway",
+                action,
+                "member_login",
+                truncate(identifier, 120),
+                request.getRemoteAddr());
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.isBlank()) return "";
+        String trimmed = value.trim();
+        return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
     }
 
     @GetMapping("/me")
