@@ -3555,6 +3555,8 @@ function memberDraftRows(type = "") {
 
 function memberProfileView(balances) {
   const member = state.member || {};
+  const tabs = [["overview", "Overview"], ["kyc", "KYC"], ["contacts", "Contacts"], ["balances", "Balances"]];
+  const tab = activeModuleTab("profile", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Membership No", member.membershipNo || "-", "Unique SACCO member identity", "Copy")}
@@ -3562,6 +3564,16 @@ function memberProfileView(balances) {
       ${summary("KYC status", labelize(member.kycStatus || "pending"), "Profile verification", "Open")}
       ${summary("Total balance", money.format(Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0)), "Savings, shares and welfare", "View")}
     </div>
+    ${moduleTabs("profile", tabs, tab)}
+    ${tab === "overview" ? memberProfileOverviewPanel(member) : ""}
+    ${tab === "kyc" ? memberProfileKycPanel(member) : ""}
+    ${tab === "contacts" ? `${memberTabReadinessPanel("Member contact controls", "Contact details are used for SACCO notices, support follow-up and account recovery.", [["Phone", member.phone || "Missing"], ["Email", member.email || "Missing"], ["Update route", "SACCO office"]])}${recordTable("Profile contacts", [member], ["fullName", "membershipNo", "phone", "email", "nationalId", "status"])}` : ""}
+    ${tab === "balances" ? `${memberTabReadinessPanel("Member balance identity", "Balances are shown beside identity details so the member can confirm the correct account.", [["Savings", money.format(balances.savings || 0)], ["Shares", money.format(balances.shares || 0)], ["Welfare", money.format(balances.welfare || 0)]])}${recordTable("Balance summary", [{ account: "Savings", balance: balances.savings || 0 }, { account: "Shares", balance: balances.shares || 0 }, { account: "Welfare", balance: balances.welfare || 0 }], ["account", "balance"])}` : ""}
+  `;
+}
+
+function memberProfileOverviewPanel(member) {
+  return `
     <section class="panel">
       <div class="panel-heading">
         <div>
@@ -3579,15 +3591,40 @@ function memberProfileView(balances) {
         ${mini("Joining date", member.joiningDate)}
       </div>
     </section>
-    <div class="grid two">
-      ${recordTable("Profile contacts", [member], ["fullName", "membershipNo", "phone", "email", "nationalId", "status"])}
-      ${recordTable("Balance summary", [{ account: "Savings", balance: balances.savings || 0 }, { account: "Shares", balance: balances.shares || 0 }, { account: "Welfare", balance: balances.welfare || 0 }], ["account", "balance"])}
-    </div>
+  `;
+}
+
+function memberProfileKycPanel(member) {
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member KYC readiness</h2>
+          <p>KYC status controls whether the member can transact, borrow and receive SACCO services.</p>
+        </div>
+        <span class="status ${normal(member.kycStatus) === "approved" ? "active" : "pending"}">${labelize(member.kycStatus || "pending")}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("KYC status", labelize(member.kycStatus || "pending"))}
+        ${mini("Member status", labelize(member.status || "pending"))}
+        ${mini("National ID", member.nationalId || "Missing")}
+        ${mini("Member type", labelize(member.memberType || "member"))}
+        ${mini("Review owner", "SACCO admin")}
+        ${mini("Support path", "Complaints")}
+      </div>
+      <ul class="activity-list">
+        <li><strong>Identity confirmation</strong><span>Full name, membership number, phone and national ID must match SACCO KYC records.</span><em>Required</em></li>
+        <li><strong>Service access</strong><span>Approved KYC improves access to payments, loan applications and guarantor requests.</span><em>Controlled</em></li>
+        <li><strong>Correction path</strong><span>Members should contact the SACCO office or submit a complaint to correct profile details.</span><em>Traceable</em></li>
+      </ul>
+    </section>
   `;
 }
 
 function memberSecurityView() {
   const expiresAt = state.memberData.sessionExpiresAt || state.memberData.dashboard?.sessionExpiresAt || "Current browser session";
+  const tabs = [["session", "Session"], ["login", "Login"], ["recovery", "Recovery"], ["safety", "Safety"]];
+  const tab = activeModuleTab("security", tabs);
   return `
     <div class="dashboard-grid">
       ${summary("Session", state.token ? "Active" : "Signed out", "Bearer token stored on this device", "Review")}
@@ -3595,6 +3632,16 @@ function memberSecurityView() {
       ${summary("Password", "Protected", "Never displayed by Tereka Online", "Change")}
       ${summary("Demo access", SHOW_DEMO_TOOLS ? "Visible" : "Hidden", "Disabled outside dev/demo", "Audit")}
     </div>
+    ${moduleTabs("security", tabs, tab)}
+    ${tab === "session" ? memberSecuritySessionPanel(expiresAt) : ""}
+    ${tab === "login" ? memberSecurityLoginPanel() : ""}
+    ${tab === "recovery" ? memberSecurityRecoveryPanel() : ""}
+    ${tab === "safety" ? memberSecuritySafetyPanel() : ""}
+  `;
+}
+
+function memberSecuritySessionPanel(expiresAt) {
+  return `
     <section class="panel">
       <div class="panel-heading">
         <div>
@@ -3612,6 +3659,30 @@ function memberSecurityView() {
         ${mini("Last sync", state.lastSync || "Pending")}
       </div>
     </section>
+  `;
+}
+
+function memberSecurityLoginPanel() {
+  return memberTabReadinessPanel("Member login requirements", "Members sign in with SACCO code plus username, email, phone or membership number and password.", [
+    ["SACCO code", contextCode()],
+    ["Username options", "Username/email/phone/member no"],
+    ["Password", "Required"],
+    ["Role", "Member"]
+  ]);
+}
+
+function memberSecurityRecoveryPanel() {
+  return memberTabReadinessPanel("Member recovery controls", "Account recovery is staff-assisted so the SACCO can verify identity before resetting access.", [
+    ["Password reset", "Staff-assisted"],
+    ["Contact update", "SACCO office"],
+    ["Identity check", "KYC record"],
+    ["Support path", "Complaint"]
+  ]);
+}
+
+function memberSecuritySafetyPanel() {
+  return `
+    ${memberTabReadinessPanel("Member safety actions", "Use these actions when a device, password or account detail looks suspicious.", [["Report issue", "Available"], ["Logout", "Immediate"], ["Demo access", SHOW_DEMO_TOOLS ? "Visible" : "Hidden"], ["Audit", "Session tracked"]])}
     ${tabsCard("Security actions", ["Change password request", "Logout current device", "Report suspicious access", "Update phone/email", "Review login code"])}
   `;
 }

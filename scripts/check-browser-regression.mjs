@@ -204,8 +204,8 @@ try {
     await assertMemberNotificationCenter(page);
     await assertScreen(page, "complaints", ["Member complaint center", "Member complaint submission", "My complaints"]);
     await assertMemberComplaintSubmission(page);
-    await assertScreen(page, "profile", ["Member profile and KYC", "Profile contacts", "Balance summary"]);
-    await assertScreen(page, "security", ["Member security center", "SACCO code", "Security actions"]);
+    await assertMemberProfileTabs(page);
+    await assertMemberSecurityTabs(page);
   } else {
     console.log("SKIP member portal path: demo member login is unavailable in the running backend profile");
   }
@@ -747,6 +747,33 @@ async function assertMemberNotificationCenter(page) {
   await page.locator("[data-module-tab-view='notifications'][data-module-tab='evidence']").click();
   await expectText(page, "Message delivery evidence", "member notification delivery evidence");
   console.log("PASS member notification center");
+}
+
+async function assertMemberProfileTabs(page) {
+  await navigateTo(page, "profile");
+  await expectText(page, "Member profile and KYC", "member profile overview");
+  await page.locator("[data-module-tab-view='profile'][data-module-tab='kyc']").click();
+  await expectText(page, "Member KYC readiness", "member profile kyc readiness");
+  await page.locator("[data-module-tab-view='profile'][data-module-tab='contacts']").click();
+  await expectText(page, "Member contact controls", "member profile contact controls");
+  await expectText(page, "Profile contacts", "member profile contacts table");
+  await page.locator("[data-module-tab-view='profile'][data-module-tab='balances']").click();
+  await expectText(page, "Member balance identity", "member profile balance identity");
+  await expectText(page, "Balance summary", "member profile balance table");
+  console.log("PASS member profile tabs");
+}
+
+async function assertMemberSecurityTabs(page) {
+  await navigateTo(page, "security");
+  await expectText(page, "Member security center", "member security session");
+  await page.locator("[data-module-tab-view='security'][data-module-tab='login']").click();
+  await expectText(page, "Member login requirements", "member security login requirements");
+  await page.locator("[data-module-tab-view='security'][data-module-tab='recovery']").click();
+  await expectText(page, "Member recovery controls", "member security recovery controls");
+  await page.locator("[data-module-tab-view='security'][data-module-tab='safety']").click();
+  await expectText(page, "Member safety actions", "member security safety actions");
+  await expectText(page, "Security actions", "member security actions");
+  console.log("PASS member security tabs");
 }
 
 async function assertMemberGuarantorDecision(page) {
