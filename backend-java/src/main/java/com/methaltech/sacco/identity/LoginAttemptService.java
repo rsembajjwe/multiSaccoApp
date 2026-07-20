@@ -4,33 +4,29 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 public class LoginAttemptService {
 
     private final Map<String, AttemptWindow> attempts = new ConcurrentHashMap<>();
-    private final int maxFailures;
-    private final Duration window;
+    private final PlatformSecurityPolicyService platformSecurityPolicyService;
 
-    LoginAttemptService(
-            @Value("${sacco.auth.rate-limit.max-failures:6}") int maxFailures,
-            @Value("${sacco.auth.rate-limit.window-seconds:60}") long windowSeconds) {
-        this.maxFailures = maxFailures;
-        this.window = Duration.ofSeconds(windowSeconds);
+    LoginAttemptService(PlatformSecurityPolicyService platformSecurityPolicyService) {
+        this.platformSecurityPolicyService = platformSecurityPolicyService;
     }
 
     public boolean isLimited(String key) {
         AttemptWindow attemptWindow = activeWindow(key);
-        return attemptWindow.failures >= maxFailures;
+        return attemptWindow.failures >= maxFailures();
     }
 
     public void recordFailure(String key) {
         Instant now = Instant.now();
+        Duration lockoutWindow = Duration.ofMinutes(lockoutMinutes());
         attempts.compute(key, (ignored, existing) -> {
             if (existing == null || existing.expiresAt.isBefore(now)) {
-                return new AttemptWindow(1, now.plus(window));
+                return new AttemptWindow(1, now.plus(lockoutWindow));
             }
             return new AttemptWindow(existing.failures + 1, existing.expiresAt);
         });
@@ -42,8 +38,16 @@ public class LoginAttemptService {
 
     public long retryAfterSeconds(String key) {
         AttemptWindow attemptWindow = activeWindow(key);
-        if (attemptWindow.failures < maxFailures) return 0;
+        if (attemptWindow.failures < maxFailures()) return 0;
         return Math.max(1, Duration.between(Instant.now(), attemptWindow.expiresAt).toSeconds());
+    }
+
+    public int maxFailures() {
+        return Math.max(3, platformSecurityPolicyService.currentPolicy().getLockoutFailedAttempts());
+    }
+
+    public int lockoutMinutes() {
+        return Math.max(1, platformSecurityPolicyService.currentPolicy().getLockoutMinutes());
     }
 
     private AttemptWindow activeWindow(String key) {
