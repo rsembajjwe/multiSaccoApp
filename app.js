@@ -221,7 +221,8 @@ function emptyData() {
     roles: [],
     permissions: [],
     auditEvents: [],
-    regulatoryReport: null
+    regulatoryReport: null,
+    securitySummary: null
   };
 }
 
@@ -2288,6 +2289,7 @@ function settingsView() {
   const productTypes = ["savings", "shares", "welfare"];
   const missingProducts = productTypes.filter((type) => !products.some((product) => normal(product.productType) === type));
   const tab = state.saccoSettingsTab || "overview";
+  const security = state.data.securitySummary || {};
   return `
     <div class="dashboard-grid">
       ${summary("Active branches", activeBranches.length, "Service points ready for use", "Manage")}
@@ -2306,6 +2308,7 @@ function settingsView() {
       ${recordTable("Branch setup", branches.map((branch) => ({ ...branch, manager: userName(branch.managerUserId) })), ["code", "name", "manager", "address", "status", "createdAt"])}
       ${recordTable("Financial product setup", products, ["productType", "code", "name", "contributionAmount", "minimumBalance", "interestRate", "status"])}
     ` : ""}
+    ${tab === "security" ? staffSecuritySettingsPanel(security, false) : ""}
   `;
 }
 
@@ -2314,7 +2317,8 @@ function saccoSettingsTabs(activeTab) {
     ["overview", "Settings Overview"],
     ["branches", "Branch Setup"],
     ["products", "Product Setup"],
-    ["records", "Setup Records"]
+    ["records", "Setup Records"],
+    ["security", "Security"]
   ];
   return `
     <div class="tabs management-tabs">
@@ -2418,6 +2422,8 @@ function platformSettingsView() {
   const permissions = dataRows("permissions");
   const templates = dataRows("notificationTemplates").filter((template) => !template.tenantId);
   const canManage = hasPermission("roles:create") || roleKind() === "super";
+  const tab = activeModuleTab("settings", [["configuration", "Configuration"], ["security", "Security"]]);
+  const security = state.data.securitySummary || {};
   return `
     <div class="dashboard-grid">
       ${summary("Subscription packages", packages.length, "Platform billing plans", "Review")}
@@ -2425,7 +2431,9 @@ function platformSettingsView() {
       ${summary("Permission controls", permissions.length, "Route and action permissions", "Audit")}
       ${summary("Global templates", templates.length, "Default notification content", "Edit")}
     </div>
-    ${platformSettingsControlPanel(packages, roles, permissions, templates, canManage)}
+    ${moduleTabs("settings", [["configuration", "Configuration"], ["security", "Security"]], tab)}
+    ${tab === "configuration" ? `
+      ${platformSettingsControlPanel(packages, roles, permissions, templates, canManage)}
     <section class="panel">
       <div class="panel-heading">
         <div>
@@ -2451,6 +2459,8 @@ function platformSettingsView() {
       ${recordTable("Platform permission catalogue", permissions, ["id", "name", "description", "module"])}
       ${recordTable("Global notification templates", templates, ["eventType", "channel", "title", "status", "updatedAt"])}
     </div>
+    ` : ""}
+    ${tab === "security" ? staffSecuritySettingsPanel(security, true) : ""}
   `;
 }
 
@@ -2463,6 +2473,62 @@ function platformSettingsControlPanel(packages, roles, permissions, templates, c
     ["Protected changes", canManage ? "Current role can update protected platform configuration with audit trail." : "Current role is view-only for protected platform configuration.", canManage ? "Allowed" : "Restricted"],
     ["Global messages", `${templates.length} global template(s), with ${inactiveTemplates} inactive template(s).`, inactiveTemplates ? "Review" : "Ready"]
   ]);
+}
+
+function staffSecuritySettingsPanel(security, platformScope) {
+  const sessions = Array.isArray(security.activeSessions) ? security.activeSessions : [];
+  const resets = Array.isArray(security.recentPasswordResets) ? security.recentPasswordResets : [];
+  const currentExpiry = security.currentSessionExpiresAt || state.sessionExpiresAt;
+  const activeCount = security.activeSessionCount ?? sessions.length;
+  const resetCount = security.passwordResetRequestCount ?? resets.length;
+  const sessionRows = sessions.map((session) => ({
+    id: session.id,
+    createdAt: formatDateTime(session.createdAt),
+    expiresAt: formatDateTime(session.expiresAt),
+    status: new Date(session.expiresAt).getTime() > Date.now() ? "active" : "expired"
+  }));
+  const resetRows = resets.map((request) => ({
+    id: request.id,
+    status: request.status,
+    createdAt: formatDateTime(request.createdAt),
+    expiresAt: formatDateTime(request.expiresAt),
+    usedAt: request.usedAt ? formatDateTime(request.usedAt) : "-"
+  }));
+  return `
+    <div class="dashboard-grid">
+      ${summary("Active sessions", activeCount, "Current administrator login devices", "Review")}
+      ${summary("MFA status", security.mfaEnabled ? "Enabled" : "Not enabled", "Step-up verification for sensitive login", "Manage")}
+      ${summary("Password resets", resetCount, "Requests recorded for this administrator", "Audit")}
+      ${summary("Session expiry", currentExpiry ? formatDateTime(currentExpiry) : "Not reported", "Current token lifetime", "Extend")}
+    </div>
+    ${rolePriorityPanel(platformScope ? "Platform security settings" : "SACCO security settings", [
+      ["Active sessions", `${activeCount} active staff session(s) are server-side and expire automatically.`, activeCount ? "Monitor" : "None"],
+      ["MFA posture", security.mfaEnabled ? "MFA is enabled for this administrator account." : "MFA is not yet enabled for this administrator account.", security.mfaEnabled ? "Ready" : "Improve"],
+      ["Password reset evidence", `${resetCount} password reset request(s) are available in the audit trail for this account.`, resetCount ? "Trace" : "No resets"],
+      ["Session lifecycle audit", "Login, logout and session extension events are recorded under access control audit evidence.", "Audited"]
+    ])}
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Security Settings</h2>
+          <p>Administrator session, MFA and password-reset evidence for the current login.</p>
+        </div>
+        <button class="button secondary" type="button" data-action="extend-session">Extend session</button>
+      </div>
+      <div class="source-grid">
+        ${mini("Signed in as", state.user?.email || state.user?.fullName || "Administrator")}
+        ${mini("Role", state.roleNames.join(", ") || "Assigned role")}
+        ${mini("MFA", security.mfaEnabled ? "Enabled" : "Not enabled")}
+        ${mini("Current expiry", currentExpiry ? formatDateTime(currentExpiry) : "Not reported")}
+        ${mini("Active sessions", activeCount)}
+        ${mini("Password resets", resetCount)}
+      </div>
+    </section>
+    <div class="grid two">
+      ${recordTable("Active administrator sessions", sessionRows, ["id", "createdAt", "expiresAt", "status"])}
+      ${recordTable("Password reset history", resetRows, ["id", "status", "createdAt", "expiresAt", "usedAt"])}
+    </div>
+  `;
 }
 
 function renderMemberView(view) {
@@ -4280,9 +4346,10 @@ async function refreshAll() {
     ["roles", "/roles"],
     ["permissions", "/permissions"],
     ["auditEvents", "/audit-events"],
-    ["regulatoryReport", "/regulatory-report"]
+    ["regulatoryReport", "/regulatory-report"],
+    ["securitySummary", "/auth/security-summary"]
   ];
-  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation"]);
+  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary"]);
   const results = await Promise.all(endpoints.map(async ([key, path]) => [key, await optionalApi(path, objectKeys.has(key) ? null : [])]));
   results.forEach(([key, value]) => {
     state.data[key] = value;

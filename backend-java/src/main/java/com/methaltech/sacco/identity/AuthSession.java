@@ -43,12 +43,20 @@ class AuthSession {
         this.createdAt = Instant.now();
     }
 
+    String getId() {
+        return id;
+    }
+
     String getUserId() {
         return userId;
     }
 
     Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    Instant getCreatedAt() {
+        return createdAt;
     }
 
     void extendTo(Instant expiresAt) {

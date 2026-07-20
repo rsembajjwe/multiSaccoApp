@@ -287,6 +287,25 @@ class AuthController {
                 currentSession.session().getExpiresAt())));
     }
 
+    @GetMapping("/security-summary")
+    ResponseEntity<?> securitySummary(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        Instant now = Instant.now();
+        List<AuthSession> sessions = authSessionRepository.findByUserIdAndRevokedAtIsNull(currentSession.user().getId()).stream()
+                .filter(session -> session.getExpiresAt().isAfter(now))
+                .toList();
+        List<PasswordResetRequest> resetRequests = passwordResetRequestRepository.findByUserIdOrderByCreatedAtDesc(currentSession.user().getId());
+        return ResponseEntity.ok(ApiResponse.of(new SecuritySummaryResponse(
+                currentSession.user().isMfaEnabled(),
+                currentSession.session().getExpiresAt(),
+                sessions.size(),
+                sessions.stream().map(SessionSummaryResponse::from).toList(),
+                resetRequests.size(),
+                resetRequests.stream().limit(5).map(PasswordResetSummaryResponse::from).toList())));
+    }
+
     @PostMapping("/logout")
     ResponseEntity<?> logout(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -415,6 +434,32 @@ class AuthController {
     }
 
     record UserAccessResponse(List<String> roleIds, List<String> roleNames, List<String> permissionIds) {
+    }
+
+    record SecuritySummaryResponse(
+            boolean mfaEnabled,
+            Instant currentSessionExpiresAt,
+            long activeSessionCount,
+            List<SessionSummaryResponse> activeSessions,
+            int passwordResetRequestCount,
+            List<PasswordResetSummaryResponse> recentPasswordResets) {
+    }
+
+    record SessionSummaryResponse(String id, Instant expiresAt, Instant createdAt) {
+        static SessionSummaryResponse from(AuthSession session) {
+            return new SessionSummaryResponse(session.getId(), session.getExpiresAt(), session.getCreatedAt());
+        }
+    }
+
+    record PasswordResetSummaryResponse(String id, String status, Instant expiresAt, Instant usedAt, Instant createdAt) {
+        static PasswordResetSummaryResponse from(PasswordResetRequest request) {
+            return new PasswordResetSummaryResponse(
+                    request.getId(),
+                    request.getStatus(),
+                    request.getExpiresAt(),
+                    request.getUsedAt(),
+                    request.getCreatedAt());
+        }
     }
 
     record LogoutResponse(boolean loggedOut) {
