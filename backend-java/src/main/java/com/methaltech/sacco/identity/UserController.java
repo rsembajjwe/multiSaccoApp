@@ -73,9 +73,7 @@ class UserController {
         Map<String, Long> activeSessionsByUser = users.stream()
                 .collect(Collectors.toMap(
                         User::getId,
-                        user -> authSessionRepository.findByUserIdAndRevokedAtIsNull(user.getId()).stream()
-                                .filter(session -> session.getExpiresAt().isAfter(now))
-                                .count(),
+                        user -> activeSessionCount(user.getId(), now),
                         Long::sum));
 
         return ResponseEntity.ok(ApiResponse.of(users.stream()
@@ -381,6 +379,44 @@ class UserController {
         return ResponseEntity.ok(ApiResponse.of(new SessionRevocationResponse(targetUser.getId(), sessions.size())));
     }
 
+    @PatchMapping("/{userId}/mfa")
+    ResponseEntity<?> updateUserMfa(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String userId,
+            @Valid @RequestBody UpdateUserMfaRequest request,
+            HttpServletRequest httpRequest) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
+
+        User targetUser = userRepository.findById(userId).orElse(null);
+        if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
+            return userNotFound();
+        }
+        if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
+        if (!canManagePlatformUser(currentSession, targetUser)) {
+            return platformSuperAdminRequired("update platform user MFA");
+        }
+
+        if (request.enabled()) {
+            targetUser.enableMfa();
+        } else {
+            targetUser.disableMfa();
+        }
+        User savedUser = userRepository.save(targetUser);
+        auditService.record(
+                targetUser.getTenantId(),
+                currentSession.user(),
+                (request.enabled() ? "Enabled" : "Disabled") + " MFA for user " + savedUser.getEmail(),
+                "mfa",
+                savedUser.getId(),
+                httpRequest.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(UserResponse.from(savedUser, activeSessionCount(savedUser.getId(), Instant.now()))));
+    }
+
     @GetMapping("/{userId}/sessions")
     ResponseEntity<?> listUserSessions(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -480,6 +516,12 @@ class UserController {
         return !targetUser.getTenantId().equals("tenant_platform") || hasRole(currentSession.user(), "Platform Super Admin");
     }
 
+    private long activeSessionCount(String userId, Instant now) {
+        return authSessionRepository.findByUserIdAndRevokedAtIsNull(userId).stream()
+                .filter(session -> session.getExpiresAt().isAfter(now))
+                .count();
+    }
+
     private String normalizedStatus(String status) {
         if (status == null) return null;
         String value = status.trim().toLowerCase();
@@ -531,6 +573,9 @@ class UserController {
     }
 
     record ReplaceUserRolesRequest(List<String> roleIds) {
+    }
+
+    record UpdateUserMfaRequest(boolean enabled) {
     }
 
     record UserRoleAssignmentResponse(String userId, String tenantId, List<String> roleIds) {

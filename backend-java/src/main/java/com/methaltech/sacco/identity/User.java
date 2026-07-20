@@ -119,4 +119,8 @@ public class User {
     void enableMfa() {
         this.mfaEnabled = true;
     }
+
+    void disableMfa() {
+        this.mfaEnabled = false;
+    }
 }

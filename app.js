@@ -1529,7 +1529,7 @@ function usersView() {
   const canCreate = hasPermission("users:create") || hasPermission("roles:create");
   const rows = users.map((user) => ({ ...staffAccessRow(user, platformOnly), action: "user-detail", actionLabel: "Manage access", actionId: user.id }));
   const roles = userRoleOptions(platformOnly);
-  const listPanel = recordTable(platformOnly ? "Platform administrator list" : "SACCO staff access list", rows, ["fullName", "email", "phone", "role", "activeSessions", "accessPurpose", "moduleScope", "lastLogin", "status"]);
+  const listPanel = recordTable(platformOnly ? "Platform administrator list" : "SACCO staff access list", rows, ["fullName", "email", "phone", "role", "mfa", "activeSessions", "accessPurpose", "moduleScope", "lastLogin", "status"]);
   const detailPanel = userDetailPanel(users, canCreate) || emptyState("User detail and role assignment", "Select Manage access from the administrator list to review roles and module access.");
   if (platformOnly) {
     return `
@@ -2514,7 +2514,10 @@ function staffSecuritySettingsPanel(security, platformScope) {
           <h2>Security Settings</h2>
           <p>Administrator session, MFA and password-reset evidence for the current login.</p>
         </div>
-        <button class="button secondary" type="button" data-action="extend-session">Extend session</button>
+        <div class="table-actions">
+          <button class="button secondary" type="button" data-action="toggle-current-mfa" data-mfa-enabled="${security.mfaEnabled ? "false" : "true"}">${security.mfaEnabled ? "Disable MFA" : "Enable MFA"}</button>
+          <button class="button secondary" type="button" data-action="extend-session">Extend session</button>
+        </div>
       </div>
       <div class="source-grid">
         ${mini("Signed in as", state.user?.email || state.user?.fullName || "Administrator")}
@@ -3197,6 +3200,7 @@ function userDetailPanel(users, canManageRoles) {
         ${mini("Phone", selected.phone)}
         ${mini("User ID", selected.id)}
         ${mini("Current roles", assignedRoles.length ? assignedRoles.map((role) => role.name).join(", ") : "Unassigned")}
+        ${mini("MFA", selected.mfaEnabled ? "Enabled" : "Not enabled")}
         ${mini("Active sessions", selected.activeSessionCount || 0)}
         ${mini("Access purpose", rolePurpose(primaryRole.name || selected.role || "", platformUser))}
         ${mini("Module scope", roleModuleScope(primaryRole.name || selected.role || "", platformUser))}
@@ -3239,6 +3243,7 @@ function userDetailPanel(users, canManageRoles) {
         </div>
         <div class="table-actions">
           ${canManageUser ? `
+            <button class="table-action" type="button" data-user-mfa="${selected.mfaEnabled ? "false" : "true"}" data-row-id="${escapeHtml(selected.id)}">${selected.mfaEnabled ? "Disable MFA" : "Enable MFA"}</button>
             ${selected.id !== state.user?.id ? `<button class="table-action" type="button" data-user-revoke-sessions="${escapeHtml(selected.id)}">Force logout sessions</button>` : ""}
             <button class="table-action" type="button" data-user-status="${nextStatus}" data-row-id="${escapeHtml(selected.id)}">${normal(selected.status) === "active" ? "Suspend user" : "Reactivate user"}</button>
             <button class="table-action danger" type="button" data-user-delete="${escapeHtml(selected.id)}">Delete user</button>
@@ -3317,6 +3322,7 @@ function staffAccessRow(user, platformOnly) {
   return {
     ...user,
     role,
+    mfa: user.mfaEnabled ? "Enabled" : "Not enabled",
     activeSessions: user.activeSessionCount || 0,
     accessPurpose: rolePurpose(role, platformOnly),
     moduleScope: roleModuleScope(role, platformOnly),
@@ -4548,6 +4554,27 @@ async function updateSelectedUserStatus(userId, status) {
     await refreshAll();
     state.selectedUserId = userId;
     state.selectedUserMessage = `${updated.fullName || updated.email} is now ${updated.status}.`;
+    renderShell();
+  } catch (error) {
+    state.selectedUserError = friendlyUserError(error, isPlatform());
+    renderShell();
+  }
+}
+
+async function updateSelectedUserMfa(userId, enabled) {
+  state.selectedUserMessage = "";
+  state.selectedUserError = "";
+  try {
+    const updated = await api(`/users/${encodeURIComponent(userId)}/mfa`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled })
+    });
+    const label = updated.fullName || updated.email || "User";
+    const message = `${enabled ? "Enabled" : "Disabled"} MFA for ${label}.`;
+    state.selectedUserMessage = message;
+    await refreshAll();
+    state.selectedUserId = userId;
+    state.selectedUserMessage = message;
     renderShell();
   } catch (error) {
     state.selectedUserError = friendlyUserError(error, isPlatform());
@@ -5997,6 +6024,9 @@ function bindEvents() {
   document.querySelectorAll("[data-user-status]").forEach((button) => {
     button.addEventListener("click", () => updateSelectedUserStatus(button.dataset.rowId, button.dataset.userStatus));
   });
+  document.querySelectorAll("[data-user-mfa]").forEach((button) => {
+    button.addEventListener("click", () => updateSelectedUserMfa(button.dataset.rowId, button.dataset.userMfa === "true"));
+  });
   document.querySelectorAll("[data-user-delete]").forEach((button) => {
     button.addEventListener("click", () => deleteSelectedUser(button.dataset.userDelete));
   });
@@ -6092,6 +6122,7 @@ function bindEvents() {
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
   document.querySelectorAll("[data-action='extend-session']").forEach((button) => button.addEventListener("click", extendSession));
+  document.querySelectorAll("[data-action='toggle-current-mfa']").forEach((button) => button.addEventListener("click", () => updateCurrentUserMfa(button.dataset.mfaEnabled === "true")));
   document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
   document.querySelectorAll("[data-action='clear-search']").forEach((button) => button.addEventListener("click", () => {
     state.search = "";
@@ -6256,6 +6287,23 @@ async function extendSession() {
     await (state.auth === "member" ? refreshMember() : refreshAll());
   } catch (error) {
     state.lastError = error.message || "Could not extend the current session.";
+  } finally {
+    state.loading = false;
+    renderShell();
+  }
+}
+
+async function updateCurrentUserMfa(enabled) {
+  if (state.auth !== "staff") return;
+  state.loading = true;
+  state.lastError = "";
+  renderShell();
+  try {
+    await api(enabled ? "/auth/mfa/enable" : "/auth/mfa/disable", { method: "POST" });
+    if (state.user) state.user.mfaEnabled = enabled;
+    await refreshAll();
+  } catch (error) {
+    state.lastError = error.message || "Could not update MFA status.";
   } finally {
     state.loading = false;
     renderShell();

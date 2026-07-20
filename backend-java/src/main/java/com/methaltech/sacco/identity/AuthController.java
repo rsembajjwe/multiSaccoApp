@@ -157,6 +157,25 @@ class AuthController {
         return ResponseEntity.ok(ApiResponse.of(new MfaEnableResponse(true)));
     }
 
+    @PostMapping("/mfa/disable")
+    ResponseEntity<?> disableMfa(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        User user = currentSession.user();
+        user.disableMfa();
+        userRepository.save(user);
+        auditService.record(
+                user.getTenantId(),
+                user,
+                "Disabled MFA",
+                "mfa",
+                user.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(new MfaEnableResponse(false)));
+    }
+
     @PostMapping("/mfa/verify")
     ResponseEntity<?> verifyMfa(@Valid @RequestBody MfaVerifyRequest body, HttpServletRequest request) {
         MfaChallenge challenge = mfaChallengeRepository
