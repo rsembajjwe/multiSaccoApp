@@ -3213,6 +3213,7 @@ function userDetailPanel(users, canManageRoles) {
         ${mini("User ID", selected.id)}
         ${mini("Current roles", assignedRoles.length ? assignedRoles.map((role) => role.name).join(", ") : "Unassigned")}
         ${mini("MFA", selected.mfaEnabled ? "Enabled" : "Not enabled")}
+        ${mini("Login reset required", selected.passwordResetRequired ? "Yes" : "No")}
         ${mini("Password reset", latestReset ? `${latestReset.status} until ${latestReset.expiresAt}` : "No pending reset")}
         ${mini("Active sessions", selected.activeSessionCount || 0)}
         ${mini("Access purpose", rolePurpose(primaryRole.name || selected.role || "", platformUser))}
@@ -4297,6 +4298,15 @@ async function tryStaffLogin(code, username, password) {
       body: JSON.stringify({ code, saccoCode: code, username, password })
     }, "");
   } catch (error) {
+    if (error.code === "PASSWORD_RESET_REQUIRED" || error.status === 423) {
+      state.authTab = "forgot";
+      state.passwordResetMessage = "Password reset is required before this account can login. Request or enter the reset token to continue.";
+      state.passwordResetError = "";
+      state.passwordResetConfirmError = "";
+      state.passwordResetConfirmMessage = "";
+      renderLogin();
+      throw error;
+    }
     state.lastError = error.message;
     return null;
   }
@@ -5839,6 +5849,7 @@ async function api(path, options = {}, token = state.token) {
   if (!response.ok) {
     const error = new Error(payload.error?.message || payload.message || `Request failed: ${response.status}`);
     error.status = response.status;
+    error.code = payload.error?.code || payload.code || "";
     if (response.status === 401 && token && token === state.token && state.auth !== "none") {
       expireLocalSession("Your session has expired. Please login again.");
     }

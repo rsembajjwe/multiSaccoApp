@@ -114,6 +114,11 @@ class AuthController {
         }
 
         loginAttemptService.clear(rateLimitKey);
+        if (user.isPasswordResetRequired()) {
+            return ResponseEntity.status(HttpStatus.LOCKED)
+                    .body(ApiErrorResponse.of(423, "PASSWORD_RESET_REQUIRED", "Password reset is required before this account can login."));
+        }
+
         if (user.isMfaEnabled()) {
             String code = mfaCode();
             MfaChallenge challenge = mfaChallengeRepository.save(new MfaChallenge(
@@ -388,6 +393,8 @@ class AuthController {
                     user.getId(),
                     tokenGenerator.hashToken(resetToken),
                     expiresAt));
+            user.requirePasswordReset();
+            userRepository.save(user);
             auditService.record(
                     user.getTenantId(),
                     user,

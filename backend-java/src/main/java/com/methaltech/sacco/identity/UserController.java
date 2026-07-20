@@ -456,6 +456,8 @@ class UserController {
                 targetUser.getId(),
                 tokenGenerator.hashToken(resetToken),
                 expiresAt));
+        targetUser.requirePasswordReset();
+        userRepository.save(targetUser);
         auditService.record(
                 targetUser.getTenantId(),
                 currentSession.user(),

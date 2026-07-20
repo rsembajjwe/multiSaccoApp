@@ -8,6 +8,7 @@ record UserResponse(
         String phone,
         String status,
         boolean mfaEnabled,
+        boolean passwordResetRequired,
         long activeSessionCount) {
 
     static UserResponse from(User user) {
@@ -23,6 +24,7 @@ record UserResponse(
                 user.getPhone(),
                 user.getStatus(),
                 user.isMfaEnabled(),
+                user.isPasswordResetRequired(),
                 activeSessionCount);
     }
 }

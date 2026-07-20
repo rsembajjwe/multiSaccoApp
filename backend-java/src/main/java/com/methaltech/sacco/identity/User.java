@@ -34,6 +34,9 @@ public class User {
     @Column(name = "mfa_enabled")
     private boolean mfaEnabled;
 
+    @Column(name = "password_reset_required")
+    private boolean passwordResetRequired;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -58,6 +61,7 @@ public class User {
         this.passwordSalt = passwordSalt;
         this.status = status;
         this.mfaEnabled = false;
+        this.passwordResetRequired = false;
         this.createdAt = Instant.now();
     }
 
@@ -97,6 +101,10 @@ public class User {
         return mfaEnabled;
     }
 
+    public boolean isPasswordResetRequired() {
+        return passwordResetRequired;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -104,6 +112,11 @@ public class User {
     void changePassword(String passwordHash, String passwordSalt) {
         this.passwordHash = passwordHash;
         this.passwordSalt = passwordSalt;
+        this.passwordResetRequired = false;
+    }
+
+    void requirePasswordReset() {
+        this.passwordResetRequired = true;
     }
 
     void updateProfile(String fullName, String email, String phone) {
