@@ -803,6 +803,40 @@ textarea {
   background: #eef9f5;
 }
 
+.notification-button {
+  position: relative;
+  width: 42px;
+}
+
+.notification-button.has-alerts {
+  border-color: #e4b557;
+  color: #6f4700;
+  background: #fff6dd;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  padding: 0 5px;
+  color: #fff;
+  background: #b42318;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.notification-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .profile-chip {
   min-width: 44px;
   padding: 0 12px;

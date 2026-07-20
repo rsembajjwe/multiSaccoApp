@@ -607,6 +607,7 @@ function renderShell() {
   const module = currentModule();
   const modules = visibleModules();
   const portal = state.auth === "member" ? "Member Self-Service Portal" : isPlatform() ? "Platform Administration Portal" : "SACCO Administration Portal";
+  const notificationButton = topbarNotificationButton(modules);
   setHtml(`
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
@@ -635,7 +636,7 @@ function renderShell() {
           <div class="topbar-actions">
             <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs"></label>
             <span class="session-chip ${sessionStatusClass()}">${sessionTimeLabel()}</span>
-            <button class="icon-button" type="button" title="Notifications">!</button>
+            ${notificationButton}
             <button class="icon-button" type="button" title="Help">?</button>
             <button class="profile-chip" type="button">${initials(displayName())}</button>
           </div>
@@ -659,6 +660,30 @@ function renderShell() {
       </main>
     </div>
   `);
+}
+
+function topbarNotificationButton(modules) {
+  const canOpen = modules.some((item) => item[0] === "notifications");
+  const unreadCount = unreadNotificationCount();
+  const countLabel = unreadCount > 99 ? "99+" : String(unreadCount);
+  const title = unreadCount ? `${countLabel} unread notification${unreadCount === 1 ? "" : "s"}` : "No unread notifications";
+  return `
+    <button class="icon-button notification-button ${unreadCount ? "has-alerts" : ""}" type="button" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}" data-action="open-notifications" ${canOpen ? "" : "disabled"}>
+      <span aria-hidden="true">!</span>
+      ${unreadCount ? `<strong class="notification-badge">${escapeHtml(countLabel)}</strong>` : ""}
+    </button>
+  `;
+}
+
+function unreadNotificationCount() {
+  if (state.auth === "member") {
+    return state.memberData.notifications.filter((row) => !row.readAt && !normal(row.status).includes("read")).length;
+  }
+  return dataRows("notifications")
+    .filter((row) => row.notificationId && !row.readAt)
+    .map((row) => row.notificationId)
+    .filter((id, index, ids) => ids.indexOf(id) === index)
+    .length;
 }
 
 function renderView(view) {
@@ -6128,6 +6153,10 @@ function bindEvents() {
     const showing = password.type === "text";
     password.type = showing ? "password" : "text";
     event.currentTarget.textContent = showing ? "Show" : "Hide";
+  });
+  document.querySelector("[data-action='open-notifications']")?.addEventListener("click", () => {
+    state.currentView = "notifications";
+    renderShell();
   });
   document.querySelector("#passwordResetRequestForm")?.addEventListener("submit", requestPasswordResetFromForm);
   document.querySelector("#passwordResetConfirmForm")?.addEventListener("submit", confirmPasswordResetFromForm);
