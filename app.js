@@ -869,19 +869,43 @@ function selfRegistrationApprovalPanel() {
 
 function subscriptionsView() {
   const rows = dataRows("subscriptions");
-  const tableRows = rows.map((subscription) => ({ ...subscription, action: "subscription-detail", actionLabel: "Manage", actionId: subscription.id }));
+  const tableRows = rows.map((subscription) => {
+    const tenant = tenantRows().find((item) => item.id === subscription.tenantId) || {};
+    return {
+      ...subscription,
+      saccoCode: tenant.abbreviation || tenant.code || subscription.tenantCode || subscription.tenantId,
+      packageName: subscription.tierLabel || subscription.packageName || subscription.packageId,
+      paymentStatus: subscriptionPaymentLabel(subscription),
+      operatingAccess: subscriptionAccessLabel(subscription, tenant),
+      billableMembers: subscription.billableMembers || subscription.memberCount || tenant.memberCount || 0,
+      balanceDue: Math.max(0, Number(subscription.amount || 0) - Number(subscription.paid || subscription.amountPaid || 0)),
+      action: "subscription-detail",
+      actionLabel: "Manage",
+      actionId: subscription.id
+    };
+  });
   return `
     <div class="dashboard-grid">
       ${summary("Active subscriptions", rows.filter((row) => normal(row.status) === "active").length, "Operating access", "View")}
       ${summary("Pending payments", rows.filter((row) => normal(row.paymentStatus || row.status).includes("pending")).length, "Awaiting confirmation", "Record payment")}
+      ${summary("Suspended access", tableRows.filter((row) => normal(row.operatingAccess).includes("suspended")).length, "Blocked from operating", "Review")}
       ${summary("Revenue this month", money.format(sum(rows, "amount")), "Invoice value", "Export")}
       ${summary("Outstanding invoices", money.format(rows.reduce((total, row) => total + Number(row.amount || 0) - Number(row.paid || row.amountPaid || 0), 0)), "Unpaid balance", "Follow up")}
     </div>
-    ${filterToolbar("Search by SACCO, package, payment status or expiry", "Record payment", "Generate invoice")}
+    ${subscriptionStatusGuide(rows, tableRows)}
+    ${filterToolbar("Search by SACCO code, SACCO name, package, payment status, access status or expiry", "Record payment", "Generate invoice")}
     ${subscriptionDetailPanel(rows)}
-    ${recordTable("Subscription list", tableRows, ["tenantName", "tenantId", "packageId", "tierLabel", "billingDescription", "amount", "paid", "expiry", "status"])}
+    ${recordTable("Subscription list", tableRows, ["saccoCode", "tenantName", "packageName", "billingDescription", "billableMembers", "amount", "paid", "balanceDue", "paymentStatus", "operatingAccess", "expiry"])}
     ${packageCards()}
   `;
+}
+
+function subscriptionStatusGuide(rows, tableRows) {
+  return rolePriorityPanel("Subscription payment and access status", [
+    ["Paid and active", `${tableRows.filter((row) => normal(row.paymentStatus) === "paid" && normal(row.operatingAccess) === "active").length} SACCO(s) have confirmed payment and operating access.`, "Active"],
+    ["Pending payment", `${tableRows.filter((row) => normal(row.paymentStatus).includes("pending")).length} SACCO(s) are waiting for payment confirmation before activation or renewal.`, "Follow up"],
+    ["Expired or suspended", `${tableRows.filter((row) => normal(row.operatingAccess).includes("expired") || normal(row.operatingAccess).includes("suspended")).length} SACCO(s) need renewal, payment confirmation or manual access review.`, "Review"]
+  ]);
 }
 
 function saccoAccounts() {
@@ -3088,7 +3112,9 @@ function subscriptionDetailPanel(rows) {
       ${state.selectedSubscriptionError ? `<div class="notice warning"><strong>Subscription update failed.</strong><span>${escapeHtml(state.selectedSubscriptionError)}</span></div>` : ""}
       <div class="source-grid">
         ${mini("Operating access", subscriptionAccessLabel(subscription, tenant))}
+        ${mini("Payment status", subscriptionPaymentLabel(subscription))}
         ${mini("Subscription status", subscription.status)}
+        ${mini("SACCO code", tenant.abbreviation || tenant.code || subscription.tenantCode || subscription.tenantId)}
         ${mini("Package", subscription.tierLabel || subscription.packageId)}
         ${mini("Billable members", subscription.billableMembers || subscription.memberCount)}
         ${mini("Amount", money.format(subscription.amount || 0))}
@@ -3121,6 +3147,17 @@ function subscriptionAccessLabel(subscription, tenant) {
   if (normal(subscription.status).includes("pending")) return "Payment pending";
   if (normal(subscription.status).includes("expired")) return "Expired";
   return subscription.status || tenant.status || "Pending";
+}
+
+function subscriptionPaymentLabel(subscription) {
+  const amount = Number(subscription.amount || 0);
+  const paid = Number(subscription.paid || subscription.amountPaid || 0);
+  const status = normal(subscription.paymentStatus || subscription.status);
+  if (amount > 0 && paid >= amount) return "Paid";
+  if (status.includes("paid") || status === "active") return paid > 0 ? "Part paid" : "Payment confirmed";
+  if (paid > 0) return "Part paid";
+  if (status.includes("expired")) return "Expired";
+  return "Pending payment";
 }
 
 function memberRegistrationPanel() {
