@@ -931,7 +931,12 @@ textarea {
   position: relative;
 }
 
-.session-menu {
+.help-control {
+  position: relative;
+}
+
+.session-menu,
+.help-menu {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
@@ -942,6 +947,10 @@ textarea {
   padding: 12px;
   background: #fff;
   box-shadow: var(--shadow);
+}
+
+.help-menu {
+  width: min(440px, 84vw);
 }
 
 .session-menu-heading,

@@ -36,6 +36,7 @@ const state = {
   search: "",
   quickSearchActiveId: "",
   sessionMenuOpen: false,
+  helpMenuOpen: false,
   tableState: {},
   moduleTabs: {},
   sessionExpiresAt: "",
@@ -614,6 +615,7 @@ function renderShell() {
   const notificationButton = topbarNotificationButton(modules);
   const quickResults = quickSearchResults();
   const sessionMenu = sessionSecurityMenu();
+  const helpMenu = helpSupportMenu();
   setHtml(`
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
@@ -649,7 +651,10 @@ function renderShell() {
               ${sessionMenu}
             </div>
             ${notificationButton}
-            <button class="icon-button" type="button" title="Help">?</button>
+            <div class="help-control">
+              <button class="icon-button" type="button" title="Help" data-action="toggle-help-menu" aria-expanded="${state.helpMenuOpen ? "true" : "false"}">?</button>
+              ${helpMenu}
+            </div>
             <button class="profile-chip" type="button">${initials(displayName())}</button>
           </div>
         </header>
@@ -808,6 +813,45 @@ function sessionSecurityMenu() {
       </div>
     </div>
   `;
+}
+
+function helpSupportMenu() {
+  if (!state.helpMenuOpen || state.auth === "none") return "";
+  const role = roleLabel();
+  const context = contextName();
+  const primaryAction = state.auth === "member"
+    ? ["open-help-complaints", "Submit complaint"]
+    : isPlatform()
+      ? ["open-help-complaints", "Open SACCO admin complaints"]
+      : ["open-help-complaints", "Open member complaints"];
+  const secondaryAction = state.auth === "member"
+    ? ["open-help-security", "Security help"]
+    : ["open-help-notifications", "Notification help"];
+  return `
+    <div class="help-menu">
+      <div class="session-menu-heading">
+        <strong>Help and support</strong>
+        <span class="status active">Available</span>
+      </div>
+      <div class="source-grid compact-source-grid">
+        ${mini("Portal", state.auth === "member" ? "Member" : isPlatform() ? "Platform" : "SACCO")}
+        ${mini("Context", context)}
+        ${mini("Role", role)}
+        ${mini("Support path", state.auth === "member" ? "SACCO admin" : isPlatform() ? "SACCO admins" : "Members")}
+      </div>
+      <p class="session-policy">${escapeHtml(helpMenuGuidance())}</p>
+      <div class="session-menu-actions">
+        <button class="button secondary" type="button" data-action="${primaryAction[0]}">${primaryAction[1]}</button>
+        <button class="button ghost" type="button" data-action="${secondaryAction[0]}">${secondaryAction[1]}</button>
+      </div>
+    </div>
+  `;
+}
+
+function helpMenuGuidance() {
+  if (state.auth === "member") return "Members raise account, payment, loan or profile issues to their SACCO administration team.";
+  if (isPlatform()) return "The platform desk handles complaints and escalations submitted by SACCO administrators.";
+  return "SACCO administrators resolve member complaints locally and escalate platform or billing issues when needed.";
 }
 
 function renderView(view) {
@@ -6663,10 +6707,19 @@ function bindEvents() {
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
   document.querySelectorAll("[data-action='toggle-session-menu']").forEach((button) => button.addEventListener("click", () => {
     state.sessionMenuOpen = !state.sessionMenuOpen;
+    state.helpMenuOpen = false;
+    renderShell();
+  }));
+  document.querySelectorAll("[data-action='toggle-help-menu']").forEach((button) => button.addEventListener("click", () => {
+    state.helpMenuOpen = !state.helpMenuOpen;
+    state.sessionMenuOpen = false;
     renderShell();
   }));
   document.querySelectorAll("[data-action='open-security-settings']").forEach((button) => button.addEventListener("click", openSecuritySettings));
   document.querySelectorAll("[data-action='open-member-security']").forEach((button) => button.addEventListener("click", openMemberSecurity));
+  document.querySelectorAll("[data-action='open-help-complaints']").forEach((button) => button.addEventListener("click", openHelpComplaints));
+  document.querySelectorAll("[data-action='open-help-notifications']").forEach((button) => button.addEventListener("click", openHelpNotifications));
+  document.querySelectorAll("[data-action='open-help-security']").forEach((button) => button.addEventListener("click", openHelpSecurity));
   document.querySelectorAll("[data-action='extend-session']").forEach((button) => button.addEventListener("click", extendSession));
   document.querySelectorAll("[data-action='toggle-current-mfa']").forEach((button) => button.addEventListener("click", () => updateCurrentUserMfa(button.dataset.mfaEnabled === "true")));
   document.querySelectorAll("[data-action='logout']").forEach((button) => button.addEventListener("click", logout));
@@ -6747,6 +6800,7 @@ async function logout() {
     permissionIds: [],
     currentView: "dashboard",
     sessionMenuOpen: false,
+    helpMenuOpen: false,
     moduleTabs: {},
     sessionExpiresAt: "",
     passwordResetMessage: "",
@@ -6909,6 +6963,25 @@ function openSecuritySettings() {
 function openMemberSecurity() {
   state.sessionMenuOpen = false;
   state.currentView = "security";
+  renderShell();
+}
+
+function openHelpComplaints() {
+  state.helpMenuOpen = false;
+  state.currentView = "complaints";
+  renderShell();
+}
+
+function openHelpNotifications() {
+  state.helpMenuOpen = false;
+  state.currentView = canAccessView("notifications") ? "notifications" : "dashboard";
+  renderShell();
+}
+
+function openHelpSecurity() {
+  state.helpMenuOpen = false;
+  state.currentView = state.auth === "member" ? "security" : "settings";
+  if (state.auth === "staff") state.moduleTabs.settings = "security";
   renderShell();
 }
 

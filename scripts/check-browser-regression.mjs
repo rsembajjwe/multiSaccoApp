@@ -41,6 +41,7 @@ try {
 
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
   await assertStaffSessionMenu(page);
+  await assertPlatformHelpMenu(page);
   await assertNotificationBadgeRouting(page, "Notification delivery control", "staff notification badge routing");
   await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
   await expectNoVisibleText(page, "Read-only SACCO member support", "Platform Members navigation hidden");
@@ -155,6 +156,7 @@ try {
   if (await canMemberLogin("GVS", "GVS-0001", "Member@12345")) {
     await memberLogin(page);
     await assertMemberSessionMenu(page);
+    await assertMemberHelpMenu(page);
     await assertNotificationBadgeRouting(page, "Read at", "member notification badge routing");
     await navigateTo(page, "home");
     for (const marker of [
@@ -331,6 +333,26 @@ async function assertMemberSessionMenu(page) {
   await expectText(page, "Member security center", "member security route");
   await navigateTo(page, "home");
   console.log("PASS member session security menu");
+}
+
+async function assertPlatformHelpMenu(page) {
+  await page.locator("[data-action='toggle-help-menu']").click();
+  await expectText(page, "Help and support", "platform help menu");
+  await expectText(page, "SACCO admins", "platform help support path");
+  await page.locator("[data-action='open-help-complaints']").click();
+  await expectText(page, "Complaints from SACCO admins", "platform help complaints destination");
+  await navigateTo(page, "dashboard");
+  console.log("PASS platform help menu");
+}
+
+async function assertMemberHelpMenu(page) {
+  await page.locator("[data-action='toggle-help-menu']").click();
+  await expectText(page, "Help and support", "member help menu");
+  await expectText(page, "SACCO admin", "member help support path");
+  await page.locator("[data-action='open-help-complaints']").click();
+  await expectText(page, "Member complaint center", "member help complaints destination");
+  await navigateTo(page, "home");
+  console.log("PASS member help menu");
 }
 
 async function assertQuickSearchResult(page, query, destinationMarker, label) {
