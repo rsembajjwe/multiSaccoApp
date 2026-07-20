@@ -27,6 +27,9 @@ class NotificationDelivery {
     @Column(name = "member_id")
     private String memberId;
 
+    @Column(name = "user_id")
+    private String userId;
+
     private String channel;
     private String provider;
     private String recipient;
@@ -52,6 +55,31 @@ class NotificationDelivery {
         this.tenantId = tenantId;
         this.notificationId = notificationId;
         this.memberId = memberId;
+        this.userId = null;
+        this.channel = channel;
+        this.provider = provider;
+        this.recipient = recipient;
+        this.status = "sent";
+        this.message = message;
+        this.sentAt = Instant.now();
+        this.createdAt = this.sentAt;
+    }
+
+    NotificationDelivery(
+            String id,
+            String tenantId,
+            String notificationId,
+            String memberId,
+            String userId,
+            String channel,
+            String provider,
+            String recipient,
+            String message) {
+        this.id = id;
+        this.tenantId = tenantId;
+        this.notificationId = notificationId;
+        this.memberId = memberId;
+        this.userId = userId;
         this.channel = channel;
         this.provider = provider;
         this.recipient = recipient;

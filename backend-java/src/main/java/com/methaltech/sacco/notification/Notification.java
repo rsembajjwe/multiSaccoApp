@@ -24,6 +24,9 @@ public class Notification {
     @Column(name = "member_id")
     private String memberId;
 
+    @Column(name = "user_id")
+    private String userId;
+
     private String channel;
 
     @Column(name = "event_type")
@@ -57,6 +60,31 @@ public class Notification {
         this.id = id;
         this.tenantId = tenantId;
         this.memberId = memberId;
+        this.userId = null;
+        this.channel = "in_app";
+        this.eventType = eventType;
+        this.title = title;
+        this.body = body;
+        this.status = "unread";
+        this.resourceType = resourceType;
+        this.resourceId = resourceId;
+        this.createdAt = Instant.now();
+    }
+
+    Notification(
+            String id,
+            String tenantId,
+            String memberId,
+            String userId,
+            String eventType,
+            String title,
+            String body,
+            String resourceType,
+            String resourceId) {
+        this.id = id;
+        this.tenantId = tenantId;
+        this.memberId = memberId;
+        this.userId = userId;
         this.channel = "in_app";
         this.eventType = eventType;
         this.title = title;

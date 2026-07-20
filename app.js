@@ -1496,8 +1496,9 @@ function notificationsView() {
   const deliveries = dataRows("notifications").map((delivery) => ({
     ...delivery,
     tenantName: tenantName(delivery.tenantId),
-    memberName: delivery.memberId ? memberName(delivery.memberId) : "SACCO broadcast"
+    memberName: delivery.memberId ? memberName(delivery.memberId) : delivery.userId ? userName(delivery.userId) : "SACCO broadcast"
   }));
+  const securityAlerts = deliveries.filter((delivery) => normal(`${delivery.message} ${delivery.provider} ${delivery.channel}`).includes("login"));
   const templates = dataRows("notificationTemplates").map((template) => ({
     ...template,
     tenantName: template.tenantId ? tenantName(template.tenantId) : "Global template",
@@ -1509,6 +1510,7 @@ function notificationsView() {
     <div class="dashboard-grid">
       ${summary("Deliveries", deliveries.length, "SMS, email and in-app events", "Monitor")}
       ${summary("Failed deliveries", deliveries.filter((row) => normal(row.status).includes("failed")).length, "Provider exceptions", "Investigate")}
+      ${summary("Login risk alerts", securityAlerts.length, "In-app admin security alerts", "Review")}
       ${summary("Active templates", templates.filter((row) => normal(row.status) === "active").length, "Reusable message rules", "Edit")}
       ${summary("Global templates", templates.filter((row) => !row.tenantId).length, "Platform defaults", "Review")}
     </div>

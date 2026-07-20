@@ -66,6 +66,37 @@ public class NotificationService {
                 complaintId));
     }
 
+    public Notification notifyStaffSecurityAlert(
+            String tenantId,
+            String userId,
+            String recipient,
+            String title,
+            String message,
+            String resourceType,
+            String resourceId) {
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                tenantId,
+                null,
+                userId,
+                "security_login_risk",
+                title,
+                message,
+                resourceType,
+                resourceId));
+        deliveryRepository.save(new NotificationDelivery(
+                "delivery_" + UUID.randomUUID(),
+                tenantId,
+                notification.getId(),
+                null,
+                userId,
+                "in_app",
+                "tereka_online",
+                recipient == null || recipient.isBlank() ? userId : recipient,
+                message));
+        return notification;
+    }
+
     private NotificationTemplate activeTemplate(String tenantId, String eventType) {
         return templateRepository.findFirstByTenantIdAndEventTypeAndStatusOrderByUpdatedAtDesc(tenantId, eventType, "active")
                 .or(() -> templateRepository.findFirstByTenantIdIsNullAndEventTypeAndStatusOrderByUpdatedAtDesc(eventType, "active"))
