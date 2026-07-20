@@ -1038,6 +1038,13 @@ th {
   background: #fbfdfc;
 }
 
+.card-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .stepper span {
   display: inline-grid;
   place-items: center;

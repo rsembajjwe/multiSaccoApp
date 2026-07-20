@@ -44,7 +44,7 @@ try {
   await assertScreen(page, "sacco-applications", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
   await assertSaccoRegistrationTabs(page);
   await assertSaccoApplicationReview(page);
-  await assertScreen(page, "subscriptions", ["Subscription list", "Subscription package configuration"]);
+  await assertScreen(page, "subscriptions", ["Subscription list", "Package Setup", "Manage package"]);
   await assertSubscriptionControl(page);
   await assertScreen(page, "sacco-accounts", ["SACCO account health", "Active accounts", "Without subscription"]);
   await expectNoVisibleText(page, "Platform approval queues", "Platform Approvals navigation hidden");

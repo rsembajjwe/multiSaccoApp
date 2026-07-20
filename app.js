@@ -3762,7 +3762,38 @@ function memberRangeOptions() {
 
 function packageCards() {
   const packages = dataRows("subscriptionPackages");
-  return `<section class="panel"><h2>Subscription package configuration</h2><div class="package-grid">${(packages.length ? packages : fallbackPackages()).map((pkg) => `<article><h3>${pkg.name}</h3><strong>${money.format(pkg.price || pkg.amount || 0)}</strong><p>${pkg.maxMembers || pkg.members || "Configured"} members / ${pkg.maxBranches || pkg.branches || "Configured"} branches</p><span>${pkg.modules || "Included modules, SMS, storage and support level"}</span><button class="button secondary" type="button">Configure</button></article>`).join("")}</div></section>`;
+  const rows = packages.length ? packages : fallbackPackages();
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Package Setup</h2>
+          <p>Active subscription packages, member ranges and annual billing rules used when SACCOs register or renew.</p>
+        </div>
+        <span class="status active">${rows.length} active package(s)</span>
+      </div>
+      <div class="package-grid">
+        ${rows.map((pkg) => {
+          const amount = pkg.price || pkg.amount || 0;
+          const memberLimit = pkg.memberRange || pkg.members || (pkg.maxMembers ? `Up to ${pkg.maxMembers}` : "Configured range");
+          const branchLimit = pkg.maxBranches || pkg.branches || "Configured";
+          const status = normal(pkg.status || "active");
+          return `
+            <article>
+              <div class="card-title-row">
+                <h3>${escapeHtml(pkg.name || pkg.packageName || "Subscription package")}</h3>
+                <span class="status ${status === "active" ? "active" : "pending"}">${escapeHtml(labelize(status || "active"))}</span>
+              </div>
+              <strong>${money.format(amount)}</strong>
+              <p>${escapeHtml(memberLimit)} members / ${escapeHtml(branchLimit)} branch${String(branchLimit) === "1" ? "" : "es"}</p>
+              <span>${escapeHtml(pkg.modules || pkg.description || "Included modules, SMS, storage and support level")}</span>
+              <button class="button secondary" type="button">Manage package</button>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
 }
 
 function permissionMatrix() {

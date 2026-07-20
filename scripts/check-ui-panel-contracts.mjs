@@ -42,6 +42,7 @@ const contracts = [
   "Save decision",
   "Request changes",
   "Subscription list",
+  "Package Setup",
   "Subscription control",
   "Record payment",
   "Renew full year",
