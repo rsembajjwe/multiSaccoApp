@@ -84,6 +84,9 @@ export async function handleApi(request, response, url) {
       if (!allowRequest(request, response, correlationId, "mobileMoneyCallback")) return;
       return receiveMobileMoneyCallback(request, response, correlationId);
     }
+    if (method === "POST" && path === "/public/sacco-registrations") {
+      return createPublicSaccoRegistration(request, response, correlationId);
+    }
 
     if (path.startsWith("/member-auth/")) {
       const memberAuth = requireMemberAuth(request, response, correlationId);
@@ -547,6 +550,59 @@ async function createTenant(request, response, auth, correlationId) {
     ipAddress: requestIp(request)
   });
   return sendData(response, tenant, 201);
+}
+
+async function createPublicSaccoRegistration(request, response, correlationId) {
+  const body = await readJson(request);
+  if (!body.name || !body.registrationNo || !body.district || !body.parish || !body.village || !body.contactNumber || !body.memberRange || !body.paymentPhone) {
+    return sendError(response, 400, "VALIDATION_ERROR", "SACCO name, registration, location, contact, member range and payment phone are required.", correlationId);
+  }
+  const saccoCode = nextAvailableSaccoCode(cleanSaccoCode(body.saccoCode) || generatedSaccoCode(body.name));
+  const tenant = {
+    id: newId("tenant"),
+    name: String(body.name).trim(),
+    abbreviation: saccoCode,
+    status: "pending_review",
+    registrationNo: String(body.registrationNo || "").trim(),
+    district: String(body.district || "").trim(),
+    licenseExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    packageId: "pending_self_registration",
+    onboardingPercent: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  db.tenants.push(tenant);
+  db.saccoProfiles.push({
+    id: newId("profile"),
+    tenantId: tenant.id,
+    legalName: tenant.name,
+    tin: "",
+    umraLicenseNo: "",
+    cooperativeRegistrationNo: tenant.registrationNo,
+    address: `District: ${String(body.district || "").trim()}; Parish: ${String(body.parish || "").trim()}; Village: ${String(body.village || "").trim()}; Member range: ${String(body.memberRange || "").trim()}`,
+    email: "",
+    phone: String(body.contactNumber || "").trim(),
+    website: "",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+  createAuditEvent({
+    tenantId: tenant.id,
+    actorUserId: null,
+    actorName: "Public registration",
+    action: `Public SACCO registration submitted by ${tenant.name}`,
+    resourceType: "tenant",
+    resourceId: tenant.id,
+    ipAddress: requestIp(request)
+  });
+  const paymentReference = `MM-${saccoCode}-${Date.now().toString().slice(-6)}`;
+  return sendData(response, {
+    tenant: publicTenant(tenant),
+    paymentReference,
+    paymentPhone: String(body.paymentPhone || body.contactNumber || "").trim(),
+    paymentStatus: "payment_initiated",
+    message: "Registration received. Mobile-money payment is initiated; platform approval follows payment confirmation."
+  }, 201);
 }
 
 async function updateTenantStatus(request, response, auth, tenantId, correlationId) {
@@ -3498,4 +3554,25 @@ async function updateMemberGuarantorRequest(request, response, auth, guarantorId
     ipAddress: requestIp(request)
   });
   return sendData(response, requestRecord);
+}
+
+function cleanSaccoCode(value) {
+  return String(value || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+}
+
+function generatedSaccoCode(name) {
+  const letters = String(name || "").replace(/[^A-Za-z]/g, "").toUpperCase();
+  return (letters.length >= 3 ? letters.slice(0, 3) : `${letters}SAC`).slice(0, 3);
+}
+
+function nextAvailableSaccoCode(requestedCode) {
+  const base = requestedCode.length >= 3 ? requestedCode : `${requestedCode}SAC`.slice(0, 3);
+  let code = base;
+  let suffix = 2;
+  while (db.tenants.some((tenant) => String(tenant.abbreviation || tenant.code || "").toUpperCase() === code)) {
+    const suffixText = String(suffix);
+    code = `${base.slice(0, Math.max(1, 8 - suffixText.length))}${suffixText}`;
+    suffix += 1;
+  }
+  return code;
 }

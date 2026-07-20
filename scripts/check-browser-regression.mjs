@@ -35,6 +35,7 @@ try {
   await expectText(page, "Register SACCO", "public SACCO registration link");
   await expectText(page, "Forgot password", "forgot password link");
   await expectNoVisibleText(page, "Demo access", "demo tools hidden by default");
+  await assertPublicSaccoRegistration(page);
 
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
   await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
@@ -172,6 +173,26 @@ async function clearSession(page) {
     localStorage.removeItem("sacco-platform-api-session-v1");
     localStorage.removeItem("sacco-platform-member-session-v1");
   });
+}
+
+async function assertPublicSaccoRegistration(page) {
+  const stamp = Date.now();
+  const saccoName = `Browser Farmers ${stamp} SACCO`;
+  await page.locator("[data-auth-tab='register']").click();
+  await expectText(page, "Complete SACCO details", "public SACCO registration form");
+  await page.locator("#publicTenantName").fill(saccoName);
+  await page.locator("#publicTenantRegistrationNo").fill(`PUB-${stamp}`);
+  await page.locator("#publicTenantDistrict").fill("Wakiso");
+  await page.locator("#publicTenantParish").fill("Nansana");
+  await page.locator("#publicTenantVillage").fill("Central");
+  await page.locator("#publicTenantContactNumber").fill("+256700123456");
+  await page.locator("#publicTenantPaymentPhone").fill("+256700123456");
+  await page.locator("#publicSaccoRegistrationForm button[type='submit']").click();
+  await expectText(page, "Registration received", "public SACCO registration submitted");
+  await expectText(page, "Mobile-money payment prompt initiated", "public SACCO payment initiated");
+  await page.locator("[data-auth-tab='login']").click();
+  await expectText(page, "Login to your portal", "public SACCO registration returns to login");
+  console.log("PASS public SACCO registration");
 }
 
 async function staffLogin(page, code, username, password, label) {

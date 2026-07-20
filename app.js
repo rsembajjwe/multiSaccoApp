@@ -4207,11 +4207,25 @@ async function submitPublicSaccoRegistration(event) {
     const saccoCode = generatedSaccoCode(value("publicTenantName"));
     const codeInput = document.getElementById("publicTenantCode");
     if (codeInput) codeInput.value = saccoCode;
-    const reference = `MM-${saccoCode}-${Date.now().toString().slice(-6)}`;
-    state.publicRegistrationMessage = `SACCO code ${saccoCode} reserved. Mobile-money payment prompt initiated to ${value("publicTenantPaymentPhone") || value("publicTenantContactNumber")} with reference ${reference}. Platform approval follows payment confirmation.`;
+    const result = await api("/public/sacco-registrations", {
+      method: "POST",
+      body: JSON.stringify({
+        name: value("publicTenantName"),
+        saccoCode,
+        registrationNo: value("publicTenantRegistrationNo"),
+        district: value("publicTenantDistrict"),
+        parish: value("publicTenantParish"),
+        village: value("publicTenantVillage"),
+        contactNumber: value("publicTenantContactNumber"),
+        memberRange: value("publicTenantMemberRange"),
+        paymentPhone: value("publicTenantPaymentPhone")
+      })
+    }, "");
+    const tenant = result.tenant || {};
+    state.publicRegistrationMessage = `Registration received for ${tenant.name || value("publicTenantName")}. SACCO code ${tenant.abbreviation || saccoCode} created. Mobile-money payment prompt initiated to ${result.paymentPhone || value("publicTenantPaymentPhone") || value("publicTenantContactNumber")} with reference ${result.paymentReference}. Platform approval follows payment confirmation.`;
     renderLogin();
   } catch (error) {
-    state.publicRegistrationError = error.message;
+    state.publicRegistrationError = friendlyUserError(error, false);
     renderLogin();
   }
 }
