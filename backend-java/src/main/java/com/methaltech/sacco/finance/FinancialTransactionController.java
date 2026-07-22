@@ -485,8 +485,8 @@ class FinancialTransactionController {
         String abbreviation = tenantService.findById(tenantId)
                 .map(tenant -> tenant.abbreviation())
                 .orElse("SACCO");
-        long next = transactionRepository.countByTenantId(tenantId) + 1;
-        return abbreviation + "-TX-" + String.format("%04d", next);
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase(Locale.ROOT);
+        return abbreviation + "-TX-" + suffix;
     }
 
     private List<FinancialTransaction> postOpeningBalanceTransactions(
