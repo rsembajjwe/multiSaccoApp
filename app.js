@@ -1432,6 +1432,12 @@ function renderShell() {
           <button class="icon-button mobile-only menu-button" type="button" data-action="toggle-sidebar" aria-label="Open menu"><span class="menu-bars" aria-hidden="true"></span></button>
           <div class="breadcrumbs">Home / ${portal} / <strong>${module[1]}</strong></div>
           <div class="topbar-actions">
+            <label class="topbar-locale">
+              <span class="sr-only">Language</span>
+              <select id="shellLocale" aria-label="Language">
+                ${supportedLocales.map((locale) => `<option value="${escapeHtml(locale.code)}" ${state.locale === locale.code ? "selected" : ""}>${escapeHtml(locale.label)}</option>`).join("")}
+              </select>
+            </label>
             <div class="quick-search">
               <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs" autocomplete="off" aria-autocomplete="list" aria-controls="quickSearchResults"></label>
               ${quickSearchPanel(quickResults)}
@@ -7751,6 +7757,12 @@ function bindEvents() {
     state.locale = supportedLocales.some((locale) => locale.code === event.target.value) ? event.target.value : DEFAULT_REGION.locale;
     localStorage.setItem(LOCALE_KEY, state.locale);
     renderLogin();
+  });
+  document.querySelector("#shellLocale")?.addEventListener("change", (event) => {
+    state.locale = supportedLocales.some((locale) => locale.code === event.target.value) ? event.target.value : DEFAULT_REGION.locale;
+    localStorage.setItem(LOCALE_KEY, state.locale);
+    applyRegionalDocumentSettings();
+    renderShell();
   });
   document.querySelectorAll("[data-auth-tab]").forEach((button) => {
     button.addEventListener("click", () => {

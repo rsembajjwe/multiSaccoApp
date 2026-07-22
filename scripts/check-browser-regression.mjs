@@ -44,6 +44,7 @@ try {
   await assertPublicSaccoRegistration(page);
 
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
+  await assertAuthenticatedLocaleSwitch(page);
   await assertStaffSessionMenu(page);
   await assertPlatformHelpMenu(page);
   await assertStaffAccountMenu(page);
@@ -328,6 +329,14 @@ async function staffLogin(page, code, username, password, label) {
   }
   await page.locator(".app-shell").waitFor({ state: "attached" });
   await expectText(page, label.includes("Platform") ? "Platform Administration Portal" : "SACCO Administration Portal", `${label} portal shell`);
+}
+
+async function assertAuthenticatedLocaleSwitch(page) {
+  await page.locator("#shellLocale").selectOption("fr-FR");
+  await expectText(page, "SACCOs actifs", "authenticated French locale switch");
+  await page.locator("#shellLocale").selectOption("en-UG");
+  await expectText(page, "Active SACCOs", "authenticated English locale restored");
+  console.log("PASS authenticated locale switch");
 }
 
 async function memberLogin(page) {

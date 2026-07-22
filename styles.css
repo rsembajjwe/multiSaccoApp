@@ -809,6 +809,17 @@ textarea {
   justify-content: flex-end;
 }
 
+.topbar-locale select {
+  min-height: 40px;
+  border: 1px solid var(--accent-line);
+  border-radius: 8px;
+  padding: 6px 28px 6px 10px;
+  color: var(--brand);
+  background: #f8fffc;
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
 .search-box {
   width: min(360px, 38vw);
 }
