@@ -14,6 +14,7 @@ const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".md": "text/markdown; charset=utf-8",
   ".svg": "image/svg+xml; charset=utf-8",
   ".ico": "image/x-icon",
@@ -96,7 +97,7 @@ async function proxyJavaApi(request, response, url) {
 function cacheControlFor(url, filePath) {
   const extension = extname(filePath);
   if (extension === ".html") return "no-cache, max-age=0";
-  if (url.searchParams.has("v") && [".css", ".js", ".svg", ".ico", ".png", ".json"].includes(extension)) {
+  if (url.searchParams.has("v") && [".css", ".js", ".svg", ".ico", ".png", ".json", ".webmanifest"].includes(extension)) {
     return "public, max-age=31536000, immutable";
   }
   return "no-store, max-age=0";

@@ -8248,6 +8248,15 @@ function applyRegionalDocumentSettings() {
   document.documentElement.dir = region.direction;
 }
 
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js").catch(() => {
+      // The app remains fully usable when a browser or local environment blocks service workers.
+    });
+  });
+}
+
 function snake(column) {
   return column.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
@@ -8281,4 +8290,5 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char]));
 }
 
+registerServiceWorker();
 init();

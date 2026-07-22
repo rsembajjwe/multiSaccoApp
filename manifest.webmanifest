@@ -1,0 +1,22 @@
+{
+  "name": "Tereka Online",
+  "short_name": "Tereka",
+  "description": "Role-based SACCO operating platform for staff and members.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f8f6",
+  "theme_color": "#0f4638",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg?v=20260719-tereka-2",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business", "productivity"],
+  "lang": "en-UG",
+  "dir": "ltr"
+}

@@ -17,7 +17,7 @@
 	}
 
 	@versioned_assets {
-		path *.css *.js *.svg *.ico *.png *.json
+		path *.css *.js *.svg *.ico *.png *.json *.webmanifest
 		query v=*
 	}
 	header @versioned_assets Cache-Control "public, max-age=31536000, immutable"
