@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -59,6 +60,10 @@ public class Member {
 
     @Column(name = "welfare_balance")
     private BigDecimal welfareBalance;
+
+    @Version
+    @Column(name = "lock_version")
+    private Long lockVersion;
 
     @Column(name = "created_at")
     private Instant createdAt;
