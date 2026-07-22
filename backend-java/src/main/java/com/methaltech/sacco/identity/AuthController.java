@@ -87,7 +87,10 @@ class AuthController {
     @PostMapping("/login")
     ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         String identifier = loginIdentifier(request);
-        if (identifier.isBlank() || request.password() == null || request.password().isBlank()) {
+        if (request.saccoCode() == null || request.saccoCode().isBlank()
+                || identifier.isBlank()
+                || request.password() == null
+                || request.password().isBlank()) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "LOGIN_REQUIRED", "SACCO code, username, and password are required."));
         }
@@ -279,7 +282,7 @@ class AuthController {
     }
 
     private java.util.Optional<User> findLoginUser(Tenant tenant, String identifier) {
-        if (tenant == null) return userRepository.findByEmailIgnoreCase(identifier);
+        if (tenant == null) return java.util.Optional.empty();
         if (identifier.contains("@")) {
             return userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), identifier);
         }

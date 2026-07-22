@@ -417,6 +417,7 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
+								  "saccoCode": "PLATFORM",
 								  "email": "admin@platform.local",
 								  "password": "Admin@12345"
 								}
@@ -429,6 +430,17 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.user.tenantId", is("tenant_platform")))
 				.andExpect(jsonPath("$.data.user.passwordHash").doesNotExist())
 				.andExpect(jsonPath("$.data.user.passwordSalt").doesNotExist());
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "email": "admin@platform.local",
+								  "password": "Admin@12345"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("LOGIN_REQUIRED")));
 	}
 
 	@Test
@@ -601,7 +613,8 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "email": "admin@platform.local",
+								  "saccoCode": "PLATFORM",
+								  "username": "admin@platform.local",
 								  "password": "wrong"
 								}
 								"""))
@@ -671,7 +684,8 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "email": "%s",
+								  "saccoCode": "GVS",
+								  "username": "%s",
 								  "password": "Temp@12345"
 								}
 								""".formatted(email)))
@@ -682,7 +696,8 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "email": "%s",
+								  "saccoCode": "GVS",
+								  "username": "%s",
 								  "password": "Reset@12345"
 								}
 								""".formatted(email)))
@@ -5737,15 +5752,20 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "email": "%s",
+								  "saccoCode": "%s",
+								  "username": "%s",
 								  "password": "%s"
 								}
-								""".formatted(email, password)))
+								""".formatted(loginCodeFor(email), email, password)))
 				.andExpect(status().isOk())
 				.andReturn();
 
 		JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
 		return root.path("data").path("token").asString();
+	}
+
+	private String loginCodeFor(String email) {
+		return email.toLowerCase().contains("@platform.") ? "PLATFORM" : "GVS";
 	}
 
 	private String memberLoginAndReturnToken(String identifier, String password) throws Exception {
