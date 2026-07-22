@@ -358,6 +358,64 @@ const messages = {
     loginRiskEvents: "Login risk events",
     actorsInvolved: "Actors involved",
     actors: "Actors",
+    totalSaccos: "Total SACCOs",
+    activeSaccos: "Active SACCOs",
+    pendingRegistrations: "Pending registrations",
+    expiredSubscriptions: "Expired subscriptions",
+    totalSubscriptionRevenue: "Total subscription revenue",
+    saccoSupportTickets: "SACCO support tickets",
+    failedPaymentTransactions: "Failed payment transactions",
+    activePlatformUsers: "Active platform users",
+    recentSaccoApplications: "Recent SACCO applications",
+    platformSaccoRegistration: "Register SACCO inside platform",
+    saccoApplicationList: "SACCO application list",
+    selfRegistrationApprovalPath: "Self-registration approval path",
+    activeSubscriptions: "Active subscriptions",
+    pendingPayments: "Pending payments",
+    suspendedAccess: "Suspended access",
+    revenueThisMonth: "Revenue this month",
+    outstandingInvoices: "Outstanding invoices",
+    subscriptionPaymentAccessStatus: "Subscription payment and access status",
+    activeAccounts: "Active accounts",
+    suspendedAccounts: "Suspended accounts",
+    withoutSubscription: "Without subscription",
+    expiringSoon: "Expiring soon",
+    registeredSaccos: "Registered SACCOs",
+    subscriptionRevenue: "Subscription revenue",
+    platformAdministrators: "Platform administrators",
+    openSaccoComplaints: "Open SACCO complaints",
+    failedPayments: "Failed payments",
+    complianceExceptions: "Compliance exceptions",
+    superAdminReportingControl: "Super admin reporting control",
+    complaintsFromSaccoAdmins: "Complaints from SACCO admins",
+    complaintReview: "Complaint review",
+    urgentComplaints: "Urgent complaints",
+    inProgress: "In progress",
+    resolved: "Resolved",
+    deliveries: "Deliveries",
+    failedDeliveries: "Failed deliveries",
+    loginRiskAlerts: "Login risk alerts",
+    unreadAlerts: "Unread alerts",
+    activeTemplates: "Active templates",
+    globalTemplates: "Global templates",
+    notificationDeliveryControl: "Notification delivery control",
+    platformUsers: "Platform users",
+    activeUsers: "Active users",
+    configuredRoles: "Configured roles",
+    roleCoverage: "Role coverage",
+    addPlatformUser: "Add platform user",
+    userDetailRoleAssignment: "User detail and role assignment",
+    platformRoleCoverage: "Platform role coverage",
+    platformAdministratorList: "Platform administrator list",
+    permissionMatrix: "Permission matrix",
+    subscriptionPackages: "Subscription packages",
+    platformRoles: "Platform roles",
+    permissionControls: "Permission controls",
+    platformSettingsControl: "Platform settings control",
+    configuration: "Configuration",
+    protectedPlatformConfiguration: "Protected platform configuration",
+    platformAuditEvidence: "Platform audit evidence",
+    platformAuditTrail: "Platform audit trail",
     passwordRecovery: "Password recovery"
   },
   "fr-FR": {
@@ -668,6 +726,64 @@ const messages = {
     loginRiskEvents: "Risques connexion",
     actorsInvolved: "Acteurs impliques",
     actors: "Acteurs",
+    totalSaccos: "Total SACCOs",
+    activeSaccos: "SACCOs actifs",
+    pendingRegistrations: "Inscriptions en attente",
+    expiredSubscriptions: "Abonnements expires",
+    totalSubscriptionRevenue: "Revenu total abonnements",
+    saccoSupportTickets: "Tickets support SACCO",
+    failedPaymentTransactions: "Paiements echoues",
+    activePlatformUsers: "Utilisateurs plateforme actifs",
+    recentSaccoApplications: "Demandes SACCO recentes",
+    platformSaccoRegistration: "Enregistrer SACCO dans plateforme",
+    saccoApplicationList: "Liste demandes SACCO",
+    selfRegistrationApprovalPath: "Parcours approbation auto-inscription",
+    activeSubscriptions: "Abonnements actifs",
+    pendingPayments: "Paiements en attente",
+    suspendedAccess: "Acces suspendu",
+    revenueThisMonth: "Revenu du mois",
+    outstandingInvoices: "Factures ouvertes",
+    subscriptionPaymentAccessStatus: "Statut paiement et acces abonnement",
+    activeAccounts: "Comptes actifs",
+    suspendedAccounts: "Comptes suspendus",
+    withoutSubscription: "Sans abonnement",
+    expiringSoon: "Expiration proche",
+    registeredSaccos: "SACCOs inscrits",
+    subscriptionRevenue: "Revenu abonnements",
+    platformAdministrators: "Administrateurs plateforme",
+    openSaccoComplaints: "Plaintes SACCO ouvertes",
+    failedPayments: "Paiements echoues",
+    complianceExceptions: "Exceptions conformite",
+    superAdminReportingControl: "Controle rapports super admin",
+    complaintsFromSaccoAdmins: "Plaintes des admins SACCO",
+    complaintReview: "Revue plainte",
+    urgentComplaints: "Plaintes urgentes",
+    inProgress: "En cours",
+    resolved: "Resolues",
+    deliveries: "Livraisons",
+    failedDeliveries: "Livraisons echouees",
+    loginRiskAlerts: "Alertes risque connexion",
+    unreadAlerts: "Alertes non lues",
+    activeTemplates: "Modeles actifs",
+    globalTemplates: "Modeles globaux",
+    notificationDeliveryControl: "Controle livraison notifications",
+    platformUsers: "Utilisateurs plateforme",
+    activeUsers: "Utilisateurs actifs",
+    configuredRoles: "Roles configures",
+    roleCoverage: "Couverture roles",
+    addPlatformUser: "Ajouter utilisateur plateforme",
+    userDetailRoleAssignment: "Detail utilisateur et roles",
+    platformRoleCoverage: "Couverture roles plateforme",
+    platformAdministratorList: "Liste administrateurs plateforme",
+    permissionMatrix: "Matrice permissions",
+    subscriptionPackages: "Packages abonnement",
+    platformRoles: "Roles plateforme",
+    permissionControls: "Controles permissions",
+    platformSettingsControl: "Controle parametres plateforme",
+    configuration: "Configuration",
+    protectedPlatformConfiguration: "Configuration plateforme protegee",
+    platformAuditEvidence: "Preuves audit plateforme",
+    platformAuditTrail: "Piste audit plateforme",
     passwordRecovery: "Recuperation du mot de passe"
   }
 };
@@ -1607,19 +1723,19 @@ function platformDashboard() {
   const platformSupportTickets = saccoSupportTickets();
   return `
     <div class="dashboard-grid">
-      ${summaryLink("Total SACCOs", tenants.length, "All registered SACCOs", "Open applications", "sacco-applications")}
-      ${summaryLink("Active SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Operating SACCOs", "View accounts", "sacco-accounts")}
-      ${summaryLink("Pending registrations", tenants.filter((t) => normal(t.status).includes("pending")).length, "Reviewer queue", "Review", "sacco-applications")}
-      ${summaryLink("Expired subscriptions", subs.filter((s) => normal(s.status).includes("expired")).length, "Billing risk", "Renew", "subscriptions")}
-      ${summaryLink("Total subscription revenue", money.format(sum(subs, "amount")), "Current records", "Open billing", "subscriptions")}
-      ${summaryLink("SACCO support tickets", platformSupportTickets.filter((c) => !["closed", "resolved"].includes(normal(c.status))).length, "SACCO admin escalations", "Open", "complaints")}
-      ${summaryLink("Failed payment transactions", transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", "Review", "transactions")}
-      ${summaryLink("Active platform users", users.filter((user) => normal(user.status) === "active").length || users.length, "Administrators and roles", "Manage access", "users")}
+      ${summaryLink(t("totalSaccos"), tenants.length, "All registered SACCOs", "Open applications", "sacco-applications")}
+      ${summaryLink(t("activeSaccos"), tenants.filter((t) => normal(t.status) === "active").length, "Operating SACCOs", "View accounts", "sacco-accounts")}
+      ${summaryLink(t("pendingRegistrations"), tenants.filter((t) => normal(t.status).includes("pending")).length, "Reviewer queue", t("review"), "sacco-applications")}
+      ${summaryLink(t("expiredSubscriptions"), subs.filter((s) => normal(s.status).includes("expired")).length, "Billing risk", "Renew", "subscriptions")}
+      ${summaryLink(t("totalSubscriptionRevenue"), money.format(sum(subs, "amount")), "Current records", "Open billing", "subscriptions")}
+      ${summaryLink(t("saccoSupportTickets"), platformSupportTickets.filter((c) => !["closed", "resolved"].includes(normal(c.status))).length, "SACCO admin escalations", t("open"), "complaints")}
+      ${summaryLink(t("failedPaymentTransactions"), transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", t("review"), "transactions")}
+      ${summaryLink(t("activePlatformUsers"), users.filter((user) => normal(user.status) === "active").length || users.length, "Administrators and roles", "Manage access", "users")}
     </div>
     ${loginRiskSummaryPanel(true)}
     <div class="split-layout">
       ${chartCard("SACCO registrations by month", ["Jan", "Feb", "Mar", "Apr", "May", "Jun"], [2, 3, 4, 5, 7, tenants.length || 3])}
-      ${activityPanel("Recent SACCO applications", tenants.slice(0, 5).map((tenant) => [tenant.name || tenant.legalName, tenant.district || "Uganda", tenant.status || "Pending"]))}
+      ${activityPanel(t("recentSaccoApplications"), tenants.slice(0, 5).map((tenant) => [tenant.name || tenant.legalName, tenant.district || "Uganda", tenant.status || t("pending")]))}
     </div>
     <div class="grid two">
       ${recordTable("Subscriptions expiring soon", subs, ["tenantName", "packageName", "expiryDate", "status"])}
@@ -1835,9 +1951,9 @@ function saccoApplications() {
 
 function saccoRegistrationTabs() {
   const tabs = [
-    ["platform", "Register SACCO inside platform"],
-    ["applications", "SACCO application list"],
-    ["self", "Self-registration approval path"]
+    ["platform", t("platformSaccoRegistration")],
+    ["applications", t("saccoApplicationList")],
+    ["self", t("selfRegistrationApprovalPath")]
   ];
   if (!tabs.some(([id]) => id === state.saccoRegistrationTab)) state.saccoRegistrationTab = "platform";
   return `
@@ -1853,7 +1969,7 @@ function saccoRegistrationTabContent(applications) {
   if (state.saccoRegistrationTab === "applications") {
     return `
       ${tenantDetailPanel()}
-      ${recordTable("SACCO application list", applications, ["saccoCode", "name", "district", "registrationNo", "licenseExpiry", "onboarding", "status"])}
+      ${recordTable(t("saccoApplicationList"), applications, ["saccoCode", "name", "district", "registrationNo", "licenseExpiry", "onboarding", "status"])}
     `;
   }
   if (state.saccoRegistrationTab === "self") return selfRegistrationApprovalPanel();
@@ -1866,7 +1982,7 @@ function platformSaccoRegistrationPanel() {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Register SACCO inside platform</h2>
+          <h2>${t("platformSaccoRegistration")}</h2>
           <p>Platform administrators can create a SACCO record directly. Paid registrations activate immediately; unpaid registrations remain pending payment.</p>
         </div>
       </div>
@@ -1902,7 +2018,7 @@ function selfRegistrationApprovalPanel() {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Self-registration approval path</h2>
+          <h2>${t("selfRegistrationApprovalPath")}</h2>
           <p>SACCOs can submit their own application publicly, but they cannot operate until platform review, approval, subscription confirmation and activation are completed.</p>
         </div>
       </div>
@@ -1930,11 +2046,11 @@ function subscriptionsView() {
   });
   return `
     <div class="dashboard-grid">
-      ${summary("Active subscriptions", rows.filter((row) => normal(row.status) === "active").length, "Operating access", "View")}
-      ${summary("Pending payments", rows.filter((row) => normal(row.paymentStatus || row.status).includes("pending")).length, "Awaiting confirmation", "Record payment")}
-      ${summary("Suspended access", tableRows.filter((row) => normal(row.operatingAccess).includes("suspended")).length, "Blocked from operating", "Review")}
-      ${summary("Revenue this month", money.format(sum(rows, "amount")), "Invoice value", "Export")}
-      ${summary("Outstanding invoices", money.format(rows.reduce((total, row) => total + Number(row.amount || 0) - Number(row.paid || row.amountPaid || 0), 0)), "Unpaid balance", "Follow up")}
+      ${summary(t("activeSubscriptions"), rows.filter((row) => normal(row.status) === "active").length, "Operating access", "View")}
+      ${summary(t("pendingPayments"), rows.filter((row) => normal(row.paymentStatus || row.status).includes("pending")).length, "Awaiting confirmation", "Record payment")}
+      ${summary(t("suspendedAccess"), tableRows.filter((row) => normal(row.operatingAccess).includes("suspended")).length, "Blocked from operating", t("review"))}
+      ${summary(t("revenueThisMonth"), money.format(sum(rows, "amount")), "Invoice value", t("export"))}
+      ${summary(t("outstandingInvoices"), money.format(rows.reduce((total, row) => total + Number(row.amount || 0) - Number(row.paid || row.amountPaid || 0), 0)), "Unpaid balance", "Follow up")}
     </div>
     ${subscriptionStatusGuide(rows, tableRows)}
     ${filterToolbar("Search by SACCO code, SACCO name, package, payment status, access status or expiry", "Record payment", "Generate invoice")}
@@ -1946,7 +2062,7 @@ function subscriptionsView() {
 }
 
 function subscriptionStatusGuide(rows, tableRows) {
-  return rolePriorityPanel("Subscription payment and access status", [
+  return rolePriorityPanel(t("subscriptionPaymentAccessStatus"), [
     ["Paid and active", `${tableRows.filter((row) => normal(row.paymentStatus) === "paid" && normal(row.operatingAccess) === "active").length} SACCO(s) have confirmed payment and operating access.`, "Active"],
     ["Pending payment", `${tableRows.filter((row) => normal(row.paymentStatus).includes("pending")).length} SACCO(s) are waiting for payment confirmation before activation or renewal.`, "Follow up"],
     ["Expired or suspended", `${tableRows.filter((row) => normal(row.operatingAccess).includes("expired") || normal(row.operatingAccess).includes("suspended")).length} SACCO(s) need renewal, payment confirmation or manual access review.`, "Review"]
@@ -1972,10 +2088,10 @@ function saccoAccounts() {
   });
   return `
     <div class="dashboard-grid">
-      ${summary("Active accounts", rows.filter((row) => normal(row.status) === "active").length, "SACCOs allowed to operate", "Monitor")}
-      ${summary("Suspended accounts", rows.filter((row) => normal(row.status).includes("suspended")).length, "Access disabled", "Review")}
-      ${summary("Without subscription", rows.filter((row) => !subscriptions.some((sub) => sub.tenantId === row.id)).length, "Needs billing setup", "Assign")}
-      ${summary("Expiring soon", rows.filter((row) => normal(row.subscriptionStatus).includes("expired") || normal(row.accountHealth).includes("risk")).length, "Billing and access risk", "Renew")}
+      ${summary(t("activeAccounts"), rows.filter((row) => normal(row.status) === "active").length, "SACCOs allowed to operate", "Monitor")}
+      ${summary(t("suspendedAccounts"), rows.filter((row) => normal(row.status).includes("suspended")).length, "Access disabled", t("review"))}
+      ${summary(t("withoutSubscription"), rows.filter((row) => !subscriptions.some((sub) => sub.tenantId === row.id)).length, "Needs billing setup", "Assign")}
+      ${summary(t("expiringSoon"), rows.filter((row) => normal(row.subscriptionStatus).includes("expired") || normal(row.accountHealth).includes("risk")).length, "Billing and access risk", "Renew")}
     </div>
     ${filterToolbar("Search SACCO code, name, district, status, subscription or package", "Activate SACCO", "Export accounts")}
     ${tenantDetailPanel()}
@@ -2235,16 +2351,16 @@ function platformSuperAdminReportsView(rows, exceptions) {
   const supportTickets = saccoSupportTickets();
   return `
     <div class="dashboard-grid">
-      ${summary("Registered SACCOs", tenants.length, "All SACCO accounts", "Review")}
-      ${summary("Active SACCOs", tenants.filter((tenant) => normal(tenant.status) === "active").length, "Allowed to operate", "Open")}
-      ${summary("Subscription revenue", money.format(sum(subscriptions, "amount")), "Platform billing", "Export")}
-      ${summary("Platform administrators", users.length, "Users and roles", "Audit")}
-      ${summary("Pending registrations", tenants.filter((tenant) => normal(tenant.status).includes("pending")).length, "Onboarding decisions", "Review")}
-      ${summary("Open SACCO complaints", supportTickets.filter((ticket) => !["closed", "resolved"].includes(normal(ticket.status))).length, "Escalations from SACCO admins", "Review")}
-      ${summary("Failed payments", dataRows("transactions").filter((transaction) => normal(transaction.status).includes("failed")).length, "Provider exceptions", "Review")}
-      ${summary("Compliance exceptions", exceptions, "Reconciliation and journal checks", "Investigate")}
+      ${summary(t("registeredSaccos"), tenants.length, "All SACCO accounts", t("review"))}
+      ${summary(t("activeSaccos"), tenants.filter((tenant) => normal(tenant.status) === "active").length, "Allowed to operate", t("open"))}
+      ${summary(t("subscriptionRevenue"), money.format(sum(subscriptions, "amount")), "Platform billing", t("export"))}
+      ${summary(t("platformAdministrators"), users.length, "Users and roles", "Audit")}
+      ${summary(t("pendingRegistrations"), tenants.filter((tenant) => normal(tenant.status).includes("pending")).length, "Onboarding decisions", t("review"))}
+      ${summary(t("openSaccoComplaints"), supportTickets.filter((ticket) => !["closed", "resolved"].includes(normal(ticket.status))).length, "Escalations from SACCO admins", t("review"))}
+      ${summary(t("failedPayments"), dataRows("transactions").filter((transaction) => normal(transaction.status).includes("failed")).length, "Provider exceptions", t("review"))}
+      ${summary(t("complianceExceptions"), exceptions, "Reconciliation and journal checks", "Investigate")}
     </div>
-    ${rolePriorityPanel("Super admin reporting control", [
+    ${rolePriorityPanel(t("superAdminReportingControl"), [
       ["SACCO account status", `${tenants.length} SACCO account(s) tracked for activation, suspension and payment eligibility.`, tenants.some((tenant) => normal(tenant.status).includes("pending")) ? "Review" : "Clear"],
       ["Billing control", `${subscriptions.length} subscription record(s) available for renewal, arrears and package reporting.`, subscriptions.some((row) => normal(row.status).includes("expired")) ? "Review" : "Current"],
       ["Access governance", `${users.length} platform administrator account(s) included in role and permission reporting.`, users.length ? "Monitored" : "Setup needed"]
@@ -2366,21 +2482,21 @@ function complaintsView() {
   const urgent = rows.filter((row) => normal(row.priority) === "urgent");
   const assigned = rows.filter((row) => row.assignedUserId);
   if (isPlatform()) {
-    const tabs = [["list", "Complaints from SACCO admins"], ["detail", "Complaint review"]];
+    const tabs = [["list", t("complaintsFromSaccoAdmins")], ["detail", t("complaintReview")]];
     const tab = activeModuleTab("complaints", tabs);
     return `
       <div class="dashboard-grid">
-        ${summary("Complaints from SACCO admins", open.length, "Open platform support cases", "Review")}
-        ${summary("Urgent complaints", urgent.length, "Needs same-day action", "Escalate")}
-        ${summary("In progress", rows.filter((row) => normal(row.status) === "in_progress").length, "Being handled", "Track")}
-        ${summary("Resolved", rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", "Review")}
+        ${summary(t("complaintsFromSaccoAdmins"), open.length, "Open platform support cases", t("review"))}
+        ${summary(t("urgentComplaints"), urgent.length, "Needs same-day action", "Escalate")}
+        ${summary(t("inProgress"), rows.filter((row) => normal(row.status) === "in_progress").length, "Being handled", "Track")}
+        ${summary(t("resolved"), rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", t("review"))}
       </div>
       ${moduleTabs("complaints", tabs, tab)}
       ${tab === "list" ? `
         ${filterToolbar("Search complaints by SACCO, category, priority, status or officer", "Export complaints", "Assign officer")}
-        ${recordTable("Complaints from SACCO admins", rows, ["tenantName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
+        ${recordTable(t("complaintsFromSaccoAdmins"), rows, ["tenantName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
       ` : ""}
-      ${tab === "detail" ? (complaintDetailPanel(rows) || emptyState("Complaint review", "Select a SACCO admin complaint from the list to review status and assignment.")) : ""}
+      ${tab === "detail" ? (complaintDetailPanel(rows) || emptyState(t("complaintReview"), "Select a SACCO admin complaint from the list to review status and assignment.")) : ""}
     `;
   }
   const tabs = [["overview", "Complaint control"], ["capture", "Member complaint intake"], ["detail", "Complaint review"], ["list", "SACCO member complaint desk"]];
@@ -2449,12 +2565,12 @@ function notificationsView() {
   }));
   return `
     <div class="dashboard-grid">
-      ${summary("Deliveries", deliveries.length, "SMS, email and in-app events", "Monitor")}
-      ${summary("Failed deliveries", failedDeliveries.length, "Provider exceptions", "Investigate")}
-      ${summary("Login risk alerts", securityAlerts.length, "In-app admin security alerts", "Review")}
-      ${summary("Unread alerts", unreadAlerts.length, "Need acknowledgement", "Clear")}
-      ${summary("Active templates", templates.filter((row) => normal(row.status) === "active").length, "Reusable message rules", "Edit")}
-      ${summary("Global templates", templates.filter((row) => !row.tenantId).length, "Platform defaults", "Review")}
+      ${summary(t("deliveries"), deliveries.length, "SMS, email and in-app events", "Monitor")}
+      ${summary(t("failedDeliveries"), failedDeliveries.length, "Provider exceptions", "Investigate")}
+      ${summary(t("loginRiskAlerts"), securityAlerts.length, "In-app admin security alerts", t("review"))}
+      ${summary(t("unreadAlerts"), unreadAlerts.length, "Need acknowledgement", "Clear")}
+      ${summary(t("activeTemplates"), templates.filter((row) => normal(row.status) === "active").length, "Reusable message rules", "Edit")}
+      ${summary(t("globalTemplates"), templates.filter((row) => !row.tenantId).length, "Platform defaults", t("review"))}
     </div>
     ${state.notificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.notificationMessage)}</strong></div>` : ""}
     ${state.notificationError ? `<div class="notice warning"><strong>Notification action failed.</strong><span>${escapeHtml(state.notificationError)}</span></div>` : ""}
@@ -2482,7 +2598,7 @@ function notificationDeliveryControlPanel(deliveries, templates) {
   const activeTemplates = templates.filter((row) => normal(row.status) === "active");
   const channels = ["sms", "email", "in_app"];
   const missingChannels = channels.filter((channel) => !activeTemplates.some((template) => normal(template.channel) === channel));
-  return rolePriorityPanel("Notification delivery control", [
+  return rolePriorityPanel(t("notificationDeliveryControl"), [
     ["Delivery exceptions", `${failed.length} failed notification(s) require provider or recipient review.`, failed.length ? "Investigate" : "Clear"],
     ["Template coverage", `${activeTemplates.length} active template(s) are available across ${uniqueCount(activeTemplates, "channel")} channel(s).`, missingChannels.length ? "Incomplete" : "Ready"],
     ["Missing channels", missingChannels.length ? `No active template for ${missingChannels.map(labelize).join(", ")}.` : "SMS, email and in-app template coverage is ready.", missingChannels.length ? "Configure" : "Ready"]
@@ -2500,16 +2616,16 @@ function usersView() {
   if (platformOnly) {
     return `
       <div class="dashboard-grid">
-        ${summary("Platform users", users.length, "Administrators only", "Review")}
-        ${summary("Active users", users.filter((user) => normal(user.status) === "active").length, "Can sign in", "Monitor")}
-        ${summary("Configured roles", roles.length, "Available assignments", "Manage")}
-        ${summary("Role coverage", roleCoverage(users, roles), "Users with assigned roles", "Audit")}
+        ${summary(t("platformUsers"), users.length, "Administrators only", t("review"))}
+        ${summary(t("activeUsers"), users.filter((user) => normal(user.status) === "active").length, "Can sign in", "Monitor")}
+        ${summary(t("configuredRoles"), roles.length, "Available assignments", "Manage")}
+        ${summary(t("roleCoverage"), roleCoverage(users, roles), "Users with assigned roles", "Audit")}
       </div>
       ${userManagementTabs(canCreate)}
       ${platformUserTabContent({
         activeTab: state.userAdminTab,
         canCreate,
-        addPanel: canCreate ? addUserPanel(true) : emptyState("Add platform user", "Only Platform Super Admin users can add platform administrators."),
+        addPanel: canCreate ? addUserPanel(true) : emptyState(t("addPlatformUser"), "Only Platform Super Admin users can add platform administrators."),
         detailPanel,
         coveragePanel: roleCoveragePanel(users, roles, true),
         listPanel,
@@ -2535,11 +2651,11 @@ function usersView() {
 
 function userManagementTabs(canCreate) {
   const tabs = [
-    ["add", "Add platform user", canCreate],
-    ["detail", "User detail and role assignment", true],
-    ["coverage", "Platform role coverage", true],
-    ["list", "Platform administrator list", true],
-    ["matrix", "Permission matrix", true]
+    ["add", t("addPlatformUser"), canCreate],
+    ["detail", t("userDetailRoleAssignment"), true],
+    ["coverage", t("platformRoleCoverage"), true],
+    ["list", t("platformAdministratorList"), true],
+    ["matrix", t("permissionMatrix"), true]
   ];
   if (!tabs.some(([id]) => id === state.userAdminTab)) state.userAdminTab = "list";
   if (state.userAdminTab === "add" && !canCreate) state.userAdminTab = "list";
@@ -2636,7 +2752,7 @@ function auditView() {
   const reversals = rows.filter((event) => event.category === "Reversals");
   const access = rows.filter((event) => event.category === "Access control");
   const finance = rows.filter((event) => event.category === "Financial activity");
-  const tabs = [["overview", t("auditControl")], ["evidence", isPlatform() ? "Platform audit evidence" : t("saccoAuditEvidence")], ["sensitive", t("sensitiveAuditQueue")], ["trail", isPlatform() ? "Platform audit trail" : t("saccoAuditTrail")]];
+  const tabs = [["overview", t("auditControl")], ["evidence", isPlatform() ? t("platformAuditEvidence") : t("saccoAuditEvidence")], ["sensitive", t("sensitiveAuditQueue")], ["trail", isPlatform() ? t("platformAuditTrail") : t("saccoAuditTrail")]];
   const tab = activeModuleTab("audit", tabs);
   return `
     <div class="dashboard-grid">
@@ -2653,7 +2769,7 @@ function auditView() {
       ${auditEvidencePanel(rows, sensitive, approvals, reversals, access, finance)}
     ` : ""}
     ${tab === "sensitive" ? recordTable("Sensitive audit queue", sensitive, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "riskLevel"]) : ""}
-    ${tab === "trail" ? recordTable(isPlatform() ? "Platform audit trail" : "SACCO audit trail", rows, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "result"]) : ""}
+    ${tab === "trail" ? recordTable(isPlatform() ? t("platformAuditTrail") : t("saccoAuditTrail"), rows, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "result"]) : ""}
   `;
 }
 
@@ -3440,22 +3556,22 @@ function platformSettingsView() {
   const permissions = dataRows("permissions");
   const templates = dataRows("notificationTemplates").filter((template) => !template.tenantId);
   const canManage = hasPermission("roles:create") || roleKind() === "super";
-  const tab = activeModuleTab("settings", [["configuration", "Configuration"], ["security", "Security"]]);
+  const tab = activeModuleTab("settings", [["configuration", t("configuration")], ["security", t("security")]]);
   const security = state.data.securitySummary || {};
   return `
     <div class="dashboard-grid">
-      ${summary("Subscription packages", packages.length, "Platform billing plans", "Review")}
-      ${summary("Platform roles", roles.length, "Administrator access profiles", "Manage")}
-      ${summary("Permission controls", permissions.length, "Route and action permissions", "Audit")}
-      ${summary("Global templates", templates.length, "Default notification content", "Edit")}
+      ${summary(t("subscriptionPackages"), packages.length, "Platform billing plans", t("review"))}
+      ${summary(t("platformRoles"), roles.length, "Administrator access profiles", "Manage")}
+      ${summary(t("permissionControls"), permissions.length, "Route and action permissions", "Audit")}
+      ${summary(t("globalTemplates"), templates.length, "Default notification content", "Edit")}
     </div>
-    ${moduleTabs("settings", [["configuration", "Configuration"], ["security", "Security"]], tab)}
+    ${moduleTabs("settings", [["configuration", t("configuration")], ["security", t("security")]], tab)}
     ${tab === "configuration" ? `
       ${platformSettingsControlPanel(packages, roles, permissions, templates, canManage)}
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Protected platform configuration</h2>
+          <h2>${t("protectedPlatformConfiguration")}</h2>
           <p>System-level settings are restricted to Platform Super Admin users and should be changed with audit review.</p>
         </div>
         ${canManage ? `<span class="status active">Super Admin controls</span>` : `<span class="status pending">View only</span>`}
@@ -3485,7 +3601,7 @@ function platformSettingsView() {
 function platformSettingsControlPanel(packages, roles, permissions, templates, canManage) {
   const inactivePackages = packages.filter((item) => normal(item.status) !== "active").length;
   const inactiveTemplates = templates.filter((item) => normal(item.status) !== "active").length;
-  return rolePriorityPanel("Platform settings control", [
+  return rolePriorityPanel(t("platformSettingsControl"), [
     ["Billing readiness", `${packages.length} subscription package(s), with ${inactivePackages} inactive plan(s).`, inactivePackages ? "Review" : "Ready"],
     ["Administrator roles", `${roles.length} platform role(s) mapped to ${permissions.length} permission control(s).`, roles.length && permissions.length ? "Ready" : "Configure"],
     ["Protected changes", canManage ? "Current role can update protected platform configuration with audit trail." : "Current role is view-only for protected platform configuration.", canManage ? "Allowed" : "Restricted"],
