@@ -26,7 +26,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -482,6 +484,33 @@ class MemberController {
                 .<ResponseEntity<?>>map(member -> {
                     if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
                     return ResponseEntity.ok(ApiResponse.of(statementFor(member, from, to)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @GetMapping(value = "/{memberId}/statement/export.csv", produces = "text/csv")
+    ResponseEntity<?> exportMemberStatementCsv(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @RequestParam(name = "from", required = false) LocalDate from,
+            @RequestParam(name = "to", required = false) LocalDate to) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        if (from != null && to != null && from.isAfter(to)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_STATEMENT_RANGE", "Statement start date cannot be after end date."));
+        }
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    MemberStatementResponse statement = statementFor(member, from, to);
+                    return ResponseEntity.ok()
+                            .contentType(MediaType.parseMediaType("text/csv"))
+                            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + statementFilename(member) + "\"")
+                            .body(statement.csv());
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
@@ -1118,6 +1147,13 @@ class MemberController {
                 closing.welfare().toPlainString(),
                 ""));
         return String.join("\n", rows) + "\n";
+    }
+
+    private String statementFilename(Member member) {
+        String membershipNo = member.getMembershipNo() == null || member.getMembershipNo().isBlank()
+                ? member.getId()
+                : member.getMembershipNo();
+        return "member-statement-" + membershipNo.replaceAll("[^A-Za-z0-9._-]", "-") + ".csv";
     }
 
     record CreateMemberRequest(

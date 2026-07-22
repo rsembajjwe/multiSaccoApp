@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const uiBaseUrl = (process.env.UI_BASE_URL || `http://127.0.0.1:${process.env.UI_REGRESSION_PORT || 5174}`).replace(/\/$/, "");
@@ -9,6 +10,7 @@ const timeoutMs = Number(process.env.UI_REGRESSION_TIMEOUT_MS || 20000);
 
 let server = null;
 let browser = null;
+let context = null;
 
 try {
   if (shouldStartUi) {
@@ -25,7 +27,8 @@ try {
   await assertJavaApiProxy();
 
   browser = await launchBrowser();
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  context = await browser.newContext({ acceptDownloads: true, viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
   page.setDefaultTimeout(timeoutMs);
 
   await page.goto(uiBaseUrl, { waitUntil: "domcontentloaded" });
@@ -222,6 +225,7 @@ try {
 
   console.log(`Browser regression checks passed against ${uiBaseUrl}`);
 } finally {
+  await context?.close().catch(() => {});
   await browser?.close().catch(() => {});
   if (server) server.kill();
 }
@@ -492,7 +496,7 @@ async function assertPasswordRecovery(page) {
   await page.locator("[data-auth-tab='forgot']").click();
   await expectText(page, "Password recovery", "password recovery panel");
   await expectText(page, "Request password reset", "password recovery action");
-  await page.locator("#passwordResetEmail").fill("admin@platform.local");
+  await page.locator("#passwordResetEmail").fill("recovery.probe@unknown.local");
   await page.locator("#passwordResetRequestForm button[type='submit']").click();
   await expectText(page, "password reset request has been recorded", "password reset request response");
   await page.getByRole("button", { name: "Back to login" }).click();
@@ -692,9 +696,26 @@ async function assertMemberRegistrationAndKyc(page) {
   await expectText(page, "Receipt evidence summary", "member statement receipt evidence summary");
   await expectText(page, "Treasurer receipt evidence", "member statement treasurer receipt evidence");
   await expectText(page, "Staff statement export controls", "member statement export controls");
-  await expectText(page, "Export PDF", "member statement export PDF action");
+  await expectText(page, "Download CSV", "member statement CSV action");
+  await assertStaffStatementCsvDownload(page);
   await page.locator("#globalSearch").fill("");
   console.log("PASS member registration and KYC");
+}
+
+async function assertStaffStatementCsvDownload(page) {
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.locator("[data-staff-statement-export='csv']").first().click()
+  ]);
+  const suggested = download.suggestedFilename();
+  if (!suggested.endsWith(".csv")) throw new Error(`Expected CSV download, got ${suggested}`);
+  const path = await download.path();
+  const csv = await readFile(path, "utf8");
+  if (!csv.includes("membershipNo,memberName,reference,type,channel,amount")) {
+    throw new Error(`Statement CSV did not include expected header. Excerpt: ${csv.slice(0, 200)}`);
+  }
+  await expectText(page, "Statement CSV download started", "member statement CSV success message");
+  console.log("PASS staff statement CSV download");
 }
 
 async function assertTransactionWorkflow(page) {

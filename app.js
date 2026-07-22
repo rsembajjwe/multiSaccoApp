@@ -4404,8 +4404,8 @@ function memberDetailPanel(mode = "kyc") {
       ${mode === "statement" ? `
         ${memberStatementControlPanel(member, statementLines, totalBalance, statementCreditTotal, statementDebitTotal, lastMovement)}
         ${memberStatementReceiptPanel(statementLines)}
-        ${staffStatementExportPanel(statementLines)}
-        ${filterToolbar("Search statement by reference, channel, type, amount or date", "Export PDF", "Print statement")}
+        ${staffStatementExportPanel(member, statementLines)}
+        ${filterToolbar("Search statement by reference, channel, type, amount or date", "Download CSV", "Print statement")}
         ${recordTable("Member balance statement", statementLines, ["reference", "type", "channel", "amount", "savingsBalance", "sharesBalance", "welfareBalance", "postedAt"])}
       ` : ""}
     </section>
@@ -4474,7 +4474,7 @@ function memberStatementReceiptPanel(lines) {
   `;
 }
 
-function staffStatementExportPanel(lines) {
+function staffStatementExportPanel(member, lines) {
   const receiptRows = lines.filter((line) => line.reference || line.receiptNo || normal(line.status) === "posted");
   return `
     <section class="panel compact-panel">
@@ -4486,12 +4486,16 @@ function staffStatementExportPanel(lines) {
         <span class="status active">Export ready</span>
       </div>
       <div class="source-grid">
-        ${mini("PDF statement", "Available")}
-        ${mini("Excel schedule", "Available")}
+        ${mini("CSV statement", "Backend download")}
+        ${mini("Excel schedule", "Open CSV in Excel")}
         ${mini("Print statement", "Available")}
         ${mini("Receipt bundle", receiptRows.length ? "Available" : "No receipts yet")}
         ${mini("Statement rows", lines.length)}
         ${mini("Audit trail", "Included")}
+      </div>
+      <div class="form-actions inline">
+        <button class="button primary" type="button" data-staff-statement-export="csv" data-member-id="${escapeHtml(member.id)}">Download CSV</button>
+        <button class="button secondary" type="button" data-staff-statement-print="statement">Print statement</button>
       </div>
     </section>
   `;
@@ -5934,6 +5938,23 @@ async function openMemberDetail(memberId, targetTab = "kyc") {
   renderShell();
 }
 
+async function exportStaffMemberStatementCsv(memberId) {
+  state.selectedMemberMessage = "";
+  state.selectedMemberError = "";
+  try {
+    const member = state.selectedMember || dataRows("members").find((item) => item.id === memberId) || {};
+    const membershipNo = member.membershipNo || memberId || "member";
+    await downloadApiFile(
+      `/members/${encodeURIComponent(memberId)}/statement/export.csv`,
+      `member-statement-${membershipNo}.csv`
+    );
+    state.selectedMemberMessage = "Statement CSV download started.";
+  } catch (error) {
+    state.selectedMemberError = error.message;
+  }
+  renderShell();
+}
+
 async function saveMemberDecision(memberId, memberStatus, kycStatus) {
   state.selectedMemberMessage = "";
   state.selectedMemberError = "";
@@ -6916,6 +6937,28 @@ async function api(path, options = {}, token = state.token) {
   return payload.data ?? payload;
 }
 
+async function downloadApiFile(path, filename, token = state.token) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const error = new Error(payload.error?.message || payload.message || `Download failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  const blob = await response.blob();
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
 function bindEvents() {
   document.querySelectorAll("[data-auth-tab]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -7062,6 +7105,12 @@ function bindEvents() {
       state.currentView = "members";
       openMemberDetail(button.dataset.memberId, "statement");
     });
+  });
+  document.querySelectorAll("[data-staff-statement-export='csv']").forEach((button) => {
+    button.addEventListener("click", () => exportStaffMemberStatementCsv(button.dataset.memberId));
+  });
+  document.querySelectorAll("[data-staff-statement-print]").forEach((button) => {
+    button.addEventListener("click", () => window.print());
   });
   document.querySelectorAll("[data-row-action='transaction-detail']").forEach((button) => {
     button.addEventListener("click", () => openTransactionDetail(button.dataset.rowId));

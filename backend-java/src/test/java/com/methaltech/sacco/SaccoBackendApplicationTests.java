@@ -11,6 +11,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
@@ -21,6 +22,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -3340,6 +3342,14 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code", is("INVALID_STATEMENT_RANGE")));
+
+		mockMvc.perform(get("/api/v1/members/member_green_amina/statement/export.csv")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Content-Disposition", containsString("member-statement-GVS-0001.csv")))
+				.andExpect(content().contentTypeCompatibleWith("text/csv"))
+				.andExpect(content().string(containsString("membershipNo,memberName,reference,type,channel,amount")))
+				.andExpect(content().string(containsString("GVS-0001")));
 
 		mockMvc.perform(post("/api/v1/financial-transactions")
 						.header("Authorization", "Bearer " + token)
