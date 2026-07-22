@@ -15,6 +15,10 @@ await check("health endpoint exposes security headers", async () => {
   assert(response.headers.get("x-frame-options") === "DENY", "missing frame denial");
   assert(response.headers.get("referrer-policy") === "no-referrer", "missing referrer policy");
   assert(response.headers.get("permissions-policy")?.includes("camera=()"), "missing permissions policy");
+  const csp = response.headers.get("content-security-policy") || "";
+  assert(csp.includes("default-src 'self'"), "missing default CSP");
+  assert(csp.includes("frame-ancestors 'none'"), "missing frame ancestor protection");
+  assert(csp.includes("object-src 'none'"), "missing plugin/object protection");
 });
 
 await check("staff-only routes require bearer tokens", async () => {
@@ -30,7 +34,8 @@ let memberToken = "";
 
 await check("staff login stores tokens server-side and hides password material", async () => {
   const login = await api("POST", "/auth/login", {
-    email: "admin@platform.local",
+    saccoCode: "PLATFORM",
+    username: "admin@platform.local",
     password: "Admin@12345"
   });
   platformToken = login.data.token;
@@ -48,7 +53,8 @@ await check("logout revokes the active staff session", async () => {
   await api("POST", "/auth/logout", null, platformToken);
   await expectStatus("GET", "/auth/me", null, platformToken, 401);
   const login = await api("POST", "/auth/login", {
-    email: "admin@platform.local",
+    saccoCode: "PLATFORM",
+    username: "admin@platform.local",
     password: "Admin@12345"
   });
   platformToken = login.data.token;
@@ -62,7 +68,8 @@ await check("password reset does not enumerate unknown users", async () => {
 
 await check("SACCO staff cannot cross tenant boundaries", async () => {
   const login = await api("POST", "/auth/login", {
-    email: "admin@greenvalley.local",
+    saccoCode: "GVS",
+    username: "admin@greenvalley.local",
     password: "Sacco@12345"
   });
   saccoToken = login.data.token;
@@ -91,7 +98,8 @@ await check("repeated failed staff logins are rate limited", async () => {
   let limited = null;
   for (let index = 0; index < 8; index += 1) {
     const response = await raw("POST", "/auth/login", {
-      email: `security-check-${Date.now()}-${index}@example.local`,
+      saccoCode: "LFS",
+      username: `security-check-${Date.now()}-${index}@example.local`,
       password: "wrong-password"
     });
     if (response.status === 429) {

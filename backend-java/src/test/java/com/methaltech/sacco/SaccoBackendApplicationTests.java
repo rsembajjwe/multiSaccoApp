@@ -47,6 +47,8 @@ class SaccoBackendApplicationTests {
 				.andExpect(header().string("X-Content-Type-Options", "nosniff"))
 				.andExpect(header().string("X-Frame-Options", "DENY"))
 				.andExpect(header().string("Referrer-Policy", "no-referrer"))
+				.andExpect(header().string("Content-Security-Policy", containsString("default-src 'self'")))
+				.andExpect(header().string("Content-Security-Policy", containsString("frame-ancestors 'none'")))
 				.andExpect(jsonPath("$.data.ok", is(true)))
 				.andExpect(jsonPath("$.data.service", is("multiSaccoApp Java API")));
 	}

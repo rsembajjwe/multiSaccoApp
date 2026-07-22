@@ -1,5 +1,20 @@
 import { randomUUID } from "node:crypto";
 
+export const contentSecurityPolicy = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "manifest-src 'self'",
+  "worker-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+  "form-action 'self'"
+].join("; ");
+
 export async function readJson(request) {
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
@@ -14,6 +29,7 @@ export function securityHeaders(headers = {}) {
     "Referrer-Policy": "no-referrer",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Cross-Origin-Resource-Policy": "same-origin",
+    "Content-Security-Policy": contentSecurityPolicy,
     ...headers
   };
 }
