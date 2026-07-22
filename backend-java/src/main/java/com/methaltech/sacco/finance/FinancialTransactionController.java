@@ -299,6 +299,7 @@ class FinancialTransactionController {
     }
 
     @PostMapping("/{transactionId}/reversal")
+    @Transactional
     ResponseEntity<?> reverseTransaction(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String transactionId,
@@ -317,6 +318,7 @@ class FinancialTransactionController {
     }
 
     @PatchMapping("/{transactionId}/status")
+    @Transactional
     ResponseEntity<?> updateTransactionStatus(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String transactionId,

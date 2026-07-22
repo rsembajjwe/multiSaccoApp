@@ -20,6 +20,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -144,6 +145,7 @@ class WelfareClaimController {
     }
 
     @PatchMapping("/{claimId}/status")
+    @Transactional
     ResponseEntity<?> decideClaim(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String claimId,
@@ -168,6 +170,7 @@ class WelfareClaimController {
     }
 
     @PostMapping("/{claimId}/payment")
+    @Transactional
     ResponseEntity<?> payClaim(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String claimId,

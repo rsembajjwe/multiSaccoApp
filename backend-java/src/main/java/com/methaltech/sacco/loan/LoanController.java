@@ -410,6 +410,7 @@ class LoanController {
     }
 
     @PatchMapping("/{loanId}/status")
+    @Transactional
     ResponseEntity<?> updateLoanStatus(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String loanId,
@@ -456,6 +457,7 @@ class LoanController {
     }
 
     @PostMapping("/{loanId}/guarantors")
+    @Transactional
     ResponseEntity<?> createGuarantor(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String loanId,
@@ -474,6 +476,7 @@ class LoanController {
     }
 
     @PostMapping("/{loanId}/disburse")
+    @Transactional
     ResponseEntity<?> disburseLoan(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String loanId,
@@ -533,6 +536,7 @@ class LoanController {
     }
 
     @PostMapping("/{loanId}/repayments")
+    @Transactional
     ResponseEntity<?> createRepayment(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String loanId,
