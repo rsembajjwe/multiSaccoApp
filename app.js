@@ -4,11 +4,44 @@ const MEMBER_TOKEN_KEY = "tereka-member-token";
 const MEMBER_DRAFTS_KEY = "tereka-member-offline-drafts-v1";
 const SHOW_DEMO_TOOLS = new URLSearchParams(window.location.search).has("demo");
 
-const money = new Intl.NumberFormat("en-UG", {
-  style: "currency",
+const DEFAULT_REGION = Object.freeze({
+  locale: "en-UG",
   currency: "UGX",
-  maximumFractionDigits: 0
+  currencyDigits: 0,
+  direction: "ltr"
 });
+
+const COUNTRY_REGIONS = Object.freeze({
+  uganda: DEFAULT_REGION,
+  kenya: { locale: "en-KE", currency: "KES", currencyDigits: 0, direction: "ltr" },
+  tanzania: { locale: "sw-TZ", currency: "TZS", currencyDigits: 0, direction: "ltr" },
+  rwanda: { locale: "rw-RW", currency: "RWF", currencyDigits: 0, direction: "ltr" },
+  nigeria: { locale: "en-NG", currency: "NGN", currencyDigits: 2, direction: "ltr" },
+  ghana: { locale: "en-GH", currency: "GHS", currencyDigits: 2, direction: "ltr" },
+  "south africa": { locale: "en-ZA", currency: "ZAR", currencyDigits: 2, direction: "ltr" },
+  ethiopia: { locale: "am-ET", currency: "ETB", currencyDigits: 2, direction: "ltr" },
+  mozambique: { locale: "pt-MZ", currency: "MZN", currencyDigits: 2, direction: "ltr" },
+  angola: { locale: "pt-AO", currency: "AOA", currencyDigits: 2, direction: "ltr" },
+  senegal: { locale: "fr-SN", currency: "XOF", currencyDigits: 0, direction: "ltr" },
+  "cote d'ivoire": { locale: "fr-CI", currency: "XOF", currencyDigits: 0, direction: "ltr" },
+  "ivory coast": { locale: "fr-CI", currency: "XOF", currencyDigits: 0, direction: "ltr" },
+  cameroon: { locale: "fr-CM", currency: "XAF", currencyDigits: 0, direction: "ltr" },
+  egypt: { locale: "ar-EG", currency: "EGP", currencyDigits: 2, direction: "rtl" },
+  sudan: { locale: "ar-SD", currency: "SDG", currencyDigits: 2, direction: "rtl" },
+  morocco: { locale: "ar-MA", currency: "MAD", currencyDigits: 2, direction: "rtl" }
+});
+
+const money = {
+  format(value) {
+    const region = currentRegion();
+    return new Intl.NumberFormat(region.locale, {
+      style: "currency",
+      currency: region.currency,
+      minimumFractionDigits: region.currencyDigits,
+      maximumFractionDigits: region.currencyDigits
+    }).format(Number(value || 0));
+  }
+};
 
 const demoAccounts = [
   { label: "Platform Super Admin", code: "PLATFORM", username: "admin@platform.local", password: "Admin@12345", portal: "Platform" },
@@ -261,6 +294,7 @@ function app() {
 
 function setHtml(markup) {
   const focusState = captureFocusState();
+  applyRegionalDocumentSettings();
   app().innerHTML = markup;
   bindEvents();
   restoreFocusState(focusState);
@@ -7853,7 +7887,7 @@ function operationAlerts() {
 
 function fallbackPackages() {
   return [
-    { name: "100-250 members", price: 500000, maxMembers: 250, maxBranches: 1, modules: "UGX 5,000 per member annually, minimum 100 members" },
+    { name: "100-250 members", price: 500000, maxMembers: 250, maxBranches: 1, modules: `${money.format(5000)} per member annually, minimum 100 members` },
     { name: "251-500 members", price: 1200000, maxMembers: 500, maxBranches: 2, modules: "Starter fixed billing" },
     { name: "501-2,500 members", price: 3600000, maxMembers: 2500, maxBranches: 5, modules: "Growth SACCO operations" },
     { name: "2,501-10,000 members", price: 9000000, maxMembers: 10000, maxBranches: 25, modules: "Enterprise support" }
@@ -8174,7 +8208,7 @@ function formatDate(value) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString("en-UG", {
+  return date.toLocaleDateString(currentRegion().locale, {
     day: "2-digit",
     month: "short",
     year: "numeric"
@@ -8185,13 +8219,33 @@ function formatDateTime(value) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString("en-UG", {
+  return date.toLocaleString(currentRegion().locale, {
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function currentRegion() {
+  const tenant = state.tenant || tenantRows().find((item) => item.id === state.user?.tenantId) || {};
+  const country = normal(tenant.country || tenant.operatingCountry || tenant.countryName || "");
+  const region = COUNTRY_REGIONS[country] || {};
+  const locale = tenant.locale || tenant.defaultLocale || region.locale || DEFAULT_REGION.locale;
+  const currency = tenant.currency || tenant.currencyCode || region.currency || DEFAULT_REGION.currency;
+  return {
+    locale,
+    currency,
+    currencyDigits: Number.isInteger(tenant.currencyDigits) ? tenant.currencyDigits : region.currencyDigits ?? DEFAULT_REGION.currencyDigits,
+    direction: tenant.direction || tenant.textDirection || region.direction || DEFAULT_REGION.direction
+  };
+}
+
+function applyRegionalDocumentSettings() {
+  const region = currentRegion();
+  document.documentElement.lang = region.locale;
+  document.documentElement.dir = region.direction;
 }
 
 function snake(column) {

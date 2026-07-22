@@ -45,7 +45,7 @@ createServer(async (request, response) => {
     const content = await readFile(filePath);
     response.writeHead(200, securityHeaders({
       "Content-Type": mimeTypes[extname(filePath)] || "application/octet-stream",
-      "Cache-Control": "no-store, max-age=0"
+      "Cache-Control": cacheControlFor(url, filePath)
     }));
     response.end(content);
   } catch {
@@ -91,6 +91,15 @@ async function proxyJavaApi(request, response, url) {
       }
     }, null, 2));
   }
+}
+
+function cacheControlFor(url, filePath) {
+  const extension = extname(filePath);
+  if (extension === ".html") return "no-cache, max-age=0";
+  if (url.searchParams.has("v") && [".css", ".js", ".svg", ".ico", ".png", ".json"].includes(extension)) {
+    return "public, max-age=31536000, immutable";
+  }
+  return "no-store, max-age=0";
 }
 
 function readRequestBody(request) {
