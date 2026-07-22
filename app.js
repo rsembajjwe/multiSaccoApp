@@ -246,6 +246,47 @@ const messages = {
     loginCode: "Login code",
     protected: "Protected",
     demoAccessHidden: "Hidden",
+    memberManagementFocus: "Member management focus",
+    memberOverview: "Member Overview",
+    registerMember: "Register Member",
+    memberList: "Member List",
+    kycDetail: "KYC Detail",
+    contactsDocuments: "Contacts & Documents",
+    statement: "Statement",
+    registeredMembers: "Registered members",
+    activeMembers: "Active members",
+    pendingKyc: "Pending KYC",
+    portalReady: "Portal-ready",
+    transactionControlFocus: "Transaction control focus",
+    control: "Control",
+    newTransactionScreen: "New transaction screen",
+    transactionDetail: "Transaction detail",
+    transactionList: "Transaction list",
+    pendingApproval: "Pending approval",
+    postedValue: "Posted value",
+    reversals: "Reversals",
+    savingsControl: "Savings control",
+    savingsOperationsControl: "Savings operations control",
+    monthlyPerformance: "Monthly performance",
+    savingsProductSetup: "Savings product setup",
+    openSavingsAccount: "Open Savings account",
+    savingsRecords: "Savings records",
+    savingsProducts: "Savings products",
+    savingsAccounts: "Savings accounts",
+    activeProducts: "Active products",
+    minimumContribution: "Minimum contribution",
+    savingsBalances: "Savings balances",
+    loanLifecycleControl: "Loan lifecycle control",
+    lifecycle: "Lifecycle",
+    loanApplicationForm: "Loan application form",
+    loanDetailGuarantors: "Loan detail and guarantors",
+    loanApplicationList: "Loan application list",
+    activeLoans: "Active loans",
+    outstandingPrincipal: "Outstanding principal",
+    awaitingApproval: "Awaiting approval",
+    readyToDisburse: "Ready to disburse",
+    portfolioAtRisk: "Portfolio at risk",
+    reportingEvidenceControl: "Reporting evidence control",
     passwordRecovery: "Password recovery"
   },
   "fr-FR": {
@@ -444,6 +485,47 @@ const messages = {
     loginCode: "Code connexion",
     protected: "Protege",
     demoAccessHidden: "Cache",
+    memberManagementFocus: "Controle gestion membres",
+    memberOverview: "Vue membres",
+    registerMember: "Enregistrer membre",
+    memberList: "Liste membres",
+    kycDetail: "Detail KYC",
+    contactsDocuments: "Contacts et documents",
+    statement: "Releve",
+    registeredMembers: "Membres inscrits",
+    activeMembers: "Membres actifs",
+    pendingKyc: "KYC en attente",
+    portalReady: "Pret portail",
+    transactionControlFocus: "Controle transactions",
+    control: "Controle",
+    newTransactionScreen: "Nouvelle transaction",
+    transactionDetail: "Detail transaction",
+    transactionList: "Liste transactions",
+    pendingApproval: "Approbation en attente",
+    postedValue: "Valeur publiee",
+    reversals: "Annulations",
+    savingsControl: "Controle epargne",
+    savingsOperationsControl: "Controle operations epargne",
+    monthlyPerformance: "Performance mensuelle",
+    savingsProductSetup: "Configuration produit epargne",
+    openSavingsAccount: "Ouvrir compte epargne",
+    savingsRecords: "Dossiers epargne",
+    savingsProducts: "Produits epargne",
+    savingsAccounts: "Comptes epargne",
+    activeProducts: "Produits actifs",
+    minimumContribution: "Contribution minimum",
+    savingsBalances: "Soldes epargne",
+    loanLifecycleControl: "Controle cycle pret",
+    lifecycle: "Cycle",
+    loanApplicationForm: "Formulaire demande pret",
+    loanDetailGuarantors: "Detail pret et garants",
+    loanApplicationList: "Liste demandes pret",
+    activeLoans: "Prets actifs",
+    outstandingPrincipal: "Principal restant",
+    awaitingApproval: "En attente approbation",
+    readyToDisburse: "Pret decaissement",
+    portfolioAtRisk: "Portefeuille a risque",
+    reportingEvidenceControl: "Controle preuves rapports",
     passwordRecovery: "Recuperation du mot de passe"
   }
 };
@@ -1774,14 +1856,14 @@ function membersView() {
   const tab = state.memberTab || "overview";
   return `
     <div class="dashboard-grid">
-      ${summary("Registered members", members.length, "Member register only, not staff users", "Review")}
-      ${summary("Active members", active.length, "Can transact and use portal", "Monitor")}
-      ${summary("Pending KYC", pendingKyc.length, "Needs document or approval follow-up", "Review")}
-      ${summary("Total balances", money.format(sum(rows, "totalBalance")), "Savings, shares and welfare", "Statements")}
-      ${summary("Portal-ready", rows.filter((member) => normal(member.status) === "active" && normal(member.kycStatus) === "verified").length, "Can use member login", "Audit")}
+      ${summary(t("registeredMembers"), members.length, "Member register only, not staff users", t("review"))}
+      ${summary(t("activeMembers"), active.length, "Can transact and use portal", "Monitor")}
+      ${summary(t("pendingKyc"), pendingKyc.length, "Needs document or approval follow-up", t("review"))}
+      ${summary("Total balances", money.format(sum(rows, "totalBalance")), t("savingsSharesWelfare"), "Statements")}
+      ${summary(t("portalReady"), rows.filter((member) => normal(member.status) === "active" && normal(member.kycStatus) === "verified").length, "Can use member login", "Audit")}
     </div>
     ${memberTabs(tab)}
-    ${tab === "overview" ? rolePriorityPanel("Member management focus", [
+    ${tab === "overview" ? rolePriorityPanel(t("memberManagementFocus"), [
       ["Member and staff separation", "Members are managed here. SACCO staff logins are managed under Users and Roles.", "Clear"],
       ["KYC workflow", `${pendingKyc.length} member profile(s) need verification, document review or approval action.`, pendingKyc.length ? "Pending" : "Clear"],
       ["Balances and statements", "Open a member profile to review balances, contacts, beneficiaries, documents and statement lines.", "Ready"]
@@ -1799,12 +1881,12 @@ function membersView() {
 
 function memberTabs(activeTab) {
   const tabs = [
-    ["overview", "Member Overview"],
-    ["register", "Register Member"],
-    ["list", "Member List"],
-    ["kyc", "KYC Detail"],
-    ["contacts", "Contacts & Documents"],
-    ["statement", "Statement"]
+    ["overview", t("memberOverview")],
+    ["register", t("registerMember")],
+    ["list", t("memberList")],
+    ["kyc", t("kycDetail")],
+    ["contacts", t("contactsDocuments")],
+    ["statement", t("statement")]
   ];
   return `
     <div class="tabs management-tabs">
@@ -1831,18 +1913,18 @@ function transactionsView() {
   const pending = rows.filter((row) => normal(row.status).includes("pending"));
   const posted = rows.filter((row) => normal(row.status) === "posted");
   const reversed = rows.filter((row) => row.originalTransactionId || normal(row.status).includes("reversed"));
-  const tabs = [["overview", "Control"], ["capture", "New transaction screen"], ["detail", "Transaction detail"], ["list", "Transaction list"]];
+  const tabs = [["overview", t("control")], ["capture", t("newTransactionScreen")], ["detail", t("transactionDetail")], ["list", t("transactionList")]];
   const tab = activeModuleTab("transactions", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Transactions", rows.length, "Deposits, withdrawals and corrections", "Review")}
-      ${summary("Pending approval", pending.length, "Maker-checker queue", "Approve")}
-      ${summary("Posted value", money.format(sum(posted, "amount")), "Receipt-ready transactions", "Receipts")}
-      ${summary("Reversals", reversed.length, "Corrections with reason trail", "Audit")}
-      ${summary("Mobile money", money.format(sum(rows.filter((row) => normal(row.channel).includes("mobile")), "amount")), "Provider channel", "Reconcile")}
+      ${summary(t("transactions"), rows.length, "Deposits, withdrawals and corrections", t("review"))}
+      ${summary(t("pendingApproval"), pending.length, "Maker-checker queue", "Approve")}
+      ${summary(t("postedValue"), money.format(sum(posted, "amount")), "Receipt-ready transactions", t("receipts"))}
+      ${summary(t("reversals"), reversed.length, "Corrections with reason trail", "Audit")}
+      ${summary(t("mobileMoney"), money.format(sum(rows.filter((row) => normal(row.channel).includes("mobile")), "amount")), "Provider channel", "Reconcile")}
     </div>
     ${moduleTabs("transactions", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel("Transaction control focus", [
+    ${tab === "overview" ? rolePriorityPanel(t("transactionControlFocus"), [
       ["Maker-checker", `${pending.length} transaction(s) are waiting for Treasurer/Admin approval.`, pending.length ? "Pending" : "Clear"],
       ["Receipts", `${posted.length} posted transaction(s) can produce member receipts.`, posted.length ? "Ready" : "Pending"],
       ["Treasurer cash", "Cash savings deposits and loan repayments are captured here, approved, then receipted for the member.", "Office route"],
@@ -1864,18 +1946,18 @@ function loansView() {
   const approved = loans.filter((loan) => normal(loan.status) === "approved");
   const active = loans.filter((loan) => normal(loan.status) === "active");
   const atRisk = loans.filter((loan) => Number(loan.dsr || 0) >= 40 || ["arrears", "overdue", "default"].some((word) => normal(`${loan.status} ${loan.stage}`).includes(word)));
-  const tabs = [["overview", "Lifecycle"], ["application", "Loan application form"], ["detail", "Loan detail and guarantors"], ["list", "Loan application list"]];
+  const tabs = [["overview", t("lifecycle")], ["application", t("loanApplicationForm")], ["detail", t("loanDetailGuarantors")], ["list", t("loanApplicationList")]];
   const tab = activeModuleTab("loans", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Active loans", active.length, "Disbursed portfolio", "Open")}
-      ${summary("Outstanding principal", money.format(sum(loans, "outstandingBalance", "balance")), "Portfolio balance", "Review")}
-      ${summary("Awaiting approval", submitted.length, "Guarantor and decision queue", "Approve")}
-      ${summary("Ready to disburse", approved.length, "Approved but not active", "Disburse")}
-      ${summary("Portfolio at risk", atRisk.length, "Arrears and DSR risk", "Report")}
+      ${summary(t("activeLoans"), active.length, "Disbursed portfolio", t("open"))}
+      ${summary(t("outstandingPrincipal"), money.format(sum(loans, "outstandingBalance", "balance")), "Portfolio balance", t("review"))}
+      ${summary(t("awaitingApproval"), submitted.length, "Guarantor and decision queue", "Approve")}
+      ${summary(t("readyToDisburse"), approved.length, "Approved but not active", "Disburse")}
+      ${summary(t("portfolioAtRisk"), atRisk.length, "Arrears and DSR risk", "Report")}
     </div>
     ${moduleTabs("loans", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel("Loan lifecycle control", [
+    ${tab === "overview" ? rolePriorityPanel(t("loanLifecycleControl"), [
       ["Application", `${submitted.length} loan file(s) are in application, guarantor or approval review.`, submitted.length ? "Pending" : "Clear"],
       ["Disbursement", `${approved.length} approved loan(s) are ready for disbursement after final checks.`, approved.length ? "Ready" : "Clear"],
       ["Servicing", `${active.length} active loan(s) can receive repayments and arrears monitoring.`, active.length ? "Active" : "Pending"]
@@ -2506,18 +2588,18 @@ function savingsView() {
   const members = dataRows("members");
   const activeProducts = products.filter((row) => normal(row.status) === "active");
   const monthlyPerformance = saccoMonthlyPerformanceRows();
-  const tabs = [["overview", "Savings control"], ["monthly", "Monthly performance"], ["products", "Savings product setup"], ["accounts", "Open Savings account"], ["lists", "Savings records"]];
+  const tabs = [["overview", t("savingsControl")], ["monthly", t("monthlyPerformance")], ["products", t("savingsProductSetup")], ["accounts", t("openSavingsAccount")], ["lists", t("savingsRecords")]];
   const tab = activeModuleTab("savings", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Savings products", products.length, "Configured products", "Manage")}
-      ${summary("Savings accounts", accounts.length, "Member accounts", "Open")}
-      ${summary("Active products", activeProducts.length, "Available to members", "Review")}
-      ${summary("Minimum contribution", money.format(sum(products, "contributionAmount", "minimumBalance")), "Configured product totals", "View")}
-      ${summary("Savings balances", money.format(sum(members, "savingsBalance", "savings")), "Member ledger total", "Statements")}
+      ${summary(t("savingsProducts"), products.length, "Configured products", "Manage")}
+      ${summary(t("savingsAccounts"), accounts.length, "Member accounts", t("open"))}
+      ${summary(t("activeProducts"), activeProducts.length, "Available to members", t("review"))}
+      ${summary(t("minimumContribution"), money.format(sum(products, "contributionAmount", "minimumBalance")), "Configured product totals", "View")}
+      ${summary(t("savingsBalances"), money.format(sum(members, "savingsBalance", "savings")), "Member ledger total", "Statements")}
     </div>
     ${moduleTabs("savings", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel("Savings operations control", [
+    ${tab === "overview" ? rolePriorityPanel(t("savingsOperationsControl"), [
       ["Product setup", `${activeProducts.length} active savings product(s) are available for account opening.`, activeProducts.length ? "Ready" : "Setup"],
       ["Member accounts", `${accounts.length} savings account(s) are open for active members.`, accounts.length ? "Active" : "Open"],
       ["Contribution flow", "Savings deposits post through Transactions and member mobile payments.", "Connected"]

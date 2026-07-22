@@ -1,9 +1,9 @@
-const CACHE_VERSION = "tereka-shell-v20260722-member-workflows-1";
+const CACHE_VERSION = "tereka-shell-v20260722-sacco-workflows-1";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/styles.css?v=20260722-member-workflows-1",
-  "/app.js?v=20260722-member-workflows-1",
+  "/styles.css?v=20260722-sacco-workflows-1",
+  "/app.js?v=20260722-sacco-workflows-1",
   "/favicon.svg?v=20260719-tereka-2",
   "/manifest.webmanifest?v=20260722-pwa-1"
 ];
