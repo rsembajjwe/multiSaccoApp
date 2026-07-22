@@ -334,8 +334,10 @@ async function staffLogin(page, code, username, password, label) {
 async function assertAuthenticatedLocaleSwitch(page) {
   await page.locator("#shellLocale").selectOption("fr-FR");
   await expectText(page, "SACCOs actifs", "authenticated French locale switch");
+  await expectText(page, "Abonnements", "authenticated French sidebar locale");
   await page.locator("#shellLocale").selectOption("en-UG");
   await expectText(page, "Active SACCOs", "authenticated English locale restored");
+  await expectText(page, "Subscriptions", "authenticated English sidebar restored");
   console.log("PASS authenticated locale switch");
 }
 
