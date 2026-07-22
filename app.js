@@ -184,6 +184,68 @@ const messages = {
     lastSync: "Last sync",
     available: "Available",
     pending: "Pending",
+    ready: "Ready",
+    verified: "Verified",
+    review: "Review",
+    download: "Download",
+    export: "Export",
+    refresh: "Refresh",
+    paymentOptions: "Payment options",
+    payableLoans: "Payable loans",
+    treasurerCash: "Treasurer cash",
+    paymentDrafts: "Payment drafts",
+    enabled: "Enabled",
+    repay: "Repay",
+    use: "Use",
+    visitOffice: "Visit office",
+    memberPaymentCenter: "Member payment center",
+    memberPaymentCenterCopy: "Deposit savings, shares, welfare contributions or loan repayments by mobile money, or prepare a Treasurer cash handoff for office receipting.",
+    readyToPost: "Ready to post",
+    paymentRoute: "Payment route",
+    paymentPurpose: "Payment purpose",
+    amount: "Amount",
+    provider: "Provider",
+    reference: "Reference",
+    loanForRepayment: "Loan for repayment",
+    saveDraft: "Save draft",
+    postPayment: "Post payment",
+    statementLines: "Statement lines",
+    statementActivity: "Statement activity",
+    exports: "Exports",
+    readiness: "Readiness",
+    savingsBalance: "Savings balance",
+    statementReadiness: "Member statement readiness",
+    statementReadinessCopy: "Balances and statement lines are refreshed from SACCO records.",
+    receiptStatus: "Receipt status",
+    totalReceived: "Total received",
+    withdrawals: "Withdrawals",
+    receiptEvidenceControls: "Receipt evidence controls",
+    receiptEvidenceCopy: "Receipts are produced from posted transactions and carry reference numbers for SACCO follow-up.",
+    evidenceReady: "Evidence ready",
+    receiptExportPrint: "Receipt export and print",
+    receiptExportPrintCopy: "Members can download or print receipt evidence for mobile-money deposits, Treasurer cash deposits and repayments.",
+    printReady: "Print ready",
+    myComplaints: "My complaints",
+    openCases: "Open cases",
+    resolvedCases: "Resolved cases",
+    memberComplaintCenter: "Member complaint center",
+    memberComplaintCenterCopy: "Submit service issues, save offline drafts, sync to the SACCO support desk and track status.",
+    noOpenCases: "No open cases",
+    followUpActive: "Follow-up active",
+    submit: "Submit",
+    drafts: "Drafts",
+    tracking: "Tracking",
+    evidence: "Evidence",
+    memberSecurityCenter: "Member security center",
+    memberSecurityCenterCopy: "Review login requirements, device session state and account safety reminders.",
+    session: "Session",
+    recovery: "Recovery",
+    safety: "Safety",
+    active: "Active",
+    signedOut: "Signed out",
+    loginCode: "Login code",
+    protected: "Protected",
+    demoAccessHidden: "Hidden",
     passwordRecovery: "Password recovery"
   },
   "fr-FR": {
@@ -320,6 +382,68 @@ const messages = {
     lastSync: "Derniere synchro",
     available: "Disponible",
     pending: "En attente",
+    ready: "Pret",
+    verified: "Verifie",
+    review: "Revoir",
+    download: "Telecharger",
+    export: "Exporter",
+    refresh: "Actualiser",
+    paymentOptions: "Options de paiement",
+    payableLoans: "Prets payables",
+    treasurerCash: "Especes tresorier",
+    paymentDrafts: "Brouillons paiement",
+    enabled: "Active",
+    repay: "Rembourser",
+    use: "Utiliser",
+    visitOffice: "Visiter bureau",
+    memberPaymentCenter: "Centre de paiement membre",
+    memberPaymentCenterCopy: "Deposer epargne, parts, solidarite ou remboursements par mobile money, ou preparer un versement chez le tresorier.",
+    readyToPost: "Pret a publier",
+    paymentRoute: "Mode de paiement",
+    paymentPurpose: "Objet du paiement",
+    amount: "Montant",
+    provider: "Fournisseur",
+    reference: "Reference",
+    loanForRepayment: "Pret a rembourser",
+    saveDraft: "Enregistrer brouillon",
+    postPayment: "Publier paiement",
+    statementLines: "Lignes de releve",
+    statementActivity: "Activite du releve",
+    exports: "Exports",
+    readiness: "Preparation",
+    savingsBalance: "Solde epargne",
+    statementReadiness: "Preparation du releve membre",
+    statementReadinessCopy: "Les soldes et lignes de releve viennent des dossiers SACCO.",
+    receiptStatus: "Statut recu",
+    totalReceived: "Total recu",
+    withdrawals: "Retraits",
+    receiptEvidenceControls: "Controles preuve recu",
+    receiptEvidenceCopy: "Les recus proviennent des transactions publiees et portent des references pour suivi SACCO.",
+    evidenceReady: "Preuve prete",
+    receiptExportPrint: "Export et impression recus",
+    receiptExportPrintCopy: "Les membres peuvent telecharger ou imprimer les preuves de depots et remboursements.",
+    printReady: "Pret a imprimer",
+    myComplaints: "Mes plaintes",
+    openCases: "Cas ouverts",
+    resolvedCases: "Cas resolus",
+    memberComplaintCenter: "Centre plaintes membre",
+    memberComplaintCenterCopy: "Soumettre des problemes, garder des brouillons, synchroniser et suivre le statut.",
+    noOpenCases: "Aucun cas ouvert",
+    followUpActive: "Suivi actif",
+    submit: "Soumettre",
+    drafts: "Brouillons",
+    tracking: "Suivi",
+    evidence: "Preuve",
+    memberSecurityCenter: "Centre securite membre",
+    memberSecurityCenterCopy: "Verifier les exigences de connexion, la session appareil et les rappels de securite.",
+    session: "Session",
+    recovery: "Recuperation",
+    safety: "Securite",
+    active: "Actif",
+    signedOut: "Deconnecte",
+    loginCode: "Code connexion",
+    protected: "Protege",
+    demoAccessHidden: "Cache",
     passwordRecovery: "Recuperation du mot de passe"
   }
 };
@@ -3437,7 +3561,7 @@ function memberTabReadinessPanel(title, copy, facts) {
           <h2>${escapeHtml(title)}</h2>
           <p>${escapeHtml(copy)}</p>
         </div>
-        <span class="status active">Ready</span>
+        <span class="status active">${t("ready")}</span>
       </div>
       <div class="source-grid">
         ${facts.map(([label, value]) => mini(label, value)).join("")}
@@ -3490,15 +3614,15 @@ function memberPaymentsView() {
   const payableLoans = loans.filter((loan) => ["active", "disbursed"].includes(normal(loan.status)));
   const paymentDrafts = memberDraftRows("payment");
   const monthlyPerformance = memberMonthlyPerformanceRows(state.memberData.dashboard || {});
-  const tabs = [["mobile-money", "Mobile money"], ["treasurer-cash", "Treasurer cash"], ["drafts", "Drafts"], ["loans", "Loan repayments"], ["tracking", "Tracking"]];
+  const tabs = [["mobile-money", t("mobileMoney")], ["treasurer-cash", t("treasurerCash")], ["drafts", t("drafts")], ["loans", "Loan repayments"], ["tracking", t("tracking")]];
   const tab = activeModuleTab("payments", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Payment options", 4, "Savings, shares, welfare and loans", "Pay")}
-      ${summary("Payable loans", payableLoans.length, "Active loan balances", "Repay")}
-      ${summary("Mobile money", "Enabled", "Provider callback posting", "Use")}
-      ${summary("Treasurer cash", "Available", "Deposits and loan repayments", "Visit office")}
-      ${summary("Payment drafts", paymentDrafts.length, "Saved locally before sync", "Sync")}
+      ${summary(t("paymentOptions"), 4, "Savings, shares, welfare and loans", "Pay")}
+      ${summary(t("payableLoans"), payableLoans.length, "Active loan balances", t("repay"))}
+      ${summary(t("mobileMoney"), t("enabled"), "Provider callback posting", t("use"))}
+      ${summary(t("treasurerCash"), t("available"), "Deposits and loan repayments", t("visitOffice"))}
+      ${summary(t("paymentDrafts"), paymentDrafts.length, "Saved locally before sync", t("sync"))}
     </div>
     ${moduleTabs("payments", tabs, tab)}
     ${tab === "mobile-money" ? `${memberPaymentControlPanel(payableLoans.length, paymentDrafts.length)}${memberPaymentFormPanel(payableLoans)}` : ""}
@@ -3514,21 +3638,21 @@ function memberPaymentFormPanel(payableLoans) {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Member payment center</h2>
-          <p>Deposit savings, shares, welfare contributions or loan repayments by mobile money, or prepare a Treasurer cash handoff for office receipting.</p>
+          <h2>${t("memberPaymentCenter")}</h2>
+          <p>${t("memberPaymentCenterCopy")}</p>
         </div>
-        <span class="status active">Ready to post</span>
+        <span class="status active">${t("readyToPost")}</span>
       </div>
       ${state.memberPaymentMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberPaymentMessage)}</strong></div>` : ""}
       ${state.memberPaymentError ? `<div class="notice warning"><strong>Payment failed.</strong><span>${escapeHtml(state.memberPaymentError)}</span></div>` : ""}
       <form id="memberPaymentForm" class="form-grid">
-        <label><span>Payment route</span><select id="memberPaymentRoute"><option value="mobile_money">Mobile money self payment</option><option value="treasurer_cash">Treasurer cash deposit</option></select><small>Mobile money posts from provider callback. Treasurer cash is receipted by SACCO staff.</small></label>
-        <label><span>Payment purpose</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="loan_repayment">Loan repayment</option></select></label>
-        <label><span>Amount</span><input id="memberPaymentAmount" type="number" min="1" step="1" value="5000"></label>
-        <label><span>Provider</span><select id="memberPaymentProvider"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option><option value="demo">Demo provider</option></select></label>
-        <label><span>Reference</span><input id="memberPaymentReference" value="MM-${Date.now()}"></label>
-        <label class="wide"><span>Loan for repayment</span><select id="memberPaymentLoanId"><option value="">Not a loan repayment</option>${payableLoans.map((loan) => `<option value="${escapeHtml(loan.id)}">${escapeHtml(loan.product || loan.applicationNo || loan.id)} - ${money.format(loan.outstandingBalance || loan.balance || 0)}</option>`).join("")}</select></label>
-        <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="payment">Save draft</button><button class="button primary" type="submit">Post payment</button></div>
+        <label><span>${t("paymentRoute")}</span><select id="memberPaymentRoute"><option value="mobile_money">Mobile money self payment</option><option value="treasurer_cash">Treasurer cash deposit</option></select><small>Mobile money posts from provider callback. Treasurer cash is receipted by SACCO staff.</small></label>
+        <label><span>${t("paymentPurpose")}</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="loan_repayment">Loan repayment</option></select></label>
+        <label><span>${t("amount")}</span><input id="memberPaymentAmount" type="number" min="1" step="1" value="5000"></label>
+        <label><span>${t("provider")}</span><select id="memberPaymentProvider"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option><option value="demo">Demo provider</option></select></label>
+        <label><span>${t("reference")}</span><input id="memberPaymentReference" value="MM-${Date.now()}"></label>
+        <label class="wide"><span>${t("loanForRepayment")}</span><select id="memberPaymentLoanId"><option value="">Not a loan repayment</option>${payableLoans.map((loan) => `<option value="${escapeHtml(loan.id)}">${escapeHtml(loan.product || loan.applicationNo || loan.id)} - ${money.format(loan.outstandingBalance || loan.balance || 0)}</option>`).join("")}</select></label>
+        <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="payment">${t("saveDraft")}</button><button class="button primary" type="submit">${t("postPayment")}</button></div>
       </form>
     </section>
   `;
@@ -3613,14 +3737,14 @@ function isMobileMoneyLine(line) {
 function memberStatementsView(dash, balances) {
   const lines = memberStatementLines(dash);
   const monthlyRows = memberMonthlyPerformanceRows(dash);
-  const tabs = [["readiness", "Readiness"], ["activity", "Statement activity"], ["monthly", "Monthly savings"], ["exports", "Exports"]];
+  const tabs = [["readiness", t("readiness")], ["activity", t("statementActivity")], ["monthly", t("monthlySavings")], ["exports", t("exports")]];
   const tab = activeModuleTab("statements", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Statement lines", lines.length, "Posted statement activity", "Review")}
-      ${summary("Savings balance", money.format(balances.savings || 0), "Verified balance", "Download")}
-      ${summary("Share balance", money.format(balances.shares || 0), "Verified balance", "Download")}
-      ${summary("Welfare balance", money.format(balances.welfare || 0), "Verified balance", "Download")}
+      ${summary(t("statementLines"), lines.length, "Posted statement activity", t("review"))}
+      ${summary(t("savingsBalance"), money.format(balances.savings || 0), "Verified balance", t("download"))}
+      ${summary(t("shareBalance"), money.format(balances.shares || 0), "Verified balance", t("download"))}
+      ${summary(t("welfare"), money.format(balances.welfare || 0), "Verified balance", t("download"))}
     </div>
     ${moduleTabs("statements", tabs, tab)}
     ${tab === "readiness" ? memberStatementEvidencePanel(lines, balances) : ""}
@@ -3635,10 +3759,10 @@ function memberStatementEvidencePanel(lines, balances) {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Member statement readiness</h2>
-          <p>Balances and statement lines are refreshed from SACCO records.</p>
+          <h2>${t("statementReadiness")}</h2>
+          <p>${t("statementReadinessCopy")}</p>
         </div>
-        <span class="status active">Verified</span>
+        <span class="status active">${t("verified")}</span>
       </div>
       <div class="source-grid">
         ${mini("Member", state.member?.membershipNo)}
@@ -3689,14 +3813,14 @@ function memberReceiptsView(dash) {
       amount: Number(line.credit || 0) || Number(line.debit || 0)
     }))
     .sort((a, b) => new Date(b.postedAt || b.createdAt || 0) - new Date(a.postedAt || a.createdAt || 0));
-  const tabs = [["receipts", "Receipts"], ["evidence", "Evidence"], ["exports", "Export/print"]];
+  const tabs = [["receipts", t("receipts")], ["evidence", t("evidence")], ["exports", "Export/print"]];
   const tab = activeModuleTab("receipts", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Receipts", receipts.length, "Posted transactions with evidence", "View")}
-      ${summary("Total received", money.format(sum(receipts.filter((row) => Number(row.credit || 0) > 0), "credit")), "Deposits and repayments", "Export")}
-      ${summary("Withdrawals", money.format(sum(receipts.filter((row) => Number(row.debit || 0) > 0), "debit")), "Cash-out evidence", "Review")}
-      ${summary("Receipt status", receipts.length ? "Available" : "Pending", "Only posted transactions", "Refresh")}
+      ${summary(t("receipts"), receipts.length, "Posted transactions with evidence", "View")}
+      ${summary(t("totalReceived"), money.format(sum(receipts.filter((row) => Number(row.credit || 0) > 0), "credit")), "Deposits and repayments", t("export"))}
+      ${summary(t("withdrawals"), money.format(sum(receipts.filter((row) => Number(row.debit || 0) > 0), "debit")), "Cash-out evidence", t("review"))}
+      ${summary(t("receiptStatus"), receipts.length ? t("available") : t("pending"), "Only posted transactions", t("refresh"))}
     </div>
     ${moduleTabs("receipts", tabs, tab)}
     ${tab === "receipts" ? `${filterToolbar("Search receipts by number, reference, narration or date", "Download receipt", "Print")}${recordTable("Member receipts", receipts, ["receiptNo", "reference", "description", "amount", "receiptStatus", "postedAt"])}` : ""}
@@ -3710,10 +3834,10 @@ function memberReceiptEvidencePanel(receipts) {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Receipt evidence controls</h2>
-          <p>Receipts are produced from posted transactions and carry reference numbers for SACCO follow-up.</p>
+          <h2>${t("receiptEvidenceControls")}</h2>
+          <p>${t("receiptEvidenceCopy")}</p>
         </div>
-        <span class="status active">Evidence ready</span>
+        <span class="status active">${t("evidenceReady")}</span>
       </div>
       <div class="source-grid">
         ${mini("Receipt count", receipts.length)}
@@ -3732,10 +3856,10 @@ function memberReceiptExportPanel(receipts) {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Receipt export and print</h2>
-          <p>Members can download or print receipt evidence for mobile-money deposits, Treasurer cash deposits and repayments.</p>
+          <h2>${t("receiptExportPrint")}</h2>
+          <p>${t("receiptExportPrintCopy")}</p>
         </div>
-        <span class="status active">Print ready</span>
+        <span class="status active">${t("printReady")}</span>
       </div>
       <div class="source-grid">
         ${mini("Download receipt", receipts.length ? "Available" : "No receipt yet")}
@@ -3799,22 +3923,22 @@ function memberComplaintsView() {
   const complaints = state.memberData.complaints || [];
   const open = complaints.filter((row) => !["closed", "resolved"].includes(normal(row.status)));
   const complaintDrafts = memberDraftRows("complaint");
-  const tabs = [["submit", "Submit"], ["drafts", "Drafts"], ["tracking", "Tracking"], ["evidence", "Evidence"]];
+  const tabs = [["submit", t("submit")], ["drafts", t("drafts")], ["tracking", t("tracking")], ["evidence", t("evidence")]];
   const tab = activeModuleTab("complaints", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("My complaints", complaints.length, "Submitted support cases", "Track")}
-      ${summary("Open cases", open.length, "Awaiting action", "Follow up")}
-      ${summary("Resolved cases", complaints.length - open.length, "Closed support history", "Review")}
-      ${summary("Offline drafts", complaintDrafts.length, "Saved before sync", "Sync")}
+      ${summary(t("myComplaints"), complaints.length, "Submitted support cases", "Track")}
+      ${summary(t("openCases"), open.length, "Awaiting action", "Follow up")}
+      ${summary(t("resolvedCases"), complaints.length - open.length, "Closed support history", t("review"))}
+      ${summary(t("offlineDrafts"), complaintDrafts.length, "Saved before sync", t("sync"))}
     </div>
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Member complaint center</h2>
-          <p>Submit service issues, save offline drafts, sync to the SACCO support desk and track status.</p>
+          <h2>${t("memberComplaintCenter")}</h2>
+          <p>${t("memberComplaintCenterCopy")}</p>
         </div>
-        <span class="status ${open.length ? "pending" : "active"}">${open.length ? "Follow-up active" : "No open cases"}</span>
+        <span class="status ${open.length ? "pending" : "active"}">${open.length ? t("followUpActive") : t("noOpenCases")}</span>
       </div>
       <div class="source-grid">
         ${mini("Member", state.member?.membershipNo)}
@@ -3987,14 +4111,14 @@ function memberProfileKycPanel(member) {
 
 function memberSecurityView() {
   const expiresAt = state.memberData.sessionExpiresAt || state.memberData.dashboard?.sessionExpiresAt || "Current browser session";
-  const tabs = [["session", "Session"], ["login", "Login"], ["recovery", "Recovery"], ["safety", "Safety"]];
+  const tabs = [["session", t("session")], ["login", t("login")], ["recovery", t("recovery")], ["safety", t("safety")]];
   const tab = activeModuleTab("security", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Session", state.token ? "Active" : "Signed out", "Bearer token stored on this device", "Review")}
-      ${summary("Login code", contextCode(), "Required with username and password", "Confirm")}
-      ${summary("Password", "Protected", "Never displayed by Tereka Online", "Change")}
-      ${summary("Demo access", SHOW_DEMO_TOOLS ? "Visible" : "Hidden", "Disabled outside dev/demo", "Audit")}
+      ${summary(t("session"), state.token ? t("active") : t("signedOut"), "Bearer token stored on this device", t("review"))}
+      ${summary(t("loginCode"), contextCode(), "Required with username and password", "Confirm")}
+      ${summary(t("password"), t("protected"), "Never displayed by Tereka Online", "Change")}
+      ${summary(t("demoAccess"), SHOW_DEMO_TOOLS ? "Visible" : t("demoAccessHidden"), "Disabled outside dev/demo", "Audit")}
     </div>
     ${moduleTabs("security", tabs, tab)}
     ${tab === "session" ? memberSecuritySessionPanel(expiresAt) : ""}
@@ -4009,10 +4133,10 @@ function memberSecuritySessionPanel(expiresAt) {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Member security center</h2>
-          <p>Review login requirements, device session state and account safety reminders.</p>
+          <h2>${t("memberSecurityCenter")}</h2>
+          <p>${t("memberSecurityCenterCopy")}</p>
         </div>
-        <span class="status active">Protected</span>
+        <span class="status active">${t("protected")}</span>
       </div>
       <div class="source-grid">
         ${mini("SACCO code", contextCode())}
