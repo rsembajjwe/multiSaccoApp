@@ -38,6 +38,7 @@ try {
   await expectText(page, "Enterprise SACCO access gateway", "enterprise login gateway");
   await expectText(page, "Register SACCO", "public SACCO registration link");
   await expectText(page, "Forgot password", "forgot password link");
+  await assertLoginLocaleSwitch(page);
   await expectNoVisibleText(page, "Demo access", "demo tools hidden by default");
   await assertPasswordRecovery(page);
   await assertPublicSaccoRegistration(page);
@@ -302,6 +303,14 @@ async function assertPublicSaccoRegistration(page) {
   await page.getByRole("button", { name: "Login", exact: true }).click();
   await expectText(page, "Login to Tereka Online", "public SACCO registration returns to login");
   console.log("PASS public SACCO registration");
+}
+
+async function assertLoginLocaleSwitch(page) {
+  await page.locator("#loginLocale").selectOption("fr-FR");
+  await expectText(page, "Connexion a Tereka Online", "login French locale switch");
+  await expectText(page, "Enregistrer SACCO", "register SACCO French locale");
+  await page.locator("#loginLocale").selectOption("en-UG");
+  await expectText(page, "Login to Tereka Online", "login English locale restored");
 }
 
 async function staffLogin(page, code, username, password, label) {

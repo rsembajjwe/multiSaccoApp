@@ -2,6 +2,7 @@ const API_BASE = "/api/v1";
 const STAFF_TOKEN_KEY = "tereka-staff-token";
 const MEMBER_TOKEN_KEY = "tereka-member-token";
 const MEMBER_DRAFTS_KEY = "tereka-member-offline-drafts-v1";
+const LOCALE_KEY = "tereka-locale";
 const SHOW_DEMO_TOOLS = new URLSearchParams(window.location.search).has("demo");
 
 const DEFAULT_REGION = Object.freeze({
@@ -43,6 +44,154 @@ const money = {
   }
 };
 
+const supportedLocales = [
+  { code: "en-UG", label: "English" },
+  { code: "fr-FR", label: "Francais" }
+];
+
+const messages = {
+  "en-UG": {
+    loginHeroTitle: "Enterprise SACCO access gateway",
+    securePortal: "Secure portal",
+    loginHeroCopy: "One controlled entry point for Platform Administrators, SACCO staff, and members. The SACCO code routes the user, and role permissions decide the workspace after authentication.",
+    platformAdmin: "Platform Admin",
+    platformAdminCopy: "Super Admin, Billing, Compliance, Operations and Support roles",
+    saccoStaff: "SACCO Staff",
+    saccoStaffCopy: "Chairperson, Treasurer, Secretary, Accountant, Teller and admin roles",
+    member: "Member",
+    membershipNo: "Membership no.",
+    memberCopy: "Balances, deposits, loans, statements, guarantors and complaints",
+    trustAccess: "Role-based access and SACCO isolation",
+    trustApprovals: "Maker-checker approvals and audit trail",
+    trustPayments: "Mobile-money, cash and loan repayment controls",
+    trustLowBandwidth: "Low-bandwidth screens for branch operations",
+    login: "Login",
+    registerSacco: "Register SACCO",
+    forgotPassword: "Forgot password",
+    support: "Support",
+    demoAccess: "Demo access",
+    demoAccessCopy: "Choose a role to fill the login fields.",
+    fillDemo: "Fill demo",
+    protectedSession: "Protected session",
+    protectedSessionCopy: "Tokens are stored server-side and expire automatically.",
+    correctPortal: "Correct portal",
+    correctPortalCopy: "Code + username decides Platform, SACCO staff or member access.",
+    productionReady: "Production ready",
+    productionReadyCopy: "Demo accounts stay profile-gated outside dev/demo mode.",
+    privacyPolicy: "Privacy policy",
+    terms: "Terms and conditions",
+    maintenanceNotices: "Maintenance notices",
+    secureAccess: "Secure access",
+    loginTitle: "Login to Tereka Online",
+    loginCopy: "Enter the code, user identity and password. The system opens only the views allowed for that role.",
+    platformCode: "Platform code",
+    saccoCode: "SACCO code",
+    saccoCodeExample: "Example: GVS",
+    memberLogin: "Member login",
+    memberLoginCopy: "Membership no. / phone / email",
+    code: "Code",
+    codePlaceholder: "PLATFORM or SACCO code",
+    codeHelp: "Required. Use PLATFORM for platform users or a SACCO code such as GVS.",
+    usernameLabel: "Username, email, phone or membership number",
+    usernameHelp: "Platform and SACCO staff may use email. Members may use membership number, phone or email.",
+    password: "Password",
+    enterPassword: "Enter password",
+    show: "Show",
+    rememberDevice: "Remember this device",
+    loginSecurely: "Login securely",
+    loginRequired: "Code, username and password are required.",
+    verifyingAccess: "Verifying access...",
+    invalidLogin: "Invalid code, username, or password.",
+    selfRegistration: "Self-registration",
+    registerSaccoCopy: "Complete SACCO details. Mobile-money payment is initiated after submission, then platform approval activates the SACCO.",
+    registrationFailed: "Registration failed.",
+    saccoName: "SACCO name",
+    saccoCodeGenerated: "Generated automatically",
+    registrationNumber: "Registration number",
+    registrationNumberPlaceholder: "Cooperative or UMRA registration",
+    district: "District",
+    parish: "Parish",
+    village: "Village",
+    contactNumber: "Contact number",
+    memberRange: "Member range",
+    mobileMoneyNumber: "Mobile money number",
+    paymentStep: "Payment step",
+    paymentStepCopy: "Mobile-money payment prompt is initiated after submission.",
+    submitAndPay: "Submit and initiate payment",
+    passwordRecovery: "Password recovery"
+  },
+  "fr-FR": {
+    loginHeroTitle: "Portail d'acces SACCO d'entreprise",
+    securePortal: "Portail securise",
+    loginHeroCopy: "Un point d'entree controle pour les administrateurs plateforme, le personnel SACCO et les membres. Le code SACCO oriente l'utilisateur, puis les permissions ouvrent l'espace autorise.",
+    platformAdmin: "Administration plateforme",
+    platformAdminCopy: "Roles Super Admin, facturation, conformite, operations et support",
+    saccoStaff: "Personnel SACCO",
+    saccoStaffCopy: "Roles president, tresorier, secretaire, comptable, guichetier et administrateur",
+    member: "Membre",
+    membershipNo: "Numero membre",
+    memberCopy: "Soldes, depots, prets, releves, garanties et plaintes",
+    trustAccess: "Acces par role et isolation SACCO",
+    trustApprovals: "Approbations maker-checker et piste d'audit",
+    trustPayments: "Controle mobile money, especes et remboursements",
+    trustLowBandwidth: "Ecrans sobres pour les agences",
+    login: "Connexion",
+    registerSacco: "Enregistrer SACCO",
+    forgotPassword: "Mot de passe oublie",
+    support: "Support",
+    demoAccess: "Acces demo",
+    demoAccessCopy: "Choisissez un role pour remplir les champs.",
+    fillDemo: "Remplir demo",
+    protectedSession: "Session protegee",
+    protectedSessionCopy: "Les jetons sont stockes cote serveur et expirent automatiquement.",
+    correctPortal: "Bon portail",
+    correctPortalCopy: "Code + identifiant determine l'acces plateforme, personnel SACCO ou membre.",
+    productionReady: "Pret pour production",
+    productionReadyCopy: "Les comptes demo restent limites aux profils dev/demo.",
+    privacyPolicy: "Politique de confidentialite",
+    terms: "Conditions d'utilisation",
+    maintenanceNotices: "Avis de maintenance",
+    secureAccess: "Acces securise",
+    loginTitle: "Connexion a Tereka Online",
+    loginCopy: "Entrez le code, l'identite utilisateur et le mot de passe. Le systeme ouvre seulement les vues autorisees pour ce role.",
+    platformCode: "Code plateforme",
+    saccoCode: "Code SACCO",
+    saccoCodeExample: "Exemple : GVS",
+    memberLogin: "Connexion membre",
+    memberLoginCopy: "Numero membre / telephone / email",
+    code: "Code",
+    codePlaceholder: "PLATFORM ou code SACCO",
+    codeHelp: "Obligatoire. Utilisez PLATFORM pour la plateforme ou un code SACCO comme GVS.",
+    usernameLabel: "Nom d'utilisateur, email, telephone ou numero membre",
+    usernameHelp: "Le personnel peut utiliser l'email. Les membres peuvent utiliser numero membre, telephone ou email.",
+    password: "Mot de passe",
+    enterPassword: "Entrer le mot de passe",
+    show: "Afficher",
+    rememberDevice: "Se souvenir de cet appareil",
+    loginSecurely: "Connexion securisee",
+    loginRequired: "Code, identifiant et mot de passe sont obligatoires.",
+    verifyingAccess: "Verification de l'acces...",
+    invalidLogin: "Code, identifiant ou mot de passe invalide.",
+    selfRegistration: "Auto-enregistrement",
+    registerSaccoCopy: "Completez les details SACCO. Le paiement mobile money est lance apres soumission, puis l'approbation plateforme active le SACCO.",
+    registrationFailed: "Echec de l'enregistrement.",
+    saccoName: "Nom du SACCO",
+    saccoCodeGenerated: "Genere automatiquement",
+    registrationNumber: "Numero d'enregistrement",
+    registrationNumberPlaceholder: "Enregistrement cooperatif ou regulateur",
+    district: "District",
+    parish: "Paroisse",
+    village: "Village",
+    contactNumber: "Numero de contact",
+    memberRange: "Tranche de membres",
+    mobileMoneyNumber: "Numero mobile money",
+    paymentStep: "Etape de paiement",
+    paymentStepCopy: "Une demande de paiement mobile money est lancee apres soumission.",
+    submitAndPay: "Soumettre et lancer le paiement",
+    passwordRecovery: "Recuperation du mot de passe"
+  }
+};
+
 const demoAccounts = [
   { label: "Platform Super Admin", code: "PLATFORM", username: "admin@platform.local", password: "Admin@12345", portal: "Platform" },
   { label: "Platform Operations", code: "PLATFORM", username: "operations@platform.local", password: "Operations@12345", portal: "Platform" },
@@ -59,6 +208,7 @@ const demoAccounts = [
 const state = {
   auth: "none",
   authTab: "login",
+  locale: localStorage.getItem(LOCALE_KEY) || "en-UG",
   token: "",
   user: null,
   member: null,
@@ -376,6 +526,7 @@ function currentModule() {
 }
 
 function init() {
+  applyRegionalDocumentSettings();
   state.token = localStorage.getItem(STAFF_TOKEN_KEY) || "";
   const memberToken = localStorage.getItem(MEMBER_TOKEN_KEY) || "";
   if (state.token) {
@@ -433,53 +584,59 @@ function renderLogin() {
             ${logo("large")}
             <div>
               <p class="eyebrow">Tereka Online</p>
-              <h1>Enterprise SACCO access gateway</h1>
+              <h1>${t("loginHeroTitle")}</h1>
             </div>
           </div>
-          <span class="environment-pill">Secure portal</span>
+          <div class="login-locale-row">
+            <label class="sr-only" for="loginLocale">Language</label>
+            <select id="loginLocale" class="locale-select" aria-label="Language">
+              ${supportedLocales.map((locale) => `<option value="${escapeHtml(locale.code)}" ${locale.code === state.locale ? "selected" : ""}>${escapeHtml(locale.label)}</option>`).join("")}
+            </select>
+            <span class="environment-pill">${t("securePortal")}</span>
+          </div>
         </div>
-        <p class="hero-copy">One controlled entry point for Platform Administrators, SACCO staff, and members. The SACCO code routes the user, and role permissions decide the workspace after authentication.</p>
+        <p class="hero-copy">${t("loginHeroCopy")}</p>
         <div class="portal-route-grid">
-          ${portalRouteCard("Platform Admin", "PLATFORM", "Super Admin, Billing, Compliance, Operations and Support roles")}
-          ${portalRouteCard("SACCO Staff", "SACCO code", "Chairperson, Treasurer, Secretary, Accountant, Teller and admin roles")}
-          ${portalRouteCard("Member", "Membership no.", "Balances, deposits, loans, statements, guarantors and complaints")}
+          ${portalRouteCard(t("platformAdmin"), "PLATFORM", t("platformAdminCopy"))}
+          ${portalRouteCard(t("saccoStaff"), t("saccoCode"), t("saccoStaffCopy"))}
+          ${portalRouteCard(t("member"), t("membershipNo"), t("memberCopy"))}
         </div>
         <div class="trust-list">
-          <span>Role-based access and tenant isolation</span>
-          <span>Maker-checker approvals and audit trail</span>
-          <span>Mobile-money, cash and loan repayment controls</span>
-          <span>Low-bandwidth screens for branch operations</span>
+          <span>${t("trustAccess")}</span>
+          <span>${t("trustApprovals")}</span>
+          <span>${t("trustPayments")}</span>
+          <span>${t("trustLowBandwidth")}</span>
         </div>
         <div class="login-links">
-          ${authTabButton("login", "Login")}
-          ${authTabButton("register", "Register SACCO")}
-          ${authTabButton("forgot", "Forgot password")}
-          ${authTabButton("support", "Support")}
+          ${authTabButton("login", t("login"))}
+          ${authTabButton("register", t("registerSacco"))}
+          ${authTabButton("forgot", t("forgotPassword"))}
+          ${authTabButton("support", t("support"))}
         </div>
       </section>
       <section class="login-card">
         ${authPanelContent()}
         ${SHOW_DEMO_TOOLS ? `<section class="demo-panel">
           <div>
-            <strong>Demo access</strong>
-            <span>Choose a role to fill the login fields.</span>
+            <strong>${t("demoAccess")}</strong>
+            <span>${t("demoAccessCopy")}</span>
           </div>
           <div class="demo-picker">
             <select id="demoAccountSelect">
               ${demoAccounts.map((account, index) => `<option value="${index}">${account.label} - ${account.portal}</option>`).join("")}
             </select>
-            <button class="button secondary" type="button" data-action="fill-demo">Fill demo</button>
+            <button class="button secondary" type="button" data-action="fill-demo">${t("fillDemo")}</button>
           </div>
         </section>` : ""}
         <section class="login-assurance">
-          <div><strong>Protected session</strong><span>Tokens are stored server-side and expire automatically.</span></div>
-          <div><strong>Correct portal</strong><span>Code + username decides Platform, SACCO staff or member access.</span></div>
-          <div><strong>Production ready</strong><span>Demo accounts stay profile-gated outside dev/demo mode.</span></div>
+          <div><strong>${t("protectedSession")}</strong><span>${t("protectedSessionCopy")}</span></div>
+          <div><strong>${t("correctPortal")}</strong><span>${t("correctPortalCopy")}</span></div>
+          <div><strong>${t("productionReady")}</strong><span>${t("productionReadyCopy")}</span></div>
         </section>
         <div class="login-footer-links">
-          <button type="button">Privacy policy</button>
-          <button type="button">Terms and conditions</button>
-          <button type="button">Maintenance notices</button>
+          <button type="button">${t("privacyPolicy")}</button>
+          <button type="button">${t("terms")}</button>
+          <button type="button">${t("maintenanceNotices")}</button>
         </div>
       </section>
     </main>
@@ -534,29 +691,29 @@ function mfaVerificationPanel() {
 function loginPanel() {
   return `
     <div class="form-heading">
-      <p class="eyebrow">Secure access</p>
-      <h2>Login to Tereka Online</h2>
-      <p>Enter the code, user identity and password. The system opens only the views allowed for that role.</p>
+      <p class="eyebrow">${t("secureAccess")}</p>
+      <h2>${t("loginTitle")}</h2>
+      <p>${t("loginCopy")}</p>
     </div>
     ${state.lastError ? `<div class="alert error">${escapeHtml(state.lastError)}</div>` : ""}
     <div class="login-context-strip">
-      <div><span>Platform code</span><strong>PLATFORM</strong></div>
-      <div><span>SACCO code</span><strong>Example: GVS</strong></div>
-      <div><span>Member login</span><strong>Membership no. / phone / email</strong></div>
+      <div><span>${t("platformCode")}</span><strong>PLATFORM</strong></div>
+      <div><span>${t("saccoCode")}</span><strong>${t("saccoCodeExample")}</strong></div>
+      <div><span>${t("memberLogin")}</span><strong>${t("memberLoginCopy")}</strong></div>
     </div>
     <form id="loginForm" class="form-grid single">
-      ${field("Code", "code", "text", "PLATFORM or SACCO code", "Required. Use PLATFORM for platform users or a SACCO code such as GVS.")}
-      ${field("Username, email, phone or membership number", "username", "text", "Username, email, phone or membership number", "Platform and SACCO staff may use email. Members may use membership number, phone or email.")}
+      ${field(t("code"), "code", "text", t("codePlaceholder"), t("codeHelp"))}
+      ${field(t("usernameLabel"), "username", "text", t("usernameLabel"), t("usernameHelp"))}
       <label>
-        <span>Password</span>
+        <span>${t("password")}</span>
         <div class="password-row">
-          <input id="password" type="password" placeholder="Enter password" autocomplete="current-password" required>
-          <button type="button" data-action="toggle-password">Show</button>
+          <input id="password" type="password" placeholder="${escapeHtml(t("enterPassword"))}" autocomplete="current-password" required>
+          <button type="button" data-action="toggle-password">${t("show")}</button>
         </div>
       </label>
-      <label class="check-row"><input id="remember" type="checkbox" checked> <span>Remember this device</span></label>
+      <label class="check-row"><input id="remember" type="checkbox" checked> <span>${t("rememberDevice")}</span></label>
       <div id="loginError" class="alert error" hidden></div>
-      <button id="loginButton" class="button primary" type="submit">Login securely</button>
+      <button id="loginButton" class="button primary" type="submit">${t("loginSecurely")}</button>
     </form>
   `;
 }
@@ -564,27 +721,27 @@ function loginPanel() {
 function publicSaccoRegistrationPanel() {
   return `
     <div class="form-heading">
-      <p class="eyebrow">Self-registration</p>
-      <h2>Register SACCO</h2>
-      <p>Complete SACCO details. Mobile-money payment is initiated after submission, then platform approval activates the SACCO.</p>
+      <p class="eyebrow">${t("selfRegistration")}</p>
+      <h2>${t("registerSacco")}</h2>
+      <p>${t("registerSaccoCopy")}</p>
     </div>
     ${state.publicRegistrationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.publicRegistrationMessage)}</strong></div>` : ""}
-    ${state.publicRegistrationError ? `<div class="notice warning"><strong>Registration failed.</strong><span>${escapeHtml(state.publicRegistrationError)}</span></div>` : ""}
+    ${state.publicRegistrationError ? `<div class="notice warning"><strong>${t("registrationFailed")}</strong><span>${escapeHtml(state.publicRegistrationError)}</span></div>` : ""}
     <form id="publicSaccoRegistrationForm" class="form-grid">
-      <label><span>SACCO name</span><input id="publicTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
-      <label><span>SACCO code</span><input id="publicTenantCode" readonly placeholder="Generated automatically"></label>
-      <label><span>Registration number</span><input id="publicTenantRegistrationNo" required placeholder="Cooperative or UMRA registration"></label>
-      <label><span>District</span><input id="publicTenantDistrict" required></label>
-      <label><span>Parish</span><input id="publicTenantParish" required></label>
-      <label><span>Village</span><input id="publicTenantVillage" required></label>
-      <label><span>Contact number</span><input id="publicTenantContactNumber" required placeholder="+256..."></label>
-      <label><span>Member range</span><select id="publicTenantMemberRange">${memberRangeOptions()}</select></label>
-      <label class="wide"><span>Mobile money number</span><input id="publicTenantPaymentPhone" required placeholder="+256..."></label>
+      <label><span>${t("saccoName")}</span><input id="publicTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
+      <label><span>${t("saccoCode")}</span><input id="publicTenantCode" readonly placeholder="${escapeHtml(t("saccoCodeGenerated"))}"></label>
+      <label><span>${t("registrationNumber")}</span><input id="publicTenantRegistrationNo" required placeholder="${escapeHtml(t("registrationNumberPlaceholder"))}"></label>
+      <label><span>${t("district")}</span><input id="publicTenantDistrict" required></label>
+      <label><span>${t("parish")}</span><input id="publicTenantParish" required></label>
+      <label><span>${t("village")}</span><input id="publicTenantVillage" required></label>
+      <label><span>${t("contactNumber")}</span><input id="publicTenantContactNumber" required placeholder="+256..."></label>
+      <label><span>${t("memberRange")}</span><select id="publicTenantMemberRange">${memberRangeOptions()}</select></label>
+      <label class="wide"><span>${t("mobileMoneyNumber")}</span><input id="publicTenantPaymentPhone" required placeholder="+256..."></label>
       <div class="mini-fact wide">
-        <span>Payment step</span>
-        <strong>Mobile-money payment prompt is initiated after submission.</strong>
+        <span>${t("paymentStep")}</span>
+        <strong>${t("paymentStepCopy")}</strong>
       </div>
-      <button class="button primary wide" type="submit">Submit and initiate payment</button>
+      <button class="button primary wide" type="submit">${t("submitAndPay")}</button>
     </form>
   `;
 }
@@ -6994,6 +7151,11 @@ async function downloadApiFile(path, filename, token = state.token) {
 }
 
 function bindEvents() {
+  document.querySelector("#loginLocale")?.addEventListener("change", (event) => {
+    state.locale = supportedLocales.some((locale) => locale.code === event.target.value) ? event.target.value : DEFAULT_REGION.locale;
+    localStorage.setItem(LOCALE_KEY, state.locale);
+    renderLogin();
+  });
   document.querySelectorAll("[data-auth-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.authTab = button.dataset.authTab;
@@ -7007,21 +7169,21 @@ function bindEvents() {
     const button = document.getElementById("loginButton");
     const error = document.getElementById("loginError");
     if (!value("code") || !value("username") || !value("password")) {
-      error.textContent = "Code, username and password are required.";
+      error.textContent = t("loginRequired");
       error.hidden = false;
       return;
     }
     button.disabled = true;
-    button.textContent = "Verifying access...";
+    button.textContent = t("verifyingAccess");
     error.hidden = true;
     try {
       await login(value("code"), value("username"), value("password"));
     } catch (loginError) {
-      error.textContent = state.lastError || loginError.message || "Invalid code, username, or password.";
+      error.textContent = state.lastError || loginError.message || t("invalidLogin");
       error.hidden = false;
     } finally {
       button.disabled = false;
-      button.textContent = "Login securely";
+      button.textContent = t("loginSecurely");
     }
   });
   document.querySelectorAll("[data-demo]").forEach((button) => {
@@ -8232,7 +8394,7 @@ function currentRegion() {
   const tenant = state.tenant || tenantRows().find((item) => item.id === state.user?.tenantId) || {};
   const country = normal(tenant.country || tenant.operatingCountry || tenant.countryName || "");
   const region = COUNTRY_REGIONS[country] || {};
-  const locale = tenant.locale || tenant.defaultLocale || region.locale || DEFAULT_REGION.locale;
+  const locale = state.locale || tenant.locale || tenant.defaultLocale || region.locale || DEFAULT_REGION.locale;
   const currency = tenant.currency || tenant.currencyCode || region.currency || DEFAULT_REGION.currency;
   return {
     locale,
@@ -8246,6 +8408,10 @@ function applyRegionalDocumentSettings() {
   const region = currentRegion();
   document.documentElement.lang = region.locale;
   document.documentElement.dir = region.direction;
+}
+
+function t(key) {
+  return messages[state.locale]?.[key] || messages[DEFAULT_REGION.locale]?.[key] || key;
 }
 
 function registerServiceWorker() {
