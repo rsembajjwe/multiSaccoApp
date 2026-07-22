@@ -487,6 +487,32 @@ const messages = {
     navProfile: "Profile",
     navProfileDesc: "Personal details and KYC",
     navSecurityDesc: "Password and device settings",
+    home: "Home",
+    search: "Search",
+    searchPlaceholder: "Search records, members, SACCOs",
+    logout: "Logout",
+    exportSummary: "Export summary",
+    searchThisTable: "Search this table",
+    rowsPerPage: "Rows per page",
+    clearSearch: "Clear search",
+    shown: "shown",
+    records: "record(s)",
+    showingRange: "Showing",
+    noRowsToShow: "No rows to show",
+    page: "Page",
+    of: "of",
+    previous: "Previous",
+    next: "Next",
+    actions: "Actions",
+    noRecordsFound: "No records found",
+    noRecordsFoundCopy: "Use refresh, adjust filters, or add the first record where your role allows it.",
+    dashboardOnly: "Dashboard only",
+    none: "None",
+    record: "Record",
+    noRecordsYet: "No records yet",
+    refreshToTryAgain: "Refresh the page to try again.",
+    empty: "Empty",
+    loadingCopy: "Please wait while Tereka Online prepares your workspace.",
     passwordRecovery: "Password recovery"
   },
   "fr-FR": {
@@ -926,6 +952,32 @@ const messages = {
     navProfile: "Profil",
     navProfileDesc: "Details personnels et KYC",
     navSecurityDesc: "Mot de passe et appareils",
+    home: "Accueil",
+    search: "Recherche",
+    searchPlaceholder: "Rechercher dossiers, membres, SACCOs",
+    logout: "Deconnexion",
+    exportSummary: "Exporter resume",
+    searchThisTable: "Rechercher dans ce tableau",
+    rowsPerPage: "Lignes par page",
+    clearSearch: "Effacer recherche",
+    shown: "affiches",
+    records: "enregistrement(s)",
+    showingRange: "Affichage",
+    noRowsToShow: "Aucune ligne a afficher",
+    page: "Page",
+    of: "sur",
+    previous: "Precedent",
+    next: "Suivant",
+    actions: "Actions",
+    noRecordsFound: "Aucun enregistrement trouve",
+    noRecordsFoundCopy: "Actualisez, ajustez les filtres ou ajoutez le premier enregistrement si votre role le permet.",
+    dashboardOnly: "Tableau seulement",
+    none: "Aucun",
+    record: "Enregistrement",
+    noRecordsYet: "Aucun enregistrement",
+    refreshToTryAgain: "Actualisez la page pour reessayer.",
+    empty: "Vide",
+    loadingCopy: "Veuillez patienter pendant que Tereka Online prepare votre espace.",
     passwordRecovery: "Recuperation du mot de passe"
   }
 };
@@ -1673,12 +1725,12 @@ function renderShell() {
             </button>
           `).join("")}
         </nav>
-        <button class="logout-button" type="button" data-action="logout">Logout</button>
+        <button class="logout-button" type="button" data-action="logout">${t("logout")}</button>
       </aside>
       <main class="main">
         <header class="topbar">
           <button class="icon-button mobile-only menu-button" type="button" data-action="toggle-sidebar" aria-label="Open menu"><span class="menu-bars" aria-hidden="true"></span></button>
-          <div class="breadcrumbs">Home / ${portal} / <strong>${module[1]}</strong></div>
+          <div class="breadcrumbs">${t("home")} / ${portal} / <strong>${module[1]}</strong></div>
           <div class="topbar-actions">
             <label class="topbar-locale">
               <span class="sr-only">Language</span>
@@ -1687,7 +1739,7 @@ function renderShell() {
               </select>
             </label>
             <div class="quick-search">
-              <label class="search-box"><span>Search</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="Search records, members, SACCOs" autocomplete="off" aria-autocomplete="list" aria-controls="quickSearchResults"></label>
+              <label class="search-box"><span>${t("search")}</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="${t("searchPlaceholder")}" autocomplete="off" aria-autocomplete="list" aria-controls="quickSearchResults"></label>
               ${quickSearchPanel(quickResults)}
             </div>
             <div class="session-control">
@@ -1712,8 +1764,8 @@ function renderShell() {
             <p>${module[2]}</p>
           </div>
           <div class="page-actions">
-            ${state.auth === "member" ? `<button class="button secondary" data-action="refresh-member" type="button">Refresh</button>` : `<button class="button secondary" data-action="refresh" type="button">Refresh</button>`}
-            <button class="button ghost" type="button">Export summary</button>
+            ${state.auth === "member" ? `<button class="button secondary" data-action="refresh-member" type="button">${t("refresh")}</button>` : `<button class="button secondary" data-action="refresh" type="button">${t("refresh")}</button>`}
+            <button class="button ghost" type="button">${t("exportSummary")}</button>
           </div>
         </section>
         <section class="content-area">
@@ -4822,11 +4874,11 @@ function summary(label, value, detail, action) {
 
 function summaryLink(label, value, detail, action, view) {
   const allowed = canAccessView(view);
-  return `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small>${detail}</small><button type="button" ${allowed ? `data-summary-view="${escapeHtml(view)}"` : "disabled"}>${allowed ? action : "Dashboard only"}</button></article>`;
+  return `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small>${detail}</small><button type="button" ${allowed ? `data-summary-view="${escapeHtml(view)}"` : "disabled"}>${allowed ? action : t("dashboardOnly")}</button></article>`;
 }
 
 function mini(label, value) {
-  return `<div class="mini-fact"><span>${label}</span><strong>${escapeHtml(String(value || "None"))}</strong></div>`;
+  return `<div class="mini-fact"><span>${label}</span><strong>${escapeHtml(String(value || t("none")))}</strong></div>`;
 }
 
 function chartCard(title, labels, values) {
@@ -4835,7 +4887,7 @@ function chartCard(title, labels, values) {
 }
 
 function activityPanel(title, rows) {
-  return `<section class="panel"><h2>${title}</h2><ul class="activity-list">${rows.map((row) => `<li><strong>${row[0] || "Record"}</strong><span>${row[1] || ""}</span><em>${row[2] || "Pending"}</em></li>`).join("") || `<li><strong>No records yet</strong><span>Refresh the page to try again.</span><em>Empty</em></li>`}</ul></section>`;
+  return `<section class="panel"><h2>${title}</h2><ul class="activity-list">${rows.map((row) => `<li><strong>${row[0] || t("record")}</strong><span>${row[1] || ""}</span><em>${row[2] || t("pending")}</em></li>`).join("") || `<li><strong>${t("noRecordsYet")}</strong><span>${t("refreshToTryAgain")}</span><em>${t("empty")}</em></li>`}</ul></section>`;
 }
 
 function recordTable(title, rows, columns) {
@@ -4854,24 +4906,24 @@ function recordTable(title, rows, columns) {
   const hasGlobalSearch = Boolean(state.search.trim());
   const hasTableSearch = Boolean(tableSearch.trim());
   const searching = hasGlobalSearch || hasTableSearch;
-  const countLabel = searching ? `${filtered.length} of ${allRows.length} shown` : `${filtered.length} record(s)`;
-  const rangeLabel = filtered.length ? `Showing ${start + 1}-${Math.min(start + pageSize, filtered.length)} of ${filtered.length}` : "No rows to show";
+  const countLabel = searching ? `${filtered.length} ${t("of")} ${allRows.length} ${t("shown")}` : `${filtered.length} ${t("records")}`;
+  const rangeLabel = filtered.length ? `${t("showingRange")} ${start + 1}-${Math.min(start + pageSize, filtered.length)} ${t("of")} ${filtered.length}` : t("noRowsToShow");
   return `
     <section class="panel">
       <div class="panel-heading">
         <h2>${title}</h2>
         <div class="table-count">
           <span>${countLabel}</span>
-          ${searching ? `<button class="table-action" type="button" data-action="clear-search">Clear search</button>` : ""}
+          ${searching ? `<button class="table-action" type="button" data-action="clear-search">${t("clearSearch")}</button>` : ""}
         </div>
       </div>
       <div class="table-tools">
         <label>
-          <span>Search this table</span>
+          <span>${t("searchThisTable")}</span>
           <input value="${escapeHtml(tableSearch)}" data-table-search="${escapeHtml(tableKey)}" placeholder="Search ${escapeHtml(title.toLowerCase())}">
         </label>
         <label>
-          <span>Rows per page</span>
+          <span>${t("rowsPerPage")}</span>
           <select data-table-page-size="${escapeHtml(tableKey)}">
             ${[10, 25, 50, 100].map((size) => `<option value="${size}" ${pageSize === size ? "selected" : ""}>${size}</option>`).join("")}
           </select>
@@ -4880,19 +4932,19 @@ function recordTable(title, rows, columns) {
       ${filtered.length ? `
         <div class="table-wrap">
           <table>
-            <thead><tr>${columns.map((column) => `<th>${labelize(column)}</th>`).join("")}<th>Actions</th></tr></thead>
+            <thead><tr>${columns.map((column) => `<th>${labelize(column)}</th>`).join("")}<th>${t("actions")}</th></tr></thead>
             <tbody>${pagedRows.map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td>${rowAction(row)}</td></tr>`).join("")}</tbody>
           </table>
         </div>
         <div class="pagination">
           <span>${rangeLabel}</span>
           <div>
-            <button class="table-action" type="button" data-table-page="${escapeHtml(tableKey)}" data-page="${currentPage - 1}" ${currentPage <= 1 ? "disabled" : ""}>Previous</button>
-            <strong>Page ${currentPage} of ${totalPages}</strong>
-            <button class="table-action" type="button" data-table-page="${escapeHtml(tableKey)}" data-page="${currentPage + 1}" ${currentPage >= totalPages ? "disabled" : ""}>Next</button>
+            <button class="table-action" type="button" data-table-page="${escapeHtml(tableKey)}" data-page="${currentPage - 1}" ${currentPage <= 1 ? "disabled" : ""}>${t("previous")}</button>
+            <strong>${t("page")} ${currentPage} ${t("of")} ${totalPages}</strong>
+            <button class="table-action" type="button" data-table-page="${escapeHtml(tableKey)}" data-page="${currentPage + 1}" ${currentPage >= totalPages ? "disabled" : ""}>${t("next")}</button>
           </div>
         </div>
-      ` : emptyState("No records found", "Use refresh, adjust filters, or add the first record where your role allows it.")}
+      ` : emptyState(t("noRecordsFound"), t("noRecordsFoundCopy"))}
     </section>
   `;
 }

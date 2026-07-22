@@ -335,9 +335,13 @@ async function assertAuthenticatedLocaleSwitch(page) {
   await page.locator("#shellLocale").selectOption("fr-FR");
   await expectText(page, "SACCOs actifs", "authenticated French locale switch");
   await expectText(page, "Abonnements", "authenticated French sidebar locale");
+  await expectText(page, "Exporter resume", "authenticated French shell action");
+  await expectText(page, "Deconnexion", "authenticated French logout label");
   await page.locator("#shellLocale").selectOption("en-UG");
   await expectText(page, "Active SACCOs", "authenticated English locale restored");
   await expectText(page, "Subscriptions", "authenticated English sidebar restored");
+  await expectText(page, "Export summary", "authenticated English shell action restored");
+  await expectText(page, "Logout", "authenticated English logout label restored");
   console.log("PASS authenticated locale switch");
 }
 
