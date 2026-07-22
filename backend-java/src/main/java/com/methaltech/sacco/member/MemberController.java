@@ -6,6 +6,7 @@ import com.methaltech.sacco.finance.FinancialTransaction;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
+import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.security.PasswordHasher;
 import com.methaltech.sacco.tenant.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -985,7 +986,7 @@ class MemberController {
     }
 
     private BigDecimal amount(String value) {
-        return new BigDecimal(value.trim().replace(",", "")).stripTrailingZeros();
+        return Money.parse(value);
     }
 
     private boolean isBoolean(String value) {

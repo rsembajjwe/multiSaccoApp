@@ -12,6 +12,7 @@ import com.methaltech.sacco.loan.Loan;
 import com.methaltech.sacco.loan.LoanRepayment;
 import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.loan.LoanRepository;
+import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.subscription.SubscriptionPayment;
 import com.methaltech.sacco.subscription.SubscriptionPaymentRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -308,7 +309,8 @@ class AccountingController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_EXPENSE_CHANNEL", "Unsupported expense payment channel."));
         }
-        if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal amount = Money.normalize(body.amount());
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_EXPENSE_AMOUNT", "Expense amount must be greater than zero."));
         }
@@ -340,7 +342,7 @@ class AccountingController {
                 tenantId,
                 supplierId,
                 accountCode,
-                body.amount(),
+                amount,
                 channel,
                 reference,
                 body.description() == null ? "" : body.description().trim(),
@@ -409,13 +411,14 @@ class AccountingController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_ASSET_CHANNEL", "Unsupported asset payment channel."));
         }
-        if (body.cost().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal cost = Money.normalize(body.cost());
+        if (cost.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_ASSET_COST", "Asset cost must be greater than zero."));
         }
 
-        BigDecimal salvageValue = body.salvageValue() == null ? BigDecimal.ZERO : body.salvageValue();
-        if (salvageValue.compareTo(BigDecimal.ZERO) < 0 || salvageValue.compareTo(body.cost()) >= 0) {
+        BigDecimal salvageValue = body.salvageValue() == null ? Money.normalize(BigDecimal.ZERO) : Money.normalize(body.salvageValue());
+        if (salvageValue.compareTo(BigDecimal.ZERO) < 0 || salvageValue.compareTo(cost) >= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_ASSET_SALVAGE_VALUE", "Salvage value must be at least zero and less than cost."));
         }
@@ -444,7 +447,7 @@ class AccountingController {
                 body.name().trim(),
                 category,
                 assetAccountCode,
-                body.cost(),
+                cost,
                 salvageValue,
                 body.usefulLifeMonths(),
                 purchaseDate,
@@ -504,7 +507,8 @@ class AccountingController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_STATEMENT_CHANNEL", "Unsupported statement channel."));
         }
-        if (body.amount().compareTo(BigDecimal.ZERO) == 0) {
+        BigDecimal amount = Money.normalize(body.amount());
+        if (amount.compareTo(BigDecimal.ZERO) == 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_STATEMENT_AMOUNT", "Statement amount cannot be zero."));
         }
@@ -526,7 +530,7 @@ class AccountingController {
                 tenantId,
                 accountForChannel(channel),
                 channel,
-                body.amount(),
+                amount,
                 externalReference,
                 body.description() == null ? "" : body.description().trim(),
                 statementDate,

@@ -4620,7 +4620,7 @@ class SaccoBackendApplicationTests {
 								"""))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.loanId", is(loanId)))
-				.andExpect(jsonPath("$.data.amount", is(125000)))
+				.andExpect(jsonPath("$.data.amount", is(125000.0)))
 				.andExpect(jsonPath("$.data.reference", is("LR-TEST-001")))
 				.andExpect(jsonPath("$.data.receivedByUserId", is("user_green_admin")))
 				.andExpect(jsonPath("$.data.receivedAt", notNullValue()));
@@ -4651,9 +4651,9 @@ class SaccoBackendApplicationTests {
 								  "channel": "mobile_money",
 								  "reference": "LR-TEST-002"
 								}
-								"""))
+				"""))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.data.amount", is(75000)));
+				.andExpect(jsonPath("$.data.amount", is(75000.0)));
 
 		MvcResult loans = mockMvc.perform(get("/api/v1/loans")
 						.header("Authorization", "Bearer " + staffToken))

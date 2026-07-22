@@ -18,6 +18,7 @@ import com.methaltech.sacco.loan.LoanRepository;
 import com.methaltech.sacco.loan.LoanResponse;
 import com.methaltech.sacco.finance.FinancialTransaction;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
+import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.notification.Notification;
 import com.methaltech.sacco.notification.NotificationRepository;
 import com.methaltech.sacco.notification.NotificationResponse;
@@ -394,7 +395,8 @@ class MemberAuthController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_LOAN_PRODUCT", "Unsupported loan product."));
         }
-        if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal amount = Money.normalize(body.amount());
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_LOAN_AMOUNT", "Loan amount must be greater than zero."));
         }
@@ -409,13 +411,13 @@ class MemberAuthController {
                 member.getTenantId(),
                 member.getId(),
                 product,
-                body.amount(),
-                dsr(body.amount(), member.getSavingsBalance()),
+                amount,
+                dsr(amount, member.getSavingsBalance()),
                 repaymentMonths,
                 body.purpose() == null ? "" : body.purpose().trim(),
                 "mobile",
                 member.getId()));
-        notificationService.notifyLoanApplicationSubmitted(member, product, body.amount(), loan.getId());
+        notificationService.notifyLoanApplicationSubmitted(member, product, amount, loan.getId());
         auditService.record(
                 member.getTenantId(),
                 (String) null,

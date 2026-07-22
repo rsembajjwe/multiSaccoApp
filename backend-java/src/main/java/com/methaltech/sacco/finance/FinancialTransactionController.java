@@ -9,6 +9,7 @@ import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
+import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -151,7 +152,8 @@ class FinancialTransactionController {
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_CHANNEL", "Unsupported payment channel."));
         }
 
-        if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal amount = Money.normalize(body.amount());
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_TRANSACTION_AMOUNT", "Amount must be greater than zero."));
         }
@@ -164,7 +166,7 @@ class FinancialTransactionController {
                 member.getId(),
                 type,
                 channel,
-                body.amount(),
+                amount,
                 reference,
                 body.narration() == null ? "" : body.narration().trim(),
                 currentSession.user().getId()));
@@ -608,7 +610,7 @@ class FinancialTransactionController {
     }
 
     private BigDecimal amount(String value) {
-        return value == null || value.isBlank() ? BigDecimal.ZERO : new BigDecimal(value.trim());
+        return Money.parse(value);
     }
 
     private String openingBalanceReference(OpeningBalanceImportRow row, String suffix) {

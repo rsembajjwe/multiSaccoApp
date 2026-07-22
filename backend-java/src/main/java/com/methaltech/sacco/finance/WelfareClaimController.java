@@ -7,6 +7,7 @@ import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
+import com.methaltech.sacco.money.Money;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -111,7 +112,8 @@ class WelfareClaimController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "MEMBER_NOT_ACTIVE", "Only active members can submit welfare claims."));
         }
-        if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal amount = Money.normalize(body.amount());
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_WELFARE_CLAIM_AMOUNT", "Welfare claim amount must be greater than zero."));
         }
@@ -129,7 +131,7 @@ class WelfareClaimController {
                 tenantId,
                 member.getId(),
                 body.claimType().trim(),
-                body.amount(),
+                amount,
                 reference,
                 body.description() == null ? "" : body.description().trim(),
                 currentSession.user().getId()));

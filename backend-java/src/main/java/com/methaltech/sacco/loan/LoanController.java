@@ -7,6 +7,7 @@ import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
+import com.methaltech.sacco.money.Money;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -143,7 +144,8 @@ class LoanController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_LOAN_PRODUCT", "Unsupported loan product."));
         }
-        if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal amount = Money.normalize(body.amount());
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_LOAN_AMOUNT", "Loan amount must be greater than zero."));
         }
@@ -157,8 +159,8 @@ class LoanController {
                 tenantId,
                 member.getId(),
                 body.product(),
-                body.amount(),
-                dsr(body.amount(), member.getSavingsBalance()),
+                amount,
+                dsr(amount, member.getSavingsBalance()),
                 body.repaymentMonths(),
                 body.purpose() == null ? "" : body.purpose().trim(),
                 "staff",
@@ -666,11 +668,12 @@ class LoanController {
         if (periodService.isClosed(loan.getTenantId(), postingDate)) {
             return accountingPeriodClosed(postingDate);
         }
-        if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal amount = Money.normalize(body.amount());
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_AMOUNT", "Repayment amount must be greater than zero."));
         }
-        if (body.amount().compareTo(loan.getBalance()) > 0) {
+        if (amount.compareTo(loan.getBalance()) > 0) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "REPAYMENT_EXCEEDS_BALANCE", "Repayment amount cannot exceed the outstanding loan balance."));
         }
@@ -691,7 +694,7 @@ class LoanController {
                 loan.getTenantId(),
                 loan.getId(),
                 loan.getMemberId(),
-                body.amount(),
+                amount,
                 channel,
                 reference,
                 body.narration() == null ? "" : body.narration().trim(),
@@ -945,7 +948,7 @@ class LoanController {
     }
 
     private BigDecimal amount(String value) {
-        return value == null || value.isBlank() ? BigDecimal.ZERO : new BigDecimal(value.trim());
+        return Money.parse(value);
     }
 
     private int integer(String value) {

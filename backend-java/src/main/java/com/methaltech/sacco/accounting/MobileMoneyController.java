@@ -11,6 +11,7 @@ import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.loan.LoanRepository;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
+import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.notification.NotificationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -62,7 +63,8 @@ class MobileMoneyController {
             return ResponseEntity.ok(ApiResponse.of(MobileMoneyCallbackResponse.from(duplicate, true)));
         }
 
-        if (body.amount().compareTo(BigDecimal.ZERO) <= 0) {
+        BigDecimal amount = Money.normalize(body.amount());
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_CALLBACK_AMOUNT", "Mobile-money amount must be greater than zero."));
         }
@@ -80,10 +82,10 @@ class MobileMoneyController {
         String purpose = body.purpose().trim();
         String provider = mobileMoneyProvider.normalizeProvider(body.provider());
         if (CONTRIBUTION_PURPOSES.contains(purpose)) {
-            return postContribution(body, tenantId, externalReference, provider, member);
+            return postContribution(body, tenantId, externalReference, provider, member, amount);
         }
         if ("loan_repayment".equals(purpose)) {
-            return postLoanRepayment(body, tenantId, externalReference, provider, member);
+            return postLoanRepayment(body, tenantId, externalReference, provider, member, amount);
         }
         return ResponseEntity.badRequest()
                 .body(ApiErrorResponse.of(400, "INVALID_CALLBACK_PURPOSE", "Unsupported mobile-money payment purpose."));
@@ -117,13 +119,14 @@ class MobileMoneyController {
             String tenantId,
             String externalReference,
             String provider,
-            Member member) {
+            Member member,
+            BigDecimal amount) {
         if (transactionRepository.existsByTenantIdAndReferenceIgnoreCase(tenantId, externalReference)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "FINANCIAL_REFERENCE_EXISTS", "A financial transaction with that reference already exists."));
         }
 
-        member.applyPostedTransaction(body.purpose().trim(), body.amount());
+        member.applyPostedTransaction(body.purpose().trim(), amount);
         memberRepository.save(member);
 
         FinancialTransaction transaction = transactionRepository.save(FinancialTransaction.postedProviderTransaction(
@@ -133,19 +136,19 @@ class MobileMoneyController {
                 member.getId(),
                 body.purpose().trim(),
                 "mobile_money",
-                body.amount(),
+                amount,
                 externalReference,
                 "Mobile-money " + body.purpose().trim().replace('_', ' '),
                 SYSTEM_USER_ID));
-        createStatementLine(tenantId, body.amount(), externalReference, "Mobile-money collection " + body.purpose().trim());
-        notificationService.notifyPaymentPosted(member, body.purpose().trim(), body.amount(), "financial_transaction", transaction.getId());
+        createStatementLine(tenantId, amount, externalReference, "Mobile-money collection " + body.purpose().trim());
+        notificationService.notifyPaymentPosted(member, body.purpose().trim(), amount, "financial_transaction", transaction.getId());
 
         MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
                 "callback_" + UUID.randomUUID(),
                 tenantId,
                 member.getId(),
                 body.purpose().trim(),
-                body.amount(),
+                amount,
                 externalReference,
                 provider,
                 payload(body.providerPayload()),
@@ -160,7 +163,8 @@ class MobileMoneyController {
             String tenantId,
             String externalReference,
             String provider,
-            Member member) {
+            Member member,
+            BigDecimal amount) {
         if (body.loanId() == null || body.loanId().isBlank()) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "LOAN_REQUIRED", "Loan id is required for mobile-money loan repayments."));
@@ -177,7 +181,7 @@ class MobileMoneyController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "LOAN_NOT_ACTIVE", "Only active loans can receive repayments."));
         }
-        if (body.amount().compareTo(loan.getBalance()) > 0) {
+        if (amount.compareTo(loan.getBalance()) > 0) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "REPAYMENT_EXCEEDS_BALANCE", "Repayment amount cannot exceed the outstanding loan balance."));
         }
@@ -191,22 +195,22 @@ class MobileMoneyController {
                 tenantId,
                 loan.getId(),
                 member.getId(),
-                body.amount(),
+                amount,
                 "mobile_money",
                 externalReference,
                 "Mobile-money loan repayment",
                 SYSTEM_USER_ID));
-        loan.recordRepayment(body.amount());
+        loan.recordRepayment(amount);
         loanRepository.save(loan);
-        createStatementLine(tenantId, body.amount(), externalReference, "Mobile-money loan repayment");
-        notificationService.notifyPaymentPosted(member, "loan_repayment", body.amount(), "loan_repayment", repayment.getId());
+        createStatementLine(tenantId, amount, externalReference, "Mobile-money loan repayment");
+        notificationService.notifyPaymentPosted(member, "loan_repayment", amount, "loan_repayment", repayment.getId());
 
         MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
                 "callback_" + UUID.randomUUID(),
                 tenantId,
                 member.getId(),
                 body.purpose().trim(),
-                body.amount(),
+                amount,
                 externalReference,
                 provider,
                 payload(body.providerPayload()),

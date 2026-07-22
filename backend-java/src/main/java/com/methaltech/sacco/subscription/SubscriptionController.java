@@ -5,6 +5,7 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
+import com.methaltech.sacco.money.Money;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
@@ -94,8 +95,8 @@ class SubscriptionController {
             AuthService.CurrentSession currentSession,
             HttpServletRequest request) {
         subscriptionService.refreshBilling(subscription);
-        BigDecimal due = subscription.getAmount().subtract(subscription.getPaid()).max(BigDecimal.ZERO);
-        BigDecimal amount = body.amount() == null ? due : body.amount();
+        BigDecimal due = Money.normalize(subscription.getAmount().subtract(subscription.getPaid()).max(BigDecimal.ZERO));
+        BigDecimal amount = body.amount() == null ? due : Money.normalize(body.amount());
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_AMOUNT", "Payment amount must be greater than zero."));
