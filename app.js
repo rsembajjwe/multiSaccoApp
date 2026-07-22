@@ -118,6 +118,72 @@ const messages = {
     paymentStep: "Payment step",
     paymentStepCopy: "Mobile-money payment prompt is initiated after submission.",
     submitAndPay: "Submit and initiate payment",
+    memberDashboardTitle: "Member dashboard",
+    memberWelcomeCopy: "Balances and requests update after every refresh.",
+    memberPortalStatus: "Member portal",
+    overview: "Overview",
+    monthlySavings: "Monthly savings",
+    loans: "Loans",
+    messages: "Messages",
+    mobileMoney: "Mobile money",
+    transactions: "Transactions",
+    totalBalance: "Total balance",
+    savings: "Savings",
+    shares: "Shares",
+    welfare: "Welfare",
+    notifications: "Notifications",
+    guaranteeRequests: "Guarantee requests",
+    offlineDrafts: "Offline drafts",
+    savingsSharesWelfare: "Savings, shares and welfare",
+    viewAccounts: "View accounts",
+    lastTransactionStatement: "Last transaction available in statement",
+    details: "Details",
+    shareBalance: "Share balance",
+    welfareContributions: "Welfare contributions",
+    activePendingLoans: "Active and pending loans",
+    open: "Open",
+    unreadAndRecent: "Unread and recent",
+    read: "Read",
+    pendingGuarantors: "Pending guarantors",
+    respond: "Respond",
+    syncDrafts: "Sync drafts",
+    sync: "Sync",
+    memberQuickActions: "Member quick actions",
+    memberQuickActionsCopy: "Common member tasks open directly in the right workspace.",
+    selfService: "Self-service",
+    payByMobileMoney: "Pay by mobile money",
+    payByMobileMoneyCopy: "Start a mobile-money savings, shares, welfare or loan payment.",
+    treasurerCashHandoff: "Treasurer cash handoff",
+    treasurerCashHandoffCopy: "Review cash deposit rules before paying through the Treasurer.",
+    viewStatement: "View statement",
+    viewStatementCopy: "Open posted activity, monthly savings and export controls.",
+    viewReceipts: "View receipts",
+    viewReceiptsCopy: "Confirm posted receipts and printable payment evidence.",
+    readSaccoMessages: "Read SACCO messages",
+    readSaccoMessagesCopy: "Open notices and reminders from the SACCO admin office.",
+    submitComplaint: "Submit complaint",
+    submitComplaintCopy: "Raise a service issue for SACCO admin follow-up.",
+    memberCommandCenter: "Member command center",
+    memberCommandCenterCopy: "One view for monthly savings, loans, SACCO admin messages and mobile-money deposit status.",
+    memberReady: "Member-ready",
+    thisMonthDeposits: "This month deposits",
+    loanBalance: "Loan balance",
+    saccoAdminMessages: "SACCO admin messages",
+    mobileMoneyDeposits: "Mobile money deposits",
+    noMonthYet: "No month yet",
+    serviceReady: "Service ready",
+    memberServiceAssurance: "Member service assurance",
+    memberServiceAssuranceCopy: "Enterprise controls for balances, messages, deposits, receipts and session safety.",
+    memberIdentity: "Member identity",
+    kycStatus: "KYC status",
+    balanceControl: "Balance control",
+    thisMonth: "This month",
+    unreadMessages: "Unread messages",
+    mobileDeposits: "Mobile deposits",
+    receipts: "Receipts",
+    lastSync: "Last sync",
+    available: "Available",
+    pending: "Pending",
     passwordRecovery: "Password recovery"
   },
   "fr-FR": {
@@ -188,6 +254,72 @@ const messages = {
     paymentStep: "Etape de paiement",
     paymentStepCopy: "Une demande de paiement mobile money est lancee apres soumission.",
     submitAndPay: "Soumettre et lancer le paiement",
+    memberDashboardTitle: "Tableau de bord membre",
+    memberWelcomeCopy: "Les soldes et demandes se mettent a jour apres chaque actualisation.",
+    memberPortalStatus: "Portail membre",
+    overview: "Vue d'ensemble",
+    monthlySavings: "Epargne mensuelle",
+    loans: "Prets",
+    messages: "Messages",
+    mobileMoney: "Mobile money",
+    transactions: "Transactions",
+    totalBalance: "Solde total",
+    savings: "Epargne",
+    shares: "Parts sociales",
+    welfare: "Solidarite",
+    notifications: "Notifications",
+    guaranteeRequests: "Demandes de garantie",
+    offlineDrafts: "Brouillons hors ligne",
+    savingsSharesWelfare: "Epargne, parts sociales et solidarite",
+    viewAccounts: "Voir comptes",
+    lastTransactionStatement: "Derniere operation disponible dans le releve",
+    details: "Details",
+    shareBalance: "Solde des parts",
+    welfareContributions: "Contributions solidarite",
+    activePendingLoans: "Prets actifs et en attente",
+    open: "Ouvrir",
+    unreadAndRecent: "Non lus et recents",
+    read: "Lire",
+    pendingGuarantors: "Garanties en attente",
+    respond: "Repondre",
+    syncDrafts: "Synchroniser brouillons",
+    sync: "Sync",
+    memberQuickActions: "Actions rapides membre",
+    memberQuickActionsCopy: "Les taches courantes ouvrent directement le bon espace.",
+    selfService: "Libre-service",
+    payByMobileMoney: "Payer par mobile money",
+    payByMobileMoneyCopy: "Demarrer un paiement epargne, parts, solidarite ou pret par mobile money.",
+    treasurerCashHandoff: "Versement chez tresorier",
+    treasurerCashHandoffCopy: "Verifier les regles avant de payer en especes chez le tresorier.",
+    viewStatement: "Voir releve",
+    viewStatementCopy: "Ouvrir les operations, l'epargne mensuelle et les exports.",
+    viewReceipts: "Voir recus",
+    viewReceiptsCopy: "Confirmer les recus publies et les preuves imprimables.",
+    readSaccoMessages: "Lire messages SACCO",
+    readSaccoMessagesCopy: "Ouvrir les avis et rappels du bureau SACCO.",
+    submitComplaint: "Soumettre plainte",
+    submitComplaintCopy: "Signaler un probleme de service au SACCO.",
+    memberCommandCenter: "Centre de commande membre",
+    memberCommandCenterCopy: "Une vue pour l'epargne mensuelle, les prets, les messages SACCO et les depots mobile money.",
+    memberReady: "Pret membre",
+    thisMonthDeposits: "Depots du mois",
+    loanBalance: "Solde pret",
+    saccoAdminMessages: "Messages admin SACCO",
+    mobileMoneyDeposits: "Depots mobile money",
+    noMonthYet: "Aucun mois",
+    serviceReady: "Service pret",
+    memberServiceAssurance: "Assurance service membre",
+    memberServiceAssuranceCopy: "Controles entreprise pour soldes, messages, depots, recus et securite de session.",
+    memberIdentity: "Identite membre",
+    kycStatus: "Statut KYC",
+    balanceControl: "Controle solde",
+    thisMonth: "Ce mois",
+    unreadMessages: "Messages non lus",
+    mobileDeposits: "Depots mobiles",
+    receipts: "Recus",
+    lastSync: "Derniere synchro",
+    available: "Disponible",
+    pending: "En attente",
     passwordRecovery: "Recuperation du mot de passe"
   }
 };
@@ -3127,22 +3259,22 @@ function renderMemberView(view) {
   const balances = state.memberData.balances || dash.balances || {};
   if (view === "home") {
     const monthlyPerformance = memberMonthlyPerformanceRows(dash);
-    const tabs = [["overview", "Overview"], ["monthly", "Monthly savings"], ["loans", "Loans"], ["messages", "Messages"], ["mobile-money", "Mobile money"], ["transactions", "Transactions"]];
+    const tabs = [["overview", t("overview")], ["monthly", t("monthlySavings")], ["loans", t("loans")], ["messages", t("messages")], ["mobile-money", t("mobileMoney")], ["transactions", t("transactions")]];
     const tab = activeModuleTab("home", tabs);
     return `
       <div class="member-hero">
-        <div><p class="eyebrow">Member dashboard</p><h2>${displayName()}, welcome back</h2><p>Balances and requests update after every refresh.</p></div>
-        <span class="status active">Member portal</span>
+        <div><p class="eyebrow">${t("memberDashboardTitle")}</p><h2>${displayName()}, welcome back</h2><p>${t("memberWelcomeCopy")}</p></div>
+        <span class="status active">${t("memberPortalStatus")}</span>
       </div>
       <div class="dashboard-grid">
-        ${summary("Total balance", money.format(Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0)), "Savings, shares and welfare", "View accounts")}
-        ${summary("Savings", money.format(balances.savings || 0), "Last transaction available in statement", "Details")}
-        ${summary("Shares", money.format(balances.shares || 0), "Share balance", "Details")}
-        ${summary("Welfare", money.format(balances.welfare || 0), "Welfare contributions", "Details")}
-        ${summary("Loans", state.memberData.loans.length, "Active and pending loans", "Open")}
-        ${summary("Notifications", state.memberData.notifications.length, "Unread and recent", "Read")}
-        ${summary("Guarantee requests", state.memberData.pendingGuarantors.length, "PendingGuarantors", "Respond")}
-        ${summary("Offline drafts", state.memberData.drafts.length, "Sync drafts", "Sync")}
+        ${summary(t("totalBalance"), money.format(Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0)), t("savingsSharesWelfare"), t("viewAccounts"))}
+        ${summary(t("savings"), money.format(balances.savings || 0), t("lastTransactionStatement"), t("details"))}
+        ${summary(t("shares"), money.format(balances.shares || 0), t("shareBalance"), t("details"))}
+        ${summary(t("welfare"), money.format(balances.welfare || 0), t("welfareContributions"), t("details"))}
+        ${summary(t("loans"), state.memberData.loans.length, t("activePendingLoans"), t("open"))}
+        ${summary(t("notifications"), state.memberData.notifications.length, t("unreadAndRecent"), t("read"))}
+        ${summary(t("guaranteeRequests"), state.memberData.pendingGuarantors.length, t("pendingGuarantors"), t("respond"))}
+        ${summary(t("offlineDrafts"), state.memberData.drafts.length, t("syncDrafts"), t("sync"))}
       </div>
       ${memberQuickActionsPanel()}
       ${memberServiceAssurancePanel(dash, balances, monthlyPerformance)}
@@ -3170,21 +3302,21 @@ function renderMemberView(view) {
 
 function memberQuickActionsPanel() {
   const actions = [
-    ["Pay by mobile money", "Start a mobile-money savings, shares, welfare or loan payment.", "payments", "mobile-money"],
-    ["Treasurer cash handoff", "Review cash deposit rules before paying through the Treasurer.", "payments", "treasurer-cash"],
-    ["View statement", "Open posted activity, monthly savings and export controls.", "statements", "activity"],
-    ["View receipts", "Confirm posted receipts and printable payment evidence.", "receipts", "receipts"],
-    ["Read SACCO messages", "Open notices and reminders from the SACCO admin office.", "notifications", "inbox"],
-    ["Submit complaint", "Raise a service issue for SACCO admin follow-up.", "complaints", "submit"]
+    [t("payByMobileMoney"), t("payByMobileMoneyCopy"), "payments", "mobile-money"],
+    [t("treasurerCashHandoff"), t("treasurerCashHandoffCopy"), "payments", "treasurer-cash"],
+    [t("viewStatement"), t("viewStatementCopy"), "statements", "activity"],
+    [t("viewReceipts"), t("viewReceiptsCopy"), "receipts", "receipts"],
+    [t("readSaccoMessages"), t("readSaccoMessagesCopy"), "notifications", "inbox"],
+    [t("submitComplaint"), t("submitComplaintCopy"), "complaints", "submit"]
   ];
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
         <div>
-          <h2>Member quick actions</h2>
-          <p>Common member tasks open directly in the right workspace.</p>
+          <h2>${t("memberQuickActions")}</h2>
+          <p>${t("memberQuickActionsCopy")}</p>
         </div>
-        <span class="status active">Self-service</span>
+        <span class="status active">${t("selfService")}</span>
       </div>
       <div class="access-grid">
         ${actions.map(([label, detail, view, tab]) => `
@@ -3245,24 +3377,24 @@ function memberCommandCenter(dash, balances, monthlyPerformance) {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Member command center</h2>
-          <p>One view for monthly savings, loans, SACCO admin messages and mobile-money deposit status.</p>
+          <h2>${t("memberCommandCenter")}</h2>
+          <p>${t("memberCommandCenterCopy")}</p>
         </div>
-        <span class="status active">Member-ready</span>
+        <span class="status active">${t("memberReady")}</span>
       </div>
       <div class="source-grid">
-        ${mini("Total balance", money.format(totalBalance))}
-        ${mini("This month deposits", money.format(latestMonth.totalDeposits || 0))}
-        ${mini("Monthly savings", money.format(latestMonth.savingsDeposits || 0))}
-        ${mini("Loan balance", money.format(sum(loans, "outstandingBalance", "balance")))}
-        ${mini("SACCO admin messages", `${messages.length} message(s)`)}
-        ${mini("Mobile money deposits", `${mobileDeposits.length} record(s)`)}
+        ${mini(t("totalBalance"), money.format(totalBalance))}
+        ${mini(t("thisMonthDeposits"), money.format(latestMonth.totalDeposits || 0))}
+        ${mini(t("monthlySavings"), money.format(latestMonth.savingsDeposits || 0))}
+        ${mini(t("loanBalance"), money.format(sum(loans, "outstandingBalance", "balance")))}
+        ${mini(t("saccoAdminMessages"), `${messages.length} message(s)`)}
+        ${mini(t("mobileMoneyDeposits"), `${mobileDeposits.length} record(s)`)}
       </div>
       <ul class="activity-list">
-        <li><strong>Monthly savings</strong><span>Your posted savings, shares, welfare and loan repayments are grouped by month for quick review.</span><em>${latestMonth.month || "No month yet"}</em></li>
-        <li><strong>Loans</strong><span>${activeLoans.length} active or approved loan file(s), with next repayment dates visible in the loan position table.</span><em>${activeLoans.length ? "Track" : "No active loan"}</em></li>
-        <li><strong>SACCO admin messages</strong><span>${unreadMessages.length} unread message(s) from your SACCO office, including notices, approvals and reminders.</span><em>${unreadMessages.length ? "Read" : "Clear"}</em></li>
-        <li><strong>Mobile money deposit</strong><span>Mobile-money payments appear after provider callback posting and then become visible in receipts and statements.</span><em>${mobileDeposits.length ? "Posted" : "No posted mobile record"}</em></li>
+        <li><strong>${t("monthlySavings")}</strong><span>Your posted savings, shares, welfare and loan repayments are grouped by month for quick review.</span><em>${latestMonth.month || t("noMonthYet")}</em></li>
+        <li><strong>${t("loans")}</strong><span>${activeLoans.length} active or approved loan file(s), with next repayment dates visible in the loan position table.</span><em>${activeLoans.length ? "Track" : "No active loan"}</em></li>
+        <li><strong>${t("saccoAdminMessages")}</strong><span>${unreadMessages.length} unread message(s) from your SACCO office, including notices, approvals and reminders.</span><em>${unreadMessages.length ? t("read") : "Clear"}</em></li>
+        <li><strong>${t("mobileMoneyDeposits")}</strong><span>Mobile-money payments appear after provider callback posting and then become visible in receipts and statements.</span><em>${mobileDeposits.length ? "Posted" : "No posted mobile record"}</em></li>
       </ul>
     </section>
   `;
@@ -3278,20 +3410,20 @@ function memberServiceAssurancePanel(dash, balances, monthlyPerformance) {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Member service assurance</h2>
-          <p>Enterprise controls for balances, messages, deposits, receipts and session safety.</p>
+          <h2>${t("memberServiceAssurance")}</h2>
+          <p>${t("memberServiceAssuranceCopy")}</p>
         </div>
-        <span class="status active">Service ready</span>
+        <span class="status active">${t("serviceReady")}</span>
       </div>
       <div class="source-grid">
-        ${mini("Member identity", state.member?.membershipNo || "Confirmed")}
-        ${mini("KYC status", labelize(state.member?.kycStatus || "pending"))}
-        ${mini("Balance control", money.format(totalBalance))}
-        ${mini("This month", money.format(latestMonth.totalDeposits || 0))}
-        ${mini("Unread messages", unreadMessages.length)}
-        ${mini("Mobile deposits", mobileDeposits.length)}
-        ${mini("Receipts", "Available")}
-        ${mini("Last sync", state.lastSync ? formatDateTime(state.lastSync) : "Pending")}
+        ${mini(t("memberIdentity"), state.member?.membershipNo || "Confirmed")}
+        ${mini(t("kycStatus"), labelize(state.member?.kycStatus || "pending"))}
+        ${mini(t("balanceControl"), money.format(totalBalance))}
+        ${mini(t("thisMonth"), money.format(latestMonth.totalDeposits || 0))}
+        ${mini(t("unreadMessages"), unreadMessages.length)}
+        ${mini(t("mobileDeposits"), mobileDeposits.length)}
+        ${mini(t("receipts"), t("available"))}
+        ${mini(t("lastSync"), state.lastSync ? formatDateTime(state.lastSync) : t("pending"))}
       </div>
     </section>
   `;
