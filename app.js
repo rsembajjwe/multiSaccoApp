@@ -513,6 +513,11 @@ const messages = {
     refreshToTryAgain: "Refresh the page to try again.",
     empty: "Empty",
     loadingCopy: "Please wait while Tereka Online prepares your workspace.",
+    online: "Online",
+    offlineMode: "Offline mode",
+    offlineNoticeTitle: "You are offline.",
+    offlineNoticeCopy: "You can keep reviewing cached screens and saving member drafts. Refresh, sync and posting actions need the connection back.",
+    backOnlineNotice: "Connection restored",
     passwordRecovery: "Password recovery"
   },
   "fr-FR": {
@@ -978,6 +983,11 @@ const messages = {
     refreshToTryAgain: "Actualisez la page pour reessayer.",
     empty: "Vide",
     loadingCopy: "Veuillez patienter pendant que Tereka Online prepare votre espace.",
+    online: "En ligne",
+    offlineMode: "Mode hors ligne",
+    offlineNoticeTitle: "Vous etes hors ligne.",
+    offlineNoticeCopy: "Vous pouvez consulter les ecrans en cache et garder les brouillons membre. Actualisation, sync et publication exigent la connexion.",
+    backOnlineNotice: "Connexion retablie",
     passwordRecovery: "Recuperation du mot de passe"
   }
 };
@@ -999,6 +1009,7 @@ const state = {
   auth: "none",
   authTab: "login",
   locale: localStorage.getItem(LOCALE_KEY) || "en-UG",
+  networkOnline: typeof navigator === "undefined" ? true : navigator.onLine,
   token: "",
   user: null,
   member: null,
@@ -1423,6 +1434,7 @@ function currentModule() {
 
 function init() {
   applyRegionalDocumentSettings();
+  bindNetworkStatusEvents();
   state.token = localStorage.getItem(STAFF_TOKEN_KEY) || "";
   const memberToken = localStorage.getItem(MEMBER_TOKEN_KEY) || "";
   if (state.token) {
@@ -1433,6 +1445,17 @@ function init() {
   } else {
     renderLogin();
   }
+}
+
+function bindNetworkStatusEvents() {
+  window.addEventListener("online", () => {
+    state.networkOnline = true;
+    if (state.auth !== "none") renderShell();
+  });
+  window.addEventListener("offline", () => {
+    state.networkOnline = false;
+    if (state.auth !== "none") renderShell();
+  });
 }
 
 async function restoreStaff() {
@@ -1738,6 +1761,7 @@ function renderShell() {
                 ${supportedLocales.map((locale) => `<option value="${escapeHtml(locale.code)}" ${state.locale === locale.code ? "selected" : ""}>${escapeHtml(locale.label)}</option>`).join("")}
               </select>
             </label>
+            ${networkStatusChip()}
             <div class="quick-search">
               <label class="search-box"><span>${t("search")}</span><input id="globalSearch" value="${escapeHtml(state.search)}" placeholder="${t("searchPlaceholder")}" autocomplete="off" aria-autocomplete="list" aria-controls="quickSearchResults"></label>
               ${quickSearchPanel(quickResults)}
@@ -1799,6 +1823,10 @@ function quickSearchPanel(results) {
       `).join("") : `<div class="quick-search-empty">No quick results. Tables below still filter by this search.</div>`}
     </div>
   `;
+}
+
+function networkStatusChip() {
+  return `<span class="network-chip ${state.networkOnline ? "online" : "offline"}">${state.networkOnline ? t("online") : t("offlineMode")}</span>`;
 }
 
 function quickSearchResults() {
@@ -8768,6 +8796,9 @@ async function openAccountProfile() {
 
 function runtimeNotice() {
   if (state.loading) return `<section class="notice compact"><strong>Loading latest records...</strong><span>Please wait while Tereka Online refreshes this view.</span></section>`;
+  if (state.auth !== "none" && !state.networkOnline) {
+    return `<section class="notice warning"><strong>${t("offlineNoticeTitle")}</strong><span>${t("offlineNoticeCopy")}</span></section>`;
+  }
   const sessionMinutes = sessionMinutesRemaining();
   if (state.auth !== "none" && sessionMinutes !== null && sessionMinutes <= 0) {
     return `<section class="notice danger"><strong>Session expired.</strong><span>Please login again to continue working.</span><button class="button secondary" type="button" data-action="logout">Return to login</button></section>`;

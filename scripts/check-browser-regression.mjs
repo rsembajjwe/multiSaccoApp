@@ -45,6 +45,7 @@ try {
 
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "Platform admin");
   await assertAuthenticatedLocaleSwitch(page);
+  await assertNetworkStatus(page);
   await assertStaffSessionMenu(page);
   await assertPlatformHelpMenu(page);
   await assertStaffAccountMenu(page);
@@ -343,6 +344,16 @@ async function assertAuthenticatedLocaleSwitch(page) {
   await expectText(page, "Export summary", "authenticated English shell action restored");
   await expectText(page, "Logout", "authenticated English logout label restored");
   console.log("PASS authenticated locale switch");
+}
+
+async function assertNetworkStatus(page) {
+  await expectText(page, "Online", "network online chip");
+  await page.context().setOffline(true);
+  await expectText(page, "Offline mode", "network offline chip");
+  await expectText(page, "You are offline.", "network offline notice");
+  await page.context().setOffline(false);
+  await expectText(page, "Online", "network online chip restored");
+  console.log("PASS network status indicator");
 }
 
 async function memberLogin(page) {
