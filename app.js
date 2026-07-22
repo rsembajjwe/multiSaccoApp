@@ -6486,6 +6486,13 @@ async function refreshMember() {
   renderShell();
 }
 
+function blockOfflineMemberAction(errorKey) {
+  if (state.networkOnline) return false;
+  state[errorKey] = t("offlineActionBlocked");
+  renderShell();
+  return true;
+}
+
 async function createUserFromForm(event) {
   event.preventDefault();
   const platformOnly = isPlatform();
@@ -7455,6 +7462,7 @@ async function submitMemberLoan(event) {
   event.preventDefault();
   state.memberLoanMessage = "";
   state.memberLoanError = "";
+  if (blockOfflineMemberAction("memberLoanError")) return;
   try {
     const loan = await api("/member-auth/mobile-loans", {
       method: "POST",
@@ -7484,6 +7492,7 @@ async function postMemberPayment(event) {
     renderShell();
     return;
   }
+  if (blockOfflineMemberAction("memberPaymentError")) return;
   try {
     const callback = await submitMemberPaymentPayload(memberPaymentPayload());
     state.memberPaymentMessage = `Payment posted: ${callback.externalReference || callback.id}.`;
@@ -7500,6 +7509,7 @@ async function submitMemberComplaint(event) {
   event.preventDefault();
   state.memberComplaintMessage = "";
   state.memberComplaintError = "";
+  if (blockOfflineMemberAction("memberComplaintError")) return;
   try {
     const complaint = await submitMemberComplaintPayload(memberComplaintPayload());
     state.memberComplaintMessage = `Submitted complaint ${complaint.id}.`;
@@ -7577,6 +7587,7 @@ function saveMemberDraftFromForm(type) {
 async function syncMemberDraft(draftId) {
   const draft = state.memberData.drafts.find((item) => item.id === draftId);
   if (!draft) return;
+  if (blockOfflineMemberAction(draft.type === "payment" ? "memberPaymentError" : "memberComplaintError")) return;
   updateMemberDraft(draftId, { status: "Syncing", updatedAt: formatDateTime(new Date().toISOString()) });
   renderShell();
   try {
@@ -7609,6 +7620,7 @@ function discardMemberDraft(draftId) {
 async function decideMemberGuarantor(guarantorId, status) {
   state.memberGuarantorMessage = "";
   state.memberGuarantorError = "";
+  if (blockOfflineMemberAction("memberGuarantorError")) return;
   try {
     const request = await api(`/member-auth/guarantor-requests/${encodeURIComponent(guarantorId)}/status`, {
       method: "PATCH",
@@ -7965,6 +7977,7 @@ async function acknowledgeMemberNotification(notificationId) {
   if (!notificationId) return;
   state.memberNotificationMessage = "";
   state.memberNotificationError = "";
+  if (blockOfflineMemberAction("memberNotificationError")) return;
   try {
     await api(`/member-auth/notifications/${encodeURIComponent(notificationId)}/acknowledge`, { method: "PATCH" });
     state.memberNotificationMessage = "Notification acknowledged.";
