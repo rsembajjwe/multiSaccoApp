@@ -2531,7 +2531,7 @@ function transactionsView() {
     ${tab === "detail" ? (transactionDetailPanel(rows) || emptyState("Transaction detail and reversal", "Select a transaction from the list to review receipt, approval and reversal actions.")) : ""}
     ${tab === "list" ? `
       ${filterToolbar("Search by reference, member, channel, status, amount or user", "New transaction", "Print receipt")}
-      ${recordTable("Transaction list", rows, ["reference", "postedAt", "memberName", "type", "channel", "amount", "approvalReadiness", "receiptStatus", "reversalStatus", "status"])}
+      ${recordTable("Transaction list", rows, ["reference", "postedAt", "memberName", "type", "paymentRoute", "amount", "paymentStatus", "receiptStatus", "reversalStatus", "status"])}
     ` : ""}
   `;
 }
@@ -4085,7 +4085,7 @@ function renderMemberView(view) {
       ${tab === "monthly" ? `${memberTabReadinessPanel("Monthly savings workspace", "Review full-date deposit performance across savings, shares, welfare, loan repayments and payment channel.", [["Statement source", "Posted activity"], ["Date display", "Full date with year"], ["Payment channels", "Treasurer/Mobile"]])}${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"])}` : ""}
       ${tab === "loans" ? `${memberTabReadinessPanel("Loan servicing workspace", "Track active loans, next due dates and outstanding balances before making repayments.", [["Repayment route", "Mobile money or Treasurer"], ["Guarantor checks", state.memberData.pendingGuarantors.length], ["Loan files", state.memberData.loans.length]])}${recordTable("Member loan position", state.memberData.loans || [], ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"])}` : ""}
       ${tab === "messages" ? `${memberTabReadinessPanel("SACCO admin message center", "Read official notices, reminders and approval updates sent by the SACCO office.", [["Unread messages", memberAdminMessageRows().filter((message) => !normal(`${message.status} ${message.readAt}`).includes("read")).length], ["Channel", "In-app/SMS/email"], ["Source", "SACCO admin"]])}${recordTable("SACCO admin messages", memberAdminMessageRows(), ["title", "message", "channel", "status", "createdAt"])}` : ""}
-      ${tab === "mobile-money" ? `${memberTabReadinessPanel("Mobile money deposit workspace", "Confirm mobile-money payments that have posted through provider callback records.", [["Provider posting", "Callback based"], ["Receipt", "After posting"], ["Records", memberMobileMoneyRows(dash).length]])}${recordTable("Mobile money deposit activity", memberMobileMoneyRows(dash), ["postedAt", "reference", "description", "credit", "status"])}` : ""}
+    ${tab === "mobile-money" ? `${memberTabReadinessPanel("Mobile money deposit workspace", "Confirm mobile-money payments that have posted through provider callback records.", [["Provider posting", "Callback based"], ["Receipt", "After posting"], ["Records", memberMobileMoneyRows(dash).length]])}${recordTable("Mobile money deposit activity", memberMobileMoneyRows(dash), ["postedAt", "reference", "description", "credit", "paymentStatus", "receiptStatus"])}` : ""}
       ${tab === "transactions" ? `${memberTabReadinessPanel("Statement activity workspace", "Review posted deposits, withdrawals, loan repayments and running balance movements.", [["Statement status", "Verified"], ["Receipt trail", "Available"], ["Rows", (dash.recentTransactions || []).length]])}${recordTable("Recent transactions", dash.recentTransactions || [], ["reference", "description", "debit", "credit", "runningBalance", "postedAt"])}` : ""}
     `;
   }
@@ -4292,6 +4292,7 @@ function memberPaymentsView() {
   const payableLoans = loans.filter((loan) => ["active", "disbursed"].includes(normal(loan.status)));
   const paymentDrafts = memberDraftRows("payment");
   const monthlyPerformance = memberMonthlyPerformanceRows(state.memberData.dashboard || {});
+  const paymentRows = memberPaymentLifecycleRows(state.memberData.dashboard || {});
   const tabs = [["mobile-money", t("mobileMoney")], ["treasurer-cash", t("treasurerCash")], ["drafts", t("drafts")], ["loans", "Loan repayments"], ["tracking", t("tracking")]];
   const tab = activeModuleTab("payments", tabs);
   return `
@@ -4307,7 +4308,7 @@ function memberPaymentsView() {
     ${tab === "treasurer-cash" ? `${memberTabReadinessPanel("Treasurer cash handoff", "Prepare cash deposits or loan repayments for SACCO Treasurer office receipting.", [["Route", "Visit SACCO office"], ["Receipt", "After staff posting"], ["Loan repayment", payableLoans.length ? "Available" : "No active loan"]])}${memberPaymentRoutePanel()}` : ""}
     ${tab === "drafts" ? `${memberTabReadinessPanel("Payment draft workspace", "Save incomplete mobile-money payment details on this device and sync them when ready.", [["Drafts saved", paymentDrafts.length], ["Storage", "Local device"], ["Sync status", paymentDrafts.length ? "Action needed" : "Clear"]])}${memberDraftPanel("Payment offline drafts", paymentDrafts)}` : ""}
     ${tab === "loans" ? `${memberTabReadinessPanel("Loan repayment workspace", "Review payable loan balances before choosing mobile money or Treasurer cash repayment.", [["Payable loans", payableLoans.length], ["Route options", "Mobile/Treasurer"], ["Receipt", "After posting"]])}${recordTable("Payable loans", payableLoans, ["product", "outstandingBalance", "nextDueDate", "status"])}` : ""}
-    ${tab === "tracking" ? `${memberTabReadinessPanel("Payment tracking workspace", "Track monthly deposits, repayments, Treasurer cash and mobile-money collections.", [["Monthly rows", monthlyPerformance.length], ["Treasurer cash", money.format(sum(monthlyPerformance, "treasurerCash"))], ["Mobile money", money.format(sum(monthlyPerformance, "mobileMoney"))]])}${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"])}` : ""}
+    ${tab === "tracking" ? `${memberTabReadinessPanel("Payment tracking workspace", "Track monthly deposits, repayments, Treasurer cash and mobile-money collections.", [["Payment records", paymentRows.length], ["Treasurer cash", money.format(sum(monthlyPerformance, "treasurerCash"))], ["Mobile money", money.format(sum(monthlyPerformance, "mobileMoney"))]])}${recordTable("Payment lifecycle", paymentRows, ["date", "reference", "description", "paymentRoute", "amount", "paymentStatus", "receiptStatus"])}${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"])}` : ""}
   `;
 }
 
@@ -4403,8 +4404,60 @@ function memberMobileMoneyRows(dash) {
       reference: line.reference,
       description: line.description || "Mobile money deposit",
       credit: line.credit || line.amount || 0,
+      paymentStatus: paymentLifecycleStatus(line),
+      receiptStatus: receiptLifecycleStatus(line),
       status: line.status || "posted"
     }));
+}
+
+function memberPaymentLifecycleRows(dash) {
+  const postedRows = memberStatementLines(dash)
+    .filter((line) => Number(line.credit || 0) > 0 || Number(line.debit || 0) > 0)
+    .map((line) => ({
+      date: line.postedAt || line.createdAt || "",
+      reference: line.reference,
+      description: line.description || "Member payment",
+      paymentRoute: paymentRouteLabel(line),
+      amount: Number(line.credit || 0) || Number(line.debit || 0),
+      paymentStatus: paymentLifecycleStatus(line),
+      receiptStatus: receiptLifecycleStatus(line)
+    }));
+  const draftRows = memberDraftRows("payment").map((draft) => ({
+    date: draft.updatedAt || draft.createdAt || "",
+    reference: draft.payload?.externalReference || draft.id,
+    description: draft.title || "Payment draft",
+    paymentRoute: paymentRouteLabel(draft.payload || draft),
+    amount: Number(draft.amount || draft.payload?.amount || 0),
+    paymentStatus: paymentLifecycleStatus(draft),
+    receiptStatus: "Not receipted"
+  }));
+  return [...draftRows, ...postedRows].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+}
+
+function paymentRouteLabel(row) {
+  const text = normal(`${row.route || ""} ${row.channel || ""} ${row.provider || ""} ${row.reference || ""} ${row.externalReference || ""} ${row.providerPayload?.route || ""}`);
+  if (text.includes("treasurer") || text.includes("cash")) return "Treasurer cash";
+  if (text.includes("mobile") || text.includes("mtn") || text.includes("airtel") || text.includes("mm-")) return "Mobile money";
+  if (text.includes("bank")) return "Bank";
+  return "Treasurer cash";
+}
+
+function paymentLifecycleStatus(row) {
+  const text = normal(`${row.status || ""} ${row.receiptStatus || ""}`);
+  if (text.includes("failed")) return "Failed";
+  if (text.includes("draft")) return "Draft";
+  if (text.includes("pending") || text.includes("syncing")) return paymentRouteLabel(row) === "Mobile money" ? "Pending mobile money" : "Pending posting";
+  if (text.includes("receipt ready") || text.includes("available") || text.includes("receipted")) return "Receipted";
+  if (text.includes("posted") || text.includes("synced") || row.postedAt) return "Posted";
+  return "Draft";
+}
+
+function receiptLifecycleStatus(row) {
+  const text = normal(`${row.receiptStatus || ""} ${row.status || ""}`);
+  if (text.includes("failed")) return "Failed";
+  if (text.includes("posted") || text.includes("available") || text.includes("receipt ready") || row.receiptNo) return "Receipted";
+  if (text.includes("pending")) return "Pending posting";
+  return "Not receipted";
 }
 
 function isMobileMoneyLine(line) {
@@ -4487,7 +4540,9 @@ function memberReceiptsView(dash) {
     .map((line) => ({
       ...line,
       receiptNo: `RCT-${line.reference}`,
-      receiptStatus: "Available",
+      paymentRoute: paymentRouteLabel(line),
+      paymentStatus: paymentLifecycleStatus(line),
+      receiptStatus: receiptLifecycleStatus({ ...line, receiptStatus: "Available" }),
       amount: Number(line.credit || 0) || Number(line.debit || 0)
     }))
     .sort((a, b) => new Date(b.postedAt || b.createdAt || 0) - new Date(a.postedAt || a.createdAt || 0));
@@ -4501,7 +4556,7 @@ function memberReceiptsView(dash) {
       ${summary(t("receiptStatus"), receipts.length ? t("available") : t("pending"), "Only posted transactions", t("refresh"))}
     </div>
     ${moduleTabs("receipts", tabs, tab)}
-    ${tab === "receipts" ? `${filterToolbar("Search receipts by number, reference, narration or date", "Download receipt", "Print")}${recordTable("Member receipts", receipts, ["receiptNo", "reference", "description", "amount", "receiptStatus", "postedAt"])}` : ""}
+    ${tab === "receipts" ? `${filterToolbar("Search receipts by number, reference, narration or date", "Download receipt", "Print")}${recordTable("Member receipts", receipts, ["receiptNo", "reference", "description", "paymentRoute", "amount", "paymentStatus", "receiptStatus", "postedAt"])}` : ""}
     ${tab === "evidence" ? memberReceiptEvidencePanel(receipts) : ""}
     ${tab === "exports" ? memberReceiptExportPanel(receipts) : ""}
   `;
@@ -5730,9 +5785,12 @@ function transactionRows() {
     const status = normal(transaction.status);
     const original = Boolean(transaction.originalTransactionId);
     const postedOriginal = status === "posted" && !original;
+    const paymentRoute = paymentRouteLabel(transaction);
     return {
       ...transaction,
       memberName: memberName(transaction.memberId),
+      paymentRoute,
+      paymentStatus: paymentLifecycleStatus(transaction),
       approvalReadiness: status.includes("pending") ? "Awaiting approval" : status === "posted" ? "Posted" : status.includes("rejected") ? "Rejected" : "Review",
       receiptStatus: status === "posted" ? "Receipt ready" : "Post first",
       reversalStatus: postedOriginal ? "Reversible with reason" : original ? "Reversal entry" : "Not available",

@@ -800,8 +800,11 @@ async function assertMemberPaymentPosting(page) {
   await expectText(page, "Member payment center", "member payment mobile money tab");
   await page.locator("[data-module-tab-view='payments'][data-module-tab='tracking']").click();
   await expectText(page, "Payment tracking workspace", "member payment tracking tab");
+  await expectText(page, "Payment lifecycle", "member payment lifecycle table");
   await expectText(page, "Treasurer cash", "member payment tracking treasurer cash");
   await expectText(page, "Mobile money", "member payment tracking mobile money");
+  await expectText(page, "Payment status", "member payment lifecycle status column");
+  await expectText(page, "Receipt status", "member payment lifecycle receipt column");
   await expectText(page, "Monthly savings and deposit performance", "member payment monthly performance");
   await page.locator("[data-module-tab-view='payments'][data-module-tab='drafts']").click();
   await expectText(page, "Payment draft workspace", "member payment drafts tab");
@@ -822,6 +825,7 @@ async function assertMemberPaymentPosting(page) {
   await expectText(page, "Payment posted", "member payment posted");
   await navigateTo(page, "receipts");
   await expectText(page, reference, "member payment receipt visible");
+  await expectText(page, "Receipted", "member payment receipt lifecycle status");
   console.log("PASS member payment action");
 }
 
@@ -858,6 +862,8 @@ async function assertMemberStatementEvidence(page) {
 async function assertMemberReceiptEvidence(page) {
   await navigateTo(page, "receipts");
   await expectText(page, "Member receipts", "member receipts table");
+  await expectText(page, "Payment route", "member receipts route column");
+  await expectText(page, "Receipt status", "member receipts status column");
   await page.locator("[data-module-tab-view='receipts'][data-module-tab='evidence']").click();
   await expectText(page, "Receipt evidence controls", "member receipt evidence controls");
   await page.locator("[data-module-tab-view='receipts'][data-module-tab='exports']").click();
