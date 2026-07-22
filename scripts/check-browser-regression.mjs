@@ -347,12 +347,16 @@ async function assertAuthenticatedLocaleSwitch(page) {
 }
 
 async function assertNetworkStatus(page) {
+  const refreshButton = page.locator(".page-actions [data-action='refresh']").first();
   await expectText(page, "Online", "network online chip");
+  if (await refreshButton.isDisabled()) throw new Error("refresh button should be enabled while online");
   await page.context().setOffline(true);
   await expectText(page, "Offline mode", "network offline chip");
   await expectText(page, "You are offline.", "network offline notice");
+  if (!(await refreshButton.isDisabled())) throw new Error("refresh button should be disabled while offline");
   await page.context().setOffline(false);
   await expectText(page, "Online", "network online chip restored");
+  if (await refreshButton.isDisabled()) throw new Error("refresh button should re-enable after reconnecting");
   console.log("PASS network status indicator");
 }
 

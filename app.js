@@ -518,6 +518,8 @@ const messages = {
     offlineNoticeTitle: "You are offline.",
     offlineNoticeCopy: "You can keep reviewing cached screens and saving member drafts. Refresh, sync and posting actions need the connection back.",
     backOnlineNotice: "Connection restored",
+    offlineActionBlocked: "This action needs internet. Reconnect, then try again.",
+    refreshUnavailableOffline: "Refresh unavailable offline",
     passwordRecovery: "Password recovery"
   },
   "fr-FR": {
@@ -988,6 +990,8 @@ const messages = {
     offlineNoticeTitle: "Vous etes hors ligne.",
     offlineNoticeCopy: "Vous pouvez consulter les ecrans en cache et garder les brouillons membre. Actualisation, sync et publication exigent la connexion.",
     backOnlineNotice: "Connexion retablie",
+    offlineActionBlocked: "Cette action exige internet. Reconnectez-vous, puis reessayez.",
+    refreshUnavailableOffline: "Actualisation indisponible hors ligne",
     passwordRecovery: "Recuperation du mot de passe"
   }
 };
@@ -1788,7 +1792,7 @@ function renderShell() {
             <p>${module[2]}</p>
           </div>
           <div class="page-actions">
-            ${state.auth === "member" ? `<button class="button secondary" data-action="refresh-member" type="button">${t("refresh")}</button>` : `<button class="button secondary" data-action="refresh" type="button">${t("refresh")}</button>`}
+            ${state.auth === "member" ? `<button class="button secondary" data-action="refresh-member" type="button" ${state.networkOnline ? "" : "disabled"} title="${state.networkOnline ? "" : t("refreshUnavailableOffline")}">${t("refresh")}</button>` : `<button class="button secondary" data-action="refresh" type="button" ${state.networkOnline ? "" : "disabled"} title="${state.networkOnline ? "" : t("refreshUnavailableOffline")}">${t("refresh")}</button>`}
             <button class="button ghost" type="button">${t("exportSummary")}</button>
           </div>
         </section>
@@ -6409,6 +6413,11 @@ function applyStaffSession(session) {
 }
 
 async function refreshAll() {
+  if (!state.networkOnline) {
+    state.lastError = t("offlineActionBlocked");
+    renderShell();
+    return;
+  }
   state.loading = true;
   state.lastError = "";
   renderShell();
@@ -6456,6 +6465,11 @@ async function refreshAll() {
 }
 
 async function refreshMember() {
+  if (!state.networkOnline) {
+    state.lastError = t("offlineActionBlocked");
+    renderShell();
+    return;
+  }
   state.loading = true;
   state.lastError = "";
   renderShell();
