@@ -287,6 +287,77 @@ const messages = {
     readyToDisburse: "Ready to disburse",
     portfolioAtRisk: "Portfolio at risk",
     reportingEvidenceControl: "Reporting evidence control",
+    sharesControl: "Shares control",
+    sharesCapitalControl: "Shares capital control",
+    sharesProductSetup: "Shares product setup",
+    openSharesAccount: "Open Shares account",
+    shareRegister: "Share register",
+    shareProducts: "Share products",
+    shareAccounts: "Share accounts",
+    shareContributionSetup: "Share contribution setup",
+    shareBalances: "Share balances",
+    welfareControl: "Welfare control",
+    welfareFundControl: "Welfare fund control",
+    welfareProductSetup: "Welfare product setup",
+    openWelfareAccount: "Open Welfare account",
+    welfareClaims: "Welfare claims",
+    welfareClaimDecision: "Welfare claim decision",
+    welfareProducts: "Welfare products",
+    welfareAccounts: "Welfare accounts",
+    claims: "Claims",
+    pendingClaims: "Pending claims",
+    approvedForPayment: "Approved for payment",
+    paidClaims: "Paid claims",
+    accountingLedgerConfidence: "Accounting ledger confidence",
+    ledgerControl: "Ledger control",
+    expenseAssetCapture: "Expense and asset capture",
+    chartPeriods: "Chart and periods",
+    recentJournalEntries: "Recent journal entries",
+    expenseAssetRegisters: "Expense and asset registers",
+    chartAccounts: "Chart accounts",
+    accountingPeriods: "Accounting periods",
+    journalEntries: "Journal entries",
+    unbalancedJournals: "Unbalanced journals",
+    expenses: "Expenses",
+    assets: "Assets",
+    reconciliationReadinessChecks: "Reconciliation readiness checks",
+    reconciliationControl: "Reconciliation control",
+    bankMobileMoneyMatching: "Bank and mobile-money matching",
+    exceptions: "Exceptions",
+    providerCallbacks: "Provider callbacks",
+    matchedRecords: "Matched records",
+    unmatchedStatementLines: "Unmatched statement lines",
+    unmatchedLedgerLines: "Unmatched ledger lines",
+    callbackExceptions: "Callback exceptions",
+    governanceActionControl: "Governance action control",
+    governanceControl: "Governance control",
+    governanceMeetingSetup: "Governance meeting setup",
+    governanceMeetingDetail: "Governance meeting detail",
+    governanceMeetingRegister: "Governance meeting register",
+    resolutionActionList: "Resolution action list",
+    meetings: "Meetings",
+    scheduledMeetings: "Scheduled meetings",
+    openResolutions: "Open resolutions",
+    completedMeetings: "Completed meetings",
+    saccoSettingsControl: "SACCO settings control",
+    settingsOverview: "Settings Overview",
+    branchSetup: "Branch Setup",
+    productSetup: "Product Setup",
+    setupRecords: "Setup Records",
+    security: "Security",
+    activeBranches: "Active branches",
+    productCoverage: "Product coverage",
+    roles: "Roles",
+    auditEvidenceControl: "Audit evidence control",
+    auditControl: "Audit control",
+    saccoAuditEvidence: "SACCO audit evidence",
+    sensitiveAuditQueue: "Sensitive audit queue",
+    saccoAuditTrail: "SACCO audit trail",
+    auditEvents: "Audit events",
+    highRiskEvents: "High-risk events",
+    loginRiskEvents: "Login risk events",
+    actorsInvolved: "Actors involved",
+    actors: "Actors",
     passwordRecovery: "Password recovery"
   },
   "fr-FR": {
@@ -526,6 +597,77 @@ const messages = {
     readyToDisburse: "Pret decaissement",
     portfolioAtRisk: "Portefeuille a risque",
     reportingEvidenceControl: "Controle preuves rapports",
+    sharesControl: "Controle parts",
+    sharesCapitalControl: "Controle capital parts",
+    sharesProductSetup: "Configuration produit parts",
+    openSharesAccount: "Ouvrir compte parts",
+    shareRegister: "Registre parts",
+    shareProducts: "Produits parts",
+    shareAccounts: "Comptes parts",
+    shareContributionSetup: "Configuration contribution parts",
+    shareBalances: "Soldes parts",
+    welfareControl: "Controle solidarite",
+    welfareFundControl: "Controle fonds solidarite",
+    welfareProductSetup: "Configuration produit solidarite",
+    openWelfareAccount: "Ouvrir compte solidarite",
+    welfareClaims: "Demandes solidarite",
+    welfareClaimDecision: "Decision demande solidarite",
+    welfareProducts: "Produits solidarite",
+    welfareAccounts: "Comptes solidarite",
+    claims: "Demandes",
+    pendingClaims: "Demandes en attente",
+    approvedForPayment: "Approuve paiement",
+    paidClaims: "Demandes payees",
+    accountingLedgerConfidence: "Confiance grand livre",
+    ledgerControl: "Controle grand livre",
+    expenseAssetCapture: "Saisie depenses et actifs",
+    chartPeriods: "Plan et periodes",
+    recentJournalEntries: "Ecritures recentes",
+    expenseAssetRegisters: "Registres depenses et actifs",
+    chartAccounts: "Plan comptes",
+    accountingPeriods: "Periodes comptables",
+    journalEntries: "Ecritures journal",
+    unbalancedJournals: "Journaux desequilibres",
+    expenses: "Depenses",
+    assets: "Actifs",
+    reconciliationReadinessChecks: "Controles rapprochement",
+    reconciliationControl: "Controle rapprochement",
+    bankMobileMoneyMatching: "Correspondance banque et mobile money",
+    exceptions: "Exceptions",
+    providerCallbacks: "Callbacks fournisseur",
+    matchedRecords: "Enregistrements rapproches",
+    unmatchedStatementLines: "Lignes releve non rapprochees",
+    unmatchedLedgerLines: "Lignes livre non rapprochees",
+    callbackExceptions: "Exceptions callback",
+    governanceActionControl: "Controle actions gouvernance",
+    governanceControl: "Controle gouvernance",
+    governanceMeetingSetup: "Configuration reunion gouvernance",
+    governanceMeetingDetail: "Detail reunion gouvernance",
+    governanceMeetingRegister: "Registre reunions gouvernance",
+    resolutionActionList: "Liste actions resolution",
+    meetings: "Reunions",
+    scheduledMeetings: "Reunions planifiees",
+    openResolutions: "Resolutions ouvertes",
+    completedMeetings: "Reunions terminees",
+    saccoSettingsControl: "Controle parametres SACCO",
+    settingsOverview: "Vue parametres",
+    branchSetup: "Configuration agence",
+    productSetup: "Configuration produit",
+    setupRecords: "Dossiers configuration",
+    security: "Securite",
+    activeBranches: "Agences actives",
+    productCoverage: "Couverture produits",
+    roles: "Roles",
+    auditEvidenceControl: "Controle preuves audit",
+    auditControl: "Controle audit",
+    saccoAuditEvidence: "Preuves audit SACCO",
+    sensitiveAuditQueue: "File audit sensible",
+    saccoAuditTrail: "Piste audit SACCO",
+    auditEvents: "Evenements audit",
+    highRiskEvents: "Evenements haut risque",
+    loginRiskEvents: "Risques connexion",
+    actorsInvolved: "Acteurs impliques",
+    actors: "Acteurs",
     passwordRecovery: "Recuperation du mot de passe"
   }
 };
@@ -2051,7 +2193,7 @@ function reportsView() {
       ${summary("Compliance exceptions", exceptions, "Reconciliation and journal checks", "Investigate")}
     </div>
     ${moduleTabs("reports", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel("Reporting evidence control", [
+    ${tab === "overview" ? rolePriorityPanel(t("reportingEvidenceControl"), [
       ["Ledger evidence", `${consolidated.journalEntries || 0} journal entr${Number(consolidated.journalEntries || 0) === 1 ? "y" : "ies"} available for report support.`, Number(consolidated.unbalancedJournalEntries || 0) ? "Review" : "Clear"],
       ["Reconciliation evidence", `${consolidated.reconciliationExceptions || 0} reconciliation exception(s) affect export confidence.`, Number(consolidated.reconciliationExceptions || 0) ? "Investigate" : "Clear"],
       ["Compliance status", `Current report status is ${labelize(consolidated.complianceStatus || (exceptions ? "review" : "clear"))}.`, exceptions ? "Review" : "Ready"]
@@ -2494,15 +2636,15 @@ function auditView() {
   const reversals = rows.filter((event) => event.category === "Reversals");
   const access = rows.filter((event) => event.category === "Access control");
   const finance = rows.filter((event) => event.category === "Financial activity");
-  const tabs = [["overview", "Audit control"], ["evidence", isPlatform() ? "Platform audit evidence" : "SACCO audit evidence"], ["sensitive", "Sensitive audit queue"], ["trail", isPlatform() ? "Platform audit trail" : "SACCO audit trail"]];
+  const tabs = [["overview", t("auditControl")], ["evidence", isPlatform() ? "Platform audit evidence" : t("saccoAuditEvidence")], ["sensitive", t("sensitiveAuditQueue")], ["trail", isPlatform() ? "Platform audit trail" : t("saccoAuditTrail")]];
   const tab = activeModuleTab("audit", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Audit events", rows.length, "Immutable activity trail", "Inspect")}
-      ${summary("High-risk events", highRisk.length, "Roles, sessions and reversals", "Review")}
-      ${summary("Login risk events", loginRisks.length, "Failed and blocked sign-ins", "Review")}
-      ${summary(isPlatform() ? "SACCOs affected" : "Actors involved", isPlatform() ? uniqueCount(rows, "tenantId") : uniqueCount(rows, "actorUserId"), isPlatform() ? "Across visible SACCOs" : "Within this SACCO", "Filter")}
-      ${summary("Actors", uniqueCount(rows, "actorUserId"), "Users and system actions", "Trace")}
+      ${summary(t("auditEvents"), rows.length, "Immutable activity trail", "Inspect")}
+      ${summary(t("highRiskEvents"), highRisk.length, "Roles, sessions and reversals", t("review"))}
+      ${summary(t("loginRiskEvents"), loginRisks.length, "Failed and blocked sign-ins", t("review"))}
+      ${summary(isPlatform() ? "SACCOs affected" : t("actorsInvolved"), isPlatform() ? uniqueCount(rows, "tenantId") : uniqueCount(rows, "actorUserId"), isPlatform() ? "Across visible SACCOs" : "Within this SACCO", "Filter")}
+      ${summary(t("actors"), uniqueCount(rows, "actorUserId"), "Users and system actions", "Trace")}
     </div>
     ${moduleTabs("audit", tabs, tab)}
     ${tab === "overview" ? auditControlPanel(rows, highRisk, approvals, reversals, access, finance) : ""}
@@ -2516,7 +2658,7 @@ function auditView() {
 }
 
 function auditControlPanel(rows, highRisk, approvals, reversals, access, finance) {
-  return rolePriorityPanel("Audit evidence control", [
+  return rolePriorityPanel(t("auditEvidenceControl"), [
     ["High-risk review", `${highRisk.length} event(s) involve sessions, roles, reversals or sensitive state changes.`, highRisk.length ? "Review" : "Clear"],
     ["Decision evidence", `${approvals.length} approval event(s) and ${reversals.length} reversal event(s) are available for follow-up.`, approvals.length || reversals.length ? "Trace" : "Empty"],
     ["Access and finance", `${access.length} access event(s) and ${finance.length} finance event(s) can be filtered for audit review.`, rows.length ? "Available" : "No events"]
@@ -2623,18 +2765,18 @@ function sharesView() {
   const accounts = accountsByType("share");
   const members = dataRows("members");
   const activeProducts = products.filter((row) => normal(row.status) === "active");
-  const tabs = [["overview", "Shares control"], ["products", "Shares product setup"], ["accounts", "Open Shares account"], ["register", "Share register"]];
+  const tabs = [["overview", t("sharesControl")], ["products", t("sharesProductSetup")], ["accounts", t("openSharesAccount")], ["register", t("shareRegister")]];
   const tab = activeModuleTab("shares", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Share products", products.length, "Share capital products", "Manage")}
-      ${summary("Share accounts", accounts.length, "Member share ledgers", "Open")}
-      ${summary("Active members", uniqueCount(accounts, "memberId"), "Holding shares", "View")}
-      ${summary("Share contribution setup", money.format(sum(products, "contributionAmount")), "Configured value", "Review")}
-      ${summary("Share balances", money.format(sum(members, "sharesBalance", "shares")), "Member share capital", "Register")}
+      ${summary(t("shareProducts"), products.length, "Share capital products", "Manage")}
+      ${summary(t("shareAccounts"), accounts.length, "Member share ledgers", t("open"))}
+      ${summary(t("activeMembers"), uniqueCount(accounts, "memberId"), "Holding shares", "View")}
+      ${summary(t("shareContributionSetup"), money.format(sum(products, "contributionAmount")), "Configured value", t("review"))}
+      ${summary(t("shareBalances"), money.format(sum(members, "sharesBalance", "shares")), "Member share capital", "Register")}
     </div>
     ${moduleTabs("shares", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel("Shares capital control", [
+    ${tab === "overview" ? rolePriorityPanel(t("sharesCapitalControl"), [
       ["Product setup", `${activeProducts.length} active share product(s) define contribution rules.`, activeProducts.length ? "Ready" : "Setup"],
       ["Share register", `${accounts.length} member share account(s) are available for reporting.`, accounts.length ? "Active" : "Open"],
       ["Contribution flow", "Share purchases post through Transactions and member mobile payments.", "Connected"]
@@ -2655,19 +2797,19 @@ function welfareView() {
   const submitted = claims.filter((row) => ["submitted", "pending", "pending_approval"].some((word) => normal(row.status).includes(word)));
   const approved = claims.filter((row) => normal(row.status) === "approved");
   const paid = claims.filter((row) => normal(row.status) === "paid");
-  const tabs = [["overview", "Welfare control"], ["products", "Welfare product setup"], ["accounts", "Open Welfare account"], ["claims", "Welfare claims"], ["detail", "Welfare claim decision"]];
+  const tabs = [["overview", t("welfareControl")], ["products", t("welfareProductSetup")], ["accounts", t("openWelfareAccount")], ["claims", t("welfareClaims")], ["detail", t("welfareClaimDecision")]];
   const tab = activeModuleTab("welfare", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Welfare products", products.length, "Contribution rules", "Manage")}
-      ${summary("Welfare accounts", accounts.length, "Member welfare ledgers", "Open")}
-      ${summary("Claims", claims.length, "Submitted claims", "Open")}
-      ${summary("Pending claims", submitted.length, "Decision queue", "Review")}
-      ${summary("Approved for payment", approved.length, "Payment queue", "Pay")}
-      ${summary("Paid claims", money.format(sum(paid, "amount")), "Settled welfare support", "Report")}
+      ${summary(t("welfareProducts"), products.length, "Contribution rules", "Manage")}
+      ${summary(t("welfareAccounts"), accounts.length, "Member welfare ledgers", t("open"))}
+      ${summary(t("claims"), claims.length, "Submitted claims", t("open"))}
+      ${summary(t("pendingClaims"), submitted.length, "Decision queue", t("review"))}
+      ${summary(t("approvedForPayment"), approved.length, "Payment queue", "Pay")}
+      ${summary(t("paidClaims"), money.format(sum(paid, "amount")), "Settled welfare support", "Report")}
     </div>
     ${moduleTabs("welfare", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel("Welfare fund control", [
+    ${tab === "overview" ? rolePriorityPanel(t("welfareFundControl"), [
       ["Contribution setup", `${products.length} welfare product(s) and ${accounts.length} welfare account(s) support member balances.`, products.length && accounts.length ? "Ready" : "Setup"],
       ["Claim decisions", `${submitted.length} submitted claim(s) need approval or rejection.`, submitted.length ? "Pending" : "Clear"],
       ["Claim payments", `${approved.length} approved claim(s) are ready for payment if member welfare balance is sufficient.`, approved.length ? "Ready" : "Clear"]
@@ -2929,19 +3071,19 @@ function accountingView() {
   const unbalanced = journals.filter((journal) => journal.isBalanced === false || Number(journal.debitTotal || 0) !== Number(journal.creditTotal || 0));
   const closedPeriods = periods.filter((period) => normal(period.status) === "closed");
   const openPeriods = periods.filter((period) => normal(period.status) === "open");
-  const tabs = [["overview", "Ledger control"], ["capture", "Expense and asset capture"], ["setup", "Chart and periods"], ["journals", "Recent journal entries"], ["registers", "Expense and asset registers"]];
+  const tabs = [["overview", t("ledgerControl")], ["capture", t("expenseAssetCapture")], ["setup", t("chartPeriods")], ["journals", t("recentJournalEntries")], ["registers", t("expenseAssetRegisters")]];
   const tab = activeModuleTab("accounting", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Chart accounts", accounts.length, "Ledger structure", "Open")}
-      ${summary("Accounting periods", periods.length, "Financial years", "View")}
-      ${summary("Journal entries", journals.length, "Posted entries", "Review")}
-      ${summary("Unbalanced journals", unbalanced.length, "Must remain zero", "Investigate")}
-      ${summary("Expenses", money.format(sum(expenses, "amount")), "Supplier and operating costs", "Open")}
-      ${summary("Assets", money.format(sum(assets, "netBookValue", "cost")), "Fixed asset register", "View")}
+      ${summary(t("chartAccounts"), accounts.length, "Ledger structure", t("open"))}
+      ${summary(t("accountingPeriods"), periods.length, "Financial years", "View")}
+      ${summary(t("journalEntries"), journals.length, "Posted entries", t("review"))}
+      ${summary(t("unbalancedJournals"), unbalanced.length, "Must remain zero", "Investigate")}
+      ${summary(t("expenses"), money.format(sum(expenses, "amount")), "Supplier and operating costs", t("open"))}
+      ${summary(t("assets"), money.format(sum(assets, "netBookValue", "cost")), "Fixed asset register", "View")}
     </div>
     ${moduleTabs("accounting", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel("Accounting ledger confidence", [
+    ${tab === "overview" ? rolePriorityPanel(t("accountingLedgerConfidence"), [
       ["Trial balance", unbalanced.length ? `${unbalanced.length} unbalanced journal entr${unbalanced.length === 1 ? "y" : "ies"} need correction.` : "All loaded journal entries are balanced.", unbalanced.length ? "Review" : "Clear"],
       ["Period control", `${openPeriods.length} open period(s), ${closedPeriods.length} closed period(s). Closed periods block ordinary postings.`, openPeriods.length ? "Open" : "Review"],
       ["Asset and expense evidence", `${expenses.length} expense record(s) and ${assets.length} asset record(s) support management reports.`, "Ready"]
@@ -2971,20 +3113,20 @@ function reconciliationView() {
   const unmatchedLedgerLines = Array.isArray(reconciliation.unmatchedLedgerLines) ? reconciliation.unmatchedLedgerLines : [];
   const callbackExceptions = callbacks.filter((row) => !normal(row.status).includes("posted") || row.duplicate);
   const exceptionCount = Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) + Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) + callbackExceptions.length;
-  const tabs = [["overview", "Reconciliation control"], ["matches", "Bank and mobile-money matching"], ["exceptions", "Exceptions"], ["callbacks", "Provider callbacks"]];
+  const tabs = [["overview", t("reconciliationControl")], ["matches", t("bankMobileMoneyMatching")], ["exceptions", t("exceptions")], ["callbacks", t("providerCallbacks")]];
   const tab = activeModuleTab("reconciliation", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Provider callbacks", callbacks.length, "Mobile money events", "Open")}
-      ${summary("Matched records", summaryData.matched ?? matches.length, money.format(summaryData.matchedAmount || 0), "Review")}
-      ${summary("Unmatched statement lines", summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length, money.format(summaryData.unmatchedStatementAmount || 0), "Investigate")}
-      ${summary("Unmatched ledger lines", summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length, money.format(summaryData.unmatchedLedgerAmount || 0), "Investigate")}
-      ${summary("Callback exceptions", callbackExceptions.length, "Failed or duplicate provider events", "Resolve")}
+      ${summary(t("providerCallbacks"), callbacks.length, "Mobile money events", t("open"))}
+      ${summary(t("matchedRecords"), summaryData.matched ?? matches.length, money.format(summaryData.matchedAmount || 0), t("review"))}
+      ${summary(t("unmatchedStatementLines"), summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length, money.format(summaryData.unmatchedStatementAmount || 0), "Investigate")}
+      ${summary(t("unmatchedLedgerLines"), summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length, money.format(summaryData.unmatchedLedgerAmount || 0), "Investigate")}
+      ${summary(t("callbackExceptions"), callbackExceptions.length, "Failed or duplicate provider events", "Resolve")}
     </div>
     ${moduleTabs("reconciliation", tabs, tab)}
     ${tab === "overview" ? `
       ${reconciliationControlPanel(summaryData)}
-      ${rolePriorityPanel("Reconciliation readiness checks", [
+      ${rolePriorityPanel(t("reconciliationReadinessChecks"), [
       ["Statement matching", `${summaryData.matched ?? matches.length} matched record(s) against ${summaryData.statementLines || unmatchedStatementLines.length + matches.length} statement line(s).`, Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) ? "Review" : "Clear"],
       ["Ledger exceptions", `${summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length} ledger line(s) remain unmatched.`, Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) ? "Investigate" : "Clear"],
       ["Provider callbacks", `${callbackExceptions.length} callback exception(s) need provider or posting review.`, callbackExceptions.length ? "Resolve" : "Clear"],
@@ -3054,14 +3196,14 @@ function governanceView() {
   })));
   const scheduled = meetings.filter((row) => normal(row.status) === "scheduled");
   const openResolutions = resolutions.filter((row) => normal(row.status) !== "closed");
-  const tabs = [["overview", "Governance control"], ["setup", "Governance meeting setup"], ["detail", "Governance meeting detail"], ["register", "Governance meeting register"], ["resolutions", "Resolution action list"]];
+  const tabs = [["overview", t("governanceControl")], ["setup", t("governanceMeetingSetup")], ["detail", t("governanceMeetingDetail")], ["register", t("governanceMeetingRegister")], ["resolutions", t("resolutionActionList")]];
   const tab = activeModuleTab("governance", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Meetings", meetings.length, "Board, AGM and committee records", "Open")}
-      ${summary("Scheduled meetings", scheduled.length, "Upcoming governance events", "Prepare")}
-      ${summary("Open resolutions", openResolutions.length, "Action items needing follow-up", "Track")}
-      ${summary("Completed meetings", meetings.filter((row) => normal(row.status) === "completed").length, "Minutes and decisions", "Review")}
+      ${summary(t("meetings"), meetings.length, "Board, AGM and committee records", t("open"))}
+      ${summary(t("scheduledMeetings"), scheduled.length, "Upcoming governance events", "Prepare")}
+      ${summary(t("openResolutions"), openResolutions.length, "Action items needing follow-up", "Track")}
+      ${summary(t("completedMeetings"), meetings.filter((row) => normal(row.status) === "completed").length, "Minutes and decisions", t("review"))}
     </div>
     ${moduleTabs("governance", tabs, tab)}
     ${tab === "overview" ? governanceActionControlPanel(meetings, scheduled, resolutions, openResolutions) : ""}
@@ -3075,7 +3217,7 @@ function governanceView() {
 function governanceActionControlPanel(meetings, scheduled, resolutions, openResolutions) {
   const withMinutes = meetings.filter((meeting) => meeting.minutes).length;
   const overdue = openResolutions.filter((resolution) => resolution.dueDate && new Date(resolution.dueDate) < new Date()).length;
-  return rolePriorityPanel("Governance action control", [
+  return rolePriorityPanel(t("governanceActionControl"), [
     ["Meeting preparedness", `${scheduled.length} scheduled meeting(s) need agenda, chairperson and attendance readiness.`, scheduled.length ? "Prepare" : "Clear"],
     ["Resolution follow-up", `${openResolutions.length} open resolution(s), including ${overdue} overdue action(s).`, overdue ? "Escalate" : openResolutions.length ? "Track" : "Clear"],
     ["Minutes evidence", `${withMinutes}/${meetings.length || 0} meeting(s) have captured minutes for audit and member trust.`, withMinutes === meetings.length && meetings.length ? "Complete" : "Capture"]
@@ -3168,10 +3310,10 @@ function settingsView() {
   const security = state.data.securitySummary || {};
   return `
     <div class="dashboard-grid">
-      ${summary("Active branches", activeBranches.length, "Service points ready for use", "Manage")}
-      ${summary("Active products", activeProducts.length, "Savings, shares and welfare", "Configure")}
-      ${summary("Product coverage", missingProducts.length ? `${productTypes.length - missingProducts.length}/${productTypes.length}` : "Complete", missingProducts.length ? `Missing ${missingProducts.map(labelize).join(", ")}` : "Core contribution types ready", "Review")}
-      ${summary("Roles", dataRows("roles").length, "Access profiles", "Review")}
+      ${summary(t("activeBranches"), activeBranches.length, "Service points ready for use", "Manage")}
+      ${summary(t("activeProducts"), activeProducts.length, t("savingsSharesWelfare"), "Configure")}
+      ${summary(t("productCoverage"), missingProducts.length ? `${productTypes.length - missingProducts.length}/${productTypes.length}` : "Complete", missingProducts.length ? `Missing ${missingProducts.map(labelize).join(", ")}` : "Core contribution types ready", t("review"))}
+      ${summary(t("roles"), dataRows("roles").length, "Access profiles", t("review"))}
     </div>
     ${saccoSettingsTabs(tab)}
     ${tab === "overview" ? `
@@ -3190,11 +3332,11 @@ function settingsView() {
 
 function saccoSettingsTabs(activeTab) {
   const tabs = [
-    ["overview", "Settings Overview"],
-    ["branches", "Branch Setup"],
-    ["products", "Product Setup"],
-    ["records", "Setup Records"],
-    ["security", "Security"]
+    ["overview", t("settingsOverview")],
+    ["branches", t("branchSetup")],
+    ["products", t("productSetup")],
+    ["records", t("setupRecords")],
+    ["security", t("security")]
   ];
   return `
     <div class="tabs management-tabs">
@@ -3206,7 +3348,7 @@ function saccoSettingsTabs(activeTab) {
 function saccoSettingsControlPanel(branches, products, accounts, missingProducts) {
   const inactiveBranches = branches.filter((branch) => normal(branch.status) !== "active").length;
   const inactiveProducts = products.filter((product) => normal(product.status) !== "active").length;
-  return rolePriorityPanel("SACCO settings control", [
+  return rolePriorityPanel(t("saccoSettingsControl"), [
     ["Branch readiness", `${branches.length} branch record(s), with ${inactiveBranches} inactive service point(s).`, inactiveBranches ? "Review" : "Ready"],
     ["Contribution setup", missingProducts.length ? `Missing ${missingProducts.map(labelize).join(", ")} product setup.` : "Savings, shares and welfare product coverage is configured.", missingProducts.length ? "Configure" : "Ready"],
     ["Ledger linkage", `${accounts.length} financial account(s) support product and reporting setup; ${inactiveProducts} product(s) are inactive.`, accounts.length ? "Linked" : "Setup"]
