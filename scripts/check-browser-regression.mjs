@@ -825,6 +825,8 @@ async function assertMemberPaymentPosting(page) {
   await expectText(page, "Member payment center", "member payment mobile money tab");
   await page.locator("[data-module-tab-view='payments'][data-module-tab='tracking']").click();
   await expectText(page, "Payment tracking workspace", "member payment tracking tab");
+  await expectText(page, "Mobile-money request tracking", "member payment request tracking table");
+  await expectText(page, "Provider requests", "member payment provider request summary");
   await expectText(page, "Payment lifecycle", "member payment lifecycle table");
   await expectText(page, "Treasurer cash", "member payment tracking treasurer cash");
   await expectText(page, "Mobile money", "member payment tracking mobile money");
@@ -850,6 +852,11 @@ async function assertMemberPaymentPosting(page) {
   await page.locator("#memberPaymentForm button[type='submit']").click();
   await expectText(page, "Payment request sent", "member payment request sent");
   await expectText(page, "callback", "member payment waits for callback");
+  await page.locator("[data-module-tab-view='payments'][data-module-tab='tracking']").click();
+  await expectText(page, reference, "member payment request visible in tracking");
+  if (await page.locator("[data-payment-provider-status]").count() === 0) {
+    throw new Error("member payment provider status action did not render a status-check button");
+  }
   console.log("PASS member payment request action");
 }
 

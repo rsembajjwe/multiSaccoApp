@@ -104,18 +104,24 @@ class MobileMoneyController {
                     .body(ApiErrorResponse.of(409, "PAYMENT_REFERENCE_EXISTS", "A mobile-money payment request with that reference already exists."));
         }
 
-        MobileMoneyPaymentResult result = mobileMoneyProvider.requestPayment(new MobileMoneyPaymentRequest(
-                member.getTenantId(),
-                member.getId(),
-                member.getMembershipNo(),
-                body.loanId(),
-                purpose,
-                amount,
-                currencyCode,
-                phone,
-                externalReference,
-                body.provider(),
-                body.providerPayload()));
+        MobileMoneyPaymentResult result;
+        try {
+            result = mobileMoneyProvider.requestPayment(new MobileMoneyPaymentRequest(
+                    member.getTenantId(),
+                    member.getId(),
+                    member.getMembershipNo(),
+                    body.loanId(),
+                    purpose,
+                    amount,
+                    currencyCode,
+                    phone,
+                    externalReference,
+                    body.provider(),
+                    body.providerPayload()));
+        } catch (MobileMoneyProviderException exception) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body(ApiErrorResponse.of(502, "PAYMENT_PROVIDER_UNAVAILABLE", exception.getMessage()));
+        }
         MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(MobileMoneyPaymentRequestEntity.from(
                 result,
                 body.loanId(),
@@ -212,6 +218,40 @@ class MobileMoneyController {
         return ResponseEntity.ok(ApiResponse.of(requests.stream().map(MobileMoneyPaymentRequestResponse::from).toList()));
     }
 
+    @GetMapping("/payment-requests/{requestId}/provider-status")
+    ResponseEntity<?> refreshProviderStatus(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String requestId,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        MobileMoneyPaymentRequestEntity request = paymentRequestRepository.findById(requestId).orElse(null);
+        if (request == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "PAYMENT_REQUEST_NOT_FOUND", "Mobile-money payment request was not found."));
+        }
+
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession != null) {
+            if (!authService.hasPermission(currentSession.user(), "accounting:view")) {
+                return authService.permissionRequired("accounting:view");
+            }
+            String tenantId = tenantScope(currentSession, requestedTenantId);
+            if (tenantId == null) tenantId = request.getTenantId();
+            if (!request.getTenantId().equals(tenantId)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot refresh another SACCO's mobile-money payment request."));
+            }
+            return refreshAndSaveProviderStatus(request);
+        }
+
+        MemberAuthService.CurrentMemberSession memberSession = memberAuthService.currentSession(authorization);
+        if (memberSession == null) return authService.authRequired();
+        if (!request.getMemberId().equals(memberSession.member().getId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "MEMBER_ACCESS_DENIED", "Cannot refresh another member's mobile-money payment request."));
+        }
+        return refreshAndSaveProviderStatus(request);
+    }
+
     @PatchMapping("/payment-requests/{requestId}/status")
     ResponseEntity<?> updatePaymentRequestStatus(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -254,6 +294,21 @@ class MobileMoneyController {
         request.updateStatus(status, body.reason());
         MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(request);
         return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
+    }
+
+    private ResponseEntity<?> refreshAndSaveProviderStatus(MobileMoneyPaymentRequestEntity request) {
+        if ("posted".equals(request.getStatus())) {
+            return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(request)));
+        }
+        try {
+            MobileMoneyProviderStatusResult result = mobileMoneyProvider.queryPaymentStatus(request);
+            request.syncProviderStatus(result);
+            MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(request);
+            return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
+        } catch (MobileMoneyProviderException exception) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body(ApiErrorResponse.of(502, "PAYMENT_PROVIDER_STATUS_UNAVAILABLE", exception.getMessage()));
+        }
     }
 
     private ResponseEntity<?> postContribution(

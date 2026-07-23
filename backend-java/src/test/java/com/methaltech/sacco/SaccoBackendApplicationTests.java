@@ -4000,6 +4000,13 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data[0].externalReference", is(externalReference)))
 				.andExpect(jsonPath("$.data[0].status", is("pending_demo_callback")));
 
+		mockMvc.perform(get("/api/v1/integrations/mobile-money/payment-requests/%s/provider-status".formatted(requestId))
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.externalReference", is(externalReference)))
+				.andExpect(jsonPath("$.data.status", is("pending_demo_callback")))
+				.andExpect(jsonPath("$.data.statusMessage", containsString("Provider status polling is not available")));
+
 		mockMvc.perform(patch("/api/v1/integrations/mobile-money/payment-requests/%s/status".formatted(requestId))
 						.header("Authorization", "Bearer " + memberToken)
 						.contentType("application/json")

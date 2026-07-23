@@ -3,15 +3,17 @@ package com.methaltech.sacco.accounting;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.MediaType;
 import org.springframework.context.annotation.Primary;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 @Primary
@@ -47,24 +49,31 @@ class MtnMomoMobileMoneyProvider implements MobileMoneyProvider {
 
     @Override
     public MobileMoneyPaymentResult requestPayment(MobileMoneyPaymentRequest request) {
+        assertConfigured();
         String providerReference = UUID.randomUUID().toString();
         String token = collectionToken();
-        restClient.post()
-                .uri("/collection/v1_0/requesttopay")
-                .contentType(MediaType.APPLICATION_JSON)
-                .header("Authorization", "Bearer " + token)
-                .header("X-Reference-Id", providerReference)
-                .header("X-Target-Environment", targetEnvironment)
-                .header("Ocp-Apim-Subscription-Key", subscriptionKey)
-                .body(Map.of(
-                        "amount", request.amount().toPlainString(),
-                        "currency", request.currencyCode(),
-                        "externalId", request.externalReference(),
-                        "payer", Map.of("partyIdType", "MSISDN", "partyId", msisdn(request.payerPhone())),
-                        "payerMessage", "Tereka Online " + request.purpose().replace('_', ' '),
-                        "payeeNote", request.tenantId() + " " + request.memberIdentifier()))
-                .retrieve()
-                .toBodilessEntity();
+        try {
+            restClient.post()
+                    .uri("/collection/v1_0/requesttopay")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("Authorization", "Bearer " + token)
+                    .header("X-Reference-Id", providerReference)
+                    .header("X-Target-Environment", targetEnvironment)
+                    .header("Ocp-Apim-Subscription-Key", subscriptionKey)
+                    .body(Map.of(
+                            "amount", request.amount().toPlainString(),
+                            "currency", request.currencyCode(),
+                            "externalId", request.externalReference(),
+                            "payer", Map.of("partyIdType", "MSISDN", "partyId", msisdn(request.payerPhone())),
+                            "payerMessage", "Tereka Online " + request.purpose().replace('_', ' '),
+                            "payeeNote", request.tenantId() + " " + request.memberIdentifier()))
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException exception) {
+            throw new MobileMoneyProviderException("MTN MoMo rejected the payment request: HTTP " + exception.getStatusCode().value(), exception);
+        } catch (RestClientException exception) {
+            throw new MobileMoneyProviderException("MTN MoMo payment request could not be completed.", exception);
+        }
         return new MobileMoneyPaymentResult(
                 "payment_request_" + providerReference,
                 request.tenantId(),
@@ -82,23 +91,101 @@ class MtnMomoMobileMoneyProvider implements MobileMoneyProvider {
                 Instant.now());
     }
 
+    @Override
+    public MobileMoneyProviderStatusResult queryPaymentStatus(MobileMoneyPaymentRequestEntity request) {
+        assertConfigured();
+        if (request.getProviderReference() == null || request.getProviderReference().isBlank()) {
+            throw new MobileMoneyProviderException("MTN MoMo payment request has no provider reference.");
+        }
+        String token = collectionToken();
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = restClient.get()
+                    .uri("/collection/v1_0/requesttopay/{reference}", request.getProviderReference())
+                    .header("Authorization", "Bearer " + token)
+                    .header("X-Target-Environment", targetEnvironment)
+                    .header("Ocp-Apim-Subscription-Key", subscriptionKey)
+                    .retrieve()
+                    .body(Map.class);
+            return mapProviderStatus(request, body);
+        } catch (RestClientResponseException exception) {
+            throw new MobileMoneyProviderException("MTN MoMo status check failed: HTTP " + exception.getStatusCode().value(), exception);
+        } catch (RestClientException exception) {
+            throw new MobileMoneyProviderException("MTN MoMo status check could not be completed.", exception);
+        }
+    }
+
     private String collectionToken() {
+        assertConfigured();
         String basicToken = Base64.getEncoder()
                 .encodeToString((apiUserId + ":" + apiKey).getBytes(StandardCharsets.UTF_8));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> body = restClient.post()
-                .uri("/collection/token/")
-                .contentType(MediaType.APPLICATION_JSON)
-                .header("Authorization", "Basic " + basicToken)
-                .header("Ocp-Apim-Subscription-Key", subscriptionKey)
-                .header("X-Target-Environment", targetEnvironment)
-                .retrieve()
-                .body(Map.class);
+        Map<String, Object> body;
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restClient.post()
+                    .uri("/collection/token/")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("Authorization", "Basic " + basicToken)
+                    .header("Ocp-Apim-Subscription-Key", subscriptionKey)
+                    .header("X-Target-Environment", targetEnvironment)
+                    .retrieve()
+                    .body(Map.class);
+            body = response;
+        } catch (RestClientResponseException exception) {
+            throw new MobileMoneyProviderException("MTN MoMo token request failed: HTTP " + exception.getStatusCode().value(), exception);
+        } catch (RestClientException exception) {
+            throw new MobileMoneyProviderException("MTN MoMo token request could not be completed.", exception);
+        }
         Object token = body == null ? null : body.get("access_token");
         if (token == null || token.toString().isBlank()) {
-            throw new IllegalStateException("MTN MoMo did not return an access token.");
+            throw new MobileMoneyProviderException("MTN MoMo did not return an access token.");
         }
         return token.toString();
+    }
+
+    private MobileMoneyProviderStatusResult mapProviderStatus(MobileMoneyPaymentRequestEntity request, Map<String, Object> body) {
+        String providerStatus = body == null || body.get("status") == null ? "UNKNOWN" : body.get("status").toString();
+        String normalized = providerStatus.trim().toUpperCase(Locale.ROOT);
+        Instant now = Instant.now();
+        return switch (normalized) {
+            case "SUCCESSFUL" -> new MobileMoneyProviderStatusResult(
+                    "paid_pending_callback",
+                    "MTN MoMo confirms successful payment. Awaiting verified callback posting.",
+                    request.getProviderReference(),
+                    normalized,
+                    true,
+                    now);
+            case "FAILED", "REJECTED" -> new MobileMoneyProviderStatusResult(
+                    "failed",
+                    "MTN MoMo returned " + normalized.toLowerCase(Locale.ROOT) + ".",
+                    request.getProviderReference(),
+                    normalized,
+                    false,
+                    now);
+            case "PENDING" -> new MobileMoneyProviderStatusResult(
+                    "pending_provider_confirmation",
+                    "MTN MoMo payment is still waiting for member confirmation.",
+                    request.getProviderReference(),
+                    normalized,
+                    true,
+                    now);
+            default -> new MobileMoneyProviderStatusResult(
+                    "provider_unknown",
+                    "MTN MoMo returned status " + providerStatus + ".",
+                    request.getProviderReference(),
+                    providerStatus,
+                    true,
+                    now);
+        };
+    }
+
+    private void assertConfigured() {
+        if (subscriptionKey == null || subscriptionKey.isBlank()
+                || apiUserId == null || apiUserId.isBlank()
+                || apiKey == null || apiKey.isBlank()
+                || targetEnvironment == null || targetEnvironment.isBlank()) {
+            throw new MobileMoneyProviderException("MTN MoMo provider is not fully configured.");
+        }
     }
 
     private String msisdn(String phone) {

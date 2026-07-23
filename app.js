@@ -4451,6 +4451,7 @@ function memberPaymentsView() {
   const paymentDrafts = memberDraftRows("payment");
   const monthlyPerformance = memberMonthlyPerformanceRows(state.memberData.dashboard || {});
   const paymentRows = memberPaymentLifecycleRows(state.memberData.dashboard || {});
+  const requestRows = memberPaymentRequestRows();
   const tabs = [["mobile-money", t("mobileMoney")], ["treasurer-cash", t("treasurerCash")], ["drafts", t("drafts")], ["loans", "Loan repayments"], ["tracking", t("tracking")]];
   const tab = activeModuleTab("payments", tabs);
   return `
@@ -4466,7 +4467,7 @@ function memberPaymentsView() {
     ${tab === "treasurer-cash" ? `${memberTabReadinessPanel("Treasurer cash handoff", "Prepare cash deposits or loan repayments for SACCO Treasurer office receipting.", [["Route", "Visit SACCO office"], ["Receipt", "After staff posting"], ["Loan repayment", payableLoans.length ? "Available" : "No active loan"]])}${memberPaymentRoutePanel()}` : ""}
     ${tab === "drafts" ? `${memberTabReadinessPanel("Payment draft workspace", "Save incomplete mobile-money payment details on this device and sync them when ready.", [["Drafts saved", paymentDrafts.length], ["Storage", "Local device"], ["Sync status", paymentDrafts.length ? "Action needed" : "Clear"]])}${memberDraftPanel("Payment offline drafts", paymentDrafts)}` : ""}
     ${tab === "loans" ? `${memberTabReadinessPanel("Loan repayment workspace", "Review payable loan balances before choosing mobile money or Treasurer cash repayment.", [["Payable loans", payableLoans.length], ["Route options", "Mobile/Treasurer"], ["Receipt", "After posting"]])}${recordTable("Payable loans", payableLoans, ["product", "outstandingBalance", "monthlyInstallment", "nextDueDate", "arrearsAmount", "scheduleStatus", "status"])}` : ""}
-    ${tab === "tracking" ? `${memberTabReadinessPanel("Payment tracking workspace", "Track monthly deposits, repayments, Treasurer cash and mobile-money collections.", [["Payment records", paymentRows.length], ["Treasurer cash", money.format(sum(monthlyPerformance, "treasurerCash"))], ["Mobile money", money.format(sum(monthlyPerformance, "mobileMoney"))]])}${recordTable("Payment lifecycle", paymentRows, ["date", "reference", "description", "paymentRoute", "amount", "paymentStatus", "receiptStatus"])}${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"])}` : ""}
+    ${tab === "tracking" ? `${memberTabReadinessPanel("Payment tracking workspace", "Track monthly deposits, repayments, Treasurer cash and mobile-money collections.", [["Payment records", paymentRows.length], ["Provider requests", requestRows.length], ["Treasurer cash", money.format(sum(monthlyPerformance, "treasurerCash"))], ["Mobile money", money.format(sum(monthlyPerformance, "mobileMoney"))]])}${paymentRequestStatusNotice()}${recordTable("Mobile-money request tracking", requestRows, ["externalReference", "provider", "purpose", "amount", "currencyCode", "payerPhone", "status", "statusMessage", "requestedAt", "completedAt"])}${recordTable("Payment lifecycle", paymentRows, ["date", "reference", "description", "paymentRoute", "amount", "paymentStatus", "receiptStatus"])}${recordTable("Monthly savings and deposit performance", monthlyPerformance, ["date", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"])}` : ""}
   `;
 }
 
@@ -4600,6 +4601,25 @@ function memberPaymentLifecycleRows(dash) {
     receiptStatus: "Not receipted"
   }));
   return [...draftRows, ...requestRows, ...postedRows].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+}
+
+function memberPaymentRequestRows() {
+  return (state.memberData.paymentRequests || []).map((request) => ({
+    ...request,
+    action: "payment-provider-status",
+    actionLabel: normal(request.status) === "posted" ? "View status" : "Check status",
+    actionId: request.id
+  }));
+}
+
+function paymentRequestStatusNotice() {
+  if (!state.paymentRequestStatusMessage && !state.paymentRequestStatusError) return "";
+  return `
+    <div class="notice ${state.paymentRequestStatusError ? "warning" : "compact"}">
+      <strong>${state.paymentRequestStatusError ? "Payment status check failed." : "Payment status updated."}</strong>
+      <span>${escapeHtml(state.paymentRequestStatusError || state.paymentRequestStatusMessage)}</span>
+    </div>
+  `;
 }
 
 function paymentRouteLabel(row) {
@@ -5227,6 +5247,9 @@ function rowAction(row) {
   }
   if (row.action === "member-notification-acknowledge" && row.actionId) {
     return `<button class="table-action" type="button" data-member-notification-acknowledge="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Acknowledge")}</button>`;
+  }
+  if (row.action === "payment-provider-status" && row.actionId) {
+    return `<button class="table-action" type="button" data-payment-provider-status="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Check status")}</button>`;
   }
   if (row.action && row.actionId) {
     return `<button class="table-action" type="button" data-row-action="${escapeHtml(row.action)}" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "View")}</button>`;
@@ -7930,6 +7953,32 @@ async function updatePaymentRequestStatus(status) {
   }
 }
 
+async function refreshPaymentRequestProviderStatus(requestId) {
+  if (!requestId) return;
+  state.paymentRequestStatusMessage = "";
+  state.paymentRequestStatusError = "";
+  if (!state.networkOnline) {
+    state.paymentRequestStatusError = t("offlineActionBlocked");
+    renderShell();
+    return;
+  }
+  try {
+    const request = await api(`/integrations/mobile-money/payment-requests/${encodeURIComponent(requestId)}/provider-status`);
+    const message = `Payment request ${request.externalReference || request.id} is ${labelize(request.status)}.`;
+    state.paymentRequestStatusMessage = message;
+    if (state.auth === "member") {
+      await refreshMember();
+    } else {
+      await refreshAll();
+    }
+    state.paymentRequestStatusMessage = message;
+    renderShell();
+  } catch (error) {
+    state.paymentRequestStatusError = error.message;
+    renderShell();
+  }
+}
+
 async function submitMemberComplaintPayload(payload) {
   return api("/member-auth/mobile-complaints", {
     method: "POST",
@@ -8877,6 +8926,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-member-draft-discard]").forEach((button) => {
     button.addEventListener("click", () => discardMemberDraft(button.dataset.memberDraftDiscard));
+  });
+  document.querySelectorAll("[data-payment-provider-status]").forEach((button) => {
+    button.addEventListener("click", () => refreshPaymentRequestProviderStatus(button.dataset.paymentProviderStatus));
   });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));

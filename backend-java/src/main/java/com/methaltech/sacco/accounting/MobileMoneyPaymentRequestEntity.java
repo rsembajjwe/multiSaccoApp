@@ -112,4 +112,15 @@ class MobileMoneyPaymentRequestEntity {
         }
         this.updatedAt = Instant.now();
     }
+
+    void syncProviderStatus(MobileMoneyProviderStatusResult result) {
+        this.status = result.status();
+        this.statusMessage = result.statusMessage();
+        this.providerReference = result.providerReference();
+        this.callbackPosting = result.callbackPosting();
+        if (Set.of("failed", "expired", "cancelled").contains(result.status())) {
+            this.completedAt = result.checkedAt();
+        }
+        this.updatedAt = result.checkedAt();
+    }
 }
