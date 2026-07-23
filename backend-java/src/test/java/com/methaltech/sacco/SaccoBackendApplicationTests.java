@@ -3963,6 +3963,47 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberCanInitiateMobileMoneyPaymentRequest() throws Exception {
+		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String externalReference = "MM-REQUEST-" + System.currentTimeMillis();
+
+		mockMvc.perform(post("/api/v1/integrations/mobile-money/payment-requests")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "purpose": "savings_deposit",
+								  "amount": 5000,
+								  "payerPhone": "+256700000001",
+								  "externalReference": "%s",
+								  "provider": "mtn"
+								}
+								""".formatted(externalReference)))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.purpose", is("savings_deposit")))
+				.andExpect(jsonPath("$.data.amount", is(5000.0)))
+				.andExpect(jsonPath("$.data.currencyCode", is("UGX")))
+				.andExpect(jsonPath("$.data.provider", is("demo_mobile_money")))
+				.andExpect(jsonPath("$.data.externalReference", is(externalReference)))
+				.andExpect(jsonPath("$.data.status", is("pending_demo_callback")))
+				.andExpect(jsonPath("$.data.callbackPosting", is(true)));
+
+		mockMvc.perform(post("/api/v1/integrations/mobile-money/payment-requests")
+						.contentType("application/json")
+						.content("""
+								{
+								  "purpose": "savings_deposit",
+								  "amount": 5000,
+								  "payerPhone": "+256700000001"
+								}
+								"""))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code", is("MEMBER_AUTH_REQUIRED")));
+	}
+
+	@Test
 	void notificationTemplatesAreManagedAndAppliedPerTenant() throws Exception {
 		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String eventType = "smoke_template_" + System.currentTimeMillis();

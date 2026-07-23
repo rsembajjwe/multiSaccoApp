@@ -8,7 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 @Service
-class MemberAuthService {
+public class MemberAuthService {
 
     private final MemberRepository memberRepository;
     private final MemberSessionRepository memberSessionRepository;
@@ -23,7 +23,7 @@ class MemberAuthService {
         this.tokenGenerator = tokenGenerator;
     }
 
-    CurrentMemberSession currentSession(String authorization) {
+    public CurrentMemberSession currentSession(String authorization) {
         String token = bearerToken(authorization);
         if (token == null) return null;
         return memberSessionRepository
@@ -34,7 +34,7 @@ class MemberAuthService {
                 .orElse(null);
     }
 
-    ResponseEntity<ApiErrorResponse> authRequired() {
+    public ResponseEntity<ApiErrorResponse> authRequired() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiErrorResponse.of(401, "MEMBER_AUTH_REQUIRED", "A valid member bearer token is required."));
     }
@@ -45,6 +45,6 @@ class MemberAuthService {
         return token.isBlank() ? null : token;
     }
 
-    record CurrentMemberSession(MemberSession session, Member member) {
+    public record CurrentMemberSession(MemberSession session, Member member) {
     }
 }

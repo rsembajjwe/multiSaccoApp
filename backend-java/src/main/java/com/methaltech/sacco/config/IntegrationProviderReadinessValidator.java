@@ -12,17 +12,27 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
 
     private final boolean demoLoginsEnabled;
     private final Map<String, String> providers;
+    private final Map<String, String> mtnMomoSettings;
 
     IntegrationProviderReadinessValidator(
             @Value("${sacco.demo-logins.enabled:true}") boolean demoLoginsEnabled,
             @Value("${sacco.providers.sms:}") String smsProvider,
             @Value("${sacco.providers.email:}") String emailProvider,
-            @Value("${sacco.providers.mobile-money:}") String mobileMoneyProvider) {
+            @Value("${sacco.providers.mobile-money:}") String mobileMoneyProvider,
+            @Value("${sacco.integrations.mobile-money.mtn.subscription-key:}") String mtnSubscriptionKey,
+            @Value("${sacco.integrations.mobile-money.mtn.api-user-id:}") String mtnApiUserId,
+            @Value("${sacco.integrations.mobile-money.mtn.api-key:}") String mtnApiKey,
+            @Value("${sacco.integrations.mobile-money.mtn.target-environment:}") String mtnTargetEnvironment) {
         this.demoLoginsEnabled = demoLoginsEnabled;
         this.providers = new LinkedHashMap<>();
         this.providers.put("SACCO_SMS_PROVIDER", smsProvider);
         this.providers.put("SACCO_EMAIL_PROVIDER", emailProvider);
         this.providers.put("SACCO_MOBILE_MONEY_PROVIDER", mobileMoneyProvider);
+        this.mtnMomoSettings = new LinkedHashMap<>();
+        this.mtnMomoSettings.put("SACCO_MTN_MOMO_SUBSCRIPTION_KEY", mtnSubscriptionKey);
+        this.mtnMomoSettings.put("SACCO_MTN_MOMO_API_USER_ID", mtnApiUserId);
+        this.mtnMomoSettings.put("SACCO_MTN_MOMO_API_KEY", mtnApiKey);
+        this.mtnMomoSettings.put("SACCO_MTN_MOMO_TARGET_ENVIRONMENT", mtnTargetEnvironment);
     }
 
     @Override
@@ -42,6 +52,22 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
         if (!invalidProviders.isBlank()) {
             throw new IllegalStateException(
                     "Production startup requires real integration provider configuration for: " + invalidProviders);
+        }
+        String mobileMoneyProvider = providers.get("SACCO_MOBILE_MONEY_PROVIDER");
+        if (!"mtn_momo".equalsIgnoreCase(mobileMoneyProvider)) {
+            throw new IllegalStateException(
+                    "Production startup requires an implemented mobile-money adapter: SACCO_MOBILE_MONEY_PROVIDER=mtn_momo");
+        }
+        if ("mtn_momo".equalsIgnoreCase(mobileMoneyProvider)) {
+            String missingMtnSettings = mtnMomoSettings.entrySet().stream()
+                    .filter((entry) -> isBlank(entry.getValue()))
+                    .map(Map.Entry::getKey)
+                    .reduce((left, right) -> left + ", " + right)
+                    .orElse("");
+            if (!missingMtnSettings.isBlank()) {
+                throw new IllegalStateException(
+                        "Production startup requires MTN MoMo configuration for: " + missingMtnSettings);
+            }
         }
     }
 

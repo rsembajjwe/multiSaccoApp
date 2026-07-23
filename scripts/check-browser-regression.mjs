@@ -838,6 +838,7 @@ async function assertMemberPaymentPosting(page) {
   await page.locator("#memberPaymentPurpose").selectOption("savings_deposit");
   await page.locator("#memberPaymentAmount").fill("5000");
   await page.locator("#memberPaymentProvider").selectOption({ index: 0 });
+  await page.locator("#memberPaymentPhone").fill("+256700000001");
   await page.locator("#memberPaymentReference").fill(reference);
   await page.locator("[data-member-draft-save='payment']").click();
   await expectText(page, "Payment draft saved on this device", "member payment draft saved");
@@ -847,11 +848,9 @@ async function assertMemberPaymentPosting(page) {
   await expectText(page, "Synced", "member payment draft synced");
   await page.locator("[data-module-tab-view='payments'][data-module-tab='mobile-money']").click();
   await page.locator("#memberPaymentForm button[type='submit']").click();
-  await expectText(page, "Payment posted", "member payment posted");
-  await navigateTo(page, "receipts");
-  await expectText(page, reference, "member payment receipt visible");
-  await expectText(page, "Receipted", "member payment receipt lifecycle status");
-  console.log("PASS member payment action");
+  await expectText(page, "Payment request sent", "member payment request sent");
+  await expectText(page, "callback", "member payment waits for callback");
+  console.log("PASS member payment request action");
 }
 
 async function assertMemberQuickActions(page) {

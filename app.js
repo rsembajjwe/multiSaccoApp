@@ -4424,6 +4424,7 @@ function memberPaymentFormPanel(payableLoans) {
         <label><span>${t("paymentPurpose")}</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="loan_repayment">Loan repayment</option></select></label>
         <label><span>${t("amount")}</span><input id="memberPaymentAmount" type="number" min="1" step="1" value="5000"></label>
         <label><span>${t("provider")}</span><select id="memberPaymentProvider"><option value="mtn">MTN Mobile Money</option><option value="airtel">Airtel Money</option><option value="demo">Demo provider</option></select></label>
+        <label><span>Mobile money phone</span><input id="memberPaymentPhone" value="${escapeHtml(state.member?.phone || "")}" placeholder="+256700000001"></label>
         <label><span>${t("reference")}</span><input id="memberPaymentReference" value="MM-${Date.now()}"></label>
         <label class="wide"><span>${t("loanForRepayment")}</span><select id="memberPaymentLoanId"><option value="">Not a loan repayment</option>${payableLoans.map((loan) => `<option value="${escapeHtml(loan.id)}">${escapeHtml(loan.product || loan.applicationNo || loan.id)} - ${money.format(loan.outstandingBalance || loan.balance || 0)}</option>`).join("")}</select></label>
         <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="payment">${t("saveDraft")}</button><button class="button primary" type="submit">${t("postPayment")}</button></div>
@@ -7746,10 +7747,10 @@ async function postMemberPayment(event) {
   }
   if (blockOfflineMemberAction("memberPaymentError")) return;
   try {
-    const callback = await submitMemberPaymentPayload(memberPaymentPayload());
-    state.memberPaymentMessage = `Payment posted: ${callback.externalReference || callback.id}.`;
+    const request = await submitMemberPaymentPayload(memberPaymentPayload());
+    state.memberPaymentMessage = `Payment request sent: ${request.externalReference || request.providerReference || request.id}. ${request.checkoutPrompt || ""}`.trim();
     await refreshMember();
-    state.memberPaymentMessage = `Payment posted: ${callback.externalReference || callback.id}.`;
+    state.memberPaymentMessage = `Payment request sent: ${request.externalReference || request.providerReference || request.id}. ${request.checkoutPrompt || ""}`.trim();
     renderShell();
   } catch (error) {
     state.memberPaymentError = error.message;
@@ -7784,6 +7785,7 @@ function memberPaymentPayload() {
     loanId: purpose === "loan_repayment" ? value("memberPaymentLoanId") : "",
     purpose,
     amount: Number(value("memberPaymentAmount")),
+    payerPhone: value("memberPaymentPhone"),
     externalReference: value("memberPaymentReference"),
     provider: value("memberPaymentProvider"),
     providerPayload: {
@@ -7804,10 +7806,10 @@ function memberComplaintPayload() {
 }
 
 async function submitMemberPaymentPayload(payload) {
-  return api("/integrations/mobile-money/callback", {
+  return api("/integrations/mobile-money/payment-requests", {
     method: "POST",
     body: JSON.stringify(payload)
-  }, "");
+  });
 }
 
 async function submitMemberComplaintPayload(payload) {

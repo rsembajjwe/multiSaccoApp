@@ -10,9 +10,12 @@ import com.methaltech.sacco.loan.LoanRepayment;
 import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.loan.LoanRepository;
 import com.methaltech.sacco.member.Member;
+import com.methaltech.sacco.member.MemberAuthService;
 import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.notification.NotificationService;
+import com.methaltech.sacco.tenant.TenantResponse;
+import com.methaltech.sacco.tenant.TenantService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -49,8 +52,64 @@ class MobileMoneyController {
     private final StatementLineRepository statementLineRepository;
     private final NotificationService notificationService;
     private final AuthService authService;
+    private final MemberAuthService memberAuthService;
+    private final TenantService tenantService;
     private final ObjectMapper objectMapper;
     private final MobileMoneyProvider mobileMoneyProvider;
+
+    @PostMapping("/payment-requests")
+    ResponseEntity<?> requestPayment(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody MemberPaymentRequest body) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        if (!"active".equals(member.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "MEMBER_NOT_ACTIVE", "Only active members can initiate mobile-money payments."));
+        }
+        String purpose = body.purpose().trim();
+        if (!CONTRIBUTION_PURPOSES.contains(purpose) && !"loan_repayment".equals(purpose)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_PURPOSE", "Unsupported mobile-money payment purpose."));
+        }
+        BigDecimal amount = Money.normalize(body.amount());
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_AMOUNT", "Payment amount must be greater than zero."));
+        }
+        String phone = body.payerPhone() == null || body.payerPhone().isBlank() ? member.getPhone() : body.payerPhone().trim();
+        if (phone == null || phone.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "PAYER_PHONE_REQUIRED", "A mobile-money phone number is required."));
+        }
+        if ("loan_repayment".equals(purpose)) {
+            ResponseEntity<?> loanValidation = validateLoanRepaymentRequest(body.loanId(), member, amount);
+            if (loanValidation != null) return loanValidation;
+        }
+        TenantResponse tenant = tenantService.findById(member.getTenantId()).orElse(null);
+        String currencyCode = tenant == null || tenant.currencyCode() == null || tenant.currencyCode().isBlank()
+                ? "UGX"
+                : tenant.currencyCode();
+        String externalReference = body.externalReference() == null || body.externalReference().isBlank()
+                ? "MM-" + UUID.randomUUID()
+                : body.externalReference().trim();
+
+        MobileMoneyPaymentResult result = mobileMoneyProvider.requestPayment(new MobileMoneyPaymentRequest(
+                member.getTenantId(),
+                member.getId(),
+                member.getMembershipNo(),
+                body.loanId(),
+                purpose,
+                amount,
+                currencyCode,
+                phone,
+                externalReference,
+                body.provider(),
+                body.providerPayload()));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.of(result));
+    }
 
     @PostMapping("/callback")
     @Transactional
@@ -220,6 +279,30 @@ class MobileMoneyController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
     }
 
+    private ResponseEntity<?> validateLoanRepaymentRequest(String loanId, Member member, BigDecimal amount) {
+        if (loanId == null || loanId.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "LOAN_REQUIRED", "Loan id is required for mobile-money loan repayments."));
+        }
+        Loan loan = loanRepository.findById(loanId.trim())
+                .filter(candidate -> candidate.getTenantId().equals(member.getTenantId()))
+                .filter(candidate -> candidate.getMemberId().equals(member.getId()))
+                .orElse(null);
+        if (loan == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_LOAN", "Loan does not exist for this member and SACCO."));
+        }
+        if (!"active".equals(loan.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "LOAN_NOT_ACTIVE", "Only active loans can receive repayments."));
+        }
+        if (amount.compareTo(loan.getBalance()) > 0) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "REPAYMENT_EXCEEDS_BALANCE", "Repayment amount cannot exceed the outstanding loan balance."));
+        }
+        return null;
+    }
+
     private Member resolveMember(String tenantId, MobileMoneyCallbackRequest body) {
         if (body.memberId() != null && !body.memberId().isBlank()) {
             return memberRepository.findById(body.memberId().trim())
@@ -275,6 +358,16 @@ class MobileMoneyController {
             @NotBlank String purpose,
             @NotNull BigDecimal amount,
             @NotBlank String externalReference,
+            String provider,
+            Map<String, Object> providerPayload) {
+    }
+
+    record MemberPaymentRequest(
+            String loanId,
+            @NotBlank String purpose,
+            @NotNull BigDecimal amount,
+            String payerPhone,
+            String externalReference,
             String provider,
             Map<String, Object> providerPayload) {
     }
