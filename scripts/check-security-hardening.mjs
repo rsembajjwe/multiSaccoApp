@@ -10,6 +10,10 @@ await check("prod profile disables demo logins by default", () => {
   assert(demoPolicy.includes("STAFF_DEMO_DOMAINS"), "demo staff domain guard is missing");
   assert(demoPolicy.includes("MEMBER_DEMO_DOMAINS"), "demo member email domain guard is missing");
   assert(demoPolicy.includes("MEMBER_DEMO_NUMBER"), "demo member number guard is missing");
+  const demoSanitizer = readFileSync("backend-java/src/main/java/com/methaltech/sacco/identity/DemoSeedDataSanitizer.java", "utf8");
+  assert(demoSanitizer.includes("sacco.demo-logins.enabled:true"), "demo seed sanitizer is not tied to the demo-login flag");
+  assert(demoSanitizer.includes("UPDATE users"), "demo seed sanitizer does not suspend seeded staff users");
+  assert(demoSanitizer.includes("UPDATE members"), "demo seed sanitizer does not suspend seeded member accounts");
 });
 
 await check("health endpoint exposes security headers", async () => {
