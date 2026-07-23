@@ -14,6 +14,9 @@ const required = [
   "SACCO_SMS_PROVIDER",
   "SACCO_EMAIL_PROVIDER",
   "SACCO_MOBILE_MONEY_PROVIDER",
+  "SACCO_BOOTSTRAP_PLATFORM_ADMIN_FULL_NAME",
+  "SACCO_BOOTSTRAP_PLATFORM_ADMIN_EMAIL",
+  "SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD",
   "STAGING_UI_BASE_URL",
   "STAGING_API_BASE_URL"
 ];
@@ -52,6 +55,9 @@ for (const name of required) {
 assertNotPlaceholder("POSTGRES_PASSWORD", failures);
 assertNotPlaceholder("STAGING_UI_BASE_URL", failures);
 assertNotPlaceholder("STAGING_API_BASE_URL", failures);
+assertNotPlaceholder("SACCO_BOOTSTRAP_PLATFORM_ADMIN_FULL_NAME", failures);
+assertNotPlaceholder("SACCO_BOOTSTRAP_PLATFORM_ADMIN_EMAIL", failures);
+assertNotPlaceholder("SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD", failures);
 
 if (String(values.SACCO_DEMO_LOGINS_ENABLED).toLowerCase() !== "false") {
   failures.push("SACCO_DEMO_LOGINS_ENABLED must be false before staging handoff.");
@@ -95,9 +101,18 @@ for (const name of ["STAGING_UI_BASE_URL", "STAGING_API_BASE_URL"]) {
 }
 
 for (const name of ["SACCO_SMS_PROVIDER", "SACCO_EMAIL_PROVIDER", "SACCO_MOBILE_MONEY_PROVIDER"]) {
-  if (String(values[name] ?? "").startsWith("demo_")) {
-    warnings.push(`${name} is still a demo provider. This is acceptable for staging UAT only if recorded in release evidence.`);
+  const value = String(values[name] ?? "").trim().toLowerCase();
+  if (placeholderValues.has(value) || value.startsWith("replace_with_")) {
+    failures.push(`${name} must be replaced with a real provider id.`);
   }
+  if (value.startsWith("demo_")) {
+    failures.push(`${name} must not use a demo provider when demo logins are disabled.`);
+  }
+}
+
+const bootstrapPassword = String(values.SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD ?? "");
+if (bootstrapPassword.length < 10 || !/[A-Z]/.test(bootstrapPassword) || !/[a-z]/.test(bootstrapPassword) || !/[0-9]/.test(bootstrapPassword)) {
+  failures.push("SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD must be at least 10 characters and include uppercase, lowercase, and a number.");
 }
 
 const gitignore = existsSync(".gitignore") ? readFileSync(".gitignore", "utf8") : "";
