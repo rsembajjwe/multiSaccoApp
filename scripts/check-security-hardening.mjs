@@ -6,6 +6,10 @@ const checks = [];
 await check("prod profile disables demo logins by default", () => {
   const prodProperties = readFileSync("backend-java/src/main/resources/application-prod.properties", "utf8");
   assert(prodProperties.includes("sacco.demo-logins.enabled=${SACCO_DEMO_LOGINS_ENABLED:false}"));
+  const demoPolicy = readFileSync("backend-java/src/main/java/com/methaltech/sacco/identity/DemoCredentialPolicy.java", "utf8");
+  assert(demoPolicy.includes("STAFF_DEMO_DOMAINS"), "demo staff domain guard is missing");
+  assert(demoPolicy.includes("MEMBER_DEMO_DOMAINS"), "demo member email domain guard is missing");
+  assert(demoPolicy.includes("MEMBER_DEMO_NUMBER"), "demo member number guard is missing");
 });
 
 await check("health endpoint exposes security headers", async () => {
