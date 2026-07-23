@@ -2335,7 +2335,7 @@ function saccoRegistrationTabContent(applications) {
   if (state.saccoRegistrationTab === "applications") {
     return `
       ${tenantDetailPanel()}
-      ${recordTable(t("saccoApplicationList"), applications, ["saccoCode", "name", "district", "registrationNo", "licenseExpiry", "onboarding", "status"])}
+      ${recordTable(t("saccoApplicationList"), applications, ["saccoCode", "name", "country", "currencyCode", "district", "registrationNo", "licenseExpiry", "onboarding", "status"])}
     `;
   }
   if (state.saccoRegistrationTab === "self") return selfRegistrationApprovalPanel();
@@ -2461,9 +2461,9 @@ function saccoAccounts() {
       ${summary(t("withoutSubscription"), rows.filter((row) => !subscriptions.some((sub) => sub.tenantId === row.id)).length, "Needs billing setup", "Assign")}
       ${summary(t("expiringSoon"), rows.filter((row) => normal(row.subscriptionStatus).includes("expired") || normal(row.accountHealth).includes("risk")).length, "Billing and access risk", "Renew")}
     </div>
-    ${filterToolbar("Search SACCO code, name, district, status, subscription or package", "Activate SACCO", "Export accounts")}
+    ${filterToolbar("Search SACCO code, name, country, currency, district, status, subscription or package", "Activate SACCO", "Export accounts")}
     ${tenantDetailPanel()}
-    ${recordTable("SACCO account health", rows, ["saccoCode", "name", "district", "status", "accountHealth", "subscriptionStatus", "packageName", "billableMembers", "expiry"])}
+    ${recordTable("SACCO account health", rows, ["saccoCode", "name", "country", "currencyCode", "district", "status", "accountHealth", "subscriptionStatus", "packageName", "billableMembers", "expiry"])}
   `;
 }
 
@@ -5462,6 +5462,8 @@ function tenantDetailPanel() {
       <div class="source-grid">
         ${mini("Activation state", tenantStatusLabel(tenant.status))}
         ${mini("SACCO code", tenant.abbreviation)}
+        ${mini("Country", tenant.country)}
+        ${mini("Currency", tenant.currencyCode)}
         ${mini("District", tenant.district)}
         ${mini("Parish", profileLocationPart(profile, "Parish"))}
         ${mini("Village", profileLocationPart(profile, "Village"))}

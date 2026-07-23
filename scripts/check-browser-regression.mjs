@@ -310,6 +310,8 @@ async function assertPublicSaccoRegistration(page) {
   await expectText(page, "Complete SACCO details", "public SACCO registration form");
   await page.locator("#publicTenantName").fill(saccoName);
   await page.locator("#publicTenantRegistrationNo").fill(`PUB-${stamp}`);
+  await page.locator("#publicTenantCountry").selectOption("kenya");
+  await expectInputValue(page, "#publicTenantCurrencyCode", "KES", "public SACCO currency follows country");
   await page.locator("#publicTenantDistrict").fill("Wakiso");
   await page.locator("#publicTenantParish").fill("Nansana");
   await page.locator("#publicTenantVillage").fill("Central");
@@ -640,8 +642,12 @@ async function assertPlatformDashboardCardNavigation(page) {
 async function assertSaccoRegistrationTabs(page) {
   await page.locator("[data-sacco-registration-tab='platform']").click();
   await expectText(page, "Register SACCO", "platform SACCO registration tab");
+  await expectText(page, "Country", "platform SACCO country field");
+  await page.locator("#newTenantCountry").selectOption("nigeria");
+  await expectInputValue(page, "#newTenantCurrencyCode", "NGN", "platform SACCO currency follows country");
   await page.locator("[data-sacco-registration-tab='applications']").click();
   await expectText(page, "SACCO application list", "SACCO application list tab");
+  await expectText(page, "Currency Code", "SACCO application currency column");
   await page.locator("[data-sacco-registration-tab='self']").click();
   await expectText(page, "Self-registration approval path", "self-registration approval tab");
   await page.locator("[data-sacco-registration-tab='applications']").click();
@@ -1085,6 +1091,12 @@ async function expectNoVisibleText(page, text, label) {
   if (bodyText.toLowerCase().includes(text.toLowerCase())) {
     throw new Error(`${label} should not be visible: ${text}`);
   }
+  console.log(`PASS ${label}`);
+}
+
+async function expectInputValue(page, selector, value, label) {
+  const actual = await page.locator(selector).inputValue();
+  if (actual !== value) throw new Error(`${label} expected ${value}, got ${actual}`);
   console.log(`PASS ${label}`);
 }
 
