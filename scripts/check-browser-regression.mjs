@@ -94,6 +94,7 @@ try {
     ["overview", ["Transaction control focus"]],
     ["capture", ["New transaction screen"]],
     ["receipting", ["Receipting queue", "Pending posting", "Receipt ready", "Payment route"]],
+    ["receipts", ["Receipt register", "SACCO receipt register", "Total receipted"]],
     ["list", ["Transaction list"]]
   ]);
   await assertTransactionWorkflow(page);
@@ -774,6 +775,9 @@ async function assertTransactionWorkflow(page) {
   await expectText(page, "Transaction decision checklist", "transaction decision checklist");
   await expectText(page, "Approve/post transaction", "transaction approve action");
   await expectText(page, "Reverse posted transaction", "transaction reverse action");
+  await page.locator("[data-module-tab-view='transactions'][data-module-tab='receipts']").click();
+  await expectText(page, "Receipt register", "transaction receipt register tab");
+  await expectText(page, "SACCO receipt register", "transaction receipt register table");
   console.log("PASS transaction workflow");
 }
 

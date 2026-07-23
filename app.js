@@ -2510,7 +2510,8 @@ function transactionsView() {
   const posted = rows.filter((row) => normal(row.status) === "posted");
   const reversed = rows.filter((row) => row.originalTransactionId || normal(row.status).includes("reversed"));
   const receiptingQueue = transactionReceiptingQueue(rows);
-  const tabs = [["overview", t("control")], ["capture", t("newTransactionScreen")], ["receipting", "Receipting queue"], ["detail", t("transactionDetail")], ["list", t("transactionList")]];
+  const receiptRegister = transactionReceiptRegister(rows);
+  const tabs = [["overview", t("control")], ["capture", t("newTransactionScreen")], ["receipting", "Receipting queue"], ["receipts", "Receipt register"], ["detail", t("transactionDetail")], ["list", t("transactionList")]];
   const tab = activeModuleTab("transactions", tabs);
   return `
     <div class="dashboard-grid">
@@ -2525,17 +2526,45 @@ function transactionsView() {
       ["Maker-checker", `${pending.length} transaction(s) are waiting for Treasurer/Admin approval.`, pending.length ? "Pending" : "Clear"],
       ["Receipts", `${posted.length} posted transaction(s) can produce member receipts.`, posted.length ? "Ready" : "Pending"],
       ["Receipting queue", `${receiptingQueue.length} payment item(s) need posting, receipt loading or member follow-up.`, receiptingQueue.length ? "Open" : "Clear"],
+      ["Receipt register", `${receiptRegister.length} posted receipt record(s) are available for member follow-up.`, receiptRegister.length ? "Available" : "Pending"],
       ["Treasurer cash", "Cash savings deposits and loan repayments are captured here, approved, then receipted for the member.", "Office route"],
       ["Mobile money", "Member self-service payments arrive through provider callbacks and are reconciled against posted transactions.", "Provider route"],
       ["Reversals", "Posted original transactions require a reason before reversal is created.", "Controlled"]
     ]) : ""}
     ${tab === "capture" ? transactionFormPanel() : ""}
     ${tab === "receipting" ? transactionReceiptingPanel(receiptingQueue) : ""}
+    ${tab === "receipts" ? transactionReceiptRegisterPanel(receiptRegister) : ""}
     ${tab === "detail" ? (transactionDetailPanel(rows) || emptyState("Transaction detail and reversal", "Select a transaction from the list to review receipt, approval and reversal actions.")) : ""}
     ${tab === "list" ? `
       ${filterToolbar("Search by reference, member, channel, status, amount or user", "New transaction", "Print receipt")}
       ${recordTable("Transaction list", rows, ["reference", "postedAt", "memberName", "type", "paymentRoute", "amount", "paymentStatus", "receiptStatus", "reversalStatus", "status"])}
     ` : ""}
+  `;
+}
+
+function transactionReceiptRegisterPanel(rows) {
+  const mobile = rows.filter((row) => row.paymentRoute === "Mobile money");
+  const treasurer = rows.filter((row) => row.paymentRoute === "Treasurer cash");
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Receipt register</h2>
+          <p>Posted member receipts for Treasurer/Admin printing, member follow-up and audit evidence.</p>
+        </div>
+        <span class="status ${rows.length ? "active" : "pending"}">${rows.length ? "Receipts available" : "No receipts"}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Receipts", rows.length)}
+        ${mini("Total receipted", money.format(sum(rows, "amount")))}
+        ${mini("Mobile money", mobile.length)}
+        ${mini("Treasurer cash", treasurer.length)}
+        ${mini("Loan repayments", rows.filter((row) => normal(row.type).includes("loan")).length)}
+        ${mini("Savings deposits", rows.filter((row) => normal(row.type).includes("saving")).length)}
+      </div>
+    </section>
+    ${filterToolbar("Search receipts by receipt number, member, route, reference or amount", "Download register", "Print receipts")}
+    ${recordTable("SACCO receipt register", rows, ["receiptNo", "postedAt", "memberName", "type", "paymentRoute", "amount", "receiptStatus", "reference"])}
   `;
 }
 
@@ -5859,6 +5888,20 @@ function transactionReceiptingQueue(rows) {
     });
 }
 
+function transactionReceiptRegister(rows) {
+  return rows
+    .filter((row) => normal(row.status) === "posted" && !row.originalTransactionId)
+    .map((row) => ({
+      ...row,
+      receiptNo: `RCT-${row.reference || row.id}`,
+      receiptStatus: "Receipted",
+      action: "transaction-detail",
+      actionLabel: "Receipt",
+      actionId: row.id
+    }))
+    .sort((a, b) => new Date(b.postedAt || b.createdAt || 0) - new Date(a.postedAt || a.createdAt || 0));
+}
+
 function transactionDetailPanel(rows) {
   const transaction = rows.find((item) => item.id === state.selectedTransactionId);
   if (!transaction) return "";
@@ -5910,7 +5953,30 @@ function transactionDetailPanel(rows) {
           ` : `<span class="status pending">View only</span>`}
         </div>
       </form>
-      ${state.selectedTransactionReceipt ? `<section class="receipt-box"><h3>Receipt preview</h3><pre>${escapeHtml(state.selectedTransactionReceipt.printableText || "")}</pre></section>` : ""}
+      ${state.selectedTransactionReceipt ? transactionReceiptPreview(state.selectedTransactionReceipt) : ""}
+    </section>
+  `;
+}
+
+function transactionReceiptPreview(receipt) {
+  return `
+    <section class="receipt-box">
+      <div class="panel-heading">
+        <div>
+          <h3>Receipt preview</h3>
+          <p>${escapeHtml(receipt.receiptNo || "Receipt")} - ${escapeHtml(receipt.memberName || receipt.membershipNo || "Member")}</p>
+        </div>
+        <span class="status active">Receipted</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Receipt number", receipt.receiptNo)}
+        ${mini("SACCO", receipt.tenantName)}
+        ${mini("Member", receipt.membershipNo ? `${receipt.memberName || "Member"} (${receipt.membershipNo})` : receipt.memberName)}
+        ${mini("Payment route", paymentRouteLabel(receipt))}
+        ${mini("Amount", money.format(receipt.amount || 0))}
+        ${mini("Issued at", receipt.issuedAt ? formatDateTime(receipt.issuedAt) : formatDateTime(new Date().toISOString()))}
+      </div>
+      <pre>${escapeHtml(receipt.printableText || "")}</pre>
     </section>
   `;
 }

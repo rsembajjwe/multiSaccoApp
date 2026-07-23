@@ -82,6 +82,8 @@ const contracts = [
   "Receipting queue",
   "Pending posting",
   "Receipt ready",
+  "Receipt register",
+  "SACCO receipt register",
   "Transaction detail and reversal",
   "Transaction decision checklist",
   "Approve/post transaction",
