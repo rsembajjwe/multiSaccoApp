@@ -68,6 +68,7 @@ export async function handleApi(request, response, url) {
         ok: true,
         service: "multiSaccoApp API",
         version: "0.1.0",
+        demoLoginsEnabled: true,
         timestamp: new Date().toISOString()
       });
     }

@@ -3,7 +3,7 @@ const STAFF_TOKEN_KEY = "tereka-staff-token";
 const MEMBER_TOKEN_KEY = "tereka-member-token";
 const MEMBER_DRAFTS_KEY = "tereka-member-offline-drafts-v1";
 const LOCALE_KEY = "tereka-locale";
-const SHOW_DEMO_TOOLS = new URLSearchParams(window.location.search).has("demo");
+const DEMO_TOOLS_REQUESTED = new URLSearchParams(window.location.search).has("demo");
 
 const DEFAULT_REGION = Object.freeze({
   locale: "en-UG",
@@ -1014,6 +1014,10 @@ const state = {
   authTab: "login",
   locale: localStorage.getItem(LOCALE_KEY) || "en-UG",
   networkOnline: typeof navigator === "undefined" ? true : navigator.onLine,
+  runtime: {
+    demoLoginsEnabled: false,
+    healthChecked: false
+  },
   token: "",
   user: null,
   member: null,
@@ -1436,9 +1440,10 @@ function currentModule() {
   return visibleModules().find((item) => item[0] === state.currentView) || visibleModules()[0];
 }
 
-function init() {
+async function init() {
   applyRegionalDocumentSettings();
   bindNetworkStatusEvents();
+  await loadRuntimeMetadata();
   state.token = localStorage.getItem(STAFF_TOKEN_KEY) || "";
   const memberToken = localStorage.getItem(MEMBER_TOKEN_KEY) || "";
   if (state.token) {
@@ -1449,6 +1454,27 @@ function init() {
   } else {
     renderLogin();
   }
+}
+
+async function loadRuntimeMetadata() {
+  try {
+    const health = await api("/health", {}, "");
+    state.runtime = {
+      ...state.runtime,
+      demoLoginsEnabled: health.demoLoginsEnabled === true,
+      healthChecked: true
+    };
+  } catch {
+    state.runtime = {
+      ...state.runtime,
+      demoLoginsEnabled: false,
+      healthChecked: true
+    };
+  }
+}
+
+function demoToolsEnabled() {
+  return DEMO_TOOLS_REQUESTED && state.runtime.demoLoginsEnabled === true;
 }
 
 function bindNetworkStatusEvents() {
@@ -1539,7 +1565,7 @@ function renderLogin() {
       </section>
       <section class="login-card">
         ${authPanelContent()}
-        ${SHOW_DEMO_TOOLS ? `<section class="demo-panel">
+        ${demoToolsEnabled() ? `<section class="demo-panel">
           <div>
             <strong>${t("demoAccess")}</strong>
             <span>${t("demoAccessCopy")}</span>
@@ -4916,7 +4942,7 @@ function memberSecurityView() {
       ${summary(t("session"), state.token ? t("active") : t("signedOut"), "Bearer token stored on this device", t("review"))}
       ${summary(t("loginCode"), contextCode(), "Required with username and password", "Confirm")}
       ${summary(t("password"), t("protected"), "Never displayed by Tereka Online", "Change")}
-      ${summary(t("demoAccess"), SHOW_DEMO_TOOLS ? "Visible" : t("demoAccessHidden"), "Disabled outside dev/demo", "Audit")}
+      ${summary(t("demoAccess"), demoToolsEnabled() ? "Visible" : t("demoAccessHidden"), "Disabled outside dev/demo", "Audit")}
     </div>
     ${moduleTabs("security", tabs, tab)}
     ${tab === "session" ? memberSecuritySessionPanel(expiresAt) : ""}
@@ -4968,7 +4994,7 @@ function memberSecurityRecoveryPanel() {
 
 function memberSecuritySafetyPanel() {
   return `
-    ${memberTabReadinessPanel("Member safety actions", "Use these actions when a device, password or account detail looks suspicious.", [["Report issue", "Available"], ["Logout", "Immediate"], ["Demo access", SHOW_DEMO_TOOLS ? "Visible" : "Hidden"], ["Audit", "Session tracked"]])}
+    ${memberTabReadinessPanel("Member safety actions", "Use these actions when a device, password or account detail looks suspicious.", [["Report issue", "Available"], ["Logout", "Immediate"], ["Demo access", demoToolsEnabled() ? "Visible" : "Hidden"], ["Audit", "Session tracked"]])}
     ${tabsCard("Security actions", ["Change password request", "Logout current device", "Report suspicious access", "Update phone/email", "Review login code"])}
   `;
 }

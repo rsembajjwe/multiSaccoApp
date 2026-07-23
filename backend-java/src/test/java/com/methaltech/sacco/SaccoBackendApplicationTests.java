@@ -52,6 +52,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(header().string("Content-Security-Policy", containsString("default-src 'self'")))
 				.andExpect(header().string("Content-Security-Policy", containsString("frame-ancestors 'none'")))
 				.andExpect(jsonPath("$.data.ok", is(true)))
+				.andExpect(jsonPath("$.data.demoLoginsEnabled", is(true)))
 				.andExpect(jsonPath("$.data.service", is("multiSaccoApp Java API")));
 	}
 

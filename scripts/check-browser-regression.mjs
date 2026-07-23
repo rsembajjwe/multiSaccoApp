@@ -40,6 +40,7 @@ try {
   await expectText(page, "Forgot password", "forgot password link");
   await assertLoginLocaleSwitch(page);
   await expectNoVisibleText(page, "Demo access", "demo tools hidden by default");
+  await assertDemoAccessGate(page);
   await assertPasswordRecovery(page);
   await assertPublicSaccoRegistration(page);
 
@@ -277,6 +278,19 @@ async function assertJavaApiProxy() {
     await delay(1000);
   }
   throw new Error(lastError || "Java API proxy did not become healthy.");
+}
+
+async function assertDemoAccessGate(page) {
+  const response = await fetch(`${uiBaseUrl}/api/v1/health`);
+  const payload = await response.json();
+  await page.goto(`${uiBaseUrl}/?demo=1`, { waitUntil: "domcontentloaded" });
+  await clearSession(page);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  if (payload.data?.demoLoginsEnabled === true) {
+    await expectText(page, "Demo access", "demo tools visible only when backend allows");
+  } else {
+    await expectNoVisibleText(page, "Demo access", "demo tools backend-gated");
+  }
 }
 
 async function clearSession(page) {
