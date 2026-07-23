@@ -3965,9 +3965,10 @@ class SaccoBackendApplicationTests {
 	@Test
 	void memberCanInitiateMobileMoneyPaymentRequest() throws Exception {
 		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String externalReference = "MM-REQUEST-" + System.currentTimeMillis();
 
-		mockMvc.perform(post("/api/v1/integrations/mobile-money/payment-requests")
+		MvcResult requestResult = mockMvc.perform(post("/api/v1/integrations/mobile-money/payment-requests")
 						.header("Authorization", "Bearer " + memberToken)
 						.contentType("application/json")
 						.content("""
@@ -3988,13 +3989,69 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.provider", is("demo_mobile_money")))
 				.andExpect(jsonPath("$.data.externalReference", is(externalReference)))
 				.andExpect(jsonPath("$.data.status", is("pending_demo_callback")))
-				.andExpect(jsonPath("$.data.callbackPosting", is(true)));
+				.andExpect(jsonPath("$.data.callbackPosting", is(true)))
+				.andReturn();
+		String requestId = objectMapper.readTree(requestResult.getResponse().getContentAsString()).path("data").path("id").asString();
 
 		mockMvc.perform(get("/api/v1/integrations/mobile-money/payment-requests")
 						.header("Authorization", "Bearer " + memberToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[0].externalReference", is(externalReference)))
 				.andExpect(jsonPath("$.data[0].status", is("pending_demo_callback")));
+
+		mockMvc.perform(patch("/api/v1/integrations/mobile-money/payment-requests/%s/status".formatted(requestId))
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "status": "failed",
+								  "reason": "Member tokens cannot close staff exceptions."
+								}
+								"""))
+				.andExpect(status().isUnauthorized());
+
+		mockMvc.perform(patch("/api/v1/integrations/mobile-money/payment-requests/%s/status".formatted(requestId))
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "status": "waiting",
+								  "reason": "Invalid operational status."
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_PAYMENT_REQUEST_STATUS")));
+
+		mockMvc.perform(patch("/api/v1/integrations/mobile-money/payment-requests/%s/status".formatted(requestId))
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "status": "failed",
+								  "reason": "Provider prompt expired before member confirmation."
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("failed")))
+				.andExpect(jsonPath("$.data.statusMessage", is("Provider prompt expired before member confirmation.")));
+
+		String postedReference = externalReference + "-POSTED";
+		MvcResult postedRequestResult = mockMvc.perform(post("/api/v1/integrations/mobile-money/payment-requests")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "purpose": "savings_deposit",
+								  "amount": 5000,
+								  "payerPhone": "+256700000001",
+								  "externalReference": "%s",
+								  "provider": "mtn"
+								}
+								""".formatted(postedReference)))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.data.status", is("pending_demo_callback")))
+				.andReturn();
+		String postedRequestId = objectMapper.readTree(postedRequestResult.getResponse().getContentAsString()).path("data").path("id").asString();
 
 		mockMvc.perform(post("/api/v1/integrations/mobile-money/callback")
 						.contentType("application/json")
@@ -4007,14 +4064,26 @@ class SaccoBackendApplicationTests {
 								  "externalReference": "%s",
 								  "provider": "demo_mobile_money"
 								}
-								""".formatted(externalReference)))
+								""".formatted(postedReference)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.status", is("posted")));
+
+		mockMvc.perform(patch("/api/v1/integrations/mobile-money/payment-requests/%s/status".formatted(postedRequestId))
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "status": "cancelled",
+								  "reason": "Cannot cancel after callback posting."
+								}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("PAYMENT_REQUEST_ALREADY_POSTED")));
 
 		mockMvc.perform(get("/api/v1/integrations/mobile-money/payment-requests")
 						.header("Authorization", "Bearer " + memberToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[0].externalReference", is(externalReference)))
+				.andExpect(jsonPath("$.data[0].externalReference", is(postedReference)))
 				.andExpect(jsonPath("$.data[0].status", is("posted")));
 
 		mockMvc.perform(post("/api/v1/integrations/mobile-money/payment-requests")

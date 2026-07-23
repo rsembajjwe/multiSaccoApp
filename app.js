@@ -1076,6 +1076,10 @@ const state = {
   selectedPackageId: "",
   selectedPackageMessage: "",
   selectedPackageError: "",
+  selectedPaymentRequestId: "",
+  paymentRequestStatusReason: "",
+  paymentRequestStatusMessage: "",
+  paymentRequestStatusError: "",
   platformPolicyMessage: "",
   platformPolicyError: "",
   memberFormMessage: "",
@@ -3693,7 +3697,10 @@ function reconciliationView() {
       ${recordTable("Unmatched bank statement lines", unmatchedStatementLines, ["externalReference", "accountCode", "channel", "amount", "description", "statementDate"])}
       ${recordTable("Unmatched ledger lines", unmatchedLedgerLines, ["reference", "accountCode", "accountName", "sourceType", "amount", "postedAt"])}
     </div>` : ""}
-    ${tab === "requests" ? recordTable("Mobile-money payment requests", paymentRequests, ["externalReference", "provider", "purpose", "amount", "currencyCode", "payerPhone", "status", "requestedAt", "completedAt"]) : ""}
+    ${tab === "requests" ? `
+      ${paymentRequestOperationsPanel(paymentRequests)}
+      ${recordTable("Mobile-money payment requests", paymentRequests, ["externalReference", "provider", "purpose", "amount", "currencyCode", "payerPhone", "status", "requestedAt", "completedAt"])}
+    ` : ""}
     ${tab === "callbacks" ? recordTable("Provider callbacks", callbacks, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"]) : ""}
   `;
 }
@@ -3720,6 +3727,56 @@ function reconciliationControlPanel(summaryData) {
         ${mini("Unmatched ledger amount", money.format(summaryData.unmatchedLedgerAmount || 0))}
         ${mini("Matched amount", money.format(summaryData.matchedAmount || 0))}
       </div>
+    </section>
+  `;
+}
+
+function paymentRequestOperationsPanel(requests) {
+  const rows = requests || [];
+  const terminalStatuses = new Set(["posted", "failed", "expired", "cancelled"]);
+  const actionable = rows.filter((row) => !terminalStatuses.has(normal(row.status)));
+  const selected = rows.find((row) => row.id === state.selectedPaymentRequestId) || actionable[0] || rows[0];
+  if (!rows.length) {
+    return emptyState("No payment requests yet", "Member mobile-money requests will appear here after they are initiated from the member portal.");
+  }
+  const canManage = hasPermission("accounting:post");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Payment request operations</h2>
+          <p>Track member-initiated mobile-money requests and close stale provider prompts with audit-ready statuses.</p>
+        </div>
+        <span class="status ${actionable.length ? "pending" : "active"}">${actionable.length ? `${actionable.length} open` : "All closed"}</span>
+      </div>
+      ${state.paymentRequestStatusMessage ? `<div class="notice success">${escapeHtml(state.paymentRequestStatusMessage)}</div>` : ""}
+      ${state.paymentRequestStatusError ? `<div class="notice warning">${escapeHtml(state.paymentRequestStatusError)}</div>` : ""}
+      <div class="form-grid">
+        <label>
+          <span>Request</span>
+          <select id="paymentRequestSelect" ${canManage ? "" : "disabled"}>
+            ${rows.map((row) => `<option value="${escapeHtml(row.id)}" ${selected?.id === row.id ? "selected" : ""}>${escapeHtml(row.externalReference || row.id)} - ${escapeHtml(labelize(row.status || "pending"))}</option>`).join("")}
+          </select>
+        </label>
+        <label>
+          <span>Status note</span>
+          <input id="paymentRequestReason" value="${escapeHtml(state.paymentRequestStatusReason)}" placeholder="Reason for status update">
+        </label>
+      </div>
+      ${selected ? `<div class="source-grid compact">
+        ${mini("Selected request", selected.externalReference || selected.id)}
+        ${mini("Member", selected.memberIdentifier || selected.memberId)}
+        ${mini("Amount", money.format(selected.amount || 0))}
+        ${mini("Phone", selected.payerPhone || t("none"))}
+        ${mini("Status", labelize(selected.status || "pending"))}
+        ${mini("Requested", formatDateTime(selected.requestedAt))}
+      </div>` : ""}
+      <div class="action-row">
+        <button class="button secondary" type="button" data-payment-request-status="failed" ${canManage && selected && !terminalStatuses.has(normal(selected.status)) ? "" : "disabled"}>Mark failed</button>
+        <button class="button secondary" type="button" data-payment-request-status="expired" ${canManage && selected && !terminalStatuses.has(normal(selected.status)) ? "" : "disabled"}>Mark expired</button>
+        <button class="button danger" type="button" data-payment-request-status="cancelled" ${canManage && selected && !terminalStatuses.has(normal(selected.status)) ? "" : "disabled"}>Cancel request</button>
+      </div>
+      ${canManage ? "" : `<p class="muted-note">Only users with posting rights can change payment request status.</p>`}
     </section>
   `;
 }
@@ -7830,6 +7887,36 @@ async function submitMemberPaymentPayload(payload) {
   });
 }
 
+async function updatePaymentRequestStatus(status) {
+  const requestId = state.selectedPaymentRequestId || dataRows("mobileMoneyPaymentRequests")[0]?.id;
+  if (!requestId) return;
+  state.paymentRequestStatusMessage = "";
+  state.paymentRequestStatusError = "";
+  if (!state.networkOnline) {
+    state.paymentRequestStatusError = t("offlineActionBlocked");
+    renderShell();
+    return;
+  }
+  try {
+    const request = await api(`/integrations/mobile-money/payment-requests/${encodeURIComponent(requestId)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status,
+        reason: state.paymentRequestStatusReason
+      })
+    });
+    state.selectedPaymentRequestId = request.id;
+    state.paymentRequestStatusReason = "";
+    state.paymentRequestStatusMessage = `Payment request ${request.externalReference || request.id} marked ${labelize(request.status)}.`;
+    await refreshAll();
+    state.paymentRequestStatusMessage = `Payment request ${request.externalReference || request.id} marked ${labelize(request.status)}.`;
+    renderShell();
+  } catch (error) {
+    state.paymentRequestStatusError = error.message;
+    renderShell();
+  }
+}
+
 async function submitMemberComplaintPayload(payload) {
   return api("/member-auth/mobile-complaints", {
     method: "POST",
@@ -8506,6 +8593,18 @@ function bindEvents() {
       state.moduleTabs[button.dataset.moduleTabView] = button.dataset.moduleTab;
       renderShell();
     });
+  });
+  document.querySelector("#paymentRequestSelect")?.addEventListener("change", (event) => {
+    state.selectedPaymentRequestId = event.target.value;
+    state.paymentRequestStatusMessage = "";
+    state.paymentRequestStatusError = "";
+    renderShell();
+  });
+  document.querySelector("#paymentRequestReason")?.addEventListener("input", (event) => {
+    state.paymentRequestStatusReason = event.target.value;
+  });
+  document.querySelectorAll("[data-payment-request-status]").forEach((button) => {
+    button.addEventListener("click", () => updatePaymentRequestStatus(button.dataset.paymentRequestStatus));
   });
   document.querySelectorAll("[data-row-action='user-detail']").forEach((button) => {
     button.addEventListener("click", () => openUserDetail(button.dataset.rowId));

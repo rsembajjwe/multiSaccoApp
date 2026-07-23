@@ -34,6 +34,7 @@ try {
   const login = await api("POST", "/auth/login", {
     saccoCode: "PLATFORM",
     username: "admin@platform.local",
+    email: "admin@platform.local",
     password: "Admin@12345"
   });
   assert(login.data.token, "Login should return a token");
@@ -114,6 +115,7 @@ try {
   const saccoLogin = await api("POST", "/auth/login", {
     saccoCode: "GVS",
     username: "admin@greenvalley.local",
+    email: "admin@greenvalley.local",
     password: "Sacco@12345"
   });
   const saccoToken = saccoLogin.data.token;
@@ -271,7 +273,43 @@ try {
   assert((mobileComplaint.data.member?.id ?? mobileComplaint.data.memberId) === memberLogin.data.member.id, "Synced mobile complaint should belong to the authenticated member");
   assert(mobileComplaint.data.channel === "mobile_offline_sync", "Synced complaint should record the offline sync channel");
 
+  const failedRequestReference = `MM-REQ-FAIL-${Date.now()}`;
+  const failedPaymentRequest = await api("POST", "/integrations/mobile-money/payment-requests", {
+    purpose: "savings_deposit",
+    amount: 5000,
+    payerPhone: "+256700000001",
+    externalReference: failedRequestReference,
+    provider: "mtn"
+  }, memberToken);
+  assert(failedPaymentRequest.data.status === "pending_demo_callback", "Member mobile-money request should wait for callback posting");
+  assert(failedPaymentRequest.data.tenantId === "tenant_green", "Member payment request should inherit member SACCO scope");
+
+  const memberStatusUpdate = await raw("PATCH", `/integrations/mobile-money/payment-requests/${failedPaymentRequest.data.id}/status`, {
+    status: "failed",
+    reason: "Member cannot close staff exception"
+  }, memberToken);
+  assert(memberStatusUpdate.status === 401, "Member token must not update payment request status");
+
+  const invalidStatusUpdate = await raw("PATCH", `/integrations/mobile-money/payment-requests/${failedPaymentRequest.data.id}/status`, {
+    status: "waiting",
+    reason: "Invalid status"
+  }, saccoToken);
+  assert(invalidStatusUpdate.status === 400, "Staff status update should reject unsupported payment request states");
+
+  const failedStatusUpdate = await api("PATCH", `/integrations/mobile-money/payment-requests/${failedPaymentRequest.data.id}/status`, {
+    status: "failed",
+    reason: "Provider prompt expired during smoke test"
+  }, saccoToken);
+  assert(failedStatusUpdate.data.status === "failed", "SACCO staff should be able to close stale payment requests");
+
   const mobileMoneyReference = `MM-SMOKE-${Date.now()}`;
+  const callbackPaymentRequest = await api("POST", "/integrations/mobile-money/payment-requests", {
+    purpose: "savings_deposit",
+    amount: 30000,
+    payerPhone: "+256700000001",
+    externalReference: mobileMoneyReference,
+    provider: "mtn"
+  }, memberToken);
   const mobileMoneyCallback = await api("POST", "/integrations/mobile-money/callback", {
     tenantId: "tenant_green",
     memberIdentifier: "GVS-0001",
@@ -283,6 +321,12 @@ try {
   });
   assert(mobileMoneyCallback.data.status === "posted", "Mobile-money callback should post");
   assert(mobileMoneyCallback.data.resourceType === "financial_transaction", "Collection callback should create a financial transaction");
+
+  const postedStatusUpdate = await raw("PATCH", `/integrations/mobile-money/payment-requests/${callbackPaymentRequest.data.id}/status`, {
+    status: "cancelled",
+    reason: "Cannot cancel a posted request"
+  }, saccoToken);
+  assert(postedStatusUpdate.status === 409, "Posted payment request should not be manually cancelled");
 
   const duplicateMobileMoneyCallback = await api("POST", "/integrations/mobile-money/callback", {
     tenantId: "tenant_green",
@@ -855,6 +899,7 @@ try {
       const response = await raw("POST", "/auth/login", {
         saccoCode: "PLATFORM",
         username: `bad-login-${index}@example.local`,
+        email: `bad-login-${index}@example.local`,
         password: "wrong-password"
       });
       if (response.status === 429) {

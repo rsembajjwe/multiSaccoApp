@@ -28,6 +28,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -43,6 +45,7 @@ class MobileMoneyController {
 
     private static final String SYSTEM_USER_ID = "user_platform_admin";
     private static final Set<String> CONTRIBUTION_PURPOSES = Set.of("savings_deposit", "share_purchase", "welfare_contribution");
+    private static final Set<String> PAYMENT_REQUEST_STATUSES = Set.of("failed", "expired", "cancelled");
 
     private final MobileMoneyCallbackRepository callbackRepository;
     private final MemberRepository memberRepository;
@@ -207,6 +210,50 @@ class MobileMoneyController {
         if (memberSession == null) return authService.authRequired();
         var requests = paymentRequestRepository.findByMemberIdOrderByRequestedAtDesc(memberSession.member().getId());
         return ResponseEntity.ok(ApiResponse.of(requests.stream().map(MobileMoneyPaymentRequestResponse::from).toList()));
+    }
+
+    @PatchMapping("/payment-requests/{requestId}/status")
+    ResponseEntity<?> updatePaymentRequestStatus(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String requestId,
+            @Valid @RequestBody UpdatePaymentRequestStatusRequest body,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "accounting:post")) {
+            return authService.permissionRequired("accounting:post");
+        }
+        String status = body.status().trim();
+        if (!PAYMENT_REQUEST_STATUSES.contains(status)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_REQUEST_STATUS", "Payment requests can only be marked failed, expired or cancelled by staff."));
+        }
+        MobileMoneyPaymentRequestEntity request = paymentRequestRepository.findById(requestId).orElse(null);
+        if (request == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "PAYMENT_REQUEST_NOT_FOUND", "Mobile-money payment request was not found."));
+        }
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null && !authService.isPlatform(currentSession.user())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot update another SACCO's mobile-money payment request."));
+        }
+        if (tenantId == null) tenantId = request.getTenantId();
+        if (!authService.isPlatform(currentSession.user()) && !request.getTenantId().equals(tenantId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot update another SACCO's mobile-money payment request."));
+        }
+        if (authService.isPlatform(currentSession.user()) && requestedTenantId != null && !requestedTenantId.isBlank() && !request.getTenantId().equals(requestedTenantId.trim())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Requested SACCO scope does not match this mobile-money payment request."));
+        }
+        if ("posted".equals(request.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "PAYMENT_REQUEST_ALREADY_POSTED", "Posted payment requests cannot be changed manually."));
+        }
+        request.updateStatus(status, body.reason());
+        MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(request);
+        return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
     }
 
     private ResponseEntity<?> postContribution(
@@ -416,5 +463,8 @@ class MobileMoneyController {
             String externalReference,
             String provider,
             Map<String, Object> providerPayload) {
+    }
+
+    record UpdatePaymentRequestStatusRequest(@NotBlank String status, String reason) {
     }
 }
