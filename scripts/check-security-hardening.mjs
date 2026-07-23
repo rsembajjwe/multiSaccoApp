@@ -6,10 +6,15 @@ const checks = [];
 await check("prod profile disables demo logins by default", () => {
   const prodProperties = readFileSync("backend-java/src/main/resources/application-prod.properties", "utf8");
   assert(prodProperties.includes("sacco.demo-logins.enabled=${SACCO_DEMO_LOGINS_ENABLED:false}"));
+  assert(prodProperties.includes("sacco.providers.sms=${SACCO_SMS_PROVIDER:}"), "prod SMS provider must not default to demo");
+  assert(prodProperties.includes("sacco.providers.email=${SACCO_EMAIL_PROVIDER:}"), "prod email provider must not default to demo");
+  assert(prodProperties.includes("sacco.providers.mobile-money=${SACCO_MOBILE_MONEY_PROVIDER:}"), "prod mobile-money provider must not default to demo");
   const demoPolicy = readFileSync("backend-java/src/main/java/com/methaltech/sacco/identity/DemoCredentialPolicy.java", "utf8");
   assert(demoPolicy.includes("STAFF_DEMO_DOMAINS"), "demo staff domain guard is missing");
   assert(demoPolicy.includes("MEMBER_DEMO_DOMAINS"), "demo member email domain guard is missing");
   assert(demoPolicy.includes("MEMBER_DEMO_NUMBER"), "demo member number guard is missing");
+  const providerValidator = readFileSync("backend-java/src/main/java/com/methaltech/sacco/config/IntegrationProviderReadinessValidator.java", "utf8");
+  assert(providerValidator.includes("Production startup requires real integration provider configuration"), "provider readiness guard is missing");
   const demoSanitizer = readFileSync("backend-java/src/main/java/com/methaltech/sacco/identity/DemoSeedDataSanitizer.java", "utf8");
   assert(demoSanitizer.includes("sacco.demo-logins.enabled:true"), "demo seed sanitizer is not tied to the demo-login flag");
   assert(demoSanitizer.includes("UPDATE users"), "demo seed sanitizer does not suspend seeded staff users");
