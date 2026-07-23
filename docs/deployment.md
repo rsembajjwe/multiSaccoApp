@@ -97,6 +97,14 @@ This starts a separate isolated Compose project on ports `15433` and `18082`, th
 
 Latest local production-readiness evidence: `npm.cmd run ready:check` passed on `2026-07-18`. The run completed Java/PostgreSQL API smoke tests against `http://127.0.0.1:18082/api/v1`, static UI source/sync contract checks, Java-backed browser regression through `http://127.0.0.1:5179`, browser UAT against `http://127.0.0.1:5180`, security hardening checks, and Docker stack cleanup.
 
+For a fast deployment evidence check without Docker:
+
+```powershell
+npm.cmd run deploy:evidence
+```
+
+This reads `.env` by default, runs the staging preflight checks, and writes a redacted Markdown evidence file under `reports/deployment-evidence`. Use `DEPLOYMENT_ENV_FILE=path\to\envfile` to check another file.
+
 If a port is already in use, call the script directly with alternate ports:
 
 ```powershell

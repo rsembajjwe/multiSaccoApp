@@ -4,6 +4,8 @@ target/
 backups/
 reports/migration-evidence/*
 !reports/migration-evidence/.gitkeep
+reports/deployment-evidence/*
+!reports/deployment-evidence/.gitkeep
 .env
 .env.*
 *.log
