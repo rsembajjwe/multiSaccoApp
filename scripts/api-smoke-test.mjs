@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHmac } from "node:crypto";
 
 const externalBaseUrl = process.env.API_BASE_URL?.replace(/\/$/, "");
 const port = Number(process.env.API_SMOKE_PORT || 5199);
@@ -31,7 +32,8 @@ try {
   assert(health.data.ok === true, "Health endpoint should return ok=true");
 
   const login = await api("POST", "/auth/login", {
-    email: "admin@platform.local",
+    saccoCode: "PLATFORM",
+    username: "admin@platform.local",
     password: "Admin@12345"
   });
   assert(login.data.token, "Login should return a token");
@@ -50,12 +52,17 @@ try {
     name: `Smoke SACCO ${Date.now()}`,
     abbreviation: "SMS",
     registrationNo: `COOP-SMOKE-${Date.now()}`,
-    district: "Kampala",
+    district: "Nairobi",
+    country: "Kenya",
+    localeCode: "en-KE",
+    currencyCode: "KES",
+    currencyDigits: 0,
     licenseExpiry: "2027-12-31",
     packageId: "starter"
   }, platformToken);
   assert(tenant.data.id, "Tenant creation should return a tenant");
   assert(tenant.data.status === "pending_review", "New tenant should start pending review");
+  assert(tenant.data.currencyCode === "KES", "Tenant creation should preserve currency settings");
 
   const approvedTenant = await api("PATCH", `/tenants/${tenant.data.id}/status`, { status: "approved" }, platformToken);
   assert(approvedTenant.data.status === "approved", "Tenant status should update to approved");
@@ -105,7 +112,8 @@ try {
   assert(!("passwordHash" in user.data), "Public user should not expose password hash");
 
   const saccoLogin = await api("POST", "/auth/login", {
-    email: "admin@greenvalley.local",
+    saccoCode: "GVS",
+    username: "admin@greenvalley.local",
     password: "Sacco@12345"
   });
   const saccoToken = saccoLogin.data.token;
@@ -224,6 +232,7 @@ try {
   assert(crossTenantWorkflows.status === 403, "SACCO admin should not list another tenant approval workflows");
 
   const memberLogin = await api("POST", "/member-auth/login", {
+    saccoCode: "GVS",
     identifier: "GVS-0001",
     password: "Member@12345"
   });
@@ -844,7 +853,8 @@ try {
     let rateLimitedLogin = null;
     for (let index = 0; index < 8; index += 1) {
       const response = await raw("POST", "/auth/login", {
-        email: `bad-login-${index}@example.local`,
+        saccoCode: "PLATFORM",
+        username: `bad-login-${index}@example.local`,
         password: "wrong-password"
       });
       if (response.status === 429) {
@@ -883,13 +893,22 @@ async function api(method, path, body, token) {
 }
 
 function raw(method, path, body, token) {
+  const jsonBody = body ? JSON.stringify(body) : undefined;
+  const headers = {
+    ...(body ? { "Content-Type": "application/json" } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+  if (jsonBody && path === "/integrations/mobile-money/callback" && process.env.API_SMOKE_MOBILE_MONEY_CALLBACK_SECRET) {
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    headers["X-Mobile-Money-Timestamp"] = timestamp;
+    headers["X-Mobile-Money-Signature"] = createHmac("sha256", process.env.API_SMOKE_MOBILE_MONEY_CALLBACK_SECRET)
+      .update(`${timestamp}.${jsonBody}`)
+      .digest("hex");
+  }
   return fetch(`${baseUrl}${path}`, {
     method,
-    headers: {
-      ...(body ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: body ? JSON.stringify(body) : undefined
+    headers,
+    body: jsonBody
   });
 }
 
