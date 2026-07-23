@@ -54,6 +54,7 @@ class MobileMoneyController {
     private final AuthService authService;
     private final MemberAuthService memberAuthService;
     private final TenantService tenantService;
+    private final MobileMoneyPaymentRequestRepository paymentRequestRepository;
     private final ObjectMapper objectMapper;
     private final MobileMoneyProvider mobileMoneyProvider;
 
@@ -95,6 +96,10 @@ class MobileMoneyController {
         String externalReference = body.externalReference() == null || body.externalReference().isBlank()
                 ? "MM-" + UUID.randomUUID()
                 : body.externalReference().trim();
+        if (paymentRequestRepository.existsByTenantIdAndExternalReferenceIgnoreCase(member.getTenantId(), externalReference)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "PAYMENT_REFERENCE_EXISTS", "A mobile-money payment request with that reference already exists."));
+        }
 
         MobileMoneyPaymentResult result = mobileMoneyProvider.requestPayment(new MobileMoneyPaymentRequest(
                 member.getTenantId(),
@@ -108,7 +113,12 @@ class MobileMoneyController {
                 externalReference,
                 body.provider(),
                 body.providerPayload()));
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.of(result));
+        MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(MobileMoneyPaymentRequestEntity.from(
+                result,
+                body.loanId(),
+                phone,
+                payload(body.providerPayload())));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
     }
 
     @PostMapping("/callback")
@@ -173,6 +183,32 @@ class MobileMoneyController {
         return ResponseEntity.ok(ApiResponse.of(callbacks.stream().map(MobileMoneyCallbackResponse::from).toList()));
     }
 
+    @GetMapping("/payment-requests")
+    ResponseEntity<?> listPaymentRequests(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession != null) {
+            if (!authService.hasPermission(currentSession.user(), "accounting:view")) {
+                return authService.permissionRequired("accounting:view");
+            }
+            String tenantId = tenantScope(currentSession, requestedTenantId);
+            if (tenantId == null && !authService.isPlatform(currentSession.user())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access mobile-money payment requests for another SACCO."));
+            }
+            var requests = authService.isPlatform(currentSession.user()) && requestedTenantId == null
+                    ? paymentRequestRepository.findAllByOrderByTenantIdAscRequestedAtDesc()
+                    : paymentRequestRepository.findByTenantIdOrderByRequestedAtDesc(tenantId);
+            return ResponseEntity.ok(ApiResponse.of(requests.stream().map(MobileMoneyPaymentRequestResponse::from).toList()));
+        }
+
+        MemberAuthService.CurrentMemberSession memberSession = memberAuthService.currentSession(authorization);
+        if (memberSession == null) return authService.authRequired();
+        var requests = paymentRequestRepository.findByMemberIdOrderByRequestedAtDesc(memberSession.member().getId());
+        return ResponseEntity.ok(ApiResponse.of(requests.stream().map(MobileMoneyPaymentRequestResponse::from).toList()));
+    }
+
     private ResponseEntity<?> postContribution(
             MobileMoneyCallbackRequest body,
             String tenantId,
@@ -214,6 +250,7 @@ class MobileMoneyController {
                 "posted",
                 "financial_transaction",
                 transaction.getId()));
+        markMatchingPaymentRequestPosted(tenantId, externalReference, "financial_transaction", transaction.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
     }
 
@@ -276,7 +313,16 @@ class MobileMoneyController {
                 "posted",
                 "loan_repayment",
                 repayment.getId()));
+        markMatchingPaymentRequestPosted(tenantId, externalReference, "loan_repayment", repayment.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
+    }
+
+    private void markMatchingPaymentRequestPosted(String tenantId, String externalReference, String resourceType, String resourceId) {
+        paymentRequestRepository.findByTenantIdAndExternalReferenceIgnoreCase(tenantId, externalReference)
+                .ifPresent(request -> {
+                    request.markPosted(resourceType, resourceId);
+                    paymentRequestRepository.save(request);
+                });
     }
 
     private ResponseEntity<?> validateLoanRepaymentRequest(String loanId, Member member, BigDecimal amount) {

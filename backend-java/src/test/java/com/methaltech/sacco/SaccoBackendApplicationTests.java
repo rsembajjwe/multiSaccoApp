@@ -3990,6 +3990,33 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.status", is("pending_demo_callback")))
 				.andExpect(jsonPath("$.data.callbackPosting", is(true)));
 
+		mockMvc.perform(get("/api/v1/integrations/mobile-money/payment-requests")
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].externalReference", is(externalReference)))
+				.andExpect(jsonPath("$.data[0].status", is("pending_demo_callback")));
+
+		mockMvc.perform(post("/api/v1/integrations/mobile-money/callback")
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "memberId": "member_green_amina",
+								  "purpose": "savings_deposit",
+								  "amount": 5000,
+								  "externalReference": "%s",
+								  "provider": "demo_mobile_money"
+								}
+								""".formatted(externalReference)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status", is("posted")));
+
+		mockMvc.perform(get("/api/v1/integrations/mobile-money/payment-requests")
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].externalReference", is(externalReference)))
+				.andExpect(jsonPath("$.data[0].status", is("posted")));
+
 		mockMvc.perform(post("/api/v1/integrations/mobile-money/payment-requests")
 						.contentType("application/json")
 						.content("""

@@ -3655,14 +3655,16 @@ function accountingView() {
 
 function reconciliationView() {
   const callbacks = dataRows("mobileMoneyCallbacks");
+  const paymentRequests = dataRows("mobileMoneyPaymentRequests");
   const reconciliation = state.data.reconciliation || {};
   const summaryData = reconciliation.summary || {};
   const matches = Array.isArray(reconciliation.matches) ? reconciliation.matches : [];
   const unmatchedStatementLines = Array.isArray(reconciliation.unmatchedStatementLines) ? reconciliation.unmatchedStatementLines : [];
   const unmatchedLedgerLines = Array.isArray(reconciliation.unmatchedLedgerLines) ? reconciliation.unmatchedLedgerLines : [];
   const callbackExceptions = callbacks.filter((row) => !normal(row.status).includes("posted") || row.duplicate);
-  const exceptionCount = Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) + Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) + callbackExceptions.length;
-  const tabs = [["overview", t("reconciliationControl")], ["matches", t("bankMobileMoneyMatching")], ["exceptions", t("exceptions")], ["callbacks", t("providerCallbacks")]];
+  const pendingPaymentRequests = paymentRequests.filter((row) => !normal(row.status).includes("posted"));
+  const exceptionCount = Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) + Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) + callbackExceptions.length + pendingPaymentRequests.length;
+  const tabs = [["overview", t("reconciliationControl")], ["matches", t("bankMobileMoneyMatching")], ["exceptions", t("exceptions")], ["requests", "Payment requests"], ["callbacks", t("providerCallbacks")]];
   const tab = activeModuleTab("reconciliation", tabs);
   return `
     <div class="dashboard-grid">
@@ -3670,6 +3672,7 @@ function reconciliationView() {
       ${summary(t("matchedRecords"), summaryData.matched ?? matches.length, money.format(summaryData.matchedAmount || 0), t("review"))}
       ${summary(t("unmatchedStatementLines"), summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length, money.format(summaryData.unmatchedStatementAmount || 0), "Investigate")}
       ${summary(t("unmatchedLedgerLines"), summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length, money.format(summaryData.unmatchedLedgerAmount || 0), "Investigate")}
+      ${summary("Pending requests", pendingPaymentRequests.length, "Awaiting provider callback", "Track")}
       ${summary(t("callbackExceptions"), callbackExceptions.length, "Failed or duplicate provider events", "Resolve")}
     </div>
     ${moduleTabs("reconciliation", tabs, tab)}
@@ -3678,6 +3681,7 @@ function reconciliationView() {
       ${rolePriorityPanel(t("reconciliationReadinessChecks"), [
       ["Statement matching", `${summaryData.matched ?? matches.length} matched record(s) against ${summaryData.statementLines || unmatchedStatementLines.length + matches.length} statement line(s).`, Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) ? "Review" : "Clear"],
       ["Ledger exceptions", `${summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length} ledger line(s) remain unmatched.`, Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) ? "Investigate" : "Clear"],
+      ["Payment requests", `${pendingPaymentRequests.length} mobile-money request(s) are awaiting provider callback posting.`, pendingPaymentRequests.length ? "Track" : "Clear"],
       ["Provider callbacks", `${callbackExceptions.length} callback exception(s) need provider or posting review.`, callbackExceptions.length ? "Resolve" : "Clear"],
       ["Close readiness", exceptionCount ? "Resolve reconciliation exceptions before period close or regulatory export." : "Reconciliation evidence is ready for reporting.", exceptionCount ? "Blocked" : "Ready"]
     ])}` : ""}
@@ -3689,6 +3693,7 @@ function reconciliationView() {
       ${recordTable("Unmatched bank statement lines", unmatchedStatementLines, ["externalReference", "accountCode", "channel", "amount", "description", "statementDate"])}
       ${recordTable("Unmatched ledger lines", unmatchedLedgerLines, ["reference", "accountCode", "accountName", "sourceType", "amount", "postedAt"])}
     </div>` : ""}
+    ${tab === "requests" ? recordTable("Mobile-money payment requests", paymentRequests, ["externalReference", "provider", "purpose", "amount", "currencyCode", "payerPhone", "status", "requestedAt", "completedAt"]) : ""}
     ${tab === "callbacks" ? recordTable("Provider callbacks", callbacks, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"]) : ""}
   `;
 }
@@ -4507,6 +4512,15 @@ function memberMobileMoneyRows(dash) {
 }
 
 function memberPaymentLifecycleRows(dash) {
+  const requestRows = (state.memberData.paymentRequests || []).map((request) => ({
+    date: request.requestedAt || request.createdAt || "",
+    reference: request.externalReference,
+    description: `${labelize(request.purpose)} request`,
+    paymentRoute: paymentRouteLabel(request),
+    amount: Number(request.amount || 0),
+    paymentStatus: paymentLifecycleStatus(request),
+    receiptStatus: receiptLifecycleStatus(request)
+  }));
   const postedRows = memberStatementLines(dash)
     .filter((line) => Number(line.credit || 0) > 0 || Number(line.debit || 0) > 0)
     .map((line) => ({
@@ -4527,7 +4541,7 @@ function memberPaymentLifecycleRows(dash) {
     paymentStatus: paymentLifecycleStatus(draft),
     receiptStatus: "Not receipted"
   }));
-  return [...draftRows, ...postedRows].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  return [...draftRows, ...requestRows, ...postedRows].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 }
 
 function paymentRouteLabel(row) {
@@ -6670,6 +6684,7 @@ async function refreshAll() {
     ["statementLines", "/statement-lines"],
     ["reconciliation", "/reconciliation"],
     ["mobileMoneyCallbacks", "/integrations/mobile-money/callbacks"],
+    ["mobileMoneyPaymentRequests", "/integrations/mobile-money/payment-requests"],
     ["notificationTemplates", "/notification-templates"],
     ["roles", "/roles"],
     ["permissions", "/permissions"],
@@ -6698,11 +6713,13 @@ async function refreshMember() {
   state.lastError = "";
   renderShell();
   const dashboard = await optionalApi("/member-auth/mobile-dashboard", null);
+  const paymentRequests = await optionalApi("/integrations/mobile-money/payment-requests", []);
   state.memberData.dashboard = dashboard || {};
   state.memberData.balances = dashboard?.balances || state.memberData.balances;
   state.memberData.loans = dashboard?.loans || [];
   state.memberData.notifications = dashboard?.notifications || [];
   state.memberData.pendingGuarantors = dashboard?.pendingGuarantorRequests || dashboard?.pendingGuarantors || [];
+  state.memberData.paymentRequests = paymentRequests;
   state.memberData.complaints = await optionalApi("/member-auth/complaints", []);
   state.memberData.drafts = loadMemberDrafts();
   state.lastSync = new Date().toISOString();
@@ -7748,6 +7765,7 @@ async function postMemberPayment(event) {
   if (blockOfflineMemberAction("memberPaymentError")) return;
   try {
     const request = await submitMemberPaymentPayload(memberPaymentPayload());
+    state.memberData.paymentRequests = [request, ...(state.memberData.paymentRequests || []).filter((row) => row.id !== request.id)];
     state.memberPaymentMessage = `Payment request sent: ${request.externalReference || request.providerReference || request.id}. ${request.checkoutPrompt || ""}`.trim();
     await refreshMember();
     state.memberPaymentMessage = `Payment request sent: ${request.externalReference || request.providerReference || request.id}. ${request.checkoutPrompt || ""}`.trim();
