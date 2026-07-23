@@ -73,6 +73,7 @@ class LoanController {
     private final LoanRepository loanRepository;
     private final LoanGuarantorRepository guarantorRepository;
     private final LoanRepaymentRepository repaymentRepository;
+    private final LoanRepaymentScheduleRepository scheduleRepository;
     private final MemberRepository memberRepository;
     private final AuthService authService;
     private final AuditService auditService;
@@ -82,6 +83,7 @@ class LoanController {
             LoanRepository loanRepository,
             LoanGuarantorRepository guarantorRepository,
             LoanRepaymentRepository repaymentRepository,
+            LoanRepaymentScheduleRepository scheduleRepository,
             MemberRepository memberRepository,
             AuthService authService,
             AuditService auditService,
@@ -89,6 +91,7 @@ class LoanController {
         this.loanRepository = loanRepository;
         this.guarantorRepository = guarantorRepository;
         this.repaymentRepository = repaymentRepository;
+        this.scheduleRepository = scheduleRepository;
         this.memberRepository = memberRepository;
         this.authService = authService;
         this.auditService = auditService;
@@ -502,6 +505,7 @@ class LoanController {
                     }
                     loan.disburse(currentSession.user().getId());
                     Loan saved = loanRepository.save(loan);
+                    createRepaymentSchedule(saved);
                     auditService.record(
                             saved.getTenantId(),
                             currentSession.user(),
@@ -510,6 +514,25 @@ class LoanController {
                             saved.getId(),
                             request.getRemoteAddr());
                     return ResponseEntity.ok(ApiResponse.of(loanResponse(saved)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
+    }
+
+    @GetMapping("/{loanId}/schedule")
+    ResponseEntity<?> loanSchedule(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:view")) {
+            return authService.permissionRequired("loans:view");
+        }
+
+        return loanRepository.findById(loanId)
+                .<ResponseEntity<?>>map(loan -> {
+                    if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+                    return ResponseEntity.ok(ApiResponse.of(scheduleResponse(loan)));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
@@ -563,6 +586,59 @@ class LoanController {
                 .divide(savingsCapacity, 6, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(35));
         return Math.min(65, ratio.setScale(0, RoundingMode.HALF_UP).intValue());
+    }
+
+    private void createRepaymentSchedule(Loan loan) {
+        if (scheduleRepository.existsByLoanId(loan.getId())) return;
+        int months = Math.max(1, loan.getRepaymentMonths());
+        LocalDate firstDueDate = (loan.getDisbursedAt() == null ? Instant.now() : loan.getDisbursedAt())
+                .atZone(ZoneOffset.UTC)
+                .toLocalDate()
+                .plusMonths(1);
+        BigDecimal principalBase = loan.getAmount().divide(BigDecimal.valueOf(months), 2, RoundingMode.HALF_UP);
+        BigDecimal interestBase = loan.getInterestAmount().divide(BigDecimal.valueOf(months), 2, RoundingMode.HALF_UP);
+        BigDecimal principalAllocated = BigDecimal.ZERO;
+        BigDecimal interestAllocated = BigDecimal.ZERO;
+        List<LoanRepaymentSchedule> schedules = new ArrayList<>();
+        for (int installment = 1; installment <= months; installment++) {
+            BigDecimal principalDue = installment == months ? loan.getAmount().subtract(principalAllocated) : principalBase;
+            BigDecimal interestDue = installment == months ? loan.getInterestAmount().subtract(interestAllocated) : interestBase;
+            principalAllocated = principalAllocated.add(principalDue);
+            interestAllocated = interestAllocated.add(interestDue);
+            schedules.add(new LoanRepaymentSchedule(
+                    "schedule_" + UUID.randomUUID(),
+                    loan.getTenantId(),
+                    loan.getId(),
+                    installment,
+                    firstDueDate.plusMonths(installment - 1L),
+                    Money.normalize(principalDue),
+                    Money.normalize(interestDue),
+                    Money.normalize(principalDue.add(interestDue))));
+        }
+        scheduleRepository.saveAll(schedules);
+    }
+
+    private List<LoanRepaymentScheduleResponse> scheduleResponse(Loan loan) {
+        List<LoanRepaymentSchedule> schedules = scheduleRepository.findByLoanIdOrderByInstallmentNoAsc(loan.getId());
+        BigDecimal remainingPaid = repaymentRepository.totalAmountByLoanId(loan.getId());
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        List<LoanRepaymentScheduleResponse> responses = new ArrayList<>();
+        for (LoanRepaymentSchedule schedule : schedules) {
+            BigDecimal paidForInstallment = remainingPaid.min(schedule.getTotalDue());
+            if (paidForInstallment.compareTo(BigDecimal.ZERO) < 0) paidForInstallment = BigDecimal.ZERO;
+            remainingPaid = remainingPaid.subtract(paidForInstallment);
+            String status = scheduleStatus(schedule, paidForInstallment, today);
+            responses.add(LoanRepaymentScheduleResponse.from(schedule, Money.normalize(paidForInstallment), status));
+        }
+        return responses;
+    }
+
+    private String scheduleStatus(LoanRepaymentSchedule schedule, BigDecimal paidForInstallment, LocalDate today) {
+        if (paidForInstallment.compareTo(schedule.getTotalDue()) >= 0) return "paid";
+        if (paidForInstallment.compareTo(BigDecimal.ZERO) > 0) return "partial";
+        if (schedule.getDueDate().isBefore(today)) return "arrears";
+        if (schedule.getDueDate().getYear() == today.getYear() && schedule.getDueDate().getMonth() == today.getMonth()) return "due";
+        return "upcoming";
     }
 
     private ResponseEntity<?> decideLoan(

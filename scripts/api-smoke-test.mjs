@@ -563,6 +563,15 @@ try {
   const disbursedLoan = await api("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
   assert(disbursedLoan.data.status === "active", "Disbursed loan should become active");
   assert(disbursedLoan.data.balance === disbursedLoan.data.amount, "Disbursed loan balance should equal principal");
+  assert(Number(disbursedLoan.data.interestRate) > 0, "Disbursed loan should expose product interest rate");
+  assert(Number(disbursedLoan.data.interestAmount) > 0, "Disbursed loan should calculate total interest");
+  assert(Number(disbursedLoan.data.totalPayable) > Number(disbursedLoan.data.amount), "Disbursed loan should expose total payable");
+  assert(Number(disbursedLoan.data.monthlyInstallment) > 0, "Disbursed loan should expose monthly installment");
+
+  const initialSchedule = await api("GET", `/loans/${loan.data.id}/schedule`, null, saccoToken);
+  assert(initialSchedule.data.length === loan.data.repaymentMonths, "Disbursed loan should generate one schedule row per repayment month");
+  assert(initialSchedule.data.every((row) => Number(row.interestDue) > 0), "Schedule should include interest due per installment");
+  assert(initialSchedule.data.every((row) => ["due", "upcoming", "arrears"].includes(row.status)), "New schedule rows should be open before repayments");
 
   const repaymentPayload = {
     amount: 200000,
@@ -576,6 +585,10 @@ try {
   assert(loanAfterRepayment, "Loan list should include the repaid loan");
   assert(loanAfterRepayment.balance === disbursedLoan.data.amount - repaymentPayload.amount, "Repayment should reduce the outstanding loan balance");
   assert(loanAfterRepayment.repaymentTotal === repaymentPayload.amount, "Loan should expose total repayments");
+
+  const scheduleAfterRepayment = await api("GET", `/loans/${loan.data.id}/schedule`, null, saccoToken);
+  assert(scheduleAfterRepayment.data.some((row) => row.status === "paid"), "Schedule should allocate repayments to earliest installments");
+  assert(scheduleAfterRepayment.data.some((row) => Number(row.paidAmount) > 0), "Schedule should expose paid amount per installment");
 
   const duplicateRepayment = await raw("POST", `/loans/${loan.data.id}/repayments`, repaymentPayload, saccoToken);
   assert(duplicateRepayment.status === 409, "Duplicate repayment reference should be rejected");

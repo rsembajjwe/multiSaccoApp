@@ -15,6 +15,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -4698,8 +4699,21 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.status", is("active")))
 				.andExpect(jsonPath("$.data.stage", is("Disbursed")))
 				.andExpect(jsonPath("$.data.balance", is(800000.00)))
+				.andExpect(jsonPath("$.data.interestRate", is(2.0000)))
+				.andExpect(jsonPath("$.data.interestAmount", is(96000.00)))
+				.andExpect(jsonPath("$.data.totalPayable", is(896000.00)))
+				.andExpect(jsonPath("$.data.monthlyInstallment", is(149333.33)))
 				.andExpect(jsonPath("$.data.disbursedByUserId", is("user_green_admin")))
 				.andExpect(jsonPath("$.data.disbursedAt", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/loans/loan_green_0002/schedule")
+				.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data", hasSize(6)))
+				.andExpect(jsonPath("$.data[0].principalDue", is(133333.33)))
+				.andExpect(jsonPath("$.data[0].interestDue", is(16000.00)))
+				.andExpect(jsonPath("$.data[0].totalDue", is(149333.33)))
+				.andExpect(jsonPath("$.data[0].status", is("upcoming")));
 	}
 
 	@Test

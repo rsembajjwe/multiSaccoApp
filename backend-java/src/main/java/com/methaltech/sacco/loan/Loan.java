@@ -28,6 +28,18 @@ public class Loan {
 
     private BigDecimal balance;
 
+    @Column(name = "interest_rate")
+    private BigDecimal interestRate;
+
+    @Column(name = "interest_amount")
+    private BigDecimal interestAmount;
+
+    @Column(name = "total_payable")
+    private BigDecimal totalPayable;
+
+    @Column(name = "monthly_installment")
+    private BigDecimal monthlyInstallment;
+
     private String status;
 
     private String stage;
@@ -91,6 +103,7 @@ public class Loan {
         this.product = product;
         this.amount = amount;
         this.balance = BigDecimal.ZERO;
+        applyTerms(product, amount, repaymentMonths);
         this.status = "submitted";
         this.stage = "Credit Appraisal";
         this.guarantors = 0;
@@ -132,6 +145,10 @@ public class Loan {
             Instant disbursedAt) {
         Loan loan = new Loan(id, tenantId, memberId, product, amount, dsr, repaymentMonths, purpose, "migration", null);
         loan.balance = balance;
+        loan.interestRate = BigDecimal.ZERO;
+        loan.interestAmount = BigDecimal.ZERO;
+        loan.totalPayable = amount;
+        loan.monthlyInstallment = repaymentMonths <= 0 ? amount : amount.divide(BigDecimal.valueOf(repaymentMonths), 2, java.math.RoundingMode.HALF_UP);
         loan.status = balance.compareTo(BigDecimal.ZERO) == 0 ? "closed" : "active";
         loan.stage = balance.compareTo(BigDecimal.ZERO) == 0 ? "Migrated Closed" : "Migrated Active";
         loan.approvedByUserId = importedByUserId;
@@ -158,6 +175,22 @@ public class Loan {
         this.disbursedByUserId = actorUserId;
         this.disbursedAt = Instant.now();
         this.updatedAt = this.disbursedAt;
+    }
+
+    private void applyTerms(String product, BigDecimal amount, int repaymentMonths) {
+        this.interestRate = switch (product) {
+            case "Emergency Loan" -> BigDecimal.valueOf(2.00);
+            case "Agriculture Loan" -> BigDecimal.valueOf(1.25);
+            case "School Fees Loan" -> BigDecimal.valueOf(1.00);
+            default -> BigDecimal.valueOf(1.50);
+        };
+        BigDecimal months = BigDecimal.valueOf(Math.max(1, repaymentMonths));
+        this.interestAmount = amount
+                .multiply(this.interestRate)
+                .multiply(months)
+                .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+        this.totalPayable = amount.add(this.interestAmount);
+        this.monthlyInstallment = this.totalPayable.divide(months, 2, java.math.RoundingMode.HALF_UP);
     }
 
     public void recordRepayment(BigDecimal amount) {
@@ -197,6 +230,22 @@ public class Loan {
 
     public BigDecimal getBalance() {
         return balance;
+    }
+
+    public BigDecimal getInterestRate() {
+        return interestRate;
+    }
+
+    public BigDecimal getInterestAmount() {
+        return interestAmount;
+    }
+
+    public BigDecimal getTotalPayable() {
+        return totalPayable;
+    }
+
+    public BigDecimal getMonthlyInstallment() {
+        return monthlyInstallment;
     }
 
     public String getStatus() {

@@ -1105,6 +1105,7 @@ const state = {
   selectedLoanId: "",
   selectedLoanGuarantors: [],
   selectedLoanRepayments: [],
+  selectedLoanSchedule: [],
   selectedLoanMessage: "",
   selectedLoanError: "",
   complaintFormMessage: "",
@@ -6146,6 +6147,8 @@ function loanDetailPanel(rows) {
   const canDisburseLoan = canApprove && normal(loan.status) === "approved";
   const canRepayLoan = canApprove && normal(loan.status) === "active";
   const balance = Number(loan.balance || loan.outstandingBalance || 0);
+  const scheduleRows = state.selectedLoanSchedule || [];
+  const arrearsScheduleRows = scheduleRows.filter((row) => normal(row.status) === "arrears");
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
@@ -6161,11 +6164,16 @@ function loanDetailPanel(rows) {
         ${summary("Loan stage", loan.approvalReadiness || labelize(loan.status || "review"), "Application to disbursement", "Review")}
         ${summary("Guarantors", acceptedGuarantors.length ? `${acceptedGuarantors.length} accepted` : loan.guarantorReadiness || "Pending", "Member consent required", "Track")}
         ${summary("Outstanding", money.format(balance), "Servicing balance", "Repay")}
-        ${summary("Repayments", state.selectedLoanRepayments.length, "Recorded repayment history", "Review")}
+        ${summary("Monthly installment", money.format(loan.monthlyInstallment || 0), `${scheduleRows.length || loan.repaymentMonths || 0} scheduled installment(s)`, "Schedule")}
+        ${summary("Arrears", arrearsScheduleRows.length, "Missed scheduled installments", "Follow up")}
       </div>
       <div class="source-grid">
         ${mini("Product", loan.product)}
         ${mini("Amount", money.format(loan.amount || loan.requestedAmount || 0))}
+        ${mini("Interest rate", `${loan.interestRate || 0}% monthly`)}
+        ${mini("Total interest", money.format(loan.interestAmount || 0))}
+        ${mini("Total payable", money.format(loan.totalPayable || loan.amount || 0))}
+        ${mini("Monthly installment", money.format(loan.monthlyInstallment || 0))}
         ${mini("Outstanding", money.format(loan.balance || loan.outstandingBalance || 0))}
         ${mini("Status", loan.status)}
         ${mini("Stage", loan.stage)}
@@ -6177,6 +6185,7 @@ function loanDetailPanel(rows) {
         ["Guarantor consent", acceptedGuarantors.length ? `${acceptedGuarantors.length} guarantor(s) accepted the request.` : "At least one accepted guarantor is required before approval.", acceptedGuarantors.length ? "Ready" : "Pending"],
         ["Approval", canApproveLoan ? "Loan can be approved after appraisal checks." : "Approval is locked until status and guarantor rules are satisfied.", canApproveLoan ? "Available" : "Locked"],
         ["Disbursement", canDisburseLoan ? "Approved loan can be disbursed into active servicing." : "Disbursement is available only after approval.", canDisburseLoan ? "Ready" : "Waiting"],
+        ["Repayment schedule", scheduleRows.length ? `${scheduleRows.length} installment(s) generated with interest and due dates.` : "A repayment schedule is generated automatically at disbursement.", scheduleRows.length ? "Ready" : "Waiting"],
         ["Repayment", canRepayLoan ? "Active loan can receive repayments; overpayments are rejected by the backend." : "Repayment starts after disbursement.", canRepayLoan ? "Active" : "Waiting"]
       ])}
       <div class="grid two">
@@ -6211,6 +6220,7 @@ function loanDetailPanel(rows) {
         ${recordTable("Loan guarantor requests", state.selectedLoanGuarantors.map((request) => ({ ...request, memberName: memberName(request.memberId) })), ["memberName", "guaranteedAmount", "capacity", "status", "createdAt"])}
         ${recordTable("Loan repayment history", state.selectedLoanRepayments, ["reference", "amount", "channel", "narration", "receivedAt"])}
       </div>
+      ${recordTable("Loan repayment schedule", scheduleRows, ["installmentNo", "dueDate", "principalDue", "interestDue", "totalDue", "paidAmount", "balanceDue", "status"])}
     </section>
   `;
 }
@@ -7577,16 +7587,19 @@ async function openLoanDetail(loanId, shouldRender = true) {
   state.moduleTabs.loans = "detail";
   state.selectedLoanGuarantors = [];
   state.selectedLoanRepayments = [];
+  state.selectedLoanSchedule = [];
   state.selectedLoanMessage = "";
   state.selectedLoanError = "";
   if (shouldRender) renderShell();
   try {
-    const [guarantors, repayments] = await Promise.all([
+    const [guarantors, repayments, schedule] = await Promise.all([
       optionalApi(`/loans/${encodeURIComponent(loanId)}/guarantors`, []),
-      optionalApi(`/loans/${encodeURIComponent(loanId)}/repayments`, [])
+      optionalApi(`/loans/${encodeURIComponent(loanId)}/repayments`, []),
+      optionalApi(`/loans/${encodeURIComponent(loanId)}/schedule`, [])
     ]);
     state.selectedLoanGuarantors = guarantors || [];
     state.selectedLoanRepayments = repayments || [];
+    state.selectedLoanSchedule = schedule || [];
   } catch (error) {
     state.selectedLoanError = error.message;
   }
@@ -8724,6 +8737,7 @@ function bindEvents() {
     state.selectedLoanId = "";
     state.selectedLoanGuarantors = [];
     state.selectedLoanRepayments = [];
+    state.selectedLoanSchedule = [];
     state.selectedLoanMessage = "";
     state.selectedLoanError = "";
     renderShell();
@@ -9057,10 +9071,11 @@ async function logout() {
     selectedTransactionError: "",
     loanFormMessage: "",
     loanFormError: "",
-    selectedLoanId: "",
-    selectedLoanGuarantors: [],
-    selectedLoanRepayments: [],
-    selectedLoanMessage: "",
+  selectedLoanId: "",
+  selectedLoanGuarantors: [],
+  selectedLoanRepayments: [],
+  selectedLoanSchedule: [],
+  selectedLoanMessage: "",
     selectedLoanError: "",
     complaintFormMessage: "",
     complaintFormError: "",
