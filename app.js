@@ -1680,6 +1680,8 @@ function publicSaccoRegistrationPanel() {
       <label><span>${t("saccoName")}</span><input id="publicTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
       <label><span>${t("saccoCode")}</span><input id="publicTenantCode" readonly placeholder="${escapeHtml(t("saccoCodeGenerated"))}"></label>
       <label><span>${t("registrationNumber")}</span><input id="publicTenantRegistrationNo" required placeholder="${escapeHtml(t("registrationNumberPlaceholder"))}"></label>
+      <label><span>Country</span><select id="publicTenantCountry">${countryRegionOptions("uganda")}</select></label>
+      <label><span>Currency</span><input id="publicTenantCurrencyCode" readonly value="UGX"></label>
       <label><span>${t("district")}</span><input id="publicTenantDistrict" required></label>
       <label><span>${t("parish")}</span><input id="publicTenantParish" required></label>
       <label><span>${t("village")}</span><input id="publicTenantVillage" required></label>
@@ -2356,6 +2358,8 @@ function platformSaccoRegistrationPanel() {
         <label><span>SACCO name</span><input id="newTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
         <label><span>SACCO code</span><input id="newTenantCode" readonly placeholder="Generated automatically"></label>
         <label><span>Registration number</span><input id="newTenantRegistrationNo" placeholder="Cooperative or UMRA registration"></label>
+        <label><span>Country</span><select id="newTenantCountry">${countryRegionOptions("uganda")}</select></label>
+        <label><span>Currency</span><input id="newTenantCurrencyCode" readonly value="UGX"></label>
         <label><span>District</span><input id="newTenantDistrict" required placeholder="e.g. Kampala"></label>
         <label><span>Parish</span><input id="newTenantParish" required placeholder="e.g. Central Parish"></label>
         <label><span>Village</span><input id="newTenantVillage" required placeholder="e.g. Market Zone"></label>
@@ -6366,6 +6370,15 @@ function memberRangeOptions() {
   ].map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
 }
 
+function countryRegionOptions(selectedCountry = "uganda") {
+  return Object.entries(COUNTRY_REGIONS)
+    .map(([country, region]) => {
+      const label = country.replace(/\b\w/g, (letter) => letter.toUpperCase());
+      return `<option value="${escapeHtml(country)}" data-country-label="${escapeHtml(label)}" data-locale="${escapeHtml(region.locale)}" data-currency="${escapeHtml(region.currency)}" data-digits="${region.currencyDigits}" ${country === selectedCountry ? "selected" : ""}>${escapeHtml(label)} - ${escapeHtml(region.currency)}</option>`;
+    })
+    .join("");
+}
+
 function packageCards() {
   const packages = dataRows("subscriptionPackages");
   const rows = packages.length ? packages : fallbackPackages();
@@ -6995,6 +7008,7 @@ async function createPlatformSacco(event) {
     const contactNumber = value("newTenantContactNumber");
     const memberRange = value("newTenantMemberRange");
     const paymentStatus = value("newTenantPaymentStatus");
+    const region = selectedCountryRegion("newTenantCountry");
     const saccoCode = generatedSaccoCode(value("newTenantName"));
     const codeInput = document.getElementById("newTenantCode");
     if (codeInput) codeInput.value = saccoCode;
@@ -7005,6 +7019,10 @@ async function createPlatformSacco(event) {
         abbreviation: saccoCode,
         registrationNo: value("newTenantRegistrationNo"),
         district,
+        country: region.country,
+        localeCode: region.locale,
+        currencyCode: region.currency,
+        currencyDigits: region.currencyDigits,
         licenseExpiry: value("newTenantLicenseExpiry"),
         packageId: value("newTenantPackageId")
       })
@@ -7049,6 +7067,7 @@ async function submitPublicSaccoRegistration(event) {
     const saccoCode = generatedSaccoCode(value("publicTenantName"));
     const codeInput = document.getElementById("publicTenantCode");
     if (codeInput) codeInput.value = saccoCode;
+    const region = selectedCountryRegion("publicTenantCountry");
     const result = await api("/public/sacco-registrations", {
       method: "POST",
       body: JSON.stringify({
@@ -7058,6 +7077,10 @@ async function submitPublicSaccoRegistration(event) {
         district: value("publicTenantDistrict"),
         parish: value("publicTenantParish"),
         village: value("publicTenantVillage"),
+        country: region.country,
+        localeCode: region.locale,
+        currencyCode: region.currency,
+        currencyDigits: region.currencyDigits,
         contactNumber: value("publicTenantContactNumber"),
         memberRange: value("publicTenantMemberRange"),
         paymentPhone: value("publicTenantPaymentPhone")
@@ -7070,6 +7093,25 @@ async function submitPublicSaccoRegistration(event) {
     state.publicRegistrationError = friendlyUserError(error, false);
     renderLogin();
   }
+}
+
+function selectedCountryRegion(selectId) {
+  const select = document.getElementById(selectId);
+  const country = select?.value || "uganda";
+  const option = select?.selectedOptions?.[0];
+  const region = COUNTRY_REGIONS[country] || DEFAULT_REGION;
+  return {
+    country: option?.dataset.countryLabel || country,
+    locale: option?.dataset.locale || region.locale,
+    currency: option?.dataset.currency || region.currency,
+    currencyDigits: Number(option?.dataset.digits ?? region.currencyDigits ?? DEFAULT_REGION.currencyDigits)
+  };
+}
+
+function syncCountryCurrency(selectId, currencyInputId) {
+  const region = selectedCountryRegion(selectId);
+  const currencyInput = document.getElementById(currencyInputId);
+  if (currencyInput) currencyInput.value = region.currency;
 }
 
 async function saveTenantStatus(status) {
@@ -8619,12 +8661,16 @@ function bindEvents() {
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
   document.querySelector("#platformSaccoForm")?.addEventListener("submit", createPlatformSacco);
   document.querySelector("#newTenantName")?.addEventListener("input", updateGeneratedSaccoCode);
+  document.querySelector("#newTenantCountry")?.addEventListener("change", () => syncCountryCurrency("newTenantCountry", "newTenantCurrencyCode"));
+  syncCountryCurrency("newTenantCountry", "newTenantCurrencyCode");
   updateGeneratedSaccoCode();
   document.querySelector("#publicSaccoRegistrationForm")?.addEventListener("submit", submitPublicSaccoRegistration);
   document.querySelector("#publicTenantName")?.addEventListener("input", () => {
     const input = document.getElementById("publicTenantCode");
     if (input) input.value = generatedSaccoCode(value("publicTenantName"));
   });
+  document.querySelector("#publicTenantCountry")?.addEventListener("change", () => syncCountryCurrency("publicTenantCountry", "publicTenantCurrencyCode"));
+  syncCountryCurrency("publicTenantCountry", "publicTenantCurrencyCode");
   document.querySelector("#transactionForm")?.addEventListener("submit", createTransactionFromForm);
   document.querySelector("#loanApplicationForm")?.addEventListener("submit", createLoanFromForm);
   document.querySelector("#loanGuarantorForm")?.addEventListener("submit", addLoanGuarantor);

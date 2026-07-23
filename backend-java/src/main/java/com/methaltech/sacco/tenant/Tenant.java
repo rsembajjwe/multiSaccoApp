@@ -25,6 +25,17 @@ public class Tenant {
 
     private String district;
 
+    private String country;
+
+    @Column(name = "locale_code")
+    private String localeCode;
+
+    @Column(name = "currency_code")
+    private String currencyCode;
+
+    @Column(name = "currency_digits")
+    private int currencyDigits;
+
     @Column(name = "license_expiry")
     private LocalDate licenseExpiry;
 
@@ -51,12 +62,31 @@ public class Tenant {
             String district,
             LocalDate licenseExpiry,
             String packageId) {
+        this(id, name, abbreviation, registrationNo, district, "Uganda", "en-UG", "UGX", 0, licenseExpiry, packageId);
+    }
+
+    Tenant(
+            String id,
+            String name,
+            String abbreviation,
+            String registrationNo,
+            String district,
+            String country,
+            String localeCode,
+            String currencyCode,
+            int currencyDigits,
+            LocalDate licenseExpiry,
+            String packageId) {
         this.id = id;
         this.name = name;
         this.abbreviation = abbreviation;
         this.status = "pending_review";
         this.registrationNo = registrationNo;
         this.district = district;
+        this.country = country;
+        this.localeCode = localeCode;
+        this.currencyCode = currencyCode;
+        this.currencyDigits = currencyDigits;
         this.licenseExpiry = licenseExpiry;
         this.packageId = packageId;
         this.onboarding = 0;
@@ -91,6 +121,22 @@ public class Tenant {
 
     String getDistrict() {
         return district;
+    }
+
+    String getCountry() {
+        return country;
+    }
+
+    String getLocaleCode() {
+        return localeCode;
+    }
+
+    String getCurrencyCode() {
+        return currencyCode;
+    }
+
+    int getCurrencyDigits() {
+        return currencyDigits;
     }
 
     LocalDate getLicenseExpiry() {

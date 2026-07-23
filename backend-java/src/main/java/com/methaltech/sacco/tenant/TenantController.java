@@ -98,6 +98,10 @@ class TenantController {
                 body.abbreviation().trim().toUpperCase(),
                 blankToDefault(body.registrationNo()),
                 blankToDefault(body.district()),
+                blankToDefault(body.country(), "Uganda"),
+                blankToDefault(body.localeCode(), "en-UG"),
+                blankToDefault(body.currencyCode(), "UGX").toUpperCase(),
+                body.currencyDigits() == null ? 0 : body.currencyDigits(),
                 body.licenseExpiry(),
                 blankToDefault(body.packageId())));
         saccoProfileRepository.save(new SaccoProfile(
@@ -247,7 +251,11 @@ class TenantController {
     }
 
     private String blankToDefault(String value) {
-        return value == null || value.isBlank() ? "" : value.trim();
+        return blankToDefault(value, "");
+    }
+
+    private String blankToDefault(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value.trim();
     }
 
     private String firstNonBlank(String requestedValue, String currentValue) {
@@ -263,6 +271,10 @@ class TenantController {
             @NotBlank String abbreviation,
             String registrationNo,
             String district,
+            String country,
+            String localeCode,
+            String currencyCode,
+            Integer currencyDigits,
             @NotNull LocalDate licenseExpiry,
             String packageId) {
     }

@@ -95,6 +95,10 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(3)))
 				.andExpect(jsonPath("$.data[0].name", is("Green Valley SACCO")))
 				.andExpect(jsonPath("$.data[0].registrationNo", is("COOP/GVS/2018/014")))
+				.andExpect(jsonPath("$.data[0].country", is("Uganda")))
+				.andExpect(jsonPath("$.data[0].localeCode", is("en-UG")))
+				.andExpect(jsonPath("$.data[0].currencyCode", is("UGX")))
+				.andExpect(jsonPath("$.data[0].currencyDigits", is(0)))
 				.andExpect(jsonPath("$.data[0].packageId", is("starter")));
 	}
 
@@ -127,7 +131,11 @@ class SaccoBackendApplicationTests {
 								  "name": "Smoke Java SACCO",
 								  "abbreviation": "sjs",
 								  "registrationNo": "%s",
-								  "district": "Kampala",
+								  "district": "Nairobi",
+								  "country": "Kenya",
+								  "localeCode": "en-KE",
+								  "currencyCode": "KES",
+								  "currencyDigits": 0,
 								  "licenseExpiry": "2027-12-31",
 								  "packageId": "starter"
 								}
@@ -135,14 +143,18 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.status", is("pending_review")))
 				.andExpect(jsonPath("$.data.abbreviation", is("SJS")))
+				.andExpect(jsonPath("$.data.country", is("Kenya")))
+				.andExpect(jsonPath("$.data.localeCode", is("en-KE")))
+				.andExpect(jsonPath("$.data.currencyCode", is("KES")))
 				.andReturn();
 
 		String tenantId = objectMapper.readTree(createdTenant.getResponse().getContentAsString()).path("data").path("id").asString();
 
 		mockMvc.perform(get("/api/v1/tenants/" + tenantId)
-						.header("Authorization", "Bearer " + token))
+				.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.registrationNo", is(registrationNo)));
+				.andExpect(jsonPath("$.data.registrationNo", is(registrationNo)))
+				.andExpect(jsonPath("$.data.currencyCode", is("KES")));
 
 		mockMvc.perform(get("/api/v1/tenants/" + tenantId + "/profile")
 						.header("Authorization", "Bearer " + token))

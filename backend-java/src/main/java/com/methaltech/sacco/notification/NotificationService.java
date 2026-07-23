@@ -1,6 +1,8 @@
 package com.methaltech.sacco.notification;
 
 import com.methaltech.sacco.member.Member;
+import com.methaltech.sacco.tenant.TenantMoneyFormatter;
+import com.methaltech.sacco.tenant.TenantService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -14,13 +16,15 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationDeliveryRepository deliveryRepository;
     private final NotificationTemplateRepository templateRepository;
+    private final TenantService tenantService;
+    private final TenantMoneyFormatter moneyFormatter;
     private final List<NotificationProvider> providers;
 
     public Notification notifyPaymentPosted(Member member, String purpose, BigDecimal amount, String resourceType, String resourceId) {
         String eventType = "loan_repayment".equals(purpose) ? "loan_repayment_received" : "payment_received";
         NotificationTemplate template = activeTemplate(member.getTenantId(), eventType);
         String title = template == null ? "Payment received" : template.getTitle();
-        String message = template == null ? "Your mobile-money " + purpose.replace('_', ' ') + " of " + amount + " was posted." : template.getBody();
+        String message = template == null ? "Your mobile-money " + purpose.replace('_', ' ') + " of " + formattedAmount(member.getTenantId(), amount) + " was posted." : template.getBody();
         Notification notification = notificationRepository.save(new Notification(
                 "notification_" + UUID.randomUUID(),
                 member.getTenantId(),
@@ -38,7 +42,7 @@ public class NotificationService {
         String eventType = "loan_application_submitted";
         NotificationTemplate template = activeTemplate(member.getTenantId(), eventType);
         String title = template == null ? "Loan application submitted" : template.getTitle();
-        String message = template == null ? "Mobile loan application " + product + " for UGX " + amount + " was submitted." : template.getBody();
+        String message = template == null ? "Mobile loan application " + product + " for " + formattedAmount(member.getTenantId(), amount) + " was submitted." : template.getBody();
         return notificationRepository.save(new Notification(
                 "notification_" + UUID.randomUUID(),
                 member.getTenantId(),
@@ -101,6 +105,10 @@ public class NotificationService {
         return templateRepository.findFirstByTenantIdAndEventTypeAndStatusOrderByUpdatedAtDesc(tenantId, eventType, "active")
                 .or(() -> templateRepository.findFirstByTenantIdIsNullAndEventTypeAndStatusOrderByUpdatedAtDesc(eventType, "active"))
                 .orElse(null);
+    }
+
+    private String formattedAmount(String tenantId, BigDecimal amount) {
+        return moneyFormatter.format(tenantService.findById(tenantId).orElse(null), amount);
     }
 
     private void createDeliveries(Notification notification, Member member, String title, String message) {

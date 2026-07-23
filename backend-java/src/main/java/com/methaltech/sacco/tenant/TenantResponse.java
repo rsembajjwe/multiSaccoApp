@@ -9,6 +9,10 @@ public record TenantResponse(
         String status,
         String registrationNo,
         String district,
+        String country,
+        String localeCode,
+        String currencyCode,
+        int currencyDigits,
         LocalDate licenseExpiry,
         String packageId,
         int onboarding) {
@@ -21,6 +25,10 @@ public record TenantResponse(
                 tenant.getStatus(),
                 tenant.getRegistrationNo(),
                 tenant.getDistrict(),
+                tenant.getCountry(),
+                tenant.getLocaleCode(),
+                tenant.getCurrencyCode(),
+                tenant.getCurrencyDigits(),
                 tenant.getLicenseExpiry(),
                 tenant.getPackageId(),
                 tenant.getOnboarding());

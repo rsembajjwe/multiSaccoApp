@@ -10,6 +10,7 @@ import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.money.Money;
+import com.methaltech.sacco.tenant.TenantMoneyFormatter;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -69,6 +70,7 @@ class FinancialTransactionController {
     private final MemberRepository memberRepository;
     private final BranchRepository branchRepository;
     private final TenantService tenantService;
+    private final TenantMoneyFormatter moneyFormatter;
     private final AuthService authService;
     private final AuditService auditService;
     private final AccountingPeriodService periodService;
@@ -78,6 +80,7 @@ class FinancialTransactionController {
             MemberRepository memberRepository,
             BranchRepository branchRepository,
             TenantService tenantService,
+            TenantMoneyFormatter moneyFormatter,
             AuthService authService,
             AuditService auditService,
             AccountingPeriodService periodService) {
@@ -85,6 +88,7 @@ class FinancialTransactionController {
         this.memberRepository = memberRepository;
         this.branchRepository = branchRepository;
         this.tenantService = tenantService;
+        this.moneyFormatter = moneyFormatter;
         this.authService = authService;
         this.auditService = auditService;
         this.periodService = periodService;
@@ -480,6 +484,7 @@ class FinancialTransactionController {
                 tenant,
                 branch,
                 member,
+                moneyFormatter.format(tenant, transaction.getAmount()),
                 Instant.now())));
     }
 

@@ -32,6 +32,7 @@ record FinancialTransactionReceiptResponse(
             TenantResponse tenant,
             Branch branch,
             Member member,
+            String formattedAmount,
             Instant issuedAt) {
         String receiptNo = "RCT-" + transaction.getReference();
         String printableText = """
@@ -40,7 +41,7 @@ record FinancialTransactionReceiptResponse(
                 Member: %s (%s)
                 Branch: %s
                 Transaction: %s via %s
-                Amount: UGX %s
+                Amount: %s
                 Reference: %s
                 Posted at: %s
                 """.formatted(
@@ -51,7 +52,7 @@ record FinancialTransactionReceiptResponse(
                 branch.getName(),
                 transaction.getType(),
                 transaction.getChannel(),
-                transaction.getAmount().toPlainString(),
+                formattedAmount,
                 transaction.getReference(),
                 transaction.getPostedAt());
         return new FinancialTransactionReceiptResponse(

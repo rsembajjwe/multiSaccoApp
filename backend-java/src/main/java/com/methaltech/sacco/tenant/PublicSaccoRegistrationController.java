@@ -44,6 +44,10 @@ class PublicSaccoRegistrationController {
                 finalSaccoCode,
                 blankToDefault(body.registrationNo()),
                 blankToDefault(body.district()),
+                blankToDefault(body.country(), "Uganda"),
+                blankToDefault(body.localeCode(), "en-UG"),
+                blankToDefault(body.currencyCode(), "UGX").toUpperCase(),
+                body.currencyDigits() == null ? 0 : body.currencyDigits(),
                 LocalDate.now().plusYears(1),
                 "pending_self_registration"));
         saccoProfileRepository.save(new SaccoProfile(
@@ -101,7 +105,11 @@ class PublicSaccoRegistrationController {
     }
 
     private String blankToDefault(String value) {
-        return value == null || value.isBlank() ? "" : value.trim();
+        return blankToDefault(value, "");
+    }
+
+    private String blankToDefault(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value.trim();
     }
 
     private String address(String district, String parish, String village, String memberRange) {
@@ -118,6 +126,10 @@ class PublicSaccoRegistrationController {
             @NotBlank String district,
             @NotBlank String parish,
             @NotBlank String village,
+            String country,
+            String localeCode,
+            String currencyCode,
+            Integer currencyDigits,
             @NotBlank String contactNumber,
             @NotBlank String memberRange,
             @NotBlank String paymentPhone) {
