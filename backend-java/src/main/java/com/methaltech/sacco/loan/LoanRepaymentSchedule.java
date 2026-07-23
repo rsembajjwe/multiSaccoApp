@@ -10,7 +10,7 @@ import java.time.LocalDate;
 
 @Entity
 @Table(name = "loan_repayment_schedules")
-class LoanRepaymentSchedule {
+public class LoanRepaymentSchedule {
 
     @Id
     private String id;

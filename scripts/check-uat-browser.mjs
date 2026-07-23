@@ -96,11 +96,12 @@ function runNodeScript(script, env) {
 
 async function platformAdminUat(page) {
   await staffLogin(page, "admin@platform.local", "Admin@12345", "Platform admin");
-  await assertScreen(page, "dashboard", "Dashboard", ["Dashboard data source", "Java-backed", "Operations scope", "Refresh backend data"]);
-  await assertScreen(page, "registrations", "SACCO Registration", ["SACCO registration data source", "Tenant approval", "Activation gate"]);
-  await assertScreen(page, "subscriptions", "Subscriptions", ["Subscriptions data source", "Billable members", "Payment access"]);
-  await assertScreen(page, "operations", "Operations", ["Operations data source", "Operations command center", "Database"]);
-  await assertScreen(page, "reports", "Reports", ["Reports data source", "Ledger integrity", "Compliance"]);
+  await assertScreen(page, "dashboard", "Dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
+  await assertScreen(page, "sacco-applications", "SACCO Registration", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
+  await assertScreen(page, "subscriptions", "Subscriptions", ["Subscription list", "Package Setup", "Manage package"]);
+  await assertScreen(page, "reports", "Reports", ["Super admin reporting control", "Super Admin SACCO report", "Platform administrator access report"]);
+  await assertScreen(page, "complaints", "Complaints", ["Complaints from SACCO admins", "Open platform support cases"]);
+  await assertScreen(page, "users", "Users and Roles", ["Add platform user", "Platform administrator list", "Permission matrix"]);
   await clearSession(page);
   await page.reload({ waitUntil: "domcontentloaded" });
   console.log("PASS platform admin UAT path");
@@ -109,12 +110,11 @@ async function platformAdminUat(page) {
 async function saccoStaffUat(page) {
   const staff = uatData?.created?.staffUser;
   await staffLogin(page, staff?.email || "admin@greenvalley.local", staff?.password || "Sacco@12345", "SACCO staff");
-  await assertScreen(page, "members", "Members", ["Members data source", "Server fields", uatData?.created?.member?.membershipNo || "GVS-0001"]);
-  await assertScreen(page, "transactions", "Transactions", ["Transactions data source", "Statement-ready", uatData?.created?.reversalCandidate?.reference || "GVS-TX"]);
-  await assertScreen(page, "approvals", "Approvals", ["Approvals data source", "Queue", "decision"]);
-  await assertScreen(page, "loans", "Loans", ["Loans data source", "Guarantor pending", uatData?.created?.loan?.product || "Development Loan"]);
-  await assertScreen(page, "reports", "Reports", ["Reports data source", "Reconciliation", "Operations exceptions"]);
-  await assertScreen(page, "operations", "Operations", ["Operations command center", "Green Valley SACCO", "Runbook"]);
+  await assertScreen(page, "members", "Members", ["Member Overview", "Member List", "Member management focus"]);
+  await assertScreen(page, "transactions", "Transactions", ["Transaction control focus", "Deposits and reversals"]);
+  await assertScreen(page, "approvals", "Approvals", ["Approval decision center", "Approval queue", "decision"]);
+  await assertScreen(page, "loans", "Loans", ["Loan lifecycle control", "Loan application list"]);
+  await assertScreen(page, "reports", "Reports", ["Reporting evidence control", "Operational and financial reporting"]);
   await clearSession(page);
   await page.reload({ waitUntil: "domcontentloaded" });
   console.log("PASS SACCO staff UAT path");
@@ -122,41 +122,53 @@ async function saccoStaffUat(page) {
 
 async function memberPortalUat(page) {
   const member = uatData?.created?.member;
-  await page.locator("#loginSaccoCode").fill("GVS");
-  await page.locator("#loginUsername").fill(member?.membershipNo || "GVS-0001");
-  await page.locator("#loginPassword").fill(member?.password || "Member@12345");
-  await page.locator("#loginSubmit").click();
+  await page.locator("#code").fill("GVS");
+  await page.locator("#username").fill(member?.membershipNo || "GVS-0001");
+  await page.locator("#password").fill(member?.password || "Member@12345");
+  await page.locator("#loginButton").click();
   await waitForSettledUi(page);
 
   for (const marker of [
-    "Member portal data source",
-    "member-authenticated Java API data",
-    "SERVER-CONFIRMED BALANCES",
+    "Balances and requests update",
     "Total balance",
     "Loans",
     "Notifications",
     "Guarantee requests",
     "Offline drafts",
+    "Monthly savings",
     member?.membershipNo || "GVS-0001"
   ]) {
     await expectText(page, marker, `member portal marker ${marker}`);
   }
 
-  await page.getByRole("button", { name: /Draft complaint/i }).first().click();
-  await page.getByRole("button", { name: /Save draft/i }).first().click();
-  await expectText(page, "Mobile service follow-up", "offline draft row saved");
-  await page.getByRole("button", { name: /Sync drafts/i }).first().click();
-  await expectTextGone(page, "Mobile service follow-up", "offline draft row synced");
+  const subject = `UAT member complaint ${Date.now()}`;
+  await navigateTo(page, "complaints");
+  await page.locator("[data-module-tab-view='complaints'][data-module-tab='submit']").click();
+  await page.locator("#memberComplaintCategory").selectOption("service");
+  await page.locator("#memberComplaintPriority").selectOption("medium");
+  await page.locator("#memberComplaintSubject").fill(subject);
+  await page.locator("#memberComplaintDescription").fill("UAT member complaint draft from the production readiness path.");
+  await page.locator("[data-member-draft-save='complaint']").click();
+  await expectText(page, "Complaint draft saved on this device", "offline draft row saved");
+  await page.locator("[data-module-tab-view='complaints'][data-module-tab='drafts']").click();
+  await expectText(page, subject, "offline draft row visible");
   console.log("PASS member portal UAT path");
 }
 
 async function staffLogin(page, email, password, label) {
-  await page.locator("#loginSaccoCode").fill(email.includes("platform") ? "PLATFORM" : "GVS");
-  await page.locator("#loginUsername").fill(email);
-  await page.locator("#loginPassword").fill(password);
-  await page.locator("#loginSubmit").click();
-  await expectText(page, "API:", `${label} API badge`);
-  await expectText(page, "Java-backed", `${label} Java-backed state`);
+  await page.locator("#code").fill(email.includes("platform") ? "PLATFORM" : "GVS");
+  await page.locator("#username").fill(email);
+  await page.locator("#password").fill(password);
+  await page.locator("#loginButton").click();
+  if (await page.locator("#mfaVerifyForm").count()) {
+    const bodyText = await page.locator("body").innerText();
+    const code = bodyText.match(/\b\d{6}\b/)?.[0];
+    if (!code) throw new Error(`${label} MFA challenge did not expose a development code`);
+    await page.locator("#mfaCode").fill(code);
+    await page.locator("#mfaVerifyButton").click();
+  }
+  await page.locator(".app-shell").waitFor({ state: "attached" });
+  console.log(`PASS ${label} login`);
   await waitForSettledUi(page);
 }
 
@@ -178,6 +190,9 @@ async function navigateTo(page, viewId) {
 
 async function clearSession(page) {
   await page.evaluate(() => {
+    localStorage.removeItem("tereka-staff-token");
+    localStorage.removeItem("tereka-member-token");
+    localStorage.removeItem("tereka-member-offline-drafts-v1");
     localStorage.removeItem("sacco-platform-api-session-v1");
     localStorage.removeItem("sacco-platform-member-session-v1");
   });

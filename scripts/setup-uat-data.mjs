@@ -22,11 +22,15 @@ try {
   await waitForApi();
 
   const platformToken = (await api("POST", "/auth/login", {
+    saccoCode: "PLATFORM",
+    username: evidence.platformAdmin.email,
     email: evidence.platformAdmin.email,
     password: evidence.platformAdmin.password
   })).data.token;
 
   const saccoToken = (await api("POST", "/auth/login", {
+    saccoCode: "GVS",
+    username: evidence.saccoAdmin.email,
     email: evidence.saccoAdmin.email,
     password: evidence.saccoAdmin.password
   })).data.token;
@@ -135,6 +139,7 @@ try {
   evidence.created.guarantorRequest = pick(guarantor.data, ["id", "loanId", "memberId", "status", "guaranteedAmount"]);
 
   const memberToken = (await api("POST", "/member-auth/login", {
+    saccoCode: "GVS",
     identifier: activeMember.data.membershipNo,
     password: memberPassword
   })).data.token;

@@ -4698,7 +4698,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status", is("active")))
 				.andExpect(jsonPath("$.data.stage", is("Disbursed")))
-				.andExpect(jsonPath("$.data.balance", is(800000.00)))
+				.andExpect(jsonPath("$.data.balance", is(896000.00)))
 				.andExpect(jsonPath("$.data.interestRate", is(2.0000)))
 				.andExpect(jsonPath("$.data.interestAmount", is(96000.00)))
 				.andExpect(jsonPath("$.data.totalPayable", is(896000.00)))
@@ -4807,22 +4807,27 @@ class SaccoBackendApplicationTests {
 		JsonNode openLoan = loanFromList(openLoans, loanId);
 		org.junit.jupiter.api.Assertions.assertEquals("active", openLoan.path("status").asString());
 		org.junit.jupiter.api.Assertions.assertEquals("Repayment", openLoan.path("stage").asString());
-		org.junit.jupiter.api.Assertions.assertEquals(75000.0, openLoan.path("balance").asDouble(), 0.01);
+		org.junit.jupiter.api.Assertions.assertEquals(91000.0, openLoan.path("balance").asDouble(), 0.01);
 		org.junit.jupiter.api.Assertions.assertEquals(1, openLoan.path("repayments").asInt());
 		org.junit.jupiter.api.Assertions.assertEquals(125000.0, openLoan.path("repaymentTotal").asDouble(), 0.01);
+		org.junit.jupiter.api.Assertions.assertEquals(4, openLoan.path("scheduledInstallments").asInt());
+		org.junit.jupiter.api.Assertions.assertEquals(2, openLoan.path("paidInstallments").asInt());
+		org.junit.jupiter.api.Assertions.assertEquals("on_track", openLoan.path("scheduleStatus").asString());
+		org.junit.jupiter.api.Assertions.assertFalse(openLoan.path("nextDueDate").asText().isBlank());
 
+		String finalPaymentAmount = openLoan.path("balance").decimalValue().toPlainString();
 		mockMvc.perform(post("/api/v1/loans/" + loanId + "/repayments")
 						.header("Authorization", "Bearer " + staffToken)
 						.contentType("application/json")
 						.content("""
 								{
-								  "amount": 75000,
+								  "amount": %s,
 								  "channel": "mobile_money",
 								  "reference": "LR-TEST-002"
 								}
-				"""))
+				""".formatted(finalPaymentAmount)))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.data.amount", is(75000.0)));
+				.andExpect(jsonPath("$.data.amount", is(91000.0)));
 
 		MvcResult loans = mockMvc.perform(get("/api/v1/loans")
 						.header("Authorization", "Bearer " + staffToken))
@@ -4834,7 +4839,8 @@ class SaccoBackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals("Closed", closedLoan.path("stage").asString());
 		org.junit.jupiter.api.Assertions.assertEquals(0.0, closedLoan.path("balance").asDouble(), 0.01);
 		org.junit.jupiter.api.Assertions.assertEquals(2, closedLoan.path("repayments").asInt());
-		org.junit.jupiter.api.Assertions.assertEquals(200000.0, closedLoan.path("repaymentTotal").asDouble(), 0.01);
+		org.junit.jupiter.api.Assertions.assertEquals(216000.0, closedLoan.path("repaymentTotal").asDouble(), 0.01);
+		org.junit.jupiter.api.Assertions.assertEquals("settled", closedLoan.path("scheduleStatus").asString());
 
 		MvcResult repaymentJournals = mockMvc.perform(get("/api/v1/journal-entries")
 						.header("Authorization", "Bearer " + staffToken))
@@ -4846,7 +4852,7 @@ class SaccoBackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertTrue(firstRepaymentJournal.path("isBalanced").asBoolean());
 		org.junit.jupiter.api.Assertions.assertTrue(secondRepaymentJournal.path("isBalanced").asBoolean());
 		org.junit.jupiter.api.Assertions.assertEquals(125000.0, firstRepaymentJournal.path("debitTotal").asDouble(), 0.01);
-		org.junit.jupiter.api.Assertions.assertEquals(75000.0, secondRepaymentJournal.path("debitTotal").asDouble(), 0.01);
+		org.junit.jupiter.api.Assertions.assertEquals(91000.0, secondRepaymentJournal.path("debitTotal").asDouble(), 0.01);
 	}
 
 	@Test

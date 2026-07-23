@@ -72,6 +72,8 @@ try {
   $env:POSTGRES_PORT = "$PostgresPort"
   $env:BACKEND_PORT = "$BackendPort"
   $env:SACCO_DEMO_LOGINS_ENABLED = "true"
+  $env:SACCO_MOBILE_MONEY_CALLBACK_SECRET = "readiness_check_callback_secret_2026"
+  $env:SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS = "true"
 
   Write-Host "Starting production-readiness Docker Compose stack: $ProjectName"
   Invoke-Checked docker @("compose", "-p", $ProjectName, "up", "-d", "--build", "postgres", "backend")
@@ -84,6 +86,7 @@ try {
 
   $env:API_BASE_URL = "http://127.0.0.1:$BackendPort/api/v1"
   $env:API_SMOKE_WAIT_MS = "60000"
+  $env:API_SMOKE_MOBILE_MONEY_CALLBACK_SECRET = $env:SACCO_MOBILE_MONEY_CALLBACK_SECRET
   $env:SKIP_RATE_LIMIT_TEST = "1"
 
   Write-Host "Running Java/PostgreSQL API smoke test"
@@ -113,10 +116,13 @@ try {
   Set-Location $repoRoot
   Remove-Item Env:\API_BASE_URL -ErrorAction SilentlyContinue
   Remove-Item Env:\API_SMOKE_WAIT_MS -ErrorAction SilentlyContinue
+  Remove-Item Env:\API_SMOKE_MOBILE_MONEY_CALLBACK_SECRET -ErrorAction SilentlyContinue
   Remove-Item Env:\SKIP_RATE_LIMIT_TEST -ErrorAction SilentlyContinue
   Remove-Item Env:\JAVA_API_BASE -ErrorAction SilentlyContinue
   Remove-Item Env:\UI_REGRESSION_PORT -ErrorAction SilentlyContinue
   Remove-Item Env:\UAT_UI_PORT -ErrorAction SilentlyContinue
+  Remove-Item Env:\SACCO_MOBILE_MONEY_CALLBACK_SECRET -ErrorAction SilentlyContinue
+  Remove-Item Env:\SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS -ErrorAction SilentlyContinue
 
   if ($composeStarted) {
     Write-Host "Stopping production-readiness Docker Compose stack: $ProjectName"

@@ -2,6 +2,7 @@ package com.methaltech.sacco.loan;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 
 public record LoanResponse(
         String id,
@@ -21,6 +22,12 @@ public record LoanResponse(
         int pendingGuarantors,
         int repayments,
         BigDecimal repaymentTotal,
+        int scheduledInstallments,
+        int paidInstallments,
+        int arrearsInstallments,
+        BigDecimal arrearsAmount,
+        LocalDate nextDueDate,
+        String scheduleStatus,
         int dsr,
         int repaymentMonths,
         String purpose,
@@ -39,6 +46,19 @@ public record LoanResponse(
     }
 
     public static LoanResponse from(Loan loan, int repayments, BigDecimal repaymentTotal) {
+        return from(loan, repayments, repaymentTotal, 0, 0, 0, BigDecimal.ZERO, null, "not_generated");
+    }
+
+    public static LoanResponse from(
+            Loan loan,
+            int repayments,
+            BigDecimal repaymentTotal,
+            int scheduledInstallments,
+            int paidInstallments,
+            int arrearsInstallments,
+            BigDecimal arrearsAmount,
+            LocalDate nextDueDate,
+            String scheduleStatus) {
         return new LoanResponse(
                 loan.getId(),
                 loan.getTenantId(),
@@ -57,6 +77,12 @@ public record LoanResponse(
                 0,
                 repayments,
                 repaymentTotal,
+                scheduledInstallments,
+                paidInstallments,
+                arrearsInstallments,
+                arrearsAmount,
+                nextDueDate,
+                scheduleStatus,
                 loan.getDsr(),
                 loan.getRepaymentMonths(),
                 loan.getPurpose(),

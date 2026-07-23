@@ -14,6 +14,8 @@ import com.methaltech.sacco.loan.LoanGuarantor;
 import com.methaltech.sacco.loan.LoanGuarantorRepository;
 import com.methaltech.sacco.loan.LoanGuarantorResponse;
 import com.methaltech.sacco.loan.LoanRepaymentRepository;
+import com.methaltech.sacco.loan.LoanRepaymentSchedule;
+import com.methaltech.sacco.loan.LoanRepaymentScheduleRepository;
 import com.methaltech.sacco.loan.LoanRepository;
 import com.methaltech.sacco.loan.LoanResponse;
 import com.methaltech.sacco.finance.FinancialTransaction;
@@ -37,6 +39,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -68,6 +72,7 @@ class MemberAuthController {
     private final MemberSessionRepository memberSessionRepository;
     private final LoanRepository loanRepository;
     private final LoanRepaymentRepository repaymentRepository;
+    private final LoanRepaymentScheduleRepository scheduleRepository;
     private final LoanGuarantorRepository guarantorRepository;
     private final FinancialTransactionRepository transactionRepository;
     private final ComplaintRepository complaintRepository;
@@ -89,6 +94,7 @@ class MemberAuthController {
             MemberSessionRepository memberSessionRepository,
             LoanRepository loanRepository,
             LoanRepaymentRepository repaymentRepository,
+            LoanRepaymentScheduleRepository scheduleRepository,
             LoanGuarantorRepository guarantorRepository,
             FinancialTransactionRepository transactionRepository,
             ComplaintRepository complaintRepository,
@@ -108,6 +114,7 @@ class MemberAuthController {
         this.memberSessionRepository = memberSessionRepository;
         this.loanRepository = loanRepository;
         this.repaymentRepository = repaymentRepository;
+        this.scheduleRepository = scheduleRepository;
         this.guarantorRepository = guarantorRepository;
         this.transactionRepository = transactionRepository;
         this.complaintRepository = complaintRepository;
@@ -572,10 +579,51 @@ class MemberAuthController {
     }
 
     private LoanResponse loanResponse(Loan loan) {
+        BigDecimal repaymentTotal = repaymentRepository.totalAmountByLoanId(loan.getId());
+        ScheduleSummary summary = scheduleSummary(loan, repaymentTotal);
         return LoanResponse.from(
                 loan,
                 repaymentRepository.countByLoanId(loan.getId()),
-                repaymentRepository.totalAmountByLoanId(loan.getId()));
+                repaymentTotal,
+                summary.scheduledInstallments(),
+                summary.paidInstallments(),
+                summary.arrearsInstallments(),
+                summary.arrearsAmount(),
+                summary.nextDueDate(),
+                summary.status());
+    }
+
+    private ScheduleSummary scheduleSummary(Loan loan, BigDecimal repaymentTotal) {
+        List<LoanRepaymentSchedule> schedules = scheduleRepository.findByLoanIdOrderByInstallmentNoAsc(loan.getId());
+        if (schedules.isEmpty()) {
+            String status = "active".equals(loan.getStatus()) ? "not_generated" : "waiting";
+            return new ScheduleSummary(0, 0, 0, BigDecimal.ZERO, null, status);
+        }
+        BigDecimal remainingPaid = repaymentTotal == null ? BigDecimal.ZERO : repaymentTotal;
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        int paidInstallments = 0;
+        int arrearsInstallments = 0;
+        BigDecimal arrearsAmount = BigDecimal.ZERO;
+        LocalDate nextDueDate = null;
+        for (LoanRepaymentSchedule schedule : schedules) {
+            BigDecimal paidForInstallment = remainingPaid.min(schedule.getTotalDue());
+            if (paidForInstallment.compareTo(BigDecimal.ZERO) < 0) paidForInstallment = BigDecimal.ZERO;
+            remainingPaid = remainingPaid.subtract(paidForInstallment);
+            BigDecimal balanceDue = schedule.getTotalDue().subtract(paidForInstallment).max(BigDecimal.ZERO);
+            if (balanceDue.compareTo(BigDecimal.ZERO) == 0) {
+                paidInstallments += 1;
+                continue;
+            }
+            if (nextDueDate == null) nextDueDate = schedule.getDueDate();
+            if (schedule.getDueDate().isBefore(today)) {
+                arrearsInstallments += 1;
+                arrearsAmount = arrearsAmount.add(balanceDue);
+            }
+        }
+        String status = arrearsInstallments > 0
+                ? "arrears"
+                : paidInstallments == schedules.size() ? "settled" : "on_track";
+        return new ScheduleSummary(schedules.size(), paidInstallments, arrearsInstallments, Money.normalize(arrearsAmount), nextDueDate, status);
     }
 
     private List<MobileStatementLineResponse> recentStatementLines(Member member) {
@@ -661,6 +709,15 @@ class MemberAuthController {
     }
 
     record UpdateGuarantorStatusRequest(@NotBlank String status) {
+    }
+
+    private record ScheduleSummary(
+            int scheduledInstallments,
+            int paidInstallments,
+            int arrearsInstallments,
+            BigDecimal arrearsAmount,
+            LocalDate nextDueDate,
+            String status) {
     }
 
     record MobileComplaintRequest(

@@ -562,7 +562,7 @@ try {
 
   const disbursedLoan = await api("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
   assert(disbursedLoan.data.status === "active", "Disbursed loan should become active");
-  assert(disbursedLoan.data.balance === disbursedLoan.data.amount, "Disbursed loan balance should equal principal");
+  assert(disbursedLoan.data.balance === disbursedLoan.data.totalPayable, "Disbursed loan balance should equal total payable");
   assert(Number(disbursedLoan.data.interestRate) > 0, "Disbursed loan should expose product interest rate");
   assert(Number(disbursedLoan.data.interestAmount) > 0, "Disbursed loan should calculate total interest");
   assert(Number(disbursedLoan.data.totalPayable) > Number(disbursedLoan.data.amount), "Disbursed loan should expose total payable");
@@ -583,8 +583,10 @@ try {
   const loansAfterRepayment = await api("GET", "/loans", null, saccoToken);
   const loanAfterRepayment = loansAfterRepayment.data.find((item) => item.id === loan.data.id);
   assert(loanAfterRepayment, "Loan list should include the repaid loan");
-  assert(loanAfterRepayment.balance === disbursedLoan.data.amount - repaymentPayload.amount, "Repayment should reduce the outstanding loan balance");
+  assert(loanAfterRepayment.balance === disbursedLoan.data.totalPayable - repaymentPayload.amount, "Repayment should reduce the outstanding loan balance");
   assert(loanAfterRepayment.repaymentTotal === repaymentPayload.amount, "Loan should expose total repayments");
+  assert(loanAfterRepayment.scheduledInstallments === loan.data.repaymentMonths, "Loan list should expose generated installment count");
+  assert(["on_track", "arrears", "settled"].includes(loanAfterRepayment.scheduleStatus), "Loan list should expose schedule servicing status");
 
   const scheduleAfterRepayment = await api("GET", `/loans/${loan.data.id}/schedule`, null, saccoToken);
   assert(scheduleAfterRepayment.data.some((row) => row.status === "paid"), "Schedule should allocate repayments to earliest installments");

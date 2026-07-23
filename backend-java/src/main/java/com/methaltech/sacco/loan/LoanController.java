@@ -633,6 +633,39 @@ class LoanController {
         return responses;
     }
 
+    private ScheduleSummary scheduleSummary(Loan loan, BigDecimal repaymentTotal) {
+        List<LoanRepaymentSchedule> schedules = scheduleRepository.findByLoanIdOrderByInstallmentNoAsc(loan.getId());
+        if (schedules.isEmpty()) {
+            String status = "active".equals(loan.getStatus()) ? "not_generated" : "waiting";
+            return new ScheduleSummary(0, 0, 0, BigDecimal.ZERO, null, status);
+        }
+        BigDecimal remainingPaid = repaymentTotal == null ? BigDecimal.ZERO : repaymentTotal;
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        int paidInstallments = 0;
+        int arrearsInstallments = 0;
+        BigDecimal arrearsAmount = BigDecimal.ZERO;
+        LocalDate nextDueDate = null;
+        for (LoanRepaymentSchedule schedule : schedules) {
+            BigDecimal paidForInstallment = remainingPaid.min(schedule.getTotalDue());
+            if (paidForInstallment.compareTo(BigDecimal.ZERO) < 0) paidForInstallment = BigDecimal.ZERO;
+            remainingPaid = remainingPaid.subtract(paidForInstallment);
+            BigDecimal balanceDue = schedule.getTotalDue().subtract(paidForInstallment).max(BigDecimal.ZERO);
+            if (balanceDue.compareTo(BigDecimal.ZERO) == 0) {
+                paidInstallments += 1;
+                continue;
+            }
+            if (nextDueDate == null) nextDueDate = schedule.getDueDate();
+            if (schedule.getDueDate().isBefore(today)) {
+                arrearsInstallments += 1;
+                arrearsAmount = arrearsAmount.add(balanceDue);
+            }
+        }
+        String status = arrearsInstallments > 0
+                ? "arrears"
+                : paidInstallments == schedules.size() ? "settled" : "on_track";
+        return new ScheduleSummary(schedules.size(), paidInstallments, arrearsInstallments, Money.normalize(arrearsAmount), nextDueDate, status);
+    }
+
     private String scheduleStatus(LoanRepaymentSchedule schedule, BigDecimal paidForInstallment, LocalDate today) {
         if (paidForInstallment.compareTo(schedule.getTotalDue()) >= 0) return "paid";
         if (paidForInstallment.compareTo(BigDecimal.ZERO) > 0) return "partial";
@@ -1105,10 +1138,18 @@ class LoanController {
     }
 
     private LoanResponse loanResponse(Loan loan) {
+        BigDecimal repaymentTotal = repaymentRepository.totalAmountByLoanId(loan.getId());
+        ScheduleSummary summary = scheduleSummary(loan, repaymentTotal);
         return LoanResponse.from(
                 loan,
                 repaymentRepository.countByLoanId(loan.getId()),
-                repaymentRepository.totalAmountByLoanId(loan.getId()));
+                repaymentTotal,
+                summary.scheduledInstallments(),
+                summary.paidInstallments(),
+                summary.arrearsInstallments(),
+                summary.arrearsAmount(),
+                summary.nextDueDate(),
+                summary.status());
     }
 
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
@@ -1153,6 +1194,15 @@ class LoanController {
             String channel,
             @NotBlank String reference,
             String narration) {
+    }
+
+    private record ScheduleSummary(
+            int scheduledInstallments,
+            int paidInstallments,
+            int arrearsInstallments,
+            BigDecimal arrearsAmount,
+            LocalDate nextDueDate,
+            String status) {
     }
 
     record LoanImportTemplateResponse(

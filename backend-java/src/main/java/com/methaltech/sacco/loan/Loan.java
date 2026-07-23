@@ -171,7 +171,9 @@ public class Loan {
     void disburse(String actorUserId) {
         this.status = "active";
         this.stage = "Disbursed";
-        this.balance = this.amount;
+        this.balance = this.totalPayable == null || this.totalPayable.compareTo(BigDecimal.ZERO) == 0
+                ? this.amount
+                : this.totalPayable;
         this.disbursedByUserId = actorUserId;
         this.disbursedAt = Instant.now();
         this.updatedAt = this.disbursedAt;
