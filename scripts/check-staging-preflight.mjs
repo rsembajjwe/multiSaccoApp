@@ -17,6 +17,8 @@ const required = [
   "SACCO_BOOTSTRAP_PLATFORM_ADMIN_FULL_NAME",
   "SACCO_BOOTSTRAP_PLATFORM_ADMIN_EMAIL",
   "SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD",
+  "SACCO_MOBILE_MONEY_CALLBACK_SECRET",
+  "SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS",
   "STAGING_UI_BASE_URL",
   "STAGING_API_BASE_URL"
 ];
@@ -58,9 +60,14 @@ assertNotPlaceholder("STAGING_API_BASE_URL", failures);
 assertNotPlaceholder("SACCO_BOOTSTRAP_PLATFORM_ADMIN_FULL_NAME", failures);
 assertNotPlaceholder("SACCO_BOOTSTRAP_PLATFORM_ADMIN_EMAIL", failures);
 assertNotPlaceholder("SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD", failures);
+assertNotPlaceholder("SACCO_MOBILE_MONEY_CALLBACK_SECRET", failures);
 
 if (String(values.SACCO_DEMO_LOGINS_ENABLED).toLowerCase() !== "false") {
   failures.push("SACCO_DEMO_LOGINS_ENABLED must be false before staging handoff.");
+}
+
+if (String(values.SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS).toLowerCase() !== "true") {
+  failures.push("SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS must be true before staging handoff.");
 }
 
 if (String(values.POSTGRES_DB).toLowerCase().includes("dev")) {
@@ -113,6 +120,11 @@ for (const name of ["SACCO_SMS_PROVIDER", "SACCO_EMAIL_PROVIDER", "SACCO_MOBILE_
 const bootstrapPassword = String(values.SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD ?? "");
 if (bootstrapPassword.length < 10 || !/[A-Z]/.test(bootstrapPassword) || !/[a-z]/.test(bootstrapPassword) || !/[0-9]/.test(bootstrapPassword)) {
   failures.push("SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD must be at least 10 characters and include uppercase, lowercase, and a number.");
+}
+
+const callbackSecret = String(values.SACCO_MOBILE_MONEY_CALLBACK_SECRET ?? "");
+if (callbackSecret.length < 24) {
+  failures.push("SACCO_MOBILE_MONEY_CALLBACK_SECRET should be at least 24 characters for staging.");
 }
 
 const gitignore = existsSync(".gitignore") ? readFileSync(".gitignore", "utf8") : "";

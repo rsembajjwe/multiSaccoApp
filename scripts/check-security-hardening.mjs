@@ -16,6 +16,10 @@ await check("prod profile disables demo logins by default", () => {
   assert(demoPolicy.includes("MEMBER_DEMO_NUMBER"), "demo member number guard is missing");
   const providerValidator = readFileSync("backend-java/src/main/java/com/methaltech/sacco/config/IntegrationProviderReadinessValidator.java", "utf8");
   assert(providerValidator.includes("Production startup requires real integration provider configuration"), "provider readiness guard is missing");
+  const secretValidator = readFileSync("backend-java/src/main/java/com/methaltech/sacco/config/ProductionSecretReadinessValidator.java", "utf8");
+  assert(secretValidator.includes("Production startup requires strong non-placeholder secrets"), "production secret readiness guard is missing");
+  assert(secretValidator.includes("SACCO_MOBILE_MONEY_CALLBACK_SECRET"), "callback secret guard is missing");
+  assert(secretValidator.includes("POSTGRES_PASSWORD"), "database password guard is missing");
   const bootstrapper = readFileSync("backend-java/src/main/java/com/methaltech/sacco/identity/PlatformAdminBootstrapper.java", "utf8");
   assert(bootstrapper.includes("SACCO_BOOTSTRAP_PLATFORM_ADMIN_EMAIL"), "bootstrap admin startup guard is missing");
   assert(bootstrapper.includes("role_platform_super_admin"), "bootstrap admin role assignment is missing");
