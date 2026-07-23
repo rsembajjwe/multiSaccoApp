@@ -2509,7 +2509,8 @@ function transactionsView() {
   const pending = rows.filter((row) => normal(row.status).includes("pending"));
   const posted = rows.filter((row) => normal(row.status) === "posted");
   const reversed = rows.filter((row) => row.originalTransactionId || normal(row.status).includes("reversed"));
-  const tabs = [["overview", t("control")], ["capture", t("newTransactionScreen")], ["detail", t("transactionDetail")], ["list", t("transactionList")]];
+  const receiptingQueue = transactionReceiptingQueue(rows);
+  const tabs = [["overview", t("control")], ["capture", t("newTransactionScreen")], ["receipting", "Receipting queue"], ["detail", t("transactionDetail")], ["list", t("transactionList")]];
   const tab = activeModuleTab("transactions", tabs);
   return `
     <div class="dashboard-grid">
@@ -2523,16 +2524,51 @@ function transactionsView() {
     ${tab === "overview" ? rolePriorityPanel(t("transactionControlFocus"), [
       ["Maker-checker", `${pending.length} transaction(s) are waiting for Treasurer/Admin approval.`, pending.length ? "Pending" : "Clear"],
       ["Receipts", `${posted.length} posted transaction(s) can produce member receipts.`, posted.length ? "Ready" : "Pending"],
+      ["Receipting queue", `${receiptingQueue.length} payment item(s) need posting, receipt loading or member follow-up.`, receiptingQueue.length ? "Open" : "Clear"],
       ["Treasurer cash", "Cash savings deposits and loan repayments are captured here, approved, then receipted for the member.", "Office route"],
       ["Mobile money", "Member self-service payments arrive through provider callbacks and are reconciled against posted transactions.", "Provider route"],
       ["Reversals", "Posted original transactions require a reason before reversal is created.", "Controlled"]
     ]) : ""}
     ${tab === "capture" ? transactionFormPanel() : ""}
+    ${tab === "receipting" ? transactionReceiptingPanel(receiptingQueue) : ""}
     ${tab === "detail" ? (transactionDetailPanel(rows) || emptyState("Transaction detail and reversal", "Select a transaction from the list to review receipt, approval and reversal actions.")) : ""}
     ${tab === "list" ? `
       ${filterToolbar("Search by reference, member, channel, status, amount or user", "New transaction", "Print receipt")}
       ${recordTable("Transaction list", rows, ["reference", "postedAt", "memberName", "type", "paymentRoute", "amount", "paymentStatus", "receiptStatus", "reversalStatus", "status"])}
     ` : ""}
+  `;
+}
+
+function transactionReceiptingPanel(rows) {
+  const pending = rows.filter((row) => normal(row.status).includes("pending"));
+  const ready = rows.filter((row) => normal(row.status) === "posted");
+  const mobile = rows.filter((row) => row.paymentRoute === "Mobile money");
+  const treasurer = rows.filter((row) => row.paymentRoute === "Treasurer cash");
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Receipting queue</h2>
+          <p>Treasurer/Admin queue for deposits, loan repayments, mobile-money callbacks and receipt follow-up.</p>
+        </div>
+        <span class="status ${rows.length ? "pending" : "active"}">${rows.length ? "Action queue" : "Clear"}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Pending posting", pending.length)}
+        ${mini("Receipt ready", ready.length)}
+        ${mini("Mobile money", mobile.length)}
+        ${mini("Treasurer cash", treasurer.length)}
+        ${mini("Loan repayments", rows.filter((row) => normal(row.type).includes("loan")).length)}
+        ${mini("Savings deposits", rows.filter((row) => normal(row.type).includes("saving")).length)}
+      </div>
+      <ul class="activity-list">
+        <li><strong>Pending posting</strong><span>Approve/post verified Treasurer cash, bank or manual entries before issuing receipts.</span><em>${pending.length ? "Review" : "Clear"}</em></li>
+        <li><strong>Receipt ready</strong><span>Load receipt for posted transactions, then confirm the member can see the same reference in the member portal.</span><em>${ready.length ? "Ready" : "Waiting"}</em></li>
+        <li><strong>Payment route</strong><span>Mobile-money and Treasurer cash are separated so reconciliation and monthly performance remain clear.</span><em>Controlled</em></li>
+      </ul>
+    </section>
+    ${filterToolbar("Search receipting queue by member, reference, route, status or amount", "Post selected", "Load receipt")}
+    ${recordTable("Receipting queue", rows, ["reference", "postedAt", "memberName", "type", "paymentRoute", "amount", "paymentStatus", "receiptStatus", "receiptingAction", "status"])}
   `;
 }
 
@@ -5799,6 +5835,28 @@ function transactionRows() {
       actionId: transaction.id
     };
   });
+}
+
+function transactionReceiptingQueue(rows) {
+  return rows
+    .filter((row) => {
+      const status = normal(row.status);
+      const type = normal(row.type);
+      return (status.includes("pending") || status === "posted") && ["deposit", "repayment", "share", "welfare", "saving"].some((word) => type.includes(word));
+    })
+    .map((row) => ({
+      ...row,
+      receiptingAction: normal(row.status).includes("pending") ? "Approve/post first" : "Load receipt",
+      action: "transaction-detail",
+      actionLabel: normal(row.status).includes("pending") ? "Post" : "Receipt",
+      actionId: row.id
+    }))
+    .sort((a, b) => {
+      const aPending = normal(a.status).includes("pending") ? 0 : 1;
+      const bPending = normal(b.status).includes("pending") ? 0 : 1;
+      if (aPending !== bPending) return aPending - bPending;
+      return new Date(b.postedAt || b.createdAt || 0) - new Date(a.postedAt || a.createdAt || 0);
+    });
 }
 
 function transactionDetailPanel(rows) {

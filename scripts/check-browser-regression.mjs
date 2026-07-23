@@ -93,6 +93,7 @@ try {
   await assertModuleTabs(page, "transactions", [
     ["overview", ["Transaction control focus"]],
     ["capture", ["New transaction screen"]],
+    ["receipting", ["Receipting queue", "Pending posting", "Receipt ready", "Payment route"]],
     ["list", ["Transaction list"]]
   ]);
   await assertTransactionWorkflow(page);
