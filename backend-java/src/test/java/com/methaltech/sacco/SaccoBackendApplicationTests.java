@@ -46,7 +46,9 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(header().string("X-Content-Type-Options", "nosniff"))
 				.andExpect(header().string("X-Frame-Options", "DENY"))
+				.andExpect(header().string("Strict-Transport-Security", "max-age=31536000; includeSubDomains"))
 				.andExpect(header().string("Referrer-Policy", "no-referrer"))
+				.andExpect(header().string("Cross-Origin-Opener-Policy", "same-origin"))
 				.andExpect(header().string("Content-Security-Policy", containsString("default-src 'self'")))
 				.andExpect(header().string("Content-Security-Policy", containsString("frame-ancestors 'none'")))
 				.andExpect(jsonPath("$.data.ok", is(true)))
@@ -730,7 +732,7 @@ class SaccoBackendApplicationTests {
 								  "tenantId": "tenant_green",
 								  "fullName": "MFA Admin Staff",
 								  "email": "%s",
-								  "password": "Mfa@12345"
+								  "password": "MfaAdmin@12345"
 								}
 								""".formatted(email)))
 				.andExpect(status().isCreated())
@@ -745,7 +747,7 @@ class SaccoBackendApplicationTests {
 								}
 								"""))
 				.andExpect(status().isOk());
-		String staffToken = loginAndReturnToken(email, "Mfa@12345");
+		String staffToken = loginAndReturnToken(email, "MfaAdmin@12345");
 
 		mockMvc.perform(post("/api/v1/auth/mfa/enable")
 						.header("Authorization", "Bearer " + staffToken))
@@ -756,8 +758,9 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "email": "%s",
-								  "password": "Mfa@12345"
+								  "saccoCode": "GVS",
+								  "username": "%s",
+								  "password": "MfaAdmin@12345"
 								}
 								""".formatted(email)))
 				.andExpect(status().isAccepted())
@@ -2211,8 +2214,8 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.createdCount", is(1)))
 				.andExpect(jsonPath("$.data.createdLoans[0].status", is("active")))
 				.andExpect(jsonPath("$.data.createdLoans[0].stage", is("Migrated Active")))
-				.andExpect(jsonPath("$.data.createdLoans[0].amount", is(1200000)))
-				.andExpect(jsonPath("$.data.createdLoans[0].balance", is(900000)));
+				.andExpect(jsonPath("$.data.createdLoans[0].amount", is(1200000.0)))
+				.andExpect(jsonPath("$.data.createdLoans[0].balance", is(900000.0)));
 
 		mockMvc.perform(get("/api/v1/loans?tenantId=" + tenantId)
 						.header("Authorization", "Bearer " + platformToken))
@@ -3732,7 +3735,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.reference", is(assetReference)))
 				.andExpect(jsonPath("$.data.status", is("active")))
 				.andExpect(jsonPath("$.data.accumulatedDepreciation", is(0)))
-				.andExpect(jsonPath("$.data.netBookValue", is(600000)));
+				.andExpect(jsonPath("$.data.netBookValue", is(600000.0)));
 
 		MvcResult journals = mockMvc.perform(get("/api/v1/journal-entries")
 						.header("Authorization", "Bearer " + token))
@@ -5767,7 +5770,8 @@ class SaccoBackendApplicationTests {
 	}
 
 	private String loginCodeFor(String email) {
-		return email.toLowerCase().contains("@platform.") ? "PLATFORM" : "GVS";
+		String normalized = email.toLowerCase();
+		return normalized.contains("@platform.") || normalized.contains("platform-") || normalized.contains("@tereka.local") ? "PLATFORM" : "GVS";
 	}
 
 	private String memberLoginAndReturnToken(String identifier, String password) throws Exception {
