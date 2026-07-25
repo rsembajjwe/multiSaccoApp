@@ -16,7 +16,7 @@ Use this guide when preparing a hosted staging environment for pilot SACCO testi
 | `SACCO_AUTH_RATE_LIMIT_WINDOW_SECONDS` | Yes | Start with `60`; tighten after UAT if needed. |
 | `SACCO_SMS_PROVIDER` | Yes | Use `demo_sms` until a real SMS adapter is configured. |
 | `SACCO_EMAIL_PROVIDER` | Yes | Use `demo_email` until a real email adapter is configured. |
-| `SACCO_MOBILE_MONEY_PROVIDER` | Yes | Use `demo_mobile_money` for local-only demos, `mtn_momo` for MTN MoMo, or `airtel_money` for Airtel Money. |
+| `SACCO_MOBILE_MONEY_PROVIDER` | Yes | Use `demo_mobile_money` for local-only demos, `mtn_momo` for MTN MoMo, `airtel_money` for Airtel Money, or `mpesa_daraja` for M-PESA. |
 | `SACCO_MTN_MOMO_SUBSCRIPTION_KEY` | Required for `mtn_momo` | Provider-issued MTN MoMo Collections subscription key. |
 | `SACCO_MTN_MOMO_API_USER_ID` | Required for `mtn_momo` | Provider-issued MTN MoMo API user. |
 | `SACCO_MTN_MOMO_API_KEY` | Required for `mtn_momo` | Provider-issued MTN MoMo API key. |
@@ -24,6 +24,11 @@ Use this guide when preparing a hosted staging environment for pilot SACCO testi
 | `SACCO_AIRTEL_MONEY_CLIENT_ID` | Required for `airtel_money` | Provider-issued Airtel Money client ID. |
 | `SACCO_AIRTEL_MONEY_CLIENT_SECRET` | Required for `airtel_money` | Provider-issued Airtel Money client secret. |
 | `SACCO_AIRTEL_MONEY_COUNTRY_CODE` | Required for `airtel_money` | ISO-like Airtel country code, for example `UG`. |
+| `SACCO_MPESA_DARAJA_CONSUMER_KEY` | Required for `mpesa_daraja` | Safaricom Daraja app consumer key. |
+| `SACCO_MPESA_DARAJA_CONSUMER_SECRET` | Required for `mpesa_daraja` | Safaricom Daraja app consumer secret. |
+| `SACCO_MPESA_DARAJA_BUSINESS_SHORT_CODE` | Required for `mpesa_daraja` | PayBill or Till short code used for STK Push. |
+| `SACCO_MPESA_DARAJA_PASSKEY` | Required for `mpesa_daraja` | Daraja STK Push passkey. |
+| `SACCO_MPESA_DARAJA_CALLBACK_URL` | Required for `mpesa_daraja` | Public HTTPS callback URL registered for STK Push callbacks. |
 | `STAGING_UI_BASE_URL` | Yes for handoff | Use the externally reachable HTTPS staging UI URL. |
 | `STAGING_API_BASE_URL` | Yes for handoff | Use the externally reachable HTTPS API base URL ending in `/api/v1`. |
 

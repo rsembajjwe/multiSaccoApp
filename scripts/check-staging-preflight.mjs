@@ -117,6 +117,36 @@ for (const name of ["SACCO_SMS_PROVIDER", "SACCO_EMAIL_PROVIDER", "SACCO_MOBILE_
   }
 }
 
+const mobileMoneyProvider = String(values.SACCO_MOBILE_MONEY_PROVIDER ?? "").trim().toLowerCase();
+const supportedMobileMoneyProviders = new Set(["mtn_momo", "airtel_money", "mpesa_daraja"]);
+if (!supportedMobileMoneyProviders.has(mobileMoneyProvider)) {
+  failures.push("SACCO_MOBILE_MONEY_PROVIDER must be one of: mtn_momo, airtel_money, mpesa_daraja.");
+}
+if (mobileMoneyProvider === "mtn_momo") {
+  assertProviderSettings([
+    "SACCO_MTN_MOMO_SUBSCRIPTION_KEY",
+    "SACCO_MTN_MOMO_API_USER_ID",
+    "SACCO_MTN_MOMO_API_KEY",
+    "SACCO_MTN_MOMO_TARGET_ENVIRONMENT"
+  ], failures);
+}
+if (mobileMoneyProvider === "airtel_money") {
+  assertProviderSettings([
+    "SACCO_AIRTEL_MONEY_CLIENT_ID",
+    "SACCO_AIRTEL_MONEY_CLIENT_SECRET",
+    "SACCO_AIRTEL_MONEY_COUNTRY_CODE"
+  ], failures);
+}
+if (mobileMoneyProvider === "mpesa_daraja") {
+  assertProviderSettings([
+    "SACCO_MPESA_DARAJA_CONSUMER_KEY",
+    "SACCO_MPESA_DARAJA_CONSUMER_SECRET",
+    "SACCO_MPESA_DARAJA_BUSINESS_SHORT_CODE",
+    "SACCO_MPESA_DARAJA_PASSKEY",
+    "SACCO_MPESA_DARAJA_CALLBACK_URL"
+  ], failures);
+}
+
 const bootstrapPassword = String(values.SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD ?? "");
 if (bootstrapPassword.length < 10 || !/[A-Z]/.test(bootstrapPassword) || !/[a-z]/.test(bootstrapPassword) || !/[0-9]/.test(bootstrapPassword)) {
   failures.push("SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD must be at least 10 characters and include uppercase, lowercase, and a number.");
@@ -175,6 +205,18 @@ function assertNotPlaceholder(name, targetFailures) {
   const normalized = value.toLowerCase();
   if (placeholderValues.has(normalized) || normalized.startsWith("replace_with_")) {
     targetFailures.push(`${name} must be replaced with a real staging value.`);
+  }
+}
+
+function assertProviderSettings(names, targetFailures) {
+  for (const name of names) {
+    const value = String(values[name] ?? "").trim();
+    const normalized = value.toLowerCase();
+    if (!value) {
+      targetFailures.push(`${name} is required for ${values.SACCO_MOBILE_MONEY_PROVIDER}.`);
+    } else if (placeholderValues.has(normalized) || normalized.startsWith("replace_with_")) {
+      targetFailures.push(`${name} must be replaced with a real provider value.`);
+    }
   }
 }
 

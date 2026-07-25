@@ -14,6 +14,7 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
     private final Map<String, String> providers;
     private final Map<String, String> mtnMomoSettings;
     private final Map<String, String> airtelMoneySettings;
+    private final Map<String, String> mpesaDarajaSettings;
 
     IntegrationProviderReadinessValidator(
             @Value("${sacco.demo-logins.enabled:true}") boolean demoLoginsEnabled,
@@ -26,7 +27,12 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
             @Value("${sacco.integrations.mobile-money.mtn.target-environment:}") String mtnTargetEnvironment,
             @Value("${sacco.integrations.mobile-money.airtel.client-id:}") String airtelClientId,
             @Value("${sacco.integrations.mobile-money.airtel.client-secret:}") String airtelClientSecret,
-            @Value("${sacco.integrations.mobile-money.airtel.country-code:}") String airtelCountryCode) {
+            @Value("${sacco.integrations.mobile-money.airtel.country-code:}") String airtelCountryCode,
+            @Value("${sacco.integrations.mobile-money.mpesa.consumer-key:}") String mpesaConsumerKey,
+            @Value("${sacco.integrations.mobile-money.mpesa.consumer-secret:}") String mpesaConsumerSecret,
+            @Value("${sacco.integrations.mobile-money.mpesa.business-short-code:}") String mpesaBusinessShortCode,
+            @Value("${sacco.integrations.mobile-money.mpesa.passkey:}") String mpesaPasskey,
+            @Value("${sacco.integrations.mobile-money.mpesa.callback-url:}") String mpesaCallbackUrl) {
         this.demoLoginsEnabled = demoLoginsEnabled;
         this.providers = new LinkedHashMap<>();
         this.providers.put("SACCO_SMS_PROVIDER", smsProvider);
@@ -41,6 +47,12 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
         this.airtelMoneySettings.put("SACCO_AIRTEL_MONEY_CLIENT_ID", airtelClientId);
         this.airtelMoneySettings.put("SACCO_AIRTEL_MONEY_CLIENT_SECRET", airtelClientSecret);
         this.airtelMoneySettings.put("SACCO_AIRTEL_MONEY_COUNTRY_CODE", airtelCountryCode);
+        this.mpesaDarajaSettings = new LinkedHashMap<>();
+        this.mpesaDarajaSettings.put("SACCO_MPESA_DARAJA_CONSUMER_KEY", mpesaConsumerKey);
+        this.mpesaDarajaSettings.put("SACCO_MPESA_DARAJA_CONSUMER_SECRET", mpesaConsumerSecret);
+        this.mpesaDarajaSettings.put("SACCO_MPESA_DARAJA_BUSINESS_SHORT_CODE", mpesaBusinessShortCode);
+        this.mpesaDarajaSettings.put("SACCO_MPESA_DARAJA_PASSKEY", mpesaPasskey);
+        this.mpesaDarajaSettings.put("SACCO_MPESA_DARAJA_CALLBACK_URL", mpesaCallbackUrl);
     }
 
     @Override
@@ -62,9 +74,11 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
                     "Production startup requires real integration provider configuration for: " + invalidProviders);
         }
         String mobileMoneyProvider = providers.get("SACCO_MOBILE_MONEY_PROVIDER");
-        if (!"mtn_momo".equalsIgnoreCase(mobileMoneyProvider) && !"airtel_money".equalsIgnoreCase(mobileMoneyProvider)) {
+        if (!"mtn_momo".equalsIgnoreCase(mobileMoneyProvider)
+                && !"airtel_money".equalsIgnoreCase(mobileMoneyProvider)
+                && !"mpesa_daraja".equalsIgnoreCase(mobileMoneyProvider)) {
             throw new IllegalStateException(
-                    "Production startup requires an implemented mobile-money adapter: SACCO_MOBILE_MONEY_PROVIDER=mtn_momo or airtel_money");
+                    "Production startup requires an implemented mobile-money adapter: SACCO_MOBILE_MONEY_PROVIDER=mtn_momo, airtel_money, or mpesa_daraja");
         }
         if ("mtn_momo".equalsIgnoreCase(mobileMoneyProvider)) {
             String missingMtnSettings = mtnMomoSettings.entrySet().stream()
@@ -86,6 +100,17 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
             if (!missingAirtelSettings.isBlank()) {
                 throw new IllegalStateException(
                         "Production startup requires Airtel Money configuration for: " + missingAirtelSettings);
+            }
+        }
+        if ("mpesa_daraja".equalsIgnoreCase(mobileMoneyProvider)) {
+            String missingMpesaSettings = mpesaDarajaSettings.entrySet().stream()
+                    .filter((entry) -> isBlank(entry.getValue()))
+                    .map(Map.Entry::getKey)
+                    .reduce((left, right) -> left + ", " + right)
+                    .orElse("");
+            if (!missingMpesaSettings.isBlank()) {
+                throw new IllegalStateException(
+                        "Production startup requires M-PESA Daraja configuration for: " + missingMpesaSettings);
             }
         }
     }
