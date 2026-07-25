@@ -277,6 +277,109 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code", is("SACCO_ACCESS_INACTIVE")))
 				.andExpect(jsonPath("$.error.message", containsString("subscription payment")));
+
+		String callbackReference = "SUB-MM-" + unique;
+		mockMvc.perform(post("/api/v1/integrations/mobile-money/subscription-callback")
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "amount": 500000,
+								  "externalReference": "%s",
+								  "provider": "mtn_momo",
+								  "receivedAt": "2026-07-16T09:00:00Z"
+								}
+								""".formatted(unpaidTenantId, callbackReference)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.idempotent", is(false)))
+				.andExpect(jsonPath("$.data.subscription.status", is("active")))
+				.andExpect(jsonPath("$.data.subscription.paid", is(500000.00)))
+				.andExpect(jsonPath("$.data.payment.channel", is("mobile_money:mtn_momo")))
+				.andExpect(jsonPath("$.data.payment.externalReference", is(callbackReference)));
+
+		mockMvc.perform(post("/api/v1/integrations/mobile-money/subscription-callback")
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "amount": 500000,
+								  "externalReference": "%s",
+								  "provider": "mtn_momo",
+								  "receivedAt": "2026-07-16T09:00:00Z"
+								}
+								""".formatted(unpaidTenantId, callbackReference)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.idempotent", is(true)))
+				.andExpect(jsonPath("$.data.payment.externalReference", is(callbackReference)));
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "%s",
+								  "email": "%s",
+								  "password": "Unpaid@12345"
+								}
+								""".formatted(unpaidCode, unpaidEmail)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.tenantId", is(unpaidTenantId)));
+	}
+
+	@Test
+	void publicSaccoRegistrationPaymentCallbackMovesApplicationToReviewQueue() throws Exception {
+		String platformToken = loginAndReturnToken();
+		long unique = System.currentTimeMillis();
+		String requestedCode = "R" + (unique % 100000);
+
+		MvcResult registration = mockMvc.perform(post("/api/v1/public/sacco-registrations")
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Public Payment SACCO",
+								  "saccoCode": "%s",
+								  "registrationNo": "COOP-PUBLIC-%s",
+								  "district": "Mukono",
+								  "parish": "Central",
+								  "village": "Trading Centre",
+								  "country": "Uganda",
+								  "localeCode": "en-UG",
+								  "currencyCode": "UGX",
+								  "currencyDigits": 0,
+								  "contactNumber": "+256703333333",
+								  "memberRange": "100-250",
+								  "paymentPhone": "+256704444444"
+								}
+								""".formatted(requestedCode, unique)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenant.status", is("pending_self_registration")))
+				.andExpect(jsonPath("$.data.subscription.status", is("pending_payment")))
+				.andExpect(jsonPath("$.data.paymentAmount", is(500000)))
+				.andExpect(jsonPath("$.data.paymentStatus", is("payment_initiated")))
+				.andReturn();
+
+		JsonNode data = objectMapper.readTree(registration.getResponse().getContentAsString()).path("data");
+		String tenantId = data.path("tenant").path("id").asString();
+		String paymentReference = data.path("paymentReference").asString();
+
+		mockMvc.perform(post("/api/v1/integrations/mobile-money/subscription-callback")
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "amount": 500000,
+								  "externalReference": "%s",
+								  "provider": "airtel_money",
+								  "receivedAt": "2026-07-16T09:00:00Z"
+								}
+								""".formatted(tenantId, paymentReference)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.subscription.status", is("active")))
+				.andExpect(jsonPath("$.data.payment.channel", is("mobile_money:airtel_money")));
+
+		mockMvc.perform(get("/api/v1/tenants/" + tenantId)
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("pending_review")));
 	}
 
 	@Test

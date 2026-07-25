@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Set;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -24,7 +25,9 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 class MobileMoneyCallbackSignatureFilter extends OncePerRequestFilter {
 
-    private static final String CALLBACK_PATH = "/api/v1/integrations/mobile-money/callback";
+    private static final Set<String> CALLBACK_PATHS = Set.of(
+            "/api/v1/integrations/mobile-money/callback",
+            "/api/v1/integrations/mobile-money/subscription-callback");
 
     private final MobileMoneyCallbackVerifier verifier;
     private final ObjectMapper objectMapper;
@@ -37,7 +40,7 @@ class MobileMoneyCallbackSignatureFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        return !(HttpMethod.POST.matches(request.getMethod()) && uri != null && uri.endsWith(CALLBACK_PATH));
+        return !(HttpMethod.POST.matches(request.getMethod()) && uri != null && CALLBACK_PATHS.stream().anyMatch(uri::endsWith));
     }
 
     @Override

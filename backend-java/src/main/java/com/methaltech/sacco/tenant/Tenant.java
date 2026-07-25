@@ -94,7 +94,7 @@ public class Tenant {
         this.updatedAt = this.createdAt;
     }
 
-    void updateStatus(String status) {
+    public void updateStatus(String status) {
         this.status = status;
         this.updatedAt = Instant.now();
     }

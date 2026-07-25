@@ -48,7 +48,7 @@ class PublicSaccoRegistrationController {
         if (saccoCode.isBlank()) saccoCode = generatedSaccoCode(body.name());
         String finalSaccoCode = nextAvailableCode(saccoCode);
 
-        Tenant tenant = tenantRepository.save(new Tenant(
+        Tenant tenant = new Tenant(
                 "tenant_" + UUID.randomUUID(),
                 body.name().trim(),
                 finalSaccoCode,
@@ -59,7 +59,9 @@ class PublicSaccoRegistrationController {
                 blankToDefault(body.currencyCode(), "UGX").toUpperCase(),
                 body.currencyDigits() == null ? 0 : body.currencyDigits(),
                 LocalDate.now().plusYears(1),
-                "pending_self_registration"));
+                "starter");
+        tenant.updateStatus("pending_self_registration");
+        tenant = tenantRepository.save(tenant);
         saccoProfileRepository.save(new SaccoProfile(
                 "profile_" + UUID.randomUUID(),
                 tenant.getId(),
