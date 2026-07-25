@@ -58,12 +58,12 @@ try {
   await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
   await expectNoVisibleText(page, "Some records could not be loaded", "optional platform fallback warning hidden");
   await assertPlatformDashboardCardNavigation(page);
-  await assertScreen(page, "sacco-applications", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
+  await assertScreen(page, "sacco-applications", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path", "SACCO registration readiness", "Payment initiated", "Callback received", "Ready for approval"]);
   await assertSaccoRegistrationTabs(page);
   await assertQuickSearchResult(page, "Green Valley", "SACCO application review", "platform SACCO quick search");
   await assertQuickSearchKeyboard(page, "Lake Farmers", "SACCO application review", "platform SACCO keyboard quick search");
   await assertSaccoApplicationReview(page);
-  await assertScreen(page, "subscriptions", ["Subscription list", "Package Setup", "Manage package"]);
+  await assertScreen(page, "subscriptions", ["Subscription list", "Package Setup", "Manage package", "Payment initiated", "Callback received"]);
   await assertSubscriptionControl(page);
   await assertScreen(page, "sacco-accounts", ["SACCO account health", "Active accounts", "Without subscription"]);
   await expectNoVisibleText(page, "Platform approval queues", "Platform Approvals navigation hidden");
@@ -653,6 +653,8 @@ async function assertSaccoRegistrationTabs(page) {
   await page.locator("[data-sacco-registration-tab='applications']").click();
   await expectText(page, "SACCO application list", "SACCO application list tab");
   await expectText(page, "Currency Code", "SACCO application currency column");
+  await expectText(page, "Payment Stage", "SACCO application payment stage column");
+  await expectText(page, "Approval Stage", "SACCO application approval stage column");
   await page.locator("[data-sacco-registration-tab='self']").click();
   await expectText(page, "Self-registration approval path", "self-registration approval tab");
   await page.locator("[data-sacco-registration-tab='applications']").click();

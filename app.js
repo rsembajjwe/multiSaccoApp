@@ -2312,12 +2312,33 @@ function saccoSecretaryDashboard() {
 }
 
 function saccoApplications() {
-  const applications = tenantRows().map((tenant) => ({ ...tenant, action: "tenant-detail", actionLabel: "Review", actionId: tenant.id }));
+  const applications = tenantRows().map((tenant) => {
+    const subscription = subscriptionForTenant(tenant.id);
+    return {
+      ...tenant,
+      paymentStage: saccoPaymentStage(tenant, subscription),
+      approvalStage: saccoApprovalStage(tenant, subscription),
+      operatingAccess: subscriptionAccessLabel(subscription || {}, tenant),
+      action: "tenant-detail",
+      actionLabel: "Review",
+      actionId: tenant.id
+    };
+  });
   return `
     ${filterToolbar("Search applications by SACCO, district, contact or status", "Assign reviewer", "Export applications")}
+    ${saccoRegistrationReadinessPanel(applications)}
     ${saccoRegistrationTabs()}
     ${saccoRegistrationTabContent(applications)}
   `;
+}
+
+function saccoRegistrationReadinessPanel(applications) {
+  return rolePriorityPanel("SACCO registration readiness", [
+    ["Payment initiated", `${applications.filter((row) => normal(row.paymentStage).includes("initiated")).length} SACCO(s) have a subscription bill awaiting mobile-money callback or manual payment.`, "Track"],
+    ["Callback received", `${applications.filter((row) => normal(row.paymentStage).includes("callback")).length} SACCO(s) have confirmed subscription payment.`, "Confirm"],
+    ["Ready for approval", `${applications.filter((row) => normal(row.approvalStage).includes("ready")).length} paid self-registration(s) are ready for platform review.`, "Review"],
+    ["Active", `${applications.filter((row) => normal(row.operatingAccess) === "active").length} SACCO(s) have active subscription and operating access.`, "Live"]
+  ]);
 }
 
 function saccoRegistrationTabs() {
@@ -2340,7 +2361,7 @@ function saccoRegistrationTabContent(applications) {
   if (state.saccoRegistrationTab === "applications") {
     return `
       ${tenantDetailPanel()}
-      ${recordTable(t("saccoApplicationList"), applications, ["saccoCode", "name", "country", "currencyCode", "district", "registrationNo", "licenseExpiry", "onboarding", "status"])}
+      ${recordTable(t("saccoApplicationList"), applications, ["saccoCode", "name", "country", "currencyCode", "district", "registrationNo", "paymentStage", "approvalStage", "operatingAccess", "status"])}
     `;
   }
   if (state.saccoRegistrationTab === "self") return selfRegistrationApprovalPanel();
@@ -2409,7 +2430,9 @@ function subscriptionsView() {
       saccoCode: tenant.abbreviation || tenant.code || subscription.tenantCode || subscription.tenantId,
       packageName: subscription.tierLabel || subscription.packageName || subscription.packageId,
       paymentStatus: subscriptionPaymentLabel(subscription),
+      paymentStage: saccoPaymentStage(tenant, subscription),
       operatingAccess: subscriptionAccessLabel(subscription, tenant),
+      approvalStage: saccoApprovalStage(tenant, subscription),
       billableMembers: subscription.billableMembers || subscription.memberCount || tenant.memberCount || 0,
       balanceDue: Math.max(0, Number(subscription.amount || 0) - Number(subscription.paid || subscription.amountPaid || 0)),
       action: "subscription-detail",
@@ -2428,7 +2451,7 @@ function subscriptionsView() {
     ${subscriptionStatusGuide(rows, tableRows)}
     ${filterToolbar("Search by SACCO code, SACCO name, package, payment status, access status or expiry", "Record payment", "Generate invoice")}
     ${subscriptionDetailPanel(rows)}
-    ${recordTable("Subscription list", tableRows, ["saccoCode", "tenantName", "packageName", "billingDescription", "billableMembers", "amount", "paid", "balanceDue", "paymentStatus", "operatingAccess", "expiry"])}
+    ${recordTable("Subscription list", tableRows, ["saccoCode", "tenantName", "packageName", "billingDescription", "billableMembers", "amount", "paid", "balanceDue", "paymentStage", "approvalStage", "operatingAccess", "expiry"])}
     ${packageCards()}
     ${packageSetupPanel()}
   `;
@@ -2437,7 +2460,8 @@ function subscriptionsView() {
 function subscriptionStatusGuide(rows, tableRows) {
   return rolePriorityPanel(t("subscriptionPaymentAccessStatus"), [
     ["Paid and active", `${tableRows.filter((row) => normal(row.paymentStatus) === "paid" && normal(row.operatingAccess) === "active").length} SACCO(s) have confirmed payment and operating access.`, "Active"],
-    ["Pending payment", `${tableRows.filter((row) => normal(row.paymentStatus).includes("pending")).length} SACCO(s) are waiting for payment confirmation before activation or renewal.`, "Follow up"],
+    ["Payment initiated", `${tableRows.filter((row) => normal(row.paymentStage).includes("initiated")).length} SACCO(s) are waiting for payment confirmation before activation or renewal.`, "Follow up"],
+    ["Callback received", `${tableRows.filter((row) => normal(row.paymentStage).includes("callback")).length} SACCO(s) have confirmed payment and need approval or activation follow-through.`, "Review"],
     ["Expired or suspended", `${tableRows.filter((row) => normal(row.operatingAccess).includes("expired") || normal(row.operatingAccess).includes("suspended")).length} SACCO(s) need renewal, payment confirmation or manual access review.`, "Review"]
   ]);
 }
@@ -2454,6 +2478,8 @@ function saccoAccounts() {
       packageName: subscription?.tierLabel || subscription?.packageName || subscription?.packageId || "Not assigned",
       expiry: subscription?.expiry || subscription?.expiryDate || "",
       billableMembers: subscription?.billableMembers || subscription?.memberCount || tenant.memberCount || 0,
+      paymentStage: saccoPaymentStage(tenant, subscription),
+      approvalStage: saccoApprovalStage(tenant, subscription),
       action: "tenant-detail",
       actionLabel: "Open",
       actionId: tenant.id
@@ -2468,7 +2494,7 @@ function saccoAccounts() {
     </div>
     ${filterToolbar("Search SACCO code, name, country, currency, district, status, subscription or package", "Activate SACCO", "Export accounts")}
     ${tenantDetailPanel()}
-    ${recordTable("SACCO account health", rows, ["saccoCode", "name", "country", "currencyCode", "district", "status", "accountHealth", "subscriptionStatus", "packageName", "billableMembers", "expiry"])}
+    ${recordTable("SACCO account health", rows, ["saccoCode", "name", "country", "currencyCode", "district", "status", "accountHealth", "paymentStage", "approvalStage", "subscriptionStatus", "packageName", "billableMembers", "expiry"])}
   `;
 }
 
@@ -5543,6 +5569,7 @@ function tenantDetailPanel() {
   const tenant = state.selectedTenant || tenantRows().find((item) => item.id === state.selectedTenantId);
   if (!tenant) return "";
   const profile = state.selectedTenantProfile || {};
+  const subscription = subscriptionForTenant(tenant.id);
   const canManage = hasPermission("tenants:manage");
   return `
     <section class="panel detail-panel">
@@ -5557,6 +5584,9 @@ function tenantDetailPanel() {
       ${state.selectedTenantError ? `<div class="notice warning"><strong>Application update failed.</strong><span>${escapeHtml(state.selectedTenantError)}</span></div>` : ""}
       <div class="source-grid">
         ${mini("Activation state", tenantStatusLabel(tenant.status))}
+        ${mini("Payment stage", saccoPaymentStage(tenant, subscription))}
+        ${mini("Approval stage", saccoApprovalStage(tenant, subscription))}
+        ${mini("Operating access", subscriptionAccessLabel(subscription || {}, tenant))}
         ${mini("SACCO code", tenant.abbreviation)}
         ${mini("Country", tenant.country)}
         ${mini("Currency", tenant.currencyCode)}
@@ -5570,6 +5600,17 @@ function tenantDetailPanel() {
         ${mini("Email", profile.email)}
         ${mini("Contact number", profile.phone)}
       </div>
+      ${subscription ? recordTable("Subscription readiness", [{
+        invoice: subscription.invoice,
+        packageName: subscription.tierLabel || subscription.packageId,
+        amount: subscription.amount,
+        paid: subscription.paid,
+        balanceDue: Math.max(0, Number(subscription.amount || 0) - Number(subscription.paid || 0)),
+        paymentStage: saccoPaymentStage(tenant, subscription),
+        approvalStage: saccoApprovalStage(tenant, subscription),
+        operatingAccess: subscriptionAccessLabel(subscription, tenant),
+        expiry: subscription.expiry
+      }], ["invoice", "packageName", "amount", "paid", "balanceDue", "paymentStage", "approvalStage", "operatingAccess", "expiry"]) : ""}
       <div class="grid two">
         ${recordTable("Registration profile", [profile], ["legalName", "tin", "umraLicenseNo", "cooperativeRegistrationNo", "address", "website"])}
         ${recordTable("Approval history", dataRows("auditEvents").filter((event) => event.recordReference === tenant.id || event.recordId === tenant.id), ["createdAt", "actor", "action", "module", "result"])}
@@ -5630,6 +5671,8 @@ function subscriptionDetailPanel(rows) {
       <div class="source-grid">
         ${mini("Operating access", subscriptionAccessLabel(subscription, tenant))}
         ${mini("Payment status", subscriptionPaymentLabel(subscription))}
+        ${mini("Payment stage", saccoPaymentStage(tenant, subscription))}
+        ${mini("Approval stage", saccoApprovalStage(tenant, subscription))}
         ${mini("Subscription status", subscription.status)}
         ${mini("SACCO code", tenant.abbreviation || tenant.code || subscription.tenantCode || subscription.tenantId)}
         ${mini("Package", subscription.tierLabel || subscription.packageId)}
@@ -5659,11 +5702,41 @@ function subscriptionDetailPanel(rows) {
 }
 
 function subscriptionAccessLabel(subscription, tenant) {
+  tenant = tenant || {};
+  subscription = subscription || {};
   if (normal(tenant.status).includes("suspended")) return "Suspended";
   if (normal(subscription.status) === "active" && normal(tenant.status) === "active") return "Active";
   if (normal(subscription.status).includes("pending")) return "Payment pending";
   if (normal(subscription.status).includes("expired")) return "Expired";
   return subscription.status || tenant.status || "Pending";
+}
+
+function saccoPaymentStage(tenant, subscription) {
+  tenant = tenant || {};
+  if (!subscription) return "No subscription";
+  const paid = Number(subscription.paid || subscription.amountPaid || 0);
+  const amount = Number(subscription.amount || 0);
+  const status = normal(subscription.status);
+  if (amount > 0 && paid >= amount) return "Callback received";
+  if (paid > 0) return "Part payment received";
+  if (normal(tenant.status).includes("pending_self_registration") || status.includes("pending")) return "Payment initiated";
+  if (status === "active") return "Callback received";
+  if (status.includes("expired")) return "Expired";
+  return "Payment pending";
+}
+
+function saccoApprovalStage(tenant, subscription) {
+  tenant = tenant || {};
+  const tenantStatus = normal(tenant.status);
+  const paymentStage = normal(saccoPaymentStage(tenant, subscription));
+  if (tenantStatus === "active" && paymentStage.includes("callback")) return "Active";
+  if (tenantStatus === "pending_review" && paymentStage.includes("callback")) return "Ready for approval";
+  if (tenantStatus === "pending_self_registration") return "Awaiting payment";
+  if (tenantStatus === "approved" && paymentStage.includes("callback")) return "Ready for activation";
+  if (tenantStatus.includes("pending")) return "Application review";
+  if (tenantStatus.includes("suspended")) return "Suspended";
+  if (tenantStatus.includes("terminated")) return "Rejected";
+  return tenantStatus ? tenantStatus.replaceAll("_", " ") : "Pending";
 }
 
 function subscriptionPaymentLabel(subscription) {
