@@ -614,6 +614,11 @@ async function assertRoleDashboard(page, code, username, password, label, marker
     await expectText(page, marker, `${label} dashboard marker ${marker}`);
   }
   await assertRoleNavigation(page, label);
+  if (label === "SACCO Chairperson") {
+    await navigateTo(page, "members");
+    await expectText(page, "Member list", "SACCO Chairperson read-only member list");
+    await expectText(page, "Member management focus", "SACCO Chairperson member account view");
+  }
   console.log(`PASS ${label} dashboard`);
   await logout(page);
 }

@@ -705,6 +705,9 @@ class MemberController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user()) && !authService.hasPermission(currentSession.user(), "members:approve")) {
+            return authService.permissionRequired("members:approve");
+        }
 
         String status = body.status().trim();
         if (!ALLOWED_MEMBER_STATUSES.contains(status)) {

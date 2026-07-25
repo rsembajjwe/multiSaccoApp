@@ -16,6 +16,7 @@ import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -543,7 +544,10 @@ class SaccoBackendApplicationTests {
 								"""))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.roleNames", hasItem("Chairperson")))
-				.andExpect(jsonPath("$.data.permissionIds", hasItem("approvals:decide")));
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("approvals:decide")))
+				.andExpect(jsonPath("$.data.permissionIds", hasItem("members:view")))
+				.andExpect(jsonPath("$.data.permissionIds", everyItem(not("members:create"))))
+				.andExpect(jsonPath("$.data.permissionIds", everyItem(not("members:approve"))));
 
 		mockMvc.perform(post("/api/v1/auth/login")
 						.contentType("application/json")
@@ -620,9 +624,31 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data[?(@.id == 'role_green_treasurer')].permissionIds[*]", hasItem("transactions:approve")))
 				.andExpect(jsonPath("$.data[?(@.id == 'role_green_secretary')].permissionIds[*]", hasItem("members:approve")))
 				.andExpect(jsonPath("$.data[?(@.id == 'role_green_chairperson')].permissionIds[*]", hasItem("approvals:decide")))
+				.andExpect(jsonPath("$.data[?(@.id == 'role_green_chairperson')].permissionIds[*]", hasItem("members:view")))
 				.andExpect(jsonPath("$.data[?(@.id == 'role_green_accountant')].permissionIds[*]", hasItem("accounting:post")))
 				.andExpect(jsonPath("$.data[?(@.id == 'role_green_teller')].permissionIds[*]", hasItem("transactions:create")))
 				.andExpect(jsonPath("$.data[?(@.id == 'role_green_auditor')].permissionIds[*]", hasItem("reports:view")));
+	}
+
+	@Test
+	void chairpersonCanReadMembersButCannotChangeMemberStatus() throws Exception {
+		String token = loginAndReturnToken("chairperson@greenvalley.local", "Chair@12345");
+
+		mockMvc.perform(get("/api/v1/members")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data[*].membershipNo", hasItem("GVS-0001")));
+
+		mockMvc.perform(patch("/api/v1/members/member_green_amina/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "active" }
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")))
+				.andExpect(jsonPath("$.error.message", containsString("members:approve")));
 	}
 
 	@Test

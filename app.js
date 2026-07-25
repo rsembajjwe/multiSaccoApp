@@ -1171,7 +1171,7 @@ const platformModules = [
 
 const saccoModules = [
   ["dashboard", "Dashboard", "Role-specific SACCO operating view", "dashboard:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "teller", "auditor"]],
-  ["members", "Members", "KYC, profiles, statements", "members:view", ["admin", "secretary", "loans", "auditor"]],
+  ["members", "Members", "KYC, profiles, statements", "members:view", ["admin", "chairperson", "secretary", "loans", "auditor"]],
   ["transactions", "Transactions", "Deposits and reversals", "transactions:view", ["admin", "treasurer", "accountant", "teller", "auditor"]],
   ["savings", "Savings", "Products, accounts and statements", "transactions:view", ["admin", "treasurer", "accountant", "auditor"]],
   ["shares", "Shares", "Share register and certificates", "transactions:view", ["admin", "treasurer", "secretary", "auditor"]],
