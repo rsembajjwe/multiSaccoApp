@@ -57,6 +57,39 @@ public class Subscription {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    public Subscription(
+            String id,
+            String tenantId,
+            String packageId,
+            String status,
+            String invoice,
+            BigDecimal amount,
+            BigDecimal paid,
+            int memberCount,
+            int billableMembers,
+            BigDecimal unitPrice,
+            String tierId,
+            String tierLabel,
+            String billingDescription,
+            LocalDate expiry) {
+        this.id = id;
+        this.tenantId = tenantId;
+        this.packageId = packageId;
+        this.status = status;
+        this.invoice = invoice;
+        this.amount = amount;
+        this.paid = paid;
+        this.memberCount = memberCount;
+        this.billableMembers = billableMembers;
+        this.unitPrice = unitPrice;
+        this.tierId = tierId;
+        this.tierLabel = tierLabel;
+        this.billingDescription = billingDescription;
+        this.expiry = expiry;
+        this.createdAt = Instant.now();
+        this.updatedAt = this.createdAt;
+    }
+
     void refreshBilling(SubscriptionBilling billing) {
         this.memberCount = billing.memberCount();
         this.billableMembers = billing.billableMembers();

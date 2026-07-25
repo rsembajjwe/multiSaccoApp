@@ -2,6 +2,10 @@ package com.methaltech.sacco.tenant;
 
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
+import com.methaltech.sacco.subscription.Subscription;
+import com.methaltech.sacco.subscription.SubscriptionRepository;
+import com.methaltech.sacco.subscription.SubscriptionResponse;
+import com.methaltech.sacco.subscription.SubscriptionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -21,14 +25,20 @@ class PublicSaccoRegistrationController {
 
     private final TenantRepository tenantRepository;
     private final SaccoProfileRepository saccoProfileRepository;
+    private final SubscriptionRepository subscriptionRepository;
+    private final SubscriptionService subscriptionService;
     private final AuditService auditService;
 
     PublicSaccoRegistrationController(
             TenantRepository tenantRepository,
             SaccoProfileRepository saccoProfileRepository,
+            SubscriptionRepository subscriptionRepository,
+            SubscriptionService subscriptionService,
             AuditService auditService) {
         this.tenantRepository = tenantRepository;
         this.saccoProfileRepository = saccoProfileRepository;
+        this.subscriptionRepository = subscriptionRepository;
+        this.subscriptionService = subscriptionService;
         this.auditService = auditService;
     }
 
@@ -61,6 +71,10 @@ class PublicSaccoRegistrationController {
                 "",
                 blankToDefault(body.contactNumber()),
                 ""));
+        Subscription subscription = subscriptionRepository.save(subscriptionService.createInitialSubscription(
+                tenant.getId(),
+                "starter",
+                false));
         String paymentReference = "MM-" + finalSaccoCode + "-" + System.currentTimeMillis() % 1_000_000;
         auditService.record(
                 tenant.getId(),
@@ -71,7 +85,10 @@ class PublicSaccoRegistrationController {
                 request.getRemoteAddr());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(new PublicSaccoRegistrationResponse(
                 TenantResponse.from(tenant),
+                SubscriptionResponse.from(subscription),
                 paymentReference,
+                subscription.getAmount(),
+                tenant.getCurrencyCode(),
                 blankToDefault(body.paymentPhone()).isBlank() ? blankToDefault(body.contactNumber()) : blankToDefault(body.paymentPhone()),
                 "payment_initiated",
                 "Registration received. Mobile-money payment is initiated; platform approval follows payment confirmation.")));
@@ -137,7 +154,10 @@ class PublicSaccoRegistrationController {
 
     record PublicSaccoRegistrationResponse(
             TenantResponse tenant,
+            SubscriptionResponse subscription,
             String paymentReference,
+            java.math.BigDecimal paymentAmount,
+            String currencyCode,
             String paymentPhone,
             String paymentStatus,
             String message) {

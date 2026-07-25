@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
-record SubscriptionResponse(
+public record SubscriptionResponse(
         String id,
         String tenantId,
         String packageId,
@@ -22,7 +22,7 @@ record SubscriptionResponse(
         Instant createdAt,
         Instant updatedAt) {
 
-    static SubscriptionResponse from(Subscription subscription) {
+    public static SubscriptionResponse from(Subscription subscription) {
         return new SubscriptionResponse(
                 subscription.getId(),
                 subscription.getTenantId(),

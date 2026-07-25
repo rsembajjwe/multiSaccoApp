@@ -99,6 +99,10 @@ public class Tenant {
         this.updatedAt = Instant.now();
     }
 
+    public void activate() {
+        updateStatus("active");
+    }
+
     public String getId() {
         return id;
     }
@@ -111,7 +115,7 @@ public class Tenant {
         return abbreviation;
     }
 
-    String getStatus() {
+    public String getStatus() {
         return status;
     }
 

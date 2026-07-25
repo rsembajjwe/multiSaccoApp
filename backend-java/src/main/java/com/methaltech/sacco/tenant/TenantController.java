@@ -4,6 +4,8 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
+import com.methaltech.sacco.subscription.SubscriptionRepository;
+import com.methaltech.sacco.subscription.SubscriptionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -32,16 +34,22 @@ class TenantController {
 
     private final TenantRepository tenantRepository;
     private final SaccoProfileRepository saccoProfileRepository;
+    private final SubscriptionRepository subscriptionRepository;
+    private final SubscriptionService subscriptionService;
     private final AuthService authService;
     private final AuditService auditService;
 
     TenantController(
             TenantRepository tenantRepository,
             SaccoProfileRepository saccoProfileRepository,
+            SubscriptionRepository subscriptionRepository,
+            SubscriptionService subscriptionService,
             AuthService authService,
             AuditService auditService) {
         this.tenantRepository = tenantRepository;
         this.saccoProfileRepository = saccoProfileRepository;
+        this.subscriptionRepository = subscriptionRepository;
+        this.subscriptionService = subscriptionService;
         this.authService = authService;
         this.auditService = auditService;
     }
@@ -92,7 +100,8 @@ class TenantController {
         }
         if (!authService.isPlatform(currentSession.user())) return platformRequired("Only platform administrators can create tenants here.");
 
-        Tenant tenant = tenantRepository.save(new Tenant(
+        boolean paid = "paid".equalsIgnoreCase(blankToDefault(body.paymentStatus()));
+        Tenant tenant = new Tenant(
                 "tenant_" + UUID.randomUUID(),
                 body.name().trim(),
                 body.abbreviation().trim().toUpperCase(),
@@ -103,28 +112,34 @@ class TenantController {
                 blankToDefault(body.currencyCode(), "UGX").toUpperCase(),
                 body.currencyDigits() == null ? 0 : body.currencyDigits(),
                 body.licenseExpiry(),
-                blankToDefault(body.packageId())));
+                blankToDefault(body.packageId()));
+        if (paid) tenant.activate();
+        Tenant savedTenant = tenantRepository.save(tenant);
         saccoProfileRepository.save(new SaccoProfile(
                 "profile_" + UUID.randomUUID(),
-                tenant.getId(),
-                tenant.getName(),
+                savedTenant.getId(),
+                savedTenant.getName(),
                 "",
                 "",
-                tenant.getRegistrationNo(),
+                savedTenant.getRegistrationNo(),
+                address(body.district(), body.parish(), body.village(), body.memberRange()),
                 "",
-                "",
-                "",
+                blankToDefault(body.contactNumber()),
                 ""));
+        subscriptionRepository.save(subscriptionService.createInitialSubscription(
+                savedTenant.getId(),
+                savedTenant.getPackageId(),
+                paid));
 
         auditService.record(
-                tenant.getId(),
+                savedTenant.getId(),
                 currentSession.user(),
-                "Created tenant " + tenant.getName(),
+                "Created SACCO " + savedTenant.getName() + " with subscription payment " + (paid ? "paid" : "pending"),
                 "tenant",
-                tenant.getId(),
+                savedTenant.getId(),
                 request.getRemoteAddr());
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(TenantResponse.from(tenant)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(TenantResponse.from(savedTenant)));
     }
 
     @PatchMapping("/{tenantId}/status")
@@ -266,6 +281,13 @@ class TenantController {
         return requestedValue == null ? currentValue : requestedValue.trim();
     }
 
+    private String address(String district, String parish, String village, String memberRange) {
+        return "District: " + blankToDefault(district)
+                + "; Parish: " + blankToDefault(parish)
+                + "; Village: " + blankToDefault(village)
+                + "; Member range: " + blankToDefault(memberRange);
+    }
+
     record CreateTenantRequest(
             @NotBlank String name,
             @NotBlank String abbreviation,
@@ -276,7 +298,12 @@ class TenantController {
             String currencyCode,
             Integer currencyDigits,
             @NotNull LocalDate licenseExpiry,
-            String packageId) {
+            String packageId,
+            String paymentStatus,
+            String parish,
+            String village,
+            String contactNumber,
+            String memberRange) {
     }
 
     record UpdateTenantStatusRequest(@NotBlank String status) {

@@ -4,6 +4,7 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.security.PasswordHasher;
 import com.methaltech.sacco.security.TokenGenerator;
+import com.methaltech.sacco.subscription.SubscriptionRepository;
 import com.methaltech.sacco.tenant.Tenant;
 import com.methaltech.sacco.tenant.TenantRepository;
 import com.methaltech.sacco.tenant.TenantResponse;
@@ -48,6 +49,7 @@ class AuthController {
     private final LoginAttemptService loginAttemptService;
     private final DemoCredentialPolicy demoCredentialPolicy;
     private final PlatformSecurityPolicyService platformSecurityPolicyService;
+    private final SubscriptionRepository subscriptionRepository;
 
     AuthController(
             UserRepository userRepository,
@@ -65,7 +67,8 @@ class AuthController {
             TenantService tenantService,
             LoginAttemptService loginAttemptService,
             DemoCredentialPolicy demoCredentialPolicy,
-            PlatformSecurityPolicyService platformSecurityPolicyService) {
+            PlatformSecurityPolicyService platformSecurityPolicyService,
+            SubscriptionRepository subscriptionRepository) {
         this.userRepository = userRepository;
         this.authSessionRepository = authSessionRepository;
         this.passwordResetRequestRepository = passwordResetRequestRepository;
@@ -82,6 +85,7 @@ class AuthController {
         this.loginAttemptService = loginAttemptService;
         this.demoCredentialPolicy = demoCredentialPolicy;
         this.platformSecurityPolicyService = platformSecurityPolicyService;
+        this.subscriptionRepository = subscriptionRepository;
     }
 
     @PostMapping("/login")
@@ -122,6 +126,11 @@ class AuthController {
             recordLoginAudit(auditTenantId(requestedTenant), "Failed staff login credentials", identifier, servletRequest);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiErrorResponse.of(401, "AUTH_INVALID", "Invalid email or password."));
+        }
+        if (!authService.isPlatform(user) && !saccoCanOperate(requestedTenant)) {
+            recordLoginAudit(auditTenantId(requestedTenant), "Blocked staff login because SACCO is not active or subscription is unpaid", identifier, servletRequest);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "SACCO_ACCESS_INACTIVE", "This SACCO cannot operate until platform approval and subscription payment are active."));
         }
 
         loginAttemptService.clear(rateLimitKey);
@@ -288,6 +297,12 @@ class AuthController {
         }
         return userRepository.findByTenantIdAndPhone(tenant.getId(), identifier)
                 .or(() -> userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), identifier));
+    }
+
+    private boolean saccoCanOperate(Tenant tenant) {
+        return tenant != null
+                && "active".equals(tenant.getStatus())
+                && subscriptionRepository.existsByTenantIdAndStatus(tenant.getId(), "active");
     }
 
     private UserAccessResponse accessFor(User user) {

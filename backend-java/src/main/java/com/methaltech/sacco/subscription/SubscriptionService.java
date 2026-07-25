@@ -2,10 +2,12 @@ package com.methaltech.sacco.subscription;
 
 import com.methaltech.sacco.member.MemberRepository;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 @Service
-class SubscriptionService {
+public class SubscriptionService {
 
     private static final int MINIMUM_BILLABLE_MEMBERS = 100;
     private static final BigDecimal PER_MEMBER_PRICE = BigDecimal.valueOf(5000);
@@ -16,12 +18,31 @@ class SubscriptionService {
         this.memberRepository = memberRepository;
     }
 
-    Subscription refreshBilling(Subscription subscription) {
+    public Subscription refreshBilling(Subscription subscription) {
         subscription.refreshBilling(calculateBilling((int) memberRepository.countByTenantId(subscription.getTenantId())));
         return subscription;
     }
 
-    SubscriptionBilling calculateBilling(int memberCount) {
+    public Subscription createInitialSubscription(String tenantId, String packageId, boolean paid) {
+        SubscriptionBilling billing = calculateBilling(0);
+        return new Subscription(
+                "subscription_" + UUID.randomUUID(),
+                tenantId,
+                packageId == null || packageId.isBlank() ? "starter" : packageId.trim(),
+                paid ? "active" : "pending_payment",
+                "INV-" + UUID.randomUUID(),
+                billing.amount(),
+                paid ? billing.amount() : BigDecimal.ZERO,
+                billing.memberCount(),
+                billing.billableMembers(),
+                billing.unitPrice(),
+                billing.tierId(),
+                billing.tierLabel(),
+                billing.billingDescription(),
+                paid ? LocalDate.now().plusYears(1) : LocalDate.now().plusDays(14));
+    }
+
+    public SubscriptionBilling calculateBilling(int memberCount) {
         if (memberCount <= 250) {
             int billableMembers = Math.max(memberCount, MINIMUM_BILLABLE_MEMBERS);
             return new SubscriptionBilling(

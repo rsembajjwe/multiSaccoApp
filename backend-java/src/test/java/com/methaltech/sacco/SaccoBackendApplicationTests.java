@@ -181,6 +181,105 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void platformPaidRegistrationCreatesActiveSubscriptionAndUnpaidSaccoCannotLogin() throws Exception {
+		String token = loginAndReturnToken();
+		long unique = System.currentTimeMillis();
+		String paidCode = "P" + (unique % 100000);
+		String unpaidCode = "U" + (unique % 100000);
+
+		MvcResult paidTenantResult = mockMvc.perform(post("/api/v1/tenants")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Paid Gate SACCO",
+								  "abbreviation": "%s",
+								  "registrationNo": "COOP-PAID-%s",
+								  "district": "Kampala",
+								  "parish": "Central",
+								  "village": "Market Zone",
+								  "contactNumber": "+256701111111",
+								  "memberRange": "100-250",
+								  "country": "Uganda",
+								  "localeCode": "en-UG",
+								  "currencyCode": "UGX",
+								  "currencyDigits": 0,
+								  "licenseExpiry": "2027-12-31",
+								  "packageId": "starter",
+								  "paymentStatus": "paid"
+								}
+								""".formatted(paidCode, unique)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status", is("active")))
+				.andExpect(jsonPath("$.data.abbreviation", is(paidCode)))
+				.andReturn();
+		String paidTenantId = objectMapper.readTree(paidTenantResult.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/subscriptions?tenantId=" + paidTenantId)
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(1)))
+				.andExpect(jsonPath("$.data[0].status", is("active")))
+				.andExpect(jsonPath("$.data[0].paid", is(500000.00)))
+				.andExpect(jsonPath("$.data[0].billingDescription", is("UGX 5,000 per member annually, minimum 100 members")));
+
+		MvcResult unpaidTenantResult = mockMvc.perform(post("/api/v1/tenants")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Unpaid Gate SACCO",
+								  "abbreviation": "%s",
+								  "registrationNo": "COOP-UNPAID-%s",
+								  "district": "Wakiso",
+								  "licenseExpiry": "2027-12-31",
+								  "packageId": "starter",
+								  "paymentStatus": "pending"
+								}
+								""".formatted(unpaidCode, unique)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status", is("pending_review")))
+				.andReturn();
+		String unpaidTenantId = objectMapper.readTree(unpaidTenantResult.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/tenants/" + unpaidTenantId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "active" }
+								"""))
+				.andExpect(status().isOk());
+
+		String unpaidEmail = "unpaid-" + unique + "@example.local";
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "fullName": "Unpaid SACCO Admin",
+								  "email": "%s",
+								  "phone": "+256701222222",
+								  "password": "Unpaid@12345"
+								}
+								""".formatted(unpaidTenantId, unpaidEmail)))
+				.andExpect(status().isCreated());
+
+		mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "%s",
+								  "email": "%s",
+								  "password": "Unpaid@12345"
+								}
+								""".formatted(unpaidCode, unpaidEmail)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("SACCO_ACCESS_INACTIVE")))
+				.andExpect(jsonPath("$.error.message", containsString("subscription payment")));
+	}
+
+	@Test
 	void saccoProfileCanBeReadAndUpdatedWithTenantScope() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 
