@@ -18,6 +18,9 @@ class IntegrationProviderReadinessValidatorTest {
                 "",
                 "",
                 "",
+                "",
+                "",
+                "",
                 "");
 
         assertDoesNotThrow(validator::validate);
@@ -30,6 +33,9 @@ class IntegrationProviderReadinessValidatorTest {
                 "demo_sms",
                 "real_email_gateway",
                 "demo_mobile_money",
+                "",
+                "",
+                "",
                 "",
                 "",
                 "",
@@ -51,6 +57,9 @@ class IntegrationProviderReadinessValidatorTest {
                 "",
                 "",
                 "",
+                "",
+                "",
+                "",
                 "");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
@@ -69,7 +78,10 @@ class IntegrationProviderReadinessValidatorTest {
                 "subscription_key",
                 "api_user_id",
                 "api_key",
-                "mtnuganda");
+                "mtnuganda",
+                "",
+                "",
+                "");
 
         assertDoesNotThrow(validator::validate);
     }
@@ -80,15 +92,57 @@ class IntegrationProviderReadinessValidatorTest {
                 false,
                 "africas_talking",
                 "smtp",
-                "airtel_money",
+                "unsupported_money",
                 "subscription_key",
                 "api_user_id",
                 "api_key",
-                "mtnuganda");
+                "mtnuganda",
+                "",
+                "",
+                "");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
 
-        assertTrue(error.getMessage().contains("SACCO_MOBILE_MONEY_PROVIDER=mtn_momo"));
+        assertTrue(error.getMessage().contains("SACCO_MOBILE_MONEY_PROVIDER=mtn_momo or airtel_money"));
+    }
+
+    @Test
+    void productionAllowsAirtelMoneyProvider() {
+        IntegrationProviderReadinessValidator validator = new IntegrationProviderReadinessValidator(
+                false,
+                "africas_talking",
+                "smtp",
+                "airtel_money",
+                "",
+                "",
+                "",
+                "",
+                "airtel-client-id",
+                "airtel-client-secret",
+                "UG");
+
+        assertDoesNotThrow(validator::validate);
+    }
+
+    @Test
+    void productionRejectsAirtelMoneyWithoutCredentials() {
+        IntegrationProviderReadinessValidator validator = new IntegrationProviderReadinessValidator(
+                false,
+                "africas_talking",
+                "smtp",
+                "airtel_money",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "airtel-client-secret",
+                "");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
+
+        assertTrue(error.getMessage().contains("SACCO_AIRTEL_MONEY_CLIENT_ID"));
+        assertTrue(error.getMessage().contains("SACCO_AIRTEL_MONEY_COUNTRY_CODE"));
     }
 
     @Test
@@ -101,7 +155,10 @@ class IntegrationProviderReadinessValidatorTest {
                 "",
                 "api_user_id",
                 "",
-                "mtnuganda");
+                "mtnuganda",
+                "",
+                "",
+                "");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
 

@@ -99,7 +99,7 @@ This starts an isolated Docker Compose stack on PostgreSQL, applies Flyway migra
 
 For hosted staging setup, use [docs/staging-environment.md](docs/staging-environment.md) and keep real `.env` values outside git.
 
-SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`; demo values remain the default until real provider adapters are wired.
+SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`. Mobile-money collections can run through `mtn_momo` or `airtel_money` when the matching provider credentials are configured; demo values remain the default for local development.
 
 For staging handoff and UAT, use [docs/staging-handoff-checklist.md](docs/staging-handoff-checklist.md), [docs/release-evidence-template.md](docs/release-evidence-template.md), [docs/uat-findings-template.md](docs/uat-findings-template.md), [docs/uat-data-setup.md](docs/uat-data-setup.md), and [docs/uat-scripts.md](docs/uat-scripts.md). For Phase 2 pilot onboarding imports, use [docs/data-import.md](docs/data-import.md).
 
@@ -291,7 +291,7 @@ This is now the first build foundation. A production build should add:
 - Java/Spring Boot REST API with `/api/v1/...` endpoints.
 - PostgreSQL schema with mandatory `tenant_id` on tenant-owned tables.
 - Strong authentication, MFA, RBAC, branch restrictions, and approval limits.
-- Real mobile-money and bank integrations.
+- Additional mobile-money rails, bank integrations, SMS, and email adapters.
 - Immutable financial ledgers and balanced journal entries.
 - File uploads, malware scanning, and object storage.
 - Android app, preferably Flutter as recommended in the requirements.
