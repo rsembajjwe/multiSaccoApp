@@ -196,6 +196,9 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path === "/members/import-template") return getMemberImportTemplate(response, auth, url, correlationId);
     if (method === "GET" && path === "/members") return listMembers(response, auth, url);
     if (method === "POST" && path === "/members") return createMember(request, response, auth, correlationId);
+    if (method === "PATCH" && path.startsWith("/members/") && path.split("/").length === 3) {
+      return updateMember(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path.startsWith("/members/") && path.endsWith("/statement")) {
       return getMemberStatement(response, auth, path.split("/")[2], url, correlationId);
     }
@@ -2438,6 +2441,66 @@ async function createMember(request, response, auth, correlationId) {
     ipAddress: requestIp(request)
   });
   return sendData(response, publicMember(member), 201);
+}
+
+async function updateMember(request, response, auth, memberId, correlationId) {
+  const body = await readJson(request);
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+
+  const branchId = body.branchId === undefined ? member.branchId : String(body.branchId || "").trim();
+  const fullName = body.fullName === undefined ? member.fullName : String(body.fullName || "").trim();
+  const phone = body.phone === undefined ? member.phone : String(body.phone || "").trim();
+  const memberType = body.memberType === undefined ? member.memberType : String(body.memberType || "").trim();
+  const kycStatus = body.kycStatus === undefined ? member.kycStatus : String(body.kycStatus || "").trim();
+  const status = body.status === undefined ? member.status : String(body.status || "").trim();
+
+  if (!branchId || !fullName || !phone) {
+    return sendError(response, 400, "VALIDATION_ERROR", "Branch, full name, and phone are required.", correlationId);
+  }
+  if (!db.branches.some((branch) => branch.id === branchId && branch.tenantId === member.tenantId)) {
+    return sendError(response, 400, "INVALID_BRANCH", "Branch does not exist for this SACCO.", correlationId);
+  }
+  if (!allowedMemberTypes.has(memberType)) return sendError(response, 400, "INVALID_MEMBER_TYPE", "Unsupported member type.", correlationId);
+  if (!allowedKycStatuses.has(kycStatus)) return sendError(response, 400, "INVALID_KYC_STATUS", "Unsupported KYC status.", correlationId);
+  if (!allowedMemberStatuses.has(status)) return sendError(response, 400, "INVALID_MEMBER_STATUS", "Unsupported member status.", correlationId);
+
+  const email = body.email === undefined ? member.email : String(body.email || "").trim();
+  const nationalId = body.nationalId === undefined ? member.nationalId : String(body.nationalId || "").trim();
+  const joiningDate = body.joiningDate === undefined ? member.joiningDate : String(body.joiningDate || "").trim();
+  if (joiningDate && Number.isNaN(Date.parse(joiningDate))) {
+    return sendError(response, 400, "INVALID_JOINING_DATE", "Joining date must be a valid date.", correlationId);
+  }
+  if (phone && db.members.some((item) => item.id !== member.id && item.tenantId === member.tenantId && String(item.phone || "").toLowerCase() === phone.toLowerCase())) {
+    return sendError(response, 409, "MEMBER_PHONE_EXISTS", "Another member already uses that phone number.", correlationId);
+  }
+  if (email && db.members.some((item) => item.id !== member.id && item.tenantId === member.tenantId && String(item.email || "").toLowerCase() === email.toLowerCase())) {
+    return sendError(response, 409, "MEMBER_EMAIL_EXISTS", "Another member already uses that email address.", correlationId);
+  }
+
+  Object.assign(member, {
+    branchId,
+    fullName,
+    memberType,
+    phone,
+    email,
+    nationalId,
+    status,
+    kycStatus,
+    joiningDate: joiningDate || member.joiningDate,
+    updatedAt: new Date().toISOString()
+  });
+  createAuditEvent({
+    tenantId: member.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Updated member ${member.membershipNo} profile`,
+    resourceType: "member",
+    resourceId: member.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicMember(member));
 }
 
 function getMember(response, auth, memberId, correlationId) {

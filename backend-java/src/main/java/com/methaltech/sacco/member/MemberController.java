@@ -467,6 +467,91 @@ class MemberController {
                         .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
     }
 
+    @PatchMapping("/{memberId}")
+    ResponseEntity<?> updateMember(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @Valid @RequestBody UpdateMemberRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())
+                && !authService.hasPermission(currentSession.user(), "members:create")
+                && !authService.hasPermission(currentSession.user(), "members:approve")) {
+            return authService.permissionRequired("members:create");
+        }
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+
+                    String branchId = body.branchId().trim();
+                    if (!branchLookup.existsInTenant(branchId, member.getTenantId())) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "INVALID_BRANCH", "Branch does not exist for this SACCO."));
+                    }
+
+                    String memberType = normalizedOrDefault(body.memberType(), "individual");
+                    if (!ALLOWED_MEMBER_TYPES.contains(memberType)) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "INVALID_MEMBER_TYPE", "Unsupported member type."));
+                    }
+
+                    String status = normalizedOrDefault(body.status(), member.getStatus());
+                    if (!ALLOWED_MEMBER_STATUSES.contains(status)) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "INVALID_MEMBER_STATUS", "Unsupported member status."));
+                    }
+
+                    String kycStatus = normalizedOrDefault(body.kycStatus(), member.getKycStatus());
+                    if (!ALLOWED_KYC_STATUSES.contains(kycStatus)) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "INVALID_KYC_STATUS", "Unsupported KYC status."));
+                    }
+
+                    String phone = body.phone().trim();
+                    if (memberRepository.findByTenantIdOrderByMembershipNoAsc(member.getTenantId()).stream()
+                            .anyMatch(existing -> !existing.getId().equals(member.getId())
+                                    && existing.getPhone() != null
+                                    && existing.getPhone().equalsIgnoreCase(phone))) {
+                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .body(ApiErrorResponse.of(409, "MEMBER_PHONE_EXISTS", "Another member already uses that phone number."));
+                    }
+
+                    String email = blankToDefault(body.email());
+                    if (!email.isBlank() && memberRepository.findByTenantIdOrderByMembershipNoAsc(member.getTenantId()).stream()
+                            .anyMatch(existing -> !existing.getId().equals(member.getId())
+                                    && existing.getEmail() != null
+                                    && existing.getEmail().equalsIgnoreCase(email))) {
+                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .body(ApiErrorResponse.of(409, "MEMBER_EMAIL_EXISTS", "Another member already uses that email address."));
+                    }
+
+                    LocalDate joiningDate = body.joiningDate() == null ? member.getJoiningDate() : body.joiningDate();
+                    member.updateProfile(
+                            branchId,
+                            body.fullName().trim(),
+                            memberType,
+                            phone,
+                            email,
+                            blankToDefault(body.nationalId()),
+                            status,
+                            kycStatus,
+                            joiningDate);
+                    Member saved = memberRepository.save(member);
+                    auditService.record(
+                            saved.getTenantId(),
+                            currentSession.user(),
+                            "Updated member " + saved.getMembershipNo() + " profile",
+                            "member",
+                            saved.getId(),
+                            request.getRemoteAddr());
+                    return ResponseEntity.ok(ApiResponse.of(MemberResponse.from(saved)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
     @GetMapping("/{memberId}/statement")
     ResponseEntity<?> getMemberStatement(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -1170,6 +1255,18 @@ class MemberController {
             String email,
             String nationalId,
             String password,
+            String kycStatus,
+            LocalDate joiningDate) {
+    }
+
+    record UpdateMemberRequest(
+            @NotBlank String branchId,
+            @NotBlank String fullName,
+            String memberType,
+            @NotBlank String phone,
+            String email,
+            String nationalId,
+            String status,
             String kycStatus,
             LocalDate joiningDate) {
     }

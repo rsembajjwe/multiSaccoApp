@@ -120,6 +120,28 @@ public class Member {
         this.updatedAt = Instant.now();
     }
 
+    void updateProfile(
+            String branchId,
+            String fullName,
+            String memberType,
+            String phone,
+            String email,
+            String nationalId,
+            String status,
+            String kycStatus,
+            LocalDate joiningDate) {
+        this.branchId = branchId;
+        this.fullName = fullName;
+        this.memberType = memberType;
+        this.phone = phone;
+        this.email = email;
+        this.nationalId = nationalId;
+        this.status = status;
+        this.kycStatus = kycStatus;
+        this.joiningDate = joiningDate;
+        this.updatedAt = Instant.now();
+    }
+
     public void applyPostedTransaction(String type, BigDecimal amount) {
         if ("savings_deposit".equals(type)) this.savingsBalance = this.savingsBalance.add(amount);
         if ("withdrawal".equals(type)) this.savingsBalance = this.savingsBalance.subtract(amount);

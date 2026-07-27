@@ -6049,6 +6049,8 @@ function memberDetailPanel(mode = "kyc") {
     );
   }
   const canManage = hasPermission("members:approve") || roleKind() === "admin" || roleKind() === "secretary";
+  const canEditProfile = canManage || hasPermission("members:create");
+  const branches = dataRows("branches");
   const statementLines = state.selectedMemberStatement?.lines || [];
   const totalBalance = Number(member.savingsBalance || 0) + Number(member.sharesBalance || 0) + Number(member.welfareBalance || 0);
   const lastMovement = statementLines[0]?.postedAt || statementLines[0]?.createdAt || "No statement activity";
@@ -6086,6 +6088,20 @@ function memberDetailPanel(mode = "kyc") {
         ${mini("Last movement", lastMovement)}
       </div>
       ${mode === "kyc" ? `
+        <form id="memberProfileForm" class="form-grid">
+          <input type="hidden" id="selectedMemberProfileId" value="${escapeHtml(member.id)}">
+          <label><span>Membership number</span><input value="${escapeHtml(member.membershipNo || "")}" readonly></label>
+          <label><span>Branch</span><select id="selectedMemberBranchId" ${canEditProfile ? "" : "disabled"}>${branches.map((branch) => `<option value="${escapeHtml(branch.id)}" ${branch.id === member.branchId ? "selected" : ""}>${escapeHtml(branch.name || branch.code)}</option>`).join("")}</select></label>
+          <label><span>Full name</span><input id="selectedMemberFullName" required value="${escapeHtml(member.fullName || "")}" ${canEditProfile ? "" : "readonly"}></label>
+          <label><span>Member type</span><select id="selectedMemberType" ${canEditProfile ? "" : "disabled"}>${memberTypeOptions().map((type) => `<option value="${type.value}" ${type.value === member.memberType ? "selected" : ""}>${type.label}</option>`).join("")}</select></label>
+          <label><span>Phone</span><input id="selectedMemberPhone" required value="${escapeHtml(member.phone || "")}" ${canEditProfile ? "" : "readonly"}></label>
+          <label><span>Email</span><input id="selectedMemberEmail" type="email" value="${escapeHtml(member.email || "")}" ${canEditProfile ? "" : "readonly"}></label>
+          <label><span>National ID</span><input id="selectedMemberNationalId" value="${escapeHtml(member.nationalId || "")}" ${canEditProfile ? "" : "readonly"}></label>
+          <label><span>Joining date</span><input id="selectedMemberJoiningDate" type="date" value="${escapeHtml(String(member.joiningDate || "").slice(0, 10))}" ${canEditProfile ? "" : "readonly"}></label>
+          <div class="form-actions inline">
+            ${canEditProfile ? `<button class="button primary" type="submit">Save member profile</button>` : `<span class="status pending">Profile view only</span>`}
+          </div>
+        </form>
         ${memberKycChecklist(member)}
         <form id="memberStatusForm" class="form-grid single">
           <input type="hidden" id="selectedMemberId" value="${escapeHtml(member.id)}">
@@ -6215,6 +6231,15 @@ function memberStatusOptions() {
     { value: "dormant", label: "Dormant" },
     { value: "suspended", label: "Suspended" },
     { value: "exited", label: "Exited" }
+  ];
+}
+
+function memberTypeOptions() {
+  return [
+    { value: "individual", label: "Individual" },
+    { value: "group", label: "Group" },
+    { value: "institutional", label: "Institutional" },
+    { value: "corporate", label: "Corporate" }
   ];
 }
 
@@ -7836,6 +7861,42 @@ async function saveMemberDecision(memberId, memberStatus, kycStatus) {
   }
 }
 
+async function saveMemberProfile(event) {
+  event.preventDefault();
+  const memberId = value("selectedMemberProfileId") || state.selectedMemberId;
+  if (!memberId) return;
+  state.selectedMemberMessage = "";
+  state.selectedMemberError = "";
+  try {
+    const member = await api(`/members/${encodeURIComponent(memberId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        branchId: value("selectedMemberBranchId"),
+        fullName: value("selectedMemberFullName"),
+        memberType: value("selectedMemberType"),
+        phone: value("selectedMemberPhone"),
+        email: value("selectedMemberEmail"),
+        nationalId: value("selectedMemberNationalId"),
+        joiningDate: value("selectedMemberJoiningDate"),
+        status: value("selectedMemberStatus") || state.selectedMember?.status || "pending_approval",
+        kycStatus: value("selectedMemberKycStatus") || state.selectedMember?.kycStatus || "pending_verification"
+      })
+    });
+    state.selectedMember = member;
+    state.selectedMemberId = member.id;
+    state.selectedMemberMessage = `Saved profile for ${member.membershipNo} - ${member.fullName}.`;
+    await refreshAll();
+    state.selectedMember = member;
+    state.selectedMemberId = member.id;
+    state.memberTab = "kyc";
+    state.selectedMemberMessage = `Saved profile for ${member.membershipNo} - ${member.fullName}.`;
+    renderShell();
+  } catch (error) {
+    state.selectedMemberError = error.message;
+    renderShell();
+  }
+}
+
 function runMemberDecision(action) {
   const memberId = value("selectedMemberId") || state.selectedMemberId;
   if (!memberId) return;
@@ -9276,6 +9337,7 @@ function bindEvents() {
     event.preventDefault();
     runMemberDecision("custom");
   });
+  document.querySelector("#memberProfileForm")?.addEventListener("submit", saveMemberProfile);
   document.querySelector("#tenantStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     saveTenantStatus(value("selectedTenantStatus"));
