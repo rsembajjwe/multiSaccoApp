@@ -1038,6 +1038,7 @@ const state = {
   helpMenuOpen: false,
   accountMenuOpen: false,
   tableState: {},
+  chatFilters: {},
   moduleTabs: {},
   sessionExpiresAt: "",
   loading: false,
@@ -1289,6 +1290,8 @@ function captureFocusState() {
     ? `#${CSS.escape(element.id)}`
     : element.dataset.tableSearch
       ? `[data-table-search="${CSS.escape(element.dataset.tableSearch)}"]`
+      : element.dataset.chatSearch
+        ? `[data-chat-search="${CSS.escape(element.dataset.chatSearch)}"]`
       : element.dataset.notificationFilter
         ? `[data-notification-filter="${CSS.escape(element.dataset.notificationFilter)}"]`
       : element.dataset.searchInput !== undefined
@@ -2969,7 +2972,7 @@ function complaintsView() {
   const urgent = rows.filter((row) => normal(row.priority) === "urgent");
   const assigned = rows.filter((row) => row.assignedUserId);
   if (isPlatform()) {
-    const tabs = [["list", t("complaintsFromSaccoAdmins")], ["detail", t("complaintReview")]];
+    const tabs = [["chat", "SACCO admin chat"], ["capture", "Record SACCO message"], ["list", "Case list"]];
     const tab = activeModuleTab("complaints", tabs);
     return `
       <div class="dashboard-grid">
@@ -2979,31 +2982,111 @@ function complaintsView() {
         ${summary(t("resolved"), rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", t("review"))}
       </div>
       ${moduleTabs("complaints", tabs, tab)}
+      ${tab === "chat" ? complaintChatWorkspace("SACCO admin - Platform Super Admin chat", "WhatsApp-style support threads from SACCO administrators to the platform owner.", rows, "platform-super") : ""}
+      ${tab === "capture" ? complaintCapturePanel("platform") : ""}
       ${tab === "list" ? `
         ${filterToolbar("Search complaints by SACCO, category, priority, status or officer", "Export complaints", "Assign officer")}
         ${recordTable(t("complaintsFromSaccoAdmins"), rows, ["tenantName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
       ` : ""}
-      ${tab === "detail" ? (complaintDetailPanel(rows) || emptyState(t("complaintReview"), "Select a SACCO admin complaint from the list to review status and assignment.")) : ""}
     `;
   }
-  const tabs = [["overview", "Message control"], ["capture", "Capture member message"], ["detail", "Message and reply"], ["list", "Member messages"]];
+  const memberRows = rows.filter((row) => row.memberId);
+  const platformRows = rows.filter((row) => !row.memberId);
+  const tabs = [["member-chat", "Member chat"], ["platform-chat", "Platform Super Admin chat"], ["capture-member", "New member message"], ["capture-platform", "Message platform"], ["list", "All messages"]];
   const tab = activeModuleTab("complaints", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary("Open complaints", open.length, "Member support workload", "Assign")}
+      ${summary("Member chats", memberRows.length, "SACCO admin and member support", "Open")}
+      ${summary("Platform chats", platformRows.length, "SACCO admin and platform support", "Open")}
       ${summary("Urgent complaints", urgent.length, "Needs same-day action", "Escalate")}
-      ${summary("In progress", rows.filter((row) => normal(row.status) === "in_progress").length, "Being handled", "Track")}
-      ${summary("Resolved", rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", "Review")}
+      ${summary("Open follow-up", open.length, "Unresolved conversations", "Track")}
     </div>
     ${moduleTabs("complaints", tabs, tab)}
-    ${tab === "overview" ? complaintServiceControlPanel(rows, open, urgent, assigned) : ""}
-    ${tab === "capture" ? complaintCapturePanel() : ""}
-    ${tab === "detail" ? (complaintDetailPanel(rows) || emptyState("Message and reply", "Select a member message from the list to read it and send a reply.")) : ""}
+    ${tab === "member-chat" ? complaintChatWorkspace("SACCO admin - member chat", "WhatsApp-style member support threads for questions, complaints and SACCO office replies.", memberRows, "sacco-member") : ""}
+    ${tab === "platform-chat" ? complaintChatWorkspace("SACCO admin - Platform Super Admin chat", "Escalate platform, billing or system support messages to the platform owner.", platformRows, "sacco-platform") : ""}
+    ${tab === "capture-member" ? complaintCapturePanel("member") : ""}
+    ${tab === "capture-platform" ? complaintCapturePanel("platform-escalation") : ""}
     ${tab === "list" ? `
       ${filterToolbar("Search messages by member, subject, category, priority, status or officer", "New message", "Assign officer")}
       ${recordTable("Member messages to SACCO admin", rows, ["memberName", "category", "subject", "description", "resolutionNotes", "assignedOfficer", "priority", "status", "createdAt", "updatedAt"])}
     ` : ""}
   `;
+}
+
+function complaintChatWorkspace(title, copy, rows, mode) {
+  const filter = normal(state.chatFilters[mode] || "");
+  const visibleRows = filter
+    ? rows.filter((row) => normal(`${row.tenantName || ""} ${row.memberName || ""} ${row.subject || ""} ${row.description || ""} ${row.resolutionNotes || ""} ${row.status || ""}`).includes(filter))
+    : rows;
+  if (!rows.length) {
+    return emptyState(title, mode === "sacco-platform"
+      ? "Start a platform message when the SACCO needs help from the Platform Super Admin."
+      : "No chat threads are available yet.");
+  }
+  const selected = visibleRows.find((row) => row.id === state.selectedComplaintId) || visibleRows[0];
+  return `
+    <section class="chat-workspace panel">
+      <div class="chat-sidebar">
+        <div class="chat-sidebar-header">
+          <strong>${escapeHtml(title)}</strong>
+          <span>${visibleRows.length} of ${rows.length}</span>
+        </div>
+        <div class="chat-search-row">
+          <input data-chat-search="${escapeHtml(mode)}" value="${escapeHtml(state.chatFilters[mode] || "")}" placeholder="Search chats">
+        </div>
+        ${visibleRows.length ? `<div class="chat-thread-list">
+          ${visibleRows.map((row) => complaintChatThreadButton(row, selected.id === row.id, mode)).join("")}
+        </div>` : `<div class="empty-state compact"><strong>No matching chats</strong><span>Clear the search to show all conversations.</span></div>`}
+      </div>
+      <div class="chat-main">
+        ${selected ? `
+          <div class="chat-main-header">
+            <div>
+              <h2>${escapeHtml(selected.subject || title)}</h2>
+              <p>${escapeHtml(copy)}</p>
+            </div>
+            <span class="status ${selected.resolutionNotes ? "active" : "pending"}">${selected.resolutionNotes ? "Replied" : "Awaiting reply"}</span>
+          </div>
+          ${complaintDetailPanel(visibleRows, mode)}
+        ` : emptyState("No matching chats", "Clear the search to select a conversation.")}
+      </div>
+    </section>
+  `;
+}
+
+function complaintChatThreadButton(row, selected, mode) {
+  const participant = complaintChatParticipant(row, mode);
+  const latest = row.resolutionNotes || row.description || row.subject || "No message body captured.";
+  return `
+    <button class="chat-thread-button ${selected ? "active" : ""}" type="button" data-chat-complaint-id="${escapeHtml(row.id)}">
+      <span class="chat-avatar">${escapeHtml(chatInitials(participant))}</span>
+      <span class="chat-thread-copy">
+        <strong>${escapeHtml(participant)}</strong>
+        <em>${escapeHtml(row.subject || "Support chat")}</em>
+        <small>${escapeHtml(latest)}</small>
+      </span>
+      <span class="chat-thread-meta">
+        <time>${escapeHtml(shortDate(row.updatedAt || row.createdAt))}</time>
+        <b class="${row.resolutionNotes ? "read" : ""}">${escapeHtml(labelize(row.status || "open"))}</b>
+      </span>
+    </button>
+  `;
+}
+
+function complaintChatParticipant(row, mode) {
+  if (mode === "platform-super") return row.tenantName || tenantName(row.tenantId) || "SACCO admin";
+  if (mode === "sacco-platform") return "Platform Super Admin";
+  return row.memberName || memberName(row.memberId) || "SACCO member";
+}
+
+function chatInitials(text) {
+  return String(text || "TO")
+    .split(/[\s-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase() || "TO";
 }
 
 function complaintServiceControlPanel(rows, open, urgent, assigned) {
@@ -6683,87 +6766,125 @@ function loanProductOptions() {
   return ["Development Loan", "Emergency Loan"];
 }
 
-function complaintCapturePanel() {
+function complaintCapturePanel(mode = "member") {
   const canManage = hasPermission("complaints:manage");
   const tenants = tenantRows();
   const tenantId = isPlatform() ? tenants[0]?.id || "" : state.user?.tenantId || "";
   const members = dataRows("members").filter((member) => !tenantId || member.tenantId === tenantId || !isPlatform());
   const platformScope = isPlatform();
+  const platformEscalation = mode === "platform-escalation";
+  const memberCapture = !platformScope && !platformEscalation;
+  const title = platformScope
+    ? "Record SACCO admin message"
+    : platformEscalation
+      ? "Message Platform Super Admin"
+      : "Member message intake";
+  const copy = platformScope
+    ? "Record a support message submitted by a SACCO administrator for platform follow-up."
+    : platformEscalation
+      ? "Start a platform support chat for billing, system access, integrations or operating issues."
+      : "SACCO admins receive, assign and resolve complaints submitted by SACCO members.";
+  const subjectPlaceholder = platformScope
+    ? "SACCO admin message title"
+    : platformEscalation
+      ? "Platform support message title"
+      : "Short member message title";
+  const messagePlaceholder = platformScope
+    ? "What issue has the SACCO administrator raised with the platform?"
+    : platformEscalation
+      ? "What should the Platform Super Admin help this SACCO resolve?"
+      : "What did the member ask, and what support is expected?";
   return `
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>${platformScope ? "SACCO admin complaint capture" : "Member complaint intake"}</h2>
-          <p>${platformScope ? "Create a complaint submitted by or on behalf of a SACCO administrator only." : "SACCO admins receive, assign and resolve complaints submitted by SACCO members."}</p>
+          <h2>${title}</h2>
+          <p>${copy}</p>
         </div>
       </div>
       ${state.complaintFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.complaintFormMessage)}</strong></div>` : ""}
       ${state.complaintFormError ? `<div class="notice warning"><strong>Complaint capture failed.</strong><span>${escapeHtml(state.complaintFormError)}</span></div>` : ""}
       <form id="complaintForm" class="form-grid">
         <label><span>SACCO</span><select id="newComplaintTenantId" ${isPlatform() && canManage ? "" : "disabled"}>${tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${tenant.id === tenantId ? "selected" : ""}>${escapeHtml(tenant.abbreviation || tenant.code || tenant.name)} - ${escapeHtml(tenant.name || tenant.id)}</option>`).join("")}</select></label>
-        ${platformScope ? `<input type="hidden" id="newComplaintMemberId" value="">` : `<label><span>Member</span><select id="newComplaintMemberId" ${canManage ? "" : "disabled"}><option value="">SACCO-level case</option>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>`}
+        ${memberCapture ? `<label><span>Member</span><select id="newComplaintMemberId" ${canManage ? "" : "disabled"}><option value="">SACCO-level case</option>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>` : `<input type="hidden" id="newComplaintMemberId" value="">`}
         <label><span>Category</span><select id="newComplaintCategory" ${canManage ? "" : "disabled"}>${complaintCategoryOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
         <label><span>Priority</span><select id="newComplaintPriority" ${canManage ? "" : "disabled"}><option value="medium">Medium</option><option value="high">High</option><option value="low">Low</option></select></label>
         <label><span>Channel</span><select id="newComplaintChannel" ${canManage ? "" : "disabled"}><option value="branch">Branch</option><option value="phone">Phone</option><option value="email">Email</option><option value="web">Web</option><option value="mobile">Mobile</option></select></label>
-        <label><span>Subject</span><input id="newComplaintSubject" required placeholder="${platformScope ? "SACCO admin complaint title" : "Short member message title"}" ${canManage ? "" : "disabled"}></label>
-        <label class="wide"><span>Message</span><textarea id="newComplaintDescription" placeholder="${platformScope ? "What issue has the SACCO administrator raised with the platform?" : "What did the member ask, and what support is expected?"}" ${canManage ? "" : "disabled"}></textarea></label>
-        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">${platformScope ? "Create SACCO admin complaint" : "Capture member message"}</button>` : `<span class="status pending">View only</span>`}</div>
+        <label><span>Subject</span><input id="newComplaintSubject" required placeholder="${subjectPlaceholder}" ${canManage ? "" : "disabled"}></label>
+        <label class="wide"><span>Message</span><textarea id="newComplaintDescription" placeholder="${messagePlaceholder}" ${canManage ? "" : "disabled"}></textarea></label>
+        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">${platformEscalation ? "Send to Platform Super Admin" : platformScope ? "Record SACCO admin message" : "Capture member message"}</button>` : `<span class="status pending">View only</span>`}</div>
       </form>
     </section>
   `;
 }
 
-function complaintDetailPanel(rows) {
+function complaintDetailPanel(rows, mode = "sacco-member") {
   const complaint = rows.find((item) => item.id === state.selectedComplaintId);
-  if (!complaint) return "";
+  const selected = complaint || rows[0];
+  if (!selected) return "";
   const canManage = hasPermission("complaints:manage");
-  const reply = complaint.resolutionNotes || complaint.resolution || "";
+  const reply = selected.resolutionNotes || selected.resolution || "";
+  const participant = complaintChatParticipant(selected, mode);
+  const isSaccoToPlatform = mode === "sacco-platform";
+  const isPlatformReply = mode === "platform-super";
+  const originalAuthor = isPlatformReply ? `${selected.tenantName || tenantName(selected.tenantId)} admin` : isSaccoToPlatform ? "SACCO admin" : (selected.memberName || "Member");
+  const replyAuthor = isPlatformReply ? "Platform Super Admin" : isSaccoToPlatform ? "Platform Super Admin" : "SACCO admin";
+  const originalDirection = isPlatformReply || mode === "sacco-member" ? "received" : "sent";
+  const replyDirection = isPlatformReply || mode === "sacco-member" ? "sent" : "received";
+  const heading = mode === "sacco-member"
+    ? "SACCO admin - member chat"
+    : "SACCO admin - Platform Super Admin chat";
+  const replyLabel = isPlatformReply
+    ? "Reply to SACCO admin"
+    : isSaccoToPlatform
+      ? "Platform Super Admin reply"
+      : "Reply to member";
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
         <div>
-          <h2>Member message and SACCO admin reply</h2>
-          <p>${escapeHtml(complaint.subject || complaint.id)} - ${escapeHtml(complaint.memberName || "SACCO member")}</p>
+          <h2>${heading}</h2>
+          <p>${escapeHtml(selected.subject || selected.id)} - ${escapeHtml(participant)}</p>
         </div>
         <button class="button ghost" type="button" data-action="close-complaint-detail">Close</button>
       </div>
       ${state.selectedComplaintMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedComplaintMessage)}</strong></div>` : ""}
       ${state.selectedComplaintError ? `<div class="notice warning"><strong>Complaint update failed.</strong><span>${escapeHtml(state.selectedComplaintError)}</span></div>` : ""}
       <div class="source-grid">
-        ${mini("SACCO", complaint.tenantName || complaint.tenantId)}
-        ${mini("Member", complaint.memberName)}
-        ${mini("Category", labelize(complaint.category))}
-        ${mini("Priority", complaint.priority)}
-        ${mini("Status", complaint.status)}
-        ${mini("Channel", complaint.channel)}
-        ${mini("Assigned officer", complaint.assignedOfficer)}
-        ${mini("Created", complaint.createdAt)}
-        ${mini("Last reply", reply ? complaint.updatedAt : "No reply yet")}
+        ${mini("SACCO", selected.tenantName || selected.tenantId)}
+        ${mode === "sacco-member" ? mini("Member", selected.memberName) : mini("Platform contact", "Platform Super Admin")}
+        ${mini("Category", labelize(selected.category))}
+        ${mini("Priority", selected.priority)}
+        ${mini("Status", selected.status)}
+        ${mini("Channel", selected.channel)}
+        ${mini("Assigned officer", selected.assignedOfficer)}
+        ${mini("Created", selected.createdAt)}
+        ${mini("Last reply", reply ? selected.updatedAt : "No reply yet")}
       </div>
       <section class="panel compact-panel chat-panel">
         <div class="panel-heading">
           <div>
             <h2>Chat thread</h2>
-            <p>Member messages and SACCO admin replies stay visible to both sides for follow-up.</p>
+            <p>${mode === "sacco-member" ? "Member messages and SACCO admin replies stay visible to both sides." : "SACCO admin messages and Platform Super Admin replies stay visible for follow-up."}</p>
           </div>
           <span class="status ${reply ? "active" : "pending"}">${reply ? "Replied" : "Awaiting reply"}</span>
         </div>
         <div class="chat-window">
-          ${chatBubble("received", complaint.memberName || "Member", complaint.description || complaint.subject || "No message body captured.", complaint.createdAt)}
-          ${reply ? chatBubble("sent", "SACCO admin", reply, complaint.updatedAt) : chatBubble("sent pending", "SACCO admin", "No reply has been sent yet.", "")}
+          ${chatBubble(originalDirection, originalAuthor, selected.description || selected.subject || "No message body captured.", selected.createdAt)}
+          ${reply ? chatBubble(replyDirection, replyAuthor, reply, selected.updatedAt) : chatBubble(`${replyDirection} pending`, replyAuthor, "No reply has been sent yet.", "")}
         </div>
       </section>
       <form id="complaintStatusForm" class="form-grid single">
-        <input type="hidden" id="selectedComplaintId" value="${escapeHtml(complaint.id)}">
-        <label><span>Status</span><select id="selectedComplaintStatus" ${canManage ? "" : "disabled"}>${complaintStatusOptions().map((status) => `<option value="${escapeHtml(status)}" ${status === complaint.status ? "selected" : ""}>${labelize(status)}</option>`).join("")}</select></label>
-        <label><span>Reply to member</span><textarea id="selectedComplaintNotes" class="chat-reply-input" placeholder="Type a reply..." ${canManage ? "" : "disabled"}>${escapeHtml(reply)}</textarea></label>
+        <input type="hidden" id="selectedComplaintId" value="${escapeHtml(selected.id)}">
+        <label><span>Status</span><select id="selectedComplaintStatus" ${canManage ? "" : "disabled"}>${complaintStatusOptions().map((status) => `<option value="${escapeHtml(status)}" ${status === selected.status ? "selected" : ""}>${labelize(status)}</option>`).join("")}</select></label>
+        <label><span>${replyLabel}</span><textarea id="selectedComplaintNotes" class="chat-reply-input" placeholder="Type a reply..." ${canManage && !isSaccoToPlatform ? "" : "disabled"}>${escapeHtml(reply)}</textarea></label>
         <div class="form-actions chat-composer-actions">
-          ${canManage ? `
-            <button class="button primary" type="submit">Send reply</button>
+          ${canManage && !isSaccoToPlatform ? `
+            <button class="button primary" type="submit">${isPlatformReply ? "Send reply to SACCO admin" : "Send reply"}</button>
             <button class="button secondary" type="button" data-complaint-status="in_progress">Mark in progress</button>
             <button class="button secondary" type="button" data-complaint-status="resolved">Resolve</button>
             <button class="button ghost" type="button" data-complaint-status="closed">Close</button>
-          ` : `<span class="status pending">View only</span>`}
+          ` : `<span class="status pending">${isSaccoToPlatform ? "Waiting for Platform Super Admin reply" : "View only"}</span>`}
         </div>
       </form>
     </section>
@@ -8752,7 +8873,12 @@ async function createGovernanceResolution(event) {
 
 function openComplaintDetail(complaintId) {
   state.selectedComplaintId = complaintId;
-  state.moduleTabs.complaints = "detail";
+  const complaint = dataRows("complaints").find((row) => row.id === complaintId);
+  state.moduleTabs.complaints = isPlatform()
+    ? "chat"
+    : complaint && !complaint.memberId
+      ? "platform-chat"
+      : "member-chat";
   state.selectedComplaintMessage = "";
   state.selectedComplaintError = "";
   renderShell();
@@ -9255,6 +9381,20 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='complaint-detail']").forEach((button) => {
     button.addEventListener("click", () => openComplaintDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-chat-complaint-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedComplaintId = button.dataset.chatComplaintId;
+      state.selectedComplaintMessage = "";
+      state.selectedComplaintError = "";
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-chat-search]").forEach((input) => {
+    input.addEventListener("input", () => {
+      state.chatFilters[input.dataset.chatSearch] = input.value;
+      renderShell();
+    });
+  });
   document.querySelectorAll("[data-row-action='template-detail']").forEach((button) => {
     button.addEventListener("click", () => openTemplateDetail(button.dataset.rowId));
   });
@@ -9618,6 +9758,7 @@ async function logout() {
     helpMenuOpen: false,
     accountMenuOpen: false,
     moduleTabs: {},
+    chatFilters: {},
     sessionExpiresAt: "",
     passwordResetMessage: "",
     passwordResetError: "",
@@ -10420,6 +10561,16 @@ function formatDateTime(value) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit"
+  });
+}
+
+function shortDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString(currentRegion().locale, {
+    day: "2-digit",
+    month: "short"
   });
 }
 
