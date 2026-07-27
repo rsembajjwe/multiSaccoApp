@@ -1244,7 +1244,8 @@ function emptyData() {
     auditEvents: [],
     regulatoryReport: null,
     securitySummary: null,
-    platformSecurityPolicy: null
+    platformSecurityPolicy: null,
+    notificationIntegrationConfig: null
   };
 }
 
@@ -4203,7 +4204,8 @@ function platformSettingsView() {
   const permissions = dataRows("permissions");
   const templates = dataRows("notificationTemplates").filter((template) => !template.tenantId);
   const canManage = hasPermission("roles:create") || roleKind() === "super";
-  const tab = activeModuleTab("settings", [["configuration", t("configuration")], ["security", t("security")]]);
+  const settingsTabs = [["configuration", t("configuration")], ["integrations", "Integrations"], ["security", t("security")]];
+  const tab = activeModuleTab("settings", settingsTabs);
   const security = state.data.securitySummary || {};
   return `
     <div class="dashboard-grid">
@@ -4212,7 +4214,7 @@ function platformSettingsView() {
       ${summary(t("permissionControls"), permissions.length, "Route and action permissions", "Audit")}
       ${summary(t("globalTemplates"), templates.length, "Default notification content", "Edit")}
     </div>
-    ${moduleTabs("settings", [["configuration", t("configuration")], ["security", t("security")]], tab)}
+    ${moduleTabs("settings", settingsTabs, tab)}
     ${tab === "configuration" ? `
       ${platformSettingsControlPanel(packages, roles, permissions, templates, canManage)}
     <section class="panel">
@@ -4241,7 +4243,57 @@ function platformSettingsView() {
       ${recordTable("Global notification templates", templates, ["eventType", "channel", "title", "status", "updatedAt"])}
     </div>
     ` : ""}
+    ${tab === "integrations" ? platformNotificationIntegrationPanel(canManage) : ""}
     ${tab === "security" ? staffSecuritySettingsPanel(security, true) : ""}
+  `;
+}
+
+function platformNotificationIntegrationPanel(canManage) {
+  const config = state.data.notificationIntegrationConfig || {};
+  const providers = Array.isArray(config.providers) ? config.providers : [];
+  const statusRows = state.notificationProviderStatus || [];
+  const rows = providers.map((provider) => {
+    const live = statusRows.find((row) => normal(row.channel) === normal(provider.channel));
+    const missing = (provider.settings || []).filter((setting) => !setting.configured).map((setting) => setting.key).join(", ") || "None";
+    return {
+      channel: provider.channel,
+      provider: provider.provider,
+      activeProvider: provider.activeProvider,
+      active: provider.active ? "Active" : "Not active",
+      liveStatus: live ? labelize(live.status) : "Not checked",
+      balance: live?.balance ? `${live.balance} SMS credits` : "-",
+      missingSettings: missing
+    };
+  });
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Notification integrations</h2>
+          <p>Super Admin visibility for AfroSMS and Gmail SMTP setup. Secrets stay in the server environment.</p>
+        </div>
+        <div class="table-actions">
+          <button class="button secondary" type="button" data-action="check-notification-provider-status" ${canManage ? "" : "disabled"}>Check provider status</button>
+        </div>
+      </div>
+      ${config.updatePolicy ? `<p class="helper-text">${escapeHtml(config.updatePolicy)}</p>` : ""}
+      <div class="source-grid">
+        ${mini("SMS provider", providers.find((row) => normal(row.channel) === "sms")?.activeProvider || "Not configured")}
+        ${mini("Email provider", providers.find((row) => normal(row.channel) === "email")?.activeProvider || "Not configured")}
+        ${mini("Last status check", state.notificationProviderStatusCheckedAt ? formatDateTime(state.notificationProviderStatusCheckedAt) : "Not checked")}
+        ${mini("Live risks", notificationProviderRiskRows().length)}
+      </div>
+    </section>
+    <div class="grid two">
+      ${recordTable("Notification provider setup", rows, ["channel", "provider", "activeProvider", "active", "liveStatus", "balance", "missingSettings"])}
+      ${recordTable("Required notification environment variables", providers.flatMap((provider) => (provider.settings || []).map((setting) => ({
+        channel: provider.channel,
+        key: setting.key,
+        configured: setting.configured ? "Yes" : "Missing",
+        secret: setting.secret ? "Secret" : "Visible",
+        value: setting.secret ? (setting.configured ? "Configured" : "Missing") : setting.value
+      }))), ["channel", "key", "configured", "secret", "value"])}
+    </div>
   `;
 }
 
@@ -6984,8 +7036,9 @@ async function refreshAll() {
     ["securitySummary", "/auth/security-summary"]
   ];
   if (isPlatform()) endpoints.push(["platformSecurityPolicy", "/platform-security-policy"]);
+  if (isPlatform() && hasPermission("roles:create")) endpoints.push(["notificationIntegrationConfig", "/platform-integrations/notification-config"]);
   if (canAccessView("notifications")) endpoints.push(["notificationProviderStatus", "/notifications/provider-status"]);
-  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy"]);
+  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy", "notificationIntegrationConfig"]);
   const results = await Promise.all(endpoints.map(async ([key, path]) => [key, await optionalApi(path, objectKeys.has(key) ? null : [])]));
   results.forEach(([key, value]) => {
     if (key === "notificationProviderStatus") {
