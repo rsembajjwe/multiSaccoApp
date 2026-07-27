@@ -4,6 +4,7 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
+import com.methaltech.sacco.notification.NotificationService;
 import com.methaltech.sacco.member.MemberRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -32,6 +33,7 @@ class ComplaintController {
     private final MemberRepository memberRepository;
     private final AuthService authService;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     @GetMapping
     ResponseEntity<?> listComplaints(
@@ -118,8 +120,13 @@ class ComplaintController {
         return complaintRepository.findById(complaintId)
                 .<ResponseEntity<?>>map(complaint -> {
                     if (!canAccess(currentSession, complaint.getTenantId())) return tenantAccessDenied();
-                    complaint.updateStatus(status, body.resolutionNotes() == null ? "" : body.resolutionNotes().trim(), currentSession.user().getId());
+                    String reply = body.resolutionNotes() == null ? "" : body.resolutionNotes().trim();
+                    complaint.updateStatus(status, reply, currentSession.user().getId());
                     Complaint saved = complaintRepository.save(complaint);
+                    if (saved.getMemberId() != null && !saved.getMemberId().isBlank() && !reply.isBlank()) {
+                        memberRepository.findById(saved.getMemberId())
+                                .ifPresent(member -> notificationService.notifyComplaintReply(member, saved.getId(), saved.getSubject(), reply));
+                    }
                     auditService.record(
                             complaint.getTenantId(),
                             currentSession.user(),

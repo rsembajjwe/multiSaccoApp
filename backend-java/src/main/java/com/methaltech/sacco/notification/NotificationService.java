@@ -70,6 +70,20 @@ public class NotificationService {
                 complaintId));
     }
 
+    public Notification notifyComplaintReply(Member member, String complaintId, String subject, String reply) {
+        String title = "SACCO admin replied";
+        String message = "Reply on " + subject + ": " + reply;
+        return notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                "complaint_reply",
+                title,
+                message,
+                "complaint",
+                complaintId));
+    }
+
     public Notification notifySaccoContact(
             String tenantId,
             String eventType,

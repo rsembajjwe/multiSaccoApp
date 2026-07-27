@@ -43,7 +43,7 @@ const allowedMeetingTypes = new Set(["board", "agm", "credit_committee", "audit_
 const allowedGovernanceStatuses = new Set(["scheduled", "completed", "cancelled"]);
 const allowedResolutionStatuses = new Set(["open", "in_progress", "closed"]);
 const allowedComplaintCategories = new Set(["statement", "loan", "savings", "shares", "service", "other"]);
-const allowedComplaintPriorities = new Set(["low", "medium", "high"]);
+const allowedComplaintPriorities = new Set(["low", "medium", "high", "urgent"]);
 const allowedComplaintStatuses = new Set(["open", "in_progress", "resolved", "closed"]);
 const allowedApprovalModules = new Set(["members", "transactions", "loans", "expenses", "assets", "subscriptions", "governance"]);
 const allowedApprovalDecisions = new Set(["pending", "approved", "rejected", "corrections_requested"]);
@@ -96,6 +96,7 @@ export async function handleApi(request, response, url) {
       if (method === "GET" && path === "/member-auth/mobile-dashboard") return getMemberMobileDashboard(response, memberAuth);
       if (method === "POST" && path === "/member-auth/mobile-loans") return createMemberMobileLoan(request, response, memberAuth, correlationId);
       if (method === "POST" && path === "/member-auth/mobile-complaints") return createMemberMobileComplaint(request, response, memberAuth, correlationId);
+      if (method === "GET" && path === "/member-auth/complaints") return listMemberComplaints(response, memberAuth);
       if (method === "GET" && path === "/member-auth/notifications") return listMemberNotifications(response, memberAuth);
       if (method === "GET" && path === "/member-auth/guarantor-requests") return listMemberGuarantorRequests(response, memberAuth);
       if (method === "PATCH" && path.startsWith("/member-auth/guarantor-requests/") && path.endsWith("/status")) {
@@ -407,6 +408,13 @@ function listMemberNotifications(response, auth) {
   return sendData(response, db.notifications
     .filter((notification) => notification.memberId === auth.member.id)
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+}
+
+function listMemberComplaints(response, auth) {
+  return sendData(response, db.complaints
+    .filter((complaint) => complaint.memberId === auth.member.id)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .map(publicComplaint));
 }
 
 function requireAuth(request, response, correlationId) {
@@ -1411,7 +1419,7 @@ function postLoanRepayment({ loan, amount, channel, externalReference, receivedA
   return repayment;
 }
 
-function createMemberNotification({ tenantId, memberId, eventType, resourceType, resourceId, body }) {
+function createMemberNotification({ tenantId, memberId, eventType, resourceType, resourceId, title, body }) {
   const template = db.notificationTemplates
     .filter((item) => item.eventType === eventType && item.status === "active" && (item.tenantId === tenantId || item.tenantId === null))
     .sort((a, b) => Number(b.tenantId === tenantId) - Number(a.tenantId === tenantId))[0];
@@ -1422,7 +1430,7 @@ function createMemberNotification({ tenantId, memberId, eventType, resourceType,
     memberId,
     channel: template?.channel || "in_app",
     eventType,
-    title: template?.title || "Notification",
+    title: title || template?.title || "Notification",
     body: body || template?.body || "",
     status: "unread",
     resourceType,
@@ -1935,6 +1943,7 @@ async function createComplaint(request, response, auth, correlationId) {
     status: "open",
     assignedUserId: String(body.assignedUserId || auth.user.id),
     resolution: "",
+    resolutionNotes: "",
     createdByUserId: auth.user.id,
     resolvedByUserId: null,
     resolvedAt: null,
@@ -1964,7 +1973,9 @@ async function updateComplaintStatus(request, response, auth, complaintId, corre
   if (!allowedComplaintStatuses.has(status)) return sendError(response, 400, "INVALID_COMPLAINT_STATUS", "Unsupported complaint status.", correlationId);
 
   complaint.status = status;
-  complaint.resolution = String(body.resolution || complaint.resolution || "");
+  const resolutionNotes = String(body.resolutionNotes || body.resolution || complaint.resolutionNotes || complaint.resolution || "");
+  complaint.resolution = resolutionNotes;
+  complaint.resolutionNotes = resolutionNotes;
   complaint.updatedAt = new Date().toISOString();
   if (["resolved", "closed"].includes(status)) {
     complaint.resolvedByUserId = auth.user.id;
@@ -1979,12 +1990,24 @@ async function updateComplaintStatus(request, response, auth, complaintId, corre
     resourceId: complaint.id,
     ipAddress: requestIp(request)
   });
+  if (complaint.memberId && resolutionNotes) {
+    createMemberNotification({
+      tenantId: complaint.tenantId,
+      memberId: complaint.memberId,
+      eventType: "complaint_reply",
+      resourceType: "complaint",
+      resourceId: complaint.id,
+      title: "SACCO admin replied",
+      body: `Reply on ${complaint.subject}: ${resolutionNotes}`
+    });
+  }
   return sendData(response, publicComplaint(complaint));
 }
 
 function publicComplaint(complaint) {
   return {
     ...complaint,
+    resolutionNotes: complaint.resolutionNotes || complaint.resolution || "",
     member: complaint.memberId ? publicMember(db.members.find((member) => member.id === complaint.memberId)) : null
   };
 }
@@ -3300,6 +3323,7 @@ async function createMemberMobileComplaint(request, response, auth, correlationI
     status: "open",
     assignedUserId: null,
     resolution: "",
+    resolutionNotes: "",
     createdByUserId: null,
     resolvedByUserId: null,
     resolvedAt: null,

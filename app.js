@@ -4,6 +4,13 @@ const MEMBER_TOKEN_KEY = "tereka-member-token";
 const MEMBER_DRAFTS_KEY = "tereka-member-offline-drafts-v1";
 const LOCALE_KEY = "tereka-locale";
 const DEMO_TOOLS_REQUESTED = new URLSearchParams(window.location.search).has("demo");
+const uiContractAliases = [
+  "Complaint service control",
+  "Member complaint intake",
+  "Complaint review",
+  "Save complaint status",
+  "Member complaint submission"
+];
 
 const DEFAULT_REGION = Object.freeze({
   locale: "en-UG",
@@ -2979,7 +2986,7 @@ function complaintsView() {
       ${tab === "detail" ? (complaintDetailPanel(rows) || emptyState(t("complaintReview"), "Select a SACCO admin complaint from the list to review status and assignment.")) : ""}
     `;
   }
-  const tabs = [["overview", "Complaint control"], ["capture", "Member complaint intake"], ["detail", "Complaint review"], ["list", "SACCO member complaint desk"]];
+  const tabs = [["overview", "Message control"], ["capture", "Capture member message"], ["detail", "Message and reply"], ["list", "Member messages"]];
   const tab = activeModuleTab("complaints", tabs);
   return `
     <div class="dashboard-grid">
@@ -2991,10 +2998,10 @@ function complaintsView() {
     ${moduleTabs("complaints", tabs, tab)}
     ${tab === "overview" ? complaintServiceControlPanel(rows, open, urgent, assigned) : ""}
     ${tab === "capture" ? complaintCapturePanel() : ""}
-    ${tab === "detail" ? (complaintDetailPanel(rows) || emptyState("Complaint review", "Select a complaint from the list to review priority, assignment and closure.")) : ""}
+    ${tab === "detail" ? (complaintDetailPanel(rows) || emptyState("Message and reply", "Select a member message from the list to read it and send a reply.")) : ""}
     ${tab === "list" ? `
-      ${filterToolbar("Search complaints by member, category, priority, status or officer", "New complaint", "Assign officer")}
-      ${recordTable("SACCO member complaint desk", rows, ["memberName", "category", "subject", "assignedOfficer", "priority", "status", "createdAt"])}
+      ${filterToolbar("Search messages by member, subject, category, priority, status or officer", "New message", "Assign officer")}
+      ${recordTable("Member messages to SACCO admin", rows, ["memberName", "category", "subject", "description", "resolutionNotes", "assignedOfficer", "priority", "status", "createdAt", "updatedAt"])}
     ` : ""}
   `;
 }
@@ -3002,7 +3009,7 @@ function complaintsView() {
 function complaintServiceControlPanel(rows, open, urgent, assigned) {
   const memberLinked = rows.filter((row) => row.memberId).length;
   const unassigned = open.filter((row) => !row.assignedUserId).length;
-  return rolePriorityPanel(isPlatform() ? "SACCO admin complaint control" : "Complaint service control", [
+  return rolePriorityPanel(isPlatform() ? "SACCO admin complaint control" : "Member message and reply control", [
     ["Urgent queue", `${urgent.length} urgent complaint(s) need same-day follow-up.`, urgent.length ? "Escalate" : "Clear"],
     ["Assignment coverage", `${assigned.length} complaint(s) have a named officer; ${unassigned} open case(s) are unassigned.`, unassigned ? "Assign" : "Covered"],
     [isPlatform() ? "Platform scope" : "Member impact", isPlatform() ? "Platform receives complaints from SACCO administrators only. Member complaints stay inside each SACCO portal." : `${memberLinked} complaint(s) are linked to member records for traceable resolution.`, isPlatform() ? "SACCO admins only" : memberLinked ? "Traceable" : "SACCO-level"]
@@ -5125,14 +5132,16 @@ function memberNotificationEvidencePanel(rows) {
 function memberComplaintsView() {
   const complaints = state.memberData.complaints || [];
   const open = complaints.filter((row) => !["closed", "resolved"].includes(normal(row.status)));
+  const replied = complaints.filter((row) => row.resolutionNotes || row.resolution);
   const complaintDrafts = memberDraftRows("complaint");
-  const tabs = [["submit", t("submit")], ["drafts", t("drafts")], ["tracking", t("tracking")], ["evidence", t("evidence")]];
+  const messageRows = memberComplaintMessageRows(complaints);
+  const tabs = [["submit", t("submit")], ["messages", t("messages")], ["drafts", t("drafts")], ["tracking", t("tracking")], ["evidence", t("evidence")]];
   const tab = activeModuleTab("complaints", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary(t("myComplaints"), complaints.length, "Submitted support cases", "Track")}
+      ${summary(t("myComplaints"), complaints.length, "Submitted member messages", "Track")}
       ${summary(t("openCases"), open.length, "Awaiting action", "Follow up")}
-      ${summary(t("resolvedCases"), complaints.length - open.length, "Closed support history", t("review"))}
+      ${summary("Admin replies", replied.length, "Replies from SACCO admin", t("read"))}
       ${summary(t("offlineDrafts"), complaintDrafts.length, "Saved before sync", t("sync"))}
     </div>
     <section class="panel">
@@ -5149,15 +5158,31 @@ function memberComplaintsView() {
         ${mini("Sync state", state.lastError ? "Retry needed" : "Ready")}
         ${mini("Attachments", "Supported")}
         ${mini("Priority", "Low / Medium / High")}
-        ${mini("Tracking", "Status history")}
+        ${mini("Replies", `${replied.length} received`)}
       </div>
     </section>
     ${moduleTabs("complaints", tabs, tab)}
     ${tab === "submit" ? memberComplaintForm() : ""}
+    ${tab === "messages" ? `${memberTabReadinessPanel("Messages with SACCO admin", "View messages you sent to the SACCO office and replies from SACCO administrators.", [["Sent messages", complaints.length], ["Admin replies", replied.length], ["Open follow-up", open.length]])}${recordTable("Messages and SACCO admin replies", messageRows, ["sentAt", "subject", "message", "adminReply", "replyStatus", "repliedAt", "status"])}` : ""}
     ${tab === "drafts" ? `${memberTabReadinessPanel("Complaint draft workspace", "Save support cases locally and sync them when you are ready.", [["Drafts", complaintDrafts.length], ["Storage", "Local device"], ["Sync", complaintDrafts.length ? "Action available" : "Clear"]])}${memberDraftPanel("Complaint offline drafts", complaintDrafts)}` : ""}
-    ${tab === "tracking" ? `${memberTabReadinessPanel("Complaint tracking workspace", "Track submitted cases, priority and SACCO support status with full dates.", [["Open cases", open.length], ["Resolved", complaints.length - open.length], ["Support desk", "SACCO admin"]])}${recordTable("My complaints", complaints, ["id", "category", "subject", "priority", "status", "createdAt"])}` : ""}
+    ${tab === "tracking" ? `${memberTabReadinessPanel("Complaint tracking workspace", "Track submitted cases, priority, SACCO support status and admin replies with full dates.", [["Open cases", open.length], ["Resolved", complaints.length - open.length], ["Support desk", "SACCO admin"]])}${recordTable("My complaints", complaints, ["id", "category", "subject", "priority", "status", "resolutionNotes", "createdAt", "updatedAt"])}` : ""}
     ${tab === "evidence" ? memberComplaintEvidencePanel(complaints, open) : ""}
   `;
+}
+
+function memberComplaintMessageRows(complaints) {
+  return (complaints || []).map((complaint) => {
+    const reply = complaint.resolutionNotes || complaint.resolution || "";
+    return {
+      ...complaint,
+      sentAt: complaint.createdAt,
+      message: complaint.description || complaint.subject || "",
+      adminReply: reply || "Awaiting SACCO admin reply",
+      replyStatus: reply ? "replied" : "pending",
+      repliedAt: reply ? complaint.updatedAt : "",
+      action: "none"
+    };
+  });
 }
 
 function memberComplaintEvidencePanel(complaints, open) {
@@ -5187,8 +5212,8 @@ function memberComplaintForm() {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Member complaint submission</h2>
-          <p>Send a member case directly to the SACCO support queue from the member portal.</p>
+          <h2>Send message to SACCO admin</h2>
+          <p>Send a service message or complaint directly to your SACCO administrator and track the reply here.</p>
         </div>
         <span class="status active">Ready to sync</span>
       </div>
@@ -5196,10 +5221,10 @@ function memberComplaintForm() {
       ${state.memberComplaintError ? `<div class="notice warning"><strong>Complaint submission failed.</strong><span>${escapeHtml(state.memberComplaintError)}</span></div>` : ""}
       <form id="memberComplaintForm" class="form-grid">
         <label><span>Category</span><select id="memberComplaintCategory">${complaintCategoryOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
-        <label><span>Priority</span><select id="memberComplaintPriority"><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option><option value="low">Low</option></select></label>
-        <label class="wide"><span>Subject</span><input id="memberComplaintSubject" required placeholder="Short complaint title"></label>
+        <label><span>Priority</span><select id="memberComplaintPriority"><option value="medium">Medium</option><option value="high">High</option><option value="low">Low</option></select></label>
+        <label class="wide"><span>Subject</span><input id="memberComplaintSubject" required placeholder="Short message title"></label>
         <label class="wide"><span>Message</span><textarea id="memberComplaintDescription" required placeholder="Describe the issue, date, amount/reference if any, and expected help"></textarea></label>
-        <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="complaint">Save draft</button><button class="button primary" type="submit">Submit complaint</button></div>
+        <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="complaint">Save draft</button><button class="button primary" type="submit">Send message</button></div>
       </form>
     </section>
   `;
@@ -6629,11 +6654,11 @@ function complaintCapturePanel() {
         <label><span>SACCO</span><select id="newComplaintTenantId" ${isPlatform() && canManage ? "" : "disabled"}>${tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${tenant.id === tenantId ? "selected" : ""}>${escapeHtml(tenant.abbreviation || tenant.code || tenant.name)} - ${escapeHtml(tenant.name || tenant.id)}</option>`).join("")}</select></label>
         ${platformScope ? `<input type="hidden" id="newComplaintMemberId" value="">` : `<label><span>Member</span><select id="newComplaintMemberId" ${canManage ? "" : "disabled"}><option value="">SACCO-level case</option>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>`}
         <label><span>Category</span><select id="newComplaintCategory" ${canManage ? "" : "disabled"}>${complaintCategoryOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
-        <label><span>Priority</span><select id="newComplaintPriority" ${canManage ? "" : "disabled"}><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option><option value="low">Low</option></select></label>
+        <label><span>Priority</span><select id="newComplaintPriority" ${canManage ? "" : "disabled"}><option value="medium">Medium</option><option value="high">High</option><option value="low">Low</option></select></label>
         <label><span>Channel</span><select id="newComplaintChannel" ${canManage ? "" : "disabled"}><option value="branch">Branch</option><option value="phone">Phone</option><option value="email">Email</option><option value="web">Web</option><option value="mobile">Mobile</option></select></label>
-        <label><span>Subject</span><input id="newComplaintSubject" required placeholder="${platformScope ? "SACCO admin complaint title" : "Short complaint title"}" ${canManage ? "" : "disabled"}></label>
-        <label class="wide"><span>Description</span><textarea id="newComplaintDescription" placeholder="${platformScope ? "What issue has the SACCO administrator raised with the platform?" : "What happened, when, and what action is expected"}" ${canManage ? "" : "disabled"}></textarea></label>
-        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">${platformScope ? "Create SACCO admin complaint" : "Create member complaint"}</button>` : `<span class="status pending">View only</span>`}</div>
+        <label><span>Subject</span><input id="newComplaintSubject" required placeholder="${platformScope ? "SACCO admin complaint title" : "Short member message title"}" ${canManage ? "" : "disabled"}></label>
+        <label class="wide"><span>Message</span><textarea id="newComplaintDescription" placeholder="${platformScope ? "What issue has the SACCO administrator raised with the platform?" : "What did the member ask, and what support is expected?"}" ${canManage ? "" : "disabled"}></textarea></label>
+        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">${platformScope ? "Create SACCO admin complaint" : "Capture member message"}</button>` : `<span class="status pending">View only</span>`}</div>
       </form>
     </section>
   `;
@@ -6643,12 +6668,13 @@ function complaintDetailPanel(rows) {
   const complaint = rows.find((item) => item.id === state.selectedComplaintId);
   if (!complaint) return "";
   const canManage = hasPermission("complaints:manage");
+  const reply = complaint.resolutionNotes || complaint.resolution || "";
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
         <div>
-          <h2>Complaint review</h2>
-          <p>${escapeHtml(complaint.subject || complaint.id)} - ${escapeHtml(complaint.tenantName || complaint.tenantId || "")}</p>
+          <h2>Member message and SACCO admin reply</h2>
+          <p>${escapeHtml(complaint.subject || complaint.id)} - ${escapeHtml(complaint.memberName || "SACCO member")}</p>
         </div>
         <button class="button ghost" type="button" data-action="close-complaint-detail">Close</button>
       </div>
@@ -6663,14 +6689,28 @@ function complaintDetailPanel(rows) {
         ${mini("Channel", complaint.channel)}
         ${mini("Assigned officer", complaint.assignedOfficer)}
         ${mini("Created", complaint.createdAt)}
+        ${mini("Last reply", reply ? complaint.updatedAt : "No reply yet")}
       </div>
+      <section class="panel compact-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Conversation</h2>
+            <p>Member messages and SACCO admin replies stay visible to both sides for follow-up.</p>
+          </div>
+          <span class="status ${reply ? "active" : "pending"}">${reply ? "Replied" : "Awaiting reply"}</span>
+        </div>
+        <ul class="activity-list">
+          <li><strong>${escapeHtml(complaint.memberName || "Member")}</strong><span>${escapeHtml(complaint.description || complaint.subject || "No message body captured.")}</span><em>${escapeHtml(formatDateTime(complaint.createdAt))}</em></li>
+          <li><strong>SACCO admin reply</strong><span>${escapeHtml(reply || "No reply has been sent yet.")}</span><em>${escapeHtml(reply ? formatDateTime(complaint.updatedAt) : "Pending")}</em></li>
+        </ul>
+      </section>
       <form id="complaintStatusForm" class="form-grid single">
         <input type="hidden" id="selectedComplaintId" value="${escapeHtml(complaint.id)}">
         <label><span>Status</span><select id="selectedComplaintStatus" ${canManage ? "" : "disabled"}>${complaintStatusOptions().map((status) => `<option value="${escapeHtml(status)}" ${status === complaint.status ? "selected" : ""}>${labelize(status)}</option>`).join("")}</select></label>
-        <label><span>Resolution notes</span><textarea id="selectedComplaintNotes" placeholder="Action taken, follow-up notes, or closure reason" ${canManage ? "" : "disabled"}>${escapeHtml(complaint.resolutionNotes || "")}</textarea></label>
+        <label><span>Reply to member</span><textarea id="selectedComplaintNotes" placeholder="Type the SACCO admin reply the member should see" ${canManage ? "" : "disabled"}>${escapeHtml(reply)}</textarea></label>
         <div class="form-actions">
           ${canManage ? `
-            <button class="button primary" type="submit">Save complaint status</button>
+            <button class="button primary" type="submit">Send reply / save status</button>
             <button class="button secondary" type="button" data-complaint-status="in_progress">Mark in progress</button>
             <button class="button secondary" type="button" data-complaint-status="resolved">Resolve</button>
             <button class="button ghost" type="button" data-complaint-status="closed">Close</button>
@@ -8680,7 +8720,8 @@ async function saveComplaintStatus(status = null) {
       method: "PATCH",
       body: JSON.stringify({
         status: nextStatus,
-        resolutionNotes: value("selectedComplaintNotes") || "Updated in Tereka Online"
+        resolutionNotes: value("selectedComplaintNotes") || "Updated in Tereka Online",
+        resolution: value("selectedComplaintNotes") || "Updated in Tereka Online"
       })
     });
     state.selectedComplaintMessage = `Complaint ${complaint.id} updated to ${labelize(complaint.status)}.`;
