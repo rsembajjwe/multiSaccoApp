@@ -2114,6 +2114,7 @@ function platformDashboard() {
       ${summaryLink(t("failedPaymentTransactions"), transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", t("review"), "transactions")}
       ${summaryLink(t("activePlatformUsers"), users.filter((user) => normal(user.status) === "active").length || users.length, "Administrators and roles", "Manage access", "users")}
     </div>
+    ${notificationProviderRiskPanel()}
     ${loginRiskSummaryPanel(true)}
     <div class="split-layout">
       ${chartCard("SACCO registrations by month", ["Jan", "Feb", "Mar", "Apr", "May", "Jun"], [2, 3, 4, 5, 7, tenants.length || 3])}
@@ -2138,6 +2139,7 @@ function platformOperationsDashboard() {
       ${summary("Failed callbacks", dataRows("mobileMoneyCallbacks").filter((row) => normal(row.status).includes("failed")).length, "Provider exceptions", "Retry")}
       ${summary("System alerts", operationAlerts().length, "Health checks", "Open")}
     </div>
+    ${notificationProviderRiskPanel()}
     ${loginRiskSummaryPanel(true)}
     <div class="grid two">
       ${recordTable("Operations command center", operationAlerts(), ["title", "provider", "severity", "status", "checkedAt"])}
@@ -3100,6 +3102,38 @@ function notificationProviderStatusPanel() {
         `${labelize(row.status)}${row.balance ? `, ${row.balance} SMS credits` : ""}`
       )).join("")}</div>` : emptyState("Provider status not checked", "Use Check provider status to verify AfroSMS credits and Gmail readiness.")}
       ${rows.some((row) => normal(row.status) !== "ready") ? `<div class="notice warning"><strong>Provider issue detected.</strong><span>${escapeHtml(rows.filter((row) => normal(row.status) !== "ready").map((row) => row.message).join(" "))}</span></div>` : ""}
+    </section>
+  `;
+}
+
+function notificationProviderRiskRows() {
+  const rows = state.notificationProviderStatus || [];
+  return rows
+    .map((row) => {
+      const balance = Number(row.balance);
+      const unavailable = normal(row.status) !== "ready";
+      const lowBalance = row.channel === "sms" && Number.isFinite(balance) && balance < 100;
+      if (!unavailable && !lowBalance) return null;
+      return {
+        title: `${labelize(row.channel)} provider`,
+        provider: labelize(row.provider),
+        severity: unavailable ? "Critical" : "Warning",
+        status: unavailable ? "Unavailable" : "Low credits",
+        checkedAt: row.checkedAt || state.notificationProviderStatusCheckedAt || state.lastSync,
+        message: unavailable ? row.message : `${balance} SMS credits remaining.`
+      };
+    })
+    .filter(Boolean);
+}
+
+function notificationProviderRiskPanel() {
+  const rows = notificationProviderRiskRows();
+  if (!rows.length) return "";
+  return `
+    <section class="notice warning">
+      <strong>Notification provider attention needed.</strong>
+      <span>${escapeHtml(rows.map((row) => `${row.title}: ${row.status}`).join("; "))}</span>
+      ${canAccessView("notifications") ? `<button class="button secondary" type="button" data-summary-view="notifications">Open notifications</button>` : ""}
     </section>
   `;
 }
@@ -6950,10 +6984,16 @@ async function refreshAll() {
     ["securitySummary", "/auth/security-summary"]
   ];
   if (isPlatform()) endpoints.push(["platformSecurityPolicy", "/platform-security-policy"]);
+  if (canAccessView("notifications")) endpoints.push(["notificationProviderStatus", "/notifications/provider-status"]);
   const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy"]);
   const results = await Promise.all(endpoints.map(async ([key, path]) => [key, await optionalApi(path, objectKeys.has(key) ? null : [])]));
   results.forEach(([key, value]) => {
-    state.data[key] = value;
+    if (key === "notificationProviderStatus") {
+      state.notificationProviderStatus = Array.isArray(value) ? value : [];
+      state.notificationProviderStatusCheckedAt = new Date().toISOString();
+    } else {
+      state.data[key] = value;
+    }
   });
   state.lastSync = new Date().toISOString();
   state.loading = false;
@@ -9679,11 +9719,12 @@ function tableStateKey(title) {
 function operationAlerts() {
   const operations = state.data.operations || {};
   const alerts = operations.alerts || operations.integrationStatuses || [];
-  return Array.isArray(alerts) && alerts.length ? alerts : [
+  const baseAlerts = Array.isArray(alerts) && alerts.length ? alerts : [
     { title: "Database", provider: "PostgreSQL", severity: "Healthy", status: "Healthy", checkedAt: state.lastSync },
     { title: "Application service", provider: "Backend service", severity: "Healthy", status: "Healthy", checkedAt: state.lastSync },
     { title: "Mobile money callbacks", provider: "Provider gateway", severity: "Warning", status: "Pending", checkedAt: state.lastSync }
   ];
+  return [...notificationProviderRiskRows(), ...baseAlerts];
 }
 
 function fallbackPackages() {
