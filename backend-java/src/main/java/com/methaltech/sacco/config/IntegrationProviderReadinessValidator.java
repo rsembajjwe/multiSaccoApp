@@ -23,8 +23,9 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
             @Value("${sacco.providers.sms:}") String smsProvider,
             @Value("${sacco.providers.email:}") String emailProvider,
             @Value("${sacco.providers.mobile-money:}") String mobileMoneyProvider,
-            @Value("${sacco.integrations.sms.afrosms.api-key:}") String afroSmsApiKey,
-            @Value("${sacco.integrations.sms.afrosms.sender-id:}") String afroSmsSenderId,
+            @Value("${sacco.integrations.sms.afrosms.email:}") String afroSmsEmail,
+            @Value("${sacco.integrations.sms.afrosms.password:}") String afroSmsPassword,
+            @Value("${sacco.integrations.sms.afrosms.source:}") String afroSmsSource,
             @Value("${spring.mail.username:}") String gmailUsername,
             @Value("${spring.mail.password:}") String gmailPassword,
             @Value("${sacco.integrations.email.gmail.from-address:}") String gmailFromAddress,
@@ -46,8 +47,9 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
         this.providers.put("SACCO_EMAIL_PROVIDER", emailProvider);
         this.providers.put("SACCO_MOBILE_MONEY_PROVIDER", mobileMoneyProvider);
         this.afroSmsSettings = new LinkedHashMap<>();
-        this.afroSmsSettings.put("SACCO_AFROSMS_API_KEY", afroSmsApiKey);
-        this.afroSmsSettings.put("SACCO_AFROSMS_SENDER_ID", afroSmsSenderId);
+        this.afroSmsSettings.put("SACCO_AFROSMS_EMAIL", afroSmsEmail);
+        this.afroSmsSettings.put("SACCO_AFROSMS_PASSWORD", afroSmsPassword);
+        this.afroSmsSettings.put("SACCO_AFROSMS_SOURCE", afroSmsSource);
         this.gmailSmtpSettings = new LinkedHashMap<>();
         this.gmailSmtpSettings.put("SACCO_GMAIL_SMTP_USERNAME", gmailUsername);
         this.gmailSmtpSettings.put("SACCO_GMAIL_SMTP_PASSWORD", gmailPassword);

@@ -1,11 +1,8 @@
 package com.methaltech.sacco.notification;
 
 import com.methaltech.sacco.member.Member;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -18,31 +15,25 @@ class AfroSmsNotificationProvider implements NotificationProvider {
     private final RestClient restClient;
     private final String baseUrl;
     private final String sendPath;
-    private final String apiKey;
-    private final String senderId;
-    private final String authHeader;
-    private final String phoneField;
-    private final String messageField;
-    private final String senderField;
+    private final String balancePath;
+    private final String email;
+    private final String password;
+    private final String source;
 
     AfroSmsNotificationProvider(
             RestClient.Builder restClientBuilder,
             @Value("${sacco.integrations.sms.afrosms.base-url:https://www.afrosms.ug}") String baseUrl,
-            @Value("${sacco.integrations.sms.afrosms.send-path:/api/sms/send}") String sendPath,
-            @Value("${sacco.integrations.sms.afrosms.api-key:}") String apiKey,
-            @Value("${sacco.integrations.sms.afrosms.sender-id:Tereka}") String senderId,
-            @Value("${sacco.integrations.sms.afrosms.auth-header:Authorization}") String authHeader,
-            @Value("${sacco.integrations.sms.afrosms.phone-field:to}") String phoneField,
-            @Value("${sacco.integrations.sms.afrosms.message-field:message}") String messageField,
-            @Value("${sacco.integrations.sms.afrosms.sender-field:sender}") String senderField) {
+            @Value("${sacco.integrations.sms.afrosms.send-path:/smskings/api.php}") String sendPath,
+            @Value("${sacco.integrations.sms.afrosms.balance-path:/smskings/balance_api.php}") String balancePath,
+            @Value("${sacco.integrations.sms.afrosms.email:}") String email,
+            @Value("${sacco.integrations.sms.afrosms.password:}") String password,
+            @Value("${sacco.integrations.sms.afrosms.source:Tereka}") String source) {
         this.baseUrl = trimTrailingSlash(baseUrl);
         this.sendPath = ensureLeadingSlash(sendPath);
-        this.apiKey = apiKey;
-        this.senderId = senderId;
-        this.authHeader = authHeader;
-        this.phoneField = phoneField;
-        this.messageField = messageField;
-        this.senderField = senderField;
+        this.balancePath = ensureLeadingSlash(balancePath);
+        this.email = email;
+        this.password = password;
+        this.source = source;
         this.restClient = restClientBuilder.baseUrl(this.baseUrl).build();
     }
 
@@ -65,19 +56,19 @@ class AfroSmsNotificationProvider implements NotificationProvider {
     public NotificationSendResult send(Member member, String title, String message) {
         assertConfigured();
         String phone = recipient(member);
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put(phoneField, msisdn(phone));
-        body.put(messageField, message);
-        body.put(senderField, senderId);
         try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> response = restClient.post()
-                    .uri(sendPath)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(authHeader, bearer(apiKey))
-                    .body(body)
+            String response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path(sendPath)
+                            .queryParam("email", email)
+                            .queryParam("password", password)
+                            .queryParam("destination", msisdn(phone))
+                            .queryParam("source", source)
+                            .queryParam("message", message)
+                            .queryParam("call", "sendsms")
+                            .build())
                     .retrieve()
-                    .body(Map.class);
+                    .body(String.class);
             return NotificationSendResult.sent(providerReference(response), "AfroSMS accepted the SMS.");
         } catch (RestClientResponseException exception) {
             return NotificationSendResult.failed("AfroSMS rejected the SMS: HTTP " + exception.getStatusCode().value());
@@ -86,29 +77,38 @@ class AfroSmsNotificationProvider implements NotificationProvider {
         }
     }
 
+    String balance() {
+        assertConfigured();
+        try {
+            String response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path(balancePath)
+                            .queryParam("email", email)
+                            .queryParam("password", password)
+                            .queryParam("call", "credits")
+                            .build())
+                    .retrieve()
+                    .body(String.class);
+            if (response == null) return "0";
+            String digits = response.replaceAll("[^0-9]", "");
+            return digits.isBlank() ? "0" : digits;
+        } catch (RestClientException exception) {
+            return "0";
+        }
+    }
+
     private void assertConfigured() {
-        if (apiKey == null || apiKey.isBlank()
-                || senderId == null || senderId.isBlank()
-                || authHeader == null || authHeader.isBlank()
-                || phoneField == null || phoneField.isBlank()
-                || messageField == null || messageField.isBlank()
-                || senderField == null || senderField.isBlank()) {
+        if (email == null || email.isBlank()
+                || password == null || password.isBlank()
+                || source == null || source.isBlank()) {
             throw new NotificationProviderException("AfroSMS provider is not fully configured.");
         }
     }
 
-    private String providerReference(Map<String, Object> response) {
+    private String providerReference(String response) {
         if (response == null) return null;
-        for (String key : new String[]{"id", "messageId", "message_id", "reference", "transactionId"}) {
-            Object value = response.get(key);
-            if (value != null && !value.toString().isBlank()) return value.toString();
-        }
-        return null;
-    }
-
-    private String bearer(String value) {
-        String trimmed = value == null ? "" : value.trim();
-        return trimmed.toLowerCase().startsWith("bearer ") ? trimmed : "Bearer " + trimmed;
+        String trimmed = response.trim();
+        return trimmed.isBlank() ? null : trimmed;
     }
 
     private String msisdn(String phone) {

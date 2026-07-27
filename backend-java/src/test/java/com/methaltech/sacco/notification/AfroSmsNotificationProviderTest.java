@@ -3,7 +3,6 @@ package com.methaltech.sacco.notification;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.ExpectedCount.once;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -26,18 +25,15 @@ class AfroSmsNotificationProviderTest {
         AfroSmsNotificationProvider provider = new AfroSmsNotificationProvider(
                 builder,
                 "https://afrosms.test",
-                "/api/sms/send",
-                "afrosms-key",
-                "Tereka",
-                "Authorization",
-                "to",
-                "message",
-                "sender");
+                "/smskings/api.php",
+                "/smskings/balance_api.php",
+                "sms@example.com",
+                "sms-password",
+                "Tereka");
 
-        server.expect(once(), requestTo("https://afrosms.test/api/sms/send"))
-                .andExpect(method(HttpMethod.POST))
-                .andExpect(header("Authorization", "Bearer afrosms-key"))
-                .andRespond(withSuccess("{\"messageId\":\"sms-ref-1\"}", MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("https://afrosms.test/smskings/api.php?email=sms@example.com&password=sms-password&destination=256700000001&source=Tereka&message=Your%20deposit%20was%20posted.&call=sendsms"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("sms-ref-1", MediaType.TEXT_PLAIN));
 
         NotificationSendResult result = provider.send(member(), "Payment received", "Your deposit was posted.");
 
@@ -53,21 +49,40 @@ class AfroSmsNotificationProviderTest {
         AfroSmsNotificationProvider provider = new AfroSmsNotificationProvider(
                 builder,
                 "https://afrosms.test",
-                "/api/sms/send",
-                "afrosms-key",
-                "Tereka",
-                "Authorization",
-                "to",
-                "message",
-                "sender");
+                "/smskings/api.php",
+                "/smskings/balance_api.php",
+                "sms@example.com",
+                "sms-password",
+                "Tereka");
 
-        server.expect(once(), requestTo("https://afrosms.test/api/sms/send"))
+        server.expect(once(), requestTo("https://afrosms.test/smskings/api.php?email=sms@example.com&password=sms-password&destination=256700000001&source=Tereka&message=Your%20deposit%20was%20posted.&call=sendsms"))
                 .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest());
 
         NotificationSendResult result = provider.send(member(), "Payment received", "Your deposit was posted.");
 
         assertEquals("failed", result.status());
         assertTrue(result.providerMessage().contains("AfroSMS rejected"));
+        server.verify();
+    }
+
+    @Test
+    void balanceReturnsNumericCreditsFromAfroSms() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        AfroSmsNotificationProvider provider = new AfroSmsNotificationProvider(
+                builder,
+                "https://afrosms.test",
+                "/smskings/api.php",
+                "/smskings/balance_api.php",
+                "sms@example.com",
+                "sms-password",
+                "Tereka");
+
+        server.expect(once(), requestTo("https://afrosms.test/smskings/balance_api.php?email=sms@example.com&password=sms-password&call=credits"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("Credits: 1250", MediaType.TEXT_PLAIN));
+
+        assertEquals("1250", provider.balance());
         server.verify();
     }
 

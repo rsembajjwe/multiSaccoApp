@@ -69,14 +69,16 @@ class IntegrationProviderReadinessValidatorTest {
                 "mtn_momo",
                 "",
                 "",
+                "",
                 "tereka.online@gmail.com",
                 "gmail-password",
                 "no-reply@tereka.online");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
 
-        assertTrue(error.getMessage().contains("SACCO_AFROSMS_API_KEY"));
-        assertTrue(error.getMessage().contains("SACCO_AFROSMS_SENDER_ID"));
+        assertTrue(error.getMessage().contains("SACCO_AFROSMS_EMAIL"));
+        assertTrue(error.getMessage().contains("SACCO_AFROSMS_PASSWORD"));
+        assertTrue(error.getMessage().contains("SACCO_AFROSMS_SOURCE"));
     }
 
     @Test
@@ -86,7 +88,8 @@ class IntegrationProviderReadinessValidatorTest {
                 "afrosms",
                 "gmail_smtp",
                 "mtn_momo",
-                "afrosms-key",
+                "sms@example.com",
+                "sms-password",
                 "Tereka",
                 "",
                 "",
@@ -122,7 +125,8 @@ class IntegrationProviderReadinessValidatorTest {
                 "afrosms",
                 "gmail_smtp",
                 "airtel_money",
-                "afrosms-key",
+                "sms@example.com",
+                "sms-password",
                 "Tereka",
                 "tereka.online@gmail.com",
                 "gmail-password",
@@ -160,7 +164,8 @@ class IntegrationProviderReadinessValidatorTest {
                 "afrosms",
                 "gmail_smtp",
                 "mpesa_daraja",
-                "afrosms-key",
+                "sms@example.com",
+                "sms-password",
                 "Tereka",
                 "tereka.online@gmail.com",
                 "gmail-password",
@@ -192,7 +197,8 @@ class IntegrationProviderReadinessValidatorTest {
                 "afrosms",
                 "gmail_smtp",
                 "mtn_momo",
-                "afrosms-key",
+                "sms@example.com",
+                "sms-password",
                 "Tereka",
                 "tereka.online@gmail.com",
                 "gmail-password",
@@ -222,7 +228,8 @@ class IntegrationProviderReadinessValidatorTest {
                 smsProvider,
                 emailProvider,
                 mobileMoneyProvider,
-                "afrosms-key",
+                "sms@example.com",
+                "sms-password",
                 "Tereka",
                 "tereka.online@gmail.com",
                 "gmail-password",
@@ -234,8 +241,9 @@ class IntegrationProviderReadinessValidatorTest {
             String smsProvider,
             String emailProvider,
             String mobileMoneyProvider,
-            String afroSmsApiKey,
-            String afroSmsSenderId,
+            String afroSmsEmail,
+            String afroSmsPassword,
+            String afroSmsSource,
             String gmailUsername,
             String gmailPassword,
             String gmailFromAddress) {
@@ -244,8 +252,9 @@ class IntegrationProviderReadinessValidatorTest {
                 smsProvider,
                 emailProvider,
                 mobileMoneyProvider,
-                afroSmsApiKey,
-                afroSmsSenderId,
+                afroSmsEmail,
+                afroSmsPassword,
+                afroSmsSource,
                 gmailUsername,
                 gmailPassword,
                 gmailFromAddress,

@@ -122,8 +122,9 @@ if (smsProvider !== "afrosms") {
   failures.push("SACCO_SMS_PROVIDER must be afrosms for hosted staging.");
 } else {
   assertProviderSettings([
-    "SACCO_AFROSMS_API_KEY",
-    "SACCO_AFROSMS_SENDER_ID"
+    "SACCO_AFROSMS_EMAIL",
+    "SACCO_AFROSMS_PASSWORD",
+    "SACCO_AFROSMS_SOURCE"
   ], failures);
 }
 

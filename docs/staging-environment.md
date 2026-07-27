@@ -15,8 +15,9 @@ Use this guide when preparing a hosted staging environment for pilot SACCO testi
 | `SACCO_AUTH_RATE_LIMIT_MAX_FAILURES` | Yes | Start with `6`; tighten after UAT if needed. |
 | `SACCO_AUTH_RATE_LIMIT_WINDOW_SECONDS` | Yes | Start with `60`; tighten after UAT if needed. |
 | `SACCO_SMS_PROVIDER` | Yes | Use `afrosms` for hosted staging/production. |
-| `SACCO_AFROSMS_API_KEY` | Required for `afrosms` | AfroSMS API key/token. |
-| `SACCO_AFROSMS_SENDER_ID` | Required for `afrosms` | Approved sender ID such as `Tereka`. |
+| `SACCO_AFROSMS_EMAIL` | Required for `afrosms` | AfroSMS login email for the SMSKings API. |
+| `SACCO_AFROSMS_PASSWORD` | Required for `afrosms` | AfroSMS SMSKings password. Store as a secret. |
+| `SACCO_AFROSMS_SOURCE` | Required for `afrosms` | Approved sender/source name such as `Tereka`. |
 | `SACCO_EMAIL_PROVIDER` | Yes | Use `gmail_smtp` for the low-budget Google Workspace email path. |
 | `SACCO_GMAIL_SMTP_USERNAME` | Required for `gmail_smtp` | Gmail/Google Workspace SMTP username. |
 | `SACCO_GMAIL_SMTP_PASSWORD` | Required for `gmail_smtp` | Gmail app password or Workspace-approved SMTP password. |
