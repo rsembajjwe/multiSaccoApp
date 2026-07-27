@@ -16,7 +16,11 @@ record NotificationDeliveryResponse(
         Instant sentAt,
         Instant createdAt,
         String notificationStatus,
-        Instant readAt) {
+        Instant readAt,
+        String eventType,
+        String title,
+        String resourceType,
+        String resourceId) {
 
     static NotificationDeliveryResponse from(NotificationDelivery delivery) {
         return from(delivery, null);
@@ -37,6 +41,10 @@ record NotificationDeliveryResponse(
                 delivery.getSentAt(),
                 delivery.getCreatedAt(),
                 notification == null ? null : notification.getStatus(),
-                notification == null ? null : notification.getReadAt());
+                notification == null ? null : notification.getReadAt(),
+                notification == null ? null : notification.getEventType(),
+                notification == null ? null : notification.getTitle(),
+                notification == null ? null : notification.getResourceType(),
+                notification == null ? null : notification.getResourceId());
     }
 }

@@ -1117,6 +1117,13 @@ const state = {
   notificationTemplateError: "",
   notificationMessage: "",
   notificationError: "",
+  notificationFilters: {
+    status: "all",
+    channel: "all",
+    provider: "all",
+    tenantId: "all",
+    date: ""
+  },
   selectedTemplateId: "",
   selectedTemplateMessage: "",
   selectedTemplateError: "",
@@ -1271,6 +1278,8 @@ function captureFocusState() {
     ? `#${CSS.escape(element.id)}`
     : element.dataset.tableSearch
       ? `[data-table-search="${CSS.escape(element.dataset.tableSearch)}"]`
+      : element.dataset.notificationFilter
+        ? `[data-notification-filter="${CSS.escape(element.dataset.notificationFilter)}"]`
       : element.dataset.searchInput !== undefined
         ? "[data-search-input]"
         : null;
@@ -2998,7 +3007,10 @@ function notificationsView() {
     ...delivery,
     tenantName: tenantName(delivery.tenantId),
     memberName: delivery.memberId ? memberName(delivery.memberId) : delivery.userId ? userName(delivery.userId) : "SACCO broadcast",
+    event: delivery.eventType ? labelize(delivery.eventType) : delivery.title || "Notification",
+    resource: delivery.resourceType ? `${labelize(delivery.resourceType)} ${delivery.resourceId || ""}`.trim() : "-",
     alertStatus: delivery.readAt ? "acknowledged" : delivery.notificationStatus || delivery.status,
+    deliveryStatus: delivery.status || "pending",
     acknowledgedAt: delivery.readAt ? formatDateTime(delivery.readAt) : "-",
     action: delivery.notificationId && !delivery.readAt ? "notification-acknowledge" : "none",
     actionLabel: "Acknowledge",
@@ -3007,15 +3019,16 @@ function notificationsView() {
   const securityAlerts = deliveries.filter((delivery) => normal(`${delivery.message} ${delivery.provider} ${delivery.channel}`).includes("login"));
   const unreadAlerts = deliveries.filter((delivery) => !delivery.readAt && normal(delivery.alertStatus).includes("unread"));
   const failedDeliveries = deliveries.filter((row) => normal(row.status).includes("failed"));
-  const tabs = [["unread", "Unread"], ["login-risk", "Login Risk"], ["failed", "Failed Delivery"], ["all", "All"]];
+  const tabs = [["delivery-log", "Delivery log"], ["failed", "Failed"], ["unread", "Unread"], ["login-risk", "Login risk"], ["templates", "Templates"]];
   const tab = activeModuleTab("notifications", tabs);
-  const visibleDeliveries = tab === "login-risk"
+  const tabDeliveries = tab === "login-risk"
     ? securityAlerts
     : tab === "failed"
       ? failedDeliveries
-      : tab === "all"
-        ? deliveries
-        : unreadAlerts;
+      : tab === "unread"
+        ? unreadAlerts
+        : deliveries;
+  const visibleDeliveries = tab === "templates" ? [] : filterNotificationDeliveries(tabDeliveries);
   const bulkAcknowledgeIds = visibleDeliveries
     .filter((delivery) => delivery.notificationId && !delivery.readAt)
     .map((delivery) => delivery.notificationId)
@@ -3040,20 +3053,18 @@ function notificationsView() {
     ${state.notificationError ? `<div class="notice warning"><strong>Notification action failed.</strong><span>${escapeHtml(state.notificationError)}</span></div>` : ""}
     ${notificationDeliveryControlPanel(deliveries, templates)}
     ${moduleTabs("notifications", tabs, tab)}
-    <section class="panel compact-panel">
+    ${tab !== "templates" ? `<section class="panel compact-panel">
       <div class="panel-heading">
         <div>
-          <h2>${escapeHtml(tabs.find(([id]) => id === tab)?.[1] || "Unread")} alerts</h2>
-          <p>${bulkAcknowledgeIds.length} visible unread alert(s) can be acknowledged from this tab.</p>
+          <h2>${escapeHtml(tabs.find(([id]) => id === tab)?.[1] || "Delivery log")}</h2>
+          <p>${visibleDeliveries.length} delivery attempt(s) after filters. ${bulkAcknowledgeIds.length} visible unread alert(s) can be acknowledged.</p>
         </div>
         <button class="button secondary" type="button" data-notification-bulk-ack="${escapeHtml(bulkAcknowledgeIds.join(","))}" ${bulkAcknowledgeIds.length ? "" : "disabled"}>Acknowledge visible alerts</button>
       </div>
-    </section>
-    ${filterToolbar("Search by SACCO, member, provider, recipient, channel, status or event", "New template", "Export delivery log")}
-    ${notificationTemplatePanel()}
-    ${notificationTemplateDetailPanel(templates)}
-    ${recordTable(`Notification delivery monitor - ${tabs.find(([id]) => id === tab)?.[1] || "Unread"}`, visibleDeliveries, ["tenantName", "memberName", "channel", "provider", "recipient", "alertStatus", "message", "acknowledgedAt", "sentAt", "createdAt"])}
-    ${recordTable("Notification templates", templates, ["tenantName", "eventType", "channel", "title", "status", "updatedAt"])}
+    </section>` : ""}
+    ${tab !== "templates" ? notificationDeliveryFilters(deliveries) : ""}
+    ${tab !== "templates" ? recordTable(`Notification delivery monitor - ${tabs.find(([id]) => id === tab)?.[1] || "Delivery log"}`, visibleDeliveries, ["tenantName", "event", "channel", "provider", "recipient", "deliveryStatus", "alertStatus", "message", "resource", "sentAt", "createdAt"]) : ""}
+    ${tab === "templates" ? `${notificationTemplatePanel()}${notificationTemplateDetailPanel(templates)}${recordTable("Notification templates", templates, ["tenantName", "eventType", "channel", "title", "status", "updatedAt"])}` : ""}
   `;
 }
 
@@ -3067,6 +3078,56 @@ function notificationDeliveryControlPanel(deliveries, templates) {
     ["Template coverage", `${activeTemplates.length} active template(s) are available across ${uniqueCount(activeTemplates, "channel")} channel(s).`, missingChannels.length ? "Incomplete" : "Ready"],
     ["Missing channels", missingChannels.length ? `No active template for ${missingChannels.map(labelize).join(", ")}.` : "SMS, email and in-app template coverage is ready.", missingChannels.length ? "Configure" : "Ready"]
   ]);
+}
+
+function notificationDeliveryFilters(deliveries) {
+  const filters = state.notificationFilters || {};
+  const statuses = uniqueValues(deliveries, "status");
+  const channels = uniqueValues(deliveries, "channel");
+  const providers = uniqueValues(deliveries, "provider");
+  const tenantOptions = uniqueValues(deliveries, "tenantId").map((tenantId) => [tenantId, tenantName(tenantId)]);
+  return `
+    <section class="filter-toolbar notification-filters">
+      <label><span>Status</span><select data-notification-filter="status">
+        ${selectOption("all", "All statuses", filters.status)}
+        ${statuses.map((status) => selectOption(status, labelize(status), filters.status)).join("")}
+      </select></label>
+      <label><span>Channel</span><select data-notification-filter="channel">
+        ${selectOption("all", "All channels", filters.channel)}
+        ${channels.map((channel) => selectOption(channel, labelize(channel), filters.channel)).join("")}
+      </select></label>
+      <label><span>Provider</span><select data-notification-filter="provider">
+        ${selectOption("all", "All providers", filters.provider)}
+        ${providers.map((provider) => selectOption(provider, labelize(provider), filters.provider)).join("")}
+      </select></label>
+      <label><span>SACCO</span><select data-notification-filter="tenantId">
+        ${selectOption("all", isPlatform() ? "All SACCOs" : "Current SACCO", filters.tenantId)}
+        ${tenantOptions.map(([tenantId, name]) => selectOption(tenantId, name, filters.tenantId)).join("")}
+      </select></label>
+      <label><span>Date</span><input type="date" value="${escapeHtml(filters.date || "")}" data-notification-filter="date"></label>
+      <button class="button secondary" type="button" data-action="clear-notification-filters">Clear filters</button>
+    </section>
+  `;
+}
+
+function filterNotificationDeliveries(deliveries) {
+  const filters = state.notificationFilters || {};
+  return (deliveries || []).filter((delivery) => {
+    if (filters.status && filters.status !== "all" && normal(delivery.status) !== normal(filters.status)) return false;
+    if (filters.channel && filters.channel !== "all" && normal(delivery.channel) !== normal(filters.channel)) return false;
+    if (filters.provider && filters.provider !== "all" && normal(delivery.provider) !== normal(filters.provider)) return false;
+    if (filters.tenantId && filters.tenantId !== "all" && delivery.tenantId !== filters.tenantId) return false;
+    if (filters.date && String(delivery.createdAt || delivery.sentAt || "").slice(0, 10) !== filters.date) return false;
+    return true;
+  });
+}
+
+function uniqueValues(rows, key) {
+  return [...new Set((rows || []).map((row) => row[key]).filter((value) => value !== undefined && value !== null && String(value).trim()))].sort((a, b) => String(a).localeCompare(String(b)));
+}
+
+function selectOption(value, label, selected) {
+  return `<option value="${escapeHtml(value)}" ${String(selected || "all") === String(value) ? "selected" : ""}>${escapeHtml(label)}</option>`;
 }
 
 function usersView() {
@@ -8473,6 +8534,17 @@ async function acknowledgeVisibleNotifications(notificationIdsText) {
   }
 }
 
+function updateNotificationFilter(event) {
+  const key = event.target.dataset.notificationFilter;
+  if (!key) return;
+  state.notificationFilters = {
+    ...(state.notificationFilters || {}),
+    [key]: event.target.value
+  };
+  state.tableState = {};
+  renderShell();
+}
+
 async function acknowledgeMemberNotification(notificationId) {
   if (!notificationId) return;
   state.memberNotificationMessage = "";
@@ -9046,6 +9118,13 @@ function bindEvents() {
     state.tableState = {};
     renderShell();
   }));
+  document.querySelectorAll("[data-action='clear-notification-filters']").forEach((button) => button.addEventListener("click", () => {
+    state.notificationFilters = { status: "all", channel: "all", provider: "all", tenantId: "all", date: "" };
+    state.tableState = {};
+    renderShell();
+  }));
+  document.querySelectorAll("[data-notification-filter]").forEach((input) => input.addEventListener("input", updateNotificationFilter));
+  document.querySelectorAll("select[data-notification-filter]").forEach((select) => select.addEventListener("change", updateNotificationFilter));
   document.querySelectorAll("[data-table-search]").forEach((input) => input.addEventListener("input", (event) => {
     const tableKey = event.target.dataset.tableSearch;
     state.tableState[tableKey] = { ...(state.tableState[tableKey] || {}), search: event.target.value, page: 1, pageSize: state.tableState[tableKey]?.pageSize || 10 };
