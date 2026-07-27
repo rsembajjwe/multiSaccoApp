@@ -27,6 +27,16 @@ class NotificationIntegrationConfigController {
     private final String gmailPassword;
     private final String gmailFromAddress;
     private final String gmailFromName;
+    private final String mobileMoneyProvider;
+    private final boolean signedCallbacksRequired;
+    private final String callbackSecret;
+    private final String mtnSubscriptionKey;
+    private final String mtnApiUserId;
+    private final String mtnApiKey;
+    private final String mtnTargetEnvironment;
+    private final String airtelClientId;
+    private final String airtelClientSecret;
+    private final String airtelCountryCode;
 
     NotificationIntegrationConfigController(
             AuthService authService,
@@ -38,7 +48,17 @@ class NotificationIntegrationConfigController {
             @Value("${spring.mail.username:}") String gmailUsername,
             @Value("${spring.mail.password:}") String gmailPassword,
             @Value("${sacco.integrations.email.gmail.from-address:}") String gmailFromAddress,
-            @Value("${sacco.integrations.email.gmail.from-name:Tereka Online}") String gmailFromName) {
+            @Value("${sacco.integrations.email.gmail.from-name:Tereka Online}") String gmailFromName,
+            @Value("${sacco.providers.mobile-money:}") String mobileMoneyProvider,
+            @Value("${sacco.integrations.mobile-money.require-signed-callbacks:false}") boolean signedCallbacksRequired,
+            @Value("${sacco.integrations.mobile-money.callback-secret:}") String callbackSecret,
+            @Value("${sacco.integrations.mobile-money.mtn.subscription-key:}") String mtnSubscriptionKey,
+            @Value("${sacco.integrations.mobile-money.mtn.api-user-id:}") String mtnApiUserId,
+            @Value("${sacco.integrations.mobile-money.mtn.api-key:}") String mtnApiKey,
+            @Value("${sacco.integrations.mobile-money.mtn.target-environment:}") String mtnTargetEnvironment,
+            @Value("${sacco.integrations.mobile-money.airtel.client-id:}") String airtelClientId,
+            @Value("${sacco.integrations.mobile-money.airtel.client-secret:}") String airtelClientSecret,
+            @Value("${sacco.integrations.mobile-money.airtel.country-code:}") String airtelCountryCode) {
         this.authService = authService;
         this.smsProvider = smsProvider;
         this.emailProvider = emailProvider;
@@ -49,6 +69,16 @@ class NotificationIntegrationConfigController {
         this.gmailPassword = gmailPassword;
         this.gmailFromAddress = gmailFromAddress;
         this.gmailFromName = gmailFromName;
+        this.mobileMoneyProvider = mobileMoneyProvider;
+        this.signedCallbacksRequired = signedCallbacksRequired;
+        this.callbackSecret = callbackSecret;
+        this.mtnSubscriptionKey = mtnSubscriptionKey;
+        this.mtnApiUserId = mtnApiUserId;
+        this.mtnApiKey = mtnApiKey;
+        this.mtnTargetEnvironment = mtnTargetEnvironment;
+        this.airtelClientId = airtelClientId;
+        this.airtelClientSecret = airtelClientSecret;
+        this.airtelCountryCode = airtelCountryCode;
     }
 
     @GetMapping("/notification-config")
@@ -88,6 +118,50 @@ class NotificationIntegrationConfigController {
                                         setting("SACCO_GMAIL_FROM_NAME", gmailFromName, false)))),
                 Instant.now(),
                 "Notification credentials are environment-backed. Update the server environment or secrets manager, then restart the backend.");
+        return ResponseEntity.ok(ApiResponse.of(response));
+    }
+
+    @GetMapping("/mobile-money-config")
+    ResponseEntity<?> mobileMoneyConfig(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "PLATFORM_ONLY", "Only platform administrators can view mobile-money integration configuration."));
+        }
+        if (!authService.hasPermission(currentSession.user(), "roles:create")) {
+            return authService.permissionRequired("roles:create");
+        }
+
+        NotificationIntegrationConfigResponse response = new NotificationIntegrationConfigResponse(
+                List.of(
+                        new ProviderConfig(
+                                "Mobile money",
+                                "MTN MoMo",
+                                valueOrMissing(mobileMoneyProvider),
+                                "mtn_momo".equalsIgnoreCase(mobileMoneyProvider),
+                                settings(
+                                        setting("SACCO_MOBILE_MONEY_PROVIDER", mobileMoneyProvider, false),
+                                        setting("SACCO_MTN_MOMO_SUBSCRIPTION_KEY", mtnSubscriptionKey, true),
+                                        setting("SACCO_MTN_MOMO_API_USER_ID", mtnApiUserId, false),
+                                        setting("SACCO_MTN_MOMO_API_KEY", mtnApiKey, true),
+                                        setting("SACCO_MTN_MOMO_TARGET_ENVIRONMENT", mtnTargetEnvironment, false),
+                                        setting("SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS", String.valueOf(signedCallbacksRequired), false),
+                                        setting("SACCO_MOBILE_MONEY_CALLBACK_SECRET", callbackSecret, true))),
+                        new ProviderConfig(
+                                "Mobile money",
+                                "Airtel Money",
+                                valueOrMissing(mobileMoneyProvider),
+                                "airtel_money".equalsIgnoreCase(mobileMoneyProvider),
+                                settings(
+                                        setting("SACCO_MOBILE_MONEY_PROVIDER", mobileMoneyProvider, false),
+                                        setting("SACCO_AIRTEL_MONEY_CLIENT_ID", airtelClientId, false),
+                                        setting("SACCO_AIRTEL_MONEY_CLIENT_SECRET", airtelClientSecret, true),
+                                        setting("SACCO_AIRTEL_MONEY_COUNTRY_CODE", airtelCountryCode, false),
+                                        setting("SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS", String.valueOf(signedCallbacksRequired), false),
+                                        setting("SACCO_MOBILE_MONEY_CALLBACK_SECRET", callbackSecret, true)))),
+                Instant.now(),
+                "Mobile-money credentials are environment-backed. Use MTN MoMo or Airtel Money provider variables, require signed callbacks, then restart the backend.");
         return ResponseEntity.ok(ApiResponse.of(response));
     }
 

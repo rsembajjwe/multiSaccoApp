@@ -1245,7 +1245,8 @@ function emptyData() {
     regulatoryReport: null,
     securitySummary: null,
     platformSecurityPolicy: null,
-    notificationIntegrationConfig: null
+    notificationIntegrationConfig: null,
+    mobileMoneyIntegrationConfig: null
   };
 }
 
@@ -4243,7 +4244,7 @@ function platformSettingsView() {
       ${recordTable("Global notification templates", templates, ["eventType", "channel", "title", "status", "updatedAt"])}
     </div>
     ` : ""}
-    ${tab === "integrations" ? platformNotificationIntegrationPanel(canManage) : ""}
+    ${tab === "integrations" ? `${platformNotificationIntegrationPanel(canManage)}${platformMobileMoneyIntegrationPanel()}` : ""}
     ${tab === "security" ? staffSecuritySettingsPanel(security, true) : ""}
   `;
 }
@@ -4293,6 +4294,59 @@ function platformNotificationIntegrationPanel(canManage) {
         secret: setting.secret ? "Secret" : "Visible",
         value: setting.secret ? (setting.configured ? "Configured" : "Missing") : setting.value
       }))), ["channel", "key", "configured", "secret", "value"])}
+    </div>
+  `;
+}
+
+function platformMobileMoneyIntegrationPanel() {
+  const config = state.data.mobileMoneyIntegrationConfig || {};
+  const providers = Array.isArray(config.providers) ? config.providers : [];
+  const callbacks = dataRows("mobileMoneyCallbacks");
+  const requests = dataRows("mobileMoneyPaymentRequests");
+  const rows = providers.map((provider) => {
+    const missing = (provider.settings || []).filter((setting) => !setting.configured).map((setting) => setting.key).join(", ") || "None";
+    return {
+      channel: provider.channel,
+      provider: provider.provider,
+      activeProvider: provider.activeProvider,
+      active: provider.active ? "Active" : "Not active",
+      missingSettings: missing
+    };
+  });
+  const callbackSecret = providers
+    .flatMap((provider) => provider.settings || [])
+    .find((setting) => setting.key === "SACCO_MOBILE_MONEY_CALLBACK_SECRET");
+  const signedCallbacks = providers
+    .flatMap((provider) => provider.settings || [])
+    .find((setting) => setting.key === "SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Mobile money integrations</h2>
+          <p>Super Admin readiness for MTN MoMo and Airtel Money. M-Pesa is intentionally excluded.</p>
+        </div>
+        <span class="status ${providers.some((provider) => provider.active) ? "active" : "pending"}">${providers.some((provider) => provider.active) ? "Provider selected" : "Setup needed"}</span>
+      </div>
+      ${config.updatePolicy ? `<p class="helper-text">${escapeHtml(config.updatePolicy)}</p>` : ""}
+      <div class="source-grid">
+        ${mini("Active provider", providers.find((provider) => provider.active)?.provider || "Not configured")}
+        ${mini("Signed callbacks", signedCallbacks?.value === "true" ? "Required" : "Not required")}
+        ${mini("Callback secret", callbackSecret?.configured ? "Configured" : "Missing")}
+        ${mini("Payment requests", requests.length)}
+        ${mini("Provider callbacks", callbacks.length)}
+        ${mini("Failed callbacks", callbacks.filter((row) => normal(row.status).includes("failed")).length)}
+      </div>
+    </section>
+    <div class="grid two">
+      ${recordTable("Mobile-money provider setup", rows, ["channel", "provider", "activeProvider", "active", "missingSettings"])}
+      ${recordTable("Required mobile-money environment variables", providers.flatMap((provider) => (provider.settings || []).map((setting) => ({
+        provider: provider.provider,
+        key: setting.key,
+        configured: setting.configured ? "Yes" : "Missing",
+        secret: setting.secret ? "Secret" : "Visible",
+        value: setting.secret ? (setting.configured ? "Configured" : "Missing") : setting.value
+      }))), ["provider", "key", "configured", "secret", "value"])}
     </div>
   `;
 }
@@ -7037,8 +7091,9 @@ async function refreshAll() {
   ];
   if (isPlatform()) endpoints.push(["platformSecurityPolicy", "/platform-security-policy"]);
   if (isPlatform() && hasPermission("roles:create")) endpoints.push(["notificationIntegrationConfig", "/platform-integrations/notification-config"]);
+  if (isPlatform() && hasPermission("roles:create")) endpoints.push(["mobileMoneyIntegrationConfig", "/platform-integrations/mobile-money-config"]);
   if (canAccessView("notifications")) endpoints.push(["notificationProviderStatus", "/notifications/provider-status"]);
-  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy", "notificationIntegrationConfig"]);
+  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy", "notificationIntegrationConfig", "mobileMoneyIntegrationConfig"]);
   const results = await Promise.all(endpoints.map(async ([key, path]) => [key, await optionalApi(path, objectKeys.has(key) ? null : [])]));
   results.forEach(([key, value]) => {
     if (key === "notificationProviderStatus") {
