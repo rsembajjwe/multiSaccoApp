@@ -21,6 +21,7 @@ Use this guide when preparing a hosted staging environment for pilot SACCO testi
 | `SACCO_EMAIL_PROVIDER` | Yes | Use `gmail_smtp` for the low-budget Google Workspace email path. |
 | `SACCO_GMAIL_SMTP_USERNAME` | Required for `gmail_smtp` | Gmail/Google Workspace SMTP username. |
 | `SACCO_GMAIL_SMTP_PASSWORD` | Required for `gmail_smtp` | Gmail app password or Workspace-approved SMTP password. |
+| `SACCO_GMAIL_SMTP_SSL_TRUST` | Optional | Defaults to `*` for Gmail SMTP TLS trust. |
 | `SACCO_GMAIL_FROM_ADDRESS` | Required for `gmail_smtp` | Sender address, preferably on `tereka.online`. |
 | `SACCO_MOBILE_MONEY_PROVIDER` | Yes | Use `demo_mobile_money` for local-only demos, `mtn_momo` for MTN MoMo, `airtel_money` for Airtel Money, or `mpesa_daraja` for M-PESA. |
 | `SACCO_MTN_MOMO_SUBSCRIPTION_KEY` | Required for `mtn_momo` | Provider-issued MTN MoMo Collections subscription key. |
