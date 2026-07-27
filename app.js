@@ -5163,7 +5163,7 @@ function memberComplaintsView() {
     </section>
     ${moduleTabs("complaints", tabs, tab)}
     ${tab === "submit" ? memberComplaintForm() : ""}
-    ${tab === "messages" ? `${memberTabReadinessPanel("Messages with SACCO admin", "View messages you sent to the SACCO office and replies from SACCO administrators.", [["Sent messages", complaints.length], ["Admin replies", replied.length], ["Open follow-up", open.length]])}${recordTable("Messages and SACCO admin replies", messageRows, ["sentAt", "subject", "message", "adminReply", "replyStatus", "repliedAt", "status"])}` : ""}
+    ${tab === "messages" ? `${memberTabReadinessPanel("Messages with SACCO admin", "View messages you sent to the SACCO office and replies from SACCO administrators.", [["Sent messages", complaints.length], ["Admin replies", replied.length], ["Open follow-up", open.length]])}${memberComplaintChatInbox(messageRows)}` : ""}
     ${tab === "drafts" ? `${memberTabReadinessPanel("Complaint draft workspace", "Save support cases locally and sync them when you are ready.", [["Drafts", complaintDrafts.length], ["Storage", "Local device"], ["Sync", complaintDrafts.length ? "Action available" : "Clear"]])}${memberDraftPanel("Complaint offline drafts", complaintDrafts)}` : ""}
     ${tab === "tracking" ? `${memberTabReadinessPanel("Complaint tracking workspace", "Track submitted cases, priority, SACCO support status and admin replies with full dates.", [["Open cases", open.length], ["Resolved", complaints.length - open.length], ["Support desk", "SACCO admin"]])}${recordTable("My complaints", complaints, ["id", "category", "subject", "priority", "status", "resolutionNotes", "createdAt", "updatedAt"])}` : ""}
     ${tab === "evidence" ? memberComplaintEvidencePanel(complaints, open) : ""}
@@ -5183,6 +5183,55 @@ function memberComplaintMessageRows(complaints) {
       action: "none"
     };
   });
+}
+
+function memberComplaintChatInbox(rows) {
+  if (!rows.length) {
+    return emptyState("No messages yet", "Send a message to your SACCO admin and replies will appear here.");
+  }
+  return `
+    <section class="panel chat-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Chat with SACCO admin</h2>
+          <p>Each case appears like a chat thread, with your message and the SACCO admin reply.</p>
+        </div>
+        <span class="status active">${rows.length} thread(s)</span>
+      </div>
+      <div class="chat-thread-list">
+        ${rows.map((row) => chatThreadCard(row)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function chatThreadCard(row) {
+  const reply = row.adminReply && row.replyStatus === "replied" ? row.adminReply : "";
+  return `
+    <article class="chat-thread-card">
+      <div class="chat-thread-header">
+        <div>
+          <strong>${escapeHtml(row.subject || "Member message")}</strong>
+          <span>${escapeHtml(labelize(row.category || "service"))} / ${escapeHtml(labelize(row.priority || "medium"))}</span>
+        </div>
+        <span class="status ${reply ? "active" : "pending"}">${reply ? "Replied" : "Awaiting reply"}</span>
+      </div>
+      <div class="chat-window compact">
+        ${chatBubble("sent", "You", row.message || row.subject || "Message sent", row.sentAt)}
+        ${reply ? chatBubble("received", "SACCO admin", reply, row.repliedAt) : chatBubble("received pending", "SACCO admin", "No reply yet.", "")}
+      </div>
+    </article>
+  `;
+}
+
+function chatBubble(direction, author, text, timestamp) {
+  return `
+    <div class="chat-bubble ${escapeHtml(direction)}">
+      <strong>${escapeHtml(author)}</strong>
+      <p>${escapeHtml(text || "")}</p>
+      <small>${timestamp ? escapeHtml(formatDateTime(timestamp)) : "Pending"}</small>
+    </div>
+  `;
 }
 
 function memberComplaintEvidencePanel(complaints, open) {
@@ -6691,26 +6740,26 @@ function complaintDetailPanel(rows) {
         ${mini("Created", complaint.createdAt)}
         ${mini("Last reply", reply ? complaint.updatedAt : "No reply yet")}
       </div>
-      <section class="panel compact-panel">
+      <section class="panel compact-panel chat-panel">
         <div class="panel-heading">
           <div>
-            <h2>Conversation</h2>
+            <h2>Chat thread</h2>
             <p>Member messages and SACCO admin replies stay visible to both sides for follow-up.</p>
           </div>
           <span class="status ${reply ? "active" : "pending"}">${reply ? "Replied" : "Awaiting reply"}</span>
         </div>
-        <ul class="activity-list">
-          <li><strong>${escapeHtml(complaint.memberName || "Member")}</strong><span>${escapeHtml(complaint.description || complaint.subject || "No message body captured.")}</span><em>${escapeHtml(formatDateTime(complaint.createdAt))}</em></li>
-          <li><strong>SACCO admin reply</strong><span>${escapeHtml(reply || "No reply has been sent yet.")}</span><em>${escapeHtml(reply ? formatDateTime(complaint.updatedAt) : "Pending")}</em></li>
-        </ul>
+        <div class="chat-window">
+          ${chatBubble("received", complaint.memberName || "Member", complaint.description || complaint.subject || "No message body captured.", complaint.createdAt)}
+          ${reply ? chatBubble("sent", "SACCO admin", reply, complaint.updatedAt) : chatBubble("sent pending", "SACCO admin", "No reply has been sent yet.", "")}
+        </div>
       </section>
       <form id="complaintStatusForm" class="form-grid single">
         <input type="hidden" id="selectedComplaintId" value="${escapeHtml(complaint.id)}">
         <label><span>Status</span><select id="selectedComplaintStatus" ${canManage ? "" : "disabled"}>${complaintStatusOptions().map((status) => `<option value="${escapeHtml(status)}" ${status === complaint.status ? "selected" : ""}>${labelize(status)}</option>`).join("")}</select></label>
-        <label><span>Reply to member</span><textarea id="selectedComplaintNotes" placeholder="Type the SACCO admin reply the member should see" ${canManage ? "" : "disabled"}>${escapeHtml(reply)}</textarea></label>
-        <div class="form-actions">
+        <label><span>Reply to member</span><textarea id="selectedComplaintNotes" class="chat-reply-input" placeholder="Type a reply..." ${canManage ? "" : "disabled"}>${escapeHtml(reply)}</textarea></label>
+        <div class="form-actions chat-composer-actions">
           ${canManage ? `
-            <button class="button primary" type="submit">Send reply / save status</button>
+            <button class="button primary" type="submit">Send reply</button>
             <button class="button secondary" type="button" data-complaint-status="in_progress">Mark in progress</button>
             <button class="button secondary" type="button" data-complaint-status="resolved">Resolve</button>
             <button class="button ghost" type="button" data-complaint-status="closed">Close</button>
