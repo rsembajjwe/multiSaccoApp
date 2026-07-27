@@ -54,15 +54,19 @@ class AfroSmsNotificationProvider implements NotificationProvider {
 
     @Override
     public NotificationSendResult send(Member member, String title, String message) {
+        return sendTo(recipient(member), title, message);
+    }
+
+    @Override
+    public NotificationSendResult sendTo(String recipient, String title, String message) {
         assertConfigured();
-        String phone = recipient(member);
         try {
             String response = restClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path(sendPath)
                             .queryParam("email", email)
                             .queryParam("password", password)
-                            .queryParam("destination", msisdn(phone))
+                            .queryParam("destination", msisdn(recipient))
                             .queryParam("source", source)
                             .queryParam("message", message)
                             .queryParam("call", "sendsms")

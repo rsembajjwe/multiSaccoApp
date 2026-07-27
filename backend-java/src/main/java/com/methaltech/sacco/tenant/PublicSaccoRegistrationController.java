@@ -2,6 +2,7 @@ package com.methaltech.sacco.tenant;
 
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
+import com.methaltech.sacco.notification.NotificationService;
 import com.methaltech.sacco.subscription.Subscription;
 import com.methaltech.sacco.subscription.SubscriptionRepository;
 import com.methaltech.sacco.subscription.SubscriptionResponse;
@@ -28,18 +29,21 @@ class PublicSaccoRegistrationController {
     private final SubscriptionRepository subscriptionRepository;
     private final SubscriptionService subscriptionService;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     PublicSaccoRegistrationController(
             TenantRepository tenantRepository,
             SaccoProfileRepository saccoProfileRepository,
             SubscriptionRepository subscriptionRepository,
             SubscriptionService subscriptionService,
-            AuditService auditService) {
+            AuditService auditService,
+            NotificationService notificationService) {
         this.tenantRepository = tenantRepository;
         this.saccoProfileRepository = saccoProfileRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.subscriptionService = subscriptionService;
         this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     @PostMapping
@@ -62,7 +66,7 @@ class PublicSaccoRegistrationController {
                 "starter");
         tenant.updateStatus("pending_self_registration");
         tenant = tenantRepository.save(tenant);
-        saccoProfileRepository.save(new SaccoProfile(
+        SaccoProfile profile = saccoProfileRepository.save(new SaccoProfile(
                 "profile_" + UUID.randomUUID(),
                 tenant.getId(),
                 tenant.getName(),
@@ -85,6 +89,15 @@ class PublicSaccoRegistrationController {
                 "tenant",
                 tenant.getId(),
                 request.getRemoteAddr());
+        notificationService.notifySaccoContact(
+                tenant.getId(),
+                "public_sacco_registration_received",
+                "SACCO registration received",
+                "Your Tereka Online SACCO registration was received. Complete the mobile-money subscription payment using reference " + paymentReference + " for approval review.",
+                "tenant",
+                tenant.getId(),
+                blankToDefault(body.paymentPhone()).isBlank() ? profile.getPhone() : blankToDefault(body.paymentPhone()),
+                profile.getEmail());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(new PublicSaccoRegistrationResponse(
                 TenantResponse.from(tenant),
                 SubscriptionResponse.from(subscription),

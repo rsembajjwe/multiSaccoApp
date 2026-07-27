@@ -70,6 +70,28 @@ public class NotificationService {
                 complaintId));
     }
 
+    public Notification notifySaccoContact(
+            String tenantId,
+            String eventType,
+            String title,
+            String message,
+            String resourceType,
+            String resourceId,
+            String phone,
+            String email) {
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                tenantId,
+                null,
+                eventType,
+                title,
+                message,
+                resourceType,
+                resourceId));
+        createContactDeliveries(notification, title, message, phone, email);
+        return notification;
+    }
+
     public Notification notifyStaffSecurityAlert(
             String tenantId,
             String userId,
@@ -134,6 +156,37 @@ public class NotificationService {
         } catch (RuntimeException exception) {
             return NotificationSendResult.failed(exception.getMessage());
         }
+    }
+
+    private NotificationSendResult sendTo(NotificationProvider provider, String recipient, String title, String message) {
+        try {
+            return provider.sendTo(recipient, title, message);
+        } catch (RuntimeException exception) {
+            return NotificationSendResult.failed(exception.getMessage());
+        }
+    }
+
+    private void createContactDeliveries(Notification notification, String title, String message, String phone, String email) {
+        providers.stream()
+                .filter(provider -> {
+                    String recipient = "email".equals(provider.channel()) ? email : "sms".equals(provider.channel()) ? phone : null;
+                    return provider.enabledForRecipient(recipient);
+                })
+                .forEach(provider -> {
+                    String recipient = "email".equals(provider.channel()) ? email : phone;
+                    String deliveryMessage = "email".equals(provider.channel()) ? title + ": " + message : message;
+                    NotificationSendResult result = sendTo(provider, recipient, title, deliveryMessage);
+                    deliveryRepository.save(new NotificationDelivery(
+                            "delivery_" + UUID.randomUUID(),
+                            notification.getTenantId(),
+                            notification.getId(),
+                            null,
+                            provider.channel(),
+                            provider.providerId(),
+                            recipient,
+                            result,
+                            deliveryMessage));
+                });
     }
 
     private void createDelivery(Notification notification, Member member, String channel, String providerId, String recipient, NotificationSendResult result, String message) {

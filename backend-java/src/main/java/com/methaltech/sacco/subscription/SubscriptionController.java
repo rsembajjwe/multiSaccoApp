@@ -6,6 +6,9 @@ import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.money.Money;
+import com.methaltech.sacco.notification.NotificationService;
+import com.methaltech.sacco.tenant.SaccoContact;
+import com.methaltech.sacco.tenant.SaccoContactLookup;
 import com.methaltech.sacco.tenant.Tenant;
 import com.methaltech.sacco.tenant.TenantRepository;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,6 +47,8 @@ class SubscriptionController {
     private final AuthService authService;
     private final AuditService auditService;
     private final TenantRepository tenantRepository;
+    private final SaccoContactLookup saccoContactLookup;
+    private final NotificationService notificationService;
 
     @GetMapping("/api/v1/subscription-packages")
     ResponseEntity<?> listPackages(@RequestHeader(name = "Authorization", required = false) String authorization) {
@@ -146,6 +151,7 @@ class SubscriptionController {
             tenant.updateStatus("pending_review");
             tenantRepository.save(tenant);
         }
+        notifySubscriptionPayment(savedSubscription, payment);
         auditService.record(
                 tenantId,
                 null,
@@ -206,6 +212,7 @@ class SubscriptionController {
                 currentSession.user().getId()));
         subscription.recordPayment(amount, LocalDate.now().plusYears(1));
         Subscription savedSubscription = subscriptionRepository.save(subscription);
+        notifySubscriptionPayment(savedSubscription, payment);
         auditService.record(
                 savedSubscription.getTenantId(),
                 currentSession.user(),
@@ -233,6 +240,22 @@ class SubscriptionController {
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access subscriptions for another tenant."));
+    }
+
+    private void notifySubscriptionPayment(Subscription subscription, SubscriptionPayment payment) {
+        SaccoContact contact = saccoContactLookup.findByTenantId(subscription.getTenantId()).orElse(null);
+        if (contact == null) return;
+        String saccoName = contact.legalName();
+        notificationService.notifySaccoContact(
+                subscription.getTenantId(),
+                "subscription_payment_confirmed",
+                "Subscription payment confirmed",
+                "Tereka Online received subscription payment " + payment.getExternalReference()
+                        + " for " + saccoName + ". Access is " + subscription.getStatus().replace('_', ' ') + ".",
+                "subscription",
+                subscription.getId(),
+                contact.phone(),
+                contact.email());
     }
 
     record RecordSubscriptionPaymentRequest(

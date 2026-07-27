@@ -4,6 +4,7 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
+import com.methaltech.sacco.notification.NotificationService;
 import com.methaltech.sacco.subscription.SubscriptionRepository;
 import com.methaltech.sacco.subscription.SubscriptionService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,6 +39,7 @@ class TenantController {
     private final SubscriptionService subscriptionService;
     private final AuthService authService;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     TenantController(
             TenantRepository tenantRepository,
@@ -45,13 +47,15 @@ class TenantController {
             SubscriptionRepository subscriptionRepository,
             SubscriptionService subscriptionService,
             AuthService authService,
-            AuditService auditService) {
+            AuditService auditService,
+            NotificationService notificationService) {
         this.tenantRepository = tenantRepository;
         this.saccoProfileRepository = saccoProfileRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.subscriptionService = subscriptionService;
         this.authService = authService;
         this.auditService = auditService;
+        this.notificationService = notificationService;
     }
 
     @GetMapping
@@ -115,7 +119,7 @@ class TenantController {
                 blankToDefault(body.packageId()));
         if (paid) tenant.activate();
         Tenant savedTenant = tenantRepository.save(tenant);
-        saccoProfileRepository.save(new SaccoProfile(
+        SaccoProfile profile = saccoProfileRepository.save(new SaccoProfile(
                 "profile_" + UUID.randomUUID(),
                 savedTenant.getId(),
                 savedTenant.getName(),
@@ -138,6 +142,17 @@ class TenantController {
                 "tenant",
                 savedTenant.getId(),
                 request.getRemoteAddr());
+        notificationService.notifySaccoContact(
+                savedTenant.getId(),
+                paid ? "sacco_created_active" : "sacco_created_pending_payment",
+                paid ? "SACCO account activated" : "SACCO account created",
+                paid
+                        ? savedTenant.getName() + " has been created and activated on Tereka Online."
+                        : savedTenant.getName() + " has been created on Tereka Online. Activation will complete after subscription payment.",
+                "tenant",
+                savedTenant.getId(),
+                profile.getPhone(),
+                profile.getEmail());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(TenantResponse.from(savedTenant)));
     }
@@ -167,6 +182,7 @@ class TenantController {
 
         tenant.updateStatus(body.status());
         Tenant savedTenant = tenantRepository.save(tenant);
+        SaccoProfile profile = saccoProfileRepository.findByTenantId(tenantId).orElse(null);
         auditService.record(
                 tenantId,
                 currentSession.user(),
@@ -174,6 +190,17 @@ class TenantController {
                 "tenant",
                 tenantId,
                 request.getRemoteAddr());
+        if (profile != null) {
+            notificationService.notifySaccoContact(
+                    tenantId,
+                    "sacco_status_updated",
+                    "SACCO status updated",
+                    "Your SACCO status on Tereka Online is now " + body.status().replace('_', ' ') + ".",
+                    "tenant",
+                    tenantId,
+                    profile.getPhone(),
+                    profile.getEmail());
+        }
 
         return ResponseEntity.ok(ApiResponse.of(TenantResponse.from(savedTenant)));
     }

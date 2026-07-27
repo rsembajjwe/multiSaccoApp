@@ -44,12 +44,17 @@ class GmailSmtpEmailNotificationProvider implements NotificationProvider {
 
     @Override
     public NotificationSendResult send(Member member, String title, String message) {
+        return sendTo(recipient(member), title, message);
+    }
+
+    @Override
+    public NotificationSendResult sendTo(String recipient, String title, String message) {
         assertConfigured();
         try {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, "UTF-8");
             helper.setFrom(fromAddress, fromName);
-            helper.setTo(recipient(member));
+            helper.setTo(recipient);
             helper.setSubject(title);
             helper.setText(message, false);
             mailSender.send(mimeMessage);
