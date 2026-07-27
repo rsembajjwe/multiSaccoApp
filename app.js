@@ -3012,9 +3012,9 @@ function notificationsView() {
     alertStatus: delivery.readAt ? "acknowledged" : delivery.notificationStatus || delivery.status,
     deliveryStatus: delivery.status || "pending",
     acknowledgedAt: delivery.readAt ? formatDateTime(delivery.readAt) : "-",
-    action: delivery.notificationId && !delivery.readAt ? "notification-acknowledge" : "none",
-    actionLabel: "Acknowledge",
-    actionId: delivery.notificationId || delivery.id
+    action: notificationDeliveryAction(delivery),
+    actionLabel: normal(delivery.status).includes("failed") && hasPermission("notifications:manage") ? "Retry" : "Acknowledge",
+    actionId: normal(delivery.status).includes("failed") && hasPermission("notifications:manage") ? delivery.id : delivery.notificationId || delivery.id
   }));
   const securityAlerts = deliveries.filter((delivery) => normal(`${delivery.message} ${delivery.provider} ${delivery.channel}`).includes("login"));
   const unreadAlerts = deliveries.filter((delivery) => !delivery.readAt && normal(delivery.alertStatus).includes("unread"));
@@ -3078,6 +3078,12 @@ function notificationDeliveryControlPanel(deliveries, templates) {
     ["Template coverage", `${activeTemplates.length} active template(s) are available across ${uniqueCount(activeTemplates, "channel")} channel(s).`, missingChannels.length ? "Incomplete" : "Ready"],
     ["Missing channels", missingChannels.length ? `No active template for ${missingChannels.map(labelize).join(", ")}.` : "SMS, email and in-app template coverage is ready.", missingChannels.length ? "Configure" : "Ready"]
   ]);
+}
+
+function notificationDeliveryAction(delivery) {
+  if (normal(delivery.status).includes("failed") && hasPermission("notifications:manage")) return "notification-retry";
+  if (delivery.notificationId && !delivery.readAt) return "notification-acknowledge";
+  return "none";
 }
 
 function notificationDeliveryFilters(deliveries) {
@@ -5331,6 +5337,9 @@ function rowAction(row) {
   }
   if (row.action === "notification-acknowledge" && row.actionId) {
     return `<button class="table-action" type="button" data-row-action="notification-acknowledge" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Acknowledge")}</button>`;
+  }
+  if (row.action === "notification-retry" && row.actionId) {
+    return `<button class="table-action" type="button" data-row-action="notification-retry" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Retry")}</button>`;
   }
   if (row.action === "member-notification-acknowledge" && row.actionId) {
     return `<button class="table-action" type="button" data-member-notification-acknowledge="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Acknowledge")}</button>`;
@@ -8509,6 +8518,25 @@ async function acknowledgeNotification(notificationId) {
   }
 }
 
+async function retryNotificationDelivery(deliveryId) {
+  if (!deliveryId) return;
+  state.notificationMessage = "";
+  state.notificationError = "";
+  try {
+    const retry = await api(`/notifications/deliveries/${encodeURIComponent(deliveryId)}/retry`, { method: "PATCH" });
+    const message = `Retry created with status ${labelize(retry.status || "pending")}.`;
+    state.notificationMessage = message;
+    await refreshAll();
+    state.currentView = "notifications";
+    state.moduleTabs.notifications = "failed";
+    state.notificationMessage = message;
+    renderShell();
+  } catch (error) {
+    state.notificationError = error.message;
+    renderShell();
+  }
+}
+
 async function acknowledgeVisibleNotifications(notificationIdsText) {
   const notificationIds = String(notificationIdsText || "")
     .split(",")
@@ -8869,6 +8897,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-row-action='notification-acknowledge']").forEach((button) => {
     button.addEventListener("click", () => acknowledgeNotification(button.dataset.rowId));
+  });
+  document.querySelectorAll("[data-row-action='notification-retry']").forEach((button) => {
+    button.addEventListener("click", () => retryNotificationDelivery(button.dataset.rowId));
   });
   document.querySelectorAll("[data-notification-bulk-ack]").forEach((button) => {
     button.addEventListener("click", () => acknowledgeVisibleNotifications(button.dataset.notificationBulkAck));

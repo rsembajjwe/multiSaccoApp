@@ -28,6 +28,7 @@ class NotificationController {
 
     private final NotificationDeliveryRepository deliveryRepository;
     private final NotificationRepository notificationRepository;
+    private final NotificationService notificationService;
     private final AuthService authService;
     private final AuditService auditService;
 
@@ -89,6 +90,44 @@ class NotificationController {
                 saved.getId(),
                 request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(NotificationResponse.from(saved)));
+    }
+
+    @PatchMapping("/deliveries/{deliveryId}/retry")
+    ResponseEntity<?> retryDelivery(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String deliveryId,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "notifications:manage")) {
+            return authService.permissionRequired("notifications:manage");
+        }
+
+        NotificationDelivery delivery = deliveryRepository.findById(deliveryId).orElse(null);
+        if (delivery == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "NOTIFICATION_DELIVERY_NOT_FOUND", "Notification delivery was not found."));
+        }
+        if (!authService.isPlatform(currentSession.user()) && !delivery.getTenantId().equals(currentSession.user().getTenantId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot retry notification deliveries for another SACCO."));
+        }
+        if (!"failed".equalsIgnoreCase(delivery.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "DELIVERY_NOT_FAILED", "Only failed notification deliveries can be retried."));
+        }
+
+        Notification notification = notificationRepository.findById(delivery.getNotificationId()).orElse(null);
+        NotificationDelivery retry = notificationService.retryDelivery(delivery, notification);
+        auditService.record(
+                retry.getTenantId(),
+                currentSession.user(),
+                "Retried notification delivery " + delivery.getId(),
+                "notification_delivery",
+                retry.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of(NotificationDeliveryResponse.from(retry, notification)));
     }
 
     @PatchMapping("/acknowledge")

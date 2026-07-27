@@ -123,6 +123,37 @@ public class NotificationService {
         return notification;
     }
 
+    NotificationDelivery retryDelivery(NotificationDelivery original, Notification notification) {
+        if (original == null) {
+            throw new NotificationProviderException("Notification delivery was not found.");
+        }
+        if (!"failed".equalsIgnoreCase(original.getStatus())) {
+            throw new NotificationProviderException("Only failed notification deliveries can be retried.");
+        }
+        NotificationProvider provider = providers.stream()
+                .filter(candidate -> original.getChannel().equals(candidate.channel())
+                        && original.getProvider().equals(candidate.providerId()))
+                .findFirst()
+                .orElse(null);
+        String title = notification == null || notification.getTitle() == null || notification.getTitle().isBlank()
+                ? "Tereka Online notification"
+                : notification.getTitle();
+        NotificationSendResult result = provider == null
+                ? NotificationSendResult.failed("Notification provider is not available for retry.")
+                : sendTo(provider, original.getRecipient(), title, original.getMessage());
+        return deliveryRepository.save(new NotificationDelivery(
+                "delivery_" + UUID.randomUUID(),
+                original.getTenantId(),
+                original.getNotificationId(),
+                original.getMemberId(),
+                original.getUserId(),
+                original.getChannel(),
+                original.getProvider(),
+                original.getRecipient(),
+                result,
+                original.getMessage()));
+    }
+
     private NotificationTemplate activeTemplate(String tenantId, String eventType) {
         return templateRepository.findFirstByTenantIdAndEventTypeAndStatusOrderByUpdatedAtDesc(tenantId, eventType, "active")
                 .or(() -> templateRepository.findFirstByTenantIdIsNullAndEventTypeAndStatusOrderByUpdatedAtDesc(eventType, "active"))

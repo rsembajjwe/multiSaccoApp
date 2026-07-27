@@ -87,6 +87,31 @@ class NotificationDelivery {
             String channel,
             String provider,
             String recipient,
+            NotificationSendResult result,
+            String message) {
+        this.id = id;
+        this.tenantId = tenantId;
+        this.notificationId = notificationId;
+        this.memberId = memberId;
+        this.userId = userId;
+        this.channel = channel;
+        this.provider = provider;
+        this.recipient = recipient;
+        this.status = result == null || result.status() == null || result.status().isBlank() ? "sent" : result.status();
+        this.message = message;
+        this.sentAt = Instant.now();
+        this.createdAt = this.sentAt;
+    }
+
+    NotificationDelivery(
+            String id,
+            String tenantId,
+            String notificationId,
+            String memberId,
+            String userId,
+            String channel,
+            String provider,
+            String recipient,
             String message) {
         this.id = id;
         this.tenantId = tenantId;
