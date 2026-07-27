@@ -12,6 +12,8 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
 
     private final boolean demoLoginsEnabled;
     private final Map<String, String> providers;
+    private final Map<String, String> afroSmsSettings;
+    private final Map<String, String> gmailSmtpSettings;
     private final Map<String, String> mtnMomoSettings;
     private final Map<String, String> airtelMoneySettings;
     private final Map<String, String> mpesaDarajaSettings;
@@ -21,6 +23,11 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
             @Value("${sacco.providers.sms:}") String smsProvider,
             @Value("${sacco.providers.email:}") String emailProvider,
             @Value("${sacco.providers.mobile-money:}") String mobileMoneyProvider,
+            @Value("${sacco.integrations.sms.afrosms.api-key:}") String afroSmsApiKey,
+            @Value("${sacco.integrations.sms.afrosms.sender-id:}") String afroSmsSenderId,
+            @Value("${spring.mail.username:}") String gmailUsername,
+            @Value("${spring.mail.password:}") String gmailPassword,
+            @Value("${sacco.integrations.email.gmail.from-address:}") String gmailFromAddress,
             @Value("${sacco.integrations.mobile-money.mtn.subscription-key:}") String mtnSubscriptionKey,
             @Value("${sacco.integrations.mobile-money.mtn.api-user-id:}") String mtnApiUserId,
             @Value("${sacco.integrations.mobile-money.mtn.api-key:}") String mtnApiKey,
@@ -38,6 +45,13 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
         this.providers.put("SACCO_SMS_PROVIDER", smsProvider);
         this.providers.put("SACCO_EMAIL_PROVIDER", emailProvider);
         this.providers.put("SACCO_MOBILE_MONEY_PROVIDER", mobileMoneyProvider);
+        this.afroSmsSettings = new LinkedHashMap<>();
+        this.afroSmsSettings.put("SACCO_AFROSMS_API_KEY", afroSmsApiKey);
+        this.afroSmsSettings.put("SACCO_AFROSMS_SENDER_ID", afroSmsSenderId);
+        this.gmailSmtpSettings = new LinkedHashMap<>();
+        this.gmailSmtpSettings.put("SACCO_GMAIL_SMTP_USERNAME", gmailUsername);
+        this.gmailSmtpSettings.put("SACCO_GMAIL_SMTP_PASSWORD", gmailPassword);
+        this.gmailSmtpSettings.put("SACCO_GMAIL_FROM_ADDRESS", gmailFromAddress);
         this.mtnMomoSettings = new LinkedHashMap<>();
         this.mtnMomoSettings.put("SACCO_MTN_MOMO_SUBSCRIPTION_KEY", mtnSubscriptionKey);
         this.mtnMomoSettings.put("SACCO_MTN_MOMO_API_USER_ID", mtnApiUserId);
@@ -73,6 +87,20 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
             throw new IllegalStateException(
                     "Production startup requires real integration provider configuration for: " + invalidProviders);
         }
+        String smsProvider = providers.get("SACCO_SMS_PROVIDER");
+        if (!"afrosms".equalsIgnoreCase(smsProvider)) {
+            throw new IllegalStateException(
+                    "Production startup requires an implemented SMS adapter: SACCO_SMS_PROVIDER=afrosms");
+        }
+        requireSettings("AfroSMS", afroSmsSettings);
+
+        String emailProvider = providers.get("SACCO_EMAIL_PROVIDER");
+        if (!"gmail_smtp".equalsIgnoreCase(emailProvider)) {
+            throw new IllegalStateException(
+                    "Production startup requires an implemented email adapter: SACCO_EMAIL_PROVIDER=gmail_smtp");
+        }
+        requireSettings("Gmail SMTP", gmailSmtpSettings);
+
         String mobileMoneyProvider = providers.get("SACCO_MOBILE_MONEY_PROVIDER");
         if (!"mtn_momo".equalsIgnoreCase(mobileMoneyProvider)
                 && !"airtel_money".equalsIgnoreCase(mobileMoneyProvider)
@@ -81,37 +109,25 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
                     "Production startup requires an implemented mobile-money adapter: SACCO_MOBILE_MONEY_PROVIDER=mtn_momo, airtel_money, or mpesa_daraja");
         }
         if ("mtn_momo".equalsIgnoreCase(mobileMoneyProvider)) {
-            String missingMtnSettings = mtnMomoSettings.entrySet().stream()
-                    .filter((entry) -> isBlank(entry.getValue()))
-                    .map(Map.Entry::getKey)
-                    .reduce((left, right) -> left + ", " + right)
-                    .orElse("");
-            if (!missingMtnSettings.isBlank()) {
-                throw new IllegalStateException(
-                        "Production startup requires MTN MoMo configuration for: " + missingMtnSettings);
-            }
+            requireSettings("MTN MoMo", mtnMomoSettings);
         }
         if ("airtel_money".equalsIgnoreCase(mobileMoneyProvider)) {
-            String missingAirtelSettings = airtelMoneySettings.entrySet().stream()
-                    .filter((entry) -> isBlank(entry.getValue()))
-                    .map(Map.Entry::getKey)
-                    .reduce((left, right) -> left + ", " + right)
-                    .orElse("");
-            if (!missingAirtelSettings.isBlank()) {
-                throw new IllegalStateException(
-                        "Production startup requires Airtel Money configuration for: " + missingAirtelSettings);
-            }
+            requireSettings("Airtel Money", airtelMoneySettings);
         }
         if ("mpesa_daraja".equalsIgnoreCase(mobileMoneyProvider)) {
-            String missingMpesaSettings = mpesaDarajaSettings.entrySet().stream()
-                    .filter((entry) -> isBlank(entry.getValue()))
-                    .map(Map.Entry::getKey)
-                    .reduce((left, right) -> left + ", " + right)
-                    .orElse("");
-            if (!missingMpesaSettings.isBlank()) {
-                throw new IllegalStateException(
-                        "Production startup requires M-PESA Daraja configuration for: " + missingMpesaSettings);
-            }
+            requireSettings("M-PESA Daraja", mpesaDarajaSettings);
+        }
+    }
+
+    private void requireSettings(String providerName, Map<String, String> settings) {
+        String missingSettings = settings.entrySet().stream()
+                .filter((entry) -> isBlank(entry.getValue()))
+                .map(Map.Entry::getKey)
+                .reduce((left, right) -> left + ", " + right)
+                .orElse("");
+        if (!missingSettings.isBlank()) {
+            throw new IllegalStateException(
+                    "Production startup requires " + providerName + " configuration for: " + missingSettings);
         }
     }
 

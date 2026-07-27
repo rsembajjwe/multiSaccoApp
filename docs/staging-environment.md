@@ -14,8 +14,13 @@ Use this guide when preparing a hosted staging environment for pilot SACCO testi
 | `SACCO_DEMO_LOGINS_ENABLED` | Yes | Keep `false` except during an explicit demo verification window. |
 | `SACCO_AUTH_RATE_LIMIT_MAX_FAILURES` | Yes | Start with `6`; tighten after UAT if needed. |
 | `SACCO_AUTH_RATE_LIMIT_WINDOW_SECONDS` | Yes | Start with `60`; tighten after UAT if needed. |
-| `SACCO_SMS_PROVIDER` | Yes | Use `demo_sms` until a real SMS adapter is configured. |
-| `SACCO_EMAIL_PROVIDER` | Yes | Use `demo_email` until a real email adapter is configured. |
+| `SACCO_SMS_PROVIDER` | Yes | Use `afrosms` for hosted staging/production. |
+| `SACCO_AFROSMS_API_KEY` | Required for `afrosms` | AfroSMS API key/token. |
+| `SACCO_AFROSMS_SENDER_ID` | Required for `afrosms` | Approved sender ID such as `Tereka`. |
+| `SACCO_EMAIL_PROVIDER` | Yes | Use `gmail_smtp` for the low-budget Google Workspace email path. |
+| `SACCO_GMAIL_SMTP_USERNAME` | Required for `gmail_smtp` | Gmail/Google Workspace SMTP username. |
+| `SACCO_GMAIL_SMTP_PASSWORD` | Required for `gmail_smtp` | Gmail app password or Workspace-approved SMTP password. |
+| `SACCO_GMAIL_FROM_ADDRESS` | Required for `gmail_smtp` | Sender address, preferably on `tereka.online`. |
 | `SACCO_MOBILE_MONEY_PROVIDER` | Yes | Use `demo_mobile_money` for local-only demos, `mtn_momo` for MTN MoMo, `airtel_money` for Airtel Money, or `mpesa_daraja` for M-PESA. |
 | `SACCO_MTN_MOMO_SUBSCRIPTION_KEY` | Required for `mtn_momo` | Provider-issued MTN MoMo Collections subscription key. |
 | `SACCO_MTN_MOMO_API_USER_ID` | Required for `mtn_momo` | Provider-issued MTN MoMo API user. |

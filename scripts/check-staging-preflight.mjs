@@ -117,6 +117,27 @@ for (const name of ["SACCO_SMS_PROVIDER", "SACCO_EMAIL_PROVIDER", "SACCO_MOBILE_
   }
 }
 
+const smsProvider = String(values.SACCO_SMS_PROVIDER ?? "").trim().toLowerCase();
+if (smsProvider !== "afrosms") {
+  failures.push("SACCO_SMS_PROVIDER must be afrosms for hosted staging.");
+} else {
+  assertProviderSettings([
+    "SACCO_AFROSMS_API_KEY",
+    "SACCO_AFROSMS_SENDER_ID"
+  ], failures);
+}
+
+const emailProvider = String(values.SACCO_EMAIL_PROVIDER ?? "").trim().toLowerCase();
+if (emailProvider !== "gmail_smtp") {
+  failures.push("SACCO_EMAIL_PROVIDER must be gmail_smtp for hosted staging.");
+} else {
+  assertProviderSettings([
+    "SACCO_GMAIL_SMTP_USERNAME",
+    "SACCO_GMAIL_SMTP_PASSWORD",
+    "SACCO_GMAIL_FROM_ADDRESS"
+  ], failures);
+}
+
 const mobileMoneyProvider = String(values.SACCO_MOBILE_MONEY_PROVIDER ?? "").trim().toLowerCase();
 const supportedMobileMoneyProviders = new Set(["mtn_momo", "airtel_money", "mpesa_daraja"]);
 if (!supportedMobileMoneyProviders.has(mobileMoneyProvider)) {

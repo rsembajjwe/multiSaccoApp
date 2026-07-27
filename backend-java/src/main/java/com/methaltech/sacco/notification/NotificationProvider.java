@@ -13,4 +13,8 @@ interface NotificationProvider {
         String recipient = recipient(member);
         return recipient != null && !recipient.isBlank();
     }
+
+    default NotificationSendResult send(Member member, String title, String message) {
+        return NotificationSendResult.sent(null, "Demo notification delivery recorded.");
+    }
 }

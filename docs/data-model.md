@@ -485,7 +485,7 @@ Callback control rule: duplicate provider references return the original posted 
 | notification_id | uuid/string | Source notification. |
 | member_id | uuid/string | Recipient member. |
 | channel | enum | `sms`, `email`. |
-| provider | text | Provider adapter, such as `demo_sms` or `demo_email`. |
+| provider | text | Provider adapter, such as `demo_sms`, `afrosms`, `demo_email`, or `gmail_smtp`. |
 | recipient | text | Phone number or email address. |
 | status | enum | `queued`, `sent`, `failed`. |
 | message | text | Rendered provider message. |

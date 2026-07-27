@@ -99,7 +99,7 @@ This starts an isolated Docker Compose stack on PostgreSQL, applies Flyway migra
 
 For hosted staging setup, use [docs/staging-environment.md](docs/staging-environment.md) and keep real `.env` values outside git.
 
-SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`. Mobile-money collections can run through `mtn_momo`, `airtel_money`, or `mpesa_daraja` when the matching provider credentials are configured; demo values remain the default for local development.
+SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`. SMS can run through `afrosms`, email through `gmail_smtp`, and mobile-money collections through `mtn_momo`, `airtel_money`, or `mpesa_daraja` when the matching provider credentials are configured; demo values remain the default for local development.
 
 For staging handoff and UAT, use [docs/staging-handoff-checklist.md](docs/staging-handoff-checklist.md), [docs/release-evidence-template.md](docs/release-evidence-template.md), [docs/uat-findings-template.md](docs/uat-findings-template.md), [docs/uat-data-setup.md](docs/uat-data-setup.md), and [docs/uat-scripts.md](docs/uat-scripts.md). For Phase 2 pilot onboarding imports, use [docs/data-import.md](docs/data-import.md).
 

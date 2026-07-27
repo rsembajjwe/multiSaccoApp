@@ -27,7 +27,7 @@ class IntegrationProviderReadinessValidatorTest {
 
     @Test
     void productionRejectsMissingProviders() {
-        IntegrationProviderReadinessValidator validator = validator(false, "", "real_email_gateway", " ");
+        IntegrationProviderReadinessValidator validator = validator(false, "", "gmail_smtp", " ");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
 
@@ -36,15 +36,72 @@ class IntegrationProviderReadinessValidatorTest {
     }
 
     @Test
-    void productionAllowsMtnMomoProvider() {
-        IntegrationProviderReadinessValidator validator = validator(false, "africas_talking", "smtp", "mtn_momo");
+    void productionAllowsAfroSmsGmailAndMtnMomoProviders() {
+        IntegrationProviderReadinessValidator validator = validator(false, "afrosms", "gmail_smtp", "mtn_momo");
 
         assertDoesNotThrow(validator::validate);
     }
 
     @Test
+    void productionRejectsUnsupportedSmsAdapter() {
+        IntegrationProviderReadinessValidator validator = validator(false, "africas_talking", "gmail_smtp", "mtn_momo");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
+
+        assertTrue(error.getMessage().contains("SACCO_SMS_PROVIDER=afrosms"));
+    }
+
+    @Test
+    void productionRejectsUnsupportedEmailAdapter() {
+        IntegrationProviderReadinessValidator validator = validator(false, "afrosms", "smtp", "mtn_momo");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
+
+        assertTrue(error.getMessage().contains("SACCO_EMAIL_PROVIDER=gmail_smtp"));
+    }
+
+    @Test
+    void productionRejectsAfroSmsWithoutCredentials() {
+        IntegrationProviderReadinessValidator validator = validator(
+                false,
+                "afrosms",
+                "gmail_smtp",
+                "mtn_momo",
+                "",
+                "",
+                "tereka.online@gmail.com",
+                "gmail-password",
+                "no-reply@tereka.online");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
+
+        assertTrue(error.getMessage().contains("SACCO_AFROSMS_API_KEY"));
+        assertTrue(error.getMessage().contains("SACCO_AFROSMS_SENDER_ID"));
+    }
+
+    @Test
+    void productionRejectsGmailSmtpWithoutCredentials() {
+        IntegrationProviderReadinessValidator validator = validator(
+                false,
+                "afrosms",
+                "gmail_smtp",
+                "mtn_momo",
+                "afrosms-key",
+                "Tereka",
+                "",
+                "",
+                "");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
+
+        assertTrue(error.getMessage().contains("SACCO_GMAIL_SMTP_USERNAME"));
+        assertTrue(error.getMessage().contains("SACCO_GMAIL_SMTP_PASSWORD"));
+        assertTrue(error.getMessage().contains("SACCO_GMAIL_FROM_ADDRESS"));
+    }
+
+    @Test
     void productionRejectsUnsupportedMobileMoneyAdapter() {
-        IntegrationProviderReadinessValidator validator = validator(false, "africas_talking", "smtp", "unsupported_money");
+        IntegrationProviderReadinessValidator validator = validator(false, "afrosms", "gmail_smtp", "unsupported_money");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
 
@@ -53,7 +110,7 @@ class IntegrationProviderReadinessValidatorTest {
 
     @Test
     void productionAllowsAirtelMoneyProvider() {
-        IntegrationProviderReadinessValidator validator = validator(false, "africas_talking", "smtp", "airtel_money");
+        IntegrationProviderReadinessValidator validator = validator(false, "afrosms", "gmail_smtp", "airtel_money");
 
         assertDoesNotThrow(validator::validate);
     }
@@ -62,9 +119,14 @@ class IntegrationProviderReadinessValidatorTest {
     void productionRejectsAirtelMoneyWithoutCredentials() {
         IntegrationProviderReadinessValidator validator = new IntegrationProviderReadinessValidator(
                 false,
-                "africas_talking",
-                "smtp",
+                "afrosms",
+                "gmail_smtp",
                 "airtel_money",
+                "afrosms-key",
+                "Tereka",
+                "tereka.online@gmail.com",
+                "gmail-password",
+                "no-reply@tereka.online",
                 "",
                 "",
                 "",
@@ -86,7 +148,7 @@ class IntegrationProviderReadinessValidatorTest {
 
     @Test
     void productionAllowsMpesaDarajaProvider() {
-        IntegrationProviderReadinessValidator validator = validator(false, "africas_talking", "smtp", "mpesa_daraja");
+        IntegrationProviderReadinessValidator validator = validator(false, "afrosms", "gmail_smtp", "mpesa_daraja");
 
         assertDoesNotThrow(validator::validate);
     }
@@ -95,9 +157,14 @@ class IntegrationProviderReadinessValidatorTest {
     void productionRejectsMpesaDarajaWithoutCredentials() {
         IntegrationProviderReadinessValidator validator = new IntegrationProviderReadinessValidator(
                 false,
-                "africas_talking",
-                "smtp",
+                "afrosms",
+                "gmail_smtp",
                 "mpesa_daraja",
+                "afrosms-key",
+                "Tereka",
+                "tereka.online@gmail.com",
+                "gmail-password",
+                "no-reply@tereka.online",
                 "",
                 "",
                 "",
@@ -122,9 +189,14 @@ class IntegrationProviderReadinessValidatorTest {
     void productionRejectsMtnMomoWithoutCredentials() {
         IntegrationProviderReadinessValidator validator = new IntegrationProviderReadinessValidator(
                 false,
-                "africas_talking",
-                "smtp",
+                "afrosms",
+                "gmail_smtp",
                 "mtn_momo",
+                "afrosms-key",
+                "Tereka",
+                "tereka.online@gmail.com",
+                "gmail-password",
+                "no-reply@tereka.online",
                 "",
                 "api_user_id",
                 "",
@@ -145,11 +217,38 @@ class IntegrationProviderReadinessValidatorTest {
     }
 
     private IntegrationProviderReadinessValidator validator(boolean demoLoginsEnabled, String smsProvider, String emailProvider, String mobileMoneyProvider) {
+        return validator(
+                demoLoginsEnabled,
+                smsProvider,
+                emailProvider,
+                mobileMoneyProvider,
+                "afrosms-key",
+                "Tereka",
+                "tereka.online@gmail.com",
+                "gmail-password",
+                "no-reply@tereka.online");
+    }
+
+    private IntegrationProviderReadinessValidator validator(
+            boolean demoLoginsEnabled,
+            String smsProvider,
+            String emailProvider,
+            String mobileMoneyProvider,
+            String afroSmsApiKey,
+            String afroSmsSenderId,
+            String gmailUsername,
+            String gmailPassword,
+            String gmailFromAddress) {
         return new IntegrationProviderReadinessValidator(
                 demoLoginsEnabled,
                 smsProvider,
                 emailProvider,
                 mobileMoneyProvider,
+                afroSmsApiKey,
+                afroSmsSenderId,
+                gmailUsername,
+                gmailPassword,
+                gmailFromAddress,
                 "subscription_key",
                 "api_user_id",
                 "api_key",

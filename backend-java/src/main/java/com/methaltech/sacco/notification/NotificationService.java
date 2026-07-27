@@ -114,16 +114,29 @@ public class NotificationService {
     private void createDeliveries(Notification notification, Member member, String title, String message) {
         providers.stream()
                 .filter(provider -> provider.enabledFor(member))
-                .forEach(provider -> createDelivery(
-                        notification,
-                        member,
-                        provider.channel(),
-                        provider.providerId(),
-                        provider.recipient(member),
-                        "email".equals(provider.channel()) ? title + ": " + message : message));
+                .forEach(provider -> {
+                    String deliveryMessage = "email".equals(provider.channel()) ? title + ": " + message : message;
+                    NotificationSendResult result = send(provider, member, title, deliveryMessage);
+                    createDelivery(
+                            notification,
+                            member,
+                            provider.channel(),
+                            provider.providerId(),
+                            provider.recipient(member),
+                            result,
+                            deliveryMessage);
+                });
     }
 
-    private void createDelivery(Notification notification, Member member, String channel, String providerId, String recipient, String message) {
+    private NotificationSendResult send(NotificationProvider provider, Member member, String title, String message) {
+        try {
+            return provider.send(member, title, message);
+        } catch (RuntimeException exception) {
+            return NotificationSendResult.failed(exception.getMessage());
+        }
+    }
+
+    private void createDelivery(Notification notification, Member member, String channel, String providerId, String recipient, NotificationSendResult result, String message) {
         deliveryRepository.save(new NotificationDelivery(
                 "delivery_" + UUID.randomUUID(),
                 notification.getTenantId(),
@@ -132,6 +145,7 @@ public class NotificationService {
                 channel,
                 providerId,
                 recipient,
+                result,
                 message));
     }
 }
