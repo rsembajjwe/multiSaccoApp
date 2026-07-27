@@ -2731,25 +2731,26 @@ function approvalsView() {
 
 function operationsView() {
   const alerts = operationAlerts();
+  const callbackRows = mobileMoneyOperationalRows();
   return `
     <div class="dashboard-grid">
       ${summary("Platform health", state.data.operations?.health || "Healthy", "Service status", "Open")}
-      ${summary("Failed callbacks", alerts.filter((a) => normal(a.status).includes("failed")).length, "Payment provider", "Retry")}
+      ${summary("Callback actions", callbackRows.length, "Payment provider", "Review")}
       ${summary("Notification delivery", dataRows("notifications").length, "SMS/email/push", "Open")}
       ${summary("User sessions", "Active", "Security monitor", "View")}
     </div>
     ${operationsReadinessPanel(alerts)}
+    ${mobileMoneyCallbackOperationsPanel()}
     ${recordTable("Operations command center", alerts, ["title", "provider", "severity", "status", "checkedAt"])}
     ${tabsCard("Operations coverage", ["Payment monitoring", "Failed transactions", "Notification delivery", "Integration status", "Scheduled jobs", "Data-import monitoring", "User-session monitoring", "Maintenance notices"])}
   `;
 }
 
 function operationsReadinessPanel(alerts) {
-  const callbacks = dataRows("mobileMoneyCallbacks");
-  const failedCallbacks = callbacks.filter((row) => normal(row.status).includes("failed")).length;
+  const callbackActions = mobileMoneyOperationalRows().length;
   const failedDeliveries = dataRows("notifications").filter((row) => normal(row.status).includes("failed")).length;
   const openSupport = openComplaints().length;
-  const incidentCount = alerts.filter((row) => ["failed", "warning", "error", "pending"].some((word) => normal(`${row.status} ${row.severity}`).includes(word))).length + failedCallbacks + failedDeliveries + openSupport;
+  const incidentCount = alerts.filter((row) => ["failed", "warning", "error", "pending"].some((word) => normal(`${row.status} ${row.severity}`).includes(word))).length + callbackActions + failedDeliveries + openSupport;
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -2761,7 +2762,7 @@ function operationsReadinessPanel(alerts) {
       </div>
       <div class="source-grid">
         ${mini("System checks", alerts.length)}
-        ${mini("Failed callbacks", failedCallbacks)}
+        ${mini("Callback actions", callbackActions)}
         ${mini("Failed notifications", failedDeliveries)}
         ${mini("Open support cases", openSupport)}
         ${mini("Database", state.data.operations?.database || "Online")}
@@ -3836,6 +3837,7 @@ function reconciliationView() {
     ${moduleTabs("reconciliation", tabs, tab)}
     ${tab === "overview" ? `
       ${reconciliationControlPanel(summaryData)}
+      ${mobileMoneyCallbackOperationsPanel()}
       ${rolePriorityPanel(t("reconciliationReadinessChecks"), [
       ["Statement matching", `${summaryData.matched ?? matches.length} matched record(s) against ${summaryData.statementLines || unmatchedStatementLines.length + matches.length} statement line(s).`, Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) ? "Review" : "Clear"],
       ["Ledger exceptions", `${summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length} ledger line(s) remain unmatched.`, Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) ? "Investigate" : "Clear"],
@@ -3856,6 +3858,29 @@ function reconciliationView() {
       ${recordTable("Mobile-money payment requests", paymentRequests, ["externalReference", "provider", "purpose", "amount", "currencyCode", "payerPhone", "status", "requestedAt", "completedAt"])}
     ` : ""}
     ${tab === "callbacks" ? recordTable("Provider callbacks", callbacks, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"]) : ""}
+  `;
+}
+
+function mobileMoneyCallbackOperationsPanel() {
+  const actions = mobileMoneyOperationalRows();
+  if (!actions.length) return "";
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Mobile-money callback operations</h2>
+          <p>Action list for provider callbacks, pending payment requests and callback signing readiness.</p>
+        </div>
+        <span class="status pending">${actions.length} action(s)</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Critical", actions.filter((row) => normal(row.severity) === "critical").length)}
+        ${mini("Pending requests", actions.filter((row) => normal(row.type).includes("pending request")).length)}
+        ${mini("Callback exceptions", actions.filter((row) => normal(row.type).includes("callback")).length)}
+        ${mini("Signing readiness", callbackSigningReadiness().status)}
+      </div>
+      ${recordTable("Mobile-money callback action list", actions, ["type", "provider", "reference", "severity", "status", "owner", "nextAction", "checkedAt"])}
+    </section>
   `;
 }
 
@@ -9832,7 +9857,75 @@ function operationAlerts() {
     { title: "Application service", provider: "Backend service", severity: "Healthy", status: "Healthy", checkedAt: state.lastSync },
     { title: "Mobile money callbacks", provider: "Provider gateway", severity: "Warning", status: "Pending", checkedAt: state.lastSync }
   ];
-  return [...notificationProviderRiskRows(), ...baseAlerts];
+  return [...mobileMoneyOperationalRows().map((row) => ({
+    title: row.type,
+    provider: row.provider,
+    severity: row.severity,
+    status: row.status,
+    checkedAt: row.checkedAt
+  })), ...notificationProviderRiskRows(), ...baseAlerts];
+}
+
+function callbackSigningReadiness() {
+  const providers = state.data.mobileMoneyIntegrationConfig?.providers || [];
+  if (!providers.length) return { status: "Not checked", severity: "Healthy", nextAction: "Platform Super Admin can review callback signing in Settings" };
+  const settings = providers.flatMap((provider) => provider.settings || []);
+  const signedCallbacks = settings.find((setting) => setting.key === "SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS");
+  const callbackSecret = settings.find((setting) => setting.key === "SACCO_MOBILE_MONEY_CALLBACK_SECRET");
+  const signed = signedCallbacks?.value === "true";
+  const secretReady = Boolean(callbackSecret?.configured);
+  if (signed && secretReady) return { status: "Ready", severity: "Healthy", nextAction: "Monitor callback posting" };
+  if (signed && !secretReady) return { status: "Secret missing", severity: "Critical", nextAction: "Configure callback secret before accepting production callbacks" };
+  return { status: "Unsigned allowed", severity: "Warning", nextAction: "Require signed callbacks before production payments" };
+}
+
+function mobileMoneyOperationalRows() {
+  const signing = callbackSigningReadiness();
+  const callbacks = dataRows("mobileMoneyCallbacks");
+  const requests = dataRows("mobileMoneyPaymentRequests");
+  const rows = [];
+  if (normal(signing.severity) !== "healthy") {
+    rows.push({
+      type: "Callback signing readiness",
+      provider: "Gateway security",
+      reference: "Callback signature",
+      severity: signing.severity,
+      status: signing.status,
+      owner: isPlatform() ? "Platform Super Admin" : "SACCO Admin",
+      nextAction: signing.nextAction,
+      checkedAt: state.lastSync || ""
+    });
+  }
+  callbacks
+    .filter((callback) => callback.duplicate || !normal(callback.status).includes("posted"))
+    .forEach((callback) => {
+      const failed = ["failed", "error", "rejected", "invalid"].some((word) => normal(callback.status).includes(word));
+      rows.push({
+        type: callback.duplicate ? "Duplicate callback" : "Callback exception",
+        provider: labelize(callback.provider || "mobile_money"),
+        reference: callback.externalReference || callback.id,
+        severity: failed ? "Critical" : "Warning",
+        status: callback.duplicate ? "Duplicate" : labelize(callback.status || "review"),
+        owner: isPlatform() ? "Platform Operations" : "SACCO Treasurer",
+        nextAction: callback.duplicate ? "Confirm no double posting occurred" : "Match provider payload to member ledger",
+        checkedAt: callback.receivedAt || callback.createdAt || state.lastSync
+      });
+    });
+  requests
+    .filter((request) => !["posted", "failed", "cancelled", "expired"].includes(normal(request.status)))
+    .forEach((request) => {
+      rows.push({
+        type: "Pending request callback",
+        provider: labelize(request.provider || "mobile_money"),
+        reference: request.externalReference || request.id,
+        severity: "Warning",
+        status: labelize(request.status || "pending"),
+        owner: isPlatform() ? "Platform Operations" : "SACCO Treasurer",
+        nextAction: "Check provider status or wait for signed callback",
+        checkedAt: request.requestedAt || state.lastSync
+      });
+    });
+  return rows;
 }
 
 function fallbackPackages() {
