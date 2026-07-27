@@ -25,4 +25,8 @@ interface NotificationProvider {
     default NotificationSendResult sendTo(String recipient, String title, String message) {
         return NotificationSendResult.sent(null, "Demo notification delivery recorded.");
     }
+
+    default NotificationProviderStatusResponse status() {
+        return NotificationProviderStatusResponse.ready(channel(), providerId(), null, "Provider is configured.");
+    }
 }

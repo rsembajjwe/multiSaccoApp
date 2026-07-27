@@ -82,23 +82,36 @@ class AfroSmsNotificationProvider implements NotificationProvider {
     }
 
     String balance() {
-        assertConfigured();
         try {
-            String response = restClient.get()
-                    .uri(uriBuilder -> uriBuilder
-                            .path(balancePath)
-                            .queryParam("email", email)
-                            .queryParam("password", password)
-                            .queryParam("call", "credits")
-                            .build())
-                    .retrieve()
-                    .body(String.class);
-            if (response == null) return "0";
-            String digits = response.replaceAll("[^0-9]", "");
-            return digits.isBlank() ? "0" : digits;
+            return readBalance();
         } catch (RestClientException exception) {
             return "0";
         }
+    }
+
+    @Override
+    public NotificationProviderStatusResponse status() {
+        try {
+            return NotificationProviderStatusResponse.ready(channel(), providerId(), readBalance(), "AfroSMS balance check completed.");
+        } catch (RuntimeException exception) {
+            return NotificationProviderStatusResponse.unavailable(channel(), providerId(), "AfroSMS status check failed.");
+        }
+    }
+
+    private String readBalance() {
+        assertConfigured();
+        String response = restClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path(balancePath)
+                        .queryParam("email", email)
+                        .queryParam("password", password)
+                        .queryParam("call", "credits")
+                        .build())
+                .retrieve()
+                .body(String.class);
+        if (response == null) return "0";
+        String digits = response.replaceAll("[^0-9]", "");
+        return digits.isBlank() ? "0" : digits;
     }
 
     private void assertConfigured() {

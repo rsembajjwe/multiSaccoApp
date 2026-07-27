@@ -68,6 +68,16 @@ class GmailSmtpEmailNotificationProvider implements NotificationProvider {
         }
     }
 
+    @Override
+    public NotificationProviderStatusResponse status() {
+        try {
+            assertConfigured();
+            return NotificationProviderStatusResponse.ready(channel(), providerId(), null, "Gmail SMTP sender is configured.");
+        } catch (RuntimeException exception) {
+            return NotificationProviderStatusResponse.unavailable(channel(), providerId(), "Gmail SMTP status check failed: " + exception.getMessage());
+        }
+    }
+
     private void assertConfigured() {
         if (fromAddress == null || fromAddress.isBlank()) {
             throw new NotificationProviderException("Gmail SMTP provider is not fully configured.");

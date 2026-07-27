@@ -29,6 +29,7 @@ class NotificationController {
     private final NotificationDeliveryRepository deliveryRepository;
     private final NotificationRepository notificationRepository;
     private final NotificationService notificationService;
+    private final List<NotificationProvider> notificationProviders;
     private final AuthService authService;
     private final AuditService auditService;
 
@@ -57,6 +58,18 @@ class NotificationController {
                 .collect(Collectors.toMap(Notification::getId, Function.identity()));
         return ResponseEntity.ok(ApiResponse.of(deliveries.stream()
                 .map(delivery -> NotificationDeliveryResponse.from(delivery, notificationsById.get(delivery.getNotificationId())))
+                .toList()));
+    }
+
+    @GetMapping("/provider-status")
+    ResponseEntity<?> providerStatus(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "notifications:view")) {
+            return authService.permissionRequired("notifications:view");
+        }
+        return ResponseEntity.ok(ApiResponse.of(notificationProviders.stream()
+                .map(NotificationProvider::status)
                 .toList()));
     }
 

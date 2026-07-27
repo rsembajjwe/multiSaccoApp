@@ -44,6 +44,32 @@ class GmailSmtpEmailNotificationProviderTest {
         assertTrue(result.providerMessage().contains("Gmail SMTP"));
     }
 
+    @Test
+    void statusReportsReadyWhenGmailSenderIsConfigured() {
+        GmailSmtpEmailNotificationProvider provider = new GmailSmtpEmailNotificationProvider(
+                new CapturingMailSender(false),
+                "no-reply@tereka.online",
+                "Tereka Online");
+
+        NotificationProviderStatusResponse status = provider.status();
+
+        assertEquals("ready", status.status());
+        assertEquals("gmail_smtp", status.provider());
+    }
+
+    @Test
+    void statusReportsUnavailableWhenGmailSenderIsMissing() {
+        GmailSmtpEmailNotificationProvider provider = new GmailSmtpEmailNotificationProvider(
+                new CapturingMailSender(false),
+                "",
+                "Tereka Online");
+
+        NotificationProviderStatusResponse status = provider.status();
+
+        assertEquals("unavailable", status.status());
+        assertTrue(status.message().contains("Gmail SMTP"));
+    }
+
     private Member member() {
         try {
             Constructor<Member> constructor = Member.class.getDeclaredConstructor(

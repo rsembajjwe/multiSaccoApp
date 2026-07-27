@@ -1117,6 +1117,8 @@ const state = {
   notificationTemplateError: "",
   notificationMessage: "",
   notificationError: "",
+  notificationProviderStatus: [],
+  notificationProviderStatusCheckedAt: "",
   notificationFilters: {
     status: "all",
     channel: "all",
@@ -3052,6 +3054,7 @@ function notificationsView() {
     ${state.notificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.notificationMessage)}</strong></div>` : ""}
     ${state.notificationError ? `<div class="notice warning"><strong>Notification action failed.</strong><span>${escapeHtml(state.notificationError)}</span></div>` : ""}
     ${notificationDeliveryControlPanel(deliveries, templates)}
+    ${notificationProviderStatusPanel()}
     ${moduleTabs("notifications", tabs, tab)}
     ${tab !== "templates" ? `<section class="panel compact-panel">
       <div class="panel-heading">
@@ -3078,6 +3081,27 @@ function notificationDeliveryControlPanel(deliveries, templates) {
     ["Template coverage", `${activeTemplates.length} active template(s) are available across ${uniqueCount(activeTemplates, "channel")} channel(s).`, missingChannels.length ? "Incomplete" : "Ready"],
     ["Missing channels", missingChannels.length ? `No active template for ${missingChannels.map(labelize).join(", ")}.` : "SMS, email and in-app template coverage is ready.", missingChannels.length ? "Configure" : "Ready"]
   ]);
+}
+
+function notificationProviderStatusPanel() {
+  const rows = state.notificationProviderStatus || [];
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Notification provider status</h2>
+          <p>Check AfroSMS credits and Gmail SMTP readiness before retrying failed SMS or email deliveries.</p>
+        </div>
+        <button class="button secondary" type="button" data-action="check-notification-provider-status">Check provider status</button>
+      </div>
+      ${state.notificationProviderStatusCheckedAt ? `<p class="helper-text">Last checked ${escapeHtml(formatDateTime(state.notificationProviderStatusCheckedAt))}</p>` : ""}
+      ${rows.length ? `<div class="mini-grid">${rows.map((row) => mini(
+        `${labelize(row.channel)} - ${labelize(row.provider)}`,
+        `${labelize(row.status)}${row.balance ? `, ${row.balance} SMS credits` : ""}`
+      )).join("")}</div>` : emptyState("Provider status not checked", "Use Check provider status to verify AfroSMS credits and Gmail readiness.")}
+      ${rows.some((row) => normal(row.status) !== "ready") ? `<div class="notice warning"><strong>Provider issue detected.</strong><span>${escapeHtml(rows.filter((row) => normal(row.status) !== "ready").map((row) => row.message).join(" "))}</span></div>` : ""}
+    </section>
+  `;
 }
 
 function notificationDeliveryAction(delivery) {
@@ -8537,6 +8561,21 @@ async function retryNotificationDelivery(deliveryId) {
   }
 }
 
+async function checkNotificationProviderStatus() {
+  state.notificationMessage = "";
+  state.notificationError = "";
+  try {
+    const rows = await api("/notifications/provider-status");
+    state.notificationProviderStatus = Array.isArray(rows) ? rows : [];
+    state.notificationProviderStatusCheckedAt = new Date().toISOString();
+    state.notificationMessage = "Notification provider status checked.";
+    renderShell();
+  } catch (error) {
+    state.notificationError = error.message;
+    renderShell();
+  }
+}
+
 async function acknowledgeVisibleNotifications(notificationIdsText) {
   const notificationIds = String(notificationIdsText || "")
     .split(",")
@@ -9154,6 +9193,9 @@ function bindEvents() {
     state.tableState = {};
     renderShell();
   }));
+  document.querySelectorAll("[data-action='check-notification-provider-status']").forEach((button) => {
+    button.addEventListener("click", checkNotificationProviderStatus);
+  });
   document.querySelectorAll("[data-notification-filter]").forEach((input) => input.addEventListener("input", updateNotificationFilter));
   document.querySelectorAll("select[data-notification-filter]").forEach((select) => select.addEventListener("change", updateNotificationFilter));
   document.querySelectorAll("[data-table-search]").forEach((input) => input.addEventListener("input", (event) => {
