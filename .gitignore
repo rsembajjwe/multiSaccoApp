@@ -13,6 +13,8 @@ reports/load-evidence/*
 !reports/load-evidence/.gitkeep
 reports/backup-evidence/*
 !reports/backup-evidence/.gitkeep
+reports/db-evidence/*
+!reports/db-evidence/.gitkeep
 .env
 .env.*
 *.log

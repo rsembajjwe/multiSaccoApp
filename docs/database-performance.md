@@ -50,3 +50,11 @@ Use PostgreSQL slow-query logs, Actuator metrics, and the load-test script to co
 ## Verification
 
 `npm.cmd run check` includes `scripts/check-db-tuning.mjs`, which verifies that production pool settings and this runbook remain present.
+
+For release evidence, run:
+
+```powershell
+npm.cmd run db:evidence
+```
+
+This records the DB tuning contract and HA recovery-target references under `reports/db-evidence/`.

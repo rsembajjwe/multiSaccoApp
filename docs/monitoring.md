@@ -83,6 +83,7 @@ Use these checks for staging and production monitoring.
 | Mobile-money reconciliation | `providerEvidence.mobileMoney.reconciliationSummary` | Warning | Confirm pending requests are being checked, provider status calls are succeeding, and callbacks are reconciling. |
 | Open complaints | `operations.status.counts.openComplaints` | Warning | Route overdue complaints to SACCO support or management escalation. |
 | Backup restore rehearsal | `npm.cmd run backup:rehearse` | Critical | Run before a release candidate and record the backup file path plus pass/fail result. |
+| Database tuning evidence | `npm.cmd run db:evidence` | Important | Run before a release candidate and confirm pool settings, recovery targets, and DB runbook markers are still present. |
 
 Minimum monitoring cadence:
 

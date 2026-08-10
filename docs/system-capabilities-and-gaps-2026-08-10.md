@@ -103,6 +103,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   evidence under `reports/load-evidence/`, using the current SACCO-code login contract. A local
   baseline on 10 August 2026 completed 100 requests at concurrency 10 with 0 failures, 258.37 req/s,
   p95 93.1 ms, and p99 135.0 ms against the Java backend.
+- A database evidence wrapper now records the production HikariCP pool contract, small-server tuning
+  guidance, and HA recovery-target markers under `reports/db-evidence/`.
 - Production multi-instance startup is guarded by Redis scale settings for rate limits,
   idempotency/shared hot keys, and Redis connectivity. The request rate limiter now has an explicit
   store boundary plus a Redis-backed shared counter implementation for multi-instance deployments.
