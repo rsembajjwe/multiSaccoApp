@@ -9,7 +9,7 @@
 > checks and the UI contract check pass, and `npm run build:ui` produces a validated **`dist/`**
 > release artifact. A no-dependency UI helper test covers shared table/search/pagination, MFA handoff,
 > password-reset-required routing, member/staff token isolation, logout cleanup, auth routing, and
-> per-portal rendering. **60** Flyway migrations. Backend role tests verify SACCO staff boundaries
+> per-portal rendering. **61** Flyway migrations. Backend role tests verify SACCO staff boundaries
 > plus branch-manager scope for member, transaction, loan, repayment, accounting journal, regulatory
 > report, audit-log, member complaint, member support chat and governance access. Note: a large working
 > set is still **uncommitted** - it should be committed in focused commits.
@@ -103,7 +103,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   Idempotency keys now have matching memory and Redis reservation stores with a configurable TTL,
   wired into mobile-money callbacks and subscription payment references. A Docker-backed Redis smoke
   check now verifies both shared-state primitives against a real Redis container, and `npm.cmd run
-  ha:evidence` records the HA contract plus Redis smoke output as timestamped evidence.
+  ha:evidence` records the HA contract plus Redis smoke output as timestamped evidence. The latest
+  run on 10 August 2026 passed against an isolated `redis:7-alpine` container.
 
 ### Frontend
 
@@ -135,10 +136,11 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
   now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
   The project still lacks a real component/unit test framework over the large UI surface.
-- **Horizontal scale / HA is unproven.** Single-node assumptions remain. Startup guards now require
-  Redis configuration before multi-instance production, and request rate limiting has a Redis-backed
-  shared counter. Idempotency also has a Redis reservation store on key payment paths, but live Redis
-  deployment, load/soak testing, RTO/RPO evidence, and failover rehearsal are still needed.
+- **Horizontal scale / HA is partly proven.** Single-node assumptions remain. Startup guards now
+  require Redis configuration before multi-instance production, request rate limiting has a
+  Redis-backed shared counter, and payment idempotency has a Redis reservation store. A Docker-backed
+  Redis smoke test passed on 10 August 2026, but live Redis deployment, load/soak testing, RTO/RPO
+  evidence, and failover rehearsal are still needed.
 - **Mobile money is not production-live.** Adapters and routing exist, but MTN/Airtel production use
   requires merchant onboarding/KYC, real credentials, live callback validation, and production
   settlement reconciliation.
@@ -180,7 +182,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 1. **Commit** the verified working set in focused commits.
 2. **Frontend build and tests:** add Vite, bundle the current modules, migrate gradually to ES
    modules, then add a proper component/unit-test framework.
-3. **Scale/resilience proof:** add Redis-backed rate-limit/session state, load testing, and DR targets.
+3. **Scale/resilience proof:** use the Redis HA evidence as the baseline, then add load testing,
+   live Redis deployment evidence, failover rehearsal, and DR targets.
 4. **Mobile-money production:** complete MTN/Airtel merchant onboarding, production credentials,
    callback validation, and settlement reconciliation.
 5. **Compliance and inclusion:** complete data-protection operating procedures, secrets rotation,
