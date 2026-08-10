@@ -136,6 +136,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   offline drafts, privacy requests, platform/SACCO administration data, subscriptions, roles,
   permissions, audit events, transactions, accounting/setup objects, integration configs, security
   policy summaries, reconciliation data, regulatory reports, and quick-search result navigation.
+  `npm run type:evidence` records the type-safety gate output as timestamped release evidence under
+  `reports/type-evidence/`.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
   views.
 - i18n evidence now records supported locale metadata for English, French, Swahili, Portuguese,

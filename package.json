@@ -40,6 +40,7 @@
     "secrets:evidence": "node scripts/secrets-evidence.mjs",
     "accessibility:evidence": "node scripts/accessibility-evidence.mjs",
     "i18n:evidence": "node scripts/i18n-evidence.mjs",
+    "type:evidence": "node scripts/type-evidence.mjs",
     "load:test": "node scripts/load-test.mjs",
     "imports:templates": "node scripts/generate-import-workbooks.mjs",
     "imports:check": "node scripts/check-import-workbooks.mjs",

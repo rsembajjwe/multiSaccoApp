@@ -24,6 +24,8 @@ reports/i18n-evidence/*
 !reports/i18n-evidence/.gitkeep
 reports/vite-evidence/*
 !reports/vite-evidence/.gitkeep
+reports/type-evidence/*
+!reports/type-evidence/.gitkeep
 .env
 .env.*
 *.log
