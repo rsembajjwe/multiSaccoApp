@@ -77,7 +77,8 @@ Run a failover rehearsal before production launch and every quarter after launch
 
 Before moving from pilot to enterprise mode:
 
-- Run `npm.cmd run load:test` against a staging system.
+- Run `npm.cmd run load:evidence` against a staging system. It wraps `npm.cmd run load:test` and
+  writes a timestamped report under `reports/load-evidence/`.
 - Run `npm.cmd run ha:evidence` before the load test so Redis shared-state wiring is proven and
   recorded.
 - Test with SACCO-sized data sets, including member search, transaction lists, loan queues, reports,

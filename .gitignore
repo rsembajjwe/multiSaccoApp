@@ -9,6 +9,8 @@ reports/deployment-evidence/*
 !reports/deployment-evidence/.gitkeep
 reports/ha-evidence/*
 !reports/ha-evidence/.gitkeep
+reports/load-evidence/*
+!reports/load-evidence/.gitkeep
 .env
 .env.*
 *.log

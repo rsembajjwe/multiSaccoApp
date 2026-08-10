@@ -97,6 +97,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   checks, Docker/dev/prod compose, and Caddy edge with TLS.
 - Prometheus metrics, Resilience4j circuit breakers, idempotent-only retries, bounded provider HTTP
   timeouts, pagination/search/sort on high-volume endpoints, and curated OpenAPI documentation.
+- A load evidence wrapper now captures `npm.cmd run load:test` output as timestamped release
+  evidence under `reports/load-evidence/`, using the current SACCO-code login contract.
 - Production multi-instance startup is guarded by Redis scale settings for rate limits,
   idempotency/shared hot keys, and Redis connectivity. The request rate limiter now has an explicit
   store boundary plus a Redis-backed shared counter implementation for multi-instance deployments.
@@ -139,8 +141,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - **Horizontal scale / HA is partly proven.** Single-node assumptions remain. Startup guards now
   require Redis configuration before multi-instance production, request rate limiting has a
   Redis-backed shared counter, and payment idempotency has a Redis reservation store. A Docker-backed
-  Redis smoke test passed on 10 August 2026, but live Redis deployment, load/soak testing, RTO/RPO
-  evidence, and failover rehearsal are still needed.
+  Redis smoke test passed on 10 August 2026, and the load-test harness now writes evidence reports,
+  but live Redis deployment, staging load/soak execution, RTO/RPO evidence, and failover rehearsal
+  are still needed.
 - **Mobile money is not production-live.** Adapters and routing exist, but MTN/Airtel production use
   requires merchant onboarding/KYC, real credentials, live callback validation, and production
   settlement reconciliation.

@@ -2,7 +2,9 @@ const baseUrl = process.env.LOAD_BASE_URL || "http://127.0.0.1:8080";
 const totalRequests = numberFromEnv("LOAD_REQUESTS", 100);
 const concurrency = numberFromEnv("LOAD_CONCURRENCY", 10);
 const p95LimitMs = numberFromEnv("LOAD_P95_MS", 1000);
-const loginEmail = process.env.LOAD_LOGIN_EMAIL || "admin@platform.local";
+const p99LimitMs = numberFromEnv("LOAD_P99_MS", 2000);
+const loginCode = process.env.LOAD_LOGIN_CODE || "PLATFORM";
+const loginUsername = process.env.LOAD_LOGIN_USERNAME || process.env.LOAD_LOGIN_EMAIL || "admin@platform.local";
 const loginPassword = process.env.LOAD_LOGIN_PASSWORD || "Admin@12345";
 
 function numberFromEnv(name, defaultValue) {
@@ -22,7 +24,7 @@ async function login() {
   const result = await request("/api/v1/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+    body: JSON.stringify({ saccoCode: loginCode, username: loginUsername, password: loginPassword }),
   });
   if (result.status !== 200) {
     throw new Error(`Login failed with ${result.status}: ${result.body}`);
@@ -71,7 +73,7 @@ function percentile(values, ratio) {
 
 async function main() {
   console.log(`Load target: ${baseUrl}`);
-  console.log(`Requests: ${totalRequests}, concurrency: ${concurrency}, p95 limit: ${p95LimitMs}ms`);
+  console.log(`Requests: ${totalRequests}, concurrency: ${concurrency}, p95 limit: ${p95LimitMs}ms, p99 limit: ${p99LimitMs}ms`);
 
   const token = await login();
   const results = [];
@@ -86,6 +88,7 @@ async function main() {
   const latencies = results.filter((result) => result.ok).map((result) => result.elapsedMs);
   const p50 = percentile(latencies, 0.5);
   const p95 = percentile(latencies, 0.95);
+  const p99 = percentile(latencies, 0.99);
   const requestsPerSecond = results.length / (durationMs / 1000);
 
   console.log(`Completed: ${results.length}`);
@@ -93,6 +96,7 @@ async function main() {
   console.log(`Throughput: ${requestsPerSecond.toFixed(2)} req/s`);
   console.log(`Latency p50: ${p50.toFixed(1)}ms`);
   console.log(`Latency p95: ${p95.toFixed(1)}ms`);
+  console.log(`Latency p99: ${p99.toFixed(1)}ms`);
 
   if (failures.length > 0) {
     console.error("First failure:", JSON.stringify(failures[0], null, 2));
@@ -100,6 +104,10 @@ async function main() {
   }
   if (p95 > p95LimitMs) {
     console.error(`p95 latency ${p95.toFixed(1)}ms exceeded ${p95LimitMs}ms`);
+    process.exit(1);
+  }
+  if (p99 > p99LimitMs) {
+    console.error(`p99 latency ${p99.toFixed(1)}ms exceeded ${p99LimitMs}ms`);
     process.exit(1);
   }
 }
