@@ -42,6 +42,7 @@ tags:
   - name: Members
   - name: Loans
   - name: Financial transactions
+  - name: Accounting
 
 # Default: staff/platform bearer token. Endpoints override with `security: []` (public),
 # `memberBearer` (member token), or `callbackSignature` (signed provider callback).
@@ -945,6 +946,39 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
 
+  /statement-lines/batch:
+    post:
+      tags: [Accounting]
+      summary: Batch import statement lines
+      description: >
+        Imports bank, cash, mobile-money, or payroll statement lines for reconciliation. The import
+        fails atomically with row-level errors when a reference is duplicated, a statement period is
+        closed, a channel is unsupported, or an amount is invalid.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatementLineBatchImportRequest" }
+      responses:
+        "201":
+          description: Statement lines imported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/StatementLineBatchImportResponse" }
+        "400":
+          description: Row-level validation errors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/StatementLineBatchImportResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1058,6 +1092,59 @@ components:
         message: { type: string }
         startedAt: { type: string, format: date-time }
         finishedAt: { type: string, format: date-time }
+
+    StatementLineImportItem:
+      type: object
+      required: [channel, amount, externalReference]
+      properties:
+        tenantId: { type: string, nullable: true, description: Platform users may provide this to import for a specific SACCO. }
+        channel: { type: string, enum: [cash, bank, mobile_money, payroll_deduction], example: bank }
+        amount: { type: number, example: 75000 }
+        externalReference: { type: string, example: BANK-20260810-001 }
+        description: { type: string, example: Member savings deposit received through bank collection }
+        statementDate: { type: string, format: date, example: "2026-08-10" }
+
+    StatementLineBatchImportRequest:
+      type: object
+      required: [lines]
+      properties:
+        tenantId: { type: string, nullable: true, description: Platform users may provide this to import for a specific SACCO. }
+        lines:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/StatementLineImportItem" }
+
+    StatementLine:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        accountCode: { type: string, example: "1010" }
+        channel: { type: string, example: bank }
+        amount: { type: number, example: 75000 }
+        externalReference: { type: string, example: BANK-20260810-001 }
+        description: { type: string }
+        statementDate: { type: string, format: date }
+        importedByUserId: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    StatementImportError:
+      type: object
+      properties:
+        rowNumber: { type: integer, example: 2 }
+        field: { type: string, example: externalReference }
+        code: { type: string, example: DUPLICATE_REFERENCE_IN_FILE }
+        message: { type: string }
+
+    StatementLineBatchImportResponse:
+      type: object
+      properties:
+        imported:
+          type: array
+          items: { $ref: "#/components/schemas/StatementLine" }
+        errors:
+          type: array
+          items: { $ref: "#/components/schemas/StatementImportError" }
 
     ProviderOperationalEvidence:
       type: object

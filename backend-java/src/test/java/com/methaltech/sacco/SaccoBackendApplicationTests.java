@@ -5403,6 +5403,92 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void staffCanBatchImportBankStatementLinesWithRowLevelControls() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String statementDate = LocalDate.now().toString();
+		String referenceOne = "BANK-BATCH-" + System.currentTimeMillis() + "-001";
+		String referenceTwo = "BANK-BATCH-" + System.currentTimeMillis() + "-002";
+
+		mockMvc.perform(post("/api/v1/statement-lines/batch")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "lines": [
+								    {
+								      "channel": "bank",
+								      "amount": 75000,
+								      "externalReference": "%s",
+								      "description": "Bank collection deposit",
+								      "statementDate": "%s"
+								    },
+								    {
+								      "channel": "bank",
+								      "amount": -5000,
+								      "externalReference": "%s",
+								      "description": "Bank charge",
+								      "statementDate": "%s"
+								    }
+								  ]
+								}
+								""".formatted(referenceOne, statementDate, referenceTwo, statementDate)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.imported.length()", is(2)))
+				.andExpect(jsonPath("$.data.imported[*].accountCode", everyItem(is("1010"))))
+				.andExpect(jsonPath("$.data.imported[*].importedByUserId", everyItem(is("user_green_admin"))))
+				.andExpect(jsonPath("$.data.errors.length()", is(0)));
+
+		mockMvc.perform(post("/api/v1/statement-lines/batch")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "lines": [
+								    {
+								      "channel": "bank",
+								      "amount": 75000,
+								      "externalReference": "%s",
+								      "statementDate": "%s"
+								    }
+								  ]
+								}
+								""".formatted(referenceOne, statementDate)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.data.errors[0].code", is("STATEMENT_LINE_EXISTS")));
+
+		mockMvc.perform(post("/api/v1/statement-lines/batch")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "lines": [
+								    {
+								      "channel": "bank",
+								      "amount": 10000,
+								      "externalReference": "BANK-DUP-IN-FILE",
+								      "statementDate": "%s"
+								    },
+								    {
+								      "channel": "bank",
+								      "amount": 10000,
+								      "externalReference": "BANK-DUP-IN-FILE",
+								      "statementDate": "%s"
+								    },
+								    {
+								      "channel": "bank",
+								      "amount": 10000,
+								      "externalReference": "BANK-CLOSED-BATCH",
+								      "statementDate": "2026-06-15"
+								    }
+								  ]
+								}
+								""".formatted(statementDate, statementDate)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("DUPLICATE_REFERENCE_IN_FILE")))
+				.andExpect(jsonPath("$.data.errors[*].code", hasItem("ACCOUNTING_PERIOD_CLOSED")));
+	}
+
+	@Test
 	void regulatoryReportSummarizesTenantAndConsolidatedMetrics() throws Exception {
 		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String platformToken = loginAndReturnToken();

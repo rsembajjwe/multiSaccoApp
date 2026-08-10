@@ -28,6 +28,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.Period;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -557,6 +558,53 @@ class AccountingController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(StatementLineResponse.from(line)));
     }
 
+    @PostMapping("/statement-lines/batch")
+    ResponseEntity<?> importStatementLines(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody ImportStatementLinesRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "accounting:post")) {
+            return authService.permissionRequired("accounting:post");
+        }
+
+        String tenantId = tenantScope(currentSession, body.tenantId());
+        if (tenantId == null) return tenantAccessDenied();
+        if (body.lines() == null || body.lines().isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "EMPTY_STATEMENT_IMPORT", "Bank statement import requires at least one line."));
+        }
+
+        List<StatementImportError> errors = validateStatementImport(tenantId, body.lines());
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.of(new StatementImportResponse(List.of(), errors)));
+        }
+
+        List<StatementLine> imported = body.lines().stream()
+                .map(line -> statementLineRepository.save(new StatementLine(
+                        "statement_" + UUID.randomUUID(),
+                        tenantId,
+                        accountForChannel(line.channel().trim()),
+                        line.channel().trim(),
+                        Money.normalize(line.amount()),
+                        line.externalReference().trim(),
+                        line.description() == null ? "" : line.description().trim(),
+                        line.statementDate() == null ? LocalDate.now() : line.statementDate(),
+                        currentSession.user().getId())))
+                .toList();
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Imported " + imported.size() + " statement lines",
+                "statement_line_import",
+                tenantId,
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of(new StatementImportResponse(imported.stream().map(StatementLineResponse::from).toList(), List.of())));
+    }
+
     @GetMapping("/reconciliation")
     ResponseEntity<?> getReconciliation(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -1014,6 +1062,41 @@ class AccountingController {
         return "AST-" + tenantId.replace("tenant_", "").toUpperCase() + "-" + String.format("%04d", assetRepository.countByTenantId(tenantId) + 1);
     }
 
+    private List<StatementImportError> validateStatementImport(String tenantId, List<CreateStatementLineRequest> lines) {
+        List<StatementImportError> errors = new ArrayList<>();
+        Set<String> seenReferences = new HashSet<>();
+        for (int index = 0; index < lines.size(); index++) {
+            CreateStatementLineRequest line = lines.get(index);
+            int rowNumber = index + 1;
+            if (line.channel() == null || line.channel().isBlank()) {
+                errors.add(new StatementImportError(rowNumber, "channel", "REQUIRED", "Statement channel is required."));
+            } else if (!STATEMENT_CHANNELS.contains(line.channel().trim())) {
+                errors.add(new StatementImportError(rowNumber, "channel", "INVALID_STATEMENT_CHANNEL", "Unsupported statement channel."));
+            }
+            if (line.amount() == null) {
+                errors.add(new StatementImportError(rowNumber, "amount", "REQUIRED", "Statement amount is required."));
+            } else if (Money.normalize(line.amount()).compareTo(BigDecimal.ZERO) == 0) {
+                errors.add(new StatementImportError(rowNumber, "amount", "INVALID_STATEMENT_AMOUNT", "Statement amount cannot be zero."));
+            }
+            if (line.externalReference() == null || line.externalReference().isBlank()) {
+                errors.add(new StatementImportError(rowNumber, "externalReference", "REQUIRED", "Statement reference is required."));
+            } else {
+                String reference = line.externalReference().trim().toUpperCase();
+                if (!seenReferences.add(reference)) {
+                    errors.add(new StatementImportError(rowNumber, "externalReference", "DUPLICATE_REFERENCE_IN_FILE", "Statement reference is repeated in this import."));
+                }
+                if (statementLineRepository.existsByTenantIdAndExternalReferenceIgnoreCase(tenantId, line.externalReference().trim())) {
+                    errors.add(new StatementImportError(rowNumber, "externalReference", "STATEMENT_LINE_EXISTS", "Statement line reference already exists."));
+                }
+            }
+            LocalDate statementDate = line.statementDate() == null ? LocalDate.now() : line.statementDate();
+            if (periodService.isClosed(tenantId, statementDate)) {
+                errors.add(new StatementImportError(rowNumber, "statementDate", "ACCOUNTING_PERIOD_CLOSED", "Accounting period " + periodService.periodKey(statementDate) + " is closed."));
+            }
+        }
+        return errors;
+    }
+
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }
@@ -1062,6 +1145,23 @@ class AccountingController {
             @NotBlank String externalReference,
             String description,
             LocalDate statementDate) {
+    }
+
+    record ImportStatementLinesRequest(
+            String tenantId,
+            @NotNull List<CreateStatementLineRequest> lines) {
+    }
+
+    record StatementImportResponse(
+            List<StatementLineResponse> imported,
+            List<StatementImportError> errors) {
+    }
+
+    record StatementImportError(
+            int rowNumber,
+            String field,
+            String code,
+            String message) {
     }
 
     record CreateSupplierRequest(

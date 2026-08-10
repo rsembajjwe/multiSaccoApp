@@ -73,6 +73,7 @@ Java-backed routes currently implemented:
 - `POST /api/v1/assets`
 - `GET /api/v1/statement-lines`
 - `POST /api/v1/statement-lines`
+- `POST /api/v1/statement-lines/batch`
 - `GET /api/v1/reconciliation`
 - `GET /api/v1/regulatory-report`
 - `POST /api/v1/integrations/mobile-money/callback`
@@ -207,6 +208,7 @@ All JSON responses should follow one of these shapes:
 | POST | `/assets` | Register a fixed asset acquisition. | SACCO staff |
 | GET | `/statement-lines` | List imported bank, cash, mobile-money, and payroll statement lines. | Required |
 | POST | `/statement-lines` | Import a statement line for reconciliation. | SACCO staff |
+| POST | `/statement-lines/batch` | Batch import bank, cash, mobile-money, or payroll statement lines with row-level validation. | SACCO staff |
 | GET | `/reconciliation` | Compare statement lines with ledger cash movements. | Required |
 | GET | `/regulatory-report` | Return supervisory report rows, consolidated totals, and CSV export text. | Required |
 | POST | `/integrations/mobile-money/callback` | Receive idempotent mobile-money payment callbacks. | Public/provider |
@@ -297,6 +299,7 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/assets`
 - `GET /api/v1/statement-lines`
 - `POST /api/v1/statement-lines`
+- `POST /api/v1/statement-lines/batch`
 - `GET /api/v1/reconciliation`
 - `GET /api/v1/regulatory-report`
 - `POST /api/v1/integrations/mobile-money/callback`

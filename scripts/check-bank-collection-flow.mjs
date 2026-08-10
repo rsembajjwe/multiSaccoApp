@@ -16,6 +16,8 @@ const checks = [
   [actions, '? "BANK" : "MM"', "bank reference generation"],
   [openapi, "/tenants/{tenantId}/collection-mode", "OpenAPI documents platform collection mode endpoint"],
   [openapi, "/tenants/{tenantId}/collection-settings", "OpenAPI documents SACCO collection activation endpoint"],
+  [openapi, "/statement-lines/batch", "OpenAPI documents batch bank statement import endpoint"],
+  [openapi, "StatementLineBatchImportResponse", "OpenAPI documents batch bank statement import response"],
   [openapi, "mobileMoneyCollectionAvailable", "OpenAPI matches TenantResponse mobile-money availability field"],
   [openapi, "bankCollectionAvailable", "OpenAPI matches TenantResponse bank availability field"]
 ];
