@@ -43,9 +43,11 @@
     "imports:templates": "node scripts/generate-import-workbooks.mjs",
     "imports:check": "node scripts/check-import-workbooks.mjs",
     "vite:check": "node scripts/check-vite-readiness.mjs",
+    "vite:evidence": "node scripts/vite-evidence.mjs",
     "migration:evidence": "node scripts/migration-evidence.mjs"
   },
   "devDependencies": {
-    "playwright": "^1.61.1"
+    "playwright": "^1.61.1",
+    "vite": "^5.4.19"
   }
 }

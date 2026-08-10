@@ -87,6 +87,7 @@ Use these checks for staging and production monitoring.
 | Secrets evidence | `npm.cmd run secrets:evidence` | Critical | Run before a release candidate and confirm examples contain placeholders, runbooks cover rotation, and production secret guards remain documented. |
 | Accessibility evidence | `npm.cmd run accessibility:evidence` | Important | Run before a release candidate and confirm skip links, landmark labels, current-page state, and visible focus markers remain present. |
 | i18n evidence | `npm.cmd run i18n:evidence` | Important | Run before a release candidate and confirm supported locale metadata, RTL document wiring, fallback, and RTL CSS markers remain present. |
+| Vite evidence | `npm.cmd run vite:evidence` | Important | Run before a release candidate and confirm Vite is installed and the current classic-script bridge build still emits `dist-vite/`. |
 
 Minimum monitoring cadence:
 

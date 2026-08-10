@@ -122,11 +122,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   session, per-portal rendering, per-domain actions, and interactions.
 - `npm run build:ui` produces a validated `dist/` artifact containing entrypoint, styles, manifest,
   service worker, favicon, and all referenced modules.
-- Vite migration has started with `vite.config.mjs`, `npm run build:vite`, and `npm run dev:vite`.
-  The first Vite path bridges the current classic-script modules into `dist-vite`; the next step is
-  installing the Vite package once npm registry access is stable, then converting modules to real
-  ES `import`/`export` boundaries. `npm run vite:check` now reports whether the local Vite package is
-  installed or still blocked by package-registry access.
+- Vite is installed as a dev dependency and `npm run build:vite` emits `dist-vite/` through the
+  current classic-script bridge. `npm.cmd run vite:evidence` records the readiness/build output as
+  timestamped evidence. The remaining frontend build work is converting the classic scripts to real
+  ES `import`/`export` boundaries so Vite can bundle, minify, and tree-shake the application logic.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
   views.
 - i18n evidence now records supported locale metadata for English, French, Swahili, Portuguese,
@@ -145,10 +144,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 
 ### High
 
-- **Frontend build maturity is partial.** There is a validated `dist/` artifact step and Vite
-  configuration has started, but the modules are still classic scripts sharing global scope, loaded
-  via many `<script>` tags. There is not yet a completed ES module import/export structure,
-  minification, tree-shaking, or type safety.
+- **Frontend build maturity is partial.** There is a validated `dist/` artifact step and Vite is now
+  installed with a working `dist-vite/` bridge build, but the modules are still classic scripts
+  sharing global scope, loaded via many `<script>` tags. There is not yet a completed ES module
+  import/export structure, application-code minification/tree-shaking, or type safety.
 - **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
   now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
   The project still lacks a real component/unit test framework over the large UI surface.
@@ -200,8 +199,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 ## 4. Suggested Next Steps
 
 1. **Commit** the verified working set in focused commits.
-2. **Frontend build and tests:** add Vite, bundle the current modules, migrate gradually to ES
-   modules, then add a proper component/unit-test framework.
+2. **Frontend build and tests:** migrate the Vite bridge from classic scripts to ES modules, then add
+   a proper component/unit-test framework.
 3. **Scale/resilience proof:** use the Redis HA evidence as the baseline, then add load testing,
    live Redis deployment evidence, failover rehearsal, and DR targets.
 4. **Mobile-money production:** complete MTN/Airtel merchant onboarding, production credentials,

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-vite/
 target/
 backups/
 logs/
@@ -21,6 +22,8 @@ reports/accessibility-evidence/*
 !reports/accessibility-evidence/.gitkeep
 reports/i18n-evidence/*
 !reports/i18n-evidence/.gitkeep
+reports/vite-evidence/*
+!reports/vite-evidence/.gitkeep
 .env
 .env.*
 *.log

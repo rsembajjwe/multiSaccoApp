@@ -27,11 +27,9 @@ const scriptCount = Array.from(indexHtml.matchAll(/<script\s+[^>]*src=["']app[^"
 assert.ok(scriptCount >= 30, `Expected classic app script tags while migration is incremental, found ${scriptCount}.`);
 
 const viteInstalled = existsSync(new URL("../node_modules/vite/package.json", import.meta.url));
-const dependencyState = viteInstalled
-  ? "vite package installed"
-  : "vite package not installed yet; run npm.cmd install once registry access is stable";
+assert.ok(viteInstalled, "vite package must be installed for frontend build maturity work");
 
-console.log(`Vite readiness check passed (${scriptCount} classic script modules bridged, ${dependencyState}).`);
+console.log(`Vite readiness check passed (${scriptCount} classic script modules bridged, vite package installed).`);
 
 async function readText(file) {
   return readFile(new URL(`../${file}`, import.meta.url), "utf8");
