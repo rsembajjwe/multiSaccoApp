@@ -85,6 +85,7 @@ Use these checks for staging and production monitoring.
 | Backup restore rehearsal | `npm.cmd run backup:rehearse` | Critical | Run before a release candidate and record the backup file path plus pass/fail result. |
 | Database tuning evidence | `npm.cmd run db:evidence` | Important | Run before a release candidate and confirm pool settings, recovery targets, and DB runbook markers are still present. |
 | Secrets evidence | `npm.cmd run secrets:evidence` | Critical | Run before a release candidate and confirm examples contain placeholders, runbooks cover rotation, and production secret guards remain documented. |
+| Accessibility evidence | `npm.cmd run accessibility:evidence` | Important | Run before a release candidate and confirm skip links, landmark labels, current-page state, and visible focus markers remain present. |
 
 Minimum monitoring cadence:
 

@@ -132,6 +132,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Member portal renderer coverage now has a focused `npm run test:member-portal` gate for full-date
   statements, monthly savings/deposit performance, mobile-money/bank payment options, offline
   drafts, WhatsApp-style support chat, and SACCO admin notifications.
+- Accessibility evidence now records static checks for skip links, named navigation landmarks,
+  current-page state, topbar menu labels, and visible keyboard focus under
+  `reports/accessibility-evidence/`.
 
 ---
 
@@ -168,9 +171,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   operating procedures still need policy-level completion and external review.
 - **Internationalization depth is incomplete.** Locale wiring and catalog scaffolding exist, but
   Luganda, Swahili, and broader regional coverage need translation and QA.
-- **Accessibility needs real audits.** Contract markers exist, but keyboard navigation,
-  screen-reader flows, contrast, focus management, and WCAG AA testing need deeper browser-level
-  validation.
+- **Accessibility needs real audits.** Static evidence now covers baseline skip links, landmarks,
+  labels, and focus markers; keyboard journeys, screen-reader flows, contrast, focus management, and
+  WCAG AA testing still need deeper browser-level validation.
 - **Secrets management needs hosted managed-store evidence.** Environment-backed config, placeholder
   scanning, production startup guards, and rotation procedures exist; the remaining work is wiring
   and proving a hosted Vault/KMS/secret-manager integration with operational rotation evidence.
