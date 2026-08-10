@@ -122,10 +122,12 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   session, per-portal rendering, per-domain actions, and interactions.
 - `npm run build:ui` produces a validated `dist/` artifact containing entrypoint, styles, manifest,
   service worker, favicon, and all referenced modules.
-- Vite is installed as a dev dependency and `npm run build:vite` emits `dist-vite/` through the
-  current classic-script bridge. `npm.cmd run vite:evidence` records the readiness/build output as
-  timestamped evidence. The remaining frontend build work is converting the classic scripts to real
-  ES `import`/`export` boundaries so Vite can bundle, minify, and tree-shake the application logic.
+- Vite is installed as a dev dependency and `npm run build:vite` emits `dist-vite/` through a bundled
+  classic-script bridge: the current 35 source scripts are combined into one generated
+  `tereka-classic-app.js` for the Vite output. `npm.cmd run vite:evidence` records the
+  readiness/build output as timestamped evidence. The remaining frontend build work is converting the
+  classic scripts to real ES `import`/`export` boundaries so Vite can natively bundle, minify, and
+  tree-shake the application logic.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
   views.
 - i18n evidence now records supported locale metadata for English, French, Swahili, Portuguese,
@@ -145,9 +147,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 ### High
 
 - **Frontend build maturity is partial.** There is a validated `dist/` artifact step and Vite is now
-  installed with a working `dist-vite/` bridge build, but the modules are still classic scripts
-  sharing global scope, loaded via many `<script>` tags. There is not yet a completed ES module
-  import/export structure, application-code minification/tree-shaking, or type safety.
+  installed with a working `dist-vite/` bridge build that emits one generated app bundle, but the
+  source modules are still classic scripts sharing global scope. There is not yet a completed ES
+  module import/export structure, native application-code tree-shaking, or type safety.
 - **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
   now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
   The project still lacks a real component/unit test framework over the large UI surface.

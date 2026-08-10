@@ -16,6 +16,9 @@ for (const marker of [
   "defineConfig",
   "outDir = \"dist-vite\"",
   "classicScriptAssetBridge",
+  "vite-entry.html",
+  "tereka-classic-app.js",
+  "classic-script-bundled-bridge",
   "vite-classic-manifest.json",
   "service-worker.js",
   "manifest.webmanifest"
@@ -29,7 +32,14 @@ assert.ok(scriptCount >= 30, `Expected classic app script tags while migration i
 const viteInstalled = existsSync(new URL("../node_modules/vite/package.json", import.meta.url));
 assert.ok(viteInstalled, "vite package must be installed for frontend build maturity work");
 
-console.log(`Vite readiness check passed (${scriptCount} classic script modules bridged, vite package installed).`);
+if (existsSync(new URL("../dist-vite/index.html", import.meta.url))) {
+  const distIndex = await readText("dist-vite/index.html");
+  const distScriptCount = Array.from(distIndex.matchAll(/<script\s+/g)).length;
+  assert.equal(distScriptCount, 1, "dist-vite index should load one bundled app script");
+  assert.ok(distIndex.includes("tereka-classic-app.js"), "dist-vite index missing bundled classic app script");
+}
+
+console.log(`Vite readiness check passed (${scriptCount} classic script modules bundled through the bridge, vite package installed).`);
 
 async function readText(file) {
   return readFile(new URL(`../${file}`, import.meta.url), "utf8");
