@@ -6,8 +6,8 @@
 
 > **Build state (verified).** Backend compiles and the Java suite passes - **248 tests, 0 failures**.
 > The frontend is decomposed into **35 script modules** (`app.js` is a 5-line entry point); JS syntax
-> checks and the UI contract check pass, and `npm run build:ui` produces a validated **`dist/`**
-> release artifact. A no-dependency UI helper test covers shared table/search/pagination, MFA handoff,
+> checks and the UI contract check pass, and `npm run build:ui` now produces a validated **`dist/`**
+> release artifact with one generated classic app bundle. A no-dependency UI helper test covers shared table/search/pagination, MFA handoff,
 > password-reset-required routing, member/staff token isolation, logout cleanup, auth routing, and
 > per-portal rendering. **61** Flyway migrations. Backend role tests verify SACCO staff boundaries
 > plus branch-manager scope for member, transaction, loan, repayment, accounting journal, regulatory
@@ -120,8 +120,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 
 - Decomposed into 35 script modules by concern: i18n, core utilities, API, tables, auth, shell,
   session, per-portal rendering, per-domain actions, and interactions.
-- `npm run build:ui` produces a validated `dist/` artifact containing entrypoint, styles, manifest,
-  service worker, favicon, and all referenced modules.
+- `npm run build:ui` produces a validated `dist/` artifact containing generated entrypoint, styles,
+  manifest, service worker, favicon, and one generated `tereka-classic-app.js` bundle made from the
+  35 classic source scripts.
 - Vite is installed as a dev dependency and `npm run build:vite` emits `dist-vite/` through a bundled
   classic-script bridge: the current 35 source scripts are combined into one generated
   `tereka-classic-app.js` for the Vite output. `npm.cmd run vite:evidence` records the
@@ -146,10 +147,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 
 ### High
 
-- **Frontend build maturity is partial.** There is a validated `dist/` artifact step and Vite is now
-  installed with a working `dist-vite/` bridge build that emits one generated app bundle, but the
-  source modules are still classic scripts sharing global scope. There is not yet a completed ES
-  module import/export structure, native application-code tree-shaking, or type safety.
+- **Frontend build maturity is partial.** The regular `dist/` build and Vite `dist-vite/` bridge
+  build both emit one generated app bundle, but the source modules are still classic scripts sharing
+  global scope. There is not yet a completed ES module import/export structure, native
+  application-code tree-shaking, or type safety.
 - **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
   now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
   The project still lacks a real component/unit test framework over the large UI surface.
@@ -201,8 +202,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 ## 4. Suggested Next Steps
 
 1. **Commit** the verified working set in focused commits.
-2. **Frontend build and tests:** migrate the Vite bridge from classic scripts to ES modules, then add
-   a proper component/unit-test framework.
+2. **Frontend build and tests:** migrate the classic source scripts to ES modules, then add a proper
+   component/unit-test framework.
 3. **Scale/resilience proof:** use the Redis HA evidence as the baseline, then add load testing,
    live Redis deployment evidence, failover rehearsal, and DR targets.
 4. **Mobile-money production:** complete MTN/Airtel merchant onboarding, production credentials,
