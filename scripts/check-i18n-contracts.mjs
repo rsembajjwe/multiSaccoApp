@@ -15,7 +15,11 @@ assertIncludes(core, `"ar-EG": { label: "Arabic", direction: "rtl"`, "Arabic loc
 assertIncludes(core, "document.documentElement.lang = region.locale", "document language is applied");
 assertIncludes(core, "document.documentElement.dir = region.direction", "document direction is applied");
 assertIncludes(core, "messages[localeInfo.fallback]?.[key]", "locale catalog fallback is configured");
-assertIncludes(interactions, "applyRegionalDocumentSettings();\n    renderLogin();", "login locale change reapplies document settings");
+assertInOrder(interactions, [
+  'document.querySelector("#loginLocale")',
+  "applyRegionalDocumentSettings();",
+  "renderLogin();"
+], "login locale change reapplies document settings");
 assertIncludes(styles, '[dir="rtl"] body', "RTL body CSS exists");
 assertIncludes(styles, '[dir="rtl"] input', "RTL form CSS exists");
 assertIncludes(styles, '[dir="rtl"] .sidebar', "RTL shell CSS exists");
@@ -25,5 +29,16 @@ console.log(`i18n contract check passed (${requiredLocales.length} supported loc
 function assertIncludes(content, marker, label) {
   if (!content.includes(marker)) {
     throw new Error(`${label} missing marker: ${marker}`);
+  }
+}
+
+function assertInOrder(content, markers, label) {
+  let offset = 0;
+  for (const marker of markers) {
+    const index = content.indexOf(marker, offset);
+    if (index === -1) {
+      throw new Error(`${label} missing ordered marker: ${marker}`);
+    }
+    offset = index + marker.length;
   }
 }

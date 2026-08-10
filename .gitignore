@@ -19,6 +19,8 @@ reports/secrets-evidence/*
 !reports/secrets-evidence/.gitkeep
 reports/accessibility-evidence/*
 !reports/accessibility-evidence/.gitkeep
+reports/i18n-evidence/*
+!reports/i18n-evidence/.gitkeep
 .env
 .env.*
 *.log

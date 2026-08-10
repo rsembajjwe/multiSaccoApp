@@ -86,6 +86,7 @@ Use these checks for staging and production monitoring.
 | Database tuning evidence | `npm.cmd run db:evidence` | Important | Run before a release candidate and confirm pool settings, recovery targets, and DB runbook markers are still present. |
 | Secrets evidence | `npm.cmd run secrets:evidence` | Critical | Run before a release candidate and confirm examples contain placeholders, runbooks cover rotation, and production secret guards remain documented. |
 | Accessibility evidence | `npm.cmd run accessibility:evidence` | Important | Run before a release candidate and confirm skip links, landmark labels, current-page state, and visible focus markers remain present. |
+| i18n evidence | `npm.cmd run i18n:evidence` | Important | Run before a release candidate and confirm supported locale metadata, RTL document wiring, fallback, and RTL CSS markers remain present. |
 
 Minimum monitoring cadence:
 

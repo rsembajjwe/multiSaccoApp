@@ -129,6 +129,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   installed or still blocked by package-registry access.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
   views.
+- i18n evidence now records supported locale metadata for English, French, Swahili, Portuguese,
+  Arabic/RTL, and Amharic, plus document `lang`/`dir`, fallback, and RTL CSS markers under
+  `reports/i18n-evidence/`.
 - Member portal renderer coverage now has a focused `npm run test:member-portal` gate for full-date
   statements, monthly savings/deposit performance, mobile-money/bank payment options, offline
   drafts, WhatsApp-style support chat, and SACCO admin notifications.
@@ -169,8 +172,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - **Data protection and regulation need deeper evidence.** Current evidence covers privacy requests,
   consent, masking/encryption helpers, and retention/disposal flows; Uganda DPA, BoU, and UMRA
   operating procedures still need policy-level completion and external review.
-- **Internationalization depth is incomplete.** Locale wiring and catalog scaffolding exist, but
-  Luganda, Swahili, and broader regional coverage need translation and QA.
+- **Internationalization depth is incomplete.** Locale and RTL wiring are evidenced for English,
+  French, Swahili, Portuguese, Arabic, and Amharic, but Luganda and professional in-country
+  translation/QA for broader regional coverage are still needed.
 - **Accessibility needs real audits.** Static evidence now covers baseline skip links, landmarks,
   labels, and focus markers; keyboard journeys, screen-reader flows, contrast, focus management, and
   WCAG AA testing still need deeper browser-level validation.
