@@ -152,7 +152,7 @@ function transactionReceiptingQueue(rows) {
       const aPending = normal(a.status).includes("pending") ? 0 : 1;
       const bPending = normal(b.status).includes("pending") ? 0 : 1;
       if (aPending !== bPending) return aPending - bPending;
-      return new Date(b.postedAt || b.createdAt || 0) - new Date(a.postedAt || a.createdAt || 0);
+      return new Date(b.postedAt || b.createdAt || 0).getTime() - new Date(a.postedAt || a.createdAt || 0).getTime();
     });
 }
 
@@ -167,7 +167,7 @@ function transactionReceiptRegister(rows) {
       actionLabel: "Receipt",
       actionId: row.id
     }))
-    .sort((a, b) => new Date(b.postedAt || b.createdAt || 0) - new Date(a.postedAt || a.createdAt || 0));
+    .sort((a, b) => new Date(b.postedAt || b.createdAt || 0).getTime() - new Date(a.postedAt || a.createdAt || 0).getTime());
 }
 
 function transactionDetailPanel(rows) {

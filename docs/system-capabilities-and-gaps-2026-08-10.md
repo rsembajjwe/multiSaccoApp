@@ -7,7 +7,8 @@
 > **Build state (verified).** Backend compiles and the Java suite passes - **248 tests, 0 failures**.
 > The frontend is decomposed into **35 script modules** (`app.js` is a 5-line entry point); JS syntax
 > checks and the UI contract check pass, and `npm run build:ui` now produces a validated **`dist/`**
-> release artifact with one generated classic app bundle. A no-dependency UI helper test covers shared table/search/pagination, MFA handoff,
+> release artifact with one generated classic app bundle. `npm run type:ui` now runs a TypeScript
+> `checkJs` pass over the SPA. A no-dependency UI helper test covers shared table/search/pagination, MFA handoff,
 > password-reset-required routing, member/staff token isolation, logout cleanup, auth routing, and
 > per-portal rendering. **61** Flyway migrations. Backend role tests verify SACCO staff boundaries
 > plus branch-manager scope for member, transaction, loan, repayment, accounting journal, regulatory
@@ -129,6 +130,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   readiness/build output as timestamped evidence. The remaining frontend build work is converting the
   classic scripts to real ES `import`/`export` boundaries so Vite can natively bundle, minify, and
   tree-shake the application logic.
+- TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
+  no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
+  API errors, and legacy DOM event handling.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
   views.
 - i18n evidence now records supported locale metadata for English, French, Swahili, Portuguese,
@@ -150,7 +154,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - **Frontend build maturity is partial.** The regular `dist/` build and Vite `dist-vite/` bridge
   build both emit one generated app bundle, but the source modules are still classic scripts sharing
   global scope. There is not yet a completed ES module import/export structure, native
-  application-code tree-shaking, or type safety.
+  application-code tree-shaking, or deep domain-level type safety.
+- **Type safety is started, not deep.** A passing TypeScript `checkJs` gate now covers the SPA and is
+  wired into `npm run check`, but many domain objects still use broad compatibility declarations
+  while the legacy global-script architecture is being migrated.
 - **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
   now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
   The project still lacks a real component/unit test framework over the large UI surface.

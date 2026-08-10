@@ -72,7 +72,7 @@ function memberMoneyView(dash, balances) {
       receiptNo: `RCT-${line.reference}`,
       amount: Number(line.credit || 0) || Number(line.debit || 0)
     }))
-    .sort((a, b) => new Date(b.postedAt || b.createdAt || 0) - new Date(a.postedAt || a.createdAt || 0));
+    .sort((a, b) => new Date(b.postedAt || b.createdAt || 0).getTime() - new Date(a.postedAt || a.createdAt || 0).getTime());
   return `
     ${moduleTabs("money", tabs, tab)}
     ${tab === "accounts" ? recordTable("Account balances", accounts, ["account", "balance"]) : ""}
@@ -201,7 +201,7 @@ function memberPaymentFormPanel(payableLoans) {
   `;
 }
 
-function memberBankCollectionPanel(payableLoans) {
+function memberBankCollectionPanel(payableLoans, _preferCompact = false) {
   const reference = `BANK-${Date.now()}`;
   return `
     <section class="panel">
@@ -320,7 +320,7 @@ function memberPaymentLifecycleRows(dash) {
     paymentStatus: paymentLifecycleStatus(draft),
     receiptStatus: "Not receipted"
   }));
-  return [...draftRows, ...requestRows, ...postedRows].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  return [...draftRows, ...requestRows, ...postedRows].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
 }
 
 function memberPaymentRequestRows() {
@@ -449,7 +449,7 @@ function memberDraftRows(type = "") {
     }));
 }
 
-function memberProfileView() {
+function memberProfileView(_balances = {}) {
   const member = state.member || {};
   const tabs = [["overview", "Overview"], ["kyc", "KYC"], ["privacy", "Privacy"], ["security", "Security"]];
   const tab = activeModuleTab("profile", tabs);

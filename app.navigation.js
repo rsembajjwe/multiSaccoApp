@@ -161,7 +161,7 @@ function friendlyUserError(error, platformOnly = isPlatform()) {
   return message.replace(/\btenants\b/gi, platformOnly ? "platform accounts" : "SACCOs").replace(/\btenant\b/gi, platformOnly ? "platform account" : "SACCO");
 }
 
-function moduleBlueprint(view) {
+function moduleBlueprint(view = "") {
   if (view === "savings") return savingsView();
   if (view === "shares") return sharesView();
   if (view === "welfare") return welfareView();

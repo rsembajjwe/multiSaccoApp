@@ -61,7 +61,7 @@ function userManagementTabs(canCreate) {
   `;
 }
 
-function platformUserTabContent({ activeTab, addPanel, detailPanel, coveragePanel, listPanel, permissionPanel }) {
+function platformUserTabContent({ activeTab, canCreate, addPanel, detailPanel, coveragePanel, listPanel, permissionPanel }) {
   if (activeTab === "add") return addPanel;
   if (activeTab === "detail") return detailPanel;
   if (activeTab === "coverage") return coveragePanel;

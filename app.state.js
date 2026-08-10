@@ -1,6 +1,7 @@
 ﻿// Global runtime state for Tereka Online.
 // Loaded after core helpers so initial data factories are available.
 
+/** @type {TerekaState} */
 const state = {
   auth: "none",
   authTab: "login",

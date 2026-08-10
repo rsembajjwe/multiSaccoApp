@@ -9,7 +9,7 @@ function dashboardIntro(title, copy) {
   `;
 }
 
-function rolePriorityPanel() {
+function rolePriorityPanel(_title, _rows) {
   // Removed: decorative "role dashboard" priority panels are no longer rendered (production declutter).
   return "";
 }

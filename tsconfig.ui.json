@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleDetection": "legacy",
+    "skipLibCheck": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "noPropertyAccessFromIndexSignature": false
+  },
+  "include": [
+    "app.types.d.ts",
+    "app*.js"
+  ],
+  "exclude": [
+    "dist",
+    "dist-vite",
+    "node_modules"
+  ]
+}
