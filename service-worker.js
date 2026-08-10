@@ -1,9 +1,10 @@
-const CACHE_VERSION = "tereka-shell-v20260723-receipt-register-1";
+const CACHE_VERSION = "tereka-shell-v20260728-modular-7";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/styles.css?v=20260723-receipt-register-1",
-  "/app.js?v=20260723-receipt-register-1",
+  "/styles.css?v=20260728-modular-7",
+  "/app.i18n.js?v=20260728-modular-7",
+  "/app.js?v=20260728-modular-7",
   "/favicon.svg?v=20260719-tereka-2",
   "/manifest.webmanifest?v=20260722-pwa-1"
 ];

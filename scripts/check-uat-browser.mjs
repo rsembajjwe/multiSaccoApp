@@ -110,11 +110,14 @@ async function platformAdminUat(page) {
 async function saccoStaffUat(page) {
   const staff = uatData?.created?.staffUser;
   await staffLogin(page, staff?.email || "admin@greenvalley.local", staff?.password || "Sacco@12345", "SACCO staff");
-  await assertScreen(page, "members", "Members", ["Member Overview", "Member List", "Member management focus"]);
-  await assertScreen(page, "transactions", "Transactions", ["Transaction control focus", "Deposits and reversals"]);
+  await assertScreen(page, "members", "Members", ["Member Overview", "Register Member", "Member List", "KYC Detail", "Contacts & Documents", "Statement", "Member management focus"]);
+  await assertSaccoMemberAdminTabs(page);
+  await assertScreen(page, "transactions", "Transactions", ["Transaction control focus", "Deposits and reversals", "New transaction screen", "Receipting queue", "Receipt register"]);
+  await assertScreen(page, "savings", "Savings", ["Savings operations control", "SACCO monthly performance control", "Treasurer cash collections", "Mobile money collections"]);
   await assertScreen(page, "approvals", "Approvals", ["Approval decision center", "Approval queue", "decision"]);
   await assertScreen(page, "loans", "Loans", ["Loan lifecycle control", "Loan application list"]);
   await assertScreen(page, "reports", "Reports", ["Reporting evidence control", "Operational and financial reporting"]);
+  await assertScreen(page, "complaints", "Complaints", ["SACCO admin - member chat", "SACCO admin - Platform Super Admin chat"]);
   await clearSession(page);
   await page.reload({ waitUntil: "domcontentloaded" });
   console.log("PASS SACCO staff UAT path");
@@ -136,10 +139,14 @@ async function memberPortalUat(page) {
     "Guarantee requests",
     "Offline drafts",
     "Monthly savings",
+    "Pay by mobile money",
+    "Read SACCO messages",
     member?.membershipNo || "GVS-0001"
   ]) {
     await expectText(page, marker, `member portal marker ${marker}`);
   }
+
+  await assertMemberPortalTabs(page);
 
   const subject = `UAT member complaint ${Date.now()}`;
   await navigateTo(page, "complaints");
@@ -153,6 +160,45 @@ async function memberPortalUat(page) {
   await page.locator("[data-module-tab-view='complaints'][data-module-tab='drafts']").click();
   await expectText(page, subject, "offline draft row visible");
   console.log("PASS member portal UAT path");
+}
+
+async function assertSaccoMemberAdminTabs(page) {
+  await navigateTo(page, "members");
+  await page.locator("[data-member-tab='list']").click();
+  await expectText(page, "Member list", "SACCO member list tab");
+  const detailAction = page.locator("[data-row-action='member-detail']").first();
+  if (await detailAction.count()) {
+    await detailAction.click();
+    await expectText(page, "Member detail and KYC approval", "SACCO member editable detail");
+    await expectText(page, "Save member profile", "SACCO member profile edit control");
+    await page.locator("[data-member-tab='contacts']").click();
+    await expectText(page, "Member contacts and documents", "SACCO member contacts tab");
+    await page.locator("[data-member-tab='statement']").click();
+    await expectText(page, "Member balance statement", "SACCO member statement tab");
+    await expectText(page, "Staff statement export controls", "SACCO member statement export controls");
+  }
+  await page.locator("[data-member-tab='register']").click();
+  await expectText(page, "Member registration", "SACCO member registration tab");
+  console.log("PASS SACCO member admin tabs");
+}
+
+async function assertMemberPortalTabs(page) {
+  await navigateTo(page, "home");
+  await page.locator("[data-module-tab-view='home'][data-module-tab='monthly']").click();
+  await expectText(page, "Monthly savings workspace", "member monthly savings tab");
+  await expectText(page, "Treasurer cash", "member monthly treasurer cash visibility");
+  await expectText(page, "Mobile money", "member monthly mobile money visibility");
+  await page.locator("[data-module-tab-view='home'][data-module-tab='messages']").click();
+  await expectText(page, "SACCO admin message center", "member SACCO message center tab");
+  await page.locator("[data-module-tab-view='home'][data-module-tab='mobile-money']").click();
+  await expectText(page, "Mobile money deposit workspace", "member mobile-money deposit tab");
+  await navigateTo(page, "payments");
+  await expectText(page, "Member payment center", "member payment center");
+  await page.locator("[data-module-tab-view='payments'][data-module-tab='tracking']").click();
+  await expectText(page, "Mobile-money request tracking", "member payment tracking tab");
+  await page.locator("[data-module-tab-view='payments'][data-module-tab='drafts']").click();
+  await expectText(page, "Payment offline drafts", "member payment offline drafts tab");
+  console.log("PASS member portal enterprise tabs");
 }
 
 async function staffLogin(page, email, password, label) {
