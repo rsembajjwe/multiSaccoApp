@@ -1,9 +1,13 @@
 package com.methaltech.sacco;
 
+import com.methaltech.sacco.accounting.MobileMoneyReconciliationJob;
+import java.time.LocalDate;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -17,6 +21,7 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.emptyOrNullString;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -29,7 +34,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @AutoConfigureMockMvc
-@SpringBootTest
+@SpringBootTest(
+		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+		properties = "sacco.rate-limit.enabled=false")
 class SaccoBackendApplicationTests {
 
 	@Autowired
@@ -37,6 +44,15 @@ class SaccoBackendApplicationTests {
 
 	@Autowired
 	private ObjectMapper objectMapper;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private MeterRegistry meterRegistry;
+
+	@Autowired
+	private MobileMoneyReconciliationJob mobileMoneyReconciliationJob;
 
 	@Test
 	void contextLoads() {
@@ -56,6 +72,184 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.ok", is(true)))
 				.andExpect(jsonPath("$.data.demoLoginsEnabled", is(true)))
 				.andExpect(jsonPath("$.data.service", is("multiSaccoApp Java API")));
+	}
+
+	@Test
+	void everyResponseCarriesAGeneratedCorrelationId() throws Exception {
+		mockMvc.perform(get("/api/v1/health"))
+				.andExpect(status().isOk())
+				.andExpect(header().exists("X-Correlation-Id"))
+				.andExpect(header().string("X-Correlation-Id", not(emptyOrNullString())));
+	}
+
+	@Test
+	void inboundCorrelationIdIsEchoedBack() throws Exception {
+		mockMvc.perform(get("/api/v1/health").header("X-Correlation-Id", "trace-abc-123"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("X-Correlation-Id", is("trace-abc-123")));
+	}
+
+	@Test
+	void prometheusAndMetricsEndpointsAreExposed() throws Exception {
+		mockMvc.perform(get("/actuator/metrics"))
+				.andExpect(status().isOk());
+		org.junit.jupiter.api.Assertions.assertFalse(meterRegistry.getMeters().isEmpty());
+	}
+
+	@Test
+	void financialTransactionsSupportOptInPaginationAndRemainBackwardCompatible() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		// Opt-in pagination returns a page envelope with metadata and a capped page.
+		mockMvc.perform(get("/api/v1/financial-transactions?page=0&size=1")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data", notNullValue()))
+				.andExpect(jsonPath("$.page.number", is(0)))
+				.andExpect(jsonPath("$.page.size", is(1)))
+				.andExpect(jsonPath("$.page.totalElements", greaterThanOrEqualTo(0)));
+
+		// Without page/size the response keeps its original shape: a plain data array, no page block.
+		mockMvc.perform(get("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data", notNullValue()))
+				.andExpect(jsonPath("$.page").doesNotExist());
+
+		// The same opt-in pattern applies to members, loans, audit events and notification deliveries.
+		mockMvc.perform(get("/api/v1/members?page=0&size=2")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.size", is(2)))
+				.andExpect(jsonPath("$.page.totalElements", greaterThanOrEqualTo(0)));
+
+		mockMvc.perform(get("/api/v1/members?page=0&size=2&search=GVS-0001")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.size", is(2)))
+				.andExpect(jsonPath("$.page.totalElements", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[0].membershipNo", is("GVS-0001")));
+
+		mockMvc.perform(get("/api/v1/members?page=0&size=2&sort=fullName&direction=desc")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.size", is(2)));
+
+		mockMvc.perform(get("/api/v1/loans?page=0&size=2")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.number", is(0)))
+				.andExpect(jsonPath("$.page.size", is(2)));
+
+		mockMvc.perform(get("/api/v1/loans?page=0&size=2&search=loan")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.size", is(2)))
+				.andExpect(jsonPath("$.page.totalElements", greaterThanOrEqualTo(0)));
+
+		mockMvc.perform(get("/api/v1/financial-transactions?page=0&size=2&search=savings")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.size", is(2)))
+				.andExpect(jsonPath("$.page.totalElements", greaterThanOrEqualTo(0)));
+
+		mockMvc.perform(get("/api/v1/financial-transactions?page=0&size=2&sort=amount&direction=asc")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.size", is(2)));
+
+		mockMvc.perform(get("/api/v1/audit-events?page=0&size=5")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.size", is(5)));
+
+		mockMvc.perform(get("/api/v1/audit-events?page=0&size=5&search=login")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.size", is(5)))
+				.andExpect(jsonPath("$.page.totalElements", greaterThanOrEqualTo(0)));
+
+		mockMvc.perform(get("/api/v1/audit-events?page=0&size=5&sort=action&direction=asc")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.size", is(5)));
+
+		mockMvc.perform(get("/api/v1/notifications/deliveries?page=0&size=5")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.size", is(5)));
+
+		mockMvc.perform(get("/api/v1/notifications/deliveries?page=0&size=5&sort=channel&direction=asc")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.page.size", is(5)));
+	}
+
+	@Test
+	void platformControlsAllowedCollectionModeAndSaccoCannotExceedIt() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String saccoAdminToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+
+		// 1) Platform sets NONE -> member online payment is blocked and the dashboard reflects it.
+		setCollectionMode(platformToken, "NONE");
+		mockMvc.perform(post("/api/v1/integrations/mobile-money/payment-requests")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{ "purpose": "savings_deposit", "amount": 5000, "payerPhone": "+256700000001", "provider": "mtn" }
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("COLLECTION_METHOD_NOT_ALLOWED")));
+
+		mockMvc.perform(get("/api/v1/member-auth/mobile-dashboard").header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenant.allowedCollectionMode", is("NONE")))
+				.andExpect(jsonPath("$.data.tenant.mobileMoneyCollectionAvailable", is(false)));
+
+		// 2) Platform sets BANK_ONLY -> SACCO admin cannot switch on mobile money.
+		setCollectionMode(platformToken, "BANK_ONLY");
+		mockMvc.perform(patch("/api/v1/tenants/tenant_green/collection-settings")
+						.header("Authorization", "Bearer " + saccoAdminToken)
+						.contentType("application/json")
+						.content("""
+								{ "mobileMoneyActive": true, "bankActive": false }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("COLLECTION_METHOD_NOT_ALLOWED")));
+
+		// 3) SACCO admin cannot change the allowed mode itself (platform-only).
+		mockMvc.perform(patch("/api/v1/tenants/tenant_green/collection-mode")
+						.header("Authorization", "Bearer " + saccoAdminToken)
+						.contentType("application/json")
+						.content("""
+								{ "allowedCollectionMode": "BOTH" }
+								"""))
+				.andExpect(status().isForbidden());
+
+		// 4) Restore: platform allows BOTH, SACCO activates mobile money; availability returns.
+		setCollectionMode(platformToken, "BOTH");
+		mockMvc.perform(patch("/api/v1/tenants/tenant_green/collection-settings")
+						.header("Authorization", "Bearer " + saccoAdminToken)
+						.contentType("application/json")
+						.content("""
+								{ "mobileMoneyActive": true, "bankActive": false }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.mobileMoneyCollectionAvailable", is(true)));
+
+		mockMvc.perform(get("/api/v1/member-auth/mobile-dashboard").header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.tenant.mobileMoneyCollectionAvailable", is(true)));
+	}
+
+	private void setCollectionMode(String platformToken, String mode) throws Exception {
+		mockMvc.perform(patch("/api/v1/tenants/tenant_green/collection-mode")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("{ \"allowedCollectionMode\": \"" + mode + "\" }"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.allowedCollectionMode", is(mode)));
 	}
 
 	@Test
@@ -854,6 +1048,130 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void saccoRoleSensitiveActionsArePermissionBounded() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String treasurerToken = loginAndReturnToken("treasurer@greenvalley.local", "Treasurer@12345");
+		String secretaryToken = loginAndReturnToken("secretary@greenvalley.local", "Secretary@12345");
+		String chairToken = loginAndReturnToken("chairperson@greenvalley.local", "Chair@12345");
+		String memberName = "Role Boundary Member " + System.currentTimeMillis();
+
+		mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_lake",
+								  "branchId": "branch_lake_main",
+								  "fullName": "%s",
+								  "memberType": "individual",
+								  "phone": "+256701%06d",
+								  "email": "role-boundary-%d@greenvalley.local",
+								  "nationalId": "RB%d",
+								  "password": "Member@12345"
+								}
+								""".formatted(memberName, System.currentTimeMillis() % 1000000, System.currentTimeMillis(), System.currentTimeMillis())))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.fullName", is(memberName)));
+
+		mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + chairToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "branchId": "branch_green_main",
+								  "fullName": "Chairperson Should Not Create",
+								  "memberType": "individual",
+								  "phone": "+256701111111",
+								  "email": "chairperson-create-denied@greenvalley.local",
+								  "nationalId": "RB-DENIED",
+								  "password": "Member@12345"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")))
+				.andExpect(jsonPath("$.error.message", containsString("members:create")));
+
+		mockMvc.perform(patch("/api/v1/members/member_green_amina/status")
+						.header("Authorization", "Bearer " + secretaryToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "active", "kycStatus": "verified" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("active")));
+
+		mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + treasurerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "branchId": "branch_green_main",
+								  "memberId": "member_green_amina",
+								  "type": "savings_deposit",
+								  "channel": "cash",
+								  "amount": 25000,
+								  "narration": "Treasurer role boundary deposit"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.type", is("savings_deposit")))
+				.andExpect(jsonPath("$.data.channel", is("cash")));
+
+		mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + secretaryToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "branchId": "branch_green_main",
+								  "memberId": "member_green_amina",
+								  "type": "savings_deposit",
+								  "channel": "cash",
+								  "amount": 10000
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.message", containsString("transactions:create")));
+
+		mockMvc.perform(patch("/api/v1/members/member_green_amina/status")
+						.header("Authorization", "Bearer " + treasurerToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "active" }
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.message", containsString("members:approve")));
+
+		mockMvc.perform(post("/api/v1/loans")
+						.header("Authorization", "Bearer " + chairToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "product": "Emergency Loan",
+								  "amount": 100000,
+								  "repaymentMonths": 4
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.message", containsString("loans:create")));
+
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + treasurerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Denied Treasurer User",
+								  "email": "denied-treasurer-user@greenvalley.local",
+								  "phone": "+256702000000",
+								  "password": "StrongPass@12345"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.message", containsString("users:create")));
+
+	}
+
+	@Test
 	void loginRejectsBadPassword() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/login")
 						.contentType("application/json")
@@ -1440,12 +1758,19 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + saccoToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(2)))
-				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+				.andExpect(jsonPath("$.data[0].privacyScope", is("summary_masked")))
+				.andExpect(jsonPath("$.data[0].phone", is("+********4567")))
+				.andExpect(jsonPath("$.data[0].email", is("am****@example.local")))
+				.andExpect(jsonPath("$.data[0].nationalId", is("CM********4PA")));
 
 		mockMvc.perform(get("/api/v1/members/member_green_amina")
 						.header("Authorization", "Bearer " + saccoToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.membershipNo", is("GVS-0001")))
+				.andExpect(jsonPath("$.data.privacyScope", is("detail_full")))
+				.andExpect(jsonPath("$.data.phone", is("+256701234567")))
+				.andExpect(jsonPath("$.data.nationalId", is("CM9000012K4PA")))
 				.andExpect(jsonPath("$.data.savingsBalance", is(2450000.00)));
 
 		mockMvc.perform(get("/api/v1/members/member_lake_peter")
@@ -1476,6 +1801,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
 				.andExpect(jsonPath("$.data.membershipNo", is(membershipNo)))
+				.andExpect(jsonPath("$.data.nationalId", is("CM1234567SMK")))
 				.andExpect(jsonPath("$.data.status", is("pending_approval")))
 				.andExpect(jsonPath("$.data.kycStatus", is("verified")))
 				.andExpect(jsonPath("$.data.savingsBalance", is(0)))
@@ -1483,6 +1809,17 @@ class SaccoBackendApplicationTests {
 				.andReturn();
 
 		String memberId = objectMapper.readTree(createdMember.getResponse().getContentAsString()).path("data").path("id").asString();
+		String storedNationalId = jdbcTemplate.queryForObject(
+				"SELECT national_id FROM members WHERE id = ?",
+				String.class,
+				memberId);
+		org.junit.jupiter.api.Assertions.assertTrue(storedNationalId.startsWith("enc:v1:"));
+		org.junit.jupiter.api.Assertions.assertNotEquals("CM1234567SMK", storedNationalId);
+
+		mockMvc.perform(get("/api/v1/members/" + memberId)
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.nationalId", is("CM1234567SMK")));
 
 		mockMvc.perform(get("/api/v1/audit-events")
 						.header("Authorization", "Bearer " + token))
@@ -1534,7 +1871,8 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
 				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
 				.andExpect(jsonPath("$.data[0].documentType", is("national_id")))
-				.andExpect(jsonPath("$.data[0].verificationStatus", is("verified")));
+				.andExpect(jsonPath("$.data[0].verificationStatus", is("verified")))
+				.andExpect(jsonPath("$.data[0].retentionStatus", is("active")));
 
 		MvcResult createdDocument = mockMvc.perform(post("/api/v1/members/member_green_amina/documents")
 						.header("Authorization", "Bearer " + token)
@@ -1550,15 +1888,47 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
 				.andExpect(jsonPath("$.data.documentType", is("signature")))
 				.andExpect(jsonPath("$.data.verificationStatus", is("pending_verification")))
+				.andExpect(jsonPath("$.data.retentionStatus", is("active")))
 				.andExpect(jsonPath("$.data.uploadedByUserId", is("user_green_admin")))
 				.andReturn();
 
 		String documentId = objectMapper.readTree(createdDocument.getResponse().getContentAsString()).path("data").path("id").asString();
 
+		mockMvc.perform(patch("/api/v1/members/member_green_amina/documents/" + documentId + "/retention")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "retentionStatus": "review_due",
+								  "retentionReason": "Signature evidence has reached periodic KYC review.",
+								  "retentionReviewDueAt": "2026-08-31"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.retentionStatus", is("review_due")))
+				.andExpect(jsonPath("$.data.retentionReason", is("Signature evidence has reached periodic KYC review.")))
+				.andExpect(jsonPath("$.data.retentionReviewDueAt", is("2026-08-31")))
+				.andExpect(jsonPath("$.data.retentionReviewedAt", notNullValue()))
+				.andExpect(jsonPath("$.data.retentionActionedByUserId", is("user_green_admin")));
+
+		mockMvc.perform(patch("/api/v1/members/member_green_amina/documents/" + documentId + "/retention")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "retentionStatus": "disposed",
+								  "retentionReason": "Member replaced this signature evidence."
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.retentionStatus", is("disposed")))
+				.andExpect(jsonPath("$.data.retentionStorageAction", is("demo_noop")))
+				.andExpect(jsonPath("$.data.retentionStorageActionAt", notNullValue()));
+
 		mockMvc.perform(get("/api/v1/audit-events")
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[0].resourceType", is("member_document")))
+				.andExpect(jsonPath("$.data[0].resourceType", is("member_document_retention")))
 				.andExpect(jsonPath("$.data[0].resourceId", is(documentId)));
 	}
 
@@ -1569,6 +1939,17 @@ class SaccoBackendApplicationTests {
 
 		mockMvc.perform(get("/api/v1/members/member_lake_peter/documents")
 						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
+
+		mockMvc.perform(patch("/api/v1/members/member_lake_peter/documents/doc_green_amina_nin/retention")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "retentionStatus": "retained"
+								}
+								"""))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code", is("TENANT_ACCESS_DENIED")));
 
@@ -1608,6 +1989,17 @@ class SaccoBackendApplicationTests {
 								"""))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code", is("INVALID_DOCUMENT_STATUS")));
+
+		mockMvc.perform(patch("/api/v1/members/member_green_amina/documents/doc_green_amina_nin/retention")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "retentionStatus": "lost"
+								}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("INVALID_DOCUMENT_RETENTION_STATUS")));
 
 		mockMvc.perform(get("/api/v1/members/member_missing/documents")
 						.header("Authorization", "Bearer " + token))
@@ -2810,6 +3202,145 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberCanUpdatePrivacyConsentsAndAuditIsWritten() throws Exception {
+		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+
+		mockMvc.perform(patch("/api/v1/member-auth/privacy-consents")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "privacyNoticeAccepted": true,
+								  "smsConsent": true,
+								  "emailConsent": false,
+								  "mobileMoneyConsent": true,
+								  "providerDataSharingConsent": true
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.id", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.consentPreferences.privacyNoticeAccepted", is(true)))
+				.andExpect(jsonPath("$.data.consentPreferences.smsConsent", is(true)))
+				.andExpect(jsonPath("$.data.consentPreferences.emailConsent", is(false)))
+				.andExpect(jsonPath("$.data.consentPreferences.mobileMoneyConsent", is(true)))
+				.andExpect(jsonPath("$.data.consentPreferences.providerDataSharingConsent", is(true)))
+				.andExpect(jsonPath("$.data.consentPreferences.consentUpdatedAt", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/member-auth/me")
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.member.consentPreferences.emailConsent", is(false)))
+				.andExpect(jsonPath("$.data.member.consentPreferences.privacyNoticeAcceptedAt", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + loginAndReturnToken("admin@greenvalley.local", "Sacco@12345")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].resourceType", is("member_privacy_consent")))
+				.andExpect(jsonPath("$.data[0].action", is("Updated member privacy consents")));
+	}
+
+	@Test
+	void memberCanSubmitAndListPrivacyRequests() throws Exception {
+		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+
+		MvcResult created = mockMvc.perform(post("/api/v1/member-auth/privacy-requests")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "requestType": "subject_access",
+								  "reason": "I need a copy of my stored SACCO profile data."
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.requestType", is("subject_access")))
+				.andExpect(jsonPath("$.data.status", is("submitted")))
+				.andReturn();
+		String requestId = objectMapper.readTree(created.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/member-auth/privacy-requests")
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].id", hasItem(requestId)))
+				.andExpect(jsonPath("$.data[*].requestType", hasItem("subject_access")));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + loginAndReturnToken("admin@greenvalley.local", "Sacco@12345")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].resourceType", is("member_privacy_request")))
+				.andExpect(jsonPath("$.data[0].action", is("Submitted member privacy request subject_access")));
+	}
+
+	@Test
+	void staffCanCompleteErasureRequestWithoutDeletingMemberRecord() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String membershipNo = "GVS-ERASURE-" + System.currentTimeMillis();
+
+		MvcResult createdMember = mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "branchId": "branch_green_main",
+								  "membershipNo": "%s",
+								  "fullName": "Erasure Test Member",
+								  "memberType": "individual",
+								  "phone": "+256700999123",
+								  "email": "erasure.test@example.local",
+								  "nationalId": "CM9999999TEST",
+								  "password": "Member@12345",
+								  "kycStatus": "verified",
+								  "joiningDate": "2026-07-18"
+								}
+								""".formatted(membershipNo)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String memberId = objectMapper.readTree(createdMember.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		MvcResult createdRequest = mockMvc.perform(post("/api/v1/members/" + memberId + "/privacy-requests")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "requestType": "erasure",
+								  "reason": "Member exited and requested personal data erasure."
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.requestType", is("erasure")))
+				.andExpect(jsonPath("$.data.status", is("submitted")))
+				.andReturn();
+		String requestId = objectMapper.readTree(createdRequest.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/members/" + memberId + "/privacy-requests/" + requestId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "status": "completed",
+								  "resolutionNote": "Redacted personal identifiers; financial records retained for statutory audit."
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("completed")))
+				.andExpect(jsonPath("$.data.completedAt", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/members/" + memberId)
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.membershipNo", is(membershipNo)))
+				.andExpect(jsonPath("$.data.fullName", is("Former member " + membershipNo)))
+				.andExpect(jsonPath("$.data.phone", is("")))
+				.andExpect(jsonPath("$.data.email", is("")))
+				.andExpect(jsonPath("$.data.nationalId", is("")))
+				.andExpect(jsonPath("$.data.status", is("exited")))
+				.andExpect(jsonPath("$.data.kycStatus", is("expired")));
+	}
+
+	@Test
 	void memberMobileDashboardAndLoanSubmissionUseServerConfirmedRecords() throws Exception {
 		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
 
@@ -3743,6 +4274,7 @@ class SaccoBackendApplicationTests {
 	void closedAccountingPeriodsBlockFinancialPosting() throws Exception {
 		String makerToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String checkerToken = loginAndReturnToken();
+		String currentPeriodId = ensureCurrentAccountingPeriod("tenant_green");
 
 		MvcResult transaction = mockMvc.perform(post("/api/v1/financial-transactions")
 						.header("Authorization", "Bearer " + makerToken)
@@ -3760,7 +4292,7 @@ class SaccoBackendApplicationTests {
 				.andReturn();
 		String transactionId = objectMapper.readTree(transaction.getResponse().getContentAsString()).path("data").path("id").asString();
 
-		mockMvc.perform(patch("/api/v1/accounting-periods/period_green_2026_07/status")
+		mockMvc.perform(patch("/api/v1/accounting-periods/" + currentPeriodId + "/status")
 						.header("Authorization", "Bearer " + makerToken)
 						.contentType("application/json")
 						.content("""
@@ -3777,7 +4309,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error.code", is("ACCOUNTING_PERIOD_CLOSED")));
 
-		mockMvc.perform(patch("/api/v1/accounting-periods/period_green_2026_07/status")
+		mockMvc.perform(patch("/api/v1/accounting-periods/" + currentPeriodId + "/status")
 						.header("Authorization", "Bearer " + makerToken)
 						.contentType("application/json")
 						.content("""
@@ -3946,6 +4478,8 @@ class SaccoBackendApplicationTests {
 	void assetsPostAcquisitionAndDepreciationJournals() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String assetReference = "AST-SMOKE-" + System.currentTimeMillis();
+		String purchaseDate = LocalDate.now().toString();
+		String depreciationStartDate = LocalDate.now().plusMonths(1).withDayOfMonth(1).toString();
 
 		mockMvc.perform(get("/api/v1/assets")
 						.header("Authorization", "Bearer " + token))
@@ -3965,13 +4499,13 @@ class SaccoBackendApplicationTests {
 								  "cost": 600000,
 								  "salvageValue": 60000,
 								  "usefulLifeMonths": 24,
-								  "purchaseDate": "2026-08-16",
-								  "depreciationStartDate": "2026-08-01",
+								  "purchaseDate": "%s",
+								  "depreciationStartDate": "%s",
 								  "channel": "bank",
 								  "reference": "%s",
 								  "location": "Main office"
 								}
-								""".formatted(assetReference)))
+								""".formatted(purchaseDate, depreciationStartDate, assetReference)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
 				.andExpect(jsonPath("$.data.reference", is(assetReference)))
@@ -4076,7 +4610,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.memberId", is("member_green_daniel")))
 				.andExpect(jsonPath("$.data.purpose", is("share_purchase")))
 				.andExpect(jsonPath("$.data.provider", is("demo_mobile_money")))
-				.andExpect(jsonPath("$.data.status", is("posted")))
+				.andExpect(jsonPath("$.data.status", is("pending_approval")))
 				.andExpect(jsonPath("$.data.resourceType", is("financial_transaction")))
 				.andExpect(jsonPath("$.data.duplicate", is(false)))
 				.andReturn();
@@ -4118,6 +4652,16 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data[*].provider", hasItem("demo_sms")))
 				.andExpect(jsonPath("$.data[*].provider", hasItem("demo_email")))
 				.andExpect(jsonPath("$.data[0].status", is("sent")));
+
+		mockMvc.perform(get("/api/v1/notifications/provider-evidence")
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.notificationDeliveries", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data.sentNotificationDeliveries", greaterThanOrEqualTo(2)))
+				.andExpect(jsonPath("$.data.mobileMoney.callbacksReceived", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.mobileMoney.callbacksPendingApproval", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.mobileMoney.providerOptions.length()", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.evidenceStatus", notNullValue()));
 	}
 
 	@Test
@@ -4126,7 +4670,7 @@ class SaccoBackendApplicationTests {
 		String loanId = createApprovedAndDisbursedLoan(staffToken, 160000);
 		String externalReference = "MM-LR-" + System.currentTimeMillis();
 
-		mockMvc.perform(post("/api/v1/integrations/mobile-money/callback")
+		MvcResult repaymentCallback = mockMvc.perform(post("/api/v1/integrations/mobile-money/callback")
 						.contentType("application/json")
 						.content("""
 								{
@@ -4142,13 +4686,49 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.resourceType", is("loan_repayment")))
 				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
-				.andExpect(jsonPath("$.data.status", is("posted")));
+				.andExpect(jsonPath("$.data.status", is("pending_approval")))
+				.andReturn();
+		String repaymentId = objectMapper.readTree(repaymentCallback.getResponse().getContentAsString())
+				.path("data").path("resourceId").asString();
 
+		// Member mobile-money repayments are received but not yet posted: they await approval.
 		mockMvc.perform(get("/api/v1/loans/" + loanId + "/repayments")
 						.header("Authorization", "Bearer " + staffToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[0].reference", is(externalReference)))
-				.andExpect(jsonPath("$.data[0].channel", is("mobile_money")));
+				.andExpect(jsonPath("$.data[0].channel", is("mobile_money")))
+				.andExpect(jsonPath("$.data[0].status", is("pending_approval")));
+
+		mockMvc.perform(get("/api/v1/loans/repayments/pending?tenantId=tenant_green")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].reference", hasItem(externalReference)));
+
+		// A treasurer/authorised checker (not the system maker) approves it, reducing the balance.
+		mockMvc.perform(post("/api/v1/loans/%s/repayments/%s/decision".formatted(loanId, repaymentId))
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "posted" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("posted")))
+				.andExpect(jsonPath("$.data.approvedByUserId", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/loans/" + loanId + "/repayments")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].status", is("posted")));
+
+		// The same repayment cannot be decided twice.
+		mockMvc.perform(post("/api/v1/loans/%s/repayments/%s/decision".formatted(loanId, repaymentId))
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "rejected", "reason": "Already posted" }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("REPAYMENT_ALREADY_DECIDED")));
 
 		mockMvc.perform(post("/api/v1/integrations/mobile-money/callback")
 						.contentType("application/json")
@@ -4235,6 +4815,48 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.status", is("pending_demo_callback")))
 				.andExpect(jsonPath("$.data.statusMessage", containsString("Provider status polling is not available")));
 
+		var reconciliationSummary = mobileMoneyReconciliationJob.reconcilePendingRequests();
+		org.hamcrest.MatcherAssert.assertThat(reconciliationSummary.scanned(), greaterThanOrEqualTo(1));
+		org.hamcrest.MatcherAssert.assertThat(reconciliationSummary.updated(), greaterThanOrEqualTo(1));
+		org.hamcrest.MatcherAssert.assertThat(reconciliationSummary.status(), is("completed"));
+		Integer recordedRuns = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*) FROM integration_job_runs
+				WHERE job_name = 'mobile_money_reconciliation'
+				""", Integer.class);
+		org.hamcrest.MatcherAssert.assertThat(recordedRuns, greaterThanOrEqualTo(1));
+
+		mockMvc.perform(get("/api/v1/notifications/provider-evidence")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.mobileMoney.reconciliationSummary.scanned", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.mobileMoney.reconciliationSummary.updated", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.mobileMoney.reconciliationSummary.status", is("completed")))
+				.andExpect(jsonPath("$.data.mobileMoney.reconciliationSummary.ranAt", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/notifications/provider-job-runs")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].jobName", is("mobile_money_reconciliation")))
+				.andExpect(jsonPath("$.data[0].status", is("completed")))
+				.andExpect(jsonPath("$.data[0].scanned", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[0].updated", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data[0].finishedAt", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/notifications/provider-job-runs")
+						.header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isUnauthorized());
+
+		mockMvc.perform(post("/api/v1/notifications/provider-job-runs/mobile-money-reconciliation")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.data.status", is("completed")))
+				.andExpect(jsonPath("$.data.ranAt", notNullValue()));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].action", hasItem("Ran mobile-money reconciliation manually")));
+
 		mockMvc.perform(patch("/api/v1/integrations/mobile-money/payment-requests/%s/status".formatted(requestId))
 						.header("Authorization", "Bearer " + memberToken)
 						.contentType("application/json")
@@ -4271,6 +4893,18 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.status", is("failed")))
 				.andExpect(jsonPath("$.data.statusMessage", is("Provider prompt expired before member confirmation.")));
 
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].action", hasItem("Marked mobile-money payment request " + externalReference + " failed")));
+
+		mockMvc.perform(get("/api/v1/notifications/deliveries")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].eventType", hasItem("payment_request_closed")))
+				.andExpect(jsonPath("$.data[*].resourceId", hasItem(requestId)))
+				.andExpect(jsonPath("$.data[*].message", hasItem(containsString("Provider prompt expired before member confirmation."))));
+
 		String postedReference = externalReference + "-POSTED";
 		MvcResult postedRequestResult = mockMvc.perform(post("/api/v1/integrations/mobile-money/payment-requests")
 						.header("Authorization", "Bearer " + memberToken)
@@ -4302,7 +4936,7 @@ class SaccoBackendApplicationTests {
 								}
 								""".formatted(postedReference)))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.data.status", is("posted")));
+				.andExpect(jsonPath("$.data.status", is("pending_approval")));
 
 		mockMvc.perform(patch("/api/v1/integrations/mobile-money/payment-requests/%s/status".formatted(postedRequestId))
 						.header("Authorization", "Bearer " + staffToken)
@@ -4705,6 +5339,8 @@ class SaccoBackendApplicationTests {
 	@Test
 	void staffCanImportStatementLineAndControlsAreEnforced() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String statementDate = LocalDate.now().toString();
+		String externalReference = "BANK-TEST-" + System.currentTimeMillis();
 
 		mockMvc.perform(post("/api/v1/statement-lines")
 						.header("Authorization", "Bearer " + token)
@@ -4713,14 +5349,14 @@ class SaccoBackendApplicationTests {
 								{
 								  "channel": "bank",
 								  "amount": 125000,
-								  "externalReference": "BANK-TEST-001",
+								  "externalReference": "%s",
 								  "description": "Manual bank import",
-								  "statementDate": "2026-07-16"
+								  "statementDate": "%s"
 								}
-								"""))
+								""".formatted(externalReference, statementDate)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.accountCode", is("1010")))
-				.andExpect(jsonPath("$.data.externalReference", is("BANK-TEST-001")))
+				.andExpect(jsonPath("$.data.externalReference", is(externalReference)))
 				.andExpect(jsonPath("$.data.importedByUserId", is("user_green_admin")));
 
 		mockMvc.perform(post("/api/v1/statement-lines")
@@ -4730,10 +5366,10 @@ class SaccoBackendApplicationTests {
 								{
 								  "channel": "bank",
 								  "amount": 125000,
-								  "externalReference": "BANK-TEST-001",
-								  "statementDate": "2026-07-16"
+								  "externalReference": "%s",
+								  "statementDate": "%s"
 								}
-								"""))
+								""".formatted(externalReference, statementDate)))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error.code", is("STATEMENT_LINE_EXISTS")));
 
@@ -4782,14 +5418,23 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.reports[0].savings", greaterThanOrEqualTo(0.0)))
 				.andExpect(jsonPath("$.data.reports[0].journalEntries", greaterThanOrEqualTo(4)))
 				.andExpect(jsonPath("$.data.reports[0].reconciliationExceptions", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.reports[0].dataProtectionEvidence.privacyNoticeAcceptedMembers", greaterThanOrEqualTo(0)))
+				.andExpect(jsonPath("$.data.reports[0].dataProtectionEvidence.privacyRequests", greaterThanOrEqualTo(0)))
+				.andExpect(jsonPath("$.data.reports[0].dataProtectionEvidence.kycDocuments", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.reports[0].dataProtectionEvidence.kycDocumentsReviewDue", greaterThanOrEqualTo(0)))
+				.andExpect(jsonPath("$.data.reports[0].dataProtectionEvidence.evidenceStatus", notNullValue()))
 				.andExpect(jsonPath("$.data.consolidated.tenantId", is("consolidated")))
-				.andExpect(jsonPath("$.data.csv", startsWith("\"tenant\",\"members\"")));
+				.andExpect(jsonPath("$.data.consolidated.dataProtectionEvidence.kycDocuments", greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$.data.csv", startsWith("\"tenant\",\"members\"")))
+				.andExpect(jsonPath("$.data.csv", containsString("privacy_requests")))
+				.andExpect(jsonPath("$.data.csv", containsString("data_protection_status")));
 
 		mockMvc.perform(get("/api/v1/regulatory-report")
 						.header("Authorization", "Bearer " + platformToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.reports.length()", greaterThanOrEqualTo(2)))
-				.andExpect(jsonPath("$.data.consolidated.memberCount", greaterThanOrEqualTo(3)));
+				.andExpect(jsonPath("$.data.consolidated.memberCount", greaterThanOrEqualTo(3)))
+				.andExpect(jsonPath("$.data.consolidated.dataProtectionEvidence.kycDocuments", greaterThanOrEqualTo(1)));
 	}
 
 	@Test
@@ -5088,6 +5733,42 @@ class SaccoBackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertTrue(secondRepaymentJournal.path("isBalanced").asBoolean());
 		org.junit.jupiter.api.Assertions.assertEquals(125000.0, firstRepaymentJournal.path("debitTotal").asDouble(), 0.01);
 		org.junit.jupiter.api.Assertions.assertEquals(91000.0, secondRepaymentJournal.path("debitTotal").asDouble(), 0.01);
+	}
+
+	@Test
+	void loansExposeArrearsAgingBucketsForCreditControl() throws Exception {
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String loanId = createApprovedAndDisbursedLoan(staffToken, 120000);
+		LocalDate today = LocalDate.now(java.time.ZoneOffset.UTC);
+
+		jdbcTemplate.update("update loan_repayment_schedules set due_date = ? where loan_id = ? and installment_no = 1", today.minusDays(20), loanId);
+		jdbcTemplate.update("update loan_repayment_schedules set due_date = ? where loan_id = ? and installment_no = 2", today.minusDays(45), loanId);
+		jdbcTemplate.update("update loan_repayment_schedules set due_date = ? where loan_id = ? and installment_no = 3", today.minusDays(100), loanId);
+		jdbcTemplate.update("update loan_repayment_schedules set due_date = ? where loan_id = ? and installment_no = 4", today, loanId);
+
+		MvcResult loans = mockMvc.perform(get("/api/v1/loans")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andReturn();
+		JsonNode loan = loanFromList(loans, loanId);
+		org.junit.jupiter.api.Assertions.assertEquals("arrears", loan.path("scheduleStatus").asString());
+		org.junit.jupiter.api.Assertions.assertEquals(3, loan.path("arrearsInstallments").asInt());
+		org.junit.jupiter.api.Assertions.assertTrue(loan.path("arrears1To30Amount").asDouble() > 0);
+		org.junit.jupiter.api.Assertions.assertTrue(loan.path("arrears31To60Amount").asDouble() > 0);
+		org.junit.jupiter.api.Assertions.assertTrue(loan.path("arrearsOver90Amount").asDouble() > 0);
+		org.junit.jupiter.api.Assertions.assertTrue(loan.path("currentDueAmount").asDouble() > 0);
+		org.junit.jupiter.api.Assertions.assertTrue(loan.path("oldestArrearsDays").asInt() >= 100);
+
+		MvcResult schedule = mockMvc.perform(get("/api/v1/loans/" + loanId + "/schedule")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].agingBucket", is("1_30")))
+				.andExpect(jsonPath("$.data[1].agingBucket", is("31_60")))
+				.andExpect(jsonPath("$.data[2].agingBucket", is("over_90")))
+				.andExpect(jsonPath("$.data[3].agingBucket", is("current")))
+				.andReturn();
+		JsonNode scheduleRows = objectMapper.readTree(schedule.getResponse().getContentAsString()).path("data");
+		org.junit.jupiter.api.Assertions.assertTrue(scheduleRows.path(2).path("daysPastDue").asInt() >= 100);
 	}
 
 	@Test
@@ -5832,6 +6513,712 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void saccoStaffAccessManagementRequiresProtectedAdministratorRole() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		long suffix = System.currentTimeMillis();
+		String roleName = "Overpowered Access Test " + suffix;
+		String managerEmail = "overpowered-access-" + suffix + "@greenvalley.local";
+
+		MvcResult createdRole = mockMvc.perform(post("/api/v1/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "%s",
+								  "permissionIds": ["users:view", "users:create", "roles:view", "roles:create", "reports:view"]
+								}
+								""".formatted(roleName)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.protectedRole", is(false)))
+				.andReturn();
+		String roleId = objectMapper.readTree(createdRole.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Overpowered Access Staff",
+								  "email": "%s",
+								  "phone": "+256700778899",
+								  "password": "Plain@12345"
+								}
+								""".formatted(managerEmail)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String userId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(put("/api/v1/users/" + userId + "/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["%s"]
+								}
+								""".formatted(roleId)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.roleIds[0]", is(roleId)));
+
+		String overpoweredToken = loginAndReturnToken(managerEmail, "Plain@12345");
+
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + overpoweredToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Denied Staff Manager",
+								  "email": "denied-staff-manager-%s@greenvalley.local",
+								  "password": "Plain@12345"
+								}
+								""".formatted(suffix)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("SACCO_ADMIN_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/roles")
+						.header("Authorization", "Bearer " + overpoweredToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Denied Role Manager %s",
+								  "permissionIds": ["users:view"]
+								}
+								""".formatted(suffix)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("SACCO_ADMIN_REQUIRED")));
+
+		mockMvc.perform(put("/api/v1/users/user_green_treasurer/roles")
+						.header("Authorization", "Bearer " + overpoweredToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["role_green_treasurer"]
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("SACCO_ADMIN_REQUIRED")));
+
+		mockMvc.perform(patch("/api/v1/users/user_green_treasurer/status")
+						.header("Authorization", "Bearer " + overpoweredToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "suspended" }
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("SACCO_ADMIN_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/users/user_green_treasurer/password-reset")
+						.header("Authorization", "Bearer " + overpoweredToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("SACCO_ADMIN_REQUIRED")));
+	}
+
+	@Test
+	void branchManagersAreScopedToAssignedBranchesForMembersAndTransactions() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		long suffix = System.currentTimeMillis();
+		String managerEmail = "branch-manager-" + suffix + "@greenvalley.local";
+		String roleName = "Branch Manager Scope " + suffix;
+
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Branch Manager Scope",
+								  "email": "%s",
+								  "phone": "+25670055%s",
+								  "password": "Plain@12345"
+								}
+								""".formatted(managerEmail, String.valueOf(suffix).substring(String.valueOf(suffix).length() - 4))))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String managerUserId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		MvcResult createdRole = mockMvc.perform(post("/api/v1/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "%s",
+								  "permissionIds": ["members:view", "members:create", "transactions:view", "transactions:create"]
+								}
+								""".formatted(roleName)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String roleId = objectMapper.readTree(createdRole.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(put("/api/v1/users/" + managerUserId + "/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "roleIds": ["%s"]
+								}
+								""".formatted(roleId)))
+				.andExpect(status().isOk());
+
+		MvcResult createdBranch = mockMvc.perform(post("/api/v1/branches")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "code": "BM%s",
+								  "name": "Branch Manager Test",
+								  "address": "Branch Scope Road",
+								  "managerUserId": "%s"
+								}
+								""".formatted(String.valueOf(suffix).substring(String.valueOf(suffix).length() - 5), managerUserId)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String managedBranchId = objectMapper.readTree(createdBranch.getResponse().getContentAsString()).path("data").path("id").asString();
+		String branchManagerToken = loginAndReturnToken(managerEmail, "Plain@12345");
+		String membershipNo = "GVS-BM-" + suffix;
+
+		MvcResult createdMember = mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "branchId": "%s",
+								  "membershipNo": "%s",
+								  "fullName": "Branch Scoped Member",
+								  "phone": "+25670155%s",
+								  "password": "Member@12345"
+								}
+								""".formatted(managedBranchId, membershipNo, String.valueOf(suffix).substring(String.valueOf(suffix).length() - 4))))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.branchId", is(managedBranchId)))
+				.andReturn();
+		String managedMemberId = objectMapper.readTree(createdMember.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/members")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].membershipNo", hasItem(membershipNo)))
+				.andExpect(jsonPath("$.data[*].membershipNo", not(hasItem("GVS-0002"))));
+
+		mockMvc.perform(get("/api/v1/members/member_green_daniel")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "branchId": "branch_green_seeta",
+								  "membershipNo": "GVS-BLOCK-%s",
+								  "fullName": "Blocked Branch Member",
+								  "phone": "+25670255%s"
+								}
+								""".formatted(suffix, String.valueOf(suffix).substring(String.valueOf(suffix).length() - 4))))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+
+		MvcResult createdTransaction = mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "branchId": "%s",
+								  "memberId": "%s",
+								  "type": "savings_deposit",
+								  "channel": "cash",
+								  "amount": 15000,
+								  "narration": "Branch manager deposit"
+								}
+								""".formatted(managedBranchId, managedMemberId)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String reference = objectMapper.readTree(createdTransaction.getResponse().getContentAsString()).path("data").path("reference").asString();
+
+		mockMvc.perform(get("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].reference", hasItem(reference)))
+				.andExpect(jsonPath("$.data[*].reference", not(hasItem("GVS-TX-0002"))));
+
+		mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "branchId": "branch_green_seeta",
+								  "memberId": "member_green_daniel",
+								  "type": "savings_deposit",
+								  "channel": "cash",
+								  "amount": 15000,
+								  "narration": "Blocked branch deposit"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+	}
+
+	@Test
+	void branchManagersAreScopedToAssignedBranchesForLoansAndRepayments() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		long suffix = System.currentTimeMillis();
+		String suffix4 = String.valueOf(suffix).substring(String.valueOf(suffix).length() - 4);
+		String suffix5 = String.valueOf(suffix).substring(String.valueOf(suffix).length() - 5);
+		String managerEmail = "branch-loans-" + suffix + "@greenvalley.local";
+		String roleName = "Branch Loan Scope " + suffix;
+
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Branch Loan Manager",
+								  "email": "%s",
+								  "phone": "+25670355%s",
+								  "password": "Plain@12345"
+								}
+								""".formatted(managerEmail, suffix4)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String managerUserId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		MvcResult createdRole = mockMvc.perform(post("/api/v1/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "%s",
+								  "permissionIds": ["members:view", "loans:view", "loans:create", "loans:approve", "transactions:approve"]
+								}
+								""".formatted(roleName)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String roleId = objectMapper.readTree(createdRole.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(put("/api/v1/users/" + managerUserId + "/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{ "roleIds": ["%s"] }
+								""".formatted(roleId)))
+				.andExpect(status().isOk());
+
+		MvcResult createdBranch = mockMvc.perform(post("/api/v1/branches")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "code": "BL%s",
+								  "name": "Branch Loan Scope",
+								  "address": "Loan Scope Road",
+								  "managerUserId": "%s"
+								}
+								""".formatted(suffix5, managerUserId)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String managedBranchId = objectMapper.readTree(createdBranch.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		MvcResult borrower = mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "branchId": "%s",
+								  "membershipNo": "GVS-LB-%s",
+								  "fullName": "Branch Loan Borrower",
+								  "phone": "+25670455%s",
+								  "password": "Member@12345"
+								}
+								""".formatted(managedBranchId, suffix, suffix4)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String borrowerId = objectMapper.readTree(borrower.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		MvcResult guarantor = mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "branchId": "%s",
+								  "membershipNo": "GVS-LG-%s",
+								  "fullName": "Branch Loan Guarantor",
+								  "phone": "+25670555%s",
+								  "password": "Member@12345"
+								}
+								""".formatted(managedBranchId, suffix, suffix4)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String guarantorId = objectMapper.readTree(guarantor.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/members/" + borrowerId + "/status")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("{ \"status\": \"active\" }"))
+				.andExpect(status().isOk());
+		mockMvc.perform(patch("/api/v1/members/" + guarantorId + "/status")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("{ \"status\": \"active\" }"))
+				.andExpect(status().isOk());
+		jdbcTemplate.update("update members set savings_balance = 250000 where id in (?, ?)", borrowerId, guarantorId);
+
+		String branchManagerToken = loginAndReturnToken(managerEmail, "Plain@12345");
+
+		MvcResult createdLoan = mockMvc.perform(post("/api/v1/loans")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "memberId": "%s",
+								  "product": "Development Loan",
+								  "amount": 120000,
+								  "repaymentMonths": 6,
+								  "purpose": "Branch-scoped loan"
+								}
+								""".formatted(borrowerId)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String loanId = objectMapper.readTree(createdLoan.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/loans")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].id", hasItem(loanId)))
+				.andExpect(jsonPath("$.data[*].id", not(hasItem("loan_green_0002"))));
+
+		mockMvc.perform(get("/api/v1/loans/loan_green_0002/schedule")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/loans/" + loanId + "/guarantors")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "%s",
+								  "guaranteedAmount": 60000
+								}
+								""".formatted(guarantorId)))
+				.andExpect(status().isCreated());
+
+		mockMvc.perform(post("/api/v1/loans/" + loanId + "/guarantors")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "guaranteedAmount": 60000
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/loans/loan_green_0001/repayments")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "amount": 10000,
+								  "channel": "cash",
+								  "reference": "BRANCH-DENIED-%s"
+								}
+								""".formatted(suffix)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+	}
+
+	@Test
+	void branchManagersAreScopedForAccountingJournalsAndBlockedFromSaccoWideReconciliation() throws Exception {
+		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		long suffix = System.currentTimeMillis();
+		String suffix4 = String.valueOf(suffix).substring(String.valueOf(suffix).length() - 4);
+		String suffix5 = String.valueOf(suffix).substring(String.valueOf(suffix).length() - 5);
+		String managerEmail = "branch-accounting-" + suffix + "@greenvalley.local";
+		String roleName = "Branch Accounting Scope " + suffix;
+
+		MvcResult createdUser = mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "fullName": "Branch Accounting Manager",
+								  "email": "%s",
+								  "phone": "+25670655%s",
+								  "password": "Plain@12345"
+								}
+								""".formatted(managerEmail, suffix4)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String managerUserId = objectMapper.readTree(createdUser.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		MvcResult createdRole = mockMvc.perform(post("/api/v1/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "%s",
+								  "permissionIds": ["members:view", "transactions:create", "accounting:view", "reports:view", "complaints:view", "complaints:manage", "governance:view", "governance:manage"]
+								}
+								""".formatted(roleName)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String roleId = objectMapper.readTree(createdRole.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(put("/api/v1/users/" + managerUserId + "/roles")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{ "roleIds": ["%s"] }
+								""".formatted(roleId)))
+				.andExpect(status().isOk());
+
+		MvcResult createdBranch = mockMvc.perform(post("/api/v1/branches")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "code": "BA%s",
+								  "name": "Branch Accounting Scope",
+								  "address": "Accounting Scope Road",
+								  "managerUserId": "%s"
+								}
+								""".formatted(suffix5, managerUserId)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String managedBranchId = objectMapper.readTree(createdBranch.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		MvcResult member = mockMvc.perform(post("/api/v1/members")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "branchId": "%s",
+								  "membershipNo": "GVS-BA-%s",
+								  "fullName": "Branch Accounting Member",
+								  "phone": "+25670755%s",
+								  "password": "Member@12345"
+								}
+								""".formatted(managedBranchId, suffix, suffix4)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String memberId = objectMapper.readTree(member.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/members/" + memberId + "/status")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("{ \"status\": \"active\" }"))
+				.andExpect(status().isOk());
+
+		String branchManagerToken = loginAndReturnToken(managerEmail, "Plain@12345");
+		MvcResult createdTransaction = mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "branchId": "%s",
+								  "memberId": "%s",
+								  "type": "savings_deposit",
+								  "channel": "cash",
+								  "amount": 20000,
+								  "narration": "Branch-scoped accounting deposit"
+								}
+								""".formatted(managedBranchId, memberId)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String transactionId = objectMapper.readTree(createdTransaction.getResponse().getContentAsString()).path("data").path("id").asString();
+		String reference = objectMapper.readTree(createdTransaction.getResponse().getContentAsString()).path("data").path("reference").asString();
+
+		mockMvc.perform(patch("/api/v1/financial-transactions/" + transactionId + "/status")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("{ \"status\": \"posted\" }"))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(get("/api/v1/journal-entries")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].reference", hasItem(reference)))
+				.andExpect(jsonPath("$.data[*].reference", not(hasItem("GVS-TX-0001"))));
+
+		mockMvc.perform(get("/api/v1/statement-lines")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+
+		mockMvc.perform(get("/api/v1/reconciliation")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+
+		mockMvc.perform(get("/api/v1/regulatory-report")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+
+		mockMvc.perform(get("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].action", hasItem("Submitted financial transaction " + reference)))
+				.andExpect(jsonPath("$.data[*].actorName", not(hasItem("Green Valley Administrator"))));
+
+		mockMvc.perform(get("/api/v1/audit-events?page=0&size=10")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].action", hasItem("Submitted financial transaction " + reference)))
+				.andExpect(jsonPath("$.data[*].actorName", not(hasItem("Green Valley Administrator"))));
+
+		String ownComplaintSubject = "Branch complaint " + suffix;
+		MvcResult ownComplaint = mockMvc.perform(post("/api/v1/complaints")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "memberId": "%s",
+								  "category": "service",
+								  "subject": "%s",
+								  "description": "Branch-scoped complaint",
+								  "channel": "branch",
+								  "priority": "medium"
+								}
+								""".formatted(memberId, ownComplaintSubject)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String ownComplaintId = objectMapper.readTree(ownComplaint.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		MvcResult outsideComplaint = mockMvc.perform(post("/api/v1/complaints")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "memberId": "member_green_amina",
+								  "category": "service",
+								  "subject": "Outside branch complaint %s",
+								  "description": "Outside branch complaint",
+								  "channel": "branch",
+								  "priority": "medium"
+								}
+								""".formatted(suffix)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String outsideComplaintId = objectMapper.readTree(outsideComplaint.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/complaints")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].subject", hasItem(ownComplaintSubject)))
+				.andExpect(jsonPath("$.data[*].subject", not(hasItem("Outside branch complaint " + suffix))));
+
+		mockMvc.perform(patch("/api/v1/complaints/" + ownComplaintId + "/status")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "in_progress", "resolutionNotes": "Reviewing in branch" }
+								"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(patch("/api/v1/complaints/" + outsideComplaintId + "/status")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{ "status": "in_progress", "resolutionNotes": "Should be denied" }
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+
+		String ownThreadSubject = "Branch chat " + suffix;
+		MvcResult ownThread = mockMvc.perform(post("/api/v1/chat/threads")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "type": "MEMBER_SUPPORT",
+								  "memberId": "%s",
+								  "subject": "%s",
+								  "message": "Branch-scoped member chat"
+								}
+								""".formatted(memberId, ownThreadSubject)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String ownThreadId = objectMapper.readTree(ownThread.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		MvcResult outsideThread = mockMvc.perform(post("/api/v1/chat/threads")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "type": "MEMBER_SUPPORT",
+								  "memberId": "member_green_amina",
+								  "subject": "Outside branch chat %s",
+								  "message": "Outside branch member chat"
+								}
+								""".formatted(suffix)))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String outsideThreadId = objectMapper.readTree(outsideThread.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(get("/api/v1/chat/threads?type=MEMBER_SUPPORT")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].subject", hasItem(ownThreadSubject)))
+				.andExpect(jsonPath("$.data[*].subject", not(hasItem("Outside branch chat " + suffix))));
+
+		mockMvc.perform(get("/api/v1/chat/threads/" + ownThreadId + "/messages")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].body", hasItem("Branch-scoped member chat")));
+
+		mockMvc.perform(get("/api/v1/chat/threads/" + outsideThreadId + "/messages")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+
+		mockMvc.perform(get("/api/v1/governance-meetings")
+						.header("Authorization", "Bearer " + branchManagerToken))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/governance-meetings")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "tenant_green",
+								  "title": "Branch should not create board record %s",
+								  "meetingType": "board"
+								}
+								""".formatted(suffix)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+
+		mockMvc.perform(post("/api/v1/governance-meetings/meeting_green_0001/resolutions")
+						.header("Authorization", "Bearer " + branchManagerToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "title": "Branch should not resolve board record %s",
+								  "decision": "Denied"
+								}
+								""".formatted(suffix)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("BRANCH_ACCESS_DENIED")));
+	}
+
+	@Test
 	void endpointsRequireAssignedPermissions() throws Exception {
 		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String email = "no-permission-" + System.currentTimeMillis() + "@greenvalley.local";
@@ -5922,6 +7309,20 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + noPermissionToken))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")));
+
+		mockMvc.perform(post("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + noPermissionToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "action": "No-permission staff should not fabricate audit evidence",
+								  "resourceType": "audit",
+								  "resourceId": "denied"
+								}
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("PERMISSION_REQUIRED")))
+				.andExpect(jsonPath("$.error.message", containsString("reports:view")));
 	}
 
 	@Test
@@ -6358,6 +7759,29 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andReturn();
 		return objectMapper.readTree(importedMember.getResponse().getContentAsString()).path("data").path("createdMembers").path(0).path("id").asString();
+	}
+
+	private String ensureCurrentAccountingPeriod(String tenantId) {
+		String period = LocalDate.now().toString().substring(0, 7);
+		String periodId = "period_" + tenantId + "_" + period.replace("-", "_");
+		Integer existing = jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM accounting_periods WHERE tenant_id = ? AND period = ?",
+				Integer.class,
+				tenantId,
+				period);
+		if (existing == null || existing == 0) {
+			jdbcTemplate.update(
+					"INSERT INTO accounting_periods (id, tenant_id, period, status) VALUES (?, ?, ?, 'open')",
+					periodId,
+					tenantId,
+					period);
+		} else {
+			jdbcTemplate.update(
+					"UPDATE accounting_periods SET status = 'open', closed_by_user_id = NULL, closed_at = NULL WHERE tenant_id = ? AND period = ?",
+					tenantId,
+					period);
+		}
+		return periodId;
 	}
 
 	private String importLoanForRepaymentHistory(String token, String tenantId, String membershipNo, String runId) throws Exception {

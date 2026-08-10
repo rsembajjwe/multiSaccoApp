@@ -94,6 +94,7 @@ class MpesaDarajaMobileMoneyProviderTest {
     private MpesaDarajaMobileMoneyProvider provider(RestClient.Builder builder) {
         return new MpesaDarajaMobileMoneyProvider(
                 builder,
+                new com.methaltech.sacco.config.ProviderResilience(),
                 "https://daraja.test",
                 "consumer-key",
                 "consumer-secret",

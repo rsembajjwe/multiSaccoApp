@@ -2,6 +2,8 @@ package com.methaltech.sacco.member;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.api.PageParams;
+import com.methaltech.sacco.api.PagedResponse;
 import com.methaltech.sacco.finance.FinancialTransaction;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
 import com.methaltech.sacco.identity.AuditService;
@@ -30,6 +32,9 @@ import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -97,56 +102,110 @@ class MemberController {
             "bylaws",
             "registration_certificate",
             "other");
+    private static final Set<String> ALLOWED_DOCUMENT_RETENTION_STATUSES = Set.of(
+            "active",
+            "review_due",
+            "retained",
+            "disposal_pending",
+            "disposed");
 
     private final MemberRepository memberRepository;
     private final MemberDocumentRepository memberDocumentRepository;
     private final MemberNextOfKinRepository memberNextOfKinRepository;
     private final MemberBeneficiaryRepository memberBeneficiaryRepository;
+    private final MemberPrivacyRequestRepository privacyRequestRepository;
     private final FinancialTransactionRepository financialTransactionRepository;
     private final BranchLookup branchLookup;
     private final TenantService tenantService;
     private final AuthService authService;
     private final AuditService auditService;
     private final PasswordHasher passwordHasher;
+    private final DocumentStorageService documentStorageService;
 
     MemberController(
             MemberRepository memberRepository,
             MemberDocumentRepository memberDocumentRepository,
             MemberNextOfKinRepository memberNextOfKinRepository,
             MemberBeneficiaryRepository memberBeneficiaryRepository,
+            MemberPrivacyRequestRepository privacyRequestRepository,
             FinancialTransactionRepository financialTransactionRepository,
             BranchLookup branchLookup,
             TenantService tenantService,
             AuthService authService,
             AuditService auditService,
-            PasswordHasher passwordHasher) {
+            PasswordHasher passwordHasher,
+            DocumentStorageService documentStorageService) {
         this.memberRepository = memberRepository;
         this.memberDocumentRepository = memberDocumentRepository;
         this.memberNextOfKinRepository = memberNextOfKinRepository;
         this.memberBeneficiaryRepository = memberBeneficiaryRepository;
+        this.privacyRequestRepository = privacyRequestRepository;
         this.financialTransactionRepository = financialTransactionRepository;
         this.branchLookup = branchLookup;
         this.tenantService = tenantService;
         this.authService = authService;
         this.auditService = auditService;
         this.passwordHasher = passwordHasher;
+        this.documentStorageService = documentStorageService;
     }
 
     @GetMapping
     ResponseEntity<?> listMembers(
             @RequestHeader(name = "Authorization", required = false) String authorization,
-            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "sort", required = false) String sortBy,
+            @RequestParam(name = "direction", required = false) String direction,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null) return tenantAccessDenied();
 
-        List<Member> members = authService.isPlatform(currentSession.user()) && requestedTenantId == null
-                ? memberRepository.findAllByOrderByTenantIdAscMembershipNoAsc()
-                : memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId);
+        boolean platformAll = authService.isPlatform(currentSession.user()) && requestedTenantId == null;
+        String searchTerm = searchTerm(search);
+        List<String> branchScope = branchScope(currentSession, tenantId);
 
-        return ResponseEntity.ok(ApiResponse.of(members.stream().map(MemberResponse::from).toList()));
+        if (PageParams.requested(page, size)) {
+            Sort sort = sortBy(platformAll, sortBy, direction, Map.of(
+                    "membershipNo", "membershipNo",
+                    "fullName", "fullName",
+                    "phone", "phone",
+                    "email", "email",
+                    "kycStatus", "kycStatus",
+                    "status", "status",
+                    "joiningDate", "joiningDate",
+                    "tenantId", "tenantId"), "membershipNo");
+            Pageable pageable = PageParams.toPageable(page, size, sort);
+            Page<Member> result = platformAll
+                    ? (searchTerm == null ? memberRepository.findAll(pageable) : memberRepository.searchAll(searchTerm, pageable))
+                    : (!branchScope.isEmpty()
+                            ? (searchTerm == null
+                                    ? memberRepository.findByTenantIdAndBranchIdIn(tenantId, branchScope, pageable)
+                                    : memberRepository.searchByTenantIdAndBranchIds(tenantId, branchScope, searchTerm, pageable))
+                            : (searchTerm == null
+                                    ? memberRepository.findByTenantId(tenantId, pageable)
+                                    : memberRepository.searchByTenantId(tenantId, searchTerm, pageable)));
+            return ResponseEntity.ok(PagedResponse.of(
+                    result.getContent().stream().map(MemberResponse::fromSummary).toList(),
+                    result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages()));
+        }
+
+        List<Member> members = platformAll
+                ? memberRepository.findAllByOrderByTenantIdAscMembershipNoAsc()
+                : (!branchScope.isEmpty()
+                        ? memberRepository.findByTenantIdAndBranchIdInOrderByMembershipNoAsc(tenantId, branchScope)
+                        : memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId));
+        if (searchTerm != null) {
+            String needle = searchTerm.toLowerCase(Locale.ROOT);
+            members = members.stream()
+                    .filter(member -> searchable(member.getMembershipNo(), member.getFullName(), member.getPhone(), member.getEmail(), member.getKycStatus(), member.getStatus()).contains(needle))
+                    .toList();
+        }
+
+        return ResponseEntity.ok(ApiResponse.of(members.stream().map(MemberResponse::fromSummary).toList()));
     }
 
     @GetMapping("/import-template")
@@ -189,6 +248,9 @@ class MemberController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user()) && !authService.hasPermission(currentSession.user(), "members:create")) {
+            return authService.permissionRequired("members:create");
+        }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
@@ -196,6 +258,15 @@ class MemberController {
         List<MemberImportRow> rows = body.rows() == null ? List.of() : body.rows();
         boolean dryRun = body.dryRun() == null || body.dryRun();
         List<MemberImportError> errors = validateImportRows(tenantId, rows);
+        List<String> branchScope = branchScope(currentSession, tenantId);
+        if (!branchScope.isEmpty()) {
+            for (int i = 0; i < rows.size(); i++) {
+                String rowBranchId = rows.get(i).branchId() == null ? "" : rows.get(i).branchId().trim();
+                if (!rowBranchId.isBlank() && !branchScope.contains(rowBranchId)) {
+                    errors.add(new MemberImportError(i + 1, "branchId", "BRANCH_ACCESS_DENIED", "Branch is outside the user's assigned scope."));
+                }
+            }
+        }
         if (!errors.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.of(new MemberImportResult(
                     tenantId,
@@ -294,6 +365,9 @@ class MemberController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user()) && !authService.hasPermission(currentSession.user(), "members:create")) {
+            return authService.permissionRequired("members:create");
+        }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
@@ -395,6 +469,9 @@ class MemberController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user()) && !authService.hasPermission(currentSession.user(), "members:create")) {
+            return authService.permissionRequired("members:create");
+        }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
@@ -402,6 +479,9 @@ class MemberController {
         if (!branchLookup.existsInTenant(body.branchId(), tenantId)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_BRANCH", "Branch does not exist for this tenant."));
+        }
+        if (!canAccessBranch(currentSession, tenantId, body.branchId().trim())) {
+            return branchAccessDenied();
         }
 
         String memberType = normalizedOrDefault(body.memberType(), "individual");
@@ -460,7 +540,7 @@ class MemberController {
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
-                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
                     return ResponseEntity.ok(ApiResponse.of(MemberResponse.from(member)));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -483,12 +563,15 @@ class MemberController {
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
-                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
 
                     String branchId = body.branchId().trim();
                     if (!branchLookup.existsInTenant(branchId, member.getTenantId())) {
                         return ResponseEntity.badRequest()
                                 .body(ApiErrorResponse.of(400, "INVALID_BRANCH", "Branch does not exist for this SACCO."));
+                    }
+                    if (!canAccessBranch(currentSession, member.getTenantId(), branchId)) {
+                        return branchAccessDenied();
                     }
 
                     String memberType = normalizedOrDefault(body.memberType(), "individual");
@@ -568,7 +651,7 @@ class MemberController {
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
-                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
                     return ResponseEntity.ok(ApiResponse.of(statementFor(member, from, to)));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -591,7 +674,7 @@ class MemberController {
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
-                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
                     MemberStatementResponse statement = statementFor(member, from, to);
                     return ResponseEntity.ok()
                             .contentType(MediaType.parseMediaType("text/csv"))
@@ -611,7 +694,7 @@ class MemberController {
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
-                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
                     return ResponseEntity.ok(ApiResponse.of(memberNextOfKinRepository.findByMemberIdOrderByCreatedAtDesc(memberId).stream()
                             .map(MemberNextOfKinResponse::from)
                             .toList()));
@@ -631,7 +714,7 @@ class MemberController {
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
-                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
                     MemberNextOfKin nextOfKin = memberNextOfKinRepository.save(new MemberNextOfKin(
                             "kin_" + UUID.randomUUID(),
                             member.getTenantId(),
@@ -664,7 +747,7 @@ class MemberController {
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
-                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
                     return ResponseEntity.ok(ApiResponse.of(memberBeneficiaryRepository.findByMemberIdOrderByCreatedAtDesc(memberId).stream()
                             .map(MemberBeneficiaryResponse::from)
                             .toList()));
@@ -690,7 +773,7 @@ class MemberController {
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
-                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
                     BigDecimal allocated = memberBeneficiaryRepository.findByMemberIdOrderByCreatedAtDesc(memberId).stream()
                             .map(MemberBeneficiary::getAllocationPercent)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -729,7 +812,7 @@ class MemberController {
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
-                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
                     return ResponseEntity.ok(ApiResponse.of(memberDocumentRepository.findByMemberIdOrderByCreatedAtDesc(memberId).stream()
                             .map(MemberDocumentResponse::from)
                             .toList()));
@@ -760,7 +843,7 @@ class MemberController {
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
-                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
                     MemberDocument document = memberDocumentRepository.save(new MemberDocument(
                             "member_document_" + UUID.randomUUID(),
                             member.getTenantId(),
@@ -777,6 +860,64 @@ class MemberController {
                             document.getId(),
                             request.getRemoteAddr());
                     return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MemberDocumentResponse.from(document)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @PatchMapping("/{memberId}/documents/{documentId}/retention")
+    ResponseEntity<?> updateMemberDocumentRetention(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @PathVariable String documentId,
+            @Valid @RequestBody UpdateMemberDocumentRetentionRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user()) && !authService.hasPermission(currentSession.user(), "members:approve")) {
+            return authService.permissionRequired("members:approve");
+        }
+
+        String retentionStatus = normalizedOrDefault(body.retentionStatus(), "");
+        if (!ALLOWED_DOCUMENT_RETENTION_STATUSES.contains(retentionStatus)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_DOCUMENT_RETENTION_STATUS", "Unsupported document retention status."));
+        }
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
+                    return memberDocumentRepository.findByIdAndTenantIdAndMemberId(documentId, member.getTenantId(), member.getId())
+                            .<ResponseEntity<?>>map(document -> {
+                                DocumentStorageActionResult storageAction = null;
+                                if ("disposed".equals(retentionStatus)) {
+                                    try {
+                                        storageAction = documentStorageService.dispose(document.getStorageKey());
+                                    } catch (DocumentStorageException ex) {
+                                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                                .body(ApiErrorResponse.of(409, "DOCUMENT_STORAGE_DISPOSAL_FAILED", ex.getMessage()));
+                                    }
+                                }
+                                document.updateRetention(
+                                        retentionStatus,
+                                        truncate(body.retentionReason(), 500),
+                                        body.retentionReviewDueAt(),
+                                        currentSession.user().getId());
+                                if (storageAction != null) {
+                                    document.recordStorageAction(storageAction);
+                                }
+                                MemberDocument saved = memberDocumentRepository.save(document);
+                                auditService.record(
+                                        member.getTenantId(),
+                                        currentSession.user(),
+                                        "Updated KYC document retention to " + retentionStatus + " for " + member.getMembershipNo(),
+                                        "member_document_retention",
+                                        saved.getId(),
+                                        request.getRemoteAddr());
+                                return ResponseEntity.ok(ApiResponse.of(MemberDocumentResponse.from(saved)));
+                            })
+                            .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                    .body(ApiErrorResponse.of(404, "MEMBER_DOCUMENT_NOT_FOUND", "Member document not found.")));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
@@ -802,7 +943,7 @@ class MemberController {
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
-                    if (!canAccess(currentSession, member.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
                     member.updateStatus(status);
                     Member saved = memberRepository.save(member);
                     auditService.record(
@@ -813,6 +954,112 @@ class MemberController {
                             saved.getId(),
                             request.getRemoteAddr());
                     return ResponseEntity.ok(ApiResponse.of(MemberResponse.from(saved)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @GetMapping("/{memberId}/privacy-requests")
+    ResponseEntity<?> listMemberPrivacyRequests(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
+                    return ResponseEntity.ok(ApiResponse.of(privacyRequestRepository
+                            .findByTenantIdAndMemberIdOrderByCreatedAtDesc(member.getTenantId(), member.getId())
+                            .stream()
+                            .map(MemberPrivacyRequestResponse::from)
+                            .toList()));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @PostMapping("/{memberId}/privacy-requests")
+    ResponseEntity<?> createMemberPrivacyRequest(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @Valid @RequestBody CreatePrivacyRequestRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String requestType = normalizedPrivacyType(body.requestType());
+        if (!MemberPrivacyRequest.ALLOWED_TYPES.contains(requestType)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_PRIVACY_REQUEST_TYPE", "Unsupported privacy request type."));
+        }
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
+                    MemberPrivacyRequest privacyRequest = privacyRequestRepository.save(new MemberPrivacyRequest(
+                            "member_privacy_request_" + UUID.randomUUID(),
+                            member.getTenantId(),
+                            member.getId(),
+                            requestType,
+                            truncate(body.reason(), 500),
+                            null,
+                            currentSession.user().getId()));
+                    auditService.record(
+                            member.getTenantId(),
+                            currentSession.user(),
+                            "Created member privacy request " + requestType + " for " + member.getMembershipNo(),
+                            "member_privacy_request",
+                            privacyRequest.getId(),
+                            request.getRemoteAddr());
+                    return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MemberPrivacyRequestResponse.from(privacyRequest)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @PatchMapping("/{memberId}/privacy-requests/{privacyRequestId}/status")
+    @Transactional
+    ResponseEntity<?> updateMemberPrivacyRequestStatus(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @PathVariable String privacyRequestId,
+            @Valid @RequestBody UpdatePrivacyRequestStatusRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user()) && !authService.hasPermission(currentSession.user(), "members:approve")) {
+            return authService.permissionRequired("members:approve");
+        }
+
+        String status = normalizedOrDefault(body.status(), "");
+        if (!MemberPrivacyRequest.ALLOWED_STATUSES.contains(status)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_PRIVACY_REQUEST_STATUS", "Unsupported privacy request status."));
+        }
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
+                    return privacyRequestRepository.findByIdAndTenantIdAndMemberId(privacyRequestId, member.getTenantId(), member.getId())
+                            .<ResponseEntity<?>>map(privacyRequest -> {
+                                privacyRequest.transition(status, truncate(body.resolutionNote(), 500), currentSession.user().getId());
+                                MemberPrivacyRequest savedRequest = privacyRequestRepository.save(privacyRequest);
+                                if ("completed".equals(status) && "erasure".equals(savedRequest.getRequestType())) {
+                                    member.redactPersonalDataForErasure();
+                                    memberRepository.save(member);
+                                }
+                                auditService.record(
+                                        member.getTenantId(),
+                                        currentSession.user(),
+                                        "Updated member privacy request " + savedRequest.getRequestType() + " to " + status,
+                                        "member_privacy_request",
+                                        savedRequest.getId(),
+                                        request.getRemoteAddr());
+                                return ResponseEntity.ok(ApiResponse.of(MemberPrivacyRequestResponse.from(savedRequest)));
+                            })
+                            .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                    .body(ApiErrorResponse.of(404, "PRIVACY_REQUEST_NOT_FOUND", "Privacy request not found.")));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
@@ -841,17 +1088,71 @@ class MemberController {
         return authService.isPlatform(currentSession.user()) || tenantId.equals(currentSession.user().getTenantId());
     }
 
+    private List<String> branchScope(AuthService.CurrentSession currentSession, String tenantId) {
+        if (authService.isPlatform(currentSession.user()) || authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return List.of();
+        }
+        return branchLookup.managedBranchIds(tenantId, currentSession.user().getId());
+    }
+
+    private boolean canAccessMember(AuthService.CurrentSession currentSession, Member member) {
+        return canAccess(currentSession, member.getTenantId())
+                && canAccessBranch(currentSession, member.getTenantId(), member.getBranchId());
+    }
+
+    private boolean canAccessBranch(AuthService.CurrentSession currentSession, String tenantId, String branchId) {
+        List<String> scopedBranchIds = branchScope(currentSession, tenantId);
+        return scopedBranchIds.isEmpty() || scopedBranchIds.contains(branchId);
+    }
+
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access members for another tenant."));
+    }
+
+    private ResponseEntity<ApiErrorResponse> memberAccessDenied(AuthService.CurrentSession currentSession, Member member) {
+        return canAccess(currentSession, member.getTenantId()) ? branchAccessDenied() : tenantAccessDenied();
+    }
+
+    private ResponseEntity<ApiErrorResponse> branchAccessDenied() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(403, "BRANCH_ACCESS_DENIED", "Cannot access members outside assigned branch scope."));
+    }
+
+    private String searchTerm(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value.trim();
+    }
+
+    private String searchable(String... values) {
+        return String.join(" ", java.util.Arrays.stream(values)
+                .map(value -> value == null ? "" : value)
+                .toList()).toLowerCase(Locale.ROOT);
+    }
+
+    private Sort sortBy(boolean platformAll, String requestedSort, String requestedDirection, Map<String, String> allowed, String fallback) {
+        String property = allowed.getOrDefault(requestedSort == null ? "" : requestedSort.trim(), fallback);
+        Sort.Direction resolvedDirection = "desc".equalsIgnoreCase(requestedDirection) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Sort sort = Sort.by(resolvedDirection, property);
+        return platformAll && !"tenantId".equals(property) ? Sort.by(Sort.Direction.ASC, "tenantId").and(sort) : sort;
     }
 
     private String normalizedOrDefault(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value.trim().toLowerCase();
     }
 
+    private String normalizedPrivacyType(String value) {
+        return value == null ? "" : value.trim().toLowerCase().replace("-", "_");
+    }
+
     private String blankToDefault(String value) {
         return value == null || value.isBlank() ? "" : value.trim();
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.isBlank()) return "";
+        String trimmed = value.trim();
+        return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
     }
 
     private String csvTemplate(List<MemberImportSampleRow> sampleRows) {
@@ -1274,10 +1575,22 @@ class MemberController {
     record UpdateMemberStatusRequest(@NotBlank String status) {
     }
 
+    record CreatePrivacyRequestRequest(@NotBlank String requestType, String reason) {
+    }
+
+    record UpdatePrivacyRequestStatusRequest(@NotBlank String status, String resolutionNote) {
+    }
+
     record CreateMemberDocumentRequest(
             @NotBlank String documentType,
             @NotBlank String storageKey,
             String verificationStatus) {
+    }
+
+    record UpdateMemberDocumentRetentionRequest(
+            @NotBlank String retentionStatus,
+            String retentionReason,
+            LocalDate retentionReviewDueAt) {
     }
 
     record CreateNextOfKinRequest(

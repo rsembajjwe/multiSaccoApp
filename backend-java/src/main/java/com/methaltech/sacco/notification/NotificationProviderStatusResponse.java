@@ -2,7 +2,7 @@ package com.methaltech.sacco.notification;
 
 import java.time.Instant;
 
-record NotificationProviderStatusResponse(
+public record NotificationProviderStatusResponse(
         String channel,
         String provider,
         String status,

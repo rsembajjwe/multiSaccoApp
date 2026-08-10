@@ -29,16 +29,19 @@ class ProductionSecretReadinessValidator implements ApplicationRunner {
 
     private final boolean demoLoginsEnabled;
     private final String databasePassword;
+    private final String piiEncryptionKey;
     private final boolean signedCallbacksRequired;
     private final String callbackSecret;
 
     ProductionSecretReadinessValidator(
             @Value("${sacco.demo-logins.enabled:true}") boolean demoLoginsEnabled,
             @Value("${spring.datasource.password:}") String databasePassword,
+            @Value("${sacco.pii.encryption-key:}") String piiEncryptionKey,
             @Value("${sacco.integrations.mobile-money.require-signed-callbacks:false}") boolean signedCallbacksRequired,
             @Value("${sacco.integrations.mobile-money.callback-secret:}") String callbackSecret) {
         this.demoLoginsEnabled = demoLoginsEnabled;
         this.databasePassword = databasePassword;
+        this.piiEncryptionKey = piiEncryptionKey;
         this.signedCallbacksRequired = signedCallbacksRequired;
         this.callbackSecret = callbackSecret;
     }
@@ -55,6 +58,9 @@ class ProductionSecretReadinessValidator implements ApplicationRunner {
         List<String> failures = new ArrayList<>();
         if (isWeakSecret(databasePassword, 16)) {
             failures.add("SPRING_DATASOURCE_PASSWORD/POSTGRES_PASSWORD");
+        }
+        if (isWeakSecret(piiEncryptionKey, 32)) {
+            failures.add("SACCO_PII_ENCRYPTION_KEY");
         }
         if (!signedCallbacksRequired) {
             failures.add("SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS");

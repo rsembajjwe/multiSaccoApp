@@ -2,6 +2,8 @@ package com.methaltech.sacco.accounting;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.branch.Branch;
+import com.methaltech.sacco.branch.BranchRepository;
 import com.methaltech.sacco.complaint.ComplaintRepository;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
 import com.methaltech.sacco.governance.GovernanceResolutionRepository;
@@ -9,6 +11,8 @@ import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.loan.Loan;
 import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.loan.LoanRepository;
+import com.methaltech.sacco.member.DataProtectionEvidence;
+import com.methaltech.sacco.member.DataProtectionEvidenceService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.subscription.SubscriptionPaymentRepository;
@@ -46,7 +50,9 @@ class RegulatoryReportController {
     private final ComplaintRepository complaintRepository;
     private final GovernanceResolutionRepository resolutionRepository;
     private final SubscriptionPaymentRepository subscriptionPaymentRepository;
+    private final DataProtectionEvidenceService dataProtectionEvidenceService;
     private final AuthService authService;
+    private final BranchRepository branchRepository;
 
     @GetMapping
     ResponseEntity<?> getRegulatoryReport(
@@ -63,6 +69,10 @@ class RegulatoryReportController {
         if (tenants == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access regulatory reports for another tenant."));
+        }
+        if (branchScoped(currentSession, tenants)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "BRANCH_ACCESS_DENIED", "Cannot access SACCO-wide regulatory reports from a branch-scoped account."));
         }
 
         List<RegulatoryTenantReport> reports = tenants.stream()
@@ -87,6 +97,18 @@ class RegulatoryReportController {
         String tenantId = currentSession.user().getTenantId();
         if (requestedTenantId != null && !requestedTenantId.isBlank() && !tenantId.equals(requestedTenantId.trim())) return null;
         return tenantService.findById(tenantId).map(List::of).orElse(List.of());
+    }
+
+    private boolean branchScoped(AuthService.CurrentSession currentSession, List<TenantResponse> tenants) {
+        if (authService.isPlatform(currentSession.user()) || authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return false;
+        }
+        return tenants.stream()
+                .anyMatch(tenant -> !branchRepository.findByTenantIdAndManagerUserIdOrderByCodeAsc(tenant.id(), currentSession.user().getId())
+                        .stream()
+                        .map(Branch::getId)
+                        .toList()
+                        .isEmpty());
     }
 
     private RegulatoryTenantReport buildTenantReport(String tenantId, String tenantName) {
@@ -130,6 +152,7 @@ class RegulatoryReportController {
                 + activeAssets.size()
                 + (int) activeAssets.stream().filter(asset -> accumulatedDepreciation(asset).compareTo(BigDecimal.ZERO) > 0).count();
         int reconciliationExceptions = reconciliationExceptions(tenantId);
+        DataProtectionEvidence dataProtectionEvidence = dataProtectionEvidenceService.build(tenantId);
 
         return RegulatoryTenantReport.builder()
                 .tenantId(tenantId)
@@ -151,7 +174,8 @@ class RegulatoryReportController {
                 .reconciliationExceptions(reconciliationExceptions)
                 .openComplaints((int) complaintRepository.countByTenantIdAndStatusNotIn(tenantId, List.of("resolved", "closed")))
                 .openResolutions((int) resolutionRepository.countByTenantIdAndStatusNot(tenantId, "closed"))
-                .complianceStatus(reconciliationExceptions == 0 ? "clear" : "review")
+                .dataProtectionEvidence(dataProtectionEvidence)
+                .complianceStatus(reconciliationExceptions == 0 && "ready".equals(dataProtectionEvidence.evidenceStatus()) ? "clear" : "review")
                 .build();
     }
 
@@ -214,6 +238,7 @@ class RegulatoryReportController {
         BigDecimal loansAtRisk = reports.stream().map(RegulatoryTenantReport::getLoansAtRisk).reduce(BigDecimal.ZERO, BigDecimal::add);
         int reconciliationExceptions = reports.stream().mapToInt(RegulatoryTenantReport::getReconciliationExceptions).sum();
         int unbalanced = reports.stream().mapToInt(RegulatoryTenantReport::getUnbalancedJournalEntries).sum();
+        DataProtectionEvidence dataProtectionEvidence = consolidateDataProtectionEvidence(reports);
         return RegulatoryTenantReport.builder()
                 .tenantId("consolidated")
                 .tenantName("Consolidated")
@@ -234,8 +259,32 @@ class RegulatoryReportController {
                 .reconciliationExceptions(reconciliationExceptions)
                 .openComplaints(reports.stream().mapToInt(RegulatoryTenantReport::getOpenComplaints).sum())
                 .openResolutions(reports.stream().mapToInt(RegulatoryTenantReport::getOpenResolutions).sum())
-                .complianceStatus(unbalanced == 0 && reconciliationExceptions == 0 ? "clear" : "review")
+                .dataProtectionEvidence(dataProtectionEvidence)
+                .complianceStatus(unbalanced == 0 && reconciliationExceptions == 0 && "ready".equals(dataProtectionEvidence.evidenceStatus()) ? "clear" : "review")
                 .build();
+    }
+
+    private DataProtectionEvidence consolidateDataProtectionEvidence(List<RegulatoryTenantReport> reports) {
+        int openPrivacyRequests = reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::openPrivacyRequests).sum();
+        int reviewDue = reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::kycDocumentsReviewDue).sum();
+        int disposed = reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::kycDocumentsDisposed).sum();
+        int storageActions = reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::kycStorageActions).sum();
+        return new DataProtectionEvidence(
+                reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::privacyNoticeAcceptedMembers).sum(),
+                reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::membersWithConsentUpdated).sum(),
+                reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::privacyRequests).sum(),
+                openPrivacyRequests,
+                reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::completedPrivacyRequests).sum(),
+                reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::erasureRequestsCompleted).sum(),
+                reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::kycDocuments).sum(),
+                reviewDue,
+                reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::kycDocumentsRetained).sum(),
+                disposed,
+                storageActions,
+                reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::kycStorageDeletes).sum(),
+                reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::kycStorageMissing).sum(),
+                reports.stream().map(RegulatoryTenantReport::getDataProtectionEvidence).mapToInt(DataProtectionEvidence::kycStorageDemoNoop).sum(),
+                openPrivacyRequests == 0 && reviewDue == 0 && disposed == storageActions ? "ready" : "review");
     }
 
     private int percent(BigDecimal numerator, BigDecimal denominator) {
@@ -264,7 +313,7 @@ class RegulatoryReportController {
     }
 
     private String csv(List<RegulatoryTenantReport> reports) {
-        String header = "\"tenant\",\"members\",\"active_members\",\"savings\",\"shares\",\"welfare\",\"loan_portfolio\",\"active_loans\",\"expenses\",\"fixed_assets\",\"net_assets\",\"par_percent\",\"reconciliation_exceptions\",\"open_complaints\",\"open_resolutions\",\"compliance_status\"";
+        String header = "\"tenant\",\"members\",\"active_members\",\"savings\",\"shares\",\"welfare\",\"loan_portfolio\",\"active_loans\",\"expenses\",\"fixed_assets\",\"net_assets\",\"par_percent\",\"reconciliation_exceptions\",\"open_complaints\",\"open_resolutions\",\"privacy_requests\",\"open_privacy_requests\",\"completed_privacy_requests\",\"erasure_requests_completed\",\"kyc_documents\",\"kyc_review_due\",\"kyc_disposed\",\"kyc_storage_actions\",\"data_protection_status\",\"compliance_status\"";
         List<String> rows = reports.stream()
                 .map(report -> csvRow(List.of(
                         report.getTenantName(),
@@ -282,6 +331,15 @@ class RegulatoryReportController {
                         report.getReconciliationExceptions(),
                         report.getOpenComplaints(),
                         report.getOpenResolutions(),
+                        report.getDataProtectionEvidence().privacyRequests(),
+                        report.getDataProtectionEvidence().openPrivacyRequests(),
+                        report.getDataProtectionEvidence().completedPrivacyRequests(),
+                        report.getDataProtectionEvidence().erasureRequestsCompleted(),
+                        report.getDataProtectionEvidence().kycDocuments(),
+                        report.getDataProtectionEvidence().kycDocumentsReviewDue(),
+                        report.getDataProtectionEvidence().kycDocumentsDisposed(),
+                        report.getDataProtectionEvidence().kycStorageActions(),
+                        report.getDataProtectionEvidence().evidenceStatus(),
                         report.getComplianceStatus())))
                 .toList();
         return java.util.stream.Stream.concat(java.util.stream.Stream.of(header), rows.stream())

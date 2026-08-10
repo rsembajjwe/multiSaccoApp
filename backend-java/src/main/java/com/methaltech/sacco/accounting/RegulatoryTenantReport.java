@@ -1,6 +1,7 @@
 package com.methaltech.sacco.accounting;
 
 import java.math.BigDecimal;
+import com.methaltech.sacco.member.DataProtectionEvidence;
 import lombok.Builder;
 import lombok.Value;
 
@@ -26,5 +27,6 @@ class RegulatoryTenantReport {
     int reconciliationExceptions;
     int openComplaints;
     int openResolutions;
+    DataProtectionEvidence dataProtectionEvidence;
     String complianceStatus;
 }

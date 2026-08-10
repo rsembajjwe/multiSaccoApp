@@ -1,0 +1,1 @@
+ALTER TABLE members ALTER COLUMN national_id TYPE VARCHAR(512);

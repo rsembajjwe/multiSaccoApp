@@ -98,6 +98,7 @@ class AirtelMoneyMobileMoneyProviderTest {
     private AirtelMoneyMobileMoneyProvider provider(RestClient.Builder builder) {
         return new AirtelMoneyMobileMoneyProvider(
                 builder,
+                new com.methaltech.sacco.config.ProviderResilience(),
                 "https://airtel.test",
                 "client-id",
                 "client-secret",

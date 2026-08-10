@@ -5,20 +5,20 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import com.methaltech.sacco.config.ProviderResilience;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 @Component
-@Primary
-@ConditionalOnProperty(name = "sacco.providers.mobile-money", havingValue = "airtel_money")
 class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
 
+    private static final String CIRCUIT = "airtel_money";
+
     private final RestClient restClient;
+    private final ProviderResilience resilience;
     private final String baseUrl;
     private final String clientId;
     private final String clientSecret;
@@ -29,6 +29,7 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
 
     AirtelMoneyMobileMoneyProvider(
             RestClient.Builder restClientBuilder,
+            ProviderResilience resilience,
             @Value("${sacco.integrations.mobile-money.airtel.base-url:https://openapi.airtel.africa}") String baseUrl,
             @Value("${sacco.integrations.mobile-money.airtel.client-id:}") String clientId,
             @Value("${sacco.integrations.mobile-money.airtel.client-secret:}") String clientSecret,
@@ -36,6 +37,7 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
             @Value("${sacco.integrations.mobile-money.airtel.token-path:/auth/oauth2/token}") String tokenPath,
             @Value("${sacco.integrations.mobile-money.airtel.payment-path:/merchant/v1/payments/}") String paymentPath,
             @Value("${sacco.integrations.mobile-money.airtel.status-path:/standard/v1/payments/{transactionId}}") String statusPath) {
+        this.resilience = resilience;
         this.baseUrl = trimTrailingSlash(baseUrl);
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -52,12 +54,20 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
     }
 
     @Override
+    public boolean isConfigured() {
+        return clientId != null && !clientId.isBlank()
+                && clientSecret != null && !clientSecret.isBlank()
+                && countryCode != null && !countryCode.isBlank();
+    }
+
+    @Override
     public MobileMoneyPaymentResult requestPayment(MobileMoneyPaymentRequest request) {
         assertConfigured();
         String providerReference = UUID.randomUUID().toString();
         String token = accessToken();
         try {
-            restClient.post()
+            // Payment initiation is not idempotent: circuit-break only (never retry).
+            resilience.protect(CIRCUIT, () -> restClient.post()
                     .uri(paymentPath)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Authorization", "Bearer " + token)
@@ -75,7 +85,7 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
                                     "currency", currency(request.currencyCode()),
                                     "id", providerReference)))
                     .retrieve()
-                    .toBodilessEntity();
+                    .toBodilessEntity());
         } catch (RestClientResponseException exception) {
             throw new MobileMoneyProviderException("Airtel Money rejected the payment request: HTTP " + exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
@@ -107,13 +117,13 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
         String token = accessToken();
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> body = restClient.get()
+            Map<String, Object> body = resilience.protectIdempotent(CIRCUIT, () -> restClient.get()
                     .uri(statusPath, request.getProviderReference())
                     .header("Authorization", "Bearer " + token)
                     .header("X-Country", country())
                     .header("X-Currency", currency(request.getCurrencyCode()))
                     .retrieve()
-                    .body(Map.class);
+                    .body(Map.class));
             return mapProviderStatus(request, body);
         } catch (RestClientResponseException exception) {
             throw new MobileMoneyProviderException("Airtel Money status check failed: HTTP " + exception.getStatusCode().value(), exception);
@@ -127,7 +137,7 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
         Map<String, Object> body;
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> response = restClient.post()
+            Map<String, Object> response = resilience.protectIdempotent(CIRCUIT, () -> restClient.post()
                     .uri(tokenPath)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of(
@@ -135,7 +145,7 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
                             "client_secret", clientSecret,
                             "grant_type", "client_credentials"))
                     .retrieve()
-                    .body(Map.class);
+                    .body(Map.class));
             body = response;
         } catch (RestClientResponseException exception) {
             throw new MobileMoneyProviderException("Airtel Money token request failed: HTTP " + exception.getStatusCode().value(), exception);

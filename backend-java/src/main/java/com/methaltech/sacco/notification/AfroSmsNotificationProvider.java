@@ -1,5 +1,6 @@
 package com.methaltech.sacco.notification;
 
+import com.methaltech.sacco.config.ProviderResilience;
 import com.methaltech.sacco.member.Member;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -12,7 +13,10 @@ import org.springframework.web.client.RestClientResponseException;
 @ConditionalOnProperty(name = "sacco.providers.sms", havingValue = "afrosms")
 class AfroSmsNotificationProvider implements NotificationProvider {
 
+    private static final String CIRCUIT = "afrosms";
+
     private final RestClient restClient;
+    private final ProviderResilience resilience;
     private final String baseUrl;
     private final String sendPath;
     private final String balancePath;
@@ -22,12 +26,14 @@ class AfroSmsNotificationProvider implements NotificationProvider {
 
     AfroSmsNotificationProvider(
             RestClient.Builder restClientBuilder,
+            ProviderResilience resilience,
             @Value("${sacco.integrations.sms.afrosms.base-url:https://www.afrosms.ug}") String baseUrl,
             @Value("${sacco.integrations.sms.afrosms.send-path:/smskings/api.php}") String sendPath,
             @Value("${sacco.integrations.sms.afrosms.balance-path:/smskings/balance_api.php}") String balancePath,
             @Value("${sacco.integrations.sms.afrosms.email:}") String email,
             @Value("${sacco.integrations.sms.afrosms.password:}") String password,
             @Value("${sacco.integrations.sms.afrosms.source:Tereka}") String source) {
+        this.resilience = resilience;
         this.baseUrl = trimTrailingSlash(baseUrl);
         this.sendPath = ensureLeadingSlash(sendPath);
         this.balancePath = ensureLeadingSlash(balancePath);
@@ -61,7 +67,9 @@ class AfroSmsNotificationProvider implements NotificationProvider {
     public NotificationSendResult sendTo(String recipient, String title, String message) {
         assertConfigured();
         try {
-            String response = restClient.get()
+            // Sending an SMS is not safely repeatable: circuit-break only (never retry) to avoid
+            // dispatching duplicate messages when the provider is flaky.
+            String response = resilience.protect(CIRCUIT, () -> restClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path(sendPath)
                             .queryParam("email", email)
@@ -72,7 +80,7 @@ class AfroSmsNotificationProvider implements NotificationProvider {
                             .queryParam("call", "sendsms")
                             .build())
                     .retrieve()
-                    .body(String.class);
+                    .body(String.class));
             return NotificationSendResult.sent(providerReference(response), "AfroSMS accepted the SMS.");
         } catch (RestClientResponseException exception) {
             return NotificationSendResult.failed("AfroSMS rejected the SMS: HTTP " + exception.getStatusCode().value());
@@ -100,7 +108,7 @@ class AfroSmsNotificationProvider implements NotificationProvider {
 
     private String readBalance() {
         assertConfigured();
-        String response = restClient.get()
+        String response = resilience.protectIdempotent(CIRCUIT, () -> restClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path(balancePath)
                         .queryParam("email", email)
@@ -108,7 +116,7 @@ class AfroSmsNotificationProvider implements NotificationProvider {
                         .queryParam("call", "credits")
                         .build())
                 .retrieve()
-                .body(String.class);
+                .body(String.class));
         if (response == null) return "0";
         String digits = response.replaceAll("[^0-9]", "");
         return digits.isBlank() ? "0" : digits;

@@ -2,6 +2,13 @@ package com.methaltech.sacco.loan;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.api.PageParams;
+import com.methaltech.sacco.api.PagedResponse;
+import com.methaltech.sacco.branch.Branch;
+import com.methaltech.sacco.branch.BranchRepository;
+import com.methaltech.sacco.tenant.CollectionMode;
+import com.methaltech.sacco.tenant.TenantResponse;
+import com.methaltech.sacco.tenant.TenantService;
 import com.methaltech.sacco.accounting.AccountingPeriodService;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
@@ -18,12 +25,17 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,9 +87,11 @@ class LoanController {
     private final LoanRepaymentRepository repaymentRepository;
     private final LoanRepaymentScheduleRepository scheduleRepository;
     private final MemberRepository memberRepository;
+    private final BranchRepository branchRepository;
     private final AuthService authService;
     private final AuditService auditService;
     private final AccountingPeriodService periodService;
+    private final TenantService tenantService;
 
     LoanController(
             LoanRepository loanRepository,
@@ -85,23 +99,32 @@ class LoanController {
             LoanRepaymentRepository repaymentRepository,
             LoanRepaymentScheduleRepository scheduleRepository,
             MemberRepository memberRepository,
+            BranchRepository branchRepository,
             AuthService authService,
             AuditService auditService,
-            AccountingPeriodService periodService) {
+            AccountingPeriodService periodService,
+            TenantService tenantService) {
         this.loanRepository = loanRepository;
         this.guarantorRepository = guarantorRepository;
         this.repaymentRepository = repaymentRepository;
         this.scheduleRepository = scheduleRepository;
         this.memberRepository = memberRepository;
+        this.branchRepository = branchRepository;
         this.authService = authService;
         this.auditService = auditService;
         this.periodService = periodService;
+        this.tenantService = tenantService;
     }
 
     @GetMapping
     ResponseEntity<?> listLoans(
             @RequestHeader(name = "Authorization", required = false) String authorization,
-            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "sort", required = false) String sortBy,
+            @RequestParam(name = "direction", required = false) String direction,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
         if (!authService.hasPermission(currentSession.user(), "loans:view")) {
@@ -111,9 +134,48 @@ class LoanController {
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null) return tenantAccessDenied();
 
-        List<Loan> loans = authService.isPlatform(currentSession.user()) && requestedTenantId == null
+        boolean platformAll = authService.isPlatform(currentSession.user()) && requestedTenantId == null;
+        String searchTerm = searchTerm(search);
+        List<String> branchScope = branchScope(currentSession, tenantId);
+
+        if (PageParams.requested(page, size)) {
+            Sort sort = sortBy(platformAll, sortBy, direction, Map.of(
+                    "product", "product",
+                    "amount", "amount",
+                    "balance", "balance",
+                    "monthlyInstallment", "monthlyInstallment",
+                    "status", "status",
+                    "stage", "stage",
+                    "createdAt", "createdAt",
+                    "disbursedAt", "disbursedAt",
+                    "memberId", "memberId",
+                    "tenantId", "tenantId"), "createdAt", Sort.Direction.DESC);
+            Pageable pageable = PageParams.toPageable(page, size, sort);
+            Page<Loan> result = platformAll
+                    ? (searchTerm == null ? loanRepository.findAll(pageable) : loanRepository.searchAll(searchTerm, pageable))
+                    : (!branchScope.isEmpty()
+                            ? (searchTerm == null
+                                    ? loanRepository.findByTenantIdAndMemberBranchIds(tenantId, branchScope, pageable)
+                                    : loanRepository.searchByTenantIdAndMemberBranchIds(tenantId, branchScope, searchTerm, pageable))
+                            : (searchTerm == null
+                                    ? loanRepository.findByTenantId(tenantId, pageable)
+                                    : loanRepository.searchByTenantId(tenantId, searchTerm, pageable)));
+            return ResponseEntity.ok(PagedResponse.of(
+                    result.getContent().stream().map(this::loanResponse).toList(),
+                    result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages()));
+        }
+
+        List<Loan> loans = platformAll
                 ? loanRepository.findAllByOrderByTenantIdAscCreatedAtDesc()
-                : loanRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+                : (!branchScope.isEmpty()
+                        ? loanRepository.findByTenantIdAndMemberBranchIds(tenantId, branchScope)
+                        : loanRepository.findByTenantIdOrderByCreatedAtDesc(tenantId));
+        if (searchTerm != null) {
+            String needle = searchTerm.toLowerCase(Locale.ROOT);
+            loans = loans.stream()
+                    .filter(loan -> searchable(loan.getProduct(), loan.getStatus(), loan.getStage(), loan.getPurpose(), loan.getChannel(), loan.getMemberId()).contains(needle))
+                    .toList();
+        }
 
         return ResponseEntity.ok(ApiResponse.of(loans.stream().map(this::loanResponse).toList()));
     }
@@ -142,6 +204,9 @@ class LoanController {
         if (!"active".equals(member.getStatus())) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "MEMBER_NOT_ACTIVE", "Only active members can apply for loans."));
+        }
+        if (!canAccessMemberBranch(currentSession, tenantId, member)) {
+            return branchAccessDenied();
         }
         if (!ALLOWED_PRODUCTS.contains(body.product())) {
             return ResponseEntity.badRequest()
@@ -234,6 +299,16 @@ class LoanController {
         List<LoanImportRow> rows = body.rows() == null ? List.of() : body.rows();
         boolean dryRun = body.dryRun() == null || body.dryRun();
         List<LoanImportError> errors = validateLoanImportRows(tenantId, rows);
+        List<String> branchScope = branchScope(currentSession, tenantId);
+        if (!branchScope.isEmpty()) {
+            for (int i = 0; i < rows.size(); i++) {
+                Member member = rows.get(i).membershipNo() == null ? null
+                        : memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCase(tenantId, rows.get(i).membershipNo().trim()).orElse(null);
+                if (member != null && !branchScope.contains(member.getBranchId())) {
+                    errors.add(new LoanImportError(i + 1, "membershipNo", "BRANCH_ACCESS_DENIED", "Member is outside the user's assigned branch scope."));
+                }
+            }
+        }
         if (!errors.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.of(new LoanImportResult(
                     tenantId,
@@ -355,6 +430,16 @@ class LoanController {
         List<RepaymentImportRow> rows = body.rows() == null ? List.of() : body.rows();
         boolean dryRun = body.dryRun() == null || body.dryRun();
         List<RepaymentImportError> errors = validateRepaymentImportRows(tenantId, rows);
+        List<String> branchScope = branchScope(currentSession, tenantId);
+        if (!branchScope.isEmpty()) {
+            for (int i = 0; i < rows.size(); i++) {
+                Member member = rows.get(i).membershipNo() == null ? null
+                        : memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCase(tenantId, rows.get(i).membershipNo().trim()).orElse(null);
+                if (member != null && !branchScope.contains(member.getBranchId())) {
+                    errors.add(new RepaymentImportError(i + 1, "membershipNo", "BRANCH_ACCESS_DENIED", "Member is outside the user's assigned branch scope."));
+                }
+            }
+        }
         if (!errors.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.of(new RepaymentImportResult(
                     tenantId,
@@ -451,7 +536,7 @@ class LoanController {
 
         return loanRepository.findById(loanId)
                 .<ResponseEntity<?>>map(loan -> {
-                    if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
                     return ResponseEntity.ok(ApiResponse.of(guarantorRepository.findByLoanIdOrderByCreatedAtDesc(loanId)
                             .stream()
                             .map(LoanGuarantorResponse::from)
@@ -494,7 +579,7 @@ class LoanController {
 
         return loanRepository.findById(loanId)
                 .<ResponseEntity<?>>map(loan -> {
-                    if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
                     if (!"approved".equals(loan.getStatus())) {
                         return ResponseEntity.status(HttpStatus.CONFLICT)
                                 .body(ApiErrorResponse.of(409, "LOAN_NOT_APPROVED", "A loan must be approved before disbursement."));
@@ -531,7 +616,7 @@ class LoanController {
 
         return loanRepository.findById(loanId)
                 .<ResponseEntity<?>>map(loan -> {
-                    if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
                     return ResponseEntity.ok(ApiResponse.of(scheduleResponse(loan)));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -550,7 +635,7 @@ class LoanController {
 
         return loanRepository.findById(loanId)
                 .<ResponseEntity<?>>map(loan -> {
-                    if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
                     return ResponseEntity.ok(ApiResponse.of(repaymentRepository.findByLoanIdOrderByReceivedAtDesc(loanId)
                             .stream()
                             .map(LoanRepaymentResponse::from)
@@ -577,6 +662,129 @@ class LoanController {
                 .<ResponseEntity<?>>map(loan -> createRepayment(loan, body, currentSession, request))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
+    }
+
+    @GetMapping("/repayments/pending")
+    ResponseEntity<?> listPendingRepayments(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "transactions:approve")) {
+            return authService.permissionRequired("transactions:approve");
+        }
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+
+        List<LoanRepayment> pending = authService.isPlatform(currentSession.user()) && requestedTenantId == null
+                ? repaymentRepository.findByStatusOrderByReceivedAtDesc(LoanRepayment.STATUS_PENDING_APPROVAL)
+                : repaymentRepository.findByTenantIdAndStatusOrderByReceivedAtDesc(tenantId, LoanRepayment.STATUS_PENDING_APPROVAL);
+        List<String> branchScope = branchScope(currentSession, tenantId);
+        if (!branchScope.isEmpty()) {
+            List<String> scopedLoanIds = loanRepository.findByTenantIdAndMemberBranchIds(tenantId, branchScope).stream()
+                    .map(Loan::getId)
+                    .toList();
+            pending = scopedLoanIds.isEmpty()
+                    ? List.of()
+                    : repaymentRepository.findByLoanIdInAndStatusOrderByReceivedAtDesc(scopedLoanIds, LoanRepayment.STATUS_PENDING_APPROVAL);
+        }
+
+        return ResponseEntity.ok(ApiResponse.of(pending.stream().map(LoanRepaymentResponse::from).toList()));
+    }
+
+    @PostMapping("/{loanId}/repayments/{repaymentId}/decision")
+    @Transactional
+    ResponseEntity<?> decideRepayment(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId,
+            @PathVariable String repaymentId,
+            @RequestBody RepaymentDecisionRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "transactions:approve")) {
+            return authService.permissionRequired("transactions:approve");
+        }
+
+        String decision = body == null || body.status() == null ? "" : body.status().trim().toLowerCase();
+        if (!LoanRepayment.STATUS_POSTED.equals(decision) && !LoanRepayment.STATUS_REJECTED.equals(decision)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_DECISION", "Repayment decision must be 'posted' or 'rejected'."));
+        }
+
+        LoanRepayment repayment = repaymentRepository.findById(repaymentId).orElse(null);
+        if (repayment == null || !repayment.getLoanId().equals(loanId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "REPAYMENT_NOT_FOUND", "Loan repayment not found."));
+        }
+        Loan repaymentLoan = loanRepository.findById(loanId).orElse(null);
+        if (repaymentLoan == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found."));
+        }
+        if (!canAccessLoan(currentSession, repaymentLoan)) return loanAccessDenied(currentSession, repaymentLoan);
+        if (!repayment.isPendingApproval()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "REPAYMENT_ALREADY_DECIDED", "Only pending loan repayments can be decided."));
+        }
+        if (repayment.getReceivedByUserId().equals(currentSession.user().getId())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "MAKER_CHECKER_REQUIRED", "The maker cannot approve or reject their own loan repayment."));
+        }
+
+        if (LoanRepayment.STATUS_POSTED.equals(decision)) {
+            ResponseEntity<?> channelCheck = ensureCollectionChannelAllowed(repayment.getTenantId(), repayment.getChannel());
+            if (channelCheck != null) return channelCheck;
+            Loan loan = repaymentLoan;
+            if (!"active".equals(loan.getStatus())) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "LOAN_NOT_ACTIVE", "Only active loans can receive repayments."));
+            }
+            Instant postingDate = Instant.now();
+            if (periodService.isClosed(loan.getTenantId(), postingDate)) {
+                return accountingPeriodClosed(postingDate);
+            }
+            if (repayment.getAmount().compareTo(loan.getBalance()) > 0) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "REPAYMENT_EXCEEDS_BALANCE", "Repayment amount cannot exceed the outstanding loan balance."));
+            }
+            loan.recordRepayment(repayment.getAmount());
+            loanRepository.save(loan);
+            repayment.approve(currentSession.user().getId());
+        } else {
+            repayment.reject(currentSession.user().getId());
+        }
+
+        LoanRepayment saved = repaymentRepository.save(repayment);
+        auditService.record(
+                saved.getTenantId(),
+                currentSession.user(),
+                (LoanRepayment.STATUS_POSTED.equals(decision) ? "Approved" : "Rejected") + " loan repayment " + saved.getReference(),
+                "loan_repayment",
+                saved.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(LoanRepaymentResponse.from(saved)));
+    }
+
+    /**
+     * A treasurer may only confirm a repayment on a channel the platform allows for the SACCO. Cash
+     * and payroll are always allowed; online channels (mobile money, bank) require the allowed mode.
+     */
+    private ResponseEntity<?> ensureCollectionChannelAllowed(String tenantId, String channel) {
+        if (!"mobile_money".equals(channel) && !"bank".equals(channel)) {
+            return null;
+        }
+        TenantResponse tenant = tenantService.findById(tenantId).orElse(null);
+        CollectionMode allowed = tenant == null ? CollectionMode.NONE : CollectionMode.fromStored(tenant.allowedCollectionMode());
+        boolean ok = "mobile_money".equals(channel) ? allowed.allowsMobileMoney() : allowed.allowsBank();
+        if (ok) {
+            return null;
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(409, "COLLECTION_CHANNEL_NOT_ALLOWED",
+                        "This SACCO is not allowed to collect via " + channel.replace('_', ' ') + ". Ask the platform to enable it."));
     }
 
     private int dsr(BigDecimal amount, BigDecimal savingsBalance) {
@@ -628,7 +836,14 @@ class LoanController {
             if (paidForInstallment.compareTo(BigDecimal.ZERO) < 0) paidForInstallment = BigDecimal.ZERO;
             remainingPaid = remainingPaid.subtract(paidForInstallment);
             String status = scheduleStatus(schedule, paidForInstallment, today);
-            responses.add(LoanRepaymentScheduleResponse.from(schedule, Money.normalize(paidForInstallment), status));
+            BigDecimal balanceDue = schedule.getTotalDue().subtract(paidForInstallment).max(BigDecimal.ZERO);
+            int daysPastDue = daysPastDue(schedule.getDueDate(), today, balanceDue);
+            responses.add(LoanRepaymentScheduleResponse.from(
+                    schedule,
+                    Money.normalize(paidForInstallment),
+                    daysPastDue,
+                    agingBucket(daysPastDue, schedule.getDueDate(), today, balanceDue),
+                    status));
         }
         return responses;
     }
@@ -637,13 +852,31 @@ class LoanController {
         List<LoanRepaymentSchedule> schedules = scheduleRepository.findByLoanIdOrderByInstallmentNoAsc(loan.getId());
         if (schedules.isEmpty()) {
             String status = "active".equals(loan.getStatus()) ? "not_generated" : "waiting";
-            return new ScheduleSummary(0, 0, 0, BigDecimal.ZERO, null, status);
+            return new ScheduleSummary(
+                    0,
+                    0,
+                    0,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    0,
+                    null,
+                    status);
         }
         BigDecimal remainingPaid = repaymentTotal == null ? BigDecimal.ZERO : repaymentTotal;
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
         int paidInstallments = 0;
         int arrearsInstallments = 0;
         BigDecimal arrearsAmount = BigDecimal.ZERO;
+        BigDecimal currentDueAmount = BigDecimal.ZERO;
+        BigDecimal arrears1To30Amount = BigDecimal.ZERO;
+        BigDecimal arrears31To60Amount = BigDecimal.ZERO;
+        BigDecimal arrears61To90Amount = BigDecimal.ZERO;
+        BigDecimal arrearsOver90Amount = BigDecimal.ZERO;
+        int oldestArrearsDays = 0;
         LocalDate nextDueDate = null;
         for (LoanRepaymentSchedule schedule : schedules) {
             BigDecimal paidForInstallment = remainingPaid.min(schedule.getTotalDue());
@@ -658,12 +891,37 @@ class LoanController {
             if (schedule.getDueDate().isBefore(today)) {
                 arrearsInstallments += 1;
                 arrearsAmount = arrearsAmount.add(balanceDue);
+                int daysPastDue = daysPastDue(schedule.getDueDate(), today, balanceDue);
+                oldestArrearsDays = Math.max(oldestArrearsDays, daysPastDue);
+                if (daysPastDue <= 30) {
+                    arrears1To30Amount = arrears1To30Amount.add(balanceDue);
+                } else if (daysPastDue <= 60) {
+                    arrears31To60Amount = arrears31To60Amount.add(balanceDue);
+                } else if (daysPastDue <= 90) {
+                    arrears61To90Amount = arrears61To90Amount.add(balanceDue);
+                } else {
+                    arrearsOver90Amount = arrearsOver90Amount.add(balanceDue);
+                }
+            } else if (schedule.getDueDate().getYear() == today.getYear() && schedule.getDueDate().getMonth() == today.getMonth()) {
+                currentDueAmount = currentDueAmount.add(balanceDue);
             }
         }
         String status = arrearsInstallments > 0
                 ? "arrears"
                 : paidInstallments == schedules.size() ? "settled" : "on_track";
-        return new ScheduleSummary(schedules.size(), paidInstallments, arrearsInstallments, Money.normalize(arrearsAmount), nextDueDate, status);
+        return new ScheduleSummary(
+                schedules.size(),
+                paidInstallments,
+                arrearsInstallments,
+                Money.normalize(arrearsAmount),
+                Money.normalize(currentDueAmount),
+                Money.normalize(arrears1To30Amount),
+                Money.normalize(arrears31To60Amount),
+                Money.normalize(arrears61To90Amount),
+                Money.normalize(arrearsOver90Amount),
+                oldestArrearsDays,
+                nextDueDate,
+                status);
     }
 
     private String scheduleStatus(LoanRepaymentSchedule schedule, BigDecimal paidForInstallment, LocalDate today) {
@@ -674,13 +932,28 @@ class LoanController {
         return "upcoming";
     }
 
+    private int daysPastDue(LocalDate dueDate, LocalDate today, BigDecimal balanceDue) {
+        if (balanceDue == null || balanceDue.compareTo(BigDecimal.ZERO) <= 0 || dueDate == null || !dueDate.isBefore(today)) return 0;
+        return Math.toIntExact(ChronoUnit.DAYS.between(dueDate, today));
+    }
+
+    private String agingBucket(int daysPastDue, LocalDate dueDate, LocalDate today, BigDecimal balanceDue) {
+        if (balanceDue == null || balanceDue.compareTo(BigDecimal.ZERO) <= 0) return "paid";
+        if (dueDate != null && dueDate.getYear() == today.getYear() && dueDate.getMonth() == today.getMonth()) return "current";
+        if (daysPastDue <= 0) return "not_due";
+        if (daysPastDue <= 30) return "1_30";
+        if (daysPastDue <= 60) return "31_60";
+        if (daysPastDue <= 90) return "61_90";
+        return "over_90";
+    }
+
     private ResponseEntity<?> decideLoan(
             Loan loan,
             String status,
             String reason,
             AuthService.CurrentSession currentSession,
             HttpServletRequest request) {
-        if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+        if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
         if (!Set.of("submitted", "under_review").contains(loan.getStatus())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "LOAN_ALREADY_DECIDED", "Only submitted or under-review loans can be decided."));
@@ -707,7 +980,7 @@ class LoanController {
             CreateGuarantorRequest body,
             AuthService.CurrentSession currentSession,
             HttpServletRequest request) {
-        if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+        if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
 
         Member guarantor = memberRepository.findById(body.memberId().trim())
                 .filter(candidate -> candidate.getTenantId().equals(loan.getTenantId()))
@@ -719,6 +992,9 @@ class LoanController {
         if (!"active".equals(guarantor.getStatus())) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "GUARANTOR_NOT_ACTIVE", "Only active members can guarantee a loan."));
+        }
+        if (!canAccessMemberBranch(currentSession, loan.getTenantId(), guarantor)) {
+            return branchAccessDenied();
         }
         if (guarantor.getId().equals(loan.getMemberId())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -768,7 +1044,7 @@ class LoanController {
             CreateRepaymentRequest body,
             AuthService.CurrentSession currentSession,
             HttpServletRequest request) {
-        if (!canAccess(currentSession, loan.getTenantId())) return tenantAccessDenied();
+        if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
         if (!"active".equals(loan.getStatus())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "LOAN_NOT_ACTIVE", "Only active loans can receive repayments."));
@@ -1148,6 +1424,12 @@ class LoanController {
                 summary.paidInstallments(),
                 summary.arrearsInstallments(),
                 summary.arrearsAmount(),
+                summary.currentDueAmount(),
+                summary.arrears1To30Amount(),
+                summary.arrears31To60Amount(),
+                summary.arrears61To90Amount(),
+                summary.arrearsOver90Amount(),
+                summary.oldestArrearsDays(),
                 summary.nextDueDate(),
                 summary.status());
     }
@@ -1164,9 +1446,58 @@ class LoanController {
         return authService.isPlatform(currentSession.user()) || tenantId.equals(currentSession.user().getTenantId());
     }
 
+    private List<String> branchScope(AuthService.CurrentSession currentSession, String tenantId) {
+        if (authService.isPlatform(currentSession.user()) || authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return List.of();
+        }
+        return branchRepository.findByTenantIdAndManagerUserIdOrderByCodeAsc(tenantId, currentSession.user().getId()).stream()
+                .map(Branch::getId)
+                .toList();
+    }
+
+    private boolean canAccessLoan(AuthService.CurrentSession currentSession, Loan loan) {
+        if (!canAccess(currentSession, loan.getTenantId())) return false;
+        Member member = memberRepository.findById(loan.getMemberId()).orElse(null);
+        return member != null && canAccessMemberBranch(currentSession, loan.getTenantId(), member);
+    }
+
+    private boolean canAccessMemberBranch(AuthService.CurrentSession currentSession, String tenantId, Member member) {
+        List<String> scopedBranchIds = branchScope(currentSession, tenantId);
+        return scopedBranchIds.isEmpty() || scopedBranchIds.contains(member.getBranchId());
+    }
+
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access loans for another tenant."));
+    }
+
+    private ResponseEntity<ApiErrorResponse> loanAccessDenied(AuthService.CurrentSession currentSession, Loan loan) {
+        return canAccess(currentSession, loan.getTenantId()) ? branchAccessDenied() : tenantAccessDenied();
+    }
+
+    private ResponseEntity<ApiErrorResponse> branchAccessDenied() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(403, "BRANCH_ACCESS_DENIED", "Cannot access loans outside assigned branch scope."));
+    }
+
+    private String searchTerm(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value.trim();
+    }
+
+    private String searchable(String... values) {
+        return String.join(" ", java.util.Arrays.stream(values)
+                .map(value -> value == null ? "" : value)
+                .toList()).toLowerCase(Locale.ROOT);
+    }
+
+    private Sort sortBy(boolean platformAll, String requestedSort, String requestedDirection, Map<String, String> allowed, String fallback, Sort.Direction fallbackDirection) {
+        String property = allowed.getOrDefault(requestedSort == null ? "" : requestedSort.trim(), fallback);
+        Sort.Direction resolvedDirection = requestedDirection == null || requestedDirection.isBlank()
+                ? fallbackDirection
+                : ("desc".equalsIgnoreCase(requestedDirection) ? Sort.Direction.DESC : Sort.Direction.ASC);
+        Sort sort = Sort.by(resolvedDirection, property);
+        return platformAll && !"tenantId".equals(property) ? Sort.by(Sort.Direction.ASC, "tenantId").and(sort) : sort;
     }
 
     private ResponseEntity<ApiErrorResponse> accountingPeriodClosed(Instant postingDate) {
@@ -1196,11 +1527,22 @@ class LoanController {
             String narration) {
     }
 
+    record RepaymentDecisionRequest(
+            String status,
+            String reason) {
+    }
+
     private record ScheduleSummary(
             int scheduledInstallments,
             int paidInstallments,
             int arrearsInstallments,
             BigDecimal arrearsAmount,
+            BigDecimal currentDueAmount,
+            BigDecimal arrears1To30Amount,
+            BigDecimal arrears31To60Amount,
+            BigDecimal arrears61To90Amount,
+            BigDecimal arrearsOver90Amount,
+            int oldestArrearsDays,
             LocalDate nextDueDate,
             String status) {
     }

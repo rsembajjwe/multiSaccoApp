@@ -13,6 +13,7 @@ class ProductionSecretReadinessValidatorTest {
         ProductionSecretReadinessValidator validator = new ProductionSecretReadinessValidator(
                 true,
                 "sacco_dev_password",
+                "",
                 false,
                 "");
 
@@ -24,6 +25,7 @@ class ProductionSecretReadinessValidatorTest {
         ProductionSecretReadinessValidator validator = new ProductionSecretReadinessValidator(
                 false,
                 "change_this_password",
+                "strong_pii_encryption_key_2026_value",
                 true,
                 "strong_callback_secret_2026_value");
 
@@ -37,6 +39,7 @@ class ProductionSecretReadinessValidatorTest {
         ProductionSecretReadinessValidator validator = new ProductionSecretReadinessValidator(
                 false,
                 "strong_database_password_2026",
+                "short",
                 false,
                 "short");
 
@@ -44,6 +47,7 @@ class ProductionSecretReadinessValidatorTest {
 
         assertTrue(error.getMessage().contains("SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS"));
         assertTrue(error.getMessage().contains("SACCO_MOBILE_MONEY_CALLBACK_SECRET"));
+        assertTrue(error.getMessage().contains("SACCO_PII_ENCRYPTION_KEY"));
     }
 
     @Test
@@ -51,6 +55,7 @@ class ProductionSecretReadinessValidatorTest {
         ProductionSecretReadinessValidator validator = new ProductionSecretReadinessValidator(
                 false,
                 "strong_database_password_2026",
+                "strong_pii_encryption_key_2026_value",
                 true,
                 "strong_callback_secret_2026_value");
 

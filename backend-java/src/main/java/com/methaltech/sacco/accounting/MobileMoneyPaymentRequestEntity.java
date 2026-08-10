@@ -123,4 +123,11 @@ class MobileMoneyPaymentRequestEntity {
         }
         this.updatedAt = result.checkedAt();
     }
+
+    void recordProviderStatusCheckFailure(String message) {
+        this.statusMessage = message == null || message.isBlank()
+                ? "Provider status check failed; request remains pending for retry."
+                : message.trim();
+        this.updatedAt = Instant.now();
+    }
 }

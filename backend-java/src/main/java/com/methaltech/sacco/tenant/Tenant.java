@@ -45,6 +45,17 @@ public class Tenant {
     @Column(name = "onboarding_percent")
     private int onboarding;
 
+    // Platform-controlled: which collection channels this SACCO is allowed to use.
+    @Column(name = "allowed_collection_mode")
+    private String allowedCollectionMode;
+
+    // SACCO-admin-controlled: which allowed channels the SACCO has activated.
+    @Column(name = "mobile_money_collection_active")
+    private boolean mobileMoneyCollectionActive;
+
+    @Column(name = "bank_collection_active")
+    private boolean bankCollectionActive;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -90,6 +101,10 @@ public class Tenant {
         this.licenseExpiry = licenseExpiry;
         this.packageId = packageId;
         this.onboarding = 0;
+        // New SACCOs start with no online collection until the platform enables it.
+        this.allowedCollectionMode = CollectionMode.NONE.name();
+        this.mobileMoneyCollectionActive = false;
+        this.bankCollectionActive = false;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
@@ -97,6 +112,46 @@ public class Tenant {
     public void updateStatus(String status) {
         this.status = status;
         this.updatedAt = Instant.now();
+    }
+
+    /** Platform Super Admin sets the allowed collection mode. Any channel no longer allowed is deactivated. */
+    public void updateAllowedCollectionMode(CollectionMode mode) {
+        this.allowedCollectionMode = mode.name();
+        if (!mode.allowsMobileMoney()) {
+            this.mobileMoneyCollectionActive = false;
+        }
+        if (!mode.allowsBank()) {
+            this.bankCollectionActive = false;
+        }
+        this.updatedAt = Instant.now();
+    }
+
+    /** SACCO admin activates channels. Caller must have validated these against the allowed mode. */
+    public void updateCollectionActivation(boolean mobileMoneyActive, boolean bankActive) {
+        this.mobileMoneyCollectionActive = mobileMoneyActive;
+        this.bankCollectionActive = bankActive;
+        this.updatedAt = Instant.now();
+    }
+
+    public CollectionMode getAllowedCollectionMode() {
+        return CollectionMode.fromStored(allowedCollectionMode);
+    }
+
+    public boolean isMobileMoneyCollectionActive() {
+        return mobileMoneyCollectionActive;
+    }
+
+    public boolean isBankCollectionActive() {
+        return bankCollectionActive;
+    }
+
+    /** Effective member-facing availability: allowed by platform AND activated by the SACCO. */
+    public boolean mobileMoneyCollectionAvailable() {
+        return getAllowedCollectionMode().allowsMobileMoney() && mobileMoneyCollectionActive;
+    }
+
+    public boolean bankCollectionAvailable() {
+        return getAllowedCollectionMode().allowsBank() && bankCollectionActive;
     }
 
     public void activate() {

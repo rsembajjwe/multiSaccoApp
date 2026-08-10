@@ -8,4 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 interface AuthSessionRepository extends JpaRepository<AuthSession, String> {
     Optional<AuthSession> findByTokenHashAndRevokedAtIsNullAndExpiresAtAfter(String tokenHash, Instant now);
     List<AuthSession> findByUserIdAndRevokedAtIsNull(String userId);
+
+    // Housekeeping: remove sessions that expired before the given cutoff.
+    long deleteByExpiresAtBefore(Instant cutoff);
 }

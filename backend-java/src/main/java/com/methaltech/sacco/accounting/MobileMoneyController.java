@@ -4,6 +4,7 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.finance.FinancialTransaction;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
+import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.loan.Loan;
 import com.methaltech.sacco.loan.LoanRepayment;
@@ -54,12 +55,13 @@ class MobileMoneyController {
     private final LoanRepaymentRepository repaymentRepository;
     private final StatementLineRepository statementLineRepository;
     private final NotificationService notificationService;
+    private final AuditService auditService;
     private final AuthService authService;
     private final MemberAuthService memberAuthService;
     private final TenantService tenantService;
     private final MobileMoneyPaymentRequestRepository paymentRequestRepository;
     private final ObjectMapper objectMapper;
-    private final MobileMoneyProvider mobileMoneyProvider;
+    private final MobileMoneyProviderRouter mobileMoneyRouter;
 
     @PostMapping("/payment-requests")
     ResponseEntity<?> requestPayment(
@@ -93,7 +95,12 @@ class MobileMoneyController {
             if (loanValidation != null) return loanValidation;
         }
         TenantResponse tenant = tenantService.findById(member.getTenantId()).orElse(null);
-        String currencyCode = tenant == null || tenant.currencyCode() == null || tenant.currencyCode().isBlank()
+        if (tenant == null || !tenant.mobileMoneyCollectionAvailable()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "COLLECTION_METHOD_NOT_ALLOWED",
+                            "Online payment collection is not yet enabled for this SACCO. Please contact your SACCO office."));
+        }
+        String currencyCode = tenant.currencyCode() == null || tenant.currencyCode().isBlank()
                 ? "UGX"
                 : tenant.currencyCode();
         String externalReference = body.externalReference() == null || body.externalReference().isBlank()
@@ -106,7 +113,7 @@ class MobileMoneyController {
 
         MobileMoneyPaymentResult result;
         try {
-            result = mobileMoneyProvider.requestPayment(new MobileMoneyPaymentRequest(
+            result = mobileMoneyRouter.resolve(body.provider()).requestPayment(new MobileMoneyPaymentRequest(
                     member.getTenantId(),
                     member.getId(),
                     member.getMembershipNo(),
@@ -158,7 +165,7 @@ class MobileMoneyController {
         }
 
         String purpose = body.purpose().trim();
-        String provider = mobileMoneyProvider.normalizeProvider(body.provider());
+        String provider = mobileMoneyRouter.resolve(body.provider()).normalizeProvider(body.provider());
         if (CONTRIBUTION_PURPOSES.contains(purpose)) {
             return postContribution(body, tenantId, externalReference, provider, member, amount);
         }
@@ -257,7 +264,8 @@ class MobileMoneyController {
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String requestId,
             @Valid @RequestBody UpdatePaymentRequestStatusRequest body,
-            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId,
+            jakarta.servlet.http.HttpServletRequest servletRequest) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
         if (!authService.hasPermission(currentSession.user(), "accounting:post")) {
@@ -293,6 +301,21 @@ class MobileMoneyController {
         }
         request.updateStatus(status, body.reason());
         MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(request);
+        auditService.record(
+                saved.getTenantId(),
+                currentSession.user(),
+                "Marked mobile-money payment request " + saved.getExternalReference() + " " + status,
+                "mobile_money_payment_request",
+                saved.getId(),
+                servletRequest.getRemoteAddr());
+        notificationService.notifyPaymentRequestManuallyClosed(
+                saved.getTenantId(),
+                saved.getExternalReference(),
+                status,
+                saved.getAmount(),
+                saved.getCurrencyCode(),
+                body.reason(),
+                saved.getId());
         return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
     }
 
@@ -301,13 +324,14 @@ class MobileMoneyController {
             return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(request)));
         }
         try {
-            MobileMoneyProviderStatusResult result = mobileMoneyProvider.queryPaymentStatus(request);
+            MobileMoneyProviderStatusResult result = mobileMoneyRouter.resolve(request.getProvider()).queryPaymentStatus(request);
             request.syncProviderStatus(result);
             MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(request);
             return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
         } catch (MobileMoneyProviderException exception) {
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                    .body(ApiErrorResponse.of(502, "PAYMENT_PROVIDER_STATUS_UNAVAILABLE", exception.getMessage()));
+            request.recordProviderStatusCheckFailure("Provider status check failed: " + exception.getMessage());
+            MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(request);
+            return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
         }
     }
 
@@ -323,10 +347,11 @@ class MobileMoneyController {
                     .body(ApiErrorResponse.of(409, "FINANCIAL_REFERENCE_EXISTS", "A financial transaction with that reference already exists."));
         }
 
-        member.applyPostedTransaction(body.purpose().trim(), amount);
-        memberRepository.save(member);
-
-        FinancialTransaction transaction = transactionRepository.save(FinancialTransaction.postedProviderTransaction(
+        // Member mobile-money contributions are RECEIVED but not auto-posted: they enter the
+        // maker-checker approval queue (maker = system) so a treasurer/authorised checker confirms
+        // them before the member balance is credited. The credit happens on approval in
+        // FinancialTransactionController#decideTransaction.
+        FinancialTransaction transaction = transactionRepository.save(FinancialTransaction.pendingProviderTransaction(
                 "txn_" + UUID.randomUUID(),
                 tenantId,
                 member.getBranchId(),
@@ -338,7 +363,7 @@ class MobileMoneyController {
                 "Mobile-money " + body.purpose().trim().replace('_', ' '),
                 SYSTEM_USER_ID));
         createStatementLine(tenantId, amount, externalReference, "Mobile-money collection " + body.purpose().trim());
-        notificationService.notifyPaymentPosted(member, body.purpose().trim(), amount, "financial_transaction", transaction.getId());
+        notificationService.notifyPaymentPendingApproval(member, body.purpose().trim(), amount, "financial_transaction", transaction.getId());
 
         MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
                 "callback_" + UUID.randomUUID(),
@@ -349,7 +374,7 @@ class MobileMoneyController {
                 externalReference,
                 provider,
                 payload(body.providerPayload()),
-                "posted",
+                "pending_approval",
                 "financial_transaction",
                 transaction.getId()));
         markMatchingPaymentRequestPosted(tenantId, externalReference, "financial_transaction", transaction.getId());
@@ -388,20 +413,21 @@ class MobileMoneyController {
                     .body(ApiErrorResponse.of(409, "DUPLICATE_REPAYMENT_REFERENCE", "Repayment reference already exists for this SACCO."));
         }
 
-        LoanRepayment repayment = repaymentRepository.save(new LoanRepayment(
+        // Member mobile-money loan repayments are RECEIVED but not auto-posted: they enter the
+        // approval queue (maker = system) so a treasurer/authorised checker confirms them before the
+        // loan balance is reduced. The reduction happens on approval in
+        // LoanController#decideRepayment.
+        LoanRepayment repayment = repaymentRepository.save(LoanRepayment.pendingMobileMoney(
                 "repayment_" + UUID.randomUUID(),
                 tenantId,
                 loan.getId(),
                 member.getId(),
                 amount,
-                "mobile_money",
                 externalReference,
                 "Mobile-money loan repayment",
                 SYSTEM_USER_ID));
-        loan.recordRepayment(amount);
-        loanRepository.save(loan);
         createStatementLine(tenantId, amount, externalReference, "Mobile-money loan repayment");
-        notificationService.notifyPaymentPosted(member, "loan_repayment", amount, "loan_repayment", repayment.getId());
+        notificationService.notifyPaymentPendingApproval(member, "loan_repayment", amount, "loan_repayment", repayment.getId());
 
         MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
                 "callback_" + UUID.randomUUID(),
@@ -412,7 +438,7 @@ class MobileMoneyController {
                 externalReference,
                 provider,
                 payload(body.providerPayload()),
-                "posted",
+                "pending_approval",
                 "loan_repayment",
                 repayment.getId()));
         markMatchingPaymentRequestPosted(tenantId, externalReference, "loan_repayment", repayment.getId());

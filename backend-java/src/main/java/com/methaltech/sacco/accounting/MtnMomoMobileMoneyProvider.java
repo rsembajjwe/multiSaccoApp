@@ -7,20 +7,20 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import com.methaltech.sacco.config.ProviderResilience;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 @Component
-@Primary
-@ConditionalOnProperty(name = "sacco.providers.mobile-money", havingValue = "mtn_momo")
 class MtnMomoMobileMoneyProvider implements MobileMoneyProvider {
 
+    private static final String CIRCUIT = "mtn_momo";
+
     private final RestClient restClient;
+    private final ProviderResilience resilience;
     private final String baseUrl;
     private final String subscriptionKey;
     private final String apiUserId;
@@ -29,11 +29,13 @@ class MtnMomoMobileMoneyProvider implements MobileMoneyProvider {
 
     MtnMomoMobileMoneyProvider(
             RestClient.Builder restClientBuilder,
+            ProviderResilience resilience,
             @Value("${sacco.integrations.mobile-money.mtn.base-url:https://sandbox.momodeveloper.mtn.com}") String baseUrl,
             @Value("${sacco.integrations.mobile-money.mtn.subscription-key:}") String subscriptionKey,
             @Value("${sacco.integrations.mobile-money.mtn.api-user-id:}") String apiUserId,
             @Value("${sacco.integrations.mobile-money.mtn.api-key:}") String apiKey,
             @Value("${sacco.integrations.mobile-money.mtn.target-environment:sandbox}") String targetEnvironment) {
+        this.resilience = resilience;
         this.baseUrl = trimTrailingSlash(baseUrl);
         this.subscriptionKey = subscriptionKey;
         this.apiUserId = apiUserId;
@@ -48,12 +50,22 @@ class MtnMomoMobileMoneyProvider implements MobileMoneyProvider {
     }
 
     @Override
+    public boolean isConfigured() {
+        return subscriptionKey != null && !subscriptionKey.isBlank()
+                && apiUserId != null && !apiUserId.isBlank()
+                && apiKey != null && !apiKey.isBlank()
+                && targetEnvironment != null && !targetEnvironment.isBlank();
+    }
+
+    @Override
     public MobileMoneyPaymentResult requestPayment(MobileMoneyPaymentRequest request) {
         assertConfigured();
         String providerReference = UUID.randomUUID().toString();
         String token = collectionToken();
         try {
-            restClient.post()
+            // Payment initiation is not idempotent: circuit-break only (never retry) so a repeated
+            // provider failure fails fast instead of risking a double charge.
+            resilience.protect(CIRCUIT, () -> restClient.post()
                     .uri("/collection/v1_0/requesttopay")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Authorization", "Bearer " + token)
@@ -68,7 +80,7 @@ class MtnMomoMobileMoneyProvider implements MobileMoneyProvider {
                             "payerMessage", "Tereka Online " + request.purpose().replace('_', ' '),
                             "payeeNote", request.tenantId() + " " + request.memberIdentifier()))
                     .retrieve()
-                    .toBodilessEntity();
+                    .toBodilessEntity());
         } catch (RestClientResponseException exception) {
             throw new MobileMoneyProviderException("MTN MoMo rejected the payment request: HTTP " + exception.getStatusCode().value(), exception);
         } catch (RestClientException exception) {
@@ -100,13 +112,13 @@ class MtnMomoMobileMoneyProvider implements MobileMoneyProvider {
         String token = collectionToken();
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> body = restClient.get()
+            Map<String, Object> body = resilience.protectIdempotent(CIRCUIT, () -> restClient.get()
                     .uri("/collection/v1_0/requesttopay/{reference}", request.getProviderReference())
                     .header("Authorization", "Bearer " + token)
                     .header("X-Target-Environment", targetEnvironment)
                     .header("Ocp-Apim-Subscription-Key", subscriptionKey)
                     .retrieve()
-                    .body(Map.class);
+                    .body(Map.class));
             return mapProviderStatus(request, body);
         } catch (RestClientResponseException exception) {
             throw new MobileMoneyProviderException("MTN MoMo status check failed: HTTP " + exception.getStatusCode().value(), exception);
@@ -122,14 +134,14 @@ class MtnMomoMobileMoneyProvider implements MobileMoneyProvider {
         Map<String, Object> body;
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> response = restClient.post()
+            Map<String, Object> response = resilience.protectIdempotent(CIRCUIT, () -> restClient.post()
                     .uri("/collection/token/")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Authorization", "Basic " + basicToken)
                     .header("Ocp-Apim-Subscription-Key", subscriptionKey)
                     .header("X-Target-Environment", targetEnvironment)
                     .retrieve()
-                    .body(Map.class);
+                    .body(Map.class));
             body = response;
         } catch (RestClientResponseException exception) {
             throw new MobileMoneyProviderException("MTN MoMo token request failed: HTTP " + exception.getStatusCode().value(), exception);

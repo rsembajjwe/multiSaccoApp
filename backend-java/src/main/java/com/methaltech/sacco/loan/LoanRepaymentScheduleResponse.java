@@ -14,9 +14,11 @@ record LoanRepaymentScheduleResponse(
         BigDecimal totalDue,
         BigDecimal paidAmount,
         BigDecimal balanceDue,
+        int daysPastDue,
+        String agingBucket,
         String status) {
 
-    static LoanRepaymentScheduleResponse from(LoanRepaymentSchedule schedule, BigDecimal paidAmount, String status) {
+    static LoanRepaymentScheduleResponse from(LoanRepaymentSchedule schedule, BigDecimal paidAmount, int daysPastDue, String agingBucket, String status) {
         BigDecimal safePaid = paidAmount == null ? BigDecimal.ZERO : paidAmount;
         BigDecimal balanceDue = schedule.getTotalDue().subtract(safePaid);
         if (balanceDue.compareTo(BigDecimal.ZERO) < 0) balanceDue = BigDecimal.ZERO;
@@ -31,6 +33,8 @@ record LoanRepaymentScheduleResponse(
                 schedule.getTotalDue(),
                 safePaid,
                 balanceDue,
+                daysPastDue,
+                agingBucket,
                 status);
     }
 }

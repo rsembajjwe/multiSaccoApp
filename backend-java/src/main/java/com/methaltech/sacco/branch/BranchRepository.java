@@ -6,5 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface BranchRepository extends JpaRepository<Branch, String> {
     List<Branch> findAllByOrderByTenantIdAscCodeAsc();
     List<Branch> findByTenantIdOrderByCodeAsc(String tenantId);
+    List<Branch> findByTenantIdAndManagerUserIdOrderByCodeAsc(String tenantId, String managerUserId);
     boolean existsByTenantIdAndCodeIgnoreCase(String tenantId, String code);
 }

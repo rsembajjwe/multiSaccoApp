@@ -8,4 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 interface PasswordResetRequestRepository extends JpaRepository<PasswordResetRequest, String> {
     Optional<PasswordResetRequest> findByTokenHashAndStatusAndExpiresAtAfter(String tokenHash, String status, Instant now);
     List<PasswordResetRequest> findByUserIdOrderByCreatedAtDesc(String userId);
+
+    // Housekeeping: remove password-reset requests that expired before the given cutoff.
+    long deleteByExpiresAtBefore(Instant cutoff);
 }

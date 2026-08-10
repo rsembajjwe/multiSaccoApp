@@ -2,9 +2,12 @@ package com.methaltech.sacco.complaint;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.branch.Branch;
+import com.methaltech.sacco.branch.BranchRepository;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.notification.NotificationService;
+import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -31,6 +34,7 @@ class ComplaintController {
     private final ComplaintRepository complaintRepository;
     private final ComplaintService complaintService;
     private final MemberRepository memberRepository;
+    private final BranchRepository branchRepository;
     private final AuthService authService;
     private final AuditService auditService;
     private final NotificationService notificationService;
@@ -51,6 +55,9 @@ class ComplaintController {
         List<Complaint> complaints = authService.isPlatform(currentSession.user()) && requestedTenantId == null
                 ? complaintRepository.findAllByOrderByTenantIdAscCreatedAtDesc()
                 : complaintRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        complaints = complaints.stream()
+                .filter(complaint -> canAccessComplaint(currentSession, complaint))
+                .toList();
         return ResponseEntity.ok(ApiResponse.of(complaints.stream().map(ComplaintResponse::from).toList()));
     }
 
@@ -70,12 +77,16 @@ class ComplaintController {
         ResponseEntity<ApiErrorResponse> validationError = validateComplaintBody(body.category(), body.channel(), body.priority());
         if (validationError != null) return validationError;
         if (body.memberId() != null && !body.memberId().isBlank()) {
-            boolean memberAllowed = memberRepository.findById(body.memberId().trim())
-                    .filter(member -> member.getTenantId().equals(tenantId))
+            Member member = memberRepository.findById(body.memberId().trim()).orElse(null);
+            boolean memberAllowed = java.util.Optional.ofNullable(member)
+                    .filter(foundMember -> foundMember.getTenantId().equals(tenantId))
                     .isPresent();
             if (!memberAllowed) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Complaint member not found for this SACCO."));
+            }
+            if (!canAccessMemberBranch(currentSession, tenantId, member)) {
+                return branchAccessDenied();
             }
         }
 
@@ -119,7 +130,7 @@ class ComplaintController {
 
         return complaintRepository.findById(complaintId)
                 .<ResponseEntity<?>>map(complaint -> {
-                    if (!canAccess(currentSession, complaint.getTenantId())) return tenantAccessDenied();
+                    if (!canAccessComplaint(currentSession, complaint)) return complaintAccessDenied(currentSession, complaint);
                     String reply = body.resolutionNotes() == null ? "" : body.resolutionNotes().trim();
                     complaint.updateStatus(status, reply, currentSession.user().getId());
                     Complaint saved = complaintRepository.save(complaint);
@@ -171,9 +182,39 @@ class ComplaintController {
         return authService.isPlatform(currentSession.user()) || tenantId.equals(currentSession.user().getTenantId());
     }
 
+    private boolean canAccessComplaint(AuthService.CurrentSession currentSession, Complaint complaint) {
+        if (!canAccess(currentSession, complaint.getTenantId())) return false;
+        if (complaint.getMemberId() == null || complaint.getMemberId().isBlank()) return true;
+        Member member = memberRepository.findById(complaint.getMemberId()).orElse(null);
+        return member != null && canAccessMemberBranch(currentSession, complaint.getTenantId(), member);
+    }
+
+    private boolean canAccessMemberBranch(AuthService.CurrentSession currentSession, String tenantId, Member member) {
+        List<String> scopedBranchIds = branchScope(currentSession, tenantId);
+        return scopedBranchIds.isEmpty() || scopedBranchIds.contains(member.getBranchId());
+    }
+
+    private List<String> branchScope(AuthService.CurrentSession currentSession, String tenantId) {
+        if (authService.isPlatform(currentSession.user()) || authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return List.of();
+        }
+        return branchRepository.findByTenantIdAndManagerUserIdOrderByCodeAsc(tenantId, currentSession.user().getId()).stream()
+                .map(Branch::getId)
+                .toList();
+    }
+
+    private ResponseEntity<ApiErrorResponse> complaintAccessDenied(AuthService.CurrentSession currentSession, Complaint complaint) {
+        return canAccess(currentSession, complaint.getTenantId()) ? branchAccessDenied() : tenantAccessDenied();
+    }
+
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access complaints for another tenant."));
+    }
+
+    private ResponseEntity<ApiErrorResponse> branchAccessDenied() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(403, "BRANCH_ACCESS_DENIED", "Cannot access member complaints outside assigned branch scope."));
     }
 
     record CreateComplaintRequest(

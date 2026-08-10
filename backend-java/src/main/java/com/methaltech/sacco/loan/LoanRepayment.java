@@ -34,11 +34,23 @@ public class LoanRepayment {
     @Column(name = "received_by_user_id")
     private String receivedByUserId;
 
+    private String status;
+
+    @Column(name = "approved_by_user_id")
+    private String approvedByUserId;
+
+    @Column(name = "approved_at")
+    private Instant approvedAt;
+
     @Column(name = "received_at")
     private Instant receivedAt;
 
     @Column(name = "created_at")
     private Instant createdAt;
+
+    public static final String STATUS_PENDING_APPROVAL = "pending_approval";
+    public static final String STATUS_POSTED = "posted";
+    public static final String STATUS_REJECTED = "rejected";
 
     protected LoanRepayment() {
     }
@@ -62,8 +74,54 @@ public class LoanRepayment {
         this.reference = reference;
         this.narration = narration;
         this.receivedByUserId = receivedByUserId;
+        this.status = STATUS_POSTED;
         this.receivedAt = Instant.now();
         this.createdAt = this.receivedAt;
+    }
+
+    /**
+     * A provider-originated (mobile-money) repayment that has been RECEIVED but not yet confirmed
+     * by the SACCO. It is created in {@code pending_approval} status and does NOT reduce the loan
+     * balance until a checker (e.g. Treasurer) approves it. The maker is the system user, so no
+     * human maker is blocked from approving it.
+     */
+    public static LoanRepayment pendingMobileMoney(
+            String id,
+            String tenantId,
+            String loanId,
+            String memberId,
+            BigDecimal amount,
+            String reference,
+            String narration,
+            String receivedByUserId) {
+        LoanRepayment repayment = new LoanRepayment(
+                id,
+                tenantId,
+                loanId,
+                memberId,
+                amount,
+                "mobile_money",
+                reference,
+                narration,
+                receivedByUserId);
+        repayment.status = STATUS_PENDING_APPROVAL;
+        return repayment;
+    }
+
+    public void approve(String checkerUserId) {
+        this.status = STATUS_POSTED;
+        this.approvedByUserId = checkerUserId;
+        this.approvedAt = Instant.now();
+    }
+
+    public void reject(String checkerUserId) {
+        this.status = STATUS_REJECTED;
+        this.approvedByUserId = checkerUserId;
+        this.approvedAt = Instant.now();
+    }
+
+    public boolean isPendingApproval() {
+        return STATUS_PENDING_APPROVAL.equals(status);
     }
 
     public static LoanRepayment imported(
@@ -126,6 +184,18 @@ public class LoanRepayment {
 
     public String getReceivedByUserId() {
         return receivedByUserId;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public String getApprovedByUserId() {
+        return approvedByUserId;
+    }
+
+    public Instant getApprovedAt() {
+        return approvedAt;
     }
 
     public Instant getReceivedAt() {

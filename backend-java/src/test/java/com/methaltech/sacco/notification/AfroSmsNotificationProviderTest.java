@@ -25,6 +25,7 @@ class AfroSmsNotificationProviderTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         AfroSmsNotificationProvider provider = new AfroSmsNotificationProvider(
                 builder,
+                new com.methaltech.sacco.config.ProviderResilience(),
                 "https://afrosms.test",
                 "/smskings/api.php",
                 "/smskings/balance_api.php",
@@ -49,6 +50,7 @@ class AfroSmsNotificationProviderTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         AfroSmsNotificationProvider provider = new AfroSmsNotificationProvider(
                 builder,
+                new com.methaltech.sacco.config.ProviderResilience(),
                 "https://afrosms.test",
                 "/smskings/api.php",
                 "/smskings/balance_api.php",
@@ -72,6 +74,7 @@ class AfroSmsNotificationProviderTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         AfroSmsNotificationProvider provider = new AfroSmsNotificationProvider(
                 builder,
+                new com.methaltech.sacco.config.ProviderResilience(),
                 "https://afrosms.test",
                 "/smskings/api.php",
                 "/smskings/balance_api.php",
@@ -93,6 +96,7 @@ class AfroSmsNotificationProviderTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         AfroSmsNotificationProvider provider = new AfroSmsNotificationProvider(
                 builder,
+                new com.methaltech.sacco.config.ProviderResilience(),
                 "https://afrosms.test",
                 "/smskings/api.php",
                 "/smskings/balance_api.php",
@@ -117,6 +121,7 @@ class AfroSmsNotificationProviderTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         AfroSmsNotificationProvider provider = new AfroSmsNotificationProvider(
                 builder,
+                new com.methaltech.sacco.config.ProviderResilience(),
                 "https://afrosms.test",
                 "/smskings/api.php",
                 "/smskings/balance_api.php",

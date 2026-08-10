@@ -1,6 +1,8 @@
 package com.methaltech.sacco.member;
 
+import com.methaltech.sacco.privacy.EncryptedNationalIdConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -36,6 +38,7 @@ public class Member {
     private String email;
 
     @Column(name = "national_id")
+    @Convert(converter = EncryptedNationalIdConverter.class)
     private String nationalId;
 
     @Column(name = "password_hash")
@@ -51,6 +54,24 @@ public class Member {
 
     @Column(name = "joining_date")
     private LocalDate joiningDate;
+
+    @Column(name = "privacy_notice_accepted_at")
+    private Instant privacyNoticeAcceptedAt;
+
+    @Column(name = "sms_consent")
+    private boolean smsConsent;
+
+    @Column(name = "email_consent")
+    private boolean emailConsent;
+
+    @Column(name = "mobile_money_consent")
+    private boolean mobileMoneyConsent;
+
+    @Column(name = "provider_data_sharing_consent")
+    private boolean providerDataSharingConsent;
+
+    @Column(name = "consent_updated_at")
+    private Instant consentUpdatedAt;
 
     @Column(name = "savings_balance")
     private BigDecimal savingsBalance;
@@ -103,6 +124,10 @@ public class Member {
         this.status = status;
         this.kycStatus = kycStatus;
         this.joiningDate = joiningDate;
+        this.smsConsent = false;
+        this.emailConsent = false;
+        this.mobileMoneyConsent = false;
+        this.providerDataSharingConsent = false;
         this.savingsBalance = BigDecimal.ZERO;
         this.sharesBalance = BigDecimal.ZERO;
         this.welfareBalance = BigDecimal.ZERO;
@@ -113,6 +138,24 @@ public class Member {
     void updateStatus(String status) {
         this.status = status;
         this.updatedAt = Instant.now();
+    }
+
+    void updateConsents(
+            boolean privacyNoticeAccepted,
+            boolean smsConsent,
+            boolean emailConsent,
+            boolean mobileMoneyConsent,
+            boolean providerDataSharingConsent) {
+        Instant now = Instant.now();
+        if (privacyNoticeAccepted && this.privacyNoticeAcceptedAt == null) {
+            this.privacyNoticeAcceptedAt = now;
+        }
+        this.smsConsent = smsConsent;
+        this.emailConsent = emailConsent;
+        this.mobileMoneyConsent = mobileMoneyConsent;
+        this.providerDataSharingConsent = providerDataSharingConsent;
+        this.consentUpdatedAt = now;
+        this.updatedAt = now;
     }
 
     void updateKycStatus(String kycStatus) {
@@ -140,6 +183,23 @@ public class Member {
         this.kycStatus = kycStatus;
         this.joiningDate = joiningDate;
         this.updatedAt = Instant.now();
+    }
+
+    void redactPersonalDataForErasure() {
+        this.fullName = "Former member " + membershipNo;
+        this.phone = "";
+        this.email = "";
+        this.nationalId = "";
+        this.passwordHash = "";
+        this.passwordSalt = "";
+        this.status = "exited";
+        this.kycStatus = "expired";
+        this.smsConsent = false;
+        this.emailConsent = false;
+        this.mobileMoneyConsent = false;
+        this.providerDataSharingConsent = false;
+        this.consentUpdatedAt = Instant.now();
+        this.updatedAt = this.consentUpdatedAt;
     }
 
     public void applyPostedTransaction(String type, BigDecimal amount) {
@@ -232,6 +292,30 @@ public class Member {
 
     LocalDate getJoiningDate() {
         return joiningDate;
+    }
+
+    Instant getPrivacyNoticeAcceptedAt() {
+        return privacyNoticeAcceptedAt;
+    }
+
+    boolean isSmsConsent() {
+        return smsConsent;
+    }
+
+    boolean isEmailConsent() {
+        return emailConsent;
+    }
+
+    boolean isMobileMoneyConsent() {
+        return mobileMoneyConsent;
+    }
+
+    boolean isProviderDataSharingConsent() {
+        return providerDataSharingConsent;
+    }
+
+    Instant getConsentUpdatedAt() {
+        return consentUpdatedAt;
     }
 
     public BigDecimal getSavingsBalance() {

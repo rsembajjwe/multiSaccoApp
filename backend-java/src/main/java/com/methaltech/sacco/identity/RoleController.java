@@ -32,6 +32,7 @@ class RoleController {
     private final RolePermissionRepository rolePermissionRepository;
     private final AuthService authService;
     private final AuditService auditService;
+    private final UserRoleRepository userRoleRepository;
 
     @GetMapping("/permissions")
     ResponseEntity<?> listPermissions(@RequestHeader(name = "Authorization", required = false) String authorization) {
@@ -75,6 +76,8 @@ class RoleController {
         if (!authService.hasPermission(currentSession.user(), "roles:create")) {
             return authService.permissionRequired("roles:create");
         }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForRoleManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
@@ -157,6 +160,23 @@ class RoleController {
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access roles for another tenant."));
+    }
+
+    private ResponseEntity<ApiErrorResponse> requireSaccoAdministratorForRoleManagement(AuthService.CurrentSession currentSession) {
+        if (authService.isPlatform(currentSession.user()) || hasRole(currentSession.user(), "SACCO Administrator")) {
+            return null;
+        }
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(403, "SACCO_ADMIN_REQUIRED", "Only the SACCO Administrator can manage SACCO roles."));
+    }
+
+    private boolean hasRole(User user, String roleName) {
+        List<String> roleIds = userRoleRepository.findByIdUserId(user.getId()).stream()
+                .map(userRole -> userRole.getId().getRoleId())
+                .toList();
+        if (roleIds.isEmpty()) return false;
+        return roleRepository.findAllById(roleIds).stream()
+                .anyMatch(role -> role.getName().equalsIgnoreCase(roleName));
     }
 
     record CreateRoleRequest(String tenantId, @NotBlank String name, List<String> permissionIds) {

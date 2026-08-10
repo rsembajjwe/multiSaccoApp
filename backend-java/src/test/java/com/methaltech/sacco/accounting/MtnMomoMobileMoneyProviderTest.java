@@ -132,6 +132,7 @@ class MtnMomoMobileMoneyProviderTest {
     private MtnMomoMobileMoneyProvider provider(RestClient.Builder builder) {
         return new MtnMomoMobileMoneyProvider(
                 builder,
+                new com.methaltech.sacco.config.ProviderResilience(),
                 "https://momo.test",
                 "subscription-key",
                 "api-user-id",

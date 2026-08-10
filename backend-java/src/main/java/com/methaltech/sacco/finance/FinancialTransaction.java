@@ -88,6 +88,37 @@ public class FinancialTransaction {
         this.updatedAt = this.createdAt;
     }
 
+    /**
+     * Provider-originated (e.g. mobile-money) transaction that has been RECEIVED but not yet
+     * confirmed by the SACCO. It is created in {@code pending_approval} status with no checker, so
+     * it surfaces in the maker-checker approval queue and the member balance is only credited once
+     * a treasurer/authorised checker approves it. The maker is the system user, so no human maker
+     * is blocked from approving it.
+     */
+    public static FinancialTransaction pendingProviderTransaction(
+            String id,
+            String tenantId,
+            String branchId,
+            String memberId,
+            String type,
+            String channel,
+            BigDecimal amount,
+            String reference,
+            String narration,
+            String userId) {
+        return new FinancialTransaction(
+                id,
+                tenantId,
+                branchId,
+                memberId,
+                type,
+                channel,
+                amount,
+                reference,
+                narration,
+                userId);
+    }
+
     public static FinancialTransaction postedProviderTransaction(
             String id,
             String tenantId,

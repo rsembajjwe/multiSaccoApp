@@ -2,6 +2,7 @@ package com.methaltech.sacco.governance;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.branch.BranchRepository;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,6 +36,7 @@ class GovernanceController {
 
     private final GovernanceMeetingRepository meetingRepository;
     private final GovernanceResolutionRepository resolutionRepository;
+    private final BranchRepository branchRepository;
     private final AuthService authService;
     private final AuditService auditService;
 
@@ -50,6 +52,7 @@ class GovernanceController {
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null && !authService.isPlatform(currentSession.user())) return tenantAccessDenied();
+        if (tenantId != null && branchScoped(currentSession, tenantId)) return branchAccessDenied();
 
         List<GovernanceMeeting> meetings = authService.isPlatform(currentSession.user()) && requestedTenantId == null
                 ? meetingRepository.findAllByOrderByTenantIdAscScheduledAtDesc()
@@ -70,6 +73,7 @@ class GovernanceController {
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
+        if (branchScoped(currentSession, tenantId)) return branchAccessDenied();
 
         String meetingType = body.meetingType() == null || body.meetingType().isBlank() ? "management" : body.meetingType().trim();
         if (!MEETING_TYPES.contains(meetingType)) {
@@ -114,6 +118,7 @@ class GovernanceController {
         return meetingRepository.findById(meetingId)
                 .<ResponseEntity<?>>map(meeting -> {
                     if (!canAccess(currentSession, meeting.getTenantId())) return tenantAccessDenied();
+                    if (branchScoped(currentSession, meeting.getTenantId())) return branchAccessDenied();
                     String status = body.status() == null || body.status().isBlank() ? "open" : body.status().trim();
                     if (!RESOLUTION_STATUSES.contains(status)) {
                         return ResponseEntity.badRequest()
@@ -163,9 +168,21 @@ class GovernanceController {
         return authService.isPlatform(currentSession.user()) || tenantId.equals(currentSession.user().getTenantId());
     }
 
+    private boolean branchScoped(AuthService.CurrentSession currentSession, String tenantId) {
+        if (authService.isPlatform(currentSession.user()) || authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return false;
+        }
+        return !branchRepository.findByTenantIdAndManagerUserIdOrderByCodeAsc(tenantId, currentSession.user().getId()).isEmpty();
+    }
+
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access governance records for another tenant."));
+    }
+
+    private ResponseEntity<ApiErrorResponse> branchAccessDenied() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(403, "BRANCH_ACCESS_DENIED", "Cannot access SACCO-wide governance records from a branch-scoped account."));
     }
 
     record CreateGovernanceMeetingRequest(

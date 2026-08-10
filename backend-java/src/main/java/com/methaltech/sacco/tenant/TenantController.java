@@ -205,6 +205,89 @@ class TenantController {
         return ResponseEntity.ok(ApiResponse.of(TenantResponse.from(savedTenant)));
     }
 
+    @PatchMapping("/{tenantId}/collection-mode")
+    ResponseEntity<?> updateCollectionMode(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String tenantId,
+            @Valid @RequestBody UpdateCollectionModeRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return authService.permissionRequired("tenants:manage");
+        }
+        if (!authService.isPlatform(currentSession.user())) {
+            return platformRequired("Only platform administrators can set the allowed payment collection mode.");
+        }
+        CollectionMode mode = CollectionMode.parse(body.allowedCollectionMode());
+        if (mode == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_COLLECTION_MODE", "Allowed collection mode must be NONE, MOBILE_MONEY_ONLY, BANK_ONLY, or BOTH."));
+        }
+
+        Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+        if (tenant == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "TENANT_NOT_FOUND", "Tenant not found."));
+        }
+
+        tenant.updateAllowedCollectionMode(mode);
+        Tenant savedTenant = tenantRepository.save(tenant);
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Set allowed payment collection mode to " + mode.name(),
+                "tenant",
+                tenantId,
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(TenantResponse.from(savedTenant)));
+    }
+
+    @PatchMapping("/{tenantId}/collection-settings")
+    ResponseEntity<?> updateCollectionSettings(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String tenantId,
+            @Valid @RequestBody UpdateCollectionSettingsRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return authService.permissionRequired("tenants:manage");
+        }
+        if (!canAccessTenant(currentSession, tenantId)) {
+            return tenantAccessDenied("Cannot change payment collection settings for another SACCO.");
+        }
+
+        Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+        if (tenant == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "TENANT_NOT_FOUND", "Tenant not found."));
+        }
+
+        CollectionMode allowed = tenant.getAllowedCollectionMode();
+        boolean mobileMoneyActive = Boolean.TRUE.equals(body.mobileMoneyActive());
+        boolean bankActive = Boolean.TRUE.equals(body.bankActive());
+        if (mobileMoneyActive && !allowed.allowsMobileMoney()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "COLLECTION_METHOD_NOT_ALLOWED", "Mobile money collection is not allowed for this SACCO by the platform."));
+        }
+        if (bankActive && !allowed.allowsBank()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "COLLECTION_METHOD_NOT_ALLOWED", "Bank collection is not allowed for this SACCO by the platform."));
+        }
+
+        tenant.updateCollectionActivation(mobileMoneyActive, bankActive);
+        Tenant savedTenant = tenantRepository.save(tenant);
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Updated payment collection activation (mobileMoney=" + mobileMoneyActive + ", bank=" + bankActive + ")",
+                "tenant",
+                tenantId,
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(TenantResponse.from(savedTenant)));
+    }
+
     @GetMapping("/{tenantId}/profile")
     ResponseEntity<?> getSaccoProfile(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -331,6 +414,12 @@ class TenantController {
             String village,
             String contactNumber,
             String memberRange) {
+    }
+
+    record UpdateCollectionModeRequest(@NotBlank String allowedCollectionMode) {
+    }
+
+    record UpdateCollectionSettingsRequest(Boolean mobileMoneyActive, Boolean bankActive) {
     }
 
     record UpdateTenantStatusRequest(@NotBlank String status) {

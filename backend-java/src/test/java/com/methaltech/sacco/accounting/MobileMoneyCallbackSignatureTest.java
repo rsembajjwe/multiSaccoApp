@@ -24,7 +24,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc
 @SpringBootTest(properties = {
         "sacco.integrations.mobile-money.callback-secret=test_shared_secret_123",
-        "sacco.integrations.mobile-money.require-signed-callbacks=true"
+        "sacco.integrations.mobile-money.require-signed-callbacks=true",
+        "sacco.rate-limit.enabled=false"
 })
 class MobileMoneyCallbackSignatureTest {
 
@@ -66,7 +67,7 @@ class MobileMoneyCallbackSignatureTest {
                         .header(MobileMoneyCallbackVerifier.SIGNATURE_HEADER, signature)
                         .content(body))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.status", is("posted")))
+                .andExpect(jsonPath("$.data.status", is("pending_approval")))
                 .andExpect(jsonPath("$.data.memberId", is("member_green_daniel")));
     }
 

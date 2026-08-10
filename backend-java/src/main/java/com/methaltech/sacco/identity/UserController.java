@@ -106,6 +106,8 @@ class UserController {
         if (!authService.hasPermission(currentSession.user(), "users:create")) {
             return authService.permissionRequired("users:create");
         }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForUserManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
 
         String tenantId = request.tenantId() == null || request.tenantId().isBlank()
                 ? currentSession.user().getTenantId()
@@ -165,6 +167,8 @@ class UserController {
         if (!authService.hasPermission(currentSession.user(), "users:create")) {
             return authService.permissionRequired("users:create");
         }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForUserManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
 
         User targetUser = userRepository.findById(userId).orElse(null);
         if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
@@ -209,6 +213,8 @@ class UserController {
         if (!authService.hasPermission(currentSession.user(), "users:create")) {
             return authService.permissionRequired("users:create");
         }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForUserManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
 
         User targetUser = userRepository.findById(userId).orElse(null);
         if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
@@ -251,6 +257,8 @@ class UserController {
         if (!authService.hasPermission(currentSession.user(), "users:create")) {
             return authService.permissionRequired("users:create");
         }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForUserManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
 
         User targetUser = userRepository.findById(userId).orElse(null);
         if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
@@ -313,6 +321,8 @@ class UserController {
         if (!authService.hasPermission(currentSession.user(), "users:create")) {
             return authService.permissionRequired("users:create");
         }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForUserManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
 
         User targetUser = userRepository.findById(userId).orElse(null);
         if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
@@ -366,6 +376,8 @@ class UserController {
         if (!authService.hasPermission(currentSession.user(), "users:create")) {
             return authService.permissionRequired("users:create");
         }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForUserManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
 
         User targetUser = userRepository.findById(userId).orElse(null);
         if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
@@ -409,6 +421,8 @@ class UserController {
         if (!authService.hasPermission(currentSession.user(), "users:create")) {
             return authService.permissionRequired("users:create");
         }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForUserManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
 
         User targetUser = userRepository.findById(userId).orElse(null);
         if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
@@ -446,6 +460,8 @@ class UserController {
         if (!authService.hasPermission(currentSession.user(), "users:create")) {
             return authService.permissionRequired("users:create");
         }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForUserManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
 
         User targetUser = userRepository.findById(userId).orElse(null);
         if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
@@ -491,6 +507,8 @@ class UserController {
         if (!authService.hasPermission(currentSession.user(), "users:create")) {
             return authService.permissionRequired("users:create");
         }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForUserManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
 
         User targetUser = userRepository.findById(userId).orElse(null);
         if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
@@ -516,6 +534,8 @@ class UserController {
         if (!authService.hasPermission(currentSession.user(), "users:create")) {
             return authService.permissionRequired("users:create");
         }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForUserManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
 
         User targetUser = userRepository.findById(userId).orElse(null);
         if (targetUser == null || "deleted".equalsIgnoreCase(targetUser.getStatus())) {
@@ -604,6 +624,14 @@ class UserController {
 
     private boolean canManagePlatformUser(AuthService.CurrentSession currentSession, User targetUser) {
         return !targetUser.getTenantId().equals("tenant_platform") || hasRole(currentSession.user(), "Platform Super Admin");
+    }
+
+    private ResponseEntity<ApiErrorResponse> requireSaccoAdministratorForUserManagement(AuthService.CurrentSession currentSession) {
+        if (authService.isPlatform(currentSession.user()) || hasRole(currentSession.user(), "SACCO Administrator")) {
+            return null;
+        }
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(403, "SACCO_ADMIN_REQUIRED", "Only the SACCO Administrator can manage SACCO staff access."));
     }
 
     private long activeSessionCount(String userId, Instant now) {

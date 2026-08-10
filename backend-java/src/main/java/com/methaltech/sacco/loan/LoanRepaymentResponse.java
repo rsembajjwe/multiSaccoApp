@@ -13,6 +13,9 @@ record LoanRepaymentResponse(
         String reference,
         String narration,
         String receivedByUserId,
+        String status,
+        String approvedByUserId,
+        Instant approvedAt,
         Instant receivedAt,
         Instant createdAt) {
 
@@ -27,6 +30,9 @@ record LoanRepaymentResponse(
                 repayment.getReference(),
                 repayment.getNarration(),
                 repayment.getReceivedByUserId(),
+                repayment.getStatus(),
+                repayment.getApprovedByUserId(),
+                repayment.getApprovedAt(),
                 repayment.getReceivedAt(),
                 repayment.getCreatedAt());
     }

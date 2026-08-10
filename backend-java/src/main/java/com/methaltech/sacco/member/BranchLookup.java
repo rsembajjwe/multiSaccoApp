@@ -2,6 +2,7 @@ package com.methaltech.sacco.member;
 
 import com.methaltech.sacco.branch.BranchRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 
@@ -39,6 +40,13 @@ class BranchLookup {
         return branchRepository.findByTenantIdOrderByCodeAsc(tenantId).stream()
                 .findFirst()
                 .map(branch -> branch.getId());
+    }
+
+    List<String> managedBranchIds(String tenantId, String managerUserId) {
+        if (tenantId == null || tenantId.isBlank() || managerUserId == null || managerUserId.isBlank()) return List.of();
+        return branchRepository.findByTenantIdAndManagerUserIdOrderByCodeAsc(tenantId.trim(), managerUserId.trim()).stream()
+                .map(branch -> branch.getId())
+                .toList();
     }
 
     record BranchSummary(

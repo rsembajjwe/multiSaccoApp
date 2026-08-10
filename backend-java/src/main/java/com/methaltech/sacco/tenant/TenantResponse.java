@@ -15,7 +15,12 @@ public record TenantResponse(
         int currencyDigits,
         LocalDate licenseExpiry,
         String packageId,
-        int onboarding) {
+        int onboarding,
+        String allowedCollectionMode,
+        boolean mobileMoneyCollectionActive,
+        boolean bankCollectionActive,
+        boolean mobileMoneyCollectionAvailable,
+        boolean bankCollectionAvailable) {
 
     public static TenantResponse from(Tenant tenant) {
         return new TenantResponse(
@@ -31,6 +36,11 @@ public record TenantResponse(
                 tenant.getCurrencyDigits(),
                 tenant.getLicenseExpiry(),
                 tenant.getPackageId(),
-                tenant.getOnboarding());
+                tenant.getOnboarding(),
+                tenant.getAllowedCollectionMode().name(),
+                tenant.isMobileMoneyCollectionActive(),
+                tenant.isBankCollectionActive(),
+                tenant.mobileMoneyCollectionAvailable(),
+                tenant.bankCollectionAvailable());
     }
 }

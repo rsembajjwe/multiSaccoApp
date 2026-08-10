@@ -10,22 +10,21 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import com.methaltech.sacco.config.ProviderResilience;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 @Component
-@Primary
-@ConditionalOnProperty(name = "sacco.providers.mobile-money", havingValue = "mpesa_daraja")
 class MpesaDarajaMobileMoneyProvider implements MobileMoneyProvider {
 
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final String CIRCUIT = "mpesa_daraja";
 
     private final RestClient restClient;
+    private final ProviderResilience resilience;
     private final String baseUrl;
     private final String consumerKey;
     private final String consumerSecret;
@@ -40,6 +39,7 @@ class MpesaDarajaMobileMoneyProvider implements MobileMoneyProvider {
 
     MpesaDarajaMobileMoneyProvider(
             RestClient.Builder restClientBuilder,
+            ProviderResilience resilience,
             @Value("${sacco.integrations.mobile-money.mpesa.base-url:https://sandbox.safaricom.co.ke}") String baseUrl,
             @Value("${sacco.integrations.mobile-money.mpesa.consumer-key:}") String consumerKey,
             @Value("${sacco.integrations.mobile-money.mpesa.consumer-secret:}") String consumerSecret,
@@ -51,6 +51,7 @@ class MpesaDarajaMobileMoneyProvider implements MobileMoneyProvider {
             @Value("${sacco.integrations.mobile-money.mpesa.token-path:/oauth/v1/generate?grant_type=client_credentials}") String tokenPath,
             @Value("${sacco.integrations.mobile-money.mpesa.stk-push-path:/mpesa/stkpush/v1/processrequest}") String stkPushPath,
             @Value("${sacco.integrations.mobile-money.mpesa.stk-query-path:/mpesa/stkpushquery/v1/query}") String stkQueryPath) {
+        this.resilience = resilience;
         this.baseUrl = trimTrailingSlash(baseUrl);
         this.consumerKey = consumerKey;
         this.consumerSecret = consumerSecret;
@@ -71,6 +72,16 @@ class MpesaDarajaMobileMoneyProvider implements MobileMoneyProvider {
     }
 
     @Override
+    public boolean isConfigured() {
+        return consumerKey != null && !consumerKey.isBlank()
+                && consumerSecret != null && !consumerSecret.isBlank()
+                && businessShortCode != null && !businessShortCode.isBlank()
+                && passkey != null && !passkey.isBlank()
+                && callbackUrl != null && !callbackUrl.isBlank()
+                && partyB != null && !partyB.isBlank();
+    }
+
+    @Override
     public MobileMoneyPaymentResult requestPayment(MobileMoneyPaymentRequest request) {
         assertConfigured();
         String timestamp = darajaTimestamp();
@@ -79,8 +90,9 @@ class MpesaDarajaMobileMoneyProvider implements MobileMoneyProvider {
         String token = accessToken();
         Map<String, Object> response;
         try {
+            // STK Push initiates a charge and is not idempotent: circuit-break only (never retry).
             @SuppressWarnings("unchecked")
-            Map<String, Object> body = restClient.post()
+            Map<String, Object> body = resilience.protect(CIRCUIT, () -> restClient.post()
                     .uri(stkPushPath)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Authorization", "Bearer " + token)
@@ -97,7 +109,7 @@ class MpesaDarajaMobileMoneyProvider implements MobileMoneyProvider {
                             Map.entry("AccountReference", accountReference),
                             Map.entry("TransactionDesc", "Tereka Online " + request.purpose().replace('_', ' '))))
                     .retrieve()
-                    .body(Map.class);
+                    .body(Map.class));
             response = body;
         } catch (RestClientResponseException exception) {
             throw new MobileMoneyProviderException("M-PESA Daraja rejected the STK Push request: HTTP " + exception.getStatusCode().value(), exception);
@@ -133,7 +145,7 @@ class MpesaDarajaMobileMoneyProvider implements MobileMoneyProvider {
         String token = accessToken();
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> body = restClient.post()
+            Map<String, Object> body = resilience.protectIdempotent(CIRCUIT, () -> restClient.post()
                     .uri(stkQueryPath)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Authorization", "Bearer " + token)
@@ -143,7 +155,7 @@ class MpesaDarajaMobileMoneyProvider implements MobileMoneyProvider {
                             "Timestamp", timestamp,
                             "CheckoutRequestID", request.getProviderReference()))
                     .retrieve()
-                    .body(Map.class);
+                    .body(Map.class));
             return mapProviderStatus(request, body);
         } catch (RestClientResponseException exception) {
             throw new MobileMoneyProviderException("M-PESA Daraja STK status check failed: HTTP " + exception.getStatusCode().value(), exception);
@@ -159,11 +171,11 @@ class MpesaDarajaMobileMoneyProvider implements MobileMoneyProvider {
         Map<String, Object> body;
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> response = restClient.get()
+            Map<String, Object> response = resilience.protectIdempotent(CIRCUIT, () -> restClient.get()
                     .uri(tokenPath)
                     .header("Authorization", "Basic " + basicToken)
                     .retrieve()
-                    .body(Map.class);
+                    .body(Map.class));
             body = response;
         } catch (RestClientResponseException exception) {
             throw new MobileMoneyProviderException("M-PESA Daraja token request failed: HTTP " + exception.getStatusCode().value(), exception);

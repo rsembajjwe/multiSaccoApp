@@ -2,6 +2,8 @@ package com.methaltech.sacco.finance;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.api.PageParams;
+import com.methaltech.sacco.api.PagedResponse;
 import com.methaltech.sacco.accounting.AccountingPeriodService;
 import com.methaltech.sacco.branch.Branch;
 import com.methaltech.sacco.branch.BranchRepository;
@@ -11,6 +13,7 @@ import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.tenant.TenantMoneyFormatter;
+import com.methaltech.sacco.tenant.CollectionMode;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,8 +29,12 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -97,7 +104,12 @@ class FinancialTransactionController {
     @GetMapping
     ResponseEntity<?> listTransactions(
             @RequestHeader(name = "Authorization", required = false) String authorization,
-            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "sort", required = false) String sortBy,
+            @RequestParam(name = "direction", required = false) String direction,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
         if (!authService.hasPermission(currentSession.user(), "transactions:view")) {
@@ -107,9 +119,51 @@ class FinancialTransactionController {
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null) return tenantAccessDenied();
 
-        List<FinancialTransaction> transactions = authService.isPlatform(currentSession.user()) && requestedTenantId == null
+        boolean platformAll = authService.isPlatform(currentSession.user()) && requestedTenantId == null;
+        String searchTerm = searchTerm(search);
+        List<String> branchScope = branchScope(currentSession, tenantId);
+
+        // Opt-in pagination: only when the caller supplies page/size, so existing clients that expect
+        // the full list are unaffected.
+        if (PageParams.requested(page, size)) {
+            Sort sort = sortBy(platformAll, sortBy, direction, Map.of(
+                    "reference", "reference",
+                    "postedAt", "postedAt",
+                    "createdAt", "createdAt",
+                    "type", "type",
+                    "channel", "channel",
+                    "amount", "amount",
+                    "status", "status",
+                    "memberId", "memberId",
+                    "tenantId", "tenantId"), "createdAt", Sort.Direction.DESC);
+            Pageable pageable = PageParams.toPageable(page, size, sort);
+            Page<FinancialTransaction> result = platformAll
+                    ? (searchTerm == null ? transactionRepository.findAll(pageable) : transactionRepository.searchAll(searchTerm, pageable))
+                    : (!branchScope.isEmpty()
+                            ? (searchTerm == null
+                                    ? transactionRepository.findByTenantIdAndBranchIdIn(tenantId, branchScope, pageable)
+                                    : transactionRepository.searchByTenantIdAndBranchIds(tenantId, branchScope, searchTerm, pageable))
+                            : (searchTerm == null
+                                    ? transactionRepository.findByTenantId(tenantId, pageable)
+                                    : transactionRepository.searchByTenantId(tenantId, searchTerm, pageable)));
+            List<FinancialTransactionResponse> items = result.getContent().stream()
+                    .map(FinancialTransactionResponse::from)
+                    .toList();
+            return ResponseEntity.ok(PagedResponse.of(
+                    items, result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages()));
+        }
+
+        List<FinancialTransaction> transactions = platformAll
                 ? transactionRepository.findAllByOrderByTenantIdAscCreatedAtDesc()
-                : transactionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+                : (!branchScope.isEmpty()
+                        ? transactionRepository.findByTenantIdAndBranchIdInOrderByCreatedAtDesc(tenantId, branchScope)
+                        : transactionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId));
+        if (searchTerm != null) {
+            String needle = searchTerm.toLowerCase(Locale.ROOT);
+            transactions = transactions.stream()
+                    .filter(transaction -> searchable(transaction.getReference(), transaction.getType(), transaction.getChannel(), transaction.getStatus(), transaction.getNarration(), transaction.getMemberId()).contains(needle))
+                    .toList();
+        }
 
         return ResponseEntity.ok(ApiResponse.of(transactions.stream().map(FinancialTransactionResponse::from).toList()));
     }
@@ -137,6 +191,13 @@ class FinancialTransactionController {
         }
 
         String branchId = body.branchId() == null || body.branchId().isBlank() ? member.getBranchId() : body.branchId().trim();
+        if (!branchId.equals(member.getBranchId())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "BRANCH_MEMBER_MISMATCH", "Transaction branch must match the member branch."));
+        }
+        if (!canAccessBranch(currentSession, tenantId, branchId)) {
+            return branchAccessDenied();
+        }
         if (branchRepository.findById(branchId)
                 .filter(branch -> branch.getTenantId().equals(tenantId))
                 .isEmpty()) {
@@ -357,7 +418,7 @@ class FinancialTransactionController {
             String reason,
             AuthService.CurrentSession currentSession,
             HttpServletRequest request) {
-        if (!canAccess(currentSession, transaction.getTenantId())) return tenantAccessDenied();
+        if (!canAccessTransaction(currentSession, transaction)) return transactionAccessDenied(currentSession, transaction);
         if (!"pending_approval".equals(transaction.getStatus())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(
@@ -374,6 +435,8 @@ class FinancialTransactionController {
         }
 
         if ("posted".equals(status)) {
+            ResponseEntity<?> channelCheck = ensureCollectionChannelAllowed(transaction.getTenantId(), transaction.getChannel());
+            if (channelCheck != null) return channelCheck;
             Instant postingDate = Instant.now();
             if (periodService.isClosed(transaction.getTenantId(), postingDate)) {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -409,12 +472,32 @@ class FinancialTransactionController {
         return ResponseEntity.ok(ApiResponse.of(FinancialTransactionResponse.from(saved)));
     }
 
+    /**
+     * A treasurer may only confirm (post) a collection on a channel the platform allows for the SACCO.
+     * Cash and payroll are not online collection channels and are always allowed. Returns a rejection
+     * response when the channel is not allowed, or {@code null} when the posting may proceed.
+     */
+    private ResponseEntity<?> ensureCollectionChannelAllowed(String tenantId, String channel) {
+        if (!"mobile_money".equals(channel) && !"bank".equals(channel)) {
+            return null;
+        }
+        TenantResponse tenant = tenantService.findById(tenantId).orElse(null);
+        CollectionMode allowed = tenant == null ? CollectionMode.NONE : CollectionMode.fromStored(tenant.allowedCollectionMode());
+        boolean ok = "mobile_money".equals(channel) ? allowed.allowsMobileMoney() : allowed.allowsBank();
+        if (ok) {
+            return null;
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(409, "COLLECTION_CHANNEL_NOT_ALLOWED",
+                        "This SACCO is not allowed to collect via " + channel.replace('_', ' ') + ". Ask the platform to enable it."));
+    }
+
     private ResponseEntity<?> reversePostedTransaction(
             FinancialTransaction original,
             String reason,
             AuthService.CurrentSession currentSession,
             HttpServletRequest request) {
-        if (!canAccess(currentSession, original.getTenantId())) return tenantAccessDenied();
+        if (!canAccessTransaction(currentSession, original)) return transactionAccessDenied(currentSession, original);
         if (!"posted".equals(original.getStatus())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "REVERSAL_NOT_AVAILABLE", "Only posted financial transactions can be reversed."));
@@ -465,7 +548,7 @@ class FinancialTransactionController {
     }
 
     private ResponseEntity<?> receiptResponse(FinancialTransaction transaction, AuthService.CurrentSession currentSession) {
-        if (!canAccess(currentSession, transaction.getTenantId())) return tenantAccessDenied();
+        if (!canAccessTransaction(currentSession, transaction)) return transactionAccessDenied(currentSession, transaction);
         if (!"posted".equals(transaction.getStatus())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "RECEIPT_NOT_AVAILABLE", "Receipts are only available for posted transactions."));
@@ -669,9 +752,57 @@ class FinancialTransactionController {
         return authService.isPlatform(currentSession.user()) || tenantId.equals(currentSession.user().getTenantId());
     }
 
+    private List<String> branchScope(AuthService.CurrentSession currentSession, String tenantId) {
+        if (authService.isPlatform(currentSession.user()) || authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return List.of();
+        }
+        return branchRepository.findByTenantIdAndManagerUserIdOrderByCodeAsc(tenantId, currentSession.user().getId()).stream()
+                .map(Branch::getId)
+                .toList();
+    }
+
+    private boolean canAccessTransaction(AuthService.CurrentSession currentSession, FinancialTransaction transaction) {
+        return canAccess(currentSession, transaction.getTenantId())
+                && canAccessBranch(currentSession, transaction.getTenantId(), transaction.getBranchId());
+    }
+
+    private boolean canAccessBranch(AuthService.CurrentSession currentSession, String tenantId, String branchId) {
+        List<String> scopedBranchIds = branchScope(currentSession, tenantId);
+        return scopedBranchIds.isEmpty() || scopedBranchIds.contains(branchId);
+    }
+
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access financial transactions for another tenant."));
+    }
+
+    private ResponseEntity<ApiErrorResponse> transactionAccessDenied(AuthService.CurrentSession currentSession, FinancialTransaction transaction) {
+        return canAccess(currentSession, transaction.getTenantId()) ? branchAccessDenied() : tenantAccessDenied();
+    }
+
+    private ResponseEntity<ApiErrorResponse> branchAccessDenied() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(403, "BRANCH_ACCESS_DENIED", "Cannot access financial transactions outside assigned branch scope."));
+    }
+
+    private String searchTerm(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value.trim();
+    }
+
+    private String searchable(String... values) {
+        return String.join(" ", java.util.Arrays.stream(values)
+                .map(value -> value == null ? "" : value)
+                .toList()).toLowerCase(Locale.ROOT);
+    }
+
+    private Sort sortBy(boolean platformAll, String requestedSort, String requestedDirection, Map<String, String> allowed, String fallback, Sort.Direction fallbackDirection) {
+        String property = allowed.getOrDefault(requestedSort == null ? "" : requestedSort.trim(), fallback);
+        Sort.Direction resolvedDirection = requestedDirection == null || requestedDirection.isBlank()
+                ? fallbackDirection
+                : ("desc".equalsIgnoreCase(requestedDirection) ? Sort.Direction.DESC : Sort.Direction.ASC);
+        Sort sort = Sort.by(resolvedDirection, property);
+        return platformAll && !"tenantId".equals(property) ? Sort.by(Sort.Direction.ASC, "tenantId").and(sort) : sort;
     }
 
     record CreateTransactionRequest(

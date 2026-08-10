@@ -1,5 +1,6 @@
 package com.methaltech.sacco.notification;
 
+import com.methaltech.sacco.identity.StaffNotificationRecipientService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.tenant.TenantMoneyFormatter;
 import com.methaltech.sacco.tenant.TenantService;
@@ -18,6 +19,7 @@ public class NotificationService {
     private final NotificationTemplateRepository templateRepository;
     private final TenantService tenantService;
     private final TenantMoneyFormatter moneyFormatter;
+    private final StaffNotificationRecipientService staffNotificationRecipientService;
     private final List<NotificationProvider> providers;
 
     public Notification notifyPaymentPosted(Member member, String purpose, BigDecimal amount, String resourceType, String resourceId) {
@@ -30,6 +32,24 @@ public class NotificationService {
                 member.getTenantId(),
                 member.getId(),
                 eventType,
+                title,
+                message,
+                resourceType,
+                resourceId));
+        createDeliveries(notification, member, title, message);
+        return notification;
+    }
+
+    public Notification notifyPaymentPendingApproval(Member member, String purpose, BigDecimal amount, String resourceType, String resourceId) {
+        String title = "Payment received";
+        String message = "Your mobile-money " + purpose.replace('_', ' ') + " of "
+                + formattedAmount(member.getTenantId(), amount)
+                + " was received and is pending SACCO confirmation. Your balance updates once it is approved.";
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                "payment_pending_approval",
                 title,
                 message,
                 resourceType,
@@ -82,6 +102,20 @@ public class NotificationService {
                 message,
                 "complaint",
                 complaintId));
+    }
+
+    public Notification notifyChatReply(Member member, String threadId, String subject, String preview) {
+        String title = "New support reply";
+        String message = "Reply on " + subject + ": " + preview;
+        return notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                "chat_reply",
+                title,
+                message,
+                "chat_thread",
+                threadId));
     }
 
     public Notification notifySaccoContact(
@@ -137,6 +171,46 @@ public class NotificationService {
         return notification;
     }
 
+    public List<Notification> notifyPaymentRequestManuallyClosed(
+            String tenantId,
+            String externalReference,
+            String status,
+            BigDecimal amount,
+            String currencyCode,
+            String reason,
+            String resourceId) {
+        String title = "Mobile-money request needs review";
+        String amountText = amount == null ? "" : " for " + formattedAmount(tenantId, amount);
+        String reasonText = reason == null || reason.isBlank() ? "" : " Reason: " + reason.trim();
+        String message = "Payment request " + safe(externalReference) + amountText
+                + " was marked " + safe(status) + "." + reasonText;
+        return staffNotificationRecipientService.saccoPaymentExceptionRecipients(tenantId).stream()
+                .map(recipient -> {
+                    Notification notification = notificationRepository.save(new Notification(
+                            "notification_" + UUID.randomUUID(),
+                            tenantId,
+                            null,
+                            recipient.userId(),
+                            "payment_request_closed",
+                            title,
+                            message,
+                            "mobile_money_payment_request",
+                            resourceId));
+                    deliveryRepository.save(new NotificationDelivery(
+                            "delivery_" + UUID.randomUUID(),
+                            tenantId,
+                            notification.getId(),
+                            null,
+                            recipient.userId(),
+                            "in_app",
+                            "tereka_online",
+                            recipient.email() == null || recipient.email().isBlank() ? recipient.userId() : recipient.email(),
+                            message));
+                    return notification;
+                })
+                .toList();
+    }
+
     NotificationDelivery retryDelivery(NotificationDelivery original, Notification notification) {
         if (original == null) {
             throw new NotificationProviderException("Notification delivery was not found.");
@@ -176,6 +250,10 @@ public class NotificationService {
 
     private String formattedAmount(String tenantId, BigDecimal amount) {
         return moneyFormatter.format(tenantService.findById(tenantId).orElse(null), amount);
+    }
+
+    private String safe(String value) {
+        return value == null || value.isBlank() ? "unknown" : value.trim();
     }
 
     private void createDeliveries(Notification notification, Member member, String title, String message) {

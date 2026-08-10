@@ -2,6 +2,8 @@ package com.methaltech.sacco.accounting;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.branch.Branch;
+import com.methaltech.sacco.branch.BranchRepository;
 import com.methaltech.sacco.finance.FinancialTransaction;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
 import com.methaltech.sacco.finance.WelfareClaim;
@@ -12,6 +14,8 @@ import com.methaltech.sacco.loan.Loan;
 import com.methaltech.sacco.loan.LoanRepayment;
 import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.loan.LoanRepository;
+import com.methaltech.sacco.member.Member;
+import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.subscription.SubscriptionPayment;
 import com.methaltech.sacco.subscription.SubscriptionPaymentRepository;
@@ -63,6 +67,8 @@ class AccountingController {
     private final WelfareClaimRepository welfareClaimRepository;
     private final LoanRepository loanRepository;
     private final LoanRepaymentRepository repaymentRepository;
+    private final MemberRepository memberRepository;
+    private final BranchRepository branchRepository;
     private final SubscriptionPaymentRepository subscriptionPaymentRepository;
     private final AuthService authService;
     private final AuditService auditService;
@@ -79,6 +85,8 @@ class AccountingController {
             WelfareClaimRepository welfareClaimRepository,
             LoanRepository loanRepository,
             LoanRepaymentRepository repaymentRepository,
+            MemberRepository memberRepository,
+            BranchRepository branchRepository,
             SubscriptionPaymentRepository subscriptionPaymentRepository,
             AuthService authService,
             AuditService auditService) {
@@ -93,6 +101,8 @@ class AccountingController {
         this.welfareClaimRepository = welfareClaimRepository;
         this.loanRepository = loanRepository;
         this.repaymentRepository = repaymentRepository;
+        this.memberRepository = memberRepository;
+        this.branchRepository = branchRepository;
         this.subscriptionPaymentRepository = subscriptionPaymentRepository;
         this.authService = authService;
         this.auditService = auditService;
@@ -480,6 +490,7 @@ class AccountingController {
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null) return tenantAccessDenied();
+        if (!branchScope(currentSession, tenantId).isEmpty()) return branchAccessDenied("Cannot access SACCO-wide statement lines from a branch-scoped account.");
 
         List<StatementLine> lines = authService.isPlatform(currentSession.user()) && requestedTenantId == null
                 ? statementLineRepository.findAllByOrderByTenantIdAscStatementDateDescCreatedAtDesc()
@@ -558,6 +569,7 @@ class AccountingController {
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null) return tenantAccessDenied();
+        if (!branchScope(currentSession, tenantId).isEmpty()) return branchAccessDenied("Cannot access SACCO-wide reconciliation from a branch-scoped account.");
 
         List<String> tenantIds = authService.isPlatform(currentSession.user()) && requestedTenantId == null
                 ? statementLineRepository.findAll().stream().map(StatementLine::getTenantId).distinct().toList()
@@ -572,6 +584,10 @@ class AccountingController {
         List<FinancialTransaction> transactions = authService.isPlatform(currentSession.user()) && tenantId == null
                 ? transactionRepository.findAllByOrderByTenantIdAscCreatedAtDesc()
                 : transactionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        List<String> branchScope = branchScope(currentSession, tenantId);
+        if (!branchScope.isEmpty()) {
+            transactions = transactionRepository.findByTenantIdAndBranchIdInOrderByCreatedAtDesc(tenantId, branchScope);
+        }
 
         return transactions.stream()
                 .filter(transaction -> "posted".equals(transaction.getStatus()))
@@ -618,6 +634,10 @@ class AccountingController {
         List<Loan> loans = authService.isPlatform(currentSession.user()) && tenantId == null
                 ? loanRepository.findAllByOrderByTenantIdAscCreatedAtDesc()
                 : loanRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        List<String> branchScope = branchScope(currentSession, tenantId);
+        if (!branchScope.isEmpty()) {
+            loans = loanRepository.findByTenantIdAndMemberBranchIds(tenantId, branchScope);
+        }
 
         return loans.stream()
                 .filter(loan -> loan.getDisbursedAt() != null)
@@ -640,6 +660,13 @@ class AccountingController {
             AuthService.CurrentSession currentSession,
             Map<String, ChartOfAccount> accounts) {
         List<LoanRepayment> repayments = repaymentRepository.findAll();
+        List<String> branchScope = branchScope(currentSession, tenantId);
+        if (!branchScope.isEmpty()) {
+            List<String> loanIds = loanRepository.findByTenantIdAndMemberBranchIds(tenantId, branchScope).stream()
+                    .map(Loan::getId)
+                    .toList();
+            repayments = loanIds.isEmpty() ? List.of() : repaymentRepository.findByLoanIdIn(loanIds);
+        }
 
         return repayments.stream()
                 .filter(repayment -> authService.isPlatform(currentSession.user()) && tenantId == null
@@ -667,6 +694,9 @@ class AccountingController {
         List<Expense> expenses = authService.isPlatform(currentSession.user()) && tenantId == null
                 ? expenseRepository.findAllByOrderByTenantIdAscExpenseDateDescCreatedAtDesc()
                 : expenseRepository.findByTenantIdOrderByExpenseDateDescCreatedAtDesc(tenantId);
+        if (!branchScope(currentSession, tenantId).isEmpty()) {
+            return List.of();
+        }
 
         return expenses.stream()
                 .filter(expense -> "posted".equals(expense.getStatus()))
@@ -693,6 +723,9 @@ class AccountingController {
         List<SubscriptionPayment> payments = authService.isPlatform(currentSession.user()) && tenantId == null
                 ? subscriptionPaymentRepository.findAllByOrderByTenantIdAscReceivedAtDesc()
                 : subscriptionPaymentRepository.findByTenantIdOrderByReceivedAtDesc(tenantId);
+        if (!branchScope(currentSession, tenantId).isEmpty()) {
+            return List.of();
+        }
 
         return payments.stream()
                 .map(payment -> journal(
@@ -716,6 +749,16 @@ class AccountingController {
         List<WelfareClaim> claims = authService.isPlatform(currentSession.user()) && tenantId == null
                 ? welfareClaimRepository.findAllByOrderByTenantIdAscSubmittedAtDesc()
                 : welfareClaimRepository.findByTenantIdOrderBySubmittedAtDesc(tenantId);
+        List<String> branchScope = branchScope(currentSession, tenantId);
+        if (!branchScope.isEmpty()) {
+            Set<String> memberIds = memberRepository.findByTenantIdAndBranchIdInOrderByMembershipNoAsc(tenantId, branchScope)
+                    .stream()
+                    .map(Member::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+            claims = claims.stream()
+                    .filter(claim -> memberIds.contains(claim.getMemberId()))
+                    .toList();
+        }
 
         return claims.stream()
                 .filter(claim -> "paid".equals(claim.getStatus()))
@@ -742,6 +785,9 @@ class AccountingController {
         List<Asset> assets = authService.isPlatform(currentSession.user()) && tenantId == null
                 ? assetRepository.findAllByOrderByTenantIdAscPurchaseDateDescCreatedAtDesc()
                 : assetRepository.findByTenantIdOrderByPurchaseDateDescCreatedAtDesc(tenantId);
+        if (!branchScope(currentSession, tenantId).isEmpty()) {
+            return List.of();
+        }
 
         return assets.stream()
                 .filter(asset -> "active".equals(asset.getStatus()))
@@ -987,9 +1033,23 @@ class AccountingController {
         return authService.isPlatform(currentSession.user()) || tenantId.equals(currentSession.user().getTenantId());
     }
 
+    private List<String> branchScope(AuthService.CurrentSession currentSession, String tenantId) {
+        if (tenantId == null || authService.isPlatform(currentSession.user()) || authService.hasPermission(currentSession.user(), "tenants:manage")) {
+            return List.of();
+        }
+        return branchRepository.findByTenantIdAndManagerUserIdOrderByCodeAsc(tenantId, currentSession.user().getId()).stream()
+                .map(Branch::getId)
+                .toList();
+    }
+
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access accounting data for another tenant."));
+    }
+
+    private ResponseEntity<ApiErrorResponse> branchAccessDenied(String message) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(403, "BRANCH_ACCESS_DENIED", message));
     }
 
     record UpdateAccountingPeriodStatusRequest(@NotBlank String status) {

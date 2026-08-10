@@ -2,6 +2,7 @@ package com.methaltech.sacco.member;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.accounting.MobileMoneyProviderRouter;
 import com.methaltech.sacco.complaint.Complaint;
 import com.methaltech.sacco.complaint.ComplaintRepository;
 import com.methaltech.sacco.complaint.ComplaintResponse;
@@ -84,10 +85,12 @@ class MemberAuthController {
     private final TenantRepository tenantRepository;
     private final TenantService tenantService;
     private final AuditService auditService;
+    private final MemberPrivacyRequestRepository privacyRequestRepository;
     private final PasswordHasher passwordHasher;
     private final TokenGenerator tokenGenerator;
     private final LoginAttemptService loginAttemptService;
     private final DemoCredentialPolicy demoCredentialPolicy;
+    private final MobileMoneyProviderRouter mobileMoneyProviderRouter;
 
     MemberAuthController(
             MemberRepository memberRepository,
@@ -106,10 +109,12 @@ class MemberAuthController {
             TenantRepository tenantRepository,
             TenantService tenantService,
             AuditService auditService,
+            MemberPrivacyRequestRepository privacyRequestRepository,
             PasswordHasher passwordHasher,
             TokenGenerator tokenGenerator,
             LoginAttemptService loginAttemptService,
-            DemoCredentialPolicy demoCredentialPolicy) {
+            DemoCredentialPolicy demoCredentialPolicy,
+            MobileMoneyProviderRouter mobileMoneyProviderRouter) {
         this.memberRepository = memberRepository;
         this.memberSessionRepository = memberSessionRepository;
         this.loanRepository = loanRepository;
@@ -126,10 +131,12 @@ class MemberAuthController {
         this.tenantRepository = tenantRepository;
         this.tenantService = tenantService;
         this.auditService = auditService;
+        this.privacyRequestRepository = privacyRequestRepository;
         this.passwordHasher = passwordHasher;
         this.tokenGenerator = tokenGenerator;
         this.loginAttemptService = loginAttemptService;
         this.demoCredentialPolicy = demoCredentialPolicy;
+        this.mobileMoneyProviderRouter = mobileMoneyProviderRouter;
     }
 
     @PostMapping("/login")
@@ -243,6 +250,10 @@ class MemberAuthController {
         return trimmed.length() <= maxLength ? trimmed : trimmed.substring(0, maxLength);
     }
 
+    private String normalizedPrivacyType(String value) {
+        return value == null ? "" : value.trim().toLowerCase().replace("-", "_");
+    }
+
     @GetMapping("/me")
     ResponseEntity<?> me(@RequestHeader(name = "Authorization", required = false) String authorization) {
         MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
@@ -275,6 +286,82 @@ class MemberAuthController {
                 currentSession.member().getId(),
                 request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(new LogoutResponse(true)));
+    }
+
+    @PatchMapping("/privacy-consents")
+    ResponseEntity<?> updatePrivacyConsents(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody UpdatePrivacyConsentsRequest body,
+            HttpServletRequest request) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        member.updateConsents(
+                body.privacyNoticeAccepted(),
+                body.smsConsent(),
+                body.emailConsent(),
+                body.mobileMoneyConsent(),
+                body.providerDataSharingConsent());
+        Member saved = memberRepository.save(member);
+        auditService.record(
+                saved.getTenantId(),
+                (String) null,
+                saved.getFullName(),
+                "Updated member privacy consents",
+                "member_privacy_consent",
+                saved.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(MemberResponse.from(saved)));
+    }
+
+    @GetMapping("/privacy-requests")
+    ResponseEntity<?> listPrivacyRequests(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        return ResponseEntity.ok(ApiResponse.of(privacyRequestRepository
+                .findByTenantIdAndMemberIdOrderByCreatedAtDesc(member.getTenantId(), member.getId())
+                .stream()
+                .map(MemberPrivacyRequestResponse::from)
+                .toList()));
+    }
+
+    @PostMapping("/privacy-requests")
+    ResponseEntity<?> createPrivacyRequest(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody CreatePrivacyRequestRequest body,
+            HttpServletRequest request) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        String requestType = normalizedPrivacyType(body.requestType());
+        if (!MemberPrivacyRequest.ALLOWED_TYPES.contains(requestType)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_PRIVACY_REQUEST_TYPE", "Unsupported privacy request type."));
+        }
+
+        Member member = currentSession.member();
+        MemberPrivacyRequest privacyRequest = privacyRequestRepository.save(new MemberPrivacyRequest(
+                "member_privacy_request_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                requestType,
+                truncate(body.reason(), 500),
+                member.getId(),
+                null));
+        auditService.record(
+                member.getTenantId(),
+                (String) null,
+                member.getFullName(),
+                "Submitted member privacy request " + requestType,
+                "member_privacy_request",
+                privacyRequest.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MemberPrivacyRequestResponse.from(privacyRequest)));
     }
 
     @PostMapping("/extend-session")
@@ -337,6 +424,7 @@ class MemberAuthController {
                 notifications,
                 pendingGuarantors,
                 statementLines,
+                mobileMoneyProviderRouter.availablePaymentOptions(),
                 lastUpdatedAt,
                 true)));
     }
@@ -673,6 +761,17 @@ class MemberAuthController {
     record SessionExtensionResponse(Instant expiresAt) {
     }
 
+    record UpdatePrivacyConsentsRequest(
+            boolean privacyNoticeAccepted,
+            boolean smsConsent,
+            boolean emailConsent,
+            boolean mobileMoneyConsent,
+            boolean providerDataSharingConsent) {
+    }
+
+    record CreatePrivacyRequestRequest(@NotBlank String requestType, String reason) {
+    }
+
     record MobileDashboardResponse(
             MemberResponse member,
             TenantResponse tenant,
@@ -682,6 +781,7 @@ class MemberAuthController {
             List<NotificationResponse> notifications,
             List<LoanGuarantorResponse> pendingGuarantorRequests,
             List<MobileStatementLineResponse> statementLines,
+            List<MobileMoneyProviderRouter.PaymentProviderOption> paymentProviders,
             Instant lastUpdatedAt,
             boolean serverConfirmed) {
     }
