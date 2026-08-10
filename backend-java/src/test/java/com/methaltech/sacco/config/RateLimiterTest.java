@@ -71,12 +71,17 @@ class RateLimiterTest {
     }
 
     @Test
-    void redisStoreFailsFastUntilAdapterIsImplemented() {
-        assertThrows(IllegalStateException.class, () -> new RateLimiter("redis"));
+    void redisStoreUsesSharedCommandCounter() {
+        AtomicLong redisCounter = new AtomicLong(0);
+        RateLimiter redisLimiter = new RateLimiter("redis", (key, ttl) -> redisCounter.incrementAndGet());
+
+        assertTrue(redisLimiter.tryAcquire("ip-redis", 2, WINDOW));
+        assertTrue(redisLimiter.tryAcquire("ip-redis", 2, WINDOW));
+        assertFalse(redisLimiter.tryAcquire("ip-redis", 2, WINDOW));
     }
 
     @Test
     void unknownStoreFailsFast() {
-        assertThrows(IllegalStateException.class, () -> new RateLimiter("database"));
+        assertThrows(IllegalStateException.class, () -> new RateLimiter("database", (key, ttl) -> 1L));
     }
 }
