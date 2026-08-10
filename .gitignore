@@ -7,6 +7,8 @@ reports/migration-evidence/*
 !reports/migration-evidence/.gitkeep
 reports/deployment-evidence/*
 !reports/deployment-evidence/.gitkeep
+reports/ha-evidence/*
+!reports/ha-evidence/.gitkeep
 .env
 .env.*
 *.log
