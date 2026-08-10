@@ -310,6 +310,97 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
+  /sacco-payment-accounts:
+    get:
+      tags: [SACCO administration]
+      summary: List SACCO-owned collection accounts
+      description: >
+        Lists the mobile-money numbers/merchant codes and bank accounts owned by the current SACCO,
+        or by a selected SACCO when a platform user supplies `tenantId`.
+      parameters:
+        - { name: tenantId, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Collection accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/SaccoPaymentAccount" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [SACCO administration]
+      summary: Add a SACCO-owned collection account
+      description: >
+        SACCO-staff-only action that adds the SACCO's own mobile-money account, merchant code, or
+        bank account. Platform users control allowed channels but do not register or own these
+        accounts. The request is rejected when the platform-approved collection mode does not allow
+        that channel.
+      parameters:
+        - { name: tenantId, in: query, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaccoPaymentAccountRequest" }
+      responses:
+        "201":
+          description: Collection account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SaccoPaymentAccount" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /sacco-payment-accounts/{accountId}:
+    patch:
+      tags: [SACCO administration]
+      summary: Update a SACCO-owned collection account
+      description: SACCO-staff-only action; platform users have read-only visibility.
+      parameters:
+        - { name: accountId, in: path, required: true, schema: { type: string } }
+        - { name: tenantId, in: query, required: false, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaccoPaymentAccountRequest" }
+      responses:
+        "200":
+          description: Collection account updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SaccoPaymentAccount" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [SACCO administration]
+      summary: Remove a SACCO-owned collection account
+      description: SACCO-staff-only action; platform users have read-only visibility.
+      parameters:
+        - { name: accountId, in: path, required: true, schema: { type: string } }
+        - { name: tenantId, in: query, required: false, schema: { type: string } }
+      responses:
+        "204": { description: Collection account removed }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /member-auth/login:
     post:
       tags: [Member self-service]
@@ -362,6 +453,29 @@ paths:
                         type: array
                         description: Safe member-facing mobile-money options; secrets and missing configuration are not exposed.
                         items: { $ref: "#/components/schemas/PaymentProviderOption" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /member-auth/collection-accounts:
+    get:
+      tags: [Member self-service]
+      summary: Member-visible SACCO collection accounts
+      description: >
+        Returns only active SACCO-owned payment accounts for channels that are both platform-allowed
+        and SACCO-activated. Members pay directly into these SACCO accounts; funds do not pass
+        through a platform holding account.
+      security:
+        - memberBearer: []
+      responses:
+        "200":
+          description: Member-visible collection accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/SaccoPaymentAccount" }
         "401": { $ref: "#/components/responses/Error" }
 
   /member-auth/privacy-consents:
@@ -1526,6 +1640,51 @@ components:
         bankActive:
           type: boolean
           description: SACCO requests bank-led collection activation.
+
+    SaccoPaymentAccountRequest:
+      type: object
+      required: [channel, accountName, accountNumber]
+      properties:
+        channel:
+          type: string
+          enum: [mobile_money, bank]
+          description: Collection channel; must be allowed by the platform collection mode.
+        network:
+          type: string
+          nullable: true
+          example: mtn
+          description: Mobile-money network, such as `mtn` or `airtel`.
+        accountName: { type: string, example: Green Valley Collections }
+        accountNumber:
+          type: string
+          example: "0779123456"
+          description: Mobile-money number, merchant code, or bank account number owned by the SACCO.
+        bankName: { type: string, nullable: true, example: Stanbic Bank }
+        branch: { type: string, nullable: true, example: Wakiso }
+        swiftCode: { type: string, nullable: true, example: SBICUGKX }
+        instructions:
+          type: string
+          nullable: true
+          example: Use your membership number as the payment reference.
+        active: { type: boolean, nullable: true }
+
+    SaccoPaymentAccount:
+      type: object
+      description: SACCO-owned account that members pay into directly; the platform does not hold these funds.
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        channel: { type: string, enum: [mobile_money, bank] }
+        network: { type: string, nullable: true }
+        accountName: { type: string }
+        accountNumber: { type: string }
+        bankName: { type: string, nullable: true }
+        branch: { type: string, nullable: true }
+        swiftCode: { type: string, nullable: true }
+        instructions: { type: string, nullable: true }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
 
     MobileMoneyCallbackRequest:
       type: object

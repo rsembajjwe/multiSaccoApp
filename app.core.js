@@ -93,6 +93,7 @@ function emptyData() {
     suppliers: [],
     expenses: [],
     assets: [],
+    saccoPaymentAccounts: [],
     governanceMeetings: [],
     statementLines: [],
     reconciliation: null,
@@ -119,6 +120,7 @@ function emptyMemberData() {
     pendingGuarantors: [],
     complaints: [],
     chatThreads: [],
+    collectionAccounts: [],
     privacyRequests: [],
     drafts: [],
     sessionExpiresAt: ""

@@ -136,6 +136,16 @@ function memberPaymentsView() {
   `;
 }
 
+function memberCollectionAccountsCard() {
+  const accounts = (state.memberData.collectionAccounts || []).filter((a) => a.active !== false);
+  if (!accounts.length) return "";
+  return `
+    <div class="notice compact collection-accounts-card">
+      <strong>Pay directly to your SACCO's accounts</strong>
+      ${accounts.map((a) => `<span>${escapeHtml(a.channel === "bank" ? (a.bankName || "Bank") : (a.network || "Mobile money").toUpperCase())}: ${escapeHtml(a.accountName || "")} - <b>${escapeHtml(a.accountNumber || "")}</b>${a.branch ? " / " + escapeHtml(a.branch) : ""}${a.instructions ? " / " + escapeHtml(a.instructions) : ""}</span>`).join("")}
+    </div>`;
+}
+
 function memberPaymentFormPanel(payableLoans) {
   const tenant = state.memberData.dashboard?.tenant || {};
   const mmAvailable = !!tenant.mobileMoneyCollectionAvailable;
@@ -150,6 +160,7 @@ function memberPaymentFormPanel(payableLoans) {
   }
   if (!mmAvailable && bankAvailable) {
     return `
+      ${memberCollectionAccountsCard()}
       ${memberBankCollectionPanel(payableLoans, false)}
     `;
   }
@@ -170,6 +181,7 @@ function memberPaymentFormPanel(payableLoans) {
         </div>
       </div>
       ${bankAvailable ? `<div class="notice compact payment-route-card"><strong>Bank collection also enabled.</strong><span>You may alternatively deposit to the SACCO bank account and present the bank reference to the SACCO office for receipting.</span></div>` : ""}
+      ${memberCollectionAccountsCard()}
       ${state.memberPaymentMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberPaymentMessage)}</strong></div>` : ""}
       ${state.memberPaymentError ? `<div class="notice warning"><strong>Payment failed.</strong><span>${escapeHtml(state.memberPaymentError)}</span></div>` : ""}
       <form id="memberPaymentForm" class="form-grid">

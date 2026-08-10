@@ -160,6 +160,16 @@ function tenantDetailPanel() {
         ${recordTable("Registration profile", [profile], ["legalName", "tin", "umraLicenseNo", "cooperativeRegistrationNo", "address", "website"])}
         ${recordTable("Approval history", dataRows("auditEvents").filter((event) => event.recordReference === tenant.id || event.recordId === tenant.id), ["createdAt", "actor", "action", "module", "result"])}
       </div>
+      ${(state.selectedTenantPaymentAccounts || []).length
+        ? recordTable("Collection accounts (SACCO-owned, read-only)", (state.selectedTenantPaymentAccounts || []).map((a) => ({
+            channel: labelize(a.channel || ""),
+            provider: a.channel === "bank" ? (a.bankName || "") : String(a.network || "").toUpperCase(),
+            accountName: a.accountName,
+            accountNumber: a.accountNumber,
+            branch: a.branch || "",
+            status: a.active ? "active" : "inactive"
+          })), ["channel", "provider", "accountName", "accountNumber", "branch", "status"])
+        : `<div class="notice compact"><span>This SACCO has not configured any collection accounts yet.</span></div>`}
       <form id="tenantStatusForm" class="form-grid single">
         <input type="hidden" id="selectedTenantId" value="${escapeHtml(tenant.id)}">
         <label>

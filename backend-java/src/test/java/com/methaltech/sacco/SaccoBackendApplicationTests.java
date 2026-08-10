@@ -25,6 +25,7 @@ import static org.hamcrest.Matchers.emptyOrNullString;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -243,6 +244,73 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.tenant.mobileMoneyCollectionAvailable", is(true)));
 	}
 
+	@Test
+	void saccoManagesItsOwnCollectionAccountsAndMembersSeeThem() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String saccoAdminToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+
+		setCollectionMode(platformToken, "BOTH");
+		setCollectionSettings(saccoAdminToken, true, true);
+
+		// Green Valley is allowed for BOTH, so a SACCO admin can add its own mobile-money account.
+		MvcResult created = mockMvc.perform(post("/api/v1/sacco-payment-accounts")
+						.header("Authorization", "Bearer " + saccoAdminToken)
+						.contentType("application/json")
+						.content("""
+								{ "channel": "mobile_money", "network": "mtn", "accountName": "Green Valley Collections", "accountNumber": "0779123456", "instructions": "Use your membership number as reference" }
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+				.andExpect(jsonPath("$.data.channel", is("mobile_money")))
+				.andExpect(jsonPath("$.data.accountNumber", is("0779123456")))
+				.andReturn();
+		String accountId = objectMapper.readTree(created.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		// The SACCO admin lists its own accounts.
+		mockMvc.perform(get("/api/v1/sacco-payment-accounts").header("Authorization", "Bearer " + saccoAdminToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].accountNumber", hasItem("0779123456")));
+
+		// Platform can inspect, but cannot register SACCO-owned money accounts.
+		mockMvc.perform(post("/api/v1/sacco-payment-accounts?tenantId=tenant_green")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{ "channel": "mobile_money", "network": "airtel", "accountName": "Platform Should Not Own This", "accountNumber": "0700123456" }
+								"""))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error.code", is("SACCO_STAFF_REQUIRED")));
+
+		// Members see the SACCO's active collection accounts (where to pay).
+		mockMvc.perform(get("/api/v1/member-auth/collection-accounts").header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].accountNumber", hasItem("0779123456")));
+
+		// If the platform later disallows online collection, members no longer see the account.
+		setCollectionMode(platformToken, "NONE");
+		mockMvc.perform(get("/api/v1/member-auth/collection-accounts").header("Authorization", "Bearer " + memberToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(0)));
+
+		// A SACCO admin cannot add a channel the platform disallows.
+		setCollectionMode(platformToken, "MOBILE_MONEY_ONLY");
+		mockMvc.perform(post("/api/v1/sacco-payment-accounts")
+						.header("Authorization", "Bearer " + saccoAdminToken)
+						.contentType("application/json")
+						.content("""
+								{ "channel": "bank", "accountName": "Green Valley Bank", "accountNumber": "01234567890", "bankName": "Stanbic" }
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("COLLECTION_METHOD_NOT_ALLOWED")));
+
+		// Restore Green Valley to BOTH and clean up the created account.
+		setCollectionMode(platformToken, "BOTH");
+		setCollectionSettings(saccoAdminToken, true, true);
+		mockMvc.perform(delete("/api/v1/sacco-payment-accounts/" + accountId).header("Authorization", "Bearer " + saccoAdminToken))
+				.andExpect(status().isNoContent());
+	}
+
 	private void setCollectionMode(String platformToken, String mode) throws Exception {
 		mockMvc.perform(patch("/api/v1/tenants/tenant_green/collection-mode")
 						.header("Authorization", "Bearer " + platformToken)
@@ -250,6 +318,14 @@ class SaccoBackendApplicationTests {
 						.content("{ \"allowedCollectionMode\": \"" + mode + "\" }"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.allowedCollectionMode", is(mode)));
+	}
+
+	private void setCollectionSettings(String saccoAdminToken, boolean mobileMoneyActive, boolean bankActive) throws Exception {
+		mockMvc.perform(patch("/api/v1/tenants/tenant_green/collection-settings")
+						.header("Authorization", "Bearer " + saccoAdminToken)
+						.contentType("application/json")
+						.content("{ \"mobileMoneyActive\": " + mobileMoneyActive + ", \"bankActive\": " + bankActive + " }"))
+				.andExpect(status().isOk());
 	}
 
 	@Test

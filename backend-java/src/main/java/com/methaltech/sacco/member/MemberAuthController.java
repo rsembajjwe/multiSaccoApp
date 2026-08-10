@@ -32,6 +32,8 @@ import com.methaltech.sacco.tenant.Tenant;
 import com.methaltech.sacco.tenant.TenantRepository;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
+import com.methaltech.sacco.tenant.SaccoPaymentAccountRepository;
+import com.methaltech.sacco.tenant.SaccoPaymentAccountResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -91,6 +93,7 @@ class MemberAuthController {
     private final LoginAttemptService loginAttemptService;
     private final DemoCredentialPolicy demoCredentialPolicy;
     private final MobileMoneyProviderRouter mobileMoneyProviderRouter;
+    private final SaccoPaymentAccountRepository paymentAccountRepository;
 
     MemberAuthController(
             MemberRepository memberRepository,
@@ -114,7 +117,8 @@ class MemberAuthController {
             TokenGenerator tokenGenerator,
             LoginAttemptService loginAttemptService,
             DemoCredentialPolicy demoCredentialPolicy,
-            MobileMoneyProviderRouter mobileMoneyProviderRouter) {
+            MobileMoneyProviderRouter mobileMoneyProviderRouter,
+            SaccoPaymentAccountRepository paymentAccountRepository) {
         this.memberRepository = memberRepository;
         this.memberSessionRepository = memberSessionRepository;
         this.loanRepository = loanRepository;
@@ -137,6 +141,7 @@ class MemberAuthController {
         this.loginAttemptService = loginAttemptService;
         this.demoCredentialPolicy = demoCredentialPolicy;
         this.mobileMoneyProviderRouter = mobileMoneyProviderRouter;
+        this.paymentAccountRepository = paymentAccountRepository;
     }
 
     @PostMapping("/login")
@@ -427,6 +432,22 @@ class MemberAuthController {
                 mobileMoneyProviderRouter.availablePaymentOptions(),
                 lastUpdatedAt,
                 true)));
+    }
+
+    @GetMapping("/collection-accounts")
+    ResponseEntity<?> listCollectionAccounts(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+        Tenant tenant = tenantRepository.findById(currentSession.member().getTenantId()).orElse(null);
+        if (tenant == null) return ResponseEntity.ok(ApiResponse.of(List.of()));
+
+        return ResponseEntity.ok(ApiResponse.of(paymentAccountRepository
+                .findByTenantIdAndActiveTrueOrderByChannelAscCreatedAtAsc(currentSession.member().getTenantId())
+                .stream()
+                .filter(account -> (account.isMobileMoney() && tenant.mobileMoneyCollectionAvailable())
+                        || (account.isBank() && tenant.bankCollectionAvailable()))
+                .map(SaccoPaymentAccountResponse::from)
+                .toList()));
     }
 
     @GetMapping("/notifications")

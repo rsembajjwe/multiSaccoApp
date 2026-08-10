@@ -486,7 +486,49 @@ function paymentCollectionSettingsPanel(tenant) {
         </label>
       </div>
       <div class="form-actions inline"><button class="button primary" type="button" data-save-collection-settings="${escapeHtml(tenant.id || state.user?.tenantId || "")}">Save collection settings</button></div>
+      ${saccoCollectionAccountsPanel(allowsMM, allowsBank)}
     </section>
+  `;
+}
+
+function saccoCollectionAccountsPanel(allowsMM, allowsBank) {
+  const accounts = dataRows("saccoPaymentAccounts");
+  const row = (a) => `
+    <div class="collection-account-row">
+      <div>
+        <strong>${escapeHtml(a.channel === "bank" ? (a.bankName || "Bank") : (a.network || "Mobile money").toUpperCase())}</strong>
+        <span>${escapeHtml(a.accountName || "")} / ${escapeHtml(a.accountNumber || "")}${a.branch ? " / " + escapeHtml(a.branch) : ""}</span>
+        <small>${escapeHtml(labelize(a.channel || ""))}${a.active ? "" : " / inactive"}${a.instructions ? " / " + escapeHtml(a.instructions) : ""}</small>
+      </div>
+      <button class="button ghost" type="button" data-remove-collection-account="${escapeHtml(a.id)}">Remove</button>
+    </div>`;
+  return `
+    <div class="collection-accounts-setup">
+      <h3>Your collection accounts</h3>
+      <p class="hint">Add the SACCO's own mobile-money numbers and bank accounts. Members pay into these directly; you record and reconcile the deposits.</p>
+      ${state.collectionAccountMessage ? `<div class="notice compact"><strong>${escapeHtml(state.collectionAccountMessage)}</strong></div>` : ""}
+      ${state.collectionAccountError ? `<div class="notice warning"><strong>Could not save.</strong><span>${escapeHtml(state.collectionAccountError)}</span></div>` : ""}
+      <div class="collection-account-list">
+        ${accounts.length ? accounts.map(row).join("") : `<div class="notice compact"><span>No collection accounts yet.</span></div>`}
+      </div>
+      <form id="collectionAccountForm" class="form-grid">
+        <label><span>Type</span>
+          <select id="caChannel">
+            ${allowsMM ? `<option value="mobile_money">Mobile money</option>` : ""}
+            ${allowsBank ? `<option value="bank">Bank account</option>` : ""}
+          </select>
+        </label>
+        <label><span>Network (mobile money)</span>
+          <select id="caNetwork"><option value="mtn">MTN</option><option value="airtel">Airtel</option></select>
+        </label>
+        <label><span>Account name</span><input id="caAccountName" placeholder="SACCO account holder name"></label>
+        <label><span>Number</span><input id="caAccountNumber" placeholder="MoMo number / merchant code, or bank account no."></label>
+        <label><span>Bank name (bank only)</span><input id="caBankName" placeholder="e.g. Stanbic"></label>
+        <label><span>Branch (bank only)</span><input id="caBranch" placeholder="Branch"></label>
+        <label class="wide"><span>Instructions (optional)</span><input id="caInstructions" placeholder="e.g. Use your membership number as the reference"></label>
+        <div class="form-actions inline"><button class="button secondary" type="button" data-add-collection-account="1">Add account</button></div>
+      </form>
+    </div>
   `;
 }
 
@@ -507,6 +549,47 @@ async function saveCollectionSettings(tenantId) {
     state.collectionSettingsError = error.code === "COLLECTION_METHOD_NOT_ALLOWED"
       ? (error.message || "That method is not allowed for this SACCO.")
       : (error.message || "Unable to save collection settings.");
+  }
+  renderShell();
+}
+
+async function saveCollectionAccount() {
+  const channel = document.getElementById("caChannel")?.value || "";
+  const payload = {
+    channel,
+    network: channel === "mobile_money" ? (document.getElementById("caNetwork")?.value || "") : null,
+    accountName: (document.getElementById("caAccountName")?.value || "").trim(),
+    accountNumber: (document.getElementById("caAccountNumber")?.value || "").trim(),
+    bankName: (document.getElementById("caBankName")?.value || "").trim(),
+    branch: (document.getElementById("caBranch")?.value || "").trim(),
+    instructions: (document.getElementById("caInstructions")?.value || "").trim()
+  };
+  state.collectionAccountMessage = "";
+  state.collectionAccountError = "";
+  if (!channel) { state.collectionAccountError = "Select an account type."; renderShell(); return; }
+  if (!payload.accountName || !payload.accountNumber) { state.collectionAccountError = "Account name and number are required."; renderShell(); return; }
+  try {
+    await api("/sacco-payment-accounts", { method: "POST", body: JSON.stringify(payload) });
+    await refreshAll();
+    state.collectionAccountMessage = "Collection account added.";
+  } catch (error) {
+    state.collectionAccountError = error.code === "COLLECTION_METHOD_NOT_ALLOWED"
+      ? (error.message || "That channel is not allowed for this SACCO.")
+      : (error.message || "Unable to add the collection account.");
+  }
+  renderShell();
+}
+
+async function removeCollectionAccount(accountId) {
+  if (!accountId) return;
+  state.collectionAccountMessage = "";
+  state.collectionAccountError = "";
+  try {
+    await api(`/sacco-payment-accounts/${encodeURIComponent(accountId)}`, { method: "DELETE" });
+    await refreshAll();
+    state.collectionAccountMessage = "Collection account removed.";
+  } catch (error) {
+    state.collectionAccountError = error.message || "Unable to remove the collection account.";
   }
   renderShell();
 }

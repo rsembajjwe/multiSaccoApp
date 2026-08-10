@@ -78,9 +78,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Provider routing by network so MTN and Airtel can be active simultaneously.
 - Member-facing provider tiles are filtered from backend provider options; M-Pesa remains hidden by
   product decision.
-- Bank collection has a member self-service reference/draft flow plus SACCO staff single-line and
-  batch statement import with row-level validation for reconciliation; real bank API integration is
-  still pending.
+- Bank collection has SACCO-owned mobile-money/bank collection account setup, member-visible
+  "pay directly to your SACCO" instructions, member reference/draft flow, and SACCO staff
+  single-line/batch statement import with row-level validation for reconciliation; real bank API
+  integration is still pending.
 
 ### Communication & Support
 
@@ -158,9 +159,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   validation.
 - **Secrets management needs a managed store and rotation.** Environment-backed config exists, but
   Vault/KMS/secret-manager integration and rotation procedures are not implemented.
-- **Bank collection depth is partial.** The member reference/draft flow and reconciliable
-  single-line/batch statement imports exist, but real bank API integration and bank notification
-  workflows remain.
+- **Bank collection depth is partial.** SACCO-owned collection account setup, member-facing direct
+  payment instructions, reference/draft flow, and reconciliable single-line/batch statement imports
+  exist, but real bank API integration and bank notification workflows remain.
 - **DB and connection-pool tuning needs load evidence.** Defaults exist, but N+1/query review and
   realistic load testing are not complete.
 

@@ -268,16 +268,19 @@ async function openTenantDetail(tenantId) {
   state.selectedTenantId = tenantId;
   state.selectedTenant = null;
   state.selectedTenantProfile = null;
+  state.selectedTenantPaymentAccounts = [];
   state.selectedTenantMessage = "";
   state.selectedTenantError = "";
   renderShell();
   try {
-    const [tenant, profile] = await Promise.all([
+    const [tenant, profile, paymentAccounts] = await Promise.all([
       api(`/tenants/${encodeURIComponent(tenantId)}`),
-      optionalApi(`/tenants/${encodeURIComponent(tenantId)}/profile`, null)
+      optionalApi(`/tenants/${encodeURIComponent(tenantId)}/profile`, null),
+      optionalApi(`/sacco-payment-accounts?tenantId=${encodeURIComponent(tenantId)}`, [])
     ]);
     state.selectedTenant = tenant;
     state.selectedTenantProfile = profile || {};
+    state.selectedTenantPaymentAccounts = Array.isArray(paymentAccounts) ? paymentAccounts : [];
   } catch (error) {
     state.selectedTenantError = error.message;
   }

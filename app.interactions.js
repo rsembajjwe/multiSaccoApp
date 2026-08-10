@@ -589,10 +589,17 @@ function bindEvents() {
   document.querySelectorAll("[data-save-collection-settings]").forEach((button) => {
     button.addEventListener("click", () => saveCollectionSettings(button.dataset.saveCollectionSettings));
   });
+  document.querySelectorAll("[data-add-collection-account]").forEach((button) => {
+    button.addEventListener("click", () => saveCollectionAccount());
+  });
+  document.querySelectorAll("[data-remove-collection-account]").forEach((button) => {
+    button.addEventListener("click", () => removeCollectionAccount(button.dataset.removeCollectionAccount));
+  });
   document.querySelector("[data-action='close-tenant-detail']")?.addEventListener("click", () => {
     state.selectedTenantId = "";
     state.selectedTenant = null;
     state.selectedTenantProfile = null;
+    state.selectedTenantPaymentAccounts = [];
     state.selectedTenantMessage = "";
     state.selectedTenantError = "";
     renderShell();

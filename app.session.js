@@ -301,6 +301,7 @@ async function refreshAll() {
     ["securitySummary", "/auth/security-summary"]
   ];
   if (isPlatform()) endpoints.push(["platformSecurityPolicy", "/platform-security-policy"]);
+  if (!isPlatform()) endpoints.push(["saccoPaymentAccounts", "/sacco-payment-accounts"]);
   if (isPlatform() && hasPermission("roles:create")) endpoints.push(["notificationIntegrationConfig", "/platform-integrations/notification-config"]);
   if (isPlatform() && hasPermission("roles:create")) endpoints.push(["mobileMoneyIntegrationConfig", "/platform-integrations/mobile-money-config"]);
   if (canAccessView("notifications")) endpoints.push(["notificationProviderStatus", "/notifications/provider-status"]);
@@ -347,6 +348,7 @@ async function refreshMember() {
   state.memberData.complaints = await optionalApi("/member-auth/complaints", []);
   state.memberData.chatThreads = await optionalApi("/member-auth/chat/threads", []);
   state.memberData.privacyRequests = await optionalApi("/member-auth/privacy-requests", []);
+  state.memberData.collectionAccounts = await optionalApi("/member-auth/collection-accounts", []);
   state.memberData.drafts = loadMemberDrafts();
   state.lastSync = new Date().toISOString();
   state.loading = false;

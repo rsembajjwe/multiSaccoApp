@@ -44,6 +44,7 @@ Java-backed routes currently implemented:
 - `POST /api/v1/members/:id/documents`
 - `POST /api/v1/member-auth/login`
 - `GET /api/v1/member-auth/me`
+- `GET /api/v1/member-auth/collection-accounts`
 - `GET /api/v1/member-auth/notifications`
 - `POST /api/v1/member-auth/logout`
 - `GET /api/v1/financial-products`
@@ -147,6 +148,7 @@ All JSON responses should follow one of these shapes:
 | POST | `/member-auth/login` | Authenticate a member with `saccoCode`, `identifier`, and `password`; identifier may be membership number, phone, or email. | Public |
 | GET | `/member-auth/me` | Get current member profile, tenant, branch, and balances. | Member |
 | GET | `/member-auth/mobile-dashboard` | Get mobile app dashboard balances, loans, notifications, and last update time. | Member |
+| GET | `/member-auth/collection-accounts` | List active SACCO-owned MoMo and bank accounts currently visible to the member. | Member |
 | POST | `/member-auth/mobile-loans` | Submit a loan application from the member mobile channel. | Member |
 | POST | `/member-auth/mobile-complaints` | Sync an offline member complaint draft. | Member |
 | GET | `/member-auth/notifications` | List current member in-app notifications. | Member |
@@ -209,6 +211,10 @@ All JSON responses should follow one of these shapes:
 | GET | `/statement-lines` | List imported bank, cash, mobile-money, and payroll statement lines. | Required |
 | POST | `/statement-lines` | Import a statement line for reconciliation. | SACCO staff |
 | POST | `/statement-lines/batch` | Batch import bank, cash, mobile-money, or payroll statement lines with row-level validation. | SACCO staff |
+| GET | `/sacco-payment-accounts` | List SACCO-owned MoMo numbers/merchant codes and bank accounts for the current or selected SACCO. | SACCO staff / platform |
+| POST | `/sacco-payment-accounts` | Add a SACCO-owned collection account for a platform-allowed channel. | SACCO staff |
+| PATCH | `/sacco-payment-accounts/:id` | Update or deactivate a SACCO-owned collection account. | SACCO staff |
+| DELETE | `/sacco-payment-accounts/:id` | Remove a SACCO-owned collection account. | SACCO staff |
 | GET | `/reconciliation` | Compare statement lines with ledger cash movements. | Required |
 | GET | `/regulatory-report` | Return supervisory report rows, consolidated totals, and CSV export text. | Required |
 | POST | `/integrations/mobile-money/callback` | Receive idempotent mobile-money payment callbacks. | Public/provider |
@@ -256,6 +262,7 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/member-auth/login`
 - `GET /api/v1/member-auth/me`
 - `GET /api/v1/member-auth/mobile-dashboard`
+- `GET /api/v1/member-auth/collection-accounts`
 - `POST /api/v1/member-auth/mobile-loans`
 - `POST /api/v1/member-auth/mobile-complaints`
 - `GET /api/v1/member-auth/notifications`
@@ -300,6 +307,10 @@ Implemented in the no-dependency development server:
 - `GET /api/v1/statement-lines`
 - `POST /api/v1/statement-lines`
 - `POST /api/v1/statement-lines/batch`
+- `GET /api/v1/sacco-payment-accounts`
+- `POST /api/v1/sacco-payment-accounts`
+- `PATCH /api/v1/sacco-payment-accounts/:id`
+- `DELETE /api/v1/sacco-payment-accounts/:id`
 - `GET /api/v1/reconciliation`
 - `GET /api/v1/regulatory-report`
 - `POST /api/v1/integrations/mobile-money/callback`
