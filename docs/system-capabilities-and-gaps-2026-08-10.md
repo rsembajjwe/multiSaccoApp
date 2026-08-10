@@ -98,7 +98,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Production multi-instance startup is guarded by Redis scale settings for rate limits,
   idempotency/shared hot keys, and Redis connectivity. The request rate limiter now has an explicit
   store boundary plus a Redis-backed shared counter implementation for multi-instance deployments.
-  Idempotency keys now have matching memory and Redis reservation stores with a configurable TTL.
+  Idempotency keys now have matching memory and Redis reservation stores with a configurable TTL,
+  wired into mobile-money callbacks and subscription payment references.
 
 ### Frontend
 
@@ -132,8 +133,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   The project still lacks a real component/unit test framework over the large UI surface.
 - **Horizontal scale / HA is unproven.** Single-node assumptions remain. Startup guards now require
   Redis configuration before multi-instance production, and request rate limiting has a Redis-backed
-  shared counter. Idempotency also has a Redis reservation store, but live Redis deployment,
-  load/soak testing, RTO/RPO evidence, and failover rehearsal are still needed.
+  shared counter. Idempotency also has a Redis reservation store on key payment paths, but live Redis
+  deployment, load/soak testing, RTO/RPO evidence, and failover rehearsal are still needed.
 - **Mobile money is not production-live.** Adapters and routing exist, but MTN/Airtel production use
   requires merchant onboarding/KYC, real credentials, live callback validation, and production
   settlement reconciliation.

@@ -9,6 +9,8 @@ const files = {
   rateLimiterTest: "backend-java/src/test/java/com/methaltech/sacco/config/RateLimiterTest.java",
   idempotencyGuard: "backend-java/src/main/java/com/methaltech/sacco/config/IdempotencyGuard.java",
   idempotencyGuardTest: "backend-java/src/test/java/com/methaltech/sacco/config/IdempotencyGuardTest.java",
+  mobileMoneyController: "backend-java/src/main/java/com/methaltech/sacco/accounting/MobileMoneyController.java",
+  subscriptionController: "backend-java/src/main/java/com/methaltech/sacco/subscription/SubscriptionController.java",
 };
 
 const contents = Object.fromEntries(
@@ -41,6 +43,10 @@ const checks = [
   [contents.idempotencyGuard, "RedisIdempotencyStore", "idempotency guard has Redis shared-store implementation"],
   [contents.idempotencyGuard, "SACCO_IDEMPOTENCY_STORE=redis requires SACCO_REDIS_URL", "idempotency Redis store fails fast without Redis URL"],
   [contents.idempotencyGuardTest, "redisStoreUsesSharedSetIfAbsentCommand", "idempotency guard test covers Redis shared-store path"],
+  [contents.mobileMoneyController, "reserveCallbackReference", "mobile-money callbacks reserve shared idempotency keys"],
+  [contents.mobileMoneyController, "CALLBACK_ALREADY_PROCESSING", "mobile-money callbacks reject in-flight duplicate references"],
+  [contents.subscriptionController, "reserveSubscriptionReference", "subscription payments reserve shared idempotency keys"],
+  [contents.subscriptionController, "PAYMENT_ALREADY_PROCESSING", "subscription payments reject in-flight duplicate references"],
   [contents.validatorTest, "productionRejectsMultiInstanceWithoutRedisStore", "validator test rejects missing Redis store"],
   [contents.validatorTest, "productionRejectsMultiInstanceWithoutSharedIdempotencyStore", "validator test rejects missing shared idempotency store"],
   [contents.validatorTest, "productionAllowsMultiInstanceWithRedisConfiguration", "validator test allows complete Redis configuration"],

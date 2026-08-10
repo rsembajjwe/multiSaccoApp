@@ -3,6 +3,7 @@ package com.methaltech.sacco.subscription;
 import com.methaltech.sacco.accounting.AccountingPeriodService;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.config.IdempotencyGuard;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.money.Money;
@@ -49,6 +50,7 @@ class SubscriptionController {
     private final TenantRepository tenantRepository;
     private final SaccoContactLookup saccoContactLookup;
     private final NotificationService notificationService;
+    private final IdempotencyGuard idempotencyGuard;
 
     @GetMapping("/api/v1/subscription-packages")
     ResponseEntity<?> listPackages(@RequestHeader(name = "Authorization", required = false) String authorization) {
@@ -135,6 +137,8 @@ class SubscriptionController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "ACCOUNTING_PERIOD_CLOSED", "Cannot post subscription payment callback into a closed accounting period."));
         }
+        ResponseEntity<?> idempotencyConflict = reserveSubscriptionReference(subscription, externalReference);
+        if (idempotencyConflict != null) return idempotencyConflict;
 
         SubscriptionPayment payment = paymentRepository.save(new SubscriptionPayment(
                 "subscription_payment_" + UUID.randomUUID(),
@@ -200,6 +204,8 @@ class SubscriptionController {
                     SubscriptionPaymentResponse.from(existing),
                     true)));
         }
+        ResponseEntity<?> idempotencyConflict = reserveSubscriptionReference(subscription, externalReference);
+        if (idempotencyConflict != null) return idempotencyConflict;
 
         SubscriptionPayment payment = paymentRepository.save(new SubscriptionPayment(
                 "subscription_payment_" + UUID.randomUUID(),
@@ -224,6 +230,23 @@ class SubscriptionController {
                 SubscriptionResponse.from(savedSubscription),
                 SubscriptionPaymentResponse.from(payment),
                 false)));
+    }
+
+    private ResponseEntity<?> reserveSubscriptionReference(Subscription subscription, String externalReference) {
+        boolean reserved = idempotencyGuard.reserve("subscription-payment", externalReference);
+        if (reserved) {
+            return null;
+        }
+        SubscriptionPayment existing = paymentRepository.findByExternalReferenceIgnoreCase(externalReference).orElse(null);
+        if (existing != null) {
+            return ResponseEntity.ok(ApiResponse.of(new SubscriptionPaymentResult(
+                    SubscriptionResponse.from(subscription),
+                    SubscriptionPaymentResponse.from(existing),
+                    true)));
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(409, "PAYMENT_ALREADY_PROCESSING",
+                        "A subscription payment with that reference is already being processed."));
     }
 
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {

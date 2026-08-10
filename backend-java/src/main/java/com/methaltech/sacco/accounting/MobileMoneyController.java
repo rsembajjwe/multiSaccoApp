@@ -2,6 +2,7 @@ package com.methaltech.sacco.accounting;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.config.IdempotencyGuard;
 import com.methaltech.sacco.finance.FinancialTransaction;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
 import com.methaltech.sacco.identity.AuditService;
@@ -62,6 +63,7 @@ class MobileMoneyController {
     private final MobileMoneyPaymentRequestRepository paymentRequestRepository;
     private final ObjectMapper objectMapper;
     private final MobileMoneyProviderRouter mobileMoneyRouter;
+    private final IdempotencyGuard idempotencyGuard;
 
     @PostMapping("/payment-requests")
     ResponseEntity<?> requestPayment(
@@ -346,6 +348,8 @@ class MobileMoneyController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "FINANCIAL_REFERENCE_EXISTS", "A financial transaction with that reference already exists."));
         }
+        ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
+        if (idempotencyConflict != null) return idempotencyConflict;
 
         // Member mobile-money contributions are RECEIVED but not auto-posted: they enter the
         // maker-checker approval queue (maker = system) so a treasurer/authorised checker confirms
@@ -412,6 +416,8 @@ class MobileMoneyController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "DUPLICATE_REPAYMENT_REFERENCE", "Repayment reference already exists for this SACCO."));
         }
+        ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
+        if (idempotencyConflict != null) return idempotencyConflict;
 
         // Member mobile-money loan repayments are RECEIVED but not auto-posted: they enter the
         // approval queue (maker = system) so a treasurer/authorised checker confirms them before the
@@ -443,6 +449,21 @@ class MobileMoneyController {
                 repayment.getId()));
         markMatchingPaymentRequestPosted(tenantId, externalReference, "loan_repayment", repayment.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
+    }
+
+    private ResponseEntity<?> reserveCallbackReference(String tenantId, String externalReference) {
+        boolean reserved = idempotencyGuard.reserve("mobile-money-callback:" + tenantId, externalReference);
+        if (reserved) {
+            return null;
+        }
+        MobileMoneyCallback duplicate = callbackRepository.findByTenantIdAndExternalReferenceIgnoreCase(tenantId, externalReference)
+                .orElse(null);
+        if (duplicate != null) {
+            return ResponseEntity.ok(ApiResponse.of(MobileMoneyCallbackResponse.from(duplicate, true)));
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(409, "CALLBACK_ALREADY_PROCESSING",
+                        "A callback with that reference is already being processed for this SACCO."));
     }
 
     private void markMatchingPaymentRequestPosted(String tenantId, String externalReference, String resourceType, String resourceId) {
