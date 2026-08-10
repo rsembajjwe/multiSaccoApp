@@ -32,7 +32,11 @@ try {
     throw "Docker is installed, but the Docker engine is not running. Start Docker Desktop, then rerun npm.cmd run ha:redis-check."
   }
 
-  docker rm -f $ContainerName *> $null
+  try {
+    docker rm -f $ContainerName *> $null
+  } catch {
+    # The pre-cleanup container may not exist; that is fine.
+  }
   Write-Host "Starting isolated Redis HA state smoke container: $ContainerName"
   Invoke-Checked docker @(
     "run", "--rm", "-d",
