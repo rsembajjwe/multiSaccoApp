@@ -33,7 +33,7 @@ Use this template for each staging or production release candidate. Store the co
 
 Latest local gate evidence before hosted handoff: `npm.cmd run ready:check` passed on `2026-07-18`, including Java/PostgreSQL API smoke, static UI contracts, Java-backed browser regression, browser UAT, security hardening checks, and Docker stack cleanup.
 
-Latest local backup rehearsal evidence: `npm.cmd run backup:rehearse` passed on `2026-07-18` with `backups\rehearsals\sacco_app_backup_rehearsal-20260718-105007.dump`, successful restore verification, and disposable Docker stack cleanup.
+Latest local backup rehearsal evidence: `npm.cmd run backup:evidence` passed on `2026-08-10` with `backups\rehearsals\sacco_app_backup_rehearsal-20260810-161957.dump`, successful restore verification, and disposable Docker stack cleanup.
 
 | Gate | Command or artifact | Pass/fail | Evidence link or notes |
 | --- | --- | --- | --- |
@@ -41,7 +41,7 @@ Latest local backup rehearsal evidence: `npm.cmd run backup:rehearse` passed on 
 | Production readiness | `npm.cmd run ready:check` |  |  |
 | PostgreSQL/Flyway | `npm.cmd run postgres:check` or hosted migration artifact |  |  |
 | Migration evidence | `npm.cmd run migration:evidence` |  | Attach `summary.md`, `members.csv`, `loans.csv`, and `audit.csv`; explain accepted warnings. |
-| Backup restore rehearsal | `npm.cmd run backup:rehearse` |  |  |
+| Backup restore rehearsal | `npm.cmd run backup:evidence` |  |  |
 | Load test | `npm.cmd run load:test` |  |  |
 | Browser regression | `npm.cmd run ui:browser` |  |  |
 | Browser UAT | `npm.cmd run uat:browser` |  |  |

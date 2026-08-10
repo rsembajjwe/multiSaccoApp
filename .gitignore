@@ -11,6 +11,8 @@ reports/ha-evidence/*
 !reports/ha-evidence/.gitkeep
 reports/load-evidence/*
 !reports/load-evidence/.gitkeep
+reports/backup-evidence/*
+!reports/backup-evidence/.gitkeep
 .env
 .env.*
 *.log

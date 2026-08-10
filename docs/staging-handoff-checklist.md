@@ -30,7 +30,7 @@ Use this checklist before handing the SACCO platform to testers or a pilot SACCO
 | Local verification passed. | `npm.cmd run check` |  |
 | Production readiness passed. | `npm.cmd run ready:check` or CI release-gate artifact. |  |
 | PostgreSQL/Flyway verified. | `npm.cmd run postgres:check` or staging migration evidence. |  |
-| Backup restore rehearsal passed. | `npm.cmd run backup:rehearse` |  |
+| Backup restore rehearsal passed. | `npm.cmd run backup:evidence` |  |
 | Load test passed. | `npm.cmd run load:test` with agreed request/concurrency/p95 values. |  |
 | Browser regression passed. | `npm.cmd run ui:browser` or CI artifact. |  |
 | Release evidence pack is started. | Completed copy of `docs/release-evidence-template.md`. |  |

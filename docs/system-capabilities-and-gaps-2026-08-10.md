@@ -94,7 +94,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 
 - Flyway migrations, H2-for-dev / PostgreSQL-for-prod parity, no `ddl-auto` in prod.
 - GitHub Actions CI, PostgreSQL/browser release gate, backup-restore rehearsal, production readiness
-  checks, Docker/dev/prod compose, and Caddy edge with TLS.
+  checks, Docker/dev/prod compose, and Caddy edge with TLS. `npm.cmd run backup:evidence` now writes
+  timestamped restore evidence; the 10 August 2026 run restored
+  `backups\rehearsals\sacco_app_backup_rehearsal-20260810-161957.dump` successfully.
 - Prometheus metrics, Resilience4j circuit breakers, idempotent-only retries, bounded provider HTTP
   timeouts, pagination/search/sort on high-volume endpoints, and curated OpenAPI documentation.
 - A load evidence wrapper now captures `npm.cmd run load:test` output as timestamped release
@@ -144,8 +146,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   require Redis configuration before multi-instance production, request rate limiting has a
   Redis-backed shared counter, and payment idempotency has a Redis reservation store. A Docker-backed
   Redis smoke test passed on 10 August 2026, and a local Java-backed baseline load evidence run also
-  passed on 10 August 2026. Live Redis deployment, staging load/soak execution, RTO/RPO evidence,
-  and failover rehearsal are still needed.
+  passed on 10 August 2026. Backup/restore evidence also passed on 10 August 2026. Live Redis
+  deployment, staging load/soak execution, production RTO/RPO evidence, and failover rehearsal are
+  still needed.
 - **Mobile money is not production-live.** Adapters and routing exist, but MTN/Airtel production use
   requires merchant onboarding/KYC, real credentials, live callback validation, and production
   settlement reconciliation.

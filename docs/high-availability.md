@@ -71,7 +71,9 @@ Run a failover rehearsal before production launch and every quarter after launch
    payment callback smoke tests.
 5. Run `npm.cmd run ha:evidence` to confirm Redis-backed rate-limit and idempotency state is shared
    and to write a timestamped evidence report.
-6. Record restore start time, healthy time, data cutoff time, RPO, RTO, and operator.
+6. Run `npm.cmd run backup:evidence` to create, restore, and verify a disposable PostgreSQL backup
+   marker row with a timestamped evidence report.
+7. Record restore start time, healthy time, data cutoff time, RPO, RTO, and operator.
 
 ## Load and soak test evidence
 

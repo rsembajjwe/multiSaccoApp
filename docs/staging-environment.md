@@ -124,7 +124,7 @@ Attach or record:
 - `flyway_schema_history` version count from PostgreSQL.
 - `npm.cmd run check` result.
 - `npm.cmd run ready:check` result.
-- `npm.cmd run backup:rehearse` result.
+- `npm.cmd run backup:evidence` result.
 - `npm.cmd run load:test` request/concurrency/p95 result.
 - Confirmation that `SACCO_DEMO_LOGINS_ENABLED=false`.
 - Completed staging handoff checklist.

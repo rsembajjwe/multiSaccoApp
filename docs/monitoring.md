@@ -121,6 +121,12 @@ The restore rehearsal uses an isolated Docker Compose project and a disposable P
 npm.cmd run backup:rehearse
 ```
 
+For release evidence, prefer the wrapper that records the rehearsal output:
+
+```powershell
+npm.cmd run backup:evidence
+```
+
 Use alternate ports when needed:
 
 ```powershell
