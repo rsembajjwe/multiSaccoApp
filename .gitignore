@@ -15,6 +15,8 @@ reports/backup-evidence/*
 !reports/backup-evidence/.gitkeep
 reports/db-evidence/*
 !reports/db-evidence/.gitkeep
+reports/secrets-evidence/*
+!reports/secrets-evidence/.gitkeep
 .env
 .env.*
 *.log

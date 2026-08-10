@@ -36,6 +36,7 @@
     "backup:rehearse": "powershell -ExecutionPolicy Bypass -File scripts/check-backup-restore.ps1",
     "backup:evidence": "node scripts/backup-evidence.mjs",
     "db:evidence": "node scripts/db-evidence.mjs",
+    "secrets:evidence": "node scripts/secrets-evidence.mjs",
     "load:test": "node scripts/load-test.mjs",
     "imports:templates": "node scripts/generate-import-workbooks.mjs",
     "imports:check": "node scripts/check-import-workbooks.mjs",

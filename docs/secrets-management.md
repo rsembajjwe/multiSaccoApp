@@ -59,3 +59,4 @@ Use emergency rotation if a secret appears in a chat, email, screenshot, ticket,
 - `IntegrationProviderReadinessValidator` blocks production startup when real provider settings are missing.
 - `DocumentStorageReadinessValidator` blocks production startup unless KYC document storage disposal is configured.
 - `npm.cmd run check` includes `scripts/check-secrets-management.mjs`, which ensures deployment example files use placeholders and this runbook remains present.
+- `npm.cmd run secrets:evidence` records the secrets management contract as timestamped release evidence under `reports/secrets-evidence/`.
