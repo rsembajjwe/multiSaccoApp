@@ -119,6 +119,118 @@ interface TerekaTenantSummary {
   textDirection?: TerekaDirection;
   mobileMoneyCollectionAvailable?: boolean;
   bankCollectionAvailable?: boolean;
+  status?: string;
+  onboarding?: number | string;
+  licenseExpiry?: string;
+  district?: string;
+  parish?: string;
+  village?: string;
+  contactNumber?: string;
+  [key: string]: any;
+}
+
+interface TerekaPlatformUser {
+  id?: string;
+  tenantId?: string;
+  fullName?: string;
+  email?: string;
+  username?: string;
+  phone?: string;
+  role?: string;
+  roleIds?: string[];
+  status?: string;
+  mfaEnabled?: boolean;
+  passwordResetRequired?: boolean;
+  activeSessionCount?: number;
+  lastLogin?: string;
+  [key: string]: any;
+}
+
+interface TerekaRole {
+  id?: string;
+  name?: string;
+  description?: string;
+  tenantId?: string;
+  permissions?: string[];
+  [key: string]: any;
+}
+
+interface TerekaPermission {
+  id?: string;
+  name?: string;
+  module?: string;
+  description?: string;
+  [key: string]: any;
+}
+
+interface TerekaSubscription {
+  id?: string;
+  tenantId?: string;
+  invoice?: string;
+  packageId?: string;
+  tierLabel?: string;
+  amount?: number | string;
+  paid?: number | string;
+  status?: string;
+  expiry?: string;
+  [key: string]: any;
+}
+
+interface TerekaSubscriptionPackage {
+  id?: string;
+  code?: string;
+  name?: string;
+  memberRange?: string;
+  amount?: number | string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface TerekaFinancialTransaction {
+  id?: string;
+  tenantId?: string;
+  memberId?: string;
+  reference?: string;
+  type?: string;
+  channel?: string;
+  provider?: string;
+  amount?: number | string;
+  status?: string;
+  stage?: string;
+  postedAt?: string;
+  createdAt?: string;
+  originalTransactionId?: string;
+  receiptStatus?: string;
+  receiptNo?: string;
+  [key: string]: any;
+}
+
+interface TerekaAuditEvent {
+  id?: string;
+  tenantId?: string;
+  recordId?: string;
+  recordReference?: string;
+  actor?: string;
+  actorName?: string;
+  action?: string;
+  module?: string;
+  result?: string;
+  createdAt?: string;
+  [key: string]: any;
+}
+
+interface TerekaSaccoProfile {
+  id?: string;
+  tenantId?: string;
+  legalName?: string;
+  tin?: string;
+  umraLicenseNo?: string;
+  cooperativeRegistrationNo?: string;
+  address?: string;
+  website?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
   [key: string]: any;
 }
 
@@ -287,6 +399,45 @@ interface TerekaMemberData {
   [key: string]: any;
 }
 
+interface TerekaAppData {
+  tenants: TerekaTenantSummary[];
+  subscriptions: TerekaSubscription[];
+  subscriptionPackages: TerekaSubscriptionPackage[];
+  members: TerekaMemberProfile[];
+  transactions: TerekaFinancialTransaction[];
+  loans: TerekaLoan[];
+  operations: Record<string, any> | null;
+  notifications: TerekaNotification[];
+  complaints: any[];
+  users: TerekaPlatformUser[];
+  branches: any[];
+  financialProducts: any[];
+  financialAccounts: any[];
+  welfareClaims: any[];
+  accountingPeriods: any[];
+  chartOfAccounts: any[];
+  journalEntries: any[];
+  suppliers: any[];
+  expenses: any[];
+  assets: any[];
+  saccoPaymentAccounts: TerekaCollectionAccount[];
+  governanceMeetings: any[];
+  statementLines: TerekaStatementLine[];
+  reconciliation: Record<string, any> | null;
+  mobileMoneyCallbacks: any[];
+  notificationTemplates: any[];
+  providerJobRuns: any[];
+  roles: TerekaRole[];
+  permissions: TerekaPermission[];
+  auditEvents: TerekaAuditEvent[];
+  regulatoryReport: Record<string, any> | null;
+  securitySummary: Record<string, any> | null;
+  platformSecurityPolicy: Record<string, any> | null;
+  notificationIntegrationConfig: Record<string, any> | null;
+  mobileMoneyIntegrationConfig: Record<string, any> | null;
+  [key: string]: any;
+}
+
 interface TerekaQuickSearchResult {
   id: string;
   recordId?: string;
@@ -315,7 +466,7 @@ interface TerekaState {
   networkOnline: boolean;
   runtime: Record<string, any>;
   token: string;
-  user: Record<string, any> | null;
+  user: TerekaPlatformUser | null;
   member: TerekaMemberProfile | null;
   tenant: TerekaTenantSummary | null;
   roleNames: string[];
@@ -326,7 +477,7 @@ interface TerekaState {
   pageMeta: Record<string, TerekaPageEnvelope>;
   chatFilters: Record<string, any>;
   chatMessages: Record<string, any[]>;
-  data: Record<string, any>;
+  data: TerekaAppData;
   memberData: TerekaMemberData;
   [key: string]: any;
 }

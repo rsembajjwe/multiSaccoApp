@@ -133,7 +133,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
   no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,
-  offline drafts, privacy requests, and quick-search result navigation.
+  offline drafts, privacy requests, platform/SACCO administration data, subscriptions, roles,
+  permissions, audit events, transactions, and quick-search result navigation.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
   views.
 - i18n evidence now records supported locale metadata for English, French, Swahili, Portuguese,
@@ -158,8 +159,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   application-code tree-shaking, or deep domain-level type safety.
 - **Type safety is started, not deep.** A passing TypeScript `checkJs` gate now covers the SPA and is
   wired into `npm run check`. Member/payment portal contracts now have named JSDoc/TypeScript
-  declarations, but many platform/SACCO admin domain objects still use broad compatibility
-  declarations while the legacy global-script architecture is being migrated.
+  declarations, and platform/SACCO administration data now has first-pass named contracts. Some
+  lower-volume operational objects still use broad compatibility declarations while the legacy
+  global-script architecture is being migrated.
 - **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
   now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
   The project still lacks a real component/unit test framework over the large UI surface.
