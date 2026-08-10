@@ -109,6 +109,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   installed or still blocked by package-registry access.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
   views.
+- Member portal renderer coverage now has a focused `npm run test:member-portal` gate for full-date
+  statements, monthly savings/deposit performance, mobile-money/bank payment options, offline
+  drafts, WhatsApp-style support chat, and SACCO admin notifications.
 
 ---
 
@@ -120,9 +123,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   configuration has started, but the modules are still classic scripts sharing global scope, loaded
   via many `<script>` tags. There is not yet a completed ES module import/export structure,
   minification, tree-shaking, or type safety.
-- **Frontend tests are still early.** Backend tests are strong, and the helper suite now covers many
-  high-risk renderers and auth/session transitions. The project still lacks a real component/unit
-  test framework over the large UI surface.
+- **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
+  now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
+  The project still lacks a real component/unit test framework over the large UI surface.
 - **Horizontal scale / HA is unproven.** Single-node assumptions remain. Redis-backed distributed
   rate-limit/session state, load/soak testing, RTO/RPO targets, and failover rehearsal are still
   needed.

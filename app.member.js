@@ -367,12 +367,12 @@ function isMobileMoneyLine(line) {
 function memberComplaintsView() {
   const notifications = memberAdminMessageRows().map((notification) => ({
     ...notification,
-    action: !notification.readAt && !normal(notification.status).includes("read") ? "member-notification-acknowledge" : "none",
+    action: isMemberNotificationUnread(notification) ? "member-notification-acknowledge" : "none",
     actionLabel: "Acknowledge",
     actionId: notification.id
   }));
   const unreadChats = (state.memberData.chatThreads || []).filter((thread) => thread.unreadCount > 0).length;
-  const unreadMsgs = notifications.filter((row) => !normal(`${row.status} ${row.readAt}`).includes("read")).length;
+  const unreadMsgs = notifications.filter((row) => isMemberNotificationUnread(row)).length;
   const tabs = [["chat", `Chat${unreadChats ? ` (${unreadChats})` : ""}`], ["notifications", `Notifications${unreadMsgs ? ` (${unreadMsgs})` : ""}`]];
   const tab = activeModuleTab("complaints", tabs);
   return `
@@ -382,6 +382,10 @@ function memberComplaintsView() {
     ${tab === "chat" ? memberChatWorkspace() : ""}
     ${tab === "notifications" ? (notifications.length ? recordTable("Notifications", notifications, ["title", "message", "channel", "status", "createdAt", "readAt"]) : emptyState("No messages", "SACCO notices and alerts will appear here.")) : ""}
   `;
+}
+
+function isMemberNotificationUnread(notification) {
+  return !notification.readAt && normal(notification.status) !== "read";
 }
 
 function chatBubble(direction, author, text, timestamp) {
