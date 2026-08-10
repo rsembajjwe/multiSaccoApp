@@ -105,7 +105,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Vite migration has started with `vite.config.mjs`, `npm run build:vite`, and `npm run dev:vite`.
   The first Vite path bridges the current classic-script modules into `dist-vite`; the next step is
   installing the Vite package once npm registry access is stable, then converting modules to real
-  ES `import`/`export` boundaries.
+  ES `import`/`export` boundaries. `npm run vite:check` now reports whether the local Vite package is
+  installed or still blocked by package-registry access.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
   views.
 

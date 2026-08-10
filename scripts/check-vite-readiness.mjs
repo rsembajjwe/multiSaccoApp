@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 
 const [packageJson, config, indexHtml] = await Promise.all([
   readJson("package.json"),
@@ -25,7 +26,12 @@ for (const marker of [
 const scriptCount = Array.from(indexHtml.matchAll(/<script\s+[^>]*src=["']app[^"']+\.js/g)).length;
 assert.ok(scriptCount >= 30, `Expected classic app script tags while migration is incremental, found ${scriptCount}.`);
 
-console.log(`Vite readiness check passed (${scriptCount} classic script modules bridged).`);
+const viteInstalled = existsSync(new URL("../node_modules/vite/package.json", import.meta.url));
+const dependencyState = viteInstalled
+  ? "vite package installed"
+  : "vite package not installed yet; run npm.cmd install once registry access is stable";
+
+console.log(`Vite readiness check passed (${scriptCount} classic script modules bridged, ${dependencyState}).`);
 
 async function readText(file) {
   return readFile(new URL(`../${file}`, import.meta.url), "utf8");
