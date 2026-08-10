@@ -96,7 +96,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Prometheus metrics, Resilience4j circuit breakers, idempotent-only retries, bounded provider HTTP
   timeouts, pagination/search/sort on high-volume endpoints, and curated OpenAPI documentation.
 - Production multi-instance startup is guarded by Redis scale settings for rate limits,
-  idempotency/shared hot keys, and Redis connectivity.
+  idempotency/shared hot keys, and Redis connectivity. The request rate limiter now has an explicit
+  store boundary, with the current memory store isolated from the future Redis adapter.
 
 ### Frontend
 
@@ -129,8 +130,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
   The project still lacks a real component/unit test framework over the large UI surface.
 - **Horizontal scale / HA is unproven.** Single-node assumptions remain. Startup guards now require
-  Redis configuration before multi-instance production, but the actual Redis-backed implementation,
-  load/soak testing, RTO/RPO evidence, and failover rehearsal are still needed.
+  Redis configuration before multi-instance production, and the request limiter has a store boundary,
+  but the actual Redis-backed implementation, load/soak testing, RTO/RPO evidence, and failover
+  rehearsal are still needed.
 - **Mobile money is not production-live.** Adapters and routing exist, but MTN/Airtel production use
   requires merchant onboarding/KYC, real credentials, live callback validation, and production
   settlement reconciliation.

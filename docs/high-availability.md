@@ -85,5 +85,6 @@ Before moving from pilot to enterprise mode:
 ## Known remaining work
 
 The application now has a production guard for Redis-backed scale configuration, but the hosted
-enterprise deployment still needs a live Redis service, load balancer wiring, and a rehearsed
-multi-instance load/failover report before it should be called fully HA.
+enterprise deployment still needs the Redis rate-limit/idempotency adapter implementation, a live
+Redis service, load balancer wiring, and a rehearsed multi-instance load/failover report before it
+should be called fully HA.

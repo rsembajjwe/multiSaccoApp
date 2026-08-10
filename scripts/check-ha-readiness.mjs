@@ -5,6 +5,8 @@ const files = {
   prodProperties: "backend-java/src/main/resources/application-prod.properties",
   validator: "backend-java/src/main/java/com/methaltech/sacco/config/ScaleReadinessValidator.java",
   validatorTest: "backend-java/src/test/java/com/methaltech/sacco/config/ScaleReadinessValidatorTest.java",
+  rateLimiter: "backend-java/src/main/java/com/methaltech/sacco/config/RateLimiter.java",
+  rateLimiterTest: "backend-java/src/test/java/com/methaltech/sacco/config/RateLimiterTest.java",
 };
 
 const contents = Object.fromEntries(
@@ -26,6 +28,10 @@ const checks = [
   [contents.validator, "SACCO_RATE_LIMIT_STORE=redis", "startup guard requires Redis rate-limit store"],
   [contents.validator, "SACCO_IDEMPOTENCY_STORE=redis", "startup guard requires Redis idempotency store"],
   [contents.validator, "SACCO_REDIS_URL", "startup guard requires Redis URL"],
+  [contents.rateLimiter, "interface RateLimitStore", "rate limiter has a shared-store boundary"],
+  [contents.rateLimiter, "InMemoryRateLimitStore", "rate limiter keeps current single-node memory store"],
+  [contents.rateLimiter, "SACCO_RATE_LIMIT_STORE=redis is configured", "rate limiter fails loudly when Redis store is selected before adapter exists"],
+  [contents.rateLimiterTest, "redisStoreFailsFastUntilAdapterIsImplemented", "rate limiter test documents pending Redis adapter"],
   [contents.validatorTest, "productionRejectsMultiInstanceWithoutRedisStore", "validator test rejects missing Redis store"],
   [contents.validatorTest, "productionRejectsMultiInstanceWithoutSharedIdempotencyStore", "validator test rejects missing shared idempotency store"],
   [contents.validatorTest, "productionAllowsMultiInstanceWithRedisConfiguration", "validator test allows complete Redis configuration"],

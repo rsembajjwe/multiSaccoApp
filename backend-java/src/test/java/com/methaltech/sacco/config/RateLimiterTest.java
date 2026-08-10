@@ -1,6 +1,7 @@
 package com.methaltech.sacco.config;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -67,5 +68,15 @@ class RateLimiterTest {
         for (int i = 0; i < 100; i++) {
             assertTrue(limiter.tryAcquire("ip-unlimited", 0, WINDOW));
         }
+    }
+
+    @Test
+    void redisStoreFailsFastUntilAdapterIsImplemented() {
+        assertThrows(IllegalStateException.class, () -> new RateLimiter("redis"));
+    }
+
+    @Test
+    void unknownStoreFailsFast() {
+        assertThrows(IllegalStateException.class, () -> new RateLimiter("database"));
     }
 }
