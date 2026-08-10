@@ -234,6 +234,280 @@ interface TerekaSaccoProfile {
   [key: string]: any;
 }
 
+interface TerekaBranch {
+  id?: string;
+  tenantId?: string;
+  code?: string;
+  name?: string;
+  managerUserId?: string;
+  address?: string;
+  status?: string;
+  createdAt?: string;
+  [key: string]: any;
+}
+
+interface TerekaFinancialProduct {
+  id?: string;
+  tenantId?: string;
+  productType?: string;
+  code?: string;
+  name?: string;
+  contributionAmount?: number | string;
+  minimumBalance?: number | string;
+  interestRate?: number | string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface TerekaFinancialAccount {
+  id?: string;
+  tenantId?: string;
+  accountType?: string;
+  productName?: string;
+  productCode?: string;
+  code?: string;
+  name?: string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface TerekaWelfareClaim {
+  id?: string;
+  tenantId?: string;
+  memberId?: string;
+  amount?: number | string;
+  status?: string;
+  createdAt?: string;
+  [key: string]: any;
+}
+
+interface TerekaAccountingPeriod {
+  id?: string;
+  tenantId?: string;
+  name?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface TerekaChartAccount {
+  id?: string;
+  tenantId?: string;
+  code?: string;
+  name?: string;
+  type?: string;
+  normalBalance?: string;
+  [key: string]: any;
+}
+
+interface TerekaJournalEntry {
+  id?: string;
+  tenantId?: string;
+  reference?: string;
+  description?: string;
+  amount?: number | string;
+  status?: string;
+  postedAt?: string;
+  [key: string]: any;
+}
+
+interface TerekaSupplier {
+  id?: string;
+  tenantId?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface TerekaExpense {
+  id?: string;
+  tenantId?: string;
+  supplierId?: string;
+  accountCode?: string;
+  amount?: number | string;
+  channel?: string;
+  reference?: string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface TerekaAsset {
+  id?: string;
+  tenantId?: string;
+  name?: string;
+  category?: string;
+  cost?: number | string;
+  netBookValue?: number | string;
+  location?: string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface TerekaGovernanceMeeting {
+  id?: string;
+  tenantId?: string;
+  title?: string;
+  meetingDate?: string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface TerekaMobileMoneyCallback {
+  id?: string;
+  tenantId?: string;
+  reference?: string;
+  status?: string;
+  duplicate?: boolean;
+  amount?: number | string;
+  provider?: string;
+  createdAt?: string;
+  [key: string]: any;
+}
+
+interface TerekaNotificationTemplate {
+  id?: string;
+  tenantId?: string;
+  eventType?: string;
+  channel?: string;
+  title?: string;
+  status?: string;
+  updatedAt?: string;
+  [key: string]: any;
+}
+
+interface TerekaProviderJobRun {
+  id?: string;
+  provider?: string;
+  jobType?: string;
+  status?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  [key: string]: any;
+}
+
+interface TerekaDataProtectionEvidence {
+  privacyRequests?: number;
+  openPrivacyRequests?: number;
+  completedPrivacyRequests?: number;
+  erasureRequestsCompleted?: number;
+  kycDocuments?: number;
+  kycDocumentsReviewDue?: number;
+  kycDocumentsRetained?: number;
+  kycDocumentsDisposed?: number;
+  kycStorageActions?: number;
+  evidenceStatus?: string;
+  [key: string]: any;
+}
+
+interface TerekaRegulatoryReportRow {
+  tenantId?: string;
+  tenantName?: string;
+  memberCount?: number | string;
+  activeMembers?: number | string;
+  savings?: number | string;
+  shares?: number | string;
+  welfare?: number | string;
+  loanPortfolio?: number | string;
+  activeLoans?: number | string;
+  expenseTotal?: number | string;
+  assetNetBookValue?: number | string;
+  journalEntries?: number | string;
+  unbalancedJournalEntries?: number | string;
+  reconciliationExceptions?: number | string;
+  openComplaints?: number | string;
+  complianceStatus?: string;
+  dataProtectionEvidence?: TerekaDataProtectionEvidence;
+  [key: string]: any;
+}
+
+interface TerekaRegulatoryReport {
+  reports?: TerekaRegulatoryReportRow[];
+  consolidated?: TerekaRegulatoryReportRow;
+  dataProtection?: TerekaDataProtectionEvidence;
+  [key: string]: any;
+}
+
+interface TerekaReconciliationSummary {
+  matched?: number | string;
+  matchedAmount?: number | string;
+  unmatchedStatementLines?: number | string;
+  unmatchedStatementAmount?: number | string;
+  unmatchedLedgerLines?: number | string;
+  unmatchedLedgerAmount?: number | string;
+  [key: string]: any;
+}
+
+interface TerekaReconciliationData {
+  summary?: TerekaReconciliationSummary;
+  matches?: any[];
+  unmatchedStatementLines?: any[];
+  unmatchedLedgerLines?: any[];
+  [key: string]: any;
+}
+
+interface TerekaProviderSetting {
+  key?: string;
+  value?: string;
+  configured?: boolean;
+  secret?: boolean;
+  [key: string]: any;
+}
+
+interface TerekaProviderConfig {
+  channel?: string;
+  provider?: string;
+  activeProvider?: string;
+  active?: boolean;
+  settings?: TerekaProviderSetting[];
+  [key: string]: any;
+}
+
+interface TerekaIntegrationConfig {
+  providers?: TerekaProviderConfig[];
+  updatePolicy?: string;
+  [key: string]: any;
+}
+
+interface TerekaSecuritySession {
+  id?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt?: string;
+  expiresAt?: string;
+  [key: string]: any;
+}
+
+interface TerekaPasswordResetRecord {
+  id?: string;
+  status?: string;
+  createdAt?: string;
+  expiresAt?: string;
+  usedAt?: string;
+  [key: string]: any;
+}
+
+interface TerekaSecuritySummary {
+  activeSessions?: TerekaSecuritySession[];
+  recentPasswordResets?: TerekaPasswordResetRecord[];
+  activeSessionCount?: number;
+  passwordResetRequestCount?: number;
+  currentSessionExpiresAt?: string;
+  mfaEnabled?: boolean;
+  [key: string]: any;
+}
+
+interface TerekaPlatformSecurityPolicy {
+  mfaEnabled?: boolean;
+  lockoutFailedAttempts?: number | string;
+  lockoutMinutes?: number | string;
+  sessionMinutes?: number | string;
+  passwordExpiryDays?: number | string;
+  [key: string]: any;
+}
+
 interface TerekaBalances {
   savings?: number | string;
   shares?: number | string;
@@ -410,31 +684,32 @@ interface TerekaAppData {
   notifications: TerekaNotification[];
   complaints: any[];
   users: TerekaPlatformUser[];
-  branches: any[];
-  financialProducts: any[];
-  financialAccounts: any[];
-  welfareClaims: any[];
-  accountingPeriods: any[];
-  chartOfAccounts: any[];
-  journalEntries: any[];
-  suppliers: any[];
-  expenses: any[];
-  assets: any[];
+  branches: TerekaBranch[];
+  financialProducts: TerekaFinancialProduct[];
+  financialAccounts: TerekaFinancialAccount[];
+  welfareClaims: TerekaWelfareClaim[];
+  accountingPeriods: TerekaAccountingPeriod[];
+  chartOfAccounts: TerekaChartAccount[];
+  journalEntries: TerekaJournalEntry[];
+  suppliers: TerekaSupplier[];
+  expenses: TerekaExpense[];
+  assets: TerekaAsset[];
   saccoPaymentAccounts: TerekaCollectionAccount[];
-  governanceMeetings: any[];
+  governanceMeetings: TerekaGovernanceMeeting[];
   statementLines: TerekaStatementLine[];
-  reconciliation: Record<string, any> | null;
-  mobileMoneyCallbacks: any[];
-  notificationTemplates: any[];
-  providerJobRuns: any[];
+  reconciliation: TerekaReconciliationData | null;
+  mobileMoneyCallbacks: TerekaMobileMoneyCallback[];
+  mobileMoneyPaymentRequests?: TerekaPaymentRequest[];
+  notificationTemplates: TerekaNotificationTemplate[];
+  providerJobRuns: TerekaProviderJobRun[];
   roles: TerekaRole[];
   permissions: TerekaPermission[];
   auditEvents: TerekaAuditEvent[];
-  regulatoryReport: Record<string, any> | null;
-  securitySummary: Record<string, any> | null;
-  platformSecurityPolicy: Record<string, any> | null;
-  notificationIntegrationConfig: Record<string, any> | null;
-  mobileMoneyIntegrationConfig: Record<string, any> | null;
+  regulatoryReport: TerekaRegulatoryReport | null;
+  securitySummary: TerekaSecuritySummary | null;
+  platformSecurityPolicy: TerekaPlatformSecurityPolicy | null;
+  notificationIntegrationConfig: TerekaIntegrationConfig | null;
+  mobileMoneyIntegrationConfig: TerekaIntegrationConfig | null;
   [key: string]: any;
 }
 

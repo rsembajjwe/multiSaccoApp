@@ -85,7 +85,9 @@ function platformSuperAdminReportsView(rows, exceptions) {
 
 function regulatoryReportRows(platform) {
   const report = state.data.regulatoryReport || {};
+  /** @type {TerekaRegulatoryReportRow[]} */
   const rawRows = Array.isArray(report.reports) ? report.reports : [];
+  /** @type {TerekaRegulatoryReportRow[]} */
   const rows = rawRows.length ? rawRows : tenantRows().map((tenant) => ({
     tenantId: tenant.id,
     tenantName: tenant.name,
