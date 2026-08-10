@@ -257,6 +257,7 @@ function updateNotificationFilter(event) {
 }
 
 async function openQuickSearchResult(resultId) {
+  /** @type {TerekaQuickSearchResult | undefined} */
   const result = quickSearchResults().find((item) => item.id === resultId);
   if (!result) return;
   state.currentView = result.view;
