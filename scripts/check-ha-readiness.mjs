@@ -1,7 +1,9 @@
 import { readFile } from "node:fs/promises";
 
 const files = {
+  packageJson: "package.json",
   runbook: "docs/high-availability.md",
+  redisSmokeScript: "scripts/check-redis-ha-state.ps1",
   prodProperties: "backend-java/src/main/resources/application-prod.properties",
   validator: "backend-java/src/main/java/com/methaltech/sacco/config/ScaleReadinessValidator.java",
   validatorTest: "backend-java/src/test/java/com/methaltech/sacco/config/ScaleReadinessValidatorTest.java",
@@ -9,6 +11,7 @@ const files = {
   rateLimiterTest: "backend-java/src/test/java/com/methaltech/sacco/config/RateLimiterTest.java",
   idempotencyGuard: "backend-java/src/main/java/com/methaltech/sacco/config/IdempotencyGuard.java",
   idempotencyGuardTest: "backend-java/src/test/java/com/methaltech/sacco/config/IdempotencyGuardTest.java",
+  redisSmokeTest: "backend-java/src/test/java/com/methaltech/sacco/config/RedisSharedStateSmokeTest.java",
   mobileMoneyController: "backend-java/src/main/java/com/methaltech/sacco/accounting/MobileMoneyController.java",
   subscriptionController: "backend-java/src/main/java/com/methaltech/sacco/subscription/SubscriptionController.java",
 };
@@ -24,6 +27,10 @@ const checks = [
   [contents.runbook, "point-in-time recovery", "HA runbook covers PostgreSQL PITR"],
   [contents.runbook, "Redis", "HA runbook covers shared Redis state"],
   [contents.runbook, "failover rehearsal", "HA runbook covers failover rehearsal"],
+  [contents.runbook, "npm.cmd run ha:redis-check", "HA runbook includes Redis shared-state smoke check"],
+  [contents.packageJson, "\"ha:redis-check\"", "package exposes Redis HA smoke script"],
+  [contents.redisSmokeScript, "redis:7-alpine", "Redis HA smoke script starts isolated Redis container"],
+  [contents.redisSmokeScript, "RedisSharedStateSmokeTest", "Redis HA smoke script runs Java shared-state test"],
   [contents.prodProperties, "sacco.scale.expected-backend-instances=${SACCO_EXPECTED_BACKEND_INSTANCES:1}", "prod properties expose expected backend instances"],
   [contents.prodProperties, "sacco.rate-limit.store=${SACCO_RATE_LIMIT_STORE:memory}", "prod properties expose rate-limit store"],
   [contents.prodProperties, "sacco.idempotency.store=${SACCO_IDEMPOTENCY_STORE:memory}", "prod properties expose idempotency store"],
@@ -43,6 +50,9 @@ const checks = [
   [contents.idempotencyGuard, "RedisIdempotencyStore", "idempotency guard has Redis shared-store implementation"],
   [contents.idempotencyGuard, "SACCO_IDEMPOTENCY_STORE=redis requires SACCO_REDIS_URL", "idempotency Redis store fails fast without Redis URL"],
   [contents.idempotencyGuardTest, "redisStoreUsesSharedSetIfAbsentCommand", "idempotency guard test covers Redis shared-store path"],
+  [contents.redisSmokeTest, "rateLimitAndIdempotencyStateIsSharedThroughRedis", "Redis smoke test covers both shared-state primitives"],
+  [contents.redisSmokeTest, "RespRedisRateLimitCommands", "Redis smoke test uses real RESP rate-limit adapter"],
+  [contents.redisSmokeTest, "RespRedisIdempotencyCommands", "Redis smoke test uses real RESP idempotency adapter"],
   [contents.mobileMoneyController, "reserveCallbackReference", "mobile-money callbacks reserve shared idempotency keys"],
   [contents.mobileMoneyController, "CALLBACK_ALREADY_PROCESSING", "mobile-money callbacks reject in-flight duplicate references"],
   [contents.subscriptionController, "reserveSubscriptionReference", "subscription payments reserve shared idempotency keys"],

@@ -21,6 +21,7 @@
     "deploy:evidence": "node scripts/deployment-evidence.mjs",
     "postgres:check": "powershell -ExecutionPolicy Bypass -File scripts/check-postgres-integration.ps1",
     "ready:check": "powershell -ExecutionPolicy Bypass -File scripts/check-production-readiness.ps1",
+    "ha:redis-check": "powershell -ExecutionPolicy Bypass -File scripts/check-redis-ha-state.ps1",
     "staging:preflight": "node scripts/check-staging-preflight.mjs",
     "uat:setup": "node scripts/setup-uat-data.mjs",
     "uat:browser": "node scripts/check-uat-browser.mjs",

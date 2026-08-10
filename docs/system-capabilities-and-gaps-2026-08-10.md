@@ -99,7 +99,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   idempotency/shared hot keys, and Redis connectivity. The request rate limiter now has an explicit
   store boundary plus a Redis-backed shared counter implementation for multi-instance deployments.
   Idempotency keys now have matching memory and Redis reservation stores with a configurable TTL,
-  wired into mobile-money callbacks and subscription payment references.
+  wired into mobile-money callbacks and subscription payment references. A Docker-backed Redis smoke
+  check now verifies both shared-state primitives against a real Redis container.
 
 ### Frontend
 

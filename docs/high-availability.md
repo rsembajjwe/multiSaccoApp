@@ -69,13 +69,16 @@ Run a failover rehearsal before production launch and every quarter after launch
 3. Start the backend against the restored database.
 4. Run login, SACCO registration, member lookup, transactions, loans, reports, notifications, and
    payment callback smoke tests.
-5. Record restore start time, healthy time, data cutoff time, RPO, RTO, and operator.
+5. Run `npm.cmd run ha:redis-check` to confirm Redis-backed rate-limit and idempotency state is
+   shared before enabling more than one backend instance.
+6. Record restore start time, healthy time, data cutoff time, RPO, RTO, and operator.
 
 ## Load and soak test evidence
 
 Before moving from pilot to enterprise mode:
 
 - Run `npm.cmd run load:test` against a staging system.
+- Run `npm.cmd run ha:redis-check` before the load test so Redis shared-state wiring is proven.
 - Test with SACCO-sized data sets, including member search, transaction lists, loan queues, reports,
   mobile-money callbacks, and chat threads.
 - Capture p95/p99 latency, HTTP errors, DB pool pressure, CPU, memory, and provider timeout rates.
