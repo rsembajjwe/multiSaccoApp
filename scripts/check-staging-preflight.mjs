@@ -14,6 +14,8 @@ const required = [
   "SACCO_SMS_PROVIDER",
   "SACCO_EMAIL_PROVIDER",
   "SACCO_MOBILE_MONEY_PROVIDER",
+  "SACCO_DOCUMENT_STORAGE_PROVIDER",
+  "SACCO_DOCUMENT_STORAGE_LOCAL_ROOT",
   "SACCO_BOOTSTRAP_PLATFORM_ADMIN_FULL_NAME",
   "SACCO_BOOTSTRAP_PLATFORM_ADMIN_EMAIL",
   "SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD",
@@ -61,6 +63,7 @@ assertNotPlaceholder("SACCO_BOOTSTRAP_PLATFORM_ADMIN_FULL_NAME", failures);
 assertNotPlaceholder("SACCO_BOOTSTRAP_PLATFORM_ADMIN_EMAIL", failures);
 assertNotPlaceholder("SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD", failures);
 assertNotPlaceholder("SACCO_MOBILE_MONEY_CALLBACK_SECRET", failures);
+assertNotPlaceholder("SACCO_DOCUMENT_STORAGE_LOCAL_ROOT", failures);
 
 if (String(values.SACCO_DEMO_LOGINS_ENABLED).toLowerCase() !== "false") {
   failures.push("SACCO_DEMO_LOGINS_ENABLED must be false before staging handoff.");
@@ -115,6 +118,14 @@ for (const name of ["SACCO_SMS_PROVIDER", "SACCO_EMAIL_PROVIDER", "SACCO_MOBILE_
   if (value.startsWith("demo_")) {
     failures.push(`${name} must not use a demo provider when demo logins are disabled.`);
   }
+}
+
+const documentStorageProvider = String(values.SACCO_DOCUMENT_STORAGE_PROVIDER ?? "").trim().toLowerCase();
+if (documentStorageProvider !== "local_filesystem") {
+  failures.push("SACCO_DOCUMENT_STORAGE_PROVIDER must be local_filesystem until a cloud object-store adapter is implemented.");
+}
+if (!String(values.SACCO_DOCUMENT_STORAGE_LOCAL_ROOT ?? "").trim()) {
+  failures.push("SACCO_DOCUMENT_STORAGE_LOCAL_ROOT is required for KYC document disposal.");
 }
 
 const smsProvider = String(values.SACCO_SMS_PROVIDER ?? "").trim().toLowerCase();

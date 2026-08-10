@@ -8,6 +8,9 @@ import { securityHeaders } from "./backend/http.mjs";
 const root = fileURLToPath(new URL(".", import.meta.url));
 const port = Number(process.env.PORT || 5173);
 const javaApiBase = process.env.JAVA_API_BASE || "";
+const nodeApiEnabled = process.env.SACCO_NODE_API_ENABLED
+  ? process.env.SACCO_NODE_API_ENABLED === "true"
+  : process.env.NODE_ENV !== "production";
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -28,6 +31,17 @@ createServer(async (request, response) => {
     if (url.pathname.startsWith("/api/v1")) {
       if (javaApiBase) {
         await proxyJavaApi(request, response, url);
+        return;
+      }
+      if (!nodeApiEnabled) {
+        response.writeHead(503, securityHeaders({ "Content-Type": "application/json; charset=utf-8" }));
+        response.end(JSON.stringify({
+          error: {
+            status: 503,
+            code: "JAVA_API_REQUIRED",
+            message: "The production server requires JAVA_API_BASE. The legacy Node API is available only when SACCO_NODE_API_ENABLED=true."
+          }
+        }, null, 2));
         return;
       }
       await handleApi(request, response, url);
@@ -56,6 +70,8 @@ createServer(async (request, response) => {
 }).listen(port, "127.0.0.1", () => {
   console.log(`SACCO app running at http://127.0.0.1:${port}`);
   if (javaApiBase) console.log(`Proxying /api/v1 requests to ${javaApiBase}`);
+  else if (nodeApiEnabled) console.log("Using legacy Node API for local development/demo only.");
+  else console.log("JAVA_API_BASE is required for /api/v1 requests in production mode.");
 });
 
 async function proxyJavaApi(request, response, url) {

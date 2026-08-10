@@ -2,7 +2,7 @@
 
 A multi-SACCO operating platform for Uganda described in the requirements document.
 
-The production backend path is Java/Spring Boot in `backend-java`. The current Node server remains as a working prototype bridge, and it can now proxy `/api/v1` traffic to the Java backend with `JAVA_API_BASE`.
+The production backend path is Java/Spring Boot in `backend-java`. The Node server is the SPA host and Java API proxy. Its legacy in-memory API is kept only for local development/demo use; in `NODE_ENV=production`, `/api/v1` requires `JAVA_API_BASE` unless `SACCO_NODE_API_ENABLED=true` is set deliberately.
 
 ## What is included
 
@@ -50,7 +50,7 @@ Then open:
 http://127.0.0.1:8080/api/v1/health
 ```
 
-Run the frontend against the Java backend instead of the Node prototype bridge:
+Run the frontend against the Java backend:
 
 ```powershell
 npm.cmd run java:start
@@ -58,6 +58,8 @@ npm.cmd run start:java-api
 ```
 
 This keeps the app at `http://127.0.0.1:5173` while proxying `/api/v1/*` requests to `http://127.0.0.1:8080`.
+
+For production-style local checks, always run the frontend with `JAVA_API_BASE`. Starting `server.mjs` with `NODE_ENV=production` and no Java API now returns `503 JAVA_API_REQUIRED` for `/api/v1/*` instead of silently serving the legacy Node prototype.
 
 If port `8080` is already used locally, run from `backend-java` with:
 
@@ -100,6 +102,10 @@ This starts an isolated Docker Compose stack on PostgreSQL, applies Flyway migra
 For hosted staging setup, use [docs/staging-environment.md](docs/staging-environment.md) and keep real `.env` values outside git.
 
 SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`. SMS can run through `afrosms`, email through `gmail_smtp`, and mobile-money collections through `mtn_momo`, `airtel_money`, or `mpesa_daraja` when the matching provider credentials are configured; demo values remain the default for local development.
+
+Secrets and provider credentials must stay outside Git. Use [docs/secrets-management.md](docs/secrets-management.md) for the storage and rotation runbook. `npm.cmd run check` includes a secrets-management contract check that scans deployment example files for real-looking secret values.
+
+Production PostgreSQL connection-pool settings are explicit and environment-tunable. Use [docs/database-performance.md](docs/database-performance.md) for the HikariCP defaults, Hetzner CX22 starting point, multi-instance pool formula, and N+1/query review guidance.
 
 For staging handoff and UAT, use [docs/staging-handoff-checklist.md](docs/staging-handoff-checklist.md), [docs/release-evidence-template.md](docs/release-evidence-template.md), [docs/uat-findings-template.md](docs/uat-findings-template.md), [docs/uat-data-setup.md](docs/uat-data-setup.md), and [docs/uat-scripts.md](docs/uat-scripts.md). For Phase 2 pilot onboarding imports, use [docs/data-import.md](docs/data-import.md).
 
@@ -278,6 +284,38 @@ Approvals also shows a backend-backed control center for pending queue size, pen
 The first screen is a single login form requiring `code`, `username`, and `password`. Use `PLATFORM` for platform administration, or the SACCO's assigned code such as `GVS` for Green Valley SACCO. The code selects the platform/SACCO context, while the username and password identify the account role, such as member, treasurer, secretary, chairperson, SACCO admin, or platform admin. Backend staff and member logins are both scoped to the submitted code.
 
 Members can login from **Member portal** using their issued membership number, phone, or email plus password to view their savings, shares, and welfare balances. Seeded demo member credentials work only in development/demo mode when `SACCO_DEMO_LOGINS_ENABLED=true`.
+
+## API documentation
+
+The integrator-facing HTTP API is documented in [`openapi.yaml`](openapi.yaml) (OpenAPI 3.0.3). It
+covers authentication, member self-service, mobile-money integration (signed callbacks and member
+payment requests), and the core financial/loan read and maker-checker approval endpoints, including
+the response envelope, error model, bearer/member/callback-signature auth, and rate-limit responses.
+
+When deployed, the file is also served at `/openapi.yaml`. To browse it interactively:
+
+- Paste it into the [Swagger Editor](https://editor.swagger.io/), or
+- Run `npx @redocly/cli preview-docs openapi.yaml`, or
+- Import it into Postman/Insomnia to generate a request collection.
+
+It is maintained by hand alongside the code; treat the Spring Boot backend as the source of truth if
+the two ever diverge.
+
+## High availability
+
+Deployment modes, RPO/RTO targets, Redis shared-state requirements, and failover rehearsal steps are
+documented in [`docs/high-availability.md`](docs/high-availability.md). Single-node production keeps
+`SACCO_EXPECTED_BACKEND_INSTANCES=1`; any declared multi-instance deployment must provide
+`SACCO_RATE_LIMIT_STORE=redis` and `SACCO_REDIS_URL`, or the Java backend fails startup.
+
+## Data protection
+
+Privacy controls and remaining compliance work are documented in
+[`docs/data-protection.md`](docs/data-protection.md). Member list/search responses now return masked
+phone, email, and national ID values with `privacyScope=summary_masked`; authorized member detail
+responses keep full editable data with `privacyScope=detail_full`. Members can also update privacy
+notice, SMS, email, mobile-money, and provider data-sharing consent from the member portal, with an
+audit event written for each change.
 
 ## Demo roles
 

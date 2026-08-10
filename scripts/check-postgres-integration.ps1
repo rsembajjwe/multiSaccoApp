@@ -71,6 +71,8 @@ try {
   $env:POSTGRES_PORT = "$PostgresPort"
   $env:BACKEND_PORT = "$BackendPort"
   $env:SACCO_DEMO_LOGINS_ENABLED = "true"
+  $env:SACCO_DOCUMENT_STORAGE_PROVIDER = "local_filesystem"
+  $env:SACCO_DOCUMENT_STORAGE_LOCAL_ROOT = "$repoRoot\.runtime\postgres-check-kyc"
   $env:SACCO_MOBILE_MONEY_CALLBACK_SECRET = "postgres_check_callback_secret_2026"
   $env:SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS = "true"
 
@@ -93,6 +95,8 @@ try {
 
   Remove-Item Env:\SKIP_RATE_LIMIT_TEST -ErrorAction SilentlyContinue
   Remove-Item Env:\API_SMOKE_MOBILE_MONEY_CALLBACK_SECRET -ErrorAction SilentlyContinue
+  Remove-Item Env:\SACCO_DOCUMENT_STORAGE_PROVIDER -ErrorAction SilentlyContinue
+  Remove-Item Env:\SACCO_DOCUMENT_STORAGE_LOCAL_ROOT -ErrorAction SilentlyContinue
 
   Write-Host "Running security hardening checks"
   Invoke-Checked node @("scripts/check-security-hardening.mjs")

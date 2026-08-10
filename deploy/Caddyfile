@@ -6,7 +6,9 @@
 	root * /srv/app
 	encode gzip zstd
 
-	@api path /api/v1* /actuator*
+	# Only health and info are public. Metrics/prometheus stay internal to the deployment network
+	# (scraped directly from backend:8080), so operational metrics are never exposed on the domain.
+	@api path /api/v1* /actuator/health* /actuator/info
 	reverse_proxy @api backend:8080
 
 	header {

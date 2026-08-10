@@ -1,0 +1,1578 @@
+openapi: 3.0.3
+info:
+  title: Tereka Online API
+  version: "1.0.0"
+  description: >
+    Multi-SACCO management platform API for Uganda. This is a curated specification of the
+    integrator-facing surface (authentication, member self-service, mobile-money integration, and the
+    core financial/loan read + approval endpoints). It is maintained by hand alongside the code; the
+    authoritative behaviour is the Spring Boot backend under `backend-java`.
+
+
+    ## Conventions
+
+    - Base path: `/api/v1`.
+
+    - Successful responses are wrapped in an envelope: `{ "data": <payload> }`.
+
+    - Errors use `{ "error": { "timestamp", "status", "code", "message" } }`.
+
+    - Authentication is a bearer token obtained from a login endpoint, sent as
+      `Authorization: Bearer <token>`.
+
+    - Abuse-prone endpoints are rate limited per client IP and may return `429` with a `Retry-After`
+      header.
+  contact:
+    name: Tereka Online
+servers:
+  - url: "https://{host}/api/v1"
+    description: Deployment
+    variables:
+      host:
+        default: tereka.online
+  - url: "http://127.0.0.1:8080/api/v1"
+    description: Local backend
+
+tags:
+  - name: Health
+  - name: Authentication
+  - name: SACCO administration
+  - name: Member self-service
+  - name: Mobile money
+  - name: Members
+  - name: Loans
+  - name: Financial transactions
+
+# Default: staff/platform bearer token. Endpoints override with `security: []` (public),
+# `memberBearer` (member token), or `callbackSignature` (signed provider callback).
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness and service metadata
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      ok: { type: boolean, example: true }
+                      service: { type: string, example: "multiSaccoApp Java API" }
+                      demoLoginsEnabled: { type: boolean, example: false }
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Staff / platform login
+      description: >
+        Authenticates a staff or platform user. When MFA is enabled the response is `202` with an MFA
+        challenge that must be completed via `/auth/mfa/verify`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffLoginRequest"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/LoginResponse" }
+        "202":
+          description: MFA challenge required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/MfaRequiredResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "423":
+          description: Password reset required before login
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /auth/mfa/verify:
+    post:
+      tags: [Authentication]
+      summary: Complete an MFA challenge
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, code]
+              properties:
+                challengeId: { type: string }
+                code: { type: string, example: "123456" }
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/LoginResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Current session, roles and permissions
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/CurrentUserResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Revoke the current session token
+      responses:
+        "200": { description: Logged out }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /tenants:
+    get:
+      tags: [SACCO administration]
+      summary: List SACCOs visible to the current staff user
+      description: >
+        Platform users see all registered SACCOs. SACCO staff see only their own SACCO.
+      responses:
+        "200":
+          description: SACCO list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/TenantResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [SACCO administration]
+      summary: Register a SACCO inside the platform
+      description: >
+        Platform administrators can create a SACCO directly. If `paymentStatus` is `paid`, the SACCO
+        is activated immediately; otherwise activation waits for subscription payment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateTenantRequest" }
+      responses:
+        "201":
+          description: SACCO created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/TenantResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /tenants/{tenantId}:
+    get:
+      tags: [SACCO administration]
+      summary: Get one SACCO
+      parameters:
+        - { name: tenantId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: SACCO details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/TenantResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /tenants/{tenantId}/status:
+    patch:
+      tags: [SACCO administration]
+      summary: Update SACCO approval or operating status
+      parameters:
+        - { name: tenantId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTenantStatusRequest" }
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/TenantResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /tenants/{tenantId}/collection-mode:
+    patch:
+      tags: [SACCO administration]
+      summary: Set the platform-approved collection mode for a SACCO
+      description: >
+        Platform Super Admin control for whether a SACCO may use no online collection, mobile-money
+        collection only, bank-led collection only, or both. Disallowed channels are deactivated when
+        the mode is changed.
+      parameters:
+        - { name: tenantId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateCollectionModeRequest" }
+      responses:
+        "200":
+          description: Collection mode updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/TenantResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /tenants/{tenantId}/collection-settings:
+    patch:
+      tags: [SACCO administration]
+      summary: Activate or deactivate SACCO collection channels
+      description: >
+        SACCO administrators can activate mobile-money and/or bank collection only when the platform
+        has allowed those channels through `/tenants/{tenantId}/collection-mode`.
+      parameters:
+        - { name: tenantId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateCollectionSettingsRequest" }
+      responses:
+        "200":
+          description: Collection settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/TenantResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409":
+          description: Requested channel is not allowed by the platform
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /member-auth/login:
+    post:
+      tags: [Member self-service]
+      summary: Member login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberLoginRequest"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/MemberLoginResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /member-auth/mobile-dashboard:
+    get:
+      tags: [Member self-service]
+      summary: Member dashboard (balances, loans, notifications)
+      security:
+        - memberBearer: []
+      responses:
+        "200":
+          description: Member dashboard snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      balances:
+                        type: object
+                        properties:
+                          savings: { type: number }
+                          shares: { type: number }
+                          welfare: { type: number }
+                      loans: { type: array, items: { type: object } }
+                      notifications: { type: array, items: { type: object } }
+                      paymentProviders:
+                        type: array
+                        description: Safe member-facing mobile-money options; secrets and missing configuration are not exposed.
+                        items: { $ref: "#/components/schemas/PaymentProviderOption" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /member-auth/privacy-consents:
+    patch:
+      tags: [Member self-service]
+      summary: Update member privacy and communication consent
+      security:
+        - memberBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdatePrivacyConsentsRequest" }
+      responses:
+        "200":
+          description: Updated member profile with consent preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/MemberResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /member-auth/privacy-requests:
+    get:
+      tags: [Member self-service]
+      summary: List the signed-in member's data-protection requests
+      security:
+        - memberBearer: []
+      responses:
+        "200":
+          description: Privacy request list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/MemberPrivacyRequestResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Member self-service]
+      summary: Submit a subject-access, retention-review, or erasure request
+      security:
+        - memberBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePrivacyRequestRequest" }
+      responses:
+        "201":
+          description: Privacy request submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/MemberPrivacyRequestResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /members/{memberId}/privacy-requests:
+    get:
+      tags: [Members]
+      summary: List a member's data-protection requests for SACCO staff review
+      parameters:
+        - { name: memberId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Privacy request list
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Members]
+      summary: Create a data-protection request on behalf of a member
+      parameters:
+        - { name: memberId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePrivacyRequestRequest" }
+      responses:
+        "201":
+          description: Privacy request created
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /members/{memberId}/privacy-requests/{privacyRequestId}/status:
+    patch:
+      tags: [Members]
+      summary: Approve, reject, or complete a member data-protection request
+      description: Completing an erasure request redacts member PII but preserves balances, statements, loans, and audit history.
+      parameters:
+        - { name: memberId, in: path, required: true, schema: { type: string } }
+        - { name: privacyRequestId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdatePrivacyRequestStatusRequest" }
+      responses:
+        "200":
+          description: Privacy request updated
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /members/{memberId}/documents/{documentId}/retention:
+    patch:
+      tags: [Members]
+      summary: Update KYC document retention status
+      description: Marks uploaded KYC evidence as active, due for review, retained, pending disposal, or disposed after SACCO staff review.
+      parameters:
+        - { name: memberId, in: path, required: true, schema: { type: string } }
+        - { name: documentId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateMemberDocumentRetentionRequest" }
+      responses:
+        "200":
+          description: KYC document retention state updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/MemberDocumentResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /regulatory-report:
+    get:
+      tags: [Reports]
+      summary: Regulatory and data-protection evidence report
+      description: Returns tenant-scoped or platform-consolidated supervisory evidence, including finance, reconciliation, complaints, privacy requests, consent coverage, KYC retention, and storage-disposal actions.
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: period
+          in: query
+          required: false
+          schema: { type: string, example: "2026-08" }
+      responses:
+        "200":
+          description: Regulatory report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/RegulatoryReportResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /integrations/mobile-money/callback:
+    post:
+      tags: [Mobile money]
+      summary: Provider payment callback (signed)
+      description: >
+        Called by the mobile-money provider when a collection completes. Authenticated by an
+        HMAC-SHA256 signature over the raw body (see the signature headers). In production, unsigned
+        or invalid callbacks are rejected. A member contribution is recorded as **pending approval**
+        (a treasurer must approve before the balance is credited); a loan repayment is likewise held
+        pending approval.
+      security:
+        - callbackSignature: []
+      parameters:
+        - $ref: "#/components/parameters/CallbackSignature"
+        - $ref: "#/components/parameters/CallbackTimestamp"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MobileMoneyCallbackRequest"
+      responses:
+        "201":
+          description: Callback recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/MobileMoneyCallback" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401":
+          description: Missing or invalid signature
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /integrations/mobile-money/subscription-callback:
+    post:
+      tags: [Mobile money]
+      summary: Provider subscription-payment callback (signed)
+      security:
+        - callbackSignature: []
+      parameters:
+        - $ref: "#/components/parameters/CallbackSignature"
+        - $ref: "#/components/parameters/CallbackTimestamp"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: Subscription payment processed }
+        "401": { description: Missing or invalid signature }
+
+  /integrations/mobile-money/payment-requests:
+    post:
+      tags: [Mobile money]
+      summary: Member initiates a mobile-money payment
+      description: Requires a member bearer token. Rate limited per IP.
+      security:
+        - memberBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberPaymentRequest"
+      responses:
+        "202":
+          description: Payment request accepted; awaiting provider callback
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/MobileMoneyPaymentRequest" }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+    get:
+      tags: [Mobile money]
+      summary: List payment requests (staff for a tenant, or the calling member)
+      security:
+        - bearerAuth: []
+        - memberBearer: []
+      responses:
+        "200":
+          description: Payment requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/MobileMoneyPaymentRequest" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /integrations/mobile-money/payment-requests/{requestId}/status:
+    patch:
+      tags: [Mobile money]
+      summary: Manually close a mobile-money payment request
+      description: >
+        Staff with posting rights can mark an open payment request as failed, expired, or cancelled.
+        Successful manual closure is recorded in audit events and creates an in-app staff alert for
+        active SACCO administrators/finance staff.
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: tenantId
+          in: query
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [failed, expired, cancelled]
+                reason: { type: string }
+      responses:
+        "200":
+          description: Payment request manually closed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/MobileMoneyPaymentRequest" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /integrations/mobile-money/callbacks:
+    get:
+      tags: [Mobile money]
+      summary: List received provider callbacks (staff)
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Callbacks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/MobileMoneyCallback" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /members:
+    get:
+      tags: [Members]
+      summary: List members for the caller's tenant
+      description: Pagination is opt-in via `page`/`size` (see the financial-transactions endpoint).
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema: { type: string }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 0 } }
+        - { name: size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: Members (paginated when page/size supplied)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { type: object } }
+                  page: { $ref: "#/components/schemas/PageMeta" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /loans:
+    get:
+      tags: [Loans]
+      summary: List loans for the caller's tenant
+      description: Pagination is opt-in via `page`/`size` (see the financial-transactions endpoint).
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema: { type: string }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 0 } }
+        - { name: size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        "200":
+          description: Loans (paginated when page/size supplied)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { type: object } }
+                  page: { $ref: "#/components/schemas/PageMeta" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /loans/repayments/pending:
+    get:
+      tags: [Loans]
+      summary: List loan repayments awaiting approval (checker queue)
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Pending repayments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/LoanRepayment" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /loans/{loanId}/repayments/{repaymentId}/decision:
+    post:
+      tags: [Loans]
+      summary: Approve or reject a pending loan repayment (maker-checker)
+      description: >
+        A checker (e.g. Treasurer) approves or rejects a repayment received via mobile money. On
+        approval the loan balance is reduced. The maker cannot approve their own repayment.
+      parameters:
+        - name: loanId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: repaymentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DecisionRequest"
+      responses:
+        "200":
+          description: Decision applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/LoanRepayment" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409":
+          description: Already decided, or maker-checker violation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /financial-transactions:
+    get:
+      tags: [Financial transactions]
+      summary: List financial transactions for the caller's tenant
+      description: >
+        Pagination is opt-in. Without `page`/`size` the response is the full list `{ data: [...] }`.
+        When `page` and/or `size` are supplied the response additionally includes a `page` metadata
+        block and the result set is capped (max size 200, default 50).
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: page
+          in: query
+          required: false
+          description: Zero-based page index. Enables pagination when present.
+          schema: { type: integer, minimum: 0 }
+        - name: size
+          in: query
+          required: false
+          description: Page size (1–200, default 50). Enables pagination when present.
+          schema: { type: integer, minimum: 1, maximum: 200 }
+      responses:
+        "200":
+          description: Transactions (paginated when page/size supplied)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/FinancialTransaction" } }
+                  page: { $ref: "#/components/schemas/PageMeta" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /financial-transactions/{transactionId}/status:
+    patch:
+      tags: [Financial transactions]
+      summary: Approve (post) or reject a pending transaction (maker-checker)
+      description: >
+        A checker posts or rejects a pending transaction, including member mobile-money deposits.
+        Posting credits the member balance. The maker cannot approve their own transaction.
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [posted, rejected]
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Decision applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/FinancialTransaction" }
+        "409":
+          description: Already decided, maker-checker violation, or period closed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /notifications/provider-evidence:
+    get:
+      tags: [Notifications]
+      summary: Provider operational evidence
+      description: >
+        Returns tenant-scoped SMS, email and mobile-money provider evidence for staff operations:
+        notification delivery totals, provider readiness, payment request state and callback counts.
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Provider operational evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/ProviderOperationalEvidence" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /notifications/provider-job-runs:
+    get:
+      tags: [Notifications]
+      summary: Provider background job history
+      description: Returns the latest provider background job runs for staff operations review.
+      parameters:
+        - name: jobName
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Provider job run history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/IntegrationJobRun" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /notifications/provider-job-runs/mobile-money-reconciliation:
+    post:
+      tags: [Notifications]
+      summary: Run mobile-money reconciliation now
+      description: Staff operation that manually polls pending mobile-money payment requests and records an audited provider job run.
+      responses:
+        "202":
+          description: Reconciliation run accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/MobileMoneyReconciliationSummary" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Staff/platform session token from `/auth/login`.
+    memberBearer:
+      type: http
+      scheme: bearer
+      description: Member session token from `/member-auth/login`.
+    callbackSignature:
+      type: apiKey
+      in: header
+      name: X-Mobile-Money-Signature
+      description: HMAC-SHA256 of the raw request body using the shared callback secret.
+
+  parameters:
+    CallbackSignature:
+      name: X-Mobile-Money-Signature
+      in: header
+      required: true
+      description: HMAC-SHA256 signature of the raw body.
+      schema: { type: string }
+    CallbackTimestamp:
+      name: X-Mobile-Money-Timestamp
+      in: header
+      required: true
+      description: Unix epoch seconds; must be within the configured tolerance window.
+      schema: { type: string }
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    RateLimited:
+      description: Too many requests
+      headers:
+        Retry-After:
+          description: Seconds to wait before retrying.
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  schemas:
+    PageMeta:
+      type: object
+      description: Pagination metadata, present only when page/size are supplied.
+      properties:
+        number: { type: integer, description: Zero-based page index }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+
+    NotificationProviderStatus:
+      type: object
+      properties:
+        channel: { type: string, example: "sms" }
+        provider: { type: string, example: "afrosms" }
+        status: { type: string, enum: [ready, unavailable] }
+        balance: { type: string, nullable: true }
+        message: { type: string }
+        checkedAt: { type: string, format: date-time }
+
+    PaymentProviderOption:
+      type: object
+      properties:
+        network: { type: string, example: "mtn" }
+        label: { type: string, example: "MTN MoMo" }
+        providerId: { type: string, example: "mtn_momo" }
+        available: { type: boolean }
+
+    MobileMoneyProviderEvidence:
+      type: object
+      properties:
+        paymentRequests: { type: integer }
+        pendingPaymentRequests: { type: integer }
+        failedPaymentRequests: { type: integer }
+        postedPaymentRequests: { type: integer }
+        callbacksReceived: { type: integer }
+        callbacksPendingApproval: { type: integer }
+        callbacksPosted: { type: integer }
+        providerOptions:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentProviderOption" }
+        reconciliationSummary:
+          $ref: "#/components/schemas/MobileMoneyReconciliationSummary"
+        evidenceStatus: { type: string, enum: [ready, review] }
+
+    MobileMoneyReconciliationSummary:
+      type: object
+      properties:
+        scanned: { type: integer }
+        updated: { type: integer }
+        failed: { type: integer }
+        status: { type: string, enum: [not_run, completed, completed_with_errors, failed] }
+        message: { type: string }
+        ranAt: { type: string, format: date-time, nullable: true }
+
+    IntegrationJobRun:
+      type: object
+      properties:
+        id: { type: string }
+        jobName: { type: string, example: "mobile_money_reconciliation" }
+        status: { type: string, enum: [completed, completed_with_errors, failed] }
+        scanned: { type: integer }
+        updated: { type: integer }
+        failed: { type: integer }
+        message: { type: string }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+
+    ProviderOperationalEvidence:
+      type: object
+      properties:
+        notificationDeliveries: { type: integer }
+        failedNotificationDeliveries: { type: integer }
+        sentNotificationDeliveries: { type: integer }
+        notificationProvidersReady: { type: integer }
+        notificationProvidersUnavailable: { type: integer }
+        notificationProviderStatus:
+          type: array
+          items: { $ref: "#/components/schemas/NotificationProviderStatus" }
+        mobileMoney: { $ref: "#/components/schemas/MobileMoneyProviderEvidence" }
+        evidenceStatus: { type: string, enum: [ready, review] }
+        checkedAt: { type: string, format: date-time }
+
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            timestamp: { type: string, format: date-time }
+            status: { type: integer, example: 400 }
+            code: { type: string, example: "AUTH_INVALID" }
+            message: { type: string }
+
+    StaffLoginRequest:
+      type: object
+      required: [saccoCode, password]
+      properties:
+        saccoCode:
+          type: string
+          description: SACCO code, or the platform code for platform staff.
+        username:
+          type: string
+          description: Username (either username or email is required).
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      properties:
+        token: { type: string }
+        tokenType: { type: string, example: "Bearer" }
+        user: { type: object }
+        roleIds: { type: array, items: { type: string } }
+        roleNames: { type: array, items: { type: string } }
+        permissionIds: { type: array, items: { type: string } }
+        expiresAt: { type: string, format: date-time }
+
+    MfaRequiredResponse:
+      type: object
+      properties:
+        mfaRequired: { type: boolean, example: true }
+        challengeId: { type: string }
+        deliveryChannel: { type: string, example: "demo_app" }
+        demoCode:
+          type: string
+          nullable: true
+          description: Present only when demo logins are enabled.
+        expiresAt: { type: string, format: date-time }
+
+    CurrentUserResponse:
+      type: object
+      properties:
+        user: { type: object }
+        tenant: { type: object, nullable: true }
+        roleIds: { type: array, items: { type: string } }
+        roleNames: { type: array, items: { type: string } }
+        permissionIds: { type: array, items: { type: string } }
+        expiresAt: { type: string, format: date-time }
+
+    MemberLoginRequest:
+      type: object
+      required: [identifier, password]
+      properties:
+        saccoCode: { type: string }
+        identifier:
+          type: string
+          description: Membership number, phone, or email.
+        password:
+          type: string
+          format: password
+
+    MemberLoginResponse:
+      type: object
+      properties:
+        token: { type: string }
+        member: { $ref: "#/components/schemas/MemberResponse" }
+        tenant: { type: object }
+
+    UpdatePrivacyConsentsRequest:
+      type: object
+      required:
+        - privacyNoticeAccepted
+        - smsConsent
+        - emailConsent
+        - mobileMoneyConsent
+        - providerDataSharingConsent
+      properties:
+        privacyNoticeAccepted: { type: boolean }
+        smsConsent: { type: boolean }
+        emailConsent: { type: boolean }
+        mobileMoneyConsent: { type: boolean }
+        providerDataSharingConsent:
+          type: boolean
+          description: Consent to share minimum required payment data with approved payment providers.
+
+    CreatePrivacyRequestRequest:
+      type: object
+      required: [requestType]
+      properties:
+        requestType:
+          type: string
+          enum: [subject_access, erasure, retention_review]
+        reason:
+          type: string
+          maxLength: 500
+
+    UpdatePrivacyRequestStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [submitted, approved, completed, rejected]
+        resolutionNote:
+          type: string
+          maxLength: 500
+
+    MemberPrivacyRequestResponse:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        memberId: { type: string }
+        requestType:
+          type: string
+          enum: [subject_access, erasure, retention_review]
+        status:
+          type: string
+          enum: [submitted, approved, completed, rejected]
+        reason: { type: string }
+        resolutionNote: { type: string }
+        requestedByMemberId: { type: string, nullable: true }
+        requestedByUserId: { type: string, nullable: true }
+        handledByUserId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        handledAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+
+    UpdateMemberDocumentRetentionRequest:
+      type: object
+      required: [retentionStatus]
+      properties:
+        retentionStatus:
+          type: string
+          enum: [active, review_due, retained, disposal_pending, disposed]
+        retentionReason:
+          type: string
+          maxLength: 500
+        retentionReviewDueAt:
+          type: string
+          format: date
+          nullable: true
+
+    MemberDocumentResponse:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        memberId: { type: string }
+        documentType: { type: string }
+        storageKey: { type: string }
+        verificationStatus: { type: string }
+        retentionStatus:
+          type: string
+          enum: [active, review_due, retained, disposal_pending, disposed]
+        retentionReason: { type: string }
+        retentionReviewDueAt: { type: string, format: date, nullable: true }
+        retentionReviewedAt: { type: string, format: date-time, nullable: true }
+        retentionActionedByUserId: { type: string, nullable: true }
+        retentionStorageAction:
+          type: string
+          nullable: true
+          description: File-store result for disposed documents, for example deleted, missing, or demo_noop.
+        retentionStorageActionDetail: { type: string, nullable: true }
+        retentionStorageActionAt: { type: string, format: date-time, nullable: true }
+        uploadedByUserId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    MemberConsentPreferences:
+      type: object
+      properties:
+        privacyNoticeAccepted: { type: boolean }
+        privacyNoticeAcceptedAt: { type: string, format: date-time, nullable: true }
+        smsConsent: { type: boolean }
+        emailConsent: { type: boolean }
+        mobileMoneyConsent: { type: boolean }
+        providerDataSharingConsent: { type: boolean }
+        consentUpdatedAt: { type: string, format: date-time, nullable: true }
+
+    DataProtectionEvidence:
+      type: object
+      properties:
+        privacyNoticeAcceptedMembers: { type: integer }
+        membersWithConsentUpdated: { type: integer }
+        privacyRequests: { type: integer }
+        openPrivacyRequests: { type: integer }
+        completedPrivacyRequests: { type: integer }
+        erasureRequestsCompleted: { type: integer }
+        kycDocuments: { type: integer }
+        kycDocumentsReviewDue: { type: integer }
+        kycDocumentsRetained: { type: integer }
+        kycDocumentsDisposed: { type: integer }
+        kycStorageActions: { type: integer }
+        kycStorageDeletes: { type: integer }
+        kycStorageMissing: { type: integer }
+        kycStorageDemoNoop: { type: integer }
+        evidenceStatus:
+          type: string
+          enum: [ready, review]
+
+    RegulatoryTenantReport:
+      type: object
+      properties:
+        tenantId: { type: string }
+        tenantName: { type: string }
+        memberCount: { type: integer }
+        activeMembers: { type: integer }
+        savings: { type: number }
+        shares: { type: number }
+        welfare: { type: number }
+        loanPortfolio: { type: number }
+        activeLoans: { type: integer }
+        loansAtRisk: { type: number }
+        parPercent: { type: integer }
+        expenseTotal: { type: number }
+        assetCost: { type: number }
+        assetNetBookValue: { type: number }
+        journalEntries: { type: integer }
+        unbalancedJournalEntries: { type: integer }
+        reconciliationExceptions: { type: integer }
+        openComplaints: { type: integer }
+        openResolutions: { type: integer }
+        dataProtectionEvidence: { $ref: "#/components/schemas/DataProtectionEvidence" }
+        complianceStatus: { type: string }
+
+    RegulatoryReportResponse:
+      type: object
+      properties:
+        generatedAt: { type: string, format: date-time }
+        period: { type: string }
+        reports:
+          type: array
+          items: { $ref: "#/components/schemas/RegulatoryTenantReport" }
+        consolidated: { $ref: "#/components/schemas/RegulatoryTenantReport" }
+        csv:
+          type: string
+          description: Export-ready CSV text including finance and data-protection evidence columns.
+
+    MemberResponse:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        branchId: { type: string }
+        membershipNo: { type: string }
+        fullName: { type: string }
+        memberType: { type: string }
+        phone:
+          type: string
+          description: Masked in list/search responses; full only in authorized member detail/session responses.
+        email:
+          type: string
+          description: Masked in list/search responses; full only in authorized member detail/session responses.
+        nationalId:
+          type: string
+          description: Masked in list/search responses; full only in authorized member detail/session responses.
+        status: { type: string }
+        kycStatus: { type: string }
+        joiningDate: { type: string, format: date }
+        savingsBalance: { type: number }
+        sharesBalance: { type: number }
+        welfareBalance: { type: number }
+        privacyScope:
+          type: string
+          enum: [summary_masked, detail_full]
+        consentPreferences: { $ref: "#/components/schemas/MemberConsentPreferences" }
+
+    TenantResponse:
+      type: object
+      properties:
+        id: { type: string, example: "tenant_green_valley" }
+        name: { type: string, example: "Green Valley SACCO" }
+        abbreviation: { type: string, example: "GVS" }
+        registrationNo: { type: string, example: "REG-001" }
+        district: { type: string, example: "Wakiso" }
+        country: { type: string, example: "Uganda" }
+        localeCode: { type: string, example: "en-UG" }
+        currencyCode: { type: string, example: "UGX" }
+        currencyDigits: { type: integer, example: 0 }
+        licenseExpiry: { type: string, format: date }
+        packageId: { type: string, example: "starter" }
+        status:
+          type: string
+          enum: [pending_review, approved, active, suspended, terminated]
+        allowedCollectionMode:
+          $ref: "#/components/schemas/CollectionMode"
+        mobileMoneyCollectionActive: { type: boolean }
+        bankCollectionActive: { type: boolean }
+        mobileMoneyCollectionAvailable:
+          type: boolean
+          description: True only when mobile money is both platform-allowed and SACCO-activated.
+        bankCollectionAvailable:
+          type: boolean
+          description: True only when bank collection is both platform-allowed and SACCO-activated.
+
+    CreateTenantRequest:
+      type: object
+      required: [name, abbreviation, licenseExpiry]
+      properties:
+        name: { type: string, example: "Green Valley SACCO" }
+        abbreviation:
+          type: string
+          description: SACCO code used at login.
+          example: "GVS"
+        registrationNo: { type: string, example: "REG-001" }
+        district: { type: string, example: "Wakiso" }
+        parish: { type: string, example: "Nansana" }
+        village: { type: string, example: "Central" }
+        contactNumber: { type: string, example: "+256700123456" }
+        memberRange:
+          type: string
+          example: "100-250"
+        country: { type: string, example: "Uganda" }
+        localeCode: { type: string, example: "en-UG" }
+        currencyCode: { type: string, example: "UGX" }
+        currencyDigits: { type: integer, example: 0 }
+        licenseExpiry: { type: string, format: date }
+        packageId: { type: string, example: "starter" }
+        paymentStatus:
+          type: string
+          enum: [paid, pending]
+          description: Paid activates the SACCO immediately; pending keeps it awaiting subscription payment.
+
+    UpdateTenantStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending_review, approved, active, suspended, terminated]
+
+    CollectionMode:
+      type: string
+      enum: [NONE, MOBILE_MONEY_ONLY, BANK_ONLY, BOTH]
+      description: Platform-approved collection channels for a SACCO.
+
+    UpdateCollectionModeRequest:
+      type: object
+      required: [allowedCollectionMode]
+      properties:
+        allowedCollectionMode:
+          $ref: "#/components/schemas/CollectionMode"
+
+    UpdateCollectionSettingsRequest:
+      type: object
+      properties:
+        mobileMoneyActive:
+          type: boolean
+          description: SACCO requests mobile-money collection activation.
+        bankActive:
+          type: boolean
+          description: SACCO requests bank-led collection activation.
+
+    MobileMoneyCallbackRequest:
+      type: object
+      required: [tenantId, purpose, amount, externalReference]
+      properties:
+        tenantId: { type: string }
+        memberId:
+          type: string
+          description: Member id, or provide memberIdentifier.
+        memberIdentifier:
+          type: string
+          description: Membership number / phone / email.
+        loanId:
+          type: string
+          description: Required when purpose is loan_repayment.
+        purpose:
+          type: string
+          enum: [savings_deposit, share_purchase, welfare_contribution, loan_repayment]
+        amount: { type: number }
+        externalReference:
+          type: string
+          description: Unique provider reference; used for idempotency.
+        provider: { type: string, example: "mtn_momo" }
+        providerPayload:
+          type: object
+          additionalProperties: true
+
+    MobileMoneyCallback:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        memberId: { type: string }
+        purpose: { type: string }
+        amount: { type: number }
+        externalReference: { type: string }
+        provider: { type: string }
+        status:
+          type: string
+          description: e.g. pending_approval, posted.
+        resourceType: { type: string }
+        resourceId: { type: string }
+        duplicate: { type: boolean }
+
+    MemberPaymentRequest:
+      type: object
+      required: [purpose, amount]
+      properties:
+        loanId: { type: string }
+        purpose:
+          type: string
+          enum: [savings_deposit, share_purchase, welfare_contribution, loan_repayment]
+        amount: { type: number }
+        payerPhone: { type: string, example: "+256700000001" }
+        externalReference: { type: string }
+        provider: { type: string, enum: [mtn, airtel] }
+        providerPayload:
+          type: object
+          additionalProperties: true
+
+    MobileMoneyPaymentRequest:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        memberId: { type: string }
+        purpose: { type: string }
+        amount: { type: number }
+        currencyCode: { type: string, example: "UGX" }
+        provider: { type: string }
+        externalReference: { type: string }
+        status: { type: string, example: "pending_demo_callback" }
+        callbackPosting: { type: boolean }
+
+    PaymentProviderOption:
+      type: object
+      properties:
+        network:
+          type: string
+          example: "mtn"
+        label:
+          type: string
+          example: "MTN MoMo"
+        providerId:
+          type: string
+          example: "mtn_momo"
+        available:
+          type: boolean
+          example: true
+
+    FinancialTransaction:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        branchId: { type: string }
+        memberId: { type: string }
+        type:
+          type: string
+          enum: [savings_deposit, withdrawal, share_purchase, welfare_contribution, loan_repayment]
+        channel: { type: string, example: "mobile_money" }
+        amount: { type: number }
+        status:
+          type: string
+          enum: [pending_approval, posted, rejected]
+        reference: { type: string }
+        makerUserId: { type: string }
+        checkerUserId: { type: string, nullable: true }
+        postedAt: { type: string, format: date-time, nullable: true }
+
+    LoanRepayment:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        loanId: { type: string }
+        memberId: { type: string }
+        amount: { type: number }
+        channel: { type: string }
+        reference: { type: string }
+        status:
+          type: string
+          enum: [pending_approval, posted, rejected]
+        receivedByUserId: { type: string }
+        approvedByUserId: { type: string, nullable: true }
+        approvedAt: { type: string, format: date-time, nullable: true }
+
+    DecisionRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [posted, rejected]
+        reason:
+          type: string
+          description: Required when rejecting.

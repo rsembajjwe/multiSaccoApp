@@ -371,6 +371,27 @@ try {
   const notificationDeliveries = await api("GET", "/notifications/deliveries", null, saccoToken);
   assert(notificationDeliveries.data.some((delivery) => delivery.channel === "sms" && delivery.status === "sent"), "SACCO admin should see SMS delivery history");
   assert(notificationDeliveries.data.some((delivery) => delivery.channel === "email" && delivery.status === "sent"), "SACCO admin should see email delivery history");
+  assert(
+    notificationDeliveries.data.some((delivery) =>
+      delivery.eventType === "payment_request_closed" &&
+      delivery.resourceId === failedPaymentRequest.data.id &&
+      delivery.message.includes("Provider prompt expired during smoke test")
+    ),
+    "SACCO admin should see staff alert when a payment request is manually closed"
+  );
+
+  const providerEvidence = await api("GET", "/notifications/provider-evidence", null, saccoToken);
+  assert(providerEvidence.data.notificationDeliveries >= 2, "Provider evidence should include notification delivery totals");
+  assert(providerEvidence.data.mobileMoney.callbacksReceived >= 1, "Provider evidence should include mobile-money callbacks");
+  assert(providerEvidence.data.mobileMoney.providerOptions.length >= 1, "Provider evidence should include active payment rails");
+  assert(providerEvidence.data.mobileMoney.reconciliationSummary, "Provider evidence should include reconciliation job summary");
+  assert(providerEvidence.data.evidenceStatus, "Provider evidence should include an overall status");
+
+  const providerJobRuns = await api("GET", "/notifications/provider-job-runs", null, saccoToken);
+  assert(Array.isArray(providerJobRuns.data), "SACCO admin should see provider job run history");
+
+  const reconciliationRun = await api("POST", "/notifications/provider-job-runs/mobile-money-reconciliation", null, saccoToken);
+  assert(reconciliationRun.data.status, "SACCO admin should run mobile-money reconciliation manually");
 
   const notificationTemplates = await api("GET", "/notification-templates", null, saccoToken);
   assert(notificationTemplates.data.some((template) => template.eventType === "payment_received"), "SACCO admin should see global notification templates");
@@ -862,11 +883,15 @@ try {
   assert(regulatoryReport.data.reports[0].tenantId === "tenant_green", "Regulatory report must be tenant-scoped");
   assert(regulatoryReport.data.reports[0].loanPortfolio > 0, "Regulatory report should include loan portfolio");
   assert(regulatoryReport.data.reports[0].assetNetBookValue > 0, "Regulatory report should include fixed assets");
+  assert(regulatoryReport.data.reports[0].dataProtectionEvidence.kycDocuments >= 1, "Regulatory report should include KYC document evidence");
+  assert(regulatoryReport.data.reports[0].dataProtectionEvidence.privacyRequests >= 0, "Regulatory report should include privacy request evidence");
   assert(regulatoryReport.data.csv.includes("loan_portfolio"), "Regulatory report should include exportable CSV data");
+  assert(regulatoryReport.data.csv.includes("data_protection_status"), "Regulatory report CSV should include data-protection evidence");
 
   const platformRegulatoryReport = await api("GET", "/regulatory-report", null, platformToken);
   assert(platformRegulatoryReport.data.reports.length >= 2, "Platform admin should receive consolidated tenant reports");
   assert(platformRegulatoryReport.data.consolidated.memberCount >= regulatoryReport.data.consolidated.memberCount, "Consolidated report should include tenant totals");
+  assert(platformRegulatoryReport.data.consolidated.dataProtectionEvidence.kycDocuments >= regulatoryReport.data.consolidated.dataProtectionEvidence.kycDocuments, "Consolidated report should include tenant data-protection totals");
 
   const governanceMeeting = await api("POST", "/governance-meetings", {
     title: "Smoke governance review",

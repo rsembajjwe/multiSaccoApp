@@ -14,6 +14,9 @@ Use this guide when preparing a hosted staging environment for pilot SACCO testi
 | `SACCO_DEMO_LOGINS_ENABLED` | Yes | Keep `false` except during an explicit demo verification window. |
 | `SACCO_AUTH_RATE_LIMIT_MAX_FAILURES` | Yes | Start with `6`; tighten after UAT if needed. |
 | `SACCO_AUTH_RATE_LIMIT_WINDOW_SECONDS` | Yes | Start with `60`; tighten after UAT if needed. |
+| `SACCO_PII_ENCRYPTION_KEY` | Yes | Generate a unique 32+ character key; keep it stable for the environment and store it only in the secret store. |
+| `SACCO_DOCUMENT_STORAGE_PROVIDER` | Yes | Use `local_filesystem` until a cloud object-store adapter is implemented. |
+| `SACCO_DOCUMENT_STORAGE_LOCAL_ROOT` | Yes | Absolute path for KYC document files; used when documents are marked disposed. |
 | `SACCO_SMS_PROVIDER` | Yes | Use `afrosms` for hosted staging/production. |
 | `SACCO_AFROSMS_EMAIL` | Required for `afrosms` | AfroSMS login email for the SMSKings API. |
 | `SACCO_AFROSMS_PASSWORD` | Required for `afrosms` | AfroSMS SMSKings password. Store as a secret. |

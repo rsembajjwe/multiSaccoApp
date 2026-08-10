@@ -2,6 +2,7 @@ node_modules/
 dist/
 target/
 backups/
+logs/
 reports/migration-evidence/*
 !reports/migration-evidence/.gitkeep
 reports/deployment-evidence/*
@@ -9,6 +10,8 @@ reports/deployment-evidence/*
 .env
 .env.*
 *.log
+tmp-*.log
+.idea/
 .local-pids/
 Thumbs.db
 .DS_Store

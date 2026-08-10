@@ -16,6 +16,9 @@ Use these for load balancer and uptime checks. They do not require authenticatio
 ```text
 GET /api/v1/operations/status
 GET /api/v1/operations/status?tenantId=tenant_green
+GET /api/v1/notifications/provider-evidence
+GET /api/v1/notifications/provider-job-runs
+POST /api/v1/notifications/provider-job-runs/mobile-money-reconciliation
 ```
 
 This endpoint requires a staff bearer token.
@@ -34,6 +37,28 @@ The response includes:
 - notification delivery exceptions
 - closed accounting period count
 - alert objects with `code`, `severity`, `count`, and `message`
+
+The provider evidence endpoint adds SMS, email, and mobile-money operational evidence:
+
+- notification delivery totals and failed deliveries
+- provider readiness from AfroSMS/Gmail status checks
+- mobile-money payment request totals, pending requests, failed requests, and callbacks
+- mobile-money reconciliation job summary: scanned, updated, failed, and last run time
+
+The provider job history endpoint returns the latest recorded background job runs so administrators can confirm when reconciliation last ran, how many requests were checked, and whether provider failures need review.
+
+Use the manual reconciliation endpoint when provider callbacks are delayed or payment requests remain pending after the expected provider window. The action is permission-protected and recorded in audit events.
+
+Manual payment request closure (`failed`, `expired`, or `cancelled`) is also recorded in audit events with the request reference and actor. It also creates an in-app staff alert for active SACCO administrators/finance staff, so payment exceptions are visible in notification delivery history as well as audit logs.
+
+Mobile-money status reconciliation is scheduled by the backend. Tune it with:
+
+```text
+SACCO_MOBILE_MONEY_RECONCILIATION_ENABLED=true
+SACCO_MOBILE_MONEY_RECONCILIATION_INITIAL_DELAY=PT1M
+SACCO_MOBILE_MONEY_RECONCILIATION_FIXED_DELAY=PT5M
+SACCO_MOBILE_MONEY_RECONCILIATION_BATCH_SIZE=50
+```
 
 ## Suggested Alerts
 
@@ -55,6 +80,7 @@ Use these checks for staging and production monitoring.
 | Mobile-money exceptions | `operations.status.counts.callbackExceptions` | Critical | Compare provider reference, callback payload, member match, and duplicate/idempotency status before reposting or reversing. |
 | Pending postings | `operations.status.counts.pendingFinancialTransactions` | Warning | Assign maker-checker approval review before end of business day. |
 | Notification exceptions | `operations.status.counts.deliveryExceptions` | Warning | Check SMS/email provider credentials, recipient contact values, provider throttling, and delivery history. |
+| Mobile-money reconciliation | `providerEvidence.mobileMoney.reconciliationSummary` | Warning | Confirm pending requests are being checked, provider status calls are succeeding, and callbacks are reconciling. |
 | Open complaints | `operations.status.counts.openComplaints` | Warning | Route overdue complaints to SACCO support or management escalation. |
 | Backup restore rehearsal | `npm.cmd run backup:rehearse` | Critical | Run before a release candidate and record the backup file path plus pass/fail result. |
 
