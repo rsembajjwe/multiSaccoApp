@@ -102,6 +102,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   session, per-portal rendering, per-domain actions, and interactions.
 - `npm run build:ui` produces a validated `dist/` artifact containing entrypoint, styles, manifest,
   service worker, favicon, and all referenced modules.
+- Vite migration has started with `vite.config.mjs`, `npm run build:vite`, and `npm run dev:vite`.
+  The first Vite path bridges the current classic-script modules into `dist-vite`; the next step is
+  installing the Vite package once npm registry access is stable, then converting modules to real
+  ES `import`/`export` boundaries.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
   views.
 
@@ -111,9 +115,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 
 ### High
 
-- **Frontend build maturity is partial.** There is a validated `dist/` artifact step, but the modules
-  are still classic scripts sharing global scope, loaded via many `<script>` tags. There is no Vite
-  bundle, ES module import/export structure, minification, tree-shaking, or type safety.
+- **Frontend build maturity is partial.** There is a validated `dist/` artifact step and Vite
+  configuration has started, but the modules are still classic scripts sharing global scope, loaded
+  via many `<script>` tags. There is not yet a completed ES module import/export structure,
+  minification, tree-shaking, or type safety.
 - **Frontend tests are still early.** Backend tests are strong, and the helper suite now covers many
   high-risk renderers and auth/session transitions. The project still lacks a real component/unit
   test framework over the large UI surface.
