@@ -13,16 +13,19 @@ class ScaleReadinessValidator implements ApplicationRunner {
     private final boolean demoLoginsEnabled;
     private final int expectedBackendInstances;
     private final String rateLimitStore;
+    private final String idempotencyStore;
     private final String redisUrl;
 
     ScaleReadinessValidator(
             @Value("${sacco.demo-logins.enabled:true}") boolean demoLoginsEnabled,
             @Value("${sacco.scale.expected-backend-instances:1}") int expectedBackendInstances,
             @Value("${sacco.rate-limit.store:memory}") String rateLimitStore,
+            @Value("${sacco.idempotency.store:memory}") String idempotencyStore,
             @Value("${sacco.redis.url:}") String redisUrl) {
         this.demoLoginsEnabled = demoLoginsEnabled;
         this.expectedBackendInstances = expectedBackendInstances;
         this.rateLimitStore = rateLimitStore;
+        this.idempotencyStore = idempotencyStore;
         this.redisUrl = redisUrl;
     }
 
@@ -41,6 +44,9 @@ class ScaleReadinessValidator implements ApplicationRunner {
         }
         if (expectedBackendInstances > 1 && !"redis".equalsIgnoreCase(trim(rateLimitStore))) {
             failures.add("SACCO_RATE_LIMIT_STORE=redis");
+        }
+        if (expectedBackendInstances > 1 && !"redis".equalsIgnoreCase(trim(idempotencyStore))) {
+            failures.add("SACCO_IDEMPOTENCY_STORE=redis");
         }
         if (expectedBackendInstances > 1 && trim(redisUrl).isBlank()) {
             failures.add("SACCO_REDIS_URL");

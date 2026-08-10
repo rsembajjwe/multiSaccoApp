@@ -20,11 +20,14 @@ const checks = [
   [contents.runbook, "failover rehearsal", "HA runbook covers failover rehearsal"],
   [contents.prodProperties, "sacco.scale.expected-backend-instances=${SACCO_EXPECTED_BACKEND_INSTANCES:1}", "prod properties expose expected backend instances"],
   [contents.prodProperties, "sacco.rate-limit.store=${SACCO_RATE_LIMIT_STORE:memory}", "prod properties expose rate-limit store"],
+  [contents.prodProperties, "sacco.idempotency.store=${SACCO_IDEMPOTENCY_STORE:memory}", "prod properties expose idempotency store"],
   [contents.prodProperties, "sacco.redis.url=${SACCO_REDIS_URL:}", "prod properties expose Redis URL"],
   [contents.validator, "expectedBackendInstances > 1", "startup guard detects multi-instance mode"],
   [contents.validator, "SACCO_RATE_LIMIT_STORE=redis", "startup guard requires Redis rate-limit store"],
+  [contents.validator, "SACCO_IDEMPOTENCY_STORE=redis", "startup guard requires Redis idempotency store"],
   [contents.validator, "SACCO_REDIS_URL", "startup guard requires Redis URL"],
   [contents.validatorTest, "productionRejectsMultiInstanceWithoutRedisStore", "validator test rejects missing Redis store"],
+  [contents.validatorTest, "productionRejectsMultiInstanceWithoutSharedIdempotencyStore", "validator test rejects missing shared idempotency store"],
   [contents.validatorTest, "productionAllowsMultiInstanceWithRedisConfiguration", "validator test allows complete Redis configuration"],
 ];
 

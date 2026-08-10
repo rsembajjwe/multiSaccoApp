@@ -10,21 +10,21 @@ class ScaleReadinessValidatorTest {
 
     @Test
     void demoModeAllowsSingleNodeDefaults() {
-        ScaleReadinessValidator validator = new ScaleReadinessValidator(true, 1, "memory", "");
+        ScaleReadinessValidator validator = new ScaleReadinessValidator(true, 1, "memory", "memory", "");
 
         assertDoesNotThrow(validator::validate);
     }
 
     @Test
     void productionAllowsSingleNodeMemoryLimiter() {
-        ScaleReadinessValidator validator = new ScaleReadinessValidator(false, 1, "memory", "");
+        ScaleReadinessValidator validator = new ScaleReadinessValidator(false, 1, "memory", "memory", "");
 
         assertDoesNotThrow(validator::validate);
     }
 
     @Test
     void productionRejectsInvalidInstanceCount() {
-        ScaleReadinessValidator validator = new ScaleReadinessValidator(false, 0, "memory", "");
+        ScaleReadinessValidator validator = new ScaleReadinessValidator(false, 0, "memory", "memory", "");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
 
@@ -33,7 +33,7 @@ class ScaleReadinessValidatorTest {
 
     @Test
     void productionRejectsMultiInstanceWithoutRedisStore() {
-        ScaleReadinessValidator validator = new ScaleReadinessValidator(false, 2, "memory", "redis://cache:6379");
+        ScaleReadinessValidator validator = new ScaleReadinessValidator(false, 2, "memory", "redis", "redis://cache:6379");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
 
@@ -42,7 +42,7 @@ class ScaleReadinessValidatorTest {
 
     @Test
     void productionRejectsMultiInstanceWithoutRedisUrl() {
-        ScaleReadinessValidator validator = new ScaleReadinessValidator(false, 2, "redis", "");
+        ScaleReadinessValidator validator = new ScaleReadinessValidator(false, 2, "redis", "redis", "");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
 
@@ -51,8 +51,17 @@ class ScaleReadinessValidatorTest {
 
     @Test
     void productionAllowsMultiInstanceWithRedisConfiguration() {
-        ScaleReadinessValidator validator = new ScaleReadinessValidator(false, 2, "redis", "redis://cache:6379");
+        ScaleReadinessValidator validator = new ScaleReadinessValidator(false, 2, "redis", "redis", "redis://cache:6379");
 
         assertDoesNotThrow(validator::validate);
+    }
+
+    @Test
+    void productionRejectsMultiInstanceWithoutSharedIdempotencyStore() {
+        ScaleReadinessValidator validator = new ScaleReadinessValidator(false, 2, "redis", "memory", "redis://cache:6379");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
+
+        assertTrue(error.getMessage().contains("SACCO_IDEMPOTENCY_STORE=redis"));
     }
 }

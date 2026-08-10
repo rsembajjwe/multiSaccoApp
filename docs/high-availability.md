@@ -20,6 +20,7 @@ Required scale settings:
 ```properties
 SACCO_EXPECTED_BACKEND_INSTANCES=1
 SACCO_RATE_LIMIT_STORE=memory
+SACCO_IDEMPOTENCY_STORE=memory
 ```
 
 ### Enterprise multi-instance mode
@@ -39,11 +40,13 @@ Required scale settings:
 ```properties
 SACCO_EXPECTED_BACKEND_INSTANCES=2
 SACCO_RATE_LIMIT_STORE=redis
+SACCO_IDEMPOTENCY_STORE=redis
 SACCO_REDIS_URL=redis://redis.internal:6379
 ```
 
 `ScaleReadinessValidator` fails production startup if more than one backend instance is declared
-without Redis scale configuration. This prevents an accidental unsafe HA deployment.
+without Redis scale configuration for rate limits, idempotency/shared hot keys, and Redis
+connectivity. This prevents an accidental unsafe HA deployment.
 
 ## Recovery targets
 
