@@ -93,7 +93,7 @@ function memberTabReadinessPanel() {
 
 function memberLoansView() {
   const loans = state.memberData.loans || [];
-  const requests = memberGuarantorRows();
+  const requests = buildMemberGuarantorRows(state.memberData.pendingGuarantors || []);
   const pending = requests.filter((row) => normal(row.status) === "pending");
   const tabs = [["loans", "My loans"], ["guarantor", `Guarantor requests${pending.length ? ` (${pending.length})` : ""}`]];
   const tab = activeModuleTab("loans", tabs);
@@ -131,8 +131,8 @@ function memberLoanApplicationPanel() {
 function memberPaymentsView() {
   const loans = state.memberData.loans || [];
   const payableLoans = loans.filter((loan) => ["active", "disbursed"].includes(normal(loan.status)));
-  const requestRows = memberPaymentRequestRows();
-  const paymentDrafts = memberDraftRows("payment");
+  const requestRows = buildMemberPaymentRequestRows(state.memberData.paymentRequests || []);
+  const paymentDrafts = buildMemberDraftRows(state.memberData.drafts || [], "payment", labelize);
   return `
     ${paymentRequestStatusNotice()}
     ${memberPaymentFormPanel(payableLoans)}
@@ -251,14 +251,6 @@ function memberPaymentProviderTile(provider, checked) {
   `;
 }
 
-function memberGuarantorRows() {
-  return buildMemberGuarantorRows(state.memberData.pendingGuarantors || []);
-}
-
-function memberAdminMessageRows() {
-  return buildMemberAdminMessageRows(state.memberData.notifications || []);
-}
-
 /**
  * Builds a member-facing payment lifecycle from requests, posted statement lines and offline drafts.
  * @param {TerekaMemberDashboard} dash
@@ -267,14 +259,10 @@ function memberAdminMessageRows() {
 function memberPaymentLifecycleRows(dash) {
   return buildMemberPaymentLifecycleRows({
     dashboard: dash,
-    drafts: memberDraftRows("payment"),
+    drafts: buildMemberDraftRows(state.memberData.drafts || [], "payment", labelize),
     labelize,
     paymentRequests: state.memberData.paymentRequests || [],
   });
-}
-
-function memberPaymentRequestRows() {
-  return buildMemberPaymentRequestRows(state.memberData.paymentRequests || []);
 }
 
 function paymentRequestStatusNotice() {
@@ -288,7 +276,7 @@ function paymentRequestStatusNotice() {
 }
 
 function memberComplaintsView() {
-  const notifications = memberAdminMessageRows().map((notification) => ({
+  const notifications = buildMemberAdminMessageRows(state.memberData.notifications || []).map((notification) => ({
     ...notification,
     action: isMemberNotificationUnread(notification) ? "member-notification-acknowledge" : "none",
     actionLabel: "Acknowledge",
@@ -343,10 +331,6 @@ function memberDraftPanel(title, drafts) {
       ` : emptyState("No offline drafts", "Use Save draft to keep a payment or complaint on this device before syncing.")}
     </section>
   `;
-}
-
-function memberDraftRows(type = "") {
-  return buildMemberDraftRows(state.memberData.drafts || [], type, labelize);
 }
 
 function memberProfileView(_balances = {}) {
