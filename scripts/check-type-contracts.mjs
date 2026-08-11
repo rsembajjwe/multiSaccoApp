@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, settingsSource, operationsSource, platformSource, saccoSource, navigationSource, approvalsSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, settingsSource, operationsSource, platformSource, saccoSource, navigationSource, approvalsSource, stateSource, coreSource, usersSource, transactionsClassicSource, operationsClassicSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -30,6 +30,10 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/navigation/navigation.ts"),
   readText("src/approvals/approvals.ts"),
   readText("app.state.js"),
+  readText("app.core.js"),
+  readText("app.users.js"),
+  readText("app.transactions.js"),
+  readText("app.operations.js"),
 ]);
 
 assert.equal(packageJson.scripts["type:ui"], "tsc -p tsconfig.ui.json");
@@ -564,6 +568,47 @@ assert.ok(declarations.includes("memberData: TerekaMemberData;"), "TerekaState.m
 assert.ok(declarations.includes("member: TerekaMemberProfile | null;"), "TerekaState.member must use TerekaMemberProfile");
 assert.ok(declarations.includes("user: TerekaPlatformUser | null;"), "TerekaState.user must use TerekaPlatformUser");
 
+const remainingClassicBridgeSurface = [
+  [coreSource, "function filterRows(rows)"],
+  [coreSource, "function filterRowsByQuery(rows, query)"],
+  [coreSource, "function tableStateKey(title)"],
+  [usersSource, "function userRoleOptions(platformOnly)"],
+  [transactionsClassicSource, "function transactionRows()"],
+  [operationsClassicSource, "function notificationProviderRiskRows()"],
+  [operationsClassicSource, "function loginRiskEvents()"],
+];
+for (const [source, marker] of remainingClassicBridgeSurface) {
+  assert.ok(source.includes(marker), `remaining classic bridge surface missing ${marker}`);
+}
+
+const retiredClassicWrappers = [
+  "function subscriptionAccessLabel(",
+  "function saccoPaymentStage(",
+  "function saccoApprovalStage(",
+  "function subscriptionPaymentLabel(",
+  "function roleSummaryText(",
+  "function rolePurpose(",
+  "function roleModuleScope(",
+  "function memberStatementLines(",
+  "function saccoMonthlyPerformanceRows(",
+  "function memberMonthlyPerformanceRows(",
+  "function loanRows(",
+  "function normalizedAuditRows(",
+  "function quickResult(",
+  "function notificationDeliveryAction(",
+  "function filterNotificationDeliveries(",
+  "function memberDocumentRows(",
+  "function memberKycReadiness(",
+  "function transactionReceiptingQueue(",
+  "function transactionReceiptRegister(",
+  "function chatInitials(",
+  "function chatThreadRows(",
+];
+const classicBridgeSources = await readClassicAppSources();
+for (const marker of retiredClassicWrappers) {
+  assert.ok(!classicBridgeSources.includes(marker), `retired classic wrapper reintroduced: ${marker}`);
+}
+
 console.log("Type contract check passed (classic SPA checkJs gate and strict src domain module verified).");
 
 async function readText(file) {
@@ -572,4 +617,10 @@ async function readText(file) {
 
 async function readJson(file) {
   return JSON.parse(await readText(file));
+}
+
+async function readClassicAppSources() {
+  const files = (await readdir(root)).filter((file) => /^app.*\.js$/.test(file));
+  const sources = await Promise.all(files.map((file) => readText(file)));
+  return sources.join("\n");
 }
