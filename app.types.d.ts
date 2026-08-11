@@ -345,6 +345,73 @@ interface TerekaPlatformSupportSummary {
 
 type TerekaPlatformActivityRow = [string | undefined, string | undefined, string | undefined];
 
+interface TerekaSaccoAdminDashboardSummary {
+  mobileMoneyCollections: number;
+  outstandingLoans: number;
+  pendingApprovals: number;
+  totalMembers: number;
+  totalSavings: number;
+}
+
+interface TerekaSaccoAccountantDashboardSummary {
+  expensesPosted: number;
+  journalEntries: number;
+  reconciliationExceptions: number;
+  reports: number;
+}
+
+interface TerekaSaccoTellerDashboardModel {
+  awaitingApproval: number;
+  members: number;
+  myCaptures: Array<TerekaFinancialTransaction & Record<string, any>>;
+  myCaptureCount: number;
+}
+
+interface TerekaSaccoLoansOfficerDashboardModel {
+  arrears: Array<TerekaLoan & Record<string, any>>;
+  arrearsWatch: number;
+  awaitingApproval: number;
+  loanApplications: number;
+  needGuarantor: Array<TerekaLoan & Record<string, any>>;
+  needGuarantorCount: number;
+  submitted: Array<TerekaLoan & Record<string, any>>;
+}
+
+interface TerekaSaccoAuditorDashboardModel {
+  auditEvents: number;
+  highValue: Array<TerekaFinancialTransaction & Record<string, any>>;
+  highValueTransactions: number;
+  reports: number;
+  reversals: Array<TerekaFinancialTransaction & Record<string, any>>;
+  reversalCount: number;
+}
+
+interface TerekaSaccoChairpersonDashboardModel {
+  approvalLoans: Array<TerekaLoan & Record<string, any>>;
+  arrearsLoans: Array<TerekaLoan & Record<string, any>>;
+  arrearsWatch: number;
+  governanceActions: number;
+  highValueTransactions: Array<TerekaFinancialTransaction & Record<string, any>>;
+  loansAwaitingApproval: number;
+  outstandingPortfolio: number;
+}
+
+interface TerekaSaccoTreasurerDashboardModel {
+  collections: number;
+  failedCallbacks: Array<TerekaMobileMoneyCallback & Record<string, any>>;
+  mobileMoneyExceptions: number;
+  pendingApprovals: number;
+  totalSavings: number;
+}
+
+interface TerekaSaccoSecretaryDashboardModel {
+  governanceRecords: number;
+  membersToVerify: number;
+  openComplaints: number;
+  pendingKyc: Array<TerekaMemberProfile & Record<string, any>>;
+  totalMembers: number;
+}
+
 interface TerekaSubscription {
   id?: string;
   tenantId?: string;
@@ -1711,6 +1778,14 @@ declare function buildPlatformBillingSummary(input: { subscriptions: Array<Terek
 declare function buildPlatformComplianceSummary(input: { alerts: Array<Record<string, any>>; auditEvents: Array<TerekaAuditEvent & Record<string, any>>; openSupportTickets: Array<TerekaComplaintThread & Record<string, any>>; pendingTenants: Array<TerekaTenantSummary & Record<string, any>>; regulatoryReportReady: boolean }): TerekaPlatformComplianceSummary;
 declare function buildPlatformSupportSummary(input: { notifications: Array<Record<string, any>>; pendingTenants: Array<TerekaTenantSummary & Record<string, any>>; tenants: Array<TerekaTenantSummary & Record<string, any>>; tickets: Array<TerekaComplaintThread & Record<string, any>> }): TerekaPlatformSupportSummary;
 declare function buildRecentSaccoApplicationRows(tenants: Array<TerekaTenantSummary & Record<string, any>>, pendingLabel: string): TerekaPlatformActivityRow[];
+declare function buildSaccoAdminDashboardSummary(input: { loans: Array<TerekaLoan & Record<string, any>>; members: Array<TerekaMemberProfile & Record<string, any>>; transactions: Array<TerekaFinancialTransaction & Record<string, any>> }): TerekaSaccoAdminDashboardSummary;
+declare function buildSaccoAccountantDashboardSummary(input: { chartOfAccounts: Array<Record<string, any>>; expenses: Array<TerekaExpense & Record<string, any>>; journalEntries: Array<Record<string, any>>; reconciliation: Record<string, any> | null | undefined }): TerekaSaccoAccountantDashboardSummary;
+declare function buildSaccoTellerDashboardModel(input: { currentUserId?: string; members: Array<TerekaMemberProfile & Record<string, any>>; transactions: Array<TerekaFinancialTransaction & Record<string, any>> }): TerekaSaccoTellerDashboardModel;
+declare function buildSaccoLoansOfficerDashboardModel(loans: Array<TerekaLoan & Record<string, any>>): TerekaSaccoLoansOfficerDashboardModel;
+declare function buildSaccoAuditorDashboardModel(input: { auditEvents: Array<TerekaAuditEvent & Record<string, any>>; chartOfAccounts: Array<Record<string, any>>; transactions: Array<TerekaFinancialTransaction & Record<string, any>> }): TerekaSaccoAuditorDashboardModel;
+declare function buildSaccoChairpersonDashboardModel(input: { governanceMeetings: Array<Record<string, any>>; loans: Array<TerekaLoan & Record<string, any>>; transactions: Array<TerekaFinancialTransaction & Record<string, any>> }): TerekaSaccoChairpersonDashboardModel;
+declare function buildSaccoTreasurerDashboardModel(input: { callbacks: Array<TerekaMobileMoneyCallback & Record<string, any>>; members: Array<TerekaMemberProfile & Record<string, any>>; pendingTransactions: Array<TerekaFinancialTransaction & Record<string, any>>; transactions: Array<TerekaFinancialTransaction & Record<string, any>> }): TerekaSaccoTreasurerDashboardModel;
+declare function buildSaccoSecretaryDashboardModel(input: { complaints: Array<TerekaComplaintThread & Record<string, any>>; governanceMeetings: Array<Record<string, any>>; members: Array<TerekaMemberProfile & Record<string, any>> }): TerekaSaccoSecretaryDashboardModel;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

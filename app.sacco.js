@@ -13,15 +13,16 @@ function saccoDashboard() {
   const members = dataRows("members");
   const transactions = dataRows("transactions");
   const loans = dataRows("loans");
+  const dashboard = buildSaccoAdminDashboardSummary({ loans, members, transactions });
   return `
     ${dashboardIntro("SACCO Administrator", "Full operating overview for the SACCO.")}
     ${roleAccessPanel("Administrator access")}
     <div class="dashboard-grid">
-      ${summaryLink("Total members", members.length, "Membership register", "Open", "members")}
-      ${summaryLink("Total savings", money.format(sum(members, "savingsBalance", "savings")), "Verified member balances", "Statements", "savings")}
-      ${summaryLink("Outstanding loans", money.format(sum(loans, "outstandingBalance", "balance")), "Loan portfolio", "Open", "loans")}
-      ${summaryLink("Pending approvals", transactions.filter((t) => normal(t.status).includes("pending")).length, "Maker-checker queue", "Approve", "approvals")}
-      ${summaryLink("Mobile-money collections", money.format(sum(transactions.filter((t) => normal(t.channel).includes("mobile")), "amount")), "Provider channel", "Reconcile", "reconciliation")}
+      ${summaryLink("Total members", dashboard.totalMembers, "Membership register", "Open", "members")}
+      ${summaryLink("Total savings", money.format(dashboard.totalSavings), "Verified member balances", "Statements", "savings")}
+      ${summaryLink("Outstanding loans", money.format(dashboard.outstandingLoans), "Loan portfolio", "Open", "loans")}
+      ${summaryLink("Pending approvals", dashboard.pendingApprovals, "Maker-checker queue", "Approve", "approvals")}
+      ${summaryLink("Mobile-money collections", money.format(dashboard.mobileMoneyCollections), "Provider channel", "Reconcile", "reconciliation")}
     </div>
     <div class="grid two">
       ${recordTable("Recent transactions", transactions, ["reference", "memberName", "type", "amount", "status"])}
@@ -34,15 +35,20 @@ function saccoAccountantDashboard() {
   const journalEntries = dataRows("journalEntries");
   const expenses = dataRows("expenses");
   const reconciliation = state.data.reconciliation || {};
-  const exceptions = (reconciliation.unmatchedStatementLines?.length || 0) + (reconciliation.unmatchedLedgerLines?.length || 0);
+  const dashboard = buildSaccoAccountantDashboardSummary({
+    chartOfAccounts: dataRows("chartOfAccounts"),
+    expenses,
+    journalEntries,
+    reconciliation
+  });
   return `
     ${dashboardIntro("SACCO Accountant", "Ledger, expenses, reconciliation and reports.")}
     ${roleAccessPanel("Accountant access")}
     <div class="dashboard-grid">
-      ${summaryLink("Journal entries", journalEntries.length, "Posted ledger activity", "Open", "accounting")}
-      ${summaryLink("Expenses posted", money.format(sum(expenses, "amount", "totalAmount")), "Operating spend", "Capture", "accounting")}
-      ${summaryLink("Reconciliation exceptions", exceptions, "Bank and mobile-money", "Match", "reconciliation")}
-      ${summaryLink("Reports", dataRows("chartOfAccounts").length, "Financial reporting", "View", "reports")}
+      ${summaryLink("Journal entries", dashboard.journalEntries, "Posted ledger activity", "Open", "accounting")}
+      ${summaryLink("Expenses posted", money.format(dashboard.expensesPosted), "Operating spend", "Capture", "accounting")}
+      ${summaryLink("Reconciliation exceptions", dashboard.reconciliationExceptions, "Bank and mobile-money", "Match", "reconciliation")}
+      ${summaryLink("Reports", dashboard.reports, "Financial reporting", "View", "reports")}
     </div>
     <div class="grid two">
       ${recordTable("Recent journal entries", journalEntries, ["reference", "description", "debit", "credit", "postedAt"])}
@@ -53,36 +59,33 @@ function saccoAccountantDashboard() {
 
 function saccoTellerDashboard() {
   const transactions = dataRows("transactions");
-  const myCaptures = transactions.filter((row) => row.makerUserId === state.user?.id);
-  const pending = myCaptures.filter((row) => normal(row.status).includes("pending"));
+  const dashboard = buildSaccoTellerDashboardModel({ currentUserId: state.user?.id, members: dataRows("members"), transactions });
   return `
     ${dashboardIntro("SACCO Teller", "Record member deposits and repayments.")}
     ${roleAccessPanel("Teller access")}
     <div class="dashboard-grid">
       ${summaryLink("Record a transaction", "Open", "Capture deposit or repayment", "Capture", "transactions")}
-      ${summaryLink("My captures", myCaptures.length, "Submitted this session", "Review", "transactions")}
-      ${summaryLink("Awaiting approval", pending.length, "Sent to Treasurer/Admin", "Track", "transactions")}
-      ${summaryLink("Members", dataRows("members").length, "Member lookup", "Open", "members")}
+      ${summaryLink("My captures", dashboard.myCaptureCount, "Submitted this session", "Review", "transactions")}
+      ${summaryLink("Awaiting approval", dashboard.awaitingApproval, "Sent to Treasurer/Admin", "Track", "transactions")}
+      ${summaryLink("Members", dashboard.members, "Member lookup", "Open", "members")}
     </div>
-    ${myCaptures.length
-      ? recordTable("My recent captures", myCaptures, ["reference", "memberName", "type", "amount", "channel", "status"])
+    ${dashboard.myCaptures.length
+      ? recordTable("My recent captures", dashboard.myCaptures, ["reference", "memberName", "type", "amount", "channel", "status"])
       : emptyState("No captures yet", "Use Transactions to record a member deposit or repayment for approval.")}
   `;
 }
 
 function saccoLoansOfficerDashboard() {
   const loans = dataRows("loans");
-  const submitted = loans.filter((row) => ["submitted", "review", "pending"].some((word) => normal(row.status).includes(word)));
-  const arrears = loans.filter((row) => ["arrears", "overdue", "default"].some((word) => normal(`${row.status} ${row.scheduleStatus}`).includes(word)));
-  const needGuarantor = submitted.filter((row) => Number(row.guarantors || 0) < 1);
+  const dashboard = buildSaccoLoansOfficerDashboardModel(loans);
   return `
     ${dashboardIntro("SACCO Loans Officer", "Loan applications, guarantors and repayment tracking.")}
     ${roleAccessPanel("Loans Officer access")}
     <div class="dashboard-grid">
-      ${summaryLink("Loan applications", loans.length, "Capture and appraise", "Open", "loans")}
-      ${summaryLink("Awaiting approval", submitted.length, "Prepared for chairperson", "Track", "loans")}
-      ${summaryLink("Need guarantor", needGuarantor.length, "Guarantee follow-up", "Review", "guarantors")}
-      ${summaryLink("Arrears watch", arrears.length, "Repayment follow-up", "Assess", "loans")}
+      ${summaryLink("Loan applications", dashboard.loanApplications, "Capture and appraise", "Open", "loans")}
+      ${summaryLink("Awaiting approval", dashboard.awaitingApproval, "Prepared for chairperson", "Track", "loans")}
+      ${summaryLink("Need guarantor", dashboard.needGuarantorCount, "Guarantee follow-up", "Review", "guarantors")}
+      ${summaryLink("Arrears watch", dashboard.arrearsWatch, "Repayment follow-up", "Assess", "loans")}
     </div>
     ${recordTable("Loan work queue", loans.map((row) => ({ ...row, memberName: row.memberName || memberName(row.memberId), action: "loan-detail", actionLabel: "Open", actionId: row.id })), ["applicationNo", "memberName", "product", "requestedAmount", "outstandingBalance", "status"])}
   `;
@@ -91,20 +94,19 @@ function saccoLoansOfficerDashboard() {
 function saccoAuditorDashboard() {
   const auditEvents = dataRows("auditEvents");
   const transactions = dataRows("transactions");
-  const reversals = transactions.filter((row) => row.originalTransactionId || normal(row.status).includes("reversed"));
-  const highValue = transactions.filter((row) => Number(row.amount || row.credit || row.debit || 0) >= 1000000);
+  const dashboard = buildSaccoAuditorDashboardModel({ auditEvents, chartOfAccounts: dataRows("chartOfAccounts"), transactions });
   return `
     ${dashboardIntro("SACCO Auditor", "Read-only oversight of activity, exceptions and the audit trail.")}
     ${roleAccessPanel("Auditor access")}
     <div class="dashboard-grid">
-      ${summaryLink("Audit events", auditEvents.length, "Sensitive activity trail", "Open", "audit")}
-      ${summaryLink("Reversals", reversals.length, "Corrections with reason", "Review", "transactions")}
-      ${summaryLink("High-value transactions", highValue.length, "Large movements", "Review", "transactions")}
-      ${summaryLink("Reports", dataRows("chartOfAccounts").length, "Operational and financial", "View", "reports")}
+      ${summaryLink("Audit events", dashboard.auditEvents, "Sensitive activity trail", "Open", "audit")}
+      ${summaryLink("Reversals", dashboard.reversalCount, "Corrections with reason", "Review", "transactions")}
+      ${summaryLink("High-value transactions", dashboard.highValueTransactions, "Large movements", "Review", "transactions")}
+      ${summaryLink("Reports", dashboard.reports, "Operational and financial", "View", "reports")}
     </div>
     <div class="grid two">
       ${recordTable("Recent audit events", auditEvents, ["action", "resourceType", "actorName", "createdAt"])}
-      ${recordTable("High-value transactions", highValue, ["reference", "memberName", "type", "amount", "status"])}
+      ${recordTable("High-value transactions", dashboard.highValue, ["reference", "memberName", "type", "amount", "status"])}
     </div>
   `;
 }
@@ -112,23 +114,19 @@ function saccoAuditorDashboard() {
 function saccoChairpersonDashboard() {
   const loans = dataRows("loans");
   const transactions = dataRows("transactions");
-  const members = dataRows("members");
-  const approvalLoans = loans.filter((row) => ["pending", "review", "approval", "submitted"].some((word) => normal(`${row.status} ${row.stage}`).includes(word)));
-  const arrearsLoans = loans.filter((row) => ["arrears", "overdue", "default"].some((word) => normal(`${row.status} ${row.riskLevel}`).includes(word)));
-  const highValueTransactions = transactions.filter((row) => Number(row.amount || row.credit || row.debit || 0) >= 1000000);
-  const governance = dataRows("governanceMeetings");
+  const dashboard = buildSaccoChairpersonDashboardModel({ governanceMeetings: dataRows("governanceMeetings"), loans, transactions });
   return `
     ${dashboardIntro("SACCO Chairperson", "Loan approvals, portfolio health and governance.")}
     ${roleAccessPanel("Chairperson access")}
     <div class="dashboard-grid">
-      ${summaryLink("Loans awaiting approval", approvalLoans.length, "Chairperson approval queue", "Decide", "approvals")}
-      ${summaryLink("Outstanding portfolio", money.format(sum(loans, "outstandingBalance", "balance")), "Credit exposure", "Review", "loans")}
-      ${summaryLink("Arrears watch", arrearsLoans.length, "Loans needing board attention", "Assess", "loans")}
-      ${summaryLink("Governance actions", governance.length, "Meetings and resolutions", "Open", "governance")}
+      ${summaryLink("Loans awaiting approval", dashboard.loansAwaitingApproval, "Chairperson approval queue", "Decide", "approvals")}
+      ${summaryLink("Outstanding portfolio", money.format(dashboard.outstandingPortfolio), "Credit exposure", "Review", "loans")}
+      ${summaryLink("Arrears watch", dashboard.arrearsWatch, "Loans needing board attention", "Assess", "loans")}
+      ${summaryLink("Governance actions", dashboard.governanceActions, "Meetings and resolutions", "Open", "governance")}
     </div>
     <div class="grid two">
-      ${recordTable("Loans awaiting approval", approvalLoans.map((row) => ({ ...row, memberName: row.memberName || memberName(row.memberId), action: "loan-detail", actionLabel: "Decide", actionId: row.id })), ["applicationNo", "memberName", "product", "requestedAmount", "status"])}
-      ${recordTable("Board risk watch", [...arrearsLoans, ...highValueTransactions], ["applicationNo", "reference", "memberName", "product", "amount", "outstandingBalance", "status"])}
+      ${recordTable("Loans awaiting approval", dashboard.approvalLoans.map((row) => ({ ...row, memberName: row.memberName || memberName(row.memberId), action: "loan-detail", actionLabel: "Decide", actionId: row.id })), ["applicationNo", "memberName", "product", "requestedAmount", "status"])}
+      ${recordTable("Board risk watch", [...dashboard.arrearsLoans, ...dashboard.highValueTransactions], ["applicationNo", "reference", "memberName", "product", "amount", "outstandingBalance", "status"])}
     </div>
   `;
 }
@@ -136,44 +134,43 @@ function saccoChairpersonDashboard() {
 function saccoTreasurerDashboard() {
   const transactions = dataRows("transactions");
   const callbacks = dataRows("mobileMoneyCallbacks");
-  const accounts = dataRows("financialAccounts");
-  const reconciliation = state.data.reconciliation || {};
-  const expenses = dataRows("expenses");
-  const cashAccounts = accounts.filter((row) => ["cash", "bank", "mobile"].some((word) => normal(`${row.accountType} ${row.productType} ${row.name}`).includes(word)));
-  const failedCallbacks = callbacks.filter((row) => ["failed", "exception", "pending"].some((word) => normal(row.status).includes(word)));
-  const monthlyPerformance = saccoMonthlyPerformanceRows();
+  const treasurer = buildSaccoTreasurerDashboardModel({
+    callbacks,
+    members: dataRows("members"),
+    pendingTransactions: pendingTransactions(),
+    transactions
+  });
   return `
     ${dashboardIntro("SACCO Treasurer", "Cash, collections, approvals and reconciliation.")}
     ${roleAccessPanel("Treasurer access")}
     <div class="dashboard-grid">
-      ${summaryLink("Total savings", money.format(sum(dataRows("members"), "savingsBalance", "savings")), "Member deposits", "Statements", "savings")}
-      ${summaryLink("Collections", money.format(sum(transactions.filter((row) => Number(row.credit || 0) > 0), "credit", "amount")), "Posted inflows", "Open", "transactions")}
-      ${summaryLink("Pending approvals", pendingTransactions().length, "Maker-checker queue", "Approve", "approvals")}
-      ${summaryLink("Mobile-money exceptions", failedCallbacks.length, "Provider callbacks needing action", "Reconcile", "reconciliation")}
+      ${summaryLink("Total savings", money.format(treasurer.totalSavings), "Member deposits", "Statements", "savings")}
+      ${summaryLink("Collections", money.format(treasurer.collections), "Posted inflows", "Open", "transactions")}
+      ${summaryLink("Pending approvals", treasurer.pendingApprovals, "Maker-checker queue", "Approve", "approvals")}
+      ${summaryLink("Mobile-money exceptions", treasurer.mobileMoneyExceptions, "Provider callbacks needing action", "Reconcile", "reconciliation")}
     </div>
     <div class="grid two">
       ${recordTable("Finance approval queue", pendingTransactions(), ["reference", "memberName", "type", "amount", "channel", "status"])}
-      ${recordTable("Reconciliation watch", [...failedCallbacks, ...callbacks].slice(0, 12), ["externalReference", "provider", "purpose", "amount", "status", "receivedAt"])}
+      ${recordTable("Reconciliation watch", [...treasurer.failedCallbacks, ...callbacks].slice(0, 12), ["externalReference", "provider", "purpose", "amount", "status", "receivedAt"])}
     </div>
   `;
 }
 
 function saccoSecretaryDashboard() {
   const members = dataRows("members");
-  const pendingKyc = members.filter((row) => normal(row.kycStatus).includes("pending") || normal(row.status).includes("pending"));
   const governance = dataRows("governanceMeetings");
-  const recentNotifications = dataRows("notifications");
+  const secretary = buildSaccoSecretaryDashboardModel({ complaints: openComplaints(), governanceMeetings: governance, members });
   return `
     ${dashboardIntro("SACCO Secretary", "Membership, KYC, complaints and governance.")}
     ${roleAccessPanel("Secretary access")}
     <div class="dashboard-grid">
-      ${summaryLink("Total members", members.length, "Member register", "Open", "members")}
-      ${summaryLink("Members to verify", pendingKyc.length, "KYC and onboarding", "Verify", "approvals")}
-      ${summaryLink("Open complaints", openComplaints().length, "Member support queue", "Open", "complaints")}
-      ${summaryLink("Governance records", governance.length, "Meetings and minutes", "Open", "governance")}
+      ${summaryLink("Total members", secretary.totalMembers, "Member register", "Open", "members")}
+      ${summaryLink("Members to verify", secretary.membersToVerify, "KYC and onboarding", "Verify", "approvals")}
+      ${summaryLink("Open complaints", secretary.openComplaints, "Member support queue", "Open", "complaints")}
+      ${summaryLink("Governance records", secretary.governanceRecords, "Meetings and minutes", "Open", "governance")}
     </div>
     <div class="grid two">
-      ${recordTable("Member follow-up list", (pendingKyc.length ? pendingKyc : members).map((row) => ({ ...row, action: "member-detail", actionLabel: "Open", actionId: row.id })), ["membershipNo", "fullName", "phone", "kycStatus", "status"])}
+      ${recordTable("Member follow-up list", (secretary.pendingKyc.length ? secretary.pendingKyc : members).map((row) => ({ ...row, action: "member-detail", actionLabel: "Open", actionId: row.id })), ["membershipNo", "fullName", "phone", "kycStatus", "status"])}
       ${recordTable("Governance and complaint follow-up", [...openComplaints(), ...governance], ["id", "memberName", "category", "subject", "scheduledAt", "priority", "status"])}
     </div>
   `;

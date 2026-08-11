@@ -176,7 +176,8 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 Progress note: the frontend type-safety bridge now covers member administration, Settings setup,
 provider readiness, security sessions, collection-account display rows, and Operations provider/login
 risk models. Platform role dashboard summaries are typed too; the remaining frontend work is
-increasingly about module packaging and real component tests.
+increasingly about module packaging and real component tests. SACCO role dashboard summaries now use
+the same typed-source pattern.
 
 Ordered by leverage: **(1)** finish the Vite build + convert to ES modules, **(2)** add the Vitest
 frontend suite, **(3)** run load/soak + a two-instance failover rehearsal and capture HA evidence,
