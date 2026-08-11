@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, settingsSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -23,6 +23,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/audit/audit.ts"),
   readText("src/onboarding/onboarding.ts"),
   readText("src/access/access.ts"),
+  readText("src/settings/settings.ts"),
   readText("app.state.js"),
 ]);
 
@@ -391,6 +392,30 @@ for (const marker of [
   "export function roleSummaryTextFor",
 ]) {
   assert.ok(accessSource.includes(marker), `src/access/access.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaSaccoSettingsModel",
+  "export interface TerekaSaccoSettingsReadiness",
+  "export type TerekaSettingsControlRow",
+  "export interface TerekaProviderSetupRow",
+  "export interface TerekaProviderEnvironmentRow",
+  "export interface TerekaMobileMoneyIntegrationSummary",
+  "export interface TerekaStaffSecurityModel",
+  "export interface TerekaCollectionAccountDisplayRow",
+  "export function buildSaccoSettingsModel",
+  "export function buildSaccoSettingsControlRows",
+  "export function buildSaccoSettingsReadiness",
+  "export function buildPlatformSettingsControlRows",
+  "export function buildNotificationProviderRows",
+  "export function buildMobileMoneyProviderRows",
+  "export function buildProviderEnvironmentRows",
+  "export function buildMobileMoneyIntegrationSummary",
+  "export function notificationProviderNameFor",
+  "export function buildStaffSecuritySettingsModel",
+  "export function buildCollectionAccountDisplayRows",
+]) {
+  assert.ok(settingsSource.includes(marker), `src/settings/settings.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");

@@ -5,24 +5,21 @@ function settingsView() {
   const branches = dataRows("branches");
   const products = dataRows("financialProducts");
   const accounts = dataRows("financialAccounts");
-  const activeBranches = branches.filter((branch) => normal(branch.status) === "active");
-  const activeProducts = products.filter((product) => normal(product.status) === "active");
-  const productTypes = ["savings", "shares", "welfare"];
-  const missingProducts = productTypes.filter((type) => !products.some((product) => normal(product.productType) === type));
+  const model = buildSaccoSettingsModel({ accounts, branches, labelize, products });
   const tab = state.saccoSettingsTab || "overview";
   const security = state.data.securitySummary || {};
   return `
     <div class="dashboard-grid">
-      ${summary(t("activeBranches"), activeBranches.length, "Service points ready for use", "Manage")}
-      ${summary(t("activeProducts"), activeProducts.length, t("savingsSharesWelfare"), "Configure")}
-      ${summary(t("productCoverage"), missingProducts.length ? `${productTypes.length - missingProducts.length}/${productTypes.length}` : "Complete", missingProducts.length ? `Missing ${missingProducts.map(labelize).join(", ")}` : "Core contribution types ready", t("review"))}
+      ${summary(t("activeBranches"), model.activeBranches, "Service points ready for use", "Manage")}
+      ${summary(t("activeProducts"), model.activeProducts, t("savingsSharesWelfare"), "Configure")}
+      ${summary(t("productCoverage"), model.productCoverage, model.productCoverageDetail, t("review"))}
       ${summary(t("roles"), dataRows("roles").length, "Access profiles", t("review"))}
     </div>
     ${saccoSettingsTabs(tab)}
     ${tab === "overview" ? `
       ${paymentCollectionSettingsPanel(dataRows("tenants").find((item) => item.id === state.user?.tenantId) || {})}
-      ${saccoSettingsControlPanel(branches, products, accounts, missingProducts)}
-      ${settingsReadinessPanel(branches, products, accounts)}
+      ${saccoSettingsControlPanel(branches, products, accounts, model.missingProducts)}
+      ${settingsReadinessPanel(model.readiness)}
     ` : ""}
     ${tab === "branches" ? branchSetupPanel() : ""}
     ${tab === "products" ? financialProductSetupPanel() : ""}
@@ -50,21 +47,10 @@ function saccoSettingsTabs(activeTab) {
 }
 
 function saccoSettingsControlPanel(branches, products, accounts, missingProducts) {
-  const inactiveBranches = branches.filter((branch) => normal(branch.status) !== "active").length;
-  const inactiveProducts = products.filter((product) => normal(product.status) !== "active").length;
-  return rolePriorityPanel(t("saccoSettingsControl"), [
-    ["Branch readiness", `${branches.length} branch record(s), with ${inactiveBranches} inactive service point(s).`, inactiveBranches ? "Review" : "Ready"],
-    ["Contribution setup", missingProducts.length ? `Missing ${missingProducts.map(labelize).join(", ")} product setup.` : "Savings, shares and welfare product coverage is configured.", missingProducts.length ? "Configure" : "Ready"],
-    ["Ledger linkage", `${accounts.length} financial account(s) support product and reporting setup; ${inactiveProducts} product(s) are inactive.`, accounts.length ? "Linked" : "Setup"]
-  ]);
+  return rolePriorityPanel(t("saccoSettingsControl"), buildSaccoSettingsControlRows({ accounts, branches, labelize, missingProducts, products }));
 }
 
-function settingsReadinessPanel(branches, products, accounts) {
-  const activeBranches = branches.filter((branch) => normal(branch.status) === "active").length;
-  const savingsProducts = products.filter((product) => normal(product.productType) === "savings").length;
-  const sharesProducts = products.filter((product) => normal(product.productType) === "shares").length;
-  const welfareProducts = products.filter((product) => normal(product.productType) === "welfare").length;
-  const inactiveProducts = products.filter((product) => normal(product.status) !== "active").length;
+function settingsReadinessPanel(readiness) {
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -72,15 +58,15 @@ function settingsReadinessPanel(branches, products, accounts) {
           <h2>SACCO operating settings</h2>
           <p>Controls used by member onboarding, transactions, product accounts and branch reporting.</p>
         </div>
-        <span class="status ${activeBranches && savingsProducts && sharesProducts && welfareProducts ? "active" : "pending"}">${activeBranches && savingsProducts && sharesProducts && welfareProducts ? "Ready" : "Setup needed"}</span>
+        <span class="status ${readiness.ready ? "active" : "pending"}">${readiness.ready ? "Ready" : "Setup needed"}</span>
       </div>
       <div class="source-grid">
-        ${mini("Active branches", activeBranches)}
-        ${mini("Savings products", savingsProducts)}
-        ${mini("Share products", sharesProducts)}
-        ${mini("Welfare products", welfareProducts)}
-        ${mini("Open accounts", accounts.length)}
-        ${mini("Inactive products", inactiveProducts)}
+        ${mini("Active branches", readiness.activeBranches)}
+        ${mini("Savings products", readiness.savingsProducts)}
+        ${mini("Share products", readiness.sharesProducts)}
+        ${mini("Welfare products", readiness.welfareProducts)}
+        ${mini("Open accounts", readiness.openAccounts)}
+        ${mini("Inactive products", readiness.inactiveProducts)}
       </div>
     </section>
   `;
@@ -192,19 +178,7 @@ function platformNotificationIntegrationPanel(canManage) {
   const config = state.data.notificationIntegrationConfig || {};
   const providers = Array.isArray(config.providers) ? config.providers : [];
   const statusRows = state.notificationProviderStatus || [];
-  const rows = providers.map((provider) => {
-    const live = statusRows.find((row) => normal(row.channel) === normal(provider.channel));
-    const missing = (provider.settings || []).filter((setting) => !setting.configured).map((setting) => setting.key).join(", ") || "None";
-    return {
-      channel: provider.channel,
-      provider: provider.provider,
-      activeProvider: provider.activeProvider,
-      active: provider.active ? "Active" : "Not active",
-      liveStatus: live ? labelize(live.status) : "Not checked",
-      balance: live?.balance ? `${live.balance} SMS credits` : "-",
-      missingSettings: missing
-    };
-  });
+  const rows = buildNotificationProviderRows({ providers, statusRows, labelize });
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -218,21 +192,15 @@ function platformNotificationIntegrationPanel(canManage) {
       </div>
       ${config.updatePolicy ? `<p class="helper-text">${escapeHtml(config.updatePolicy)}</p>` : ""}
       <div class="source-grid">
-        ${mini("SMS provider", providers.find((row) => normal(row.channel) === "sms")?.activeProvider || "Not configured")}
-        ${mini("Email provider", providers.find((row) => normal(row.channel) === "email")?.activeProvider || "Not configured")}
+        ${mini("SMS provider", notificationProviderNameFor(config, "sms"))}
+        ${mini("Email provider", notificationProviderNameFor(config, "email"))}
         ${mini("Last status check", state.notificationProviderStatusCheckedAt ? formatDateTime(state.notificationProviderStatusCheckedAt) : "Not checked")}
         ${mini("Live risks", notificationProviderRiskRows().length)}
       </div>
     </section>
     <div class="grid two">
       ${recordTable("Notification provider setup", rows, ["channel", "provider", "activeProvider", "active", "liveStatus", "balance", "missingSettings"])}
-      ${recordTable("Required notification environment variables", providers.flatMap((provider) => (provider.settings || []).map((setting) => ({
-        channel: provider.channel,
-        key: setting.key,
-        configured: setting.configured ? "Yes" : "Missing",
-        secret: setting.secret ? "Secret" : "Visible",
-        value: setting.secret ? (setting.configured ? "Configured" : "Missing") : setting.value
-      }))), ["channel", "key", "configured", "secret", "value"])}
+      ${recordTable("Required notification environment variables", buildProviderEnvironmentRows(providers, "channel"), ["channel", "key", "configured", "secret", "value"])}
     </div>
   `;
 }
@@ -242,22 +210,8 @@ function platformMobileMoneyIntegrationPanel() {
   const providers = Array.isArray(config.providers) ? config.providers : [];
   const callbacks = dataRows("mobileMoneyCallbacks");
   const requests = dataRows("mobileMoneyPaymentRequests");
-  const rows = providers.map((provider) => {
-    const missing = (provider.settings || []).filter((setting) => !setting.configured).map((setting) => setting.key).join(", ") || "None";
-    return {
-      channel: provider.channel,
-      provider: provider.provider,
-      activeProvider: provider.activeProvider,
-      active: provider.active ? "Active" : "Not active",
-      missingSettings: missing
-    };
-  });
-  const callbackSecret = providers
-    .flatMap((provider) => provider.settings || [])
-    .find((setting) => setting.key === "SACCO_MOBILE_MONEY_CALLBACK_SECRET");
-  const signedCallbacks = providers
-    .flatMap((provider) => provider.settings || [])
-    .find((setting) => setting.key === "SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS");
+  const rows = buildMobileMoneyProviderRows(providers);
+  const integration = buildMobileMoneyIntegrationSummary({ callbacks, providers, requests });
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -265,73 +219,43 @@ function platformMobileMoneyIntegrationPanel() {
           <h2>Mobile money integrations</h2>
           <p>Super Admin readiness for MTN MoMo and Airtel Money. M-Pesa is intentionally excluded.</p>
         </div>
-        <span class="status ${providers.some((provider) => provider.active) ? "active" : "pending"}">${providers.some((provider) => provider.active) ? "Provider selected" : "Setup needed"}</span>
+        <span class="status ${integration.providerSelected ? "active" : "pending"}">${integration.providerSelected ? "Provider selected" : "Setup needed"}</span>
       </div>
       ${config.updatePolicy ? `<p class="helper-text">${escapeHtml(config.updatePolicy)}</p>` : ""}
       <div class="source-grid">
-        ${mini("Active provider", providers.find((provider) => provider.active)?.provider || "Not configured")}
-        ${mini("Signed callbacks", signedCallbacks?.value === "true" ? "Required" : "Not required")}
-        ${mini("Callback secret", callbackSecret?.configured ? "Configured" : "Missing")}
-        ${mini("Payment requests", requests.length)}
-        ${mini("Provider callbacks", callbacks.length)}
-        ${mini("Failed callbacks", callbacks.filter((row) => normal(row.status).includes("failed")).length)}
+        ${mini("Active provider", integration.activeProvider)}
+        ${mini("Signed callbacks", integration.signedCallbacks)}
+        ${mini("Callback secret", integration.callbackSecret)}
+        ${mini("Payment requests", integration.paymentRequests)}
+        ${mini("Provider callbacks", integration.providerCallbacks)}
+        ${mini("Failed callbacks", integration.failedCallbacks)}
       </div>
     </section>
     <div class="grid two">
       ${recordTable("Mobile-money provider setup", rows, ["channel", "provider", "activeProvider", "active", "missingSettings"])}
-      ${recordTable("Required mobile-money environment variables", providers.flatMap((provider) => (provider.settings || []).map((setting) => ({
-        provider: provider.provider,
-        key: setting.key,
-        configured: setting.configured ? "Yes" : "Missing",
-        secret: setting.secret ? "Secret" : "Visible",
-        value: setting.secret ? (setting.configured ? "Configured" : "Missing") : setting.value
-      }))), ["provider", "key", "configured", "secret", "value"])}
+      ${recordTable("Required mobile-money environment variables", buildProviderEnvironmentRows(providers, "provider"), ["provider", "key", "configured", "secret", "value"])}
     </div>
   `;
 }
 
 function platformSettingsControlPanel(packages, roles, permissions, templates, canManage) {
-  const inactivePackages = packages.filter((item) => normal(item.status) !== "active").length;
-  const inactiveTemplates = templates.filter((item) => normal(item.status) !== "active").length;
-  return rolePriorityPanel(t("platformSettingsControl"), [
-    ["Billing readiness", `${packages.length} subscription package(s), with ${inactivePackages} inactive plan(s).`, inactivePackages ? "Review" : "Ready"],
-    ["Administrator roles", `${roles.length} platform role(s) mapped to ${permissions.length} permission control(s).`, roles.length && permissions.length ? "Ready" : "Configure"],
-    ["Protected changes", canManage ? "Current role can update protected platform configuration with audit trail." : "Current role is view-only for protected platform configuration.", canManage ? "Allowed" : "Restricted"],
-    ["Global messages", `${templates.length} global template(s), with ${inactiveTemplates} inactive template(s).`, inactiveTemplates ? "Review" : "Ready"]
-  ]);
+  return rolePriorityPanel(t("platformSettingsControl"), buildPlatformSettingsControlRows({ canManage, packages, permissions, roles, templates }));
 }
 
 function staffSecuritySettingsPanel(security, platformScope) {
-  const sessions = Array.isArray(security.activeSessions) ? security.activeSessions : [];
-  const resets = Array.isArray(security.recentPasswordResets) ? security.recentPasswordResets : [];
   const policy = state.data.platformSecurityPolicy || defaultPlatformSecurityPolicy();
-  const currentExpiry = security.currentSessionExpiresAt || state.sessionExpiresAt;
-  const activeCount = security.activeSessionCount ?? sessions.length;
-  const resetCount = security.passwordResetRequestCount ?? resets.length;
-  const sessionRows = sessions.map((session) => ({
-    id: session.id,
-    createdAt: formatDateTime(session.createdAt),
-    expiresAt: formatDateTime(session.expiresAt),
-    status: new Date(session.expiresAt).getTime() > Date.now() ? "active" : "expired"
-  }));
-  const resetRows = resets.map((request) => ({
-    id: request.id,
-    status: request.status,
-    createdAt: formatDateTime(request.createdAt),
-    expiresAt: formatDateTime(request.expiresAt),
-    usedAt: request.usedAt ? formatDateTime(request.usedAt) : "-"
-  }));
+  const model = buildStaffSecuritySettingsModel({ currentSessionExpiresAt: state.sessionExpiresAt, formatDateTime, security });
   return `
     <div class="dashboard-grid">
-      ${summary("Active sessions", activeCount, "Current administrator login devices", "Review")}
+      ${summary("Active sessions", model.activeCount, "Current administrator login devices", "Review")}
       ${summary("MFA status", security.mfaEnabled ? "Enabled" : "Not enabled", "Step-up verification for sensitive login", "Manage")}
-      ${summary("Password resets", resetCount, "Requests recorded for this administrator", "Audit")}
-      ${summary("Session expiry", currentExpiry ? formatDateTime(currentExpiry) : "Not reported", "Current token lifetime", "Extend")}
+      ${summary("Password resets", model.resetCount, "Requests recorded for this administrator", "Audit")}
+      ${summary("Session expiry", model.currentExpiry ? formatDateTime(model.currentExpiry) : "Not reported", "Current token lifetime", "Extend")}
     </div>
     ${rolePriorityPanel(platformScope ? "Platform security settings" : "SACCO security settings", [
-      ["Active sessions", `${activeCount} active staff session(s) are server-side and expire automatically.`, activeCount ? "Monitor" : "None"],
+      ["Active sessions", `${model.activeCount} active staff session(s) are server-side and expire automatically.`, model.activeCount ? "Monitor" : "None"],
       ["MFA posture", security.mfaEnabled ? "MFA is enabled for this administrator account." : "MFA is not yet enabled for this administrator account.", security.mfaEnabled ? "Ready" : "Improve"],
-      ["Password reset evidence", `${resetCount} password reset request(s) are available in the audit trail for this account.`, resetCount ? "Trace" : "No resets"],
+      ["Password reset evidence", `${model.resetCount} password reset request(s) are available in the audit trail for this account.`, model.resetCount ? "Trace" : "No resets"],
       ["Session lifecycle audit", "Login, logout and session extension events are recorded under access control audit evidence.", "Audited"]
     ])}
     <section class="panel">
@@ -349,14 +273,14 @@ function staffSecuritySettingsPanel(security, platformScope) {
         ${mini("Signed in as", state.user?.email || state.user?.fullName || "Administrator")}
         ${mini("Role", state.roleNames.join(", ") || "Assigned role")}
         ${mini("MFA", security.mfaEnabled ? "Enabled" : "Not enabled")}
-        ${mini("Current expiry", currentExpiry ? formatDateTime(currentExpiry) : "Not reported")}
-        ${mini("Active sessions", activeCount)}
-        ${mini("Password resets", resetCount)}
+        ${mini("Current expiry", model.currentExpiry ? formatDateTime(model.currentExpiry) : "Not reported")}
+        ${mini("Active sessions", model.activeCount)}
+        ${mini("Password resets", model.resetCount)}
       </div>
     </section>
     <div class="grid two">
-      ${recordTable("Active administrator sessions", sessionRows, ["id", "createdAt", "expiresAt", "status"])}
-      ${recordTable("Password reset history", resetRows, ["id", "status", "createdAt", "expiresAt", "usedAt"])}
+      ${recordTable("Active administrator sessions", model.sessionRows, ["id", "createdAt", "expiresAt", "status"])}
+      ${recordTable("Password reset history", model.resetRows, ["id", "status", "createdAt", "expiresAt", "usedAt"])}
     </div>
     ${platformScope ? platformPasswordPolicyPanel(policy) : ""}
   `;
@@ -492,13 +416,13 @@ function paymentCollectionSettingsPanel(tenant) {
 }
 
 function saccoCollectionAccountsPanel(allowsMM, allowsBank) {
-  const accounts = dataRows("saccoPaymentAccounts");
+  const accounts = buildCollectionAccountDisplayRows(dataRows("saccoPaymentAccounts"), labelize);
   const row = (a) => `
     <div class="collection-account-row">
       <div>
-        <strong>${escapeHtml(a.channel === "bank" ? (a.bankName || "Bank") : (a.network || "Mobile money").toUpperCase())}</strong>
-        <span>${escapeHtml(a.accountName || "")} / ${escapeHtml(a.accountNumber || "")}${a.branch ? " / " + escapeHtml(a.branch) : ""}</span>
-        <small>${escapeHtml(labelize(a.channel || ""))}${a.active ? "" : " / inactive"}${a.instructions ? " / " + escapeHtml(a.instructions) : ""}</small>
+        <strong>${escapeHtml(a.title)}</strong>
+        <span>${escapeHtml(a.detail)}</span>
+        <small>${escapeHtml(a.channelLabel)}${a.active ? "" : " / inactive"}${a.instructions ? " / " + escapeHtml(a.instructions) : ""}</small>
       </div>
       <button class="button ghost" type="button" data-remove-collection-account="${escapeHtml(a.id)}">Remove</button>
     </div>`;

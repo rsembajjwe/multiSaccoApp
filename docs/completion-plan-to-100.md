@@ -173,6 +173,10 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 
 ## What I can drive now (no external dependencies)
 
+Progress note: the frontend type-safety bridge now covers member administration plus Settings setup,
+provider readiness, security sessions, and collection-account display rows; the remaining frontend
+work is increasingly about module packaging and real component tests.
+
 Ordered by leverage: **(1)** finish the Vite build + convert to ES modules, **(2)** add the Vitest
 frontend suite, **(3)** run load/soak + a two-instance failover rehearsal and capture HA evidence,
 **(4)** deepen backend unit tests to a coverage floor, **(5)** structured logging + alert rules,

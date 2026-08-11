@@ -205,6 +205,75 @@ interface TerekaPermissionMatrixRow {
   moduleName: string;
 }
 
+interface TerekaSaccoSettingsReadiness {
+  activeBranches: number;
+  savingsProducts: number;
+  sharesProducts: number;
+  welfareProducts: number;
+  openAccounts: number;
+  inactiveProducts: number;
+  ready: boolean;
+}
+
+interface TerekaSaccoSettingsModel {
+  activeBranches: number;
+  activeProducts: number;
+  missingProducts: string[];
+  productCoverage: string;
+  productCoverageDetail: string;
+  readiness: TerekaSaccoSettingsReadiness;
+}
+
+type TerekaSettingsControlRow = [string, string, string];
+
+interface TerekaProviderSetupRow {
+  active: string;
+  activeProvider?: string;
+  balance?: string;
+  channel?: string;
+  liveStatus?: string;
+  missingSettings: string;
+  provider?: string;
+  [key: string]: any;
+}
+
+interface TerekaProviderEnvironmentRow {
+  channel?: string;
+  configured: string;
+  key?: string;
+  provider?: string;
+  secret: string;
+  value?: string;
+  [key: string]: any;
+}
+
+interface TerekaMobileMoneyIntegrationSummary {
+  activeProvider: string;
+  callbackSecret: string;
+  failedCallbacks: number;
+  paymentRequests: number;
+  providerCallbacks: number;
+  providerSelected: boolean;
+  signedCallbacks: string;
+}
+
+interface TerekaStaffSecurityModel {
+  activeCount: number;
+  currentExpiry?: string;
+  resetCount: number;
+  resetRows: Array<Record<string, any>>;
+  sessionRows: Array<Record<string, any>>;
+}
+
+interface TerekaCollectionAccountDisplayRow {
+  active: boolean;
+  channelLabel: string;
+  detail: string;
+  id?: string;
+  instructions?: string;
+  title: string;
+}
+
 interface TerekaSubscription {
   id?: string;
   tenantId?: string;
@@ -1548,6 +1617,17 @@ declare function roleModuleScopeFor(roleName: any, platformOnly: boolean): strin
 declare function buildSaccoStaffGuideRows(roles: Array<TerekaRole & Record<string, any>>): TerekaSaccoStaffGuideRow[];
 declare function buildPermissionMatrixRows(modules: Array<[string, string] | string[]>, permissions?: TerekaPermission[]): TerekaPermissionMatrixRow[];
 declare function roleSummaryTextFor(roleIds: string[], roles: Array<TerekaRole & Record<string, any>>, platformOnly: boolean): string;
+declare function buildSaccoSettingsModel(input: { accounts: Array<TerekaFinancialAccount & Record<string, any>>; branches: Array<TerekaBranch & Record<string, any>>; labelize: (value: any) => string; products: Array<TerekaFinancialProduct & Record<string, any>> }): TerekaSaccoSettingsModel;
+declare function buildSaccoSettingsControlRows(input: { accounts: Array<TerekaFinancialAccount & Record<string, any>>; branches: Array<TerekaBranch & Record<string, any>>; labelize: (value: any) => string; missingProducts: string[]; products: Array<TerekaFinancialProduct & Record<string, any>> }): TerekaSettingsControlRow[];
+declare function buildSaccoSettingsReadiness(branches: Array<TerekaBranch & Record<string, any>>, products: Array<TerekaFinancialProduct & Record<string, any>>, accounts: Array<TerekaFinancialAccount & Record<string, any>>): TerekaSaccoSettingsReadiness;
+declare function buildPlatformSettingsControlRows(input: { canManage: boolean; packages: Array<Record<string, any>>; permissions: Array<Record<string, any>>; roles: Array<Record<string, any>>; templates: Array<Record<string, any>> }): TerekaSettingsControlRow[];
+declare function buildNotificationProviderRows(input: { providers: Array<TerekaProviderConfig & Record<string, any>>; statusRows: Array<Record<string, any>>; labelize: (value: any) => string }): TerekaProviderSetupRow[];
+declare function buildMobileMoneyProviderRows(providers: Array<TerekaProviderConfig & Record<string, any>>): TerekaProviderSetupRow[];
+declare function buildProviderEnvironmentRows(providers: Array<TerekaProviderConfig & Record<string, any>>, providerColumn: "channel" | "provider"): TerekaProviderEnvironmentRow[];
+declare function buildMobileMoneyIntegrationSummary(input: { callbacks: Array<Record<string, any>>; providers: Array<TerekaProviderConfig & Record<string, any>>; requests: Array<Record<string, any>> }): TerekaMobileMoneyIntegrationSummary;
+declare function notificationProviderNameFor(config: TerekaIntegrationConfig | null | undefined, channel: string): string;
+declare function buildStaffSecuritySettingsModel(input: { currentSessionExpiresAt?: string; formatDateTime: (value: any) => string; security: TerekaSecuritySummary | null | undefined }): TerekaStaffSecurityModel;
+declare function buildCollectionAccountDisplayRows(accounts: Array<TerekaCollectionAccount & Record<string, any>>, labelize: (value: any) => string): TerekaCollectionAccountDisplayRow[];
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;
