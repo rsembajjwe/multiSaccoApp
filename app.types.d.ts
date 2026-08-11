@@ -1712,6 +1712,15 @@ interface TerekaWelfareClaimRow extends TerekaWelfareClaim {
   [key: string]: any;
 }
 
+interface TerekaFinanceMemberOption {
+  fullName?: string;
+  id?: string;
+  label: string;
+  membershipNo?: string;
+  status?: string;
+  [key: string]: any;
+}
+
 interface TerekaNotificationDeliveryRow extends TerekaNotification {
   acknowledgedAt: string;
   action: string;
@@ -1891,6 +1900,7 @@ declare function buildWelfareSummary(input: { accounts: TerekaFinancialAccount[]
 declare function buildWelfareClaimRows(claims: TerekaWelfareClaim[]): TerekaWelfareClaimRow[];
 declare function activeFinanceProducts(products: TerekaFinancialProduct[]): TerekaFinancialProduct[];
 declare function welfareSubmittedClaims(claims: TerekaWelfareClaim[]): TerekaWelfareClaim[];
+declare function activeFinanceMemberOptions(members: Array<TerekaMemberProfile & Record<string, any>>): TerekaFinanceMemberOption[];
 declare function buildNotificationDeliveryRows(input: TerekaNotificationRowsInput): TerekaNotificationDeliveryRow[];
 declare function buildNotificationTemplateRows(input: { templates: Array<TerekaNotificationTemplate & Record<string, any>>; tenantName: (tenantId?: string) => string }): TerekaNotificationTemplateRow[];
 declare function buildProviderJobRunRows(input: { formatDateTime: (value: any) => string; jobRuns: Array<TerekaProviderJobRun & Record<string, any>>; labelize: (value: any) => string }): TerekaProviderJobRunRow[];

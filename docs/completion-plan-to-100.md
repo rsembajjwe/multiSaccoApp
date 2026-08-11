@@ -41,7 +41,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    expense/asset account option filters, asset category options, reconciliation exception totals,
    payment request review rows, match rows, and reconciliation coverage now follow the same pattern through `src/accounting/accounting.ts` plus
    `app.accounting-model.js`. SACCO finance summaries for savings, shares, welfare, active products,
-   member balances, contribution totals, welfare claim counts, paid welfare amounts, and claim action
+   active member option rows, member balances, contribution totals, welfare claim counts, paid welfare amounts, and claim action
    rows now follow the same pattern through `src/sacco-finance/finance.ts` plus
    `app.sacco-finance-model.js`. Notification delivery rows, template rows, template event/channel options, provider job rows,
    dashboard counts, delivery filters, unread acknowledgement IDs, payment exception slices, and

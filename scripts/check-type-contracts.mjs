@@ -105,6 +105,7 @@ for (const marker of [
   "interface TerekaSharesSummary",
   "interface TerekaWelfareSummary",
   "interface TerekaWelfareClaimRow",
+  "interface TerekaFinanceMemberOption",
   "interface TerekaNotificationDeliveryRow",
   "interface TerekaNotificationTemplateRow",
   "interface TerekaProviderJobRunRow",
@@ -294,6 +295,7 @@ for (const marker of [
   "export function buildWelfareClaimRows",
   "export function activeFinanceProducts",
   "export function welfareSubmittedClaims",
+  "export function activeFinanceMemberOptions",
 ]) {
   assert.ok(financeSource.includes(marker), `src/sacco-finance/finance.ts missing ${marker}`);
 }

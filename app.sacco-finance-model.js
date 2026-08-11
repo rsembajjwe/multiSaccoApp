@@ -51,6 +51,19 @@ function welfareSubmittedClaims(claims) {
   return claims.filter((row) => ["submitted", "pending", "pending_approval"].some((word) => normalizeFinanceModelText(row.status).includes(word)));
 }
 
+function activeFinanceMemberOptions(members) {
+  return members
+    .filter((member) => normalizeFinanceModelText(member.status) === "active")
+    .map((member) => ({
+      ...member,
+      fullName: member.fullName,
+      id: member.id,
+      label: `${member.membershipNo || ""} - ${member.fullName || ""}`.trim(),
+      membershipNo: member.membershipNo,
+      status: member.status
+    }));
+}
+
 function uniqueFinanceModelCount(rows, key) {
   return new Set(rows.map((row) => row[key]).filter((value) => value !== undefined && value !== null && value !== "")).size;
 }

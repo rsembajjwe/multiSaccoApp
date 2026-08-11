@@ -39,6 +39,14 @@ export interface TerekaWelfareClaimRow extends TerekaWelfareClaim, TerekaRecord 
   actionLabel: string;
 }
 
+export interface TerekaFinanceMemberOption extends TerekaRecord {
+  fullName?: string;
+  id?: string;
+  label: string;
+  membershipNo?: string;
+  status?: string;
+}
+
 export function buildSavingsSummary(input: {
   accounts: TerekaFinancialAccount[];
   members: Array<TerekaMemberProfile & TerekaRecord>;
@@ -102,6 +110,19 @@ export function activeFinanceProducts(products: TerekaFinancialProduct[]): Terek
 
 export function welfareSubmittedClaims(claims: TerekaWelfareClaim[]): TerekaWelfareClaim[] {
   return claims.filter((row) => ["submitted", "pending", "pending_approval"].some((word) => normalizeFinanceText(row.status).includes(word)));
+}
+
+export function activeFinanceMemberOptions(members: Array<TerekaMemberProfile & TerekaRecord>): TerekaFinanceMemberOption[] {
+  return members
+    .filter((member) => normalizeFinanceText(member.status) === "active")
+    .map((member) => ({
+      ...member,
+      fullName: member.fullName,
+      id: member.id,
+      label: `${member.membershipNo || ""} - ${member.fullName || ""}`.trim(),
+      membershipNo: member.membershipNo,
+      status: member.status,
+    }));
 }
 
 function uniqueFinanceCount(rows: TerekaRecord[], key: string): number {

@@ -129,7 +129,7 @@ function financialProductPanel(type) {
 
 function financialAccountPanel(type, products) {
   const canCreate = hasPermission("transactions:create");
-  const members = dataRows("members").filter((member) => normal(member.status) === "active");
+  const members = activeFinanceMemberOptions(dataRows("members"));
   const accounts = accountsByType(type === "shares" ? "share" : type);
   return `
     <section class="panel">
@@ -145,7 +145,7 @@ function financialAccountPanel(type, products) {
       <form class="form-grid" data-account-form="${escapeHtml(type)}">
         <input type="hidden" data-account-field="tenantId" value="${escapeHtml(state.user?.tenantId || "")}">
         <input type="hidden" data-account-field="accountType" value="${escapeHtml(type)}">
-        <label><span>Member</span><select data-account-field="memberId" ${canCreate ? "" : "disabled"}>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
+        <label><span>Member</span><select data-account-field="memberId" ${canCreate ? "" : "disabled"}>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.label)}</option>`).join("")}</select></label>
         <label><span>Product</span><select data-account-field="productId" ${canCreate ? "" : "disabled"}>${products.map((product) => `<option value="${escapeHtml(product.id)}">${escapeHtml(product.code)} - ${escapeHtml(product.name)}</option>`).join("")}</select></label>
         <label><span>Account number</span><input data-account-field="accountNo" placeholder="Auto if blank" ${canCreate ? "" : "disabled"}></label>
         <div class="form-actions inline">${canCreate ? `<button class="button secondary" type="submit">Open ${labelize(type)} account</button>` : `<span class="status pending">View only</span>`}</div>
@@ -156,7 +156,7 @@ function financialAccountPanel(type, products) {
 
 function welfareClaimPanel() {
   const canCreate = hasPermission("transactions:create");
-  const members = dataRows("members").filter((member) => normal(member.status) === "active");
+  const members = activeFinanceMemberOptions(dataRows("members"));
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -169,7 +169,7 @@ function welfareClaimPanel() {
       ${state.welfareClaimError ? `<div class="notice warning"><strong>Welfare claim failed.</strong><span>${escapeHtml(state.welfareClaimError)}</span></div>` : ""}
       <form id="welfareClaimForm" class="form-grid">
         <input type="hidden" id="newWelfareTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
-        <label><span>Member</span><select id="newWelfareMemberId" ${canCreate ? "" : "disabled"}>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
+        <label><span>Member</span><select id="newWelfareMemberId" ${canCreate ? "" : "disabled"}>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.label)}</option>`).join("")}</select></label>
         <label><span>Claim type</span><input id="newWelfareClaimType" required value="medical" ${canCreate ? "" : "disabled"}></label>
         <label><span>Amount</span><input id="newWelfareAmount" type="number" min="1" step="1" value="50000" ${canCreate ? "" : "disabled"}></label>
         <label><span>Reference</span><input id="newWelfareReference" placeholder="Auto if blank" ${canCreate ? "" : "disabled"}></label>
