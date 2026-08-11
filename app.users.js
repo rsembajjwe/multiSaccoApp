@@ -129,7 +129,7 @@ function userDetailPanel(users, canManageRoles) {
   const sessionRows = buildUserSessionRows({
     canManageUser,
     currentUserId: state.user?.id,
-    deviceLabel,
+    deviceLabel: deviceLabelFor,
     formatDateTime,
     sessions: state.selectedUserSessions || [],
     userId: selected.id
@@ -244,23 +244,6 @@ function staffAccessRow(user, platformOnly) {
     moduleScope: roleModuleScope(role, platformOnly),
     status: user.status || "active"
   };
-}
-
-function deviceLabel(userAgent) {
-  const value = String(userAgent || "").trim();
-  if (!value) return "Not captured";
-  const browser = value.includes("Edg/") ? "Edge"
-    : value.includes("Chrome/") ? "Chrome"
-    : value.includes("Firefox/") ? "Firefox"
-    : value.includes("Safari/") ? "Safari"
-    : "Browser";
-  const os = value.includes("Windows") ? "Windows"
-    : value.includes("Android") ? "Android"
-    : value.includes("iPhone") || value.includes("iPad") ? "iOS"
-    : value.includes("Mac OS") ? "macOS"
-    : value.includes("Linux") ? "Linux"
-    : "Device";
-  return `${browser} on ${os}`;
 }
 
 function roleNameFromId(roleId, platformOnly) {

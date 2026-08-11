@@ -1972,6 +1972,7 @@ declare function roleModuleScopeFor(roleName: any, platformOnly: boolean): strin
 declare function buildUserDetailRoleModel(input: { platformOnly: boolean; roleIds: string[]; roles: Array<TerekaRole & Record<string, any>>; user: TerekaPlatformUser & Record<string, any> }): TerekaUserDetailRoleModel;
 declare function buildUserSessionRows(input: { canManageUser: boolean; currentUserId?: string; deviceLabel: (userAgent: any) => string; formatDateTime: (value: any) => string; sessions: Array<TerekaSecuritySession & Record<string, any>>; userId?: string }): TerekaUserSessionRow[];
 declare function buildPasswordResetRows(input: { formatDateTime: (value: any) => string; resets: Array<TerekaPasswordResetRecord & Record<string, any>> }): TerekaPasswordResetRow[];
+declare function deviceLabelFor(userAgent: any): string;
 declare function buildSaccoStaffGuideRows(roles: Array<TerekaRole & Record<string, any>>): TerekaSaccoStaffGuideRow[];
 declare function buildPermissionMatrixRows(modules: Array<[string, string] | string[]>, permissions?: TerekaPermission[]): TerekaPermissionMatrixRow[];
 declare function roleSummaryTextFor(roleIds: string[], roles: Array<TerekaRole & Record<string, any>>, platformOnly: boolean): string;

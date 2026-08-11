@@ -235,6 +235,23 @@ export function buildPasswordResetRows(input: {
   }));
 }
 
+export function deviceLabelFor(userAgent: unknown): string {
+  const value = String(userAgent || "").trim();
+  if (!value) return "Not captured";
+  const browser = value.includes("Edg/") ? "Edge"
+    : value.includes("Chrome/") ? "Chrome"
+      : value.includes("Firefox/") ? "Firefox"
+        : value.includes("Safari/") ? "Safari"
+          : "Browser";
+  const os = value.includes("Windows") ? "Windows"
+    : value.includes("Android") ? "Android"
+      : value.includes("iPhone") || value.includes("iPad") ? "iOS"
+        : value.includes("Mac OS") ? "macOS"
+          : value.includes("Linux") ? "Linux"
+            : "Device";
+  return `${browser} on ${os}`;
+}
+
 export function buildSaccoStaffGuideRows(roles: Array<TerekaRole & TerekaRecord>): TerekaSaccoStaffGuideRow[] {
   const preferred = ["SACCO Chairperson", "SACCO Treasurer", "SACCO Secretary", "Loans Officer", "Accountant", "Teller", "Auditor"];
   return preferred.map((name) => {

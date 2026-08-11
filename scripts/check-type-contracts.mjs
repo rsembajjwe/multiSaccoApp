@@ -441,6 +441,7 @@ for (const marker of [
   "export function buildUserDetailRoleModel",
   "export function buildUserSessionRows",
   "export function buildPasswordResetRows",
+  "export function deviceLabelFor",
   "export function buildSaccoStaffGuideRows",
   "export function buildPermissionMatrixRows",
   "export function roleSummaryTextFor",
