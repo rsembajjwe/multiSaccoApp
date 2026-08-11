@@ -160,7 +160,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Accounting dashboard totals, unbalanced-journal counts, period-close counts, expense/asset account
   option filters, asset category options, reconciliation exception totals, payment request review
   rows, match rows, and reconciliation coverage now live behind `src/accounting/accounting.ts` plus
-  `app.accounting-model.js`.
+  `app.accounting-model.js`, with redundant payment/reconciliation wrapper helpers removed.
 - SACCO finance summaries for savings, shares, welfare, active products, active member option rows,
   member balances, contribution totals, welfare claim counts, paid welfare amounts, and claim action rows now live
   behind `src/sacco-finance/finance.ts` plus `app.sacco-finance-model.js`.

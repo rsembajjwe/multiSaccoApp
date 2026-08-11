@@ -132,7 +132,7 @@ function reconciliationView() {
       ["Close readiness", exceptionCount ? "Resolve reconciliation exceptions before period close or regulatory export." : "Reconciliation evidence is ready for reporting.", exceptionCount ? "Blocked" : "Ready"]
     ])}` : ""}
     ${tab === "matches" ? `<div class="grid two">
-      ${recordTable("Bank and mobile-money matching", reconciliationMatchRows(matches), ["externalReference", "statementAmount", "ledgerAmount", "accountCode", "sourceType", "postedAt"])}
+      ${recordTable("Bank and mobile-money matching", buildReconciliationMatchRows(matches), ["externalReference", "statementAmount", "ledgerAmount", "accountCode", "sourceType", "postedAt"])}
       ${recordTable("Provider callback exceptions", callbackExceptions, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"])}
     </div>` : ""}
     ${tab === "exceptions" ? `<div class="grid two">
@@ -248,12 +248,3 @@ function paymentRequestOperationsPanel(requests) {
     </section>
   `;
 }
-
-function paymentRequestReviewRows(requests) {
-  return buildPaymentRequestReviewRows(requests, labelize);
-}
-
-function reconciliationMatchRows(matches) {
-  return buildReconciliationMatchRows(matches);
-}
-
