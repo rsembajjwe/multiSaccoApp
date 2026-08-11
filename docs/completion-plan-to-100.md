@@ -46,7 +46,10 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    `app.sacco-finance-model.js`. Notification delivery rows, template rows, provider job rows,
    dashboard counts, delivery filters, unread acknowledgement IDs, payment exception slices, and
    login-risk slices now follow the same pattern through `src/notifications/notifications.ts` plus
-   `app.notifications-model.js`.
+   `app.notifications-model.js`. Complaint/chat thread rows, open/urgent/in-progress/resolved counts,
+   member/platform split counts, unread and assignment counts, chat search filtering, participant
+   labels, and avatar initials now follow the same pattern through `src/complaints/complaints.ts`
+   plus `app.complaints-model.js`.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the

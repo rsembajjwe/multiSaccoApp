@@ -1127,6 +1127,45 @@ interface TerekaNotificationRowsInput {
   userName: (userId?: string) => string;
 }
 
+type TerekaChatMode = "platform-super" | "sacco-platform" | "member-support" | "sacco-member" | string;
+
+interface TerekaChatThreadRow extends TerekaComplaintThread {
+  id: string;
+  lastMessagePreview: string;
+  lastMessageSenderType: string;
+  memberName: string;
+  tenantName: string;
+  unreadCount: number;
+  updatedAt?: string;
+  [key: string]: any;
+}
+
+interface TerekaComplaintSummary {
+  inProgress: number;
+  memberLinked: number;
+  memberSupport: number;
+  open: number;
+  platformSupport: number;
+  resolved: number;
+  total: number;
+  unassignedOpen: number;
+  urgent: number;
+}
+
+interface TerekaChatThreadRowsInput {
+  memberName: (memberId?: string) => string;
+  tenantName: (tenantId?: string) => string;
+  threads: TerekaComplaintThread[] | null | undefined;
+}
+
+interface TerekaChatParticipantInput {
+  contextName: () => string;
+  memberName: (memberId?: string) => string;
+  mode: TerekaChatMode;
+  row: TerekaChatThreadRow | TerekaComplaintThread;
+  tenantName: (tenantId?: string) => string;
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -1197,6 +1236,13 @@ declare function failedNotificationDeliveries(deliveries: TerekaNotificationDeli
 declare function paymentExceptionDeliveries(deliveries: TerekaNotificationDeliveryRow[]): TerekaNotificationDeliveryRow[];
 declare function uniqueUnreadNotificationIds(deliveries: TerekaNotificationDeliveryRow[]): string[];
 declare function notificationDeliveryActionFor(delivery: Record<string, any>, canManageNotifications: boolean): string;
+declare function buildChatThreadRows(input: TerekaChatThreadRowsInput): TerekaChatThreadRow[];
+declare function buildComplaintSummary(rows: TerekaChatThreadRow[]): TerekaComplaintSummary;
+declare function complaintOpenRows(rows: TerekaChatThreadRow[]): TerekaChatThreadRow[];
+declare function complaintUrgentRows(rows: TerekaChatThreadRow[]): TerekaChatThreadRow[];
+declare function filterChatThreadRows(rows: TerekaChatThreadRow[], query: any): TerekaChatThreadRow[];
+declare function chatParticipantLabel(input: TerekaChatParticipantInput): string;
+declare function chatInitialsFor(text: any): string;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

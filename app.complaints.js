@@ -1,16 +1,15 @@
 ﻿function complaintsView() {
   const rows = chatThreadRows();
-  const open = rows.filter((row) => !["closed", "resolved"].includes(normal(row.status)));
-  const urgent = rows.filter((row) => row.unreadCount > 0);
+  const complaintSummary = buildComplaintSummary(rows);
   if (isPlatform()) {
     const tabs = [["chat", "SACCO admin chat"], ["capture", "Record SACCO message"], ["list", "Case list"]];
     const tab = activeModuleTab("complaints", tabs);
     return `
       <div class="dashboard-grid">
-        ${summary(t("complaintsFromSaccoAdmins"), open.length, "Open platform support cases", t("review"))}
-        ${summary(t("urgentComplaints"), urgent.length, "Needs same-day action", "Escalate")}
-        ${summary(t("inProgress"), rows.filter((row) => normal(row.status) === "in_progress").length, "Being handled", "Track")}
-        ${summary(t("resolved"), rows.filter((row) => normal(row.status) === "resolved" || normal(row.status) === "closed").length, "Closed support cases", t("review"))}
+        ${summary(t("complaintsFromSaccoAdmins"), complaintSummary.open, "Open platform support cases", t("review"))}
+        ${summary(t("urgentComplaints"), complaintSummary.urgent, "Needs same-day action", "Escalate")}
+        ${summary(t("inProgress"), complaintSummary.inProgress, "Being handled", "Track")}
+        ${summary(t("resolved"), complaintSummary.resolved, "Closed support cases", t("review"))}
       </div>
       ${moduleTabs("complaints", tabs, tab)}
       ${tab === "chat" ? complaintChatWorkspace("SACCO admin - Platform Super Admin chat", "WhatsApp-style support threads from SACCO administrators to the platform owner.", rows.filter((row) => row.type === "PLATFORM_SUPPORT"), "platform-super") : ""}
@@ -29,8 +28,8 @@
     <div class="dashboard-grid">
       ${summary("Member chats", memberRows.length, "SACCO admin and member support", "Open")}
       ${summary("Platform chats", platformRows.length, "SACCO admin and platform support", "Open")}
-      ${summary("Urgent complaints", urgent.length, "Needs same-day action", "Escalate")}
-      ${summary("Open follow-up", open.length, "Unresolved conversations", "Track")}
+      ${summary("Urgent complaints", complaintSummary.urgent, "Needs same-day action", "Escalate")}
+      ${summary("Open follow-up", complaintSummary.open, "Unresolved conversations", "Track")}
     </div>
     ${moduleTabs("complaints", tabs, tab)}
     ${tab === "member-chat" ? complaintChatWorkspace("SACCO admin - member chat", "WhatsApp-style member support threads for questions, complaints and SACCO office replies.", memberRows, "sacco-member") : ""}
@@ -45,10 +44,7 @@
 }
 
 function complaintChatWorkspace(title, copy, rows, mode) {
-  const filter = normal(state.chatFilters[mode] || "");
-  const visibleRows = filter
-    ? rows.filter((row) => normal(`${row.tenantName || ""} ${row.memberName || ""} ${row.subject || ""} ${row.description || ""} ${row.resolutionNotes || ""} ${row.status || ""}`).includes(filter))
-    : rows;
+  const visibleRows = filterChatThreadRows(rows, state.chatFilters[mode] || "");
   if (!rows.length) {
     return emptyState(title, mode === "sacco-platform"
       ? "Start a platform message when the SACCO needs help from the Platform Super Admin."
@@ -105,39 +101,16 @@ function complaintChatThreadButton(row, selected, mode) {
 }
 
 function complaintChatParticipant(row, mode) {
-  if (mode === "platform-super") return row.tenantName || tenantName(row.tenantId) || "SACCO admin";
-  if (mode === "sacco-platform") return "Platform Super Admin";
-  if (mode === "member-support") return row.tenantName || contextName() || "SACCO admin";
-  return row.memberName || memberName(row.memberId) || "SACCO member";
+  return chatParticipantLabel({ row, mode, tenantName, memberName, contextName });
 }
 
 function chatInitials(text) {
-  return String(text || "TO")
-    .split(/[\s-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase() || "TO";
+  return chatInitialsFor(text);
 }
 
 function chatThreadRows(source) {
   const threads = source || dataRows("chatThreads") || [];
-  return threads.map((thread) => ({
-    id: thread.id,
-    type: thread.type,
-    subject: thread.subject,
-    status: thread.status,
-    tenantId: thread.tenantId,
-    tenantName: thread.tenantName || tenantName(thread.tenantId),
-    memberId: thread.memberId,
-    memberName: thread.memberName || (thread.memberId ? memberName(thread.memberId) : ""),
-    createdAt: thread.createdAt,
-    updatedAt: thread.lastMessageAt || thread.updatedAt,
-    lastMessagePreview: thread.lastMessagePreview || "",
-    lastMessageSenderType: thread.lastMessageSenderType || "",
-    unreadCount: thread.unreadCount || 0
-  }));
+  return buildChatThreadRows({ threads, tenantName, memberName });
 }
 
 /**
