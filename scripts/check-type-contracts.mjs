@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, settingsSource, operationsSource, platformSource, saccoSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, settingsSource, operationsSource, platformSource, saccoSource, navigationSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -27,6 +27,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/operations/operations.ts"),
   readText("src/platform/platform.ts"),
   readText("src/sacco/sacco.ts"),
+  readText("src/navigation/navigation.ts"),
   readText("app.state.js"),
 ]);
 
@@ -471,6 +472,21 @@ for (const marker of [
   "export function buildSaccoSecretaryDashboardModel",
 ]) {
   assert.ok(saccoSource.includes(marker), `src/sacco/sacco.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaSaccoAccountHealthRow",
+  "export interface TerekaSaccoAccountSummary",
+  "export interface TerekaMemberDirectoryRow",
+  "export interface TerekaMemberDirectorySummary",
+  "export function buildSaccoAccountHealthRows",
+  "export function buildSaccoAccountSummary",
+  "export function buildMemberDirectoryRows",
+  "export function buildMemberDirectorySummary",
+  "export function pendingMemberKycRows",
+  "export function uniqueNavigationValues",
+]) {
+  assert.ok(navigationSource.includes(marker), `src/navigation/navigation.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");

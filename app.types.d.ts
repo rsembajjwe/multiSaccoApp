@@ -412,6 +412,45 @@ interface TerekaSaccoSecretaryDashboardModel {
   totalMembers: number;
 }
 
+interface TerekaSaccoAccountHealthRow extends TerekaTenantSummary {
+  accountHealth: string;
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  approvalStage: string;
+  billableMembers: number | string;
+  expiry: string;
+  packageName: string;
+  paymentStage: string;
+  saccoCode: string;
+  subscriptionStatus: string;
+  [key: string]: any;
+}
+
+interface TerekaSaccoAccountSummary {
+  activeAccounts: number;
+  expiringSoon: number;
+  suspendedAccounts: number;
+  withoutSubscription: number;
+}
+
+interface TerekaMemberDirectoryRow extends TerekaMemberProfile {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  kycReadiness: string;
+  totalBalance: number;
+  [key: string]: any;
+}
+
+interface TerekaMemberDirectorySummary {
+  activeMembers: number;
+  pendingKyc: number;
+  portalReady: number;
+  registeredMembers: number;
+  totalBalances: number;
+}
+
 interface TerekaSubscription {
   id?: string;
   tenantId?: string;
@@ -1786,6 +1825,12 @@ declare function buildSaccoAuditorDashboardModel(input: { auditEvents: Array<Ter
 declare function buildSaccoChairpersonDashboardModel(input: { governanceMeetings: Array<Record<string, any>>; loans: Array<TerekaLoan & Record<string, any>>; transactions: Array<TerekaFinancialTransaction & Record<string, any>> }): TerekaSaccoChairpersonDashboardModel;
 declare function buildSaccoTreasurerDashboardModel(input: { callbacks: Array<TerekaMobileMoneyCallback & Record<string, any>>; members: Array<TerekaMemberProfile & Record<string, any>>; pendingTransactions: Array<TerekaFinancialTransaction & Record<string, any>>; transactions: Array<TerekaFinancialTransaction & Record<string, any>> }): TerekaSaccoTreasurerDashboardModel;
 declare function buildSaccoSecretaryDashboardModel(input: { complaints: Array<TerekaComplaintThread & Record<string, any>>; governanceMeetings: Array<Record<string, any>>; members: Array<TerekaMemberProfile & Record<string, any>> }): TerekaSaccoSecretaryDashboardModel;
+declare function buildSaccoAccountHealthRows(input: { accountHealth: (tenant: TerekaTenantSummary & Record<string, any>, subscription?: TerekaSubscription & Record<string, any>) => string; approvalStage: (tenant: TerekaTenantSummary & Record<string, any>, subscription?: TerekaSubscription & Record<string, any>) => string; paymentStage: (tenant: TerekaTenantSummary & Record<string, any>, subscription?: TerekaSubscription & Record<string, any>) => string; subscriptionForTenant: (tenantId?: string) => (TerekaSubscription & Record<string, any>) | undefined; tenants: Array<TerekaTenantSummary & Record<string, any>> }): TerekaSaccoAccountHealthRow[];
+declare function buildSaccoAccountSummary(rows: TerekaSaccoAccountHealthRow[], subscriptions: Array<TerekaSubscription & Record<string, any>>): TerekaSaccoAccountSummary;
+declare function buildMemberDirectoryRows(input: { kycReadiness: (member: TerekaMemberProfile & Record<string, any>) => string; members: Array<TerekaMemberProfile & Record<string, any>> }): TerekaMemberDirectoryRow[];
+declare function buildMemberDirectorySummary(rows: TerekaMemberDirectoryRow[]): TerekaMemberDirectorySummary;
+declare function pendingMemberKycRows<T extends TerekaMemberProfile & Record<string, any>>(members: T[]): T[];
+declare function uniqueNavigationValues(rows: Array<Record<string, any>> | null | undefined, key: string): any[];
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

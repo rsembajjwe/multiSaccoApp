@@ -46,29 +46,20 @@ const memberModules = [
 
 function saccoAccounts() {
   const subscriptions = dataRows("subscriptions");
-  const rows = tenantRows().map((tenant) => {
-    const subscription = subscriptionForTenant(tenant.id);
-    return {
-      ...tenant,
-      saccoCode: tenant.abbreviation || tenant.code || tenant.id,
-      accountHealth: tenantAccountHealth(tenant, subscription),
-      subscriptionStatus: subscription?.status || "No subscription",
-      packageName: subscription?.tierLabel || subscription?.packageName || subscription?.packageId || "Not assigned",
-      expiry: subscription?.expiry || subscription?.expiryDate || "",
-      billableMembers: subscription?.billableMembers || subscription?.memberCount || tenant.memberCount || 0,
-      paymentStage: saccoPaymentStage(tenant, subscription),
-      approvalStage: saccoApprovalStage(tenant, subscription),
-      action: "tenant-detail",
-      actionLabel: "Open",
-      actionId: tenant.id
-    };
+  const rows = buildSaccoAccountHealthRows({
+    accountHealth: tenantAccountHealth,
+    approvalStage: saccoApprovalStage,
+    paymentStage: saccoPaymentStage,
+    subscriptionForTenant,
+    tenants: tenantRows()
   });
+  const accountSummary = buildSaccoAccountSummary(rows, subscriptions);
   return `
     <div class="dashboard-grid">
-      ${summary(t("activeAccounts"), rows.filter((row) => normal(row.status) === "active").length, "SACCOs allowed to operate", "Monitor")}
-      ${summary(t("suspendedAccounts"), rows.filter((row) => normal(row.status).includes("suspended")).length, "Access disabled", t("review"))}
-      ${summary(t("withoutSubscription"), rows.filter((row) => !subscriptions.some((sub) => sub.tenantId === row.id)).length, "Needs billing setup", "Assign")}
-      ${summary(t("expiringSoon"), rows.filter((row) => normal(row.subscriptionStatus).includes("expired") || normal(row.accountHealth).includes("risk")).length, "Billing and access risk", "Renew")}
+      ${summary(t("activeAccounts"), accountSummary.activeAccounts, "SACCOs allowed to operate", "Monitor")}
+      ${summary(t("suspendedAccounts"), accountSummary.suspendedAccounts, "Access disabled", t("review"))}
+      ${summary(t("withoutSubscription"), accountSummary.withoutSubscription, "Needs billing setup", "Assign")}
+      ${summary(t("expiringSoon"), accountSummary.expiringSoon, "Billing and access risk", "Renew")}
     </div>
     ${filterToolbar("Search SACCO code, name, country, currency, district, status, subscription or package", "Activate SACCO", "Export accounts")}
     ${tenantDetailPanel()}
@@ -78,24 +69,17 @@ function saccoAccounts() {
 
 function membersView() {
   const members = dataRows("members");
-  const pendingKyc = members.filter((member) => normal(member.kycStatus).includes("pending") || normal(member.status).includes("pending"));
-  const active = members.filter((member) => normal(member.status) === "active");
-  const rows = members.map((member) => ({
-    ...member,
-    totalBalance: Number(member.savingsBalance || 0) + Number(member.sharesBalance || 0) + Number(member.welfareBalance || 0),
-    kycReadiness: memberKycReadiness(member),
-    action: "member-detail",
-    actionLabel: "Open profile",
-    actionId: member.id
-  }));
+  const rows = buildMemberDirectoryRows({ kycReadiness: memberKycReadiness, members });
+  const memberSummary = buildMemberDirectorySummary(rows);
+  const pendingKyc = pendingMemberKycRows(rows);
   const tab = state.memberTab || "overview";
   return `
     <div class="dashboard-grid">
-      ${summary(t("registeredMembers"), members.length, "Member register only, not staff users", t("review"))}
-      ${summary(t("activeMembers"), active.length, "Can transact and use portal", "Monitor")}
-      ${summary(t("pendingKyc"), pendingKyc.length, "Needs document or approval follow-up", t("review"))}
-      ${summary("Total balances", money.format(sum(rows, "totalBalance")), t("savingsSharesWelfare"), "Statements")}
-      ${summary(t("portalReady"), rows.filter((member) => normal(member.status) === "active" && normal(member.kycStatus) === "verified").length, "Can use member login", "Audit")}
+      ${summary(t("registeredMembers"), memberSummary.registeredMembers, "Member register only, not staff users", t("review"))}
+      ${summary(t("activeMembers"), memberSummary.activeMembers, "Can transact and use portal", "Monitor")}
+      ${summary(t("pendingKyc"), memberSummary.pendingKyc, "Needs document or approval follow-up", t("review"))}
+      ${summary("Total balances", money.format(memberSummary.totalBalances), t("savingsSharesWelfare"), "Statements")}
+      ${summary(t("portalReady"), memberSummary.portalReady, "Can use member login", "Audit")}
     </div>
     ${memberTabs(tab)}
     ${tab === "overview" ? rolePriorityPanel(t("memberManagementFocus"), [
@@ -143,7 +127,7 @@ function moduleTabs(view, tabs, activeTab = activeModuleTab(view, tabs)) {
 }
 
 function uniqueValues(rows, key) {
-  return [...new Set((rows || []).map((row) => row[key]).filter((value) => value !== undefined && value !== null && String(value).trim()))].sort((a, b) => String(a).localeCompare(String(b)));
+  return uniqueNavigationValues(rows, key);
 }
 
 function selectOption(value, label, selected) {
