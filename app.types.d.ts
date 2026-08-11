@@ -986,6 +986,55 @@ interface TerekaLoanPortfolioSummary {
   total: number;
 }
 
+interface TerekaAccountingSummary {
+  accountCount: number;
+  assetTotal: number;
+  closedPeriods: number;
+  expenseTotal: number;
+  journalCount: number;
+  openPeriods: number;
+  periodCount: number;
+  unbalancedCount: number;
+}
+
+interface TerekaAccountingSummaryInput {
+  accounts: TerekaChartAccount[];
+  assets: Array<TerekaAsset & Record<string, any>>;
+  expenses: Array<TerekaExpense & Record<string, any>>;
+  journals: Array<TerekaJournalEntry & Record<string, any>>;
+  periods: TerekaAccountingPeriod[];
+}
+
+interface TerekaPaymentRequestReviewRow extends TerekaPaymentRequest {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  reviewStatus: string;
+  [key: string]: any;
+}
+
+interface TerekaReconciliationMatchRow {
+  accountCode?: any;
+  externalReference?: any;
+  ledgerAmount?: any;
+  postedAt?: any;
+  sourceType?: any;
+  statementAmount?: any;
+}
+
+interface TerekaReconciliationReviewModel {
+  callbackExceptions: Array<TerekaMobileMoneyCallback & Record<string, any>>;
+  exceptionCount: number;
+  failedPaymentRequests: Array<TerekaPaymentRequest & Record<string, any>>;
+  matches: Record<string, any>[];
+  matchedCoverage: number;
+  paymentRequestRows: TerekaPaymentRequestReviewRow[];
+  pendingPaymentRequests: Array<TerekaPaymentRequest & Record<string, any>>;
+  summaryData: Record<string, any>;
+  unmatchedLedgerLines: Record<string, any>[];
+  unmatchedStatementLines: Record<string, any>[];
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -1034,6 +1083,11 @@ declare function buildTransactionReceiptRegister(rows: TerekaTransactionRow[]): 
 declare function buildTransactionReceiptSummary(rows: TerekaTransactionRow[]): TerekaTransactionReceiptSummary;
 declare function buildLoanRows(input: TerekaLoanRowsInput): TerekaLoanRow[];
 declare function buildLoanPortfolioSummary(rows: TerekaLoanRow[]): TerekaLoanPortfolioSummary;
+declare function buildAccountingSummary(input: TerekaAccountingSummaryInput): TerekaAccountingSummary;
+declare function buildReconciliationReviewModel(input: { callbacks: Array<TerekaMobileMoneyCallback & Record<string, any>>; labelize: (value: any) => string; paymentRequests: Array<TerekaPaymentRequest & Record<string, any>>; reconciliation: TerekaReconciliationData | null | undefined }): TerekaReconciliationReviewModel;
+declare function buildPaymentRequestReviewRows(requests: Array<TerekaPaymentRequest & Record<string, any>> | null | undefined, labelize: (value: any) => string): TerekaPaymentRequestReviewRow[];
+declare function buildReconciliationMatchRows(matches: Record<string, any>[] | null | undefined): TerekaReconciliationMatchRow[];
+declare function reconciliationCoverage(summaryData: Record<string, any>): number;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

@@ -68,24 +68,22 @@ function accountingView() {
   const journals = dataRows("journalEntries");
   const expenses = dataRows("expenses");
   const assets = dataRows("assets");
-  const unbalanced = journals.filter((journal) => journal.isBalanced === false || Number(journal.debitTotal || 0) !== Number(journal.creditTotal || 0));
-  const closedPeriods = periods.filter((period) => normal(period.status) === "closed");
-  const openPeriods = periods.filter((period) => normal(period.status) === "open");
+  const accounting = buildAccountingSummary({ accounts, periods, journals, expenses, assets });
   const tabs = [["capture", t("expenseAssetCapture")], ["journals", t("recentJournalEntries")], ["registers", t("expenseAssetRegisters")], ["setup", t("chartPeriods")]];
   const tab = activeModuleTab("accounting", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary(t("chartAccounts"), accounts.length, "Ledger structure", t("open"))}
-      ${summary(t("accountingPeriods"), periods.length, "Financial years", "View")}
-      ${summary(t("journalEntries"), journals.length, "Posted entries", t("review"))}
-      ${summary(t("unbalancedJournals"), unbalanced.length, "Must remain zero", "Investigate")}
-      ${summary(t("expenses"), money.format(sum(expenses, "amount")), "Supplier and operating costs", t("open"))}
-      ${summary(t("assets"), money.format(sum(assets, "netBookValue", "cost")), "Fixed asset register", "View")}
+      ${summary(t("chartAccounts"), accounting.accountCount, "Ledger structure", t("open"))}
+      ${summary(t("accountingPeriods"), accounting.periodCount, "Financial years", "View")}
+      ${summary(t("journalEntries"), accounting.journalCount, "Posted entries", t("review"))}
+      ${summary(t("unbalancedJournals"), accounting.unbalancedCount, "Must remain zero", "Investigate")}
+      ${summary(t("expenses"), money.format(accounting.expenseTotal), "Supplier and operating costs", t("open"))}
+      ${summary(t("assets"), money.format(accounting.assetTotal), "Fixed asset register", "View")}
     </div>
     ${moduleTabs("accounting", tabs, tab)}
     ${tab === "overview" ? rolePriorityPanel(t("accountingLedgerConfidence"), [
-      ["Trial balance", unbalanced.length ? `${unbalanced.length} unbalanced journal entr${unbalanced.length === 1 ? "y" : "ies"} need correction.` : "All loaded journal entries are balanced.", unbalanced.length ? "Review" : "Clear"],
-      ["Period control", `${openPeriods.length} open period(s), ${closedPeriods.length} closed period(s). Closed periods block ordinary postings.`, openPeriods.length ? "Open" : "Review"],
+      ["Trial balance", accounting.unbalancedCount ? `${accounting.unbalancedCount} unbalanced journal entr${accounting.unbalancedCount === 1 ? "y" : "ies"} need correction.` : "All loaded journal entries are balanced.", accounting.unbalancedCount ? "Review" : "Clear"],
+      ["Period control", `${accounting.openPeriods} open period(s), ${accounting.closedPeriods} closed period(s). Closed periods block ordinary postings.`, accounting.openPeriods ? "Open" : "Review"],
       ["Asset and expense evidence", `${expenses.length} expense record(s) and ${assets.length} asset record(s) support management reports.`, "Ready"]
     ]) : ""}
     ${tab === "capture" ? `<div class="grid two">
@@ -107,16 +105,13 @@ function accountingView() {
 function reconciliationView() {
   const callbacks = dataRows("mobileMoneyCallbacks");
   const paymentRequests = dataRows("mobileMoneyPaymentRequests");
-  const reconciliation = state.data.reconciliation || {};
-  const summaryData = reconciliation.summary || {};
-  const matches = Array.isArray(reconciliation.matches) ? reconciliation.matches : [];
-  const unmatchedStatementLines = Array.isArray(reconciliation.unmatchedStatementLines) ? reconciliation.unmatchedStatementLines : [];
-  const unmatchedLedgerLines = Array.isArray(reconciliation.unmatchedLedgerLines) ? reconciliation.unmatchedLedgerLines : [];
-  const callbackExceptions = callbacks.filter((row) => !normal(row.status).includes("posted") || row.duplicate);
-  const pendingPaymentRequests = paymentRequests.filter((row) => !normal(row.status).includes("posted"));
-  const failedPaymentRequests = paymentRequests.filter((row) => ["failed", "expired", "cancelled"].includes(normal(row.status)));
-  const paymentRequestRows = paymentRequestReviewRows(paymentRequests);
-  const exceptionCount = Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) + Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) + callbackExceptions.length + pendingPaymentRequests.length;
+  const review = buildReconciliationReviewModel({
+    callbacks,
+    paymentRequests,
+    reconciliation: state.data.reconciliation,
+    labelize
+  });
+  const { summaryData, matches, unmatchedStatementLines, unmatchedLedgerLines, callbackExceptions, pendingPaymentRequests, failedPaymentRequests, paymentRequestRows, exceptionCount } = review;
   const tabs = [["overview", t("reconciliationControl")], ["matches", t("bankMobileMoneyMatching")], ["exceptions", t("exceptions")], ["requests", "Payment requests"], ["callbacks", t("providerCallbacks")]];
   const tab = activeModuleTab("reconciliation", tabs);
   return `
@@ -183,7 +178,7 @@ function reconciliationControlPanel(summaryData) {
   const statementTotal = Number(summaryData.statementLines || 0);
   const ledgerTotal = Number(summaryData.ledgerLines || 0);
   const matched = Number(summaryData.matched || 0);
-  const coverage = Math.round((matched / Math.max(statementTotal, ledgerTotal, 1)) * 100);
+  const coverage = reconciliationCoverage(summaryData);
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -259,29 +254,10 @@ function paymentRequestOperationsPanel(requests) {
 }
 
 function paymentRequestReviewRows(requests) {
-  const terminalStatuses = new Set(["posted", "failed", "expired", "cancelled"]);
-  return (requests || []).map((row) => {
-    const status = normal(row.status);
-    const open = !terminalStatuses.has(status);
-    const providerIssue = normal(row.statusMessage).includes("provider status check failed");
-    return {
-      ...row,
-      reviewStatus: providerIssue ? "Provider check failed" : open ? "Needs provider check" : labelize(row.status || "closed"),
-      action: open ? "payment-provider-status" : "none",
-      actionLabel: open ? "Check status" : "Closed",
-      actionId: row.id
-    };
-  });
+  return buildPaymentRequestReviewRows(requests, labelize);
 }
 
 function reconciliationMatchRows(matches) {
-  return (matches || []).map((match) => ({
-    externalReference: match.statementLine?.externalReference || match.ledgerLine?.reference,
-    statementAmount: match.statementLine?.amount,
-    ledgerAmount: match.ledgerLine?.amount,
-    accountCode: match.statementLine?.accountCode || match.ledgerLine?.accountCode,
-    sourceType: match.ledgerLine?.sourceType,
-    postedAt: match.ledgerLine?.postedAt || match.statementLine?.statementDate
-  }));
+  return buildReconciliationMatchRows(matches);
 }
 

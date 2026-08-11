@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -14,6 +14,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/member/admin.ts"),
   readText("src/transactions/transactions.ts"),
   readText("src/loans/loans.ts"),
+  readText("src/accounting/accounting.ts"),
   readText("app.state.js"),
 ]);
 
@@ -72,6 +73,11 @@ for (const marker of [
   "interface TerekaLoanRow",
   "interface TerekaLoanRowsInput",
   "interface TerekaLoanPortfolioSummary",
+  "interface TerekaAccountingSummary",
+  "interface TerekaAccountingSummaryInput",
+  "interface TerekaPaymentRequestReviewRow",
+  "interface TerekaReconciliationMatchRow",
+  "interface TerekaReconciliationReviewModel",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -176,6 +182,21 @@ for (const marker of [
   "export function buildLoanPortfolioSummary",
 ]) {
   assert.ok(loanSource.includes(marker), `src/loans/loans.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaAccountingSummary",
+  "export interface TerekaAccountingSummaryInput",
+  "export interface TerekaPaymentRequestReviewRow",
+  "export interface TerekaReconciliationMatchRow",
+  "export interface TerekaReconciliationReviewModel",
+  "export function buildAccountingSummary",
+  "export function buildReconciliationReviewModel",
+  "export function buildPaymentRequestReviewRows",
+  "export function buildReconciliationMatchRows",
+  "export function reconciliationCoverage",
+]) {
+  assert.ok(accountingSource.includes(marker), `src/accounting/accounting.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");

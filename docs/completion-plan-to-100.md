@@ -37,7 +37,10 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    through `src/transactions/transactions.ts` plus `app.transactions-model.js`. Loan row shaping,
    guarantor readiness, approval readiness, servicing status, portfolio risk counts, outstanding
    principal, and arrears-aging totals now follow the same pattern through `src/loans/loans.ts` plus
-   `app.loans-model.js`.
+   `app.loans-model.js`. Accounting dashboard totals, unbalanced-journal counts, period-close counts,
+   reconciliation exception totals, payment request review rows, match rows, and reconciliation
+   coverage now follow the same pattern through `src/accounting/accounting.ts` plus
+   `app.accounting-model.js`.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the

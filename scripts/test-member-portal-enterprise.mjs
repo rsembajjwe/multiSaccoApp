@@ -210,6 +210,7 @@ for (const file of [
   "app.member-admin-model.js",
   "app.transactions-model.js",
   "app.loans-model.js",
+  "app.accounting-model.js",
   "app.core.js",
   "app.api.js",
   "app.ui.js",
