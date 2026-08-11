@@ -69,7 +69,7 @@ function saccoAccounts() {
 
 function membersView() {
   const members = dataRows("members");
-  const rows = buildMemberDirectoryRows({ kycReadiness: memberKycReadiness, members });
+  const rows = buildMemberDirectoryRows({ kycReadiness: memberKycReadinessFor, members });
   const memberSummary = buildMemberDirectorySummary(rows);
   const pendingKyc = pendingMemberKycRows(rows);
   const tab = state.memberTab || "overview";

@@ -66,9 +66,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    access dashboard summaries, role coverage rows, SACCO staff role guide rows, permission-matrix
    rows, role purpose/scope text, and multi-role summary text now follow the same pattern through
    `src/access/access.ts` plus `app.access-model.js`, with redundant role-purpose and role-coverage wrapper helpers removed. Member administration status/type/KYC options,
-   KYC readiness, KYC checklist rows, member detail summary counts, receipt evidence summaries, and staff statement
+   KYC readiness, KYC checklist rows, document rows, member detail summary counts, receipt evidence summaries, and staff statement
    export summaries now live in the existing `src/member/admin.ts` plus
-   `app.member-admin-model.js`.
+   `app.member-admin-model.js`, with redundant KYC/document wrapper helpers removed.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the

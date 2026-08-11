@@ -190,9 +190,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   guide rows, permission-matrix rows, role purpose/scope text, and multi-role summary text now live
   behind `src/access/access.ts` plus `app.access-model.js`.
   Redundant role-purpose and role-coverage wrapper helpers have also been removed.
-- Member administration status/type/KYC options, KYC readiness, KYC checklist rows, member detail summary counts, receipt
+- Member administration status/type/KYC options, KYC readiness, KYC checklist rows, document rows, member detail summary counts, receipt
   evidence summaries, and staff statement export summaries now live behind the existing
-  `src/member/admin.ts` plus `app.member-admin-model.js`.
+  `src/member/admin.ts` plus `app.member-admin-model.js`, with redundant KYC/document wrapper helpers removed.
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
   no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,

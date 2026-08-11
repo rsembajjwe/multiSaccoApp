@@ -73,7 +73,7 @@ function memberDetailPanel(mode = "kyc") {
       <div class="source-grid">
         ${mini("Status", member.status)}
         ${mini("KYC", member.kycStatus)}
-        ${mini("KYC readiness", memberKycReadiness(member))}
+        ${mini("KYC readiness", memberKycReadinessFor(member))}
         ${mini("Savings", money.format(member.savingsBalance || 0))}
         ${mini("Shares", money.format(member.sharesBalance || 0))}
         ${mini("Welfare", money.format(member.welfareBalance || 0))}
@@ -114,7 +114,7 @@ function memberDetailPanel(mode = "kyc") {
       ` : ""}
       ${mode === "contacts" ? `<div class="grid two">
         ${memberDocumentRetentionPanel(member)}
-        ${recordTable("Member KYC documents", memberDocumentRows(), ["documentType", "storageKey", "verificationStatus", "retentionStatus", "retentionStorageAction", "retentionReviewDueAt", "retentionReviewedAt"])}
+        ${recordTable("Member KYC documents", buildMemberDocumentRows(state.selectedMemberDocuments || [], labelize, formatDateTime), ["documentType", "storageKey", "verificationStatus", "retentionStatus", "retentionStorageAction", "retentionReviewDueAt", "retentionReviewedAt"])}
         ${recordTable("Member contacts and next of kin", state.selectedMemberNextOfKin, ["fullName", "relationship", "phone", "address", "primaryContact"])}
         ${recordTable("Member beneficiaries", state.selectedMemberBeneficiaries, ["fullName", "relationship", "phone", "allocationPercent"])}
       </div>` : ""}
@@ -127,10 +127,6 @@ function memberDetailPanel(mode = "kyc") {
       ` : ""}
     </section>
   `;
-}
-
-function memberDocumentRows() {
-  return buildMemberDocumentRows(state.selectedMemberDocuments || [], labelize, formatDateTime);
 }
 
 function memberDocumentRetentionPanel(member) {
@@ -226,10 +222,6 @@ function staffStatementExportPanel(member, lines) {
       </div>
     </section>
   `;
-}
-
-function memberKycReadiness(member) {
-  return memberKycReadinessFor(member);
 }
 
 function memberKycChecklist(member) {
