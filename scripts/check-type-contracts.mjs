@@ -113,6 +113,7 @@ for (const marker of [
   "interface TerekaNotificationRowsInput",
   "interface TerekaChatThreadRow",
   "interface TerekaComplaintSummary",
+  "interface TerekaComplaintOption",
   "interface TerekaChatThreadRowsInput",
   "interface TerekaChatParticipantInput",
   "interface TerekaGovernanceResolutionRow",
@@ -331,6 +332,8 @@ for (const marker of [
   "export function filterChatThreadRows",
   "export function chatParticipantLabel",
   "export function chatInitialsFor",
+  "export function complaintCategoryOptions",
+  "export function complaintStatusOptions",
 ]) {
   assert.ok(complaintSource.includes(marker), `src/complaints/complaints.ts missing ${marker}`);
 }

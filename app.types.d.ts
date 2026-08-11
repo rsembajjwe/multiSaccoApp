@@ -1795,6 +1795,11 @@ interface TerekaComplaintSummary {
   urgent: number;
 }
 
+interface TerekaComplaintOption {
+  label: string;
+  value: string;
+}
+
 interface TerekaChatThreadRowsInput {
   memberName: (memberId?: string) => string;
   tenantName: (tenantId?: string) => string;
@@ -1899,6 +1904,8 @@ declare function complaintUrgentRows(rows: TerekaChatThreadRow[]): TerekaChatThr
 declare function filterChatThreadRows(rows: TerekaChatThreadRow[], query: any): TerekaChatThreadRow[];
 declare function chatParticipantLabel(input: TerekaChatParticipantInput): string;
 declare function chatInitialsFor(text: any): string;
+declare function complaintCategoryOptions(): TerekaComplaintOption[];
+declare function complaintStatusOptions(): TerekaComplaintOption[];
 declare function buildGovernanceMeetingRows(input: TerekaGovernanceRowsInput): TerekaGovernanceMeetingRow[];
 declare function buildGovernanceResolutionRows(meetings: TerekaGovernanceMeetingRow[], userName: (userId?: string) => string): TerekaGovernanceResolutionRow[];
 declare function buildMeetingResolutionRows(meeting: Pick<TerekaGovernanceMeetingRow, "resolutions"> | null | undefined, userName: (userId?: string) => string): TerekaGovernanceResolutionRow[];

@@ -63,6 +63,26 @@ function chatInitialsFor(text) {
     .toUpperCase() || "TO";
 }
 
+function complaintCategoryOptions() {
+  return [
+    { value: "statement", label: "Statement" },
+    { value: "loan", label: "Loan" },
+    { value: "savings", label: "Savings" },
+    { value: "shares", label: "Shares" },
+    { value: "service", label: "Service" },
+    { value: "other", label: "Other" }
+  ];
+}
+
+function complaintStatusOptions() {
+  return [
+    { value: "open", label: "Open" },
+    { value: "in_progress", label: "In progress" },
+    { value: "resolved", label: "Resolved" },
+    { value: "closed", label: "Closed" }
+  ];
+}
+
 function normalizeComplaintModelText(value) {
   return String(value || "").toLowerCase();
 }

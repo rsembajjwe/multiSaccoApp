@@ -416,7 +416,7 @@ function complaintCapturePanel(mode = "member") {
       <form id="complaintForm" class="form-grid" data-thread-type="${memberCapture ? "MEMBER_SUPPORT" : "PLATFORM_SUPPORT"}">
         <label><span>SACCO</span><select id="newComplaintTenantId" ${isPlatform() && canManage ? "" : "disabled"}>${tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${tenant.id === tenantId ? "selected" : ""}>${escapeHtml(tenant.abbreviation || tenant.code || tenant.name)} - ${escapeHtml(tenant.name || tenant.id)}</option>`).join("")}</select></label>
         ${memberCapture ? `<label><span>Member</span><select id="newComplaintMemberId" ${canManage ? "" : "disabled"}><option value="">SACCO-level case</option>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>` : `<input type="hidden" id="newComplaintMemberId" value="">`}
-        <label><span>Category</span><select id="newComplaintCategory" ${canManage ? "" : "disabled"}>${complaintCategoryOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
+        <label><span>Category</span><select id="newComplaintCategory" ${canManage ? "" : "disabled"}>${complaintCategoryOptions().map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("")}</select></label>
         <label><span>Priority</span><select id="newComplaintPriority" ${canManage ? "" : "disabled"}><option value="medium">Medium</option><option value="high">High</option><option value="low">Low</option></select></label>
         <label><span>Channel</span><select id="newComplaintChannel" ${canManage ? "" : "disabled"}><option value="branch">Branch</option><option value="phone">Phone</option><option value="email">Email</option><option value="web">Web</option><option value="mobile">Mobile</option></select></label>
         <label><span>Subject</span><input id="newComplaintSubject" required placeholder="${subjectPlaceholder}" ${canManage ? "" : "disabled"}></label>
@@ -485,7 +485,7 @@ function complaintDetailPanel(rows, mode = "sacco-member") {
       </section>
       <form id="complaintStatusForm" class="form-grid single">
         <input type="hidden" id="selectedComplaintId" value="${escapeHtml(selected.id)}">
-        <label><span>Status</span><select id="selectedComplaintStatus" ${canManage ? "" : "disabled"}>${complaintStatusOptions().map((status) => `<option value="${escapeHtml(status)}" ${status === selected.status ? "selected" : ""}>${labelize(status)}</option>`).join("")}</select></label>
+        <label><span>Status</span><select id="selectedComplaintStatus" ${canManage ? "" : "disabled"}>${complaintStatusOptions().map((status) => `<option value="${escapeHtml(status.value)}" ${status.value === selected.status ? "selected" : ""}>${escapeHtml(status.label)}</option>`).join("")}</select></label>
         <label><span>${replyLabel}</span><textarea id="selectedComplaintNotes" class="chat-reply-input" placeholder="Type a reply..." ${canManage && !isSaccoToPlatform ? "" : "disabled"}>${escapeHtml(reply)}</textarea></label>
         <div class="form-actions chat-composer-actions">
           ${canManage && !isSaccoToPlatform ? `
@@ -498,13 +498,5 @@ function complaintDetailPanel(rows, mode = "sacco-member") {
       </form>
     </section>
   `;
-}
-
-function complaintCategoryOptions() {
-  return ["statement", "loan", "savings", "shares", "service", "other"];
-}
-
-function complaintStatusOptions() {
-  return ["open", "in_progress", "resolved", "closed"];
 }
 

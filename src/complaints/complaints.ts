@@ -24,6 +24,11 @@ export interface TerekaComplaintSummary {
   urgent: number;
 }
 
+export interface TerekaComplaintOption {
+  label: string;
+  value: string;
+}
+
 export interface TerekaChatThreadRowsInput {
   memberName: (memberId?: string) => string;
   tenantName: (tenantId?: string) => string;
@@ -101,6 +106,26 @@ export function chatInitialsFor(text: unknown): string {
     .map((part) => part[0])
     .join("")
     .toUpperCase() || "TO";
+}
+
+export function complaintCategoryOptions(): TerekaComplaintOption[] {
+  return [
+    { value: "statement", label: "Statement" },
+    { value: "loan", label: "Loan" },
+    { value: "savings", label: "Savings" },
+    { value: "shares", label: "Shares" },
+    { value: "service", label: "Service" },
+    { value: "other", label: "Other" },
+  ];
+}
+
+export function complaintStatusOptions(): TerekaComplaintOption[] {
+  return [
+    { value: "open", label: "Open" },
+    { value: "in_progress", label: "In progress" },
+    { value: "resolved", label: "Resolved" },
+    { value: "closed", label: "Closed" },
+  ];
 }
 
 function normalizeComplaintText(value: unknown): string {
