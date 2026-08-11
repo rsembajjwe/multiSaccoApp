@@ -1237,6 +1237,6 @@ assert.match(notificationHtml, /1 unread/);
 assert.match(notificationHtml, /Provider prompt expired before member approval/);
 assert.match(notificationHtml, /Payment request MMREQ-001/);
 assert.doesNotMatch(notificationHtml, /Deposit posted/);
-assert.ok(sandbox.notificationEventOptions().includes("payment_request_closed"));
+assert.ok(sandbox.notificationEventOptions().some((option) => option.value === "payment_request_closed"));
 
 console.log("Frontend helper tests passed (tables, login fields, role routing, session labels, platform user management, SACCO registration, SACCO member management, SACCO finance/payment workflows, SACCO loan workflows, shares, welfare, accounting, settings, governance, chat, notifications, audit evidence, member payment routes, payment exception alerts).");

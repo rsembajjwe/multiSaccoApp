@@ -1752,6 +1752,11 @@ interface TerekaNotificationSummary {
   unreadAlerts: number;
 }
 
+interface TerekaNotificationOption {
+  label: string;
+  value: string;
+}
+
 interface TerekaNotificationFilters {
   channel?: string;
   date?: string;
@@ -1897,6 +1902,8 @@ declare function failedNotificationDeliveries(deliveries: TerekaNotificationDeli
 declare function paymentExceptionDeliveries(deliveries: TerekaNotificationDeliveryRow[]): TerekaNotificationDeliveryRow[];
 declare function uniqueUnreadNotificationIds(deliveries: TerekaNotificationDeliveryRow[]): string[];
 declare function notificationDeliveryActionFor(delivery: Record<string, any>, canManageNotifications: boolean): string;
+declare function notificationEventOptions(extra?: string): TerekaNotificationOption[];
+declare function notificationChannelOptions(): TerekaNotificationOption[];
 declare function buildChatThreadRows(input: TerekaChatThreadRowsInput): TerekaChatThreadRow[];
 declare function buildComplaintSummary(rows: TerekaChatThreadRow[]): TerekaComplaintSummary;
 declare function complaintOpenRows(rows: TerekaChatThreadRow[]): TerekaChatThreadRow[];

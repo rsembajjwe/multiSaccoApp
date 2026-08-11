@@ -91,6 +91,25 @@ function notificationDeliveryActionFor(delivery, canManageNotifications) {
   return "none";
 }
 
+function notificationEventOptions(extra = "") {
+  return Array.from(new Set(["payment_posted", "payment_request_closed", "loan_application_submitted", "complaint_synced", "subscription_due", "sacco_approved", extra].filter(Boolean)))
+    .map((value) => ({ value, label: labelizeNotificationModelText(value) }));
+}
+
+function notificationChannelOptions() {
+  return [
+    { value: "in_app", label: "In app" },
+    { value: "sms", label: "Sms" },
+    { value: "email", label: "Email" }
+  ];
+}
+
 function normalizeNotificationModelText(value) {
   return String(value || "").toLowerCase();
+}
+
+function labelizeNotificationModelText(value) {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

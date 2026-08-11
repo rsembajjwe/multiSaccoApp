@@ -109,6 +109,7 @@ for (const marker of [
   "interface TerekaNotificationTemplateRow",
   "interface TerekaProviderJobRunRow",
   "interface TerekaNotificationSummary",
+  "interface TerekaNotificationOption",
   "interface TerekaNotificationFilters",
   "interface TerekaNotificationRowsInput",
   "interface TerekaChatThreadRow",
@@ -315,6 +316,8 @@ for (const marker of [
   "export function paymentExceptionDeliveries",
   "export function uniqueUnreadNotificationIds",
   "export function notificationDeliveryActionFor",
+  "export function notificationEventOptions",
+  "export function notificationChannelOptions",
 ]) {
   assert.ok(notificationSource.includes(marker), `src/notifications/notifications.ts missing ${marker}`);
 }

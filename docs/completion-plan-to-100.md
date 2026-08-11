@@ -43,7 +43,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    `app.accounting-model.js`. SACCO finance summaries for savings, shares, welfare, active products,
    member balances, contribution totals, welfare claim counts, paid welfare amounts, and claim action
    rows now follow the same pattern through `src/sacco-finance/finance.ts` plus
-   `app.sacco-finance-model.js`. Notification delivery rows, template rows, provider job rows,
+   `app.sacco-finance-model.js`. Notification delivery rows, template rows, template event/channel options, provider job rows,
    dashboard counts, delivery filters, unread acknowledgement IDs, payment exception slices, and
    login-risk slices now follow the same pattern through `src/notifications/notifications.ts` plus
    `app.notifications-model.js`. Complaint/chat thread rows, open/urgent/in-progress/resolved counts,

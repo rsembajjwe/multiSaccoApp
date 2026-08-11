@@ -268,8 +268,8 @@ function notificationTemplateDetailPanel(rows) {
       ${state.selectedTemplateError ? `<div class="notice warning"><strong>Template update failed.</strong><span>${escapeHtml(state.selectedTemplateError)}</span></div>` : ""}
       <form id="notificationTemplateEditForm" class="form-grid">
         <input type="hidden" id="selectedTemplateId" value="${escapeHtml(template.id)}">
-        <label><span>Event type</span><select id="selectedTemplateEventType" ${canManage ? "" : "disabled"}>${notificationEventOptions(template.eventType).map((item) => `<option value="${escapeHtml(item)}" ${item === template.eventType ? "selected" : ""}>${labelize(item)}</option>`).join("")}</select></label>
-        <label><span>Channel</span><select id="selectedTemplateChannel" ${canManage ? "" : "disabled"}>${notificationChannelOptions().map((item) => `<option value="${escapeHtml(item)}" ${item === template.channel ? "selected" : ""}>${labelize(item)}</option>`).join("")}</select></label>
+        <label><span>Event type</span><select id="selectedTemplateEventType" ${canManage ? "" : "disabled"}>${notificationEventOptions(template.eventType).map((item) => `<option value="${escapeHtml(item.value)}" ${item.value === template.eventType ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}</select></label>
+        <label><span>Channel</span><select id="selectedTemplateChannel" ${canManage ? "" : "disabled"}>${notificationChannelOptions().map((item) => `<option value="${escapeHtml(item.value)}" ${item.value === template.channel ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}</select></label>
         <label><span>Status</span><select id="selectedTemplateStatus" ${canManage ? "" : "disabled"}><option value="active" ${template.status === "active" ? "selected" : ""}>Active</option><option value="inactive" ${template.status === "inactive" ? "selected" : ""}>Inactive</option></select></label>
         <label><span>Title</span><input id="selectedTemplateTitle" value="${escapeHtml(template.title || "")}" ${canManage ? "" : "disabled"}></label>
         <label class="wide"><span>Message body</span><textarea id="selectedTemplateBody" ${canManage ? "" : "disabled"}>${escapeHtml(template.body || "")}</textarea></label>
@@ -277,13 +277,5 @@ function notificationTemplateDetailPanel(rows) {
       </form>
     </section>
   `;
-}
-
-function notificationEventOptions(extra = "") {
-  return Array.from(new Set(["payment_posted", "payment_request_closed", "loan_application_submitted", "complaint_synced", "subscription_due", "sacco_approved", extra].filter(Boolean)));
-}
-
-function notificationChannelOptions() {
-  return ["in_app", "sms", "email"];
 }
 

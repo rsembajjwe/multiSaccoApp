@@ -164,7 +164,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - SACCO finance summaries for savings, shares, welfare, active products, member balances,
   contribution totals, welfare claim counts, paid welfare amounts, and claim action rows now live
   behind `src/sacco-finance/finance.ts` plus `app.sacco-finance-model.js`.
-- Notification delivery rows, template rows, provider job rows, dashboard counts, delivery filters,
+- Notification delivery rows, template rows, template event/channel options, provider job rows, dashboard counts, delivery filters,
   unread acknowledgement IDs, payment exception slices, and login-risk slices now live behind
   `src/notifications/notifications.ts` plus `app.notifications-model.js`.
 - Complaint/chat thread rows, open/urgent/in-progress/resolved counts, member/platform split counts,
@@ -241,7 +241,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   SACCO admin member-document and statement summary builders are now typed too. Transaction row
   shaping, dashboard overview counts, receipting queue, receipt register, and receipt summaries now have the same typed boundary,
   as do SACCO loan rows, borrower/guarantor options, loan product options, portfolio risk summaries, accounting ledger totals, accounting account
-  options, reconciliation review rows, SACCO finance summaries, notification delivery summaries, complaint/chat summaries and options, and
+  options, reconciliation review rows, SACCO finance summaries, notification delivery summaries and options, complaint/chat summaries and options, and
   governance meeting/resolution summaries, regulatory/platform report summaries, and audit
   classification summaries, onboarding and subscription billing summaries, onboarding option models, and user/role access
   summaries. Member administration option lists, KYC and statement evidence summaries are also covered by the

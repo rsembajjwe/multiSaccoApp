@@ -42,6 +42,11 @@ export interface TerekaNotificationSummary {
   unreadAlerts: number;
 }
 
+export interface TerekaNotificationOption {
+  label: string;
+  value: string;
+}
+
 export interface TerekaNotificationFilters {
   channel?: string;
   date?: string;
@@ -170,6 +175,25 @@ export function notificationDeliveryActionFor(delivery: TerekaRecord, canManageN
   return "none";
 }
 
+export function notificationEventOptions(extra = ""): TerekaNotificationOption[] {
+  return Array.from(new Set(["payment_posted", "payment_request_closed", "loan_application_submitted", "complaint_synced", "subscription_due", "sacco_approved", extra].filter(Boolean)))
+    .map((value) => ({ value, label: labelizeNotificationText(value) }));
+}
+
+export function notificationChannelOptions(): TerekaNotificationOption[] {
+  return [
+    { value: "in_app", label: "In app" },
+    { value: "sms", label: "Sms" },
+    { value: "email", label: "Email" },
+  ];
+}
+
 function normalizeNotificationText(value: unknown): string {
   return String(value || "").toLowerCase();
+}
+
+function labelizeNotificationText(value: unknown): string {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
