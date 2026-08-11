@@ -849,6 +849,12 @@ interface TerekaGovernanceRowsInput {
   userName: (userId?: string) => string;
 }
 
+interface TerekaGovernanceUserOption {
+  id?: string;
+  label: string;
+  [key: string]: any;
+}
+
 interface TerekaMobileMoneyCallback {
   id?: string;
   tenantId?: string;
@@ -1848,6 +1854,9 @@ declare function chatParticipantLabel(input: TerekaChatParticipantInput): string
 declare function chatInitialsFor(text: any): string;
 declare function buildGovernanceMeetingRows(input: TerekaGovernanceRowsInput): TerekaGovernanceMeetingRow[];
 declare function buildGovernanceResolutionRows(meetings: TerekaGovernanceMeetingRow[], userName: (userId?: string) => string): TerekaGovernanceResolutionRow[];
+declare function buildMeetingResolutionRows(meeting: Pick<TerekaGovernanceMeetingRow, "resolutions"> | null | undefined, userName: (userId?: string) => string): TerekaGovernanceResolutionRow[];
+declare function governanceUserOptions(users: Array<TerekaPlatformUser & Record<string, any>>, tenantId?: string): TerekaGovernanceUserOption[];
+declare function meetingTypeOptions(): string[];
 declare function governanceScheduledMeetings(meetings: TerekaGovernanceMeetingRow[]): TerekaGovernanceMeetingRow[];
 declare function governanceCompletedMeetings(meetings: TerekaGovernanceMeetingRow[]): TerekaGovernanceMeetingRow[];
 declare function governanceOpenResolutions(resolutions: TerekaGovernanceResolutionRow[]): TerekaGovernanceResolutionRow[];

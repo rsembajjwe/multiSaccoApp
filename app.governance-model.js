@@ -21,6 +21,27 @@ function buildGovernanceResolutionRows(meetings, userName) {
   })));
 }
 
+function buildMeetingResolutionRows(meeting, userName) {
+  return (meeting?.resolutions || []).map((resolution) => ({
+    ...resolution,
+    ownerName: userName(String(resolution.ownerUserId || ""))
+  }));
+}
+
+function governanceUserOptions(users, tenantId) {
+  return users
+    .filter((user) => !tenantId || user.tenantId === tenantId)
+    .map((user) => ({
+      ...user,
+      id: user.id,
+      label: String(user.fullName || user.email || user.username || user.id || "Staff user")
+    }));
+}
+
+function meetingTypeOptions() {
+  return ["board", "agm", "credit_committee", "audit_committee", "management"];
+}
+
 function governanceScheduledMeetings(meetings) {
   return meetings.filter((row) => normalizeGovernanceModelText(row.status) === "scheduled");
 }

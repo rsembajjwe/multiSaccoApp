@@ -169,8 +169,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Complaint/chat thread rows, open/urgent/in-progress/resolved counts, member/platform split counts,
   unread and assignment counts, chat search filtering, participant labels, and avatar initials now
   live behind `src/complaints/complaints.ts` plus `app.complaints-model.js`.
-- Governance meeting rows, resolution rows, scheduled/completed/open-resolution slices, overdue
-  resolution detection, and meeting evidence summaries now live behind
+- Governance meeting rows, resolution rows, meeting-detail resolution rows, SACCO staff dropdown
+  options, meeting type options, scheduled/completed/open-resolution slices, overdue resolution
+  detection, and meeting evidence summaries now live behind
   `src/governance/governance.ts` plus `app.governance-model.js`.
 - Regulatory report rows, display data-protection fields, consolidated report totals, exception
   counts, platform reporting dashboard counts, and report catalogue entries now live behind

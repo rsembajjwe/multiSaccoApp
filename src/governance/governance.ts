@@ -1,4 +1,4 @@
-import type { TerekaGovernanceMeeting, TerekaRecord } from "../types/domain";
+import type { TerekaGovernanceMeeting, TerekaPlatformUser, TerekaRecord } from "../types/domain";
 
 export interface TerekaGovernanceResolutionRow extends TerekaRecord {
   id?: string;
@@ -36,6 +36,11 @@ export interface TerekaGovernanceRowsInput {
   userName: (userId?: string) => string;
 }
 
+export interface TerekaGovernanceUserOption extends TerekaRecord {
+  id?: string;
+  label: string;
+}
+
 export function buildGovernanceMeetingRows(input: TerekaGovernanceRowsInput): TerekaGovernanceMeetingRow[] {
   return (input.meetings || []).map((meeting) => {
     const id = String(meeting.id || "");
@@ -57,6 +62,27 @@ export function buildGovernanceResolutionRows(meetings: TerekaGovernanceMeetingR
     meetingTitle: meeting.title,
     ownerName: userName(String(resolution.ownerUserId || "")),
   })));
+}
+
+export function buildMeetingResolutionRows(meeting: Pick<TerekaGovernanceMeetingRow, "resolutions"> | null | undefined, userName: (userId?: string) => string): TerekaGovernanceResolutionRow[] {
+  return (meeting?.resolutions || []).map((resolution) => ({
+    ...resolution,
+    ownerName: userName(String(resolution.ownerUserId || "")),
+  }));
+}
+
+export function governanceUserOptions(users: Array<TerekaPlatformUser & TerekaRecord>, tenantId?: string): TerekaGovernanceUserOption[] {
+  return users
+    .filter((user) => !tenantId || user.tenantId === tenantId)
+    .map((user) => ({
+      ...user,
+      id: user.id,
+      label: String(user.fullName || user.email || user.username || user.id || "Staff user"),
+    }));
+}
+
+export function meetingTypeOptions(): string[] {
+  return ["board", "agm", "credit_committee", "audit_committee", "management"];
 }
 
 export function governanceScheduledMeetings(meetings: TerekaGovernanceMeetingRow[]): TerekaGovernanceMeetingRow[] {

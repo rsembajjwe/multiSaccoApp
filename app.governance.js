@@ -34,7 +34,7 @@ function governanceActionControlPanel(governanceSummary) {
 
 function governanceMeetingPanel() {
   const canManage = hasPermission("governance:manage");
-  const users = dataRows("users").filter((user) => user.tenantId === state.user?.tenantId);
+  const users = governanceUserOptions(dataRows("users"), state.user?.tenantId);
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -50,7 +50,7 @@ function governanceMeetingPanel() {
         <label><span>Title</span><input id="newMeetingTitle" required placeholder="Monthly board meeting" ${canManage ? "" : "disabled"}></label>
         <label><span>Meeting type</span><select id="newMeetingType" ${canManage ? "" : "disabled"}>${meetingTypeOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
         <label><span>Scheduled time</span><input id="newMeetingScheduledAt" type="datetime-local" value="${localDateTimeValue()}" ${canManage ? "" : "disabled"}></label>
-        <label><span>Chairperson</span><select id="newMeetingChairUserId" ${canManage ? "" : "disabled"}><option value="">Use current user</option>${users.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.fullName || user.email)}</option>`).join("")}</select></label>
+        <label><span>Chairperson</span><select id="newMeetingChairUserId" ${canManage ? "" : "disabled"}><option value="">Use current user</option>${users.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.label)}</option>`).join("")}</select></label>
         <label><span>Status</span><select id="newMeetingStatus" ${canManage ? "" : "disabled"}><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
         <label class="wide"><span>Minutes / agenda</span><textarea id="newMeetingMinutes" placeholder="Agenda, attendance notes, or minutes summary" ${canManage ? "" : "disabled"}></textarea></label>
         <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">Create governance meeting</button>` : `<span class="status pending">View only</span>`}</div>
@@ -63,7 +63,7 @@ function governanceMeetingDetailPanel(meetings) {
   const meeting = meetings.find((item) => item.id === state.selectedMeetingId);
   if (!meeting) return "";
   const canManage = hasPermission("governance:manage");
-  const users = dataRows("users").filter((user) => user.tenantId === state.user?.tenantId);
+  const users = governanceUserOptions(dataRows("users"), state.user?.tenantId);
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
@@ -85,19 +85,15 @@ function governanceMeetingDetailPanel(meetings) {
       <form id="governanceResolutionForm" class="form-grid">
         <input type="hidden" id="selectedMeetingId" value="${escapeHtml(meeting.id)}">
         <label><span>Resolution title</span><input id="newResolutionTitle" required placeholder="Resolution or action item" ${canManage ? "" : "disabled"}></label>
-        <label><span>Owner</span><select id="newResolutionOwnerUserId" ${canManage ? "" : "disabled"}><option value="">Use current user</option>${users.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.fullName || user.email)}</option>`).join("")}</select></label>
+        <label><span>Owner</span><select id="newResolutionOwnerUserId" ${canManage ? "" : "disabled"}><option value="">Use current user</option>${users.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.label)}</option>`).join("")}</select></label>
         <label><span>Due date</span><input id="newResolutionDueDate" type="date" ${canManage ? "" : "disabled"}></label>
         <label><span>Status</span><select id="newResolutionStatus" ${canManage ? "" : "disabled"}><option value="open">Open</option><option value="in_progress">In progress</option><option value="closed">Closed</option></select></label>
         <label class="wide"><span>Decision</span><textarea id="newResolutionDecision" placeholder="Decision text, follow-up requirement, or governance action" ${canManage ? "" : "disabled"}></textarea></label>
         <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">Record resolution</button>` : `<span class="status pending">View only</span>`}</div>
       </form>
-      ${recordTable("Meeting resolutions", (meeting.resolutions || []).map((resolution) => ({ ...resolution, ownerName: userName(resolution.ownerUserId) })), ["title", "ownerName", "dueDate", "status", "createdAt"])}
+      ${recordTable("Meeting resolutions", buildMeetingResolutionRows(meeting, userName), ["title", "ownerName", "dueDate", "status", "createdAt"])}
     </section>
   `;
-}
-
-function meetingTypeOptions() {
-  return ["board", "agm", "credit_committee", "audit_committee", "management"];
 }
 
 function localDateTimeValue() {
