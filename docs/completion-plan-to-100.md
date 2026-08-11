@@ -46,7 +46,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    `app.sacco-finance-model.js`. Notification delivery rows, template rows, template event/channel options, provider job rows,
    dashboard counts, delivery filters, unread acknowledgement IDs, payment exception slices, and
    login-risk slices now follow the same pattern through `src/notifications/notifications.ts` plus
-   `app.notifications-model.js`. Complaint/chat thread rows, open/urgent/in-progress/resolved counts,
+   `app.notifications-model.js`, with redundant delivery filter/action wrapper helpers removed. Complaint/chat thread rows, open/urgent/in-progress/resolved counts,
    member/platform split counts, complaint category/status options, unread and assignment counts,
    chat search filtering, participant labels, and avatar initials now follow the same pattern through `src/complaints/complaints.ts`
    plus `app.complaints-model.js`, with redundant chat row/avatar wrapper helpers removed. Governance meeting rows, resolution rows, meeting-detail

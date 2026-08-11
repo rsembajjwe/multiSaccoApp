@@ -166,7 +166,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   behind `src/sacco-finance/finance.ts` plus `app.sacco-finance-model.js`.
 - Notification delivery rows, template rows, template event/channel options, provider job rows, dashboard counts, delivery filters,
   unread acknowledgement IDs, payment exception slices, and login-risk slices now live behind
-  `src/notifications/notifications.ts` plus `app.notifications-model.js`.
+  `src/notifications/notifications.ts` plus `app.notifications-model.js`, with redundant delivery filter/action wrapper helpers removed.
 - Complaint/chat thread rows, open/urgent/in-progress/resolved counts, member/platform split counts,
   complaint category/status options, unread and assignment counts, chat search filtering, participant labels, and avatar initials now
   live behind `src/complaints/complaints.ts` plus `app.complaints-model.js`, with redundant chat row/avatar wrapper helpers removed.

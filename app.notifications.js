@@ -25,7 +25,7 @@
         : tab === "unread"
           ? unreadAlerts
           : deliveries;
-  const visibleDeliveries = deliveryTabs.includes(tab) ? filterNotificationDeliveries(tabDeliveries) : [];
+  const visibleDeliveries = deliveryTabs.includes(tab) ? filterNotificationDeliveryRows(tabDeliveries, state.notificationFilters || {}) : [];
   const bulkAcknowledgeIds = uniqueUnreadNotificationIds(visibleDeliveries);
   const templates = buildNotificationTemplateRows({ templates: dataRows("notificationTemplates"), tenantName });
   const notificationSummary = buildNotificationSummary(deliveries, templates);
@@ -187,10 +187,6 @@ function notificationProviderStatusPanel() {
   `;
 }
 
-function notificationDeliveryAction(delivery) {
-  return notificationDeliveryActionFor(delivery, hasPermission("notifications:manage"));
-}
-
 function notificationDeliveryFilters(deliveries) {
   const filters = state.notificationFilters || {};
   const statuses = uniqueValues(deliveries, "status");
@@ -219,10 +215,6 @@ function notificationDeliveryFilters(deliveries) {
       <button class="button secondary" type="button" data-action="clear-notification-filters">Clear filters</button>
     </section>
   `;
-}
-
-function filterNotificationDeliveries(deliveries) {
-  return filterNotificationDeliveryRows(deliveries, state.notificationFilters || {});
 }
 
 function notificationTemplatePanel() {
