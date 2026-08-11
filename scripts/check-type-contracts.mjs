@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -11,6 +11,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/tables/tableModel.ts"),
   readText("src/formatting/formatters.ts"),
   readText("src/member/performance.ts"),
+  readText("src/member/admin.ts"),
   readText("app.state.js"),
 ]);
 
@@ -58,6 +59,9 @@ for (const marker of [
   "interface TerekaMemberMobileMoneyRow",
   "interface TerekaMemberPaymentProviderOption",
   "interface TerekaMemberDraftRow",
+  "interface TerekaMemberDocumentRow",
+  "interface TerekaMemberDocumentRetentionSummary",
+  "interface TerekaMemberStatementSummary",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -127,6 +131,17 @@ for (const marker of [
   "export function receiptLifecycleStatusFor",
 ]) {
   assert.ok(performanceSource.includes(marker), `src/member/performance.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export function buildMemberDocumentRows",
+  "export function buildMemberDocumentRetentionSummary",
+  "export function buildMemberStatementSummary",
+  "export function buildReceiptReadyStatementLines",
+  "export function statementCredit",
+  "export function statementDebit",
+]) {
+  assert.ok(memberAdminSource.includes(marker), `src/member/admin.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");

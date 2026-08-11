@@ -113,6 +113,7 @@ for (const file of [
   "app.i18n.js",
   "app.formatters.js",
   "app.member-performance.js",
+  "app.member-admin-model.js",
   "app.core.js",
   "app.api.js",
   "app.ui.js",

@@ -891,6 +891,33 @@ interface TerekaMemberDraftRow extends TerekaOfflineDraft {
   details: string;
 }
 
+interface TerekaMemberDocumentRow extends Record<string, any> {
+  action: string;
+  actionId?: string;
+  retentionReviewDueAt: string;
+  retentionReviewedAt: string;
+  retentionStatus: string;
+  retentionStorageAction: string;
+}
+
+interface TerekaMemberDocumentRetentionSummary {
+  disposed: number;
+  disposalPending: number;
+  documents: number;
+  reviewDue: number;
+}
+
+interface TerekaMemberStatementSummary {
+  creditTotal: number;
+  debitTotal: number;
+  lastMovement: string;
+  mobileRows: number;
+  officeRows: number;
+  receiptRows: number;
+  totalBalance: number;
+  treasurerRows: number;
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -929,6 +956,10 @@ declare function buildMemberMobileMoneyRows(dashboard: TerekaMemberDashboard | n
 declare function buildMemberPaymentProviderOptions(mobileMoneyCollectionAvailable: boolean, providers: any, labelize: (value: any) => string): TerekaMemberPaymentProviderOption[];
 declare function buildMemberDraftRows(drafts: TerekaOfflineDraft[], type: string, labelize: (value: any) => string): TerekaMemberDraftRow[];
 declare function buildMemberPaymentRequestRows(requests: TerekaPaymentRequest[]): Array<TerekaPaymentRequest & { action: string; actionId?: string; actionLabel: string }>;
+declare function buildMemberDocumentRows(documents: Record<string, any>[], labelize: (value: any) => string, formatDateTime: (value: any) => string): TerekaMemberDocumentRow[];
+declare function buildMemberDocumentRetentionSummary(documents: Record<string, any>[]): TerekaMemberDocumentRetentionSummary;
+declare function buildMemberStatementSummary(member: Record<string, any>, lines: TerekaStatementLine[]): TerekaMemberStatementSummary;
+declare function buildReceiptReadyStatementLines(lines: TerekaStatementLine[]): TerekaStatementLine[];
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

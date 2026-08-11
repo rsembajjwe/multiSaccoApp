@@ -43,10 +43,7 @@ function memberDetailPanel(mode = "kyc") {
   const canEditProfile = canManage || hasPermission("members:create");
   const branches = dataRows("branches");
   const statementLines = state.selectedMemberStatement?.lines || [];
-  const totalBalance = Number(member.savingsBalance || 0) + Number(member.sharesBalance || 0) + Number(member.welfareBalance || 0);
-  const lastMovement = statementLines[0]?.postedAt || statementLines[0]?.createdAt || "No statement activity";
-  const statementCreditTotal = statementLines.reduce((total, line) => total + statementCredit(line), 0);
-  const statementDebitTotal = statementLines.reduce((total, line) => total + statementDebit(line), 0);
+  const statementSummary = buildMemberStatementSummary(member, statementLines);
   const title = mode === "contacts" ? "Member contacts and documents" : mode === "statement" ? "Member balance statement" : "Member detail and KYC approval";
   return `
     <section class="panel detail-panel">
@@ -60,7 +57,7 @@ function memberDetailPanel(mode = "kyc") {
       ${state.selectedMemberMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedMemberMessage)}</strong></div>` : ""}
       ${state.selectedMemberError ? `<div class="notice warning"><strong>Member update failed.</strong><span>${escapeHtml(state.selectedMemberError)}</span></div>` : ""}
       <div class="dashboard-grid">
-        ${summary("Total balance", money.format(totalBalance), "Savings, shares and welfare", "View")}
+        ${summary("Total balance", money.format(statementSummary.totalBalance), "Savings, shares and welfare", "View")}
         ${summary("Statement lines", statementLines.length, "Posted statement activity", "Review")}
         ${summary("Documents", state.selectedMemberDocuments.length, "KYC evidence files", "Verify")}
         ${summary("Contacts", state.selectedMemberNextOfKin.length, "Next-of-kin records", "Review")}
@@ -76,7 +73,7 @@ function memberDetailPanel(mode = "kyc") {
         ${mini("Phone", member.phone)}
         ${mini("Email", member.email)}
         ${mini("National ID", member.nationalId)}
-        ${mini("Last movement", lastMovement)}
+        ${mini("Last movement", statementSummary.lastMovement)}
       </div>
       ${mode === "kyc" ? `
         <form id="memberProfileForm" class="form-grid">
@@ -115,7 +112,7 @@ function memberDetailPanel(mode = "kyc") {
         ${recordTable("Member beneficiaries", state.selectedMemberBeneficiaries, ["fullName", "relationship", "phone", "allocationPercent"])}
       </div>` : ""}
       ${mode === "statement" ? `
-        ${memberStatementControlPanel(member, statementLines, totalBalance, statementCreditTotal, statementDebitTotal, lastMovement)}
+        ${memberStatementControlPanel(member, statementLines, statementSummary)}
         ${memberStatementReceiptPanel(statementLines)}
         ${staffStatementExportPanel(member, statementLines)}
         ${filterToolbar("Search statement by reference, channel, type, amount or date", "Download CSV", "Print statement")}
@@ -126,22 +123,12 @@ function memberDetailPanel(mode = "kyc") {
 }
 
 function memberDocumentRows() {
-  return (state.selectedMemberDocuments || []).map((document) => ({
-    ...document,
-    retentionStatus: labelize(document.retentionStatus || "active"),
-    retentionStorageAction: labelize(document.retentionStorageAction || "not_actioned"),
-    retentionReviewDueAt: document.retentionReviewDueAt || "",
-    retentionReviewedAt: document.retentionReviewedAt ? formatDateTime(document.retentionReviewedAt) : "",
-    action: "document-retention",
-    actionId: document.id
-  }));
+  return buildMemberDocumentRows(state.selectedMemberDocuments || [], labelize, formatDateTime);
 }
 
 function memberDocumentRetentionPanel(member) {
   const documents = state.selectedMemberDocuments || [];
-  const reviewDue = documents.filter((document) => normal(document.retentionStatus) === "review_due").length;
-  const disposalPending = documents.filter((document) => normal(document.retentionStatus) === "disposal_pending").length;
-  const disposed = documents.filter((document) => normal(document.retentionStatus) === "disposed").length;
+  const retention = buildMemberDocumentRetentionSummary(documents);
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
@@ -149,22 +136,20 @@ function memberDocumentRetentionPanel(member) {
           <h2>KYC document retention</h2>
           <p>Control expired KYC evidence without deleting audit history for ${escapeHtml(member.membershipNo || "member")}.</p>
         </div>
-        <span class="status ${reviewDue || disposalPending ? "pending" : "active"}">${reviewDue || disposalPending ? "Review needed" : "Current"}</span>
+        <span class="status ${retention.reviewDue || retention.disposalPending ? "pending" : "active"}">${retention.reviewDue || retention.disposalPending ? "Review needed" : "Current"}</span>
       </div>
       <div class="source-grid">
-        ${mini("Documents", documents.length)}
-        ${mini("Review due", reviewDue)}
-        ${mini("Disposal pending", disposalPending)}
-        ${mini("Disposed markers", disposed)}
+        ${mini("Documents", retention.documents)}
+        ${mini("Review due", retention.reviewDue)}
+        ${mini("Disposal pending", retention.disposalPending)}
+        ${mini("Disposed markers", retention.disposed)}
       </div>
       <p>Use Dispose only after the external file has been removed or legally placed beyond access in the document store.</p>
     </section>
   `;
 }
 
-function memberStatementControlPanel(member, lines, totalBalance, creditTotal, debitTotal, lastMovement) {
-  const mobileRows = lines.filter((line) => isMobileMoneyLine(line)).length;
-  const officeRows = Math.max(0, lines.length - mobileRows);
+function memberStatementControlPanel(member, lines, statementSummary) {
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
@@ -176,13 +161,13 @@ function memberStatementControlPanel(member, lines, totalBalance, creditTotal, d
       </div>
       <div class="source-grid">
         ${mini("Member", member.membershipNo || member.fullName)}
-        ${mini("Total balance", money.format(totalBalance))}
-        ${mini("Posted credits", money.format(creditTotal))}
-        ${mini("Posted debits", money.format(debitTotal))}
+        ${mini("Total balance", money.format(statementSummary.totalBalance))}
+        ${mini("Posted credits", money.format(statementSummary.creditTotal))}
+        ${mini("Posted debits", money.format(statementSummary.debitTotal))}
         ${mini("Statement lines", lines.length)}
-        ${mini("Mobile money rows", mobileRows)}
-        ${mini("Office/Treasurer rows", officeRows)}
-        ${mini("Last movement", lastMovement)}
+        ${mini("Mobile money rows", statementSummary.mobileRows)}
+        ${mini("Office/Treasurer rows", statementSummary.officeRows)}
+        ${mini("Last movement", statementSummary.lastMovement)}
       </div>
     </section>
   `;
@@ -201,7 +186,7 @@ function statementDebit(line) {
 }
 
 function memberStatementReceiptPanel(lines) {
-  const receiptRows = lines.filter((line) => line.reference || line.receiptNo || normal(line.status) === "posted");
+  const receiptRows = buildReceiptReadyStatementLines(lines);
   const mobileRows = receiptRows.filter((line) => isMobileMoneyLine(line));
   const treasurerRows = receiptRows.filter((line) => !isMobileMoneyLine(line));
   const lastReceipt = receiptRows[0]?.receiptNo || receiptRows[0]?.reference || "No receipt yet";
@@ -225,7 +210,7 @@ function memberStatementReceiptPanel(lines) {
 }
 
 function staffStatementExportPanel(member, lines) {
-  const receiptRows = lines.filter((line) => line.reference || line.receiptNo || normal(line.status) === "posted");
+  const receiptRows = buildReceiptReadyStatementLines(lines);
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
