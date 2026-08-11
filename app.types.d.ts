@@ -301,6 +301,50 @@ interface TerekaLoginRiskRow {
   sacco?: string;
 }
 
+interface TerekaPlatformDashboardSummary {
+  activePlatformUsers: number;
+  activeSaccos: number;
+  expiredSubscriptions: number;
+  failedPaymentTransactions: number;
+  openSaccoSupportTickets: number;
+  pendingRegistrations: number;
+  totalSaccos: number;
+  totalSubscriptionRevenue: number;
+}
+
+interface TerekaPlatformOperationsSummary {
+  failedCallbacks: number;
+  openSupportTickets: number;
+  operatingSaccos: number;
+  pendingOnboarding: number;
+  systemAlerts: number;
+}
+
+interface TerekaPlatformBillingSummary {
+  activeSubscriptions: number;
+  billableSaccos: number;
+  expiredSubscriptions: number;
+  pendingPayments: number;
+  subscriptionRevenue: number;
+}
+
+interface TerekaPlatformComplianceSummary {
+  auditEvents: number;
+  operationsAlerts: number;
+  pendingRegistrations: number;
+  regulatoryReportStatus: string;
+  saccoSupportTickets: number;
+}
+
+interface TerekaPlatformSupportSummary {
+  notifications: number;
+  pendingOnboarding: number;
+  saccoSupportTickets: number;
+  visibleSaccos: number;
+}
+
+type TerekaPlatformActivityRow = [string | undefined, string | undefined, string | undefined];
+
 interface TerekaSubscription {
   id?: string;
   tenantId?: string;
@@ -1661,6 +1705,12 @@ declare function buildLoginRiskSummary(events: Array<TerekaAuditEvent & Record<s
 declare function buildLoginRiskRows(input: { events: Array<TerekaAuditEvent & Record<string, any>>; formatDateTime: (value: any) => string }): TerekaLoginRiskRow[];
 declare function isLoginRiskEvent(event: TerekaAuditEvent & Record<string, any>): boolean;
 declare function loginRiskPortalFor(event: TerekaAuditEvent & Record<string, any>): string;
+declare function buildPlatformDashboardSummary(input: { supportTickets: Array<TerekaComplaintThread & Record<string, any>>; subscriptions: Array<TerekaSubscription & Record<string, any>>; tenants: Array<TerekaTenantSummary & Record<string, any>>; transactions: Array<TerekaFinancialTransaction & Record<string, any>>; users: Array<TerekaPlatformUser & Record<string, any>> }): TerekaPlatformDashboardSummary;
+declare function buildPlatformOperationsSummary(input: { alerts: Array<Record<string, any>>; callbacks: Array<Record<string, any>>; openSupportTickets: Array<TerekaComplaintThread & Record<string, any>>; pendingTenants: Array<TerekaTenantSummary & Record<string, any>>; tenants: Array<TerekaTenantSummary & Record<string, any>> }): TerekaPlatformOperationsSummary;
+declare function buildPlatformBillingSummary(input: { subscriptions: Array<TerekaSubscription & Record<string, any>>; tenants: Array<TerekaTenantSummary & Record<string, any>> }): TerekaPlatformBillingSummary;
+declare function buildPlatformComplianceSummary(input: { alerts: Array<Record<string, any>>; auditEvents: Array<TerekaAuditEvent & Record<string, any>>; openSupportTickets: Array<TerekaComplaintThread & Record<string, any>>; pendingTenants: Array<TerekaTenantSummary & Record<string, any>>; regulatoryReportReady: boolean }): TerekaPlatformComplianceSummary;
+declare function buildPlatformSupportSummary(input: { notifications: Array<Record<string, any>>; pendingTenants: Array<TerekaTenantSummary & Record<string, any>>; tenants: Array<TerekaTenantSummary & Record<string, any>>; tickets: Array<TerekaComplaintThread & Record<string, any>> }): TerekaPlatformSupportSummary;
+declare function buildRecentSaccoApplicationRows(tenants: Array<TerekaTenantSummary & Record<string, any>>, pendingLabel: string): TerekaPlatformActivityRow[];
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

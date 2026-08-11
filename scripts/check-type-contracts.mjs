@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, settingsSource, operationsSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, settingsSource, operationsSource, platformSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -25,6 +25,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/access/access.ts"),
   readText("src/settings/settings.ts"),
   readText("src/operations/operations.ts"),
+  readText("src/platform/platform.ts"),
   readText("app.state.js"),
 ]);
 
@@ -431,6 +432,23 @@ for (const marker of [
   "export function loginRiskPortalFor",
 ]) {
   assert.ok(operationsSource.includes(marker), `src/operations/operations.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaPlatformDashboardSummary",
+  "export interface TerekaPlatformOperationsSummary",
+  "export interface TerekaPlatformBillingSummary",
+  "export interface TerekaPlatformComplianceSummary",
+  "export interface TerekaPlatformSupportSummary",
+  "export type TerekaPlatformActivityRow",
+  "export function buildPlatformDashboardSummary",
+  "export function buildPlatformOperationsSummary",
+  "export function buildPlatformBillingSummary",
+  "export function buildPlatformComplianceSummary",
+  "export function buildPlatformSupportSummary",
+  "export function buildRecentSaccoApplicationRows",
+]) {
+  assert.ok(platformSource.includes(marker), `src/platform/platform.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");

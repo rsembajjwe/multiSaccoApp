@@ -12,22 +12,23 @@ function platformDashboard() {
   const transactions = dataRows("transactions");
   const users = platformUsers();
   const platformSupportTickets = saccoSupportTickets();
+  const dashboard = buildPlatformDashboardSummary({ supportTickets: platformSupportTickets, subscriptions: subs, tenants, transactions, users });
   return `
     <div class="dashboard-grid">
-      ${summaryLink(t("totalSaccos"), tenants.length, "All registered SACCOs", "Open applications", "sacco-applications")}
-      ${summaryLink(t("activeSaccos"), tenants.filter((t) => normal(t.status) === "active").length, "Operating SACCOs", "View accounts", "sacco-accounts")}
-      ${summaryLink(t("pendingRegistrations"), tenants.filter((t) => normal(t.status).includes("pending")).length, "Reviewer queue", t("review"), "sacco-applications")}
-      ${summaryLink(t("expiredSubscriptions"), subs.filter((s) => normal(s.status).includes("expired")).length, "Billing risk", "Renew", "subscriptions")}
-      ${summaryLink(t("totalSubscriptionRevenue"), money.format(sum(subs, "amount")), "Current records", "Open billing", "subscriptions")}
-      ${summaryLink(t("saccoSupportTickets"), platformSupportTickets.filter((c) => !["closed", "resolved"].includes(normal(c.status))).length, "SACCO admin escalations", t("open"), "complaints")}
-      ${summaryLink(t("failedPaymentTransactions"), transactions.filter((t) => normal(t.status).includes("failed")).length, "Provider exceptions", t("review"), "transactions")}
-      ${summaryLink(t("activePlatformUsers"), users.filter((user) => normal(user.status) === "active").length || users.length, "Administrators and roles", "Manage access", "users")}
+      ${summaryLink(t("totalSaccos"), dashboard.totalSaccos, "All registered SACCOs", "Open applications", "sacco-applications")}
+      ${summaryLink(t("activeSaccos"), dashboard.activeSaccos, "Operating SACCOs", "View accounts", "sacco-accounts")}
+      ${summaryLink(t("pendingRegistrations"), dashboard.pendingRegistrations, "Reviewer queue", t("review"), "sacco-applications")}
+      ${summaryLink(t("expiredSubscriptions"), dashboard.expiredSubscriptions, "Billing risk", "Renew", "subscriptions")}
+      ${summaryLink(t("totalSubscriptionRevenue"), money.format(dashboard.totalSubscriptionRevenue), "Current records", "Open billing", "subscriptions")}
+      ${summaryLink(t("saccoSupportTickets"), dashboard.openSaccoSupportTickets, "SACCO admin escalations", t("open"), "complaints")}
+      ${summaryLink(t("failedPaymentTransactions"), dashboard.failedPaymentTransactions, "Provider exceptions", t("review"), "transactions")}
+      ${summaryLink(t("activePlatformUsers"), dashboard.activePlatformUsers, "Administrators and roles", "Manage access", "users")}
     </div>
     ${notificationProviderRiskPanel()}
     ${loginRiskSummaryPanel(true)}
     <div class="split-layout">
       ${chartCard("SACCO registrations by month", ["Jan", "Feb", "Mar", "Apr", "May", "Jun"], [2, 3, 4, 5, 7, tenants.length || 3])}
-      ${activityPanel(t("recentSaccoApplications"), tenants.slice(0, 5).map((tenant) => [tenant.name || tenant.legalName, tenant.district || "Uganda", tenant.status || t("pending")]))}
+      ${activityPanel(t("recentSaccoApplications"), buildRecentSaccoApplicationRows(tenants, t("pending")))}
     </div>
     <div class="grid two">
       ${recordTable("Subscriptions expiring soon", subs, ["tenantName", "packageName", "expiryDate", "status"])}
@@ -39,14 +40,21 @@ function platformDashboard() {
 function platformOperationsDashboard() {
   const tenants = tenantRows();
   const complaints = openSaccoSupportTickets();
+  const operations = buildPlatformOperationsSummary({
+    alerts: operationAlerts(),
+    callbacks: dataRows("mobileMoneyCallbacks"),
+    openSupportTickets: complaints,
+    pendingTenants: pendingTenants(),
+    tenants
+  });
   return `
     ${dashboardIntro("Platform Operations Officer", "Monitor service health, onboarding queues, callbacks, incidents and SACCO operating status.")}
     <div class="dashboard-grid">
-      ${summary("Operating SACCOs", tenants.filter((t) => normal(t.status) === "active").length, "Live SACCOs", "Monitor")}
-      ${summary("Pending onboarding", pendingTenants().length, "Applications needing follow-up", "Open queue")}
-      ${summary("Open support tickets", complaints.length, "Operational workload", "Assign")}
-      ${summary("Failed callbacks", dataRows("mobileMoneyCallbacks").filter((row) => normal(row.status).includes("failed")).length, "Provider exceptions", "Retry")}
-      ${summary("System alerts", operationAlerts().length, "Health checks", "Open")}
+      ${summary("Operating SACCOs", operations.operatingSaccos, "Live SACCOs", "Monitor")}
+      ${summary("Pending onboarding", operations.pendingOnboarding, "Applications needing follow-up", "Open queue")}
+      ${summary("Open support tickets", operations.openSupportTickets, "Operational workload", "Assign")}
+      ${summary("Failed callbacks", operations.failedCallbacks, "Provider exceptions", "Retry")}
+      ${summary("System alerts", operations.systemAlerts, "Health checks", "Open")}
     </div>
     ${notificationProviderRiskPanel()}
     ${loginRiskSummaryPanel(true)}
@@ -59,14 +67,15 @@ function platformOperationsDashboard() {
 
 function platformBillingDashboard() {
   const subs = dataRows("subscriptions");
+  const billing = buildPlatformBillingSummary({ subscriptions: subs, tenants: tenantRows() });
   return `
     ${dashboardIntro("Platform Billing Officer", "Control subscriptions, invoices, payment access and SACCO operating eligibility.")}
     <div class="dashboard-grid">
-      ${summary("Active subscriptions", subs.filter((row) => normal(row.status) === "active").length, "Allowed to operate", "Review")}
-      ${summary("Pending payments", subs.filter((row) => normal(row.paymentStatus || row.status).includes("pending")).length, "Awaiting confirmation", "Record")}
-      ${summary("Expired subscriptions", subs.filter((row) => normal(row.status).includes("expired")).length, "Access risk", "Renew")}
-      ${summary("Subscription revenue", money.format(sum(subs, "amount")), "Current records", "Export")}
-      ${summary("Billable SACCOs", tenantRows().length, "Registered SACCOs", "Open")}
+      ${summary("Active subscriptions", billing.activeSubscriptions, "Allowed to operate", "Review")}
+      ${summary("Pending payments", billing.pendingPayments, "Awaiting confirmation", "Record")}
+      ${summary("Expired subscriptions", billing.expiredSubscriptions, "Access risk", "Renew")}
+      ${summary("Subscription revenue", money.format(billing.subscriptionRevenue), "Current records", "Export")}
+      ${summary("Billable SACCOs", billing.billableSaccos, "Registered SACCOs", "Open")}
     </div>
     ${recordTable("Subscription list", subs, ["tenantName", "packageName", "billingPeriod", "expiryDate", "amount", "memberCount", "status"])}
     ${recordTable("SACCO billing access", tenantRows(), ["name", "district", "memberCount", "status"])}
@@ -74,14 +83,21 @@ function platformBillingDashboard() {
 }
 
 function platformComplianceDashboard() {
+  const compliance = buildPlatformComplianceSummary({
+    alerts: operationAlerts(),
+    auditEvents: dataRows("auditEvents"),
+    openSupportTickets: openSaccoSupportTickets(),
+    pendingTenants: pendingTenants(),
+    regulatoryReportReady: Boolean(state.data.regulatoryReport)
+  });
   return `
     ${dashboardIntro("Platform Compliance Officer", "Oversight view for SACCO approvals, audit events, reports and operating exceptions.")}
     <div class="dashboard-grid">
-      ${summary("Pending registrations", pendingTenants().length, "Approval oversight", "Review")}
-      ${summary("Audit events", dataRows("auditEvents").length, "Sensitive actions", "Inspect")}
-      ${summary("SACCO support tickets", openSaccoSupportTickets().length, "SACCO escalation cases", "Open")}
-      ${summary("Operations alerts", operationAlerts().length, "System exceptions", "Review")}
-      ${summary("Regulatory report", state.data.regulatoryReport ? "Ready" : "Pending", "Export readiness", "Open")}
+      ${summary("Pending registrations", compliance.pendingRegistrations, "Approval oversight", "Review")}
+      ${summary("Audit events", compliance.auditEvents, "Sensitive actions", "Inspect")}
+      ${summary("SACCO support tickets", compliance.saccoSupportTickets, "SACCO escalation cases", "Open")}
+      ${summary("Operations alerts", compliance.operationsAlerts, "System exceptions", "Review")}
+      ${summary("Regulatory report", compliance.regulatoryReportStatus, "Export readiness", "Open")}
     </div>
     ${loginRiskSummaryPanel(true)}
     <div class="grid two">
@@ -93,13 +109,19 @@ function platformComplianceDashboard() {
 
 function platformSupportDashboard() {
   const tickets = openSaccoSupportTickets();
+  const support = buildPlatformSupportSummary({
+    notifications: dataRows("notifications"),
+    pendingTenants: pendingTenants(),
+    tenants: tenantRows(),
+    tickets
+  });
   return `
     ${dashboardIntro("Platform Support Officer", "Help SACCO admins resolve onboarding, subscription and operating issues without member-level access.")}
     <div class="dashboard-grid">
-      ${summary("SACCO support tickets", tickets.length, "SACCO admin escalations", "Open")}
-      ${summary("Visible SACCOs", tenantRows().length, "SACCO support context", "View")}
-      ${summary("Pending onboarding", pendingTenants().length, "Applicant follow-up", "Assist")}
-      ${summary("Notifications", dataRows("notifications").length, "Recent messages", "Open")}
+      ${summary("SACCO support tickets", support.saccoSupportTickets, "SACCO admin escalations", "Open")}
+      ${summary("Visible SACCOs", support.visibleSaccos, "SACCO support context", "View")}
+      ${summary("Pending onboarding", support.pendingOnboarding, "Applicant follow-up", "Assist")}
+      ${summary("Notifications", support.notifications, "Recent messages", "Open")}
     </div>
     <div class="grid two">
       ${recordTable("SACCO admin support tickets", tickets, ["id", "tenantName", "category", "subject", "assignedOfficer", "priority", "status"])}
