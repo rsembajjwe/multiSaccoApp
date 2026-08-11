@@ -4,22 +4,22 @@ function savingsView() {
   const products = productsByType("savings");
   const accounts = accountsByType("savings");
   const members = dataRows("members");
-  const activeProducts = products.filter((row) => normal(row.status) === "active");
+  const finance = buildSavingsSummary({ products, accounts, members });
   const monthlyPerformance = saccoMonthlyPerformanceRows();
   const tabs = [["monthly", t("monthlyPerformance")], ["products", t("savingsProductSetup")], ["accounts", t("openSavingsAccount")], ["lists", t("savingsRecords")]];
   const tab = activeModuleTab("savings", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary(t("savingsProducts"), products.length, "Configured products", "Manage")}
-      ${summary(t("savingsAccounts"), accounts.length, "Member accounts", t("open"))}
-      ${summary(t("activeProducts"), activeProducts.length, "Available to members", t("review"))}
-      ${summary(t("minimumContribution"), money.format(sum(products, "contributionAmount", "minimumBalance")), "Configured product totals", "View")}
-      ${summary(t("savingsBalances"), money.format(sum(members, "savingsBalance", "savings")), "Member ledger total", "Statements")}
+      ${summary(t("savingsProducts"), finance.productCount, "Configured products", "Manage")}
+      ${summary(t("savingsAccounts"), finance.accountCount, "Member accounts", t("open"))}
+      ${summary(t("activeProducts"), finance.activeProductCount, "Available to members", t("review"))}
+      ${summary(t("minimumContribution"), money.format(finance.contributionTotal), "Configured product totals", "View")}
+      ${summary(t("savingsBalances"), money.format(finance.balanceTotal), "Member ledger total", "Statements")}
     </div>
     ${moduleTabs("savings", tabs, tab)}
     ${tab === "overview" ? rolePriorityPanel(t("savingsOperationsControl"), [
-      ["Product setup", `${activeProducts.length} active savings product(s) are available for account opening.`, activeProducts.length ? "Ready" : "Setup"],
-      ["Member accounts", `${accounts.length} savings account(s) are open for active members.`, accounts.length ? "Active" : "Open"],
+      ["Product setup", `${finance.activeProductCount} active savings product(s) are available for account opening.`, finance.activeProductCount ? "Ready" : "Setup"],
+      ["Member accounts", `${finance.accountCount} savings account(s) are open for active members.`, finance.accountCount ? "Active" : "Open"],
       ["Contribution flow", "Savings deposits post through Transactions and member mobile payments.", "Connected"]
     ]) : ""}
     ${tab === "monthly" ? `
@@ -40,21 +40,21 @@ function sharesView() {
   const products = productsByType("share");
   const accounts = accountsByType("share");
   const members = dataRows("members");
-  const activeProducts = products.filter((row) => normal(row.status) === "active");
+  const finance = buildSharesSummary({ products, accounts, members });
   const tabs = [["products", t("sharesProductSetup")], ["accounts", t("openSharesAccount")], ["register", t("shareRegister")]];
   const tab = activeModuleTab("shares", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary(t("shareProducts"), products.length, "Share capital products", "Manage")}
-      ${summary(t("shareAccounts"), accounts.length, "Member share ledgers", t("open"))}
-      ${summary(t("activeMembers"), uniqueCount(accounts, "memberId"), "Holding shares", "View")}
-      ${summary(t("shareContributionSetup"), money.format(sum(products, "contributionAmount")), "Configured value", t("review"))}
-      ${summary(t("shareBalances"), money.format(sum(members, "sharesBalance", "shares")), "Member share capital", "Register")}
+      ${summary(t("shareProducts"), finance.productCount, "Share capital products", "Manage")}
+      ${summary(t("shareAccounts"), finance.accountCount, "Member share ledgers", t("open"))}
+      ${summary(t("activeMembers"), finance.activeMemberCount, "Holding shares", "View")}
+      ${summary(t("shareContributionSetup"), money.format(finance.contributionTotal), "Configured value", t("review"))}
+      ${summary(t("shareBalances"), money.format(finance.balanceTotal), "Member share capital", "Register")}
     </div>
     ${moduleTabs("shares", tabs, tab)}
     ${tab === "overview" ? rolePriorityPanel(t("sharesCapitalControl"), [
-      ["Product setup", `${activeProducts.length} active share product(s) define contribution rules.`, activeProducts.length ? "Ready" : "Setup"],
-      ["Share register", `${accounts.length} member share account(s) are available for reporting.`, accounts.length ? "Active" : "Open"],
+      ["Product setup", `${finance.activeProductCount} active share product(s) define contribution rules.`, finance.activeProductCount ? "Ready" : "Setup"],
+      ["Share register", `${finance.accountCount} member share account(s) are available for reporting.`, finance.accountCount ? "Active" : "Open"],
       ["Contribution flow", "Share purchases post through Transactions and member mobile payments.", "Connected"]
     ]) : ""}
     ${tab === "products" ? financialProductPanel("shares") : ""}
@@ -70,32 +70,30 @@ function welfareView() {
   const products = productsByType("welfare");
   const claims = dataRows("welfareClaims");
   const accounts = accountsByType("welfare");
-  const submitted = claims.filter((row) => ["submitted", "pending", "pending_approval"].some((word) => normal(row.status).includes(word)));
-  const approved = claims.filter((row) => normal(row.status) === "approved");
-  const paid = claims.filter((row) => normal(row.status) === "paid");
+  const finance = buildWelfareSummary({ products, claims, accounts });
   const tabs = [["claims", t("welfareClaims")], ["products", t("welfareProductSetup")], ["accounts", t("openWelfareAccount")], ["detail", t("welfareClaimDecision")]];
   const tab = activeModuleTab("welfare", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary(t("welfareProducts"), products.length, "Contribution rules", "Manage")}
-      ${summary(t("welfareAccounts"), accounts.length, "Member welfare ledgers", t("open"))}
-      ${summary(t("claims"), claims.length, "Submitted claims", t("open"))}
-      ${summary(t("pendingClaims"), submitted.length, "Decision queue", t("review"))}
-      ${summary(t("approvedForPayment"), approved.length, "Payment queue", "Pay")}
-      ${summary(t("paidClaims"), money.format(sum(paid, "amount")), "Settled welfare support", "Report")}
+      ${summary(t("welfareProducts"), finance.productCount, "Contribution rules", "Manage")}
+      ${summary(t("welfareAccounts"), finance.accountCount, "Member welfare ledgers", t("open"))}
+      ${summary(t("claims"), finance.claimCount, "Submitted claims", t("open"))}
+      ${summary(t("pendingClaims"), finance.submittedCount, "Decision queue", t("review"))}
+      ${summary(t("approvedForPayment"), finance.approvedCount, "Payment queue", "Pay")}
+      ${summary(t("paidClaims"), money.format(finance.paidAmount), "Settled welfare support", "Report")}
     </div>
     ${moduleTabs("welfare", tabs, tab)}
     ${tab === "overview" ? rolePriorityPanel(t("welfareFundControl"), [
-      ["Contribution setup", `${products.length} welfare product(s) and ${accounts.length} welfare account(s) support member balances.`, products.length && accounts.length ? "Ready" : "Setup"],
-      ["Claim decisions", `${submitted.length} submitted claim(s) need approval or rejection.`, submitted.length ? "Pending" : "Clear"],
-      ["Claim payments", `${approved.length} approved claim(s) are ready for payment if member welfare balance is sufficient.`, approved.length ? "Ready" : "Clear"]
+      ["Contribution setup", `${finance.productCount} welfare product(s) and ${finance.accountCount} welfare account(s) support member balances.`, finance.productCount && finance.accountCount ? "Ready" : "Setup"],
+      ["Claim decisions", `${finance.submittedCount} submitted claim(s) need approval or rejection.`, finance.submittedCount ? "Pending" : "Clear"],
+      ["Claim payments", `${finance.approvedCount} approved claim(s) are ready for payment if member welfare balance is sufficient.`, finance.approvedCount ? "Ready" : "Clear"]
     ]) : ""}
     ${tab === "products" ? financialProductPanel("welfare") : ""}
     ${tab === "accounts" ? financialAccountPanel("welfare", products) : ""}
     ${tab === "claims" ? `
       ${welfareClaimPanel()}
       ${recordTable("Welfare product list", products, ["name", "code", "contributionAmount", "status"])}
-      ${recordTable("Welfare claims", claims.map((claim) => ({ ...claim, action: "welfare-claim-detail", actionLabel: "Review", actionId: claim.id })), ["membershipNo", "memberName", "claimType", "amount", "channel", "reference", "status", "submittedAt"])}
+      ${recordTable("Welfare claims", buildWelfareClaimRows(claims), ["membershipNo", "memberName", "claimType", "amount", "channel", "reference", "status", "submittedAt"])}
     ` : ""}
     ${tab === "detail" ? (welfareClaimDetailPanel(claims) || emptyState("Welfare claim decision", "Select a welfare claim from the list to approve, reject or pay.")) : ""}
   `;

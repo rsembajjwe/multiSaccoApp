@@ -1035,6 +1035,40 @@ interface TerekaReconciliationReviewModel {
   unmatchedStatementLines: Record<string, any>[];
 }
 
+interface TerekaSavingsSummary {
+  accountCount: number;
+  activeProductCount: number;
+  balanceTotal: number;
+  contributionTotal: number;
+  productCount: number;
+}
+
+interface TerekaSharesSummary {
+  accountCount: number;
+  activeMemberCount: number;
+  activeProductCount: number;
+  balanceTotal: number;
+  contributionTotal: number;
+  productCount: number;
+}
+
+interface TerekaWelfareSummary {
+  accountCount: number;
+  approvedCount: number;
+  claimCount: number;
+  paidAmount: number;
+  paidCount: number;
+  productCount: number;
+  submittedCount: number;
+}
+
+interface TerekaWelfareClaimRow extends TerekaWelfareClaim {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  [key: string]: any;
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -1088,6 +1122,12 @@ declare function buildReconciliationReviewModel(input: { callbacks: Array<Tereka
 declare function buildPaymentRequestReviewRows(requests: Array<TerekaPaymentRequest & Record<string, any>> | null | undefined, labelize: (value: any) => string): TerekaPaymentRequestReviewRow[];
 declare function buildReconciliationMatchRows(matches: Record<string, any>[] | null | undefined): TerekaReconciliationMatchRow[];
 declare function reconciliationCoverage(summaryData: Record<string, any>): number;
+declare function buildSavingsSummary(input: { accounts: TerekaFinancialAccount[]; members: Array<TerekaMemberProfile & Record<string, any>>; products: TerekaFinancialProduct[] }): TerekaSavingsSummary;
+declare function buildSharesSummary(input: { accounts: Array<TerekaFinancialAccount & Record<string, any>>; members: Array<TerekaMemberProfile & Record<string, any>>; products: TerekaFinancialProduct[] }): TerekaSharesSummary;
+declare function buildWelfareSummary(input: { accounts: TerekaFinancialAccount[]; claims: TerekaWelfareClaim[]; products: TerekaFinancialProduct[] }): TerekaWelfareSummary;
+declare function buildWelfareClaimRows(claims: TerekaWelfareClaim[]): TerekaWelfareClaimRow[];
+declare function activeFinanceProducts(products: TerekaFinancialProduct[]): TerekaFinancialProduct[];
+declare function welfareSubmittedClaims(claims: TerekaWelfareClaim[]): TerekaWelfareClaim[];
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

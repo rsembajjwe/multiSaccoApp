@@ -40,7 +40,10 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    `app.loans-model.js`. Accounting dashboard totals, unbalanced-journal counts, period-close counts,
    reconciliation exception totals, payment request review rows, match rows, and reconciliation
    coverage now follow the same pattern through `src/accounting/accounting.ts` plus
-   `app.accounting-model.js`.
+   `app.accounting-model.js`. SACCO finance summaries for savings, shares, welfare, active products,
+   member balances, contribution totals, welfare claim counts, paid welfare amounts, and claim action
+   rows now follow the same pattern through `src/sacco-finance/finance.ts` plus
+   `app.sacco-finance-model.js`.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -15,6 +15,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/transactions/transactions.ts"),
   readText("src/loans/loans.ts"),
   readText("src/accounting/accounting.ts"),
+  readText("src/sacco-finance/finance.ts"),
   readText("app.state.js"),
 ]);
 
@@ -78,6 +79,10 @@ for (const marker of [
   "interface TerekaPaymentRequestReviewRow",
   "interface TerekaReconciliationMatchRow",
   "interface TerekaReconciliationReviewModel",
+  "interface TerekaSavingsSummary",
+  "interface TerekaSharesSummary",
+  "interface TerekaWelfareSummary",
+  "interface TerekaWelfareClaimRow",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -197,6 +202,21 @@ for (const marker of [
   "export function reconciliationCoverage",
 ]) {
   assert.ok(accountingSource.includes(marker), `src/accounting/accounting.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaSavingsSummary",
+  "export interface TerekaSharesSummary",
+  "export interface TerekaWelfareSummary",
+  "export interface TerekaWelfareClaimRow",
+  "export function buildSavingsSummary",
+  "export function buildSharesSummary",
+  "export function buildWelfareSummary",
+  "export function buildWelfareClaimRows",
+  "export function activeFinanceProducts",
+  "export function welfareSubmittedClaims",
+]) {
+  assert.ok(financeSource.includes(marker), `src/sacco-finance/finance.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");
