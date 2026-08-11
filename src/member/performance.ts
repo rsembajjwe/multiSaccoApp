@@ -1,6 +1,7 @@
 import type {
   TerekaFinancialTransaction,
   TerekaMobileMoneyCallback,
+  TerekaMoney,
   TerekaOfflineDraft,
   TerekaGuarantorRequest,
   TerekaNotification,
@@ -87,6 +88,20 @@ export interface TerekaMemberMobileMoneyRow {
   paymentStatus: string;
   receiptStatus: string;
   status: string;
+}
+
+export interface TerekaMemberPaymentProviderOption {
+  network: string;
+  label: string;
+  providerId: string;
+}
+
+export interface TerekaMemberDraftRow extends TerekaOfflineDraft {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  amount: TerekaMoney;
+  details: string;
 }
 
 export function buildMemberStatementLines(dashboard: TerekaMemberStatementDashboard | null | undefined): TerekaStatementLine[] {
@@ -246,6 +261,66 @@ export function buildMemberMobileMoneyRows(dashboard: TerekaMemberStatementDashb
       receiptStatus: receiptLifecycleStatusFor(line),
       status: line.status || "posted",
     }));
+}
+
+export function buildMemberPaymentProviderOptions(
+  mobileMoneyCollectionAvailable: boolean,
+  providers: unknown,
+  labelize: (value: unknown) => string
+): TerekaMemberPaymentProviderOption[] {
+  if (!mobileMoneyCollectionAvailable) return [];
+  const rows = Array.isArray(providers) ? providers : [];
+  return rows
+    .filter((provider): provider is { available?: boolean; label?: string; network?: string; providerId?: string } => Boolean(provider))
+    .filter((provider) => provider.available !== false)
+    .filter((provider) => normalizePerformanceText(provider.network || provider.providerId || "") !== "mpesa")
+    .map((provider) => ({
+      network: provider.network || "default",
+      label: provider.label || labelize(provider.providerId || "Mobile money"),
+      providerId: provider.providerId || provider.network || "default",
+    }));
+}
+
+export function buildMemberDraftRows(
+  drafts: TerekaOfflineDraft[],
+  type: string,
+  labelize: (value: unknown) => string
+): TerekaMemberDraftRow[] {
+  return drafts
+    .filter((draft) => !type || draft.type === type)
+    .map((draft) => {
+      const payload = (draft.payload || {}) as {
+        amount?: unknown;
+        description?: unknown;
+        externalReference?: unknown;
+        provider?: unknown;
+        purpose?: unknown;
+      };
+      const amount = typeof payload.amount === "number" || typeof payload.amount === "string" ? payload.amount : 0;
+      return {
+        ...draft,
+        amount,
+        details: draft.type === "payment"
+          ? `${labelize(payload.purpose || "payment")} / ${payload.provider || "provider"} / ${payload.externalReference || "no reference"}`
+          : String(payload.description || "Complaint case"),
+        action: "member-draft",
+        actionId: draft.id,
+        actionLabel: "Sync",
+      };
+    });
+}
+
+export function buildMemberPaymentRequestRows(requests: TerekaPaymentRequest[]): Array<TerekaPaymentRequest & {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+}> {
+  return requests.map((request) => ({
+    ...request,
+    action: "payment-provider-status",
+    actionLabel: normalizePerformanceText(request.status) === "posted" ? "View status" : "Check status",
+    actionId: request.id,
+  }));
 }
 
 export function paymentRouteLabelFor(row: TerekaPaymentChannelLine): string {

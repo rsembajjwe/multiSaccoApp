@@ -156,6 +156,47 @@ function buildMemberMobileMoneyRows(dashboard) {
     }));
 }
 
+function buildMemberPaymentProviderOptions(mobileMoneyCollectionAvailable, providers, labelize) {
+  if (!mobileMoneyCollectionAvailable) return [];
+  const rows = Array.isArray(providers) ? providers : [];
+  return rows
+    .filter((provider) => Boolean(provider))
+    .filter((provider) => provider.available !== false)
+    .filter((provider) => normalizePerformanceText(provider.network || provider.providerId || "") !== "mpesa")
+    .map((provider) => ({
+      network: provider.network || "default",
+      label: provider.label || labelize(provider.providerId || "Mobile money"),
+      providerId: provider.providerId || provider.network || "default"
+    }));
+}
+
+function buildMemberDraftRows(drafts, type, labelize) {
+  return drafts
+    .filter((draft) => !type || draft.type === type)
+    .map((draft) => {
+      const payload = draft.payload || {};
+      return {
+        ...draft,
+        amount: payload.amount || 0,
+        details: draft.type === "payment"
+          ? `${labelize(payload.purpose || "payment")} / ${payload.provider || "provider"} / ${payload.externalReference || "no reference"}`
+          : payload.description || "Complaint case",
+        action: "member-draft",
+        actionId: draft.id,
+        actionLabel: "Sync"
+      };
+    });
+}
+
+function buildMemberPaymentRequestRows(requests) {
+  return requests.map((request) => ({
+    ...request,
+    action: "payment-provider-status",
+    actionLabel: normalizePerformanceText(request.status) === "posted" ? "View status" : "Check status",
+    actionId: request.id
+  }));
+}
+
 function paymentRouteLabelFor(row) {
   const text = normalizePerformanceText(`${row.route || ""} ${row.channel || ""} ${row.provider || ""} ${row.reference || ""} ${row.externalReference || ""} ${row.providerPayload?.route || ""}`);
   if (text.includes("treasurer") || text.includes("cash")) return "Treasurer cash";

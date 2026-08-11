@@ -231,18 +231,11 @@ function memberBankCollectionPanel(payableLoans, _preferCompact = false) {
 
 function memberAvailablePaymentProviders() {
   const tenant = state.memberData.dashboard?.tenant || {};
-  if (!tenant.mobileMoneyCollectionAvailable) return [];
-  const providers = Array.isArray(state.memberData.dashboard?.paymentProviders)
-    ? state.memberData.dashboard.paymentProviders
-    : [];
-  return providers
-    .filter((provider) => provider && provider.available !== false)
-    .filter((provider) => normal(provider.network || provider.providerId || "") !== "mpesa")
-    .map((provider) => ({
-      network: provider.network || "default",
-      label: provider.label || labelize(provider.providerId || "Mobile money"),
-      providerId: provider.providerId || provider.network || "default"
-    }));
+  return buildMemberPaymentProviderOptions(
+    !!tenant.mobileMoneyCollectionAvailable,
+    state.memberData.dashboard?.paymentProviders,
+    labelize
+  );
 }
 
 function memberPaymentProviderTile(provider, checked) {
@@ -285,12 +278,7 @@ function memberPaymentLifecycleRows(dash) {
 }
 
 function memberPaymentRequestRows() {
-  return (state.memberData.paymentRequests || []).map((request) => ({
-    ...request,
-    action: "payment-provider-status",
-    actionLabel: normal(request.status) === "posted" ? "View status" : "Check status",
-    actionId: request.id
-  }));
+  return buildMemberPaymentRequestRows(state.memberData.paymentRequests || []);
 }
 
 function paymentRequestStatusNotice() {
@@ -397,18 +385,7 @@ function memberDraftPanel(title, drafts) {
 }
 
 function memberDraftRows(type = "") {
-  return (state.memberData.drafts || [])
-    .filter((draft) => !type || draft.type === type)
-    .map((draft) => ({
-      ...draft,
-      amount: draft.payload?.amount || 0,
-      details: draft.type === "payment"
-        ? `${labelize(draft.payload?.purpose || "payment")} / ${draft.payload?.provider || "provider"} / ${draft.payload?.externalReference || "no reference"}`
-        : draft.payload?.description || "Complaint case",
-      action: "member-draft",
-      actionId: draft.id,
-      actionLabel: "Sync"
-    }));
+  return buildMemberDraftRows(state.memberData.drafts || [], type, labelize);
 }
 
 function memberProfileView(_balances = {}) {

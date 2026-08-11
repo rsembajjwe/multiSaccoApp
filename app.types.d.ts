@@ -877,6 +877,20 @@ interface TerekaMemberMobileMoneyRow {
   status: string;
 }
 
+interface TerekaMemberPaymentProviderOption {
+  network: string;
+  label: string;
+  providerId: string;
+}
+
+interface TerekaMemberDraftRow extends TerekaOfflineDraft {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  amount: any;
+  details: string;
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -912,6 +926,9 @@ declare function buildMemberPaymentLifecycleRows(input: TerekaPaymentLifecycleIn
 declare function buildMemberGuarantorRows(requests: TerekaGuarantorRequest[]): TerekaMemberGuarantorRow[];
 declare function buildMemberAdminMessageRows(notifications: TerekaNotification[]): TerekaMemberAdminMessageRow[];
 declare function buildMemberMobileMoneyRows(dashboard: TerekaMemberDashboard | null | undefined): TerekaMemberMobileMoneyRow[];
+declare function buildMemberPaymentProviderOptions(mobileMoneyCollectionAvailable: boolean, providers: any, labelize: (value: any) => string): TerekaMemberPaymentProviderOption[];
+declare function buildMemberDraftRows(drafts: TerekaOfflineDraft[], type: string, labelize: (value: any) => string): TerekaMemberDraftRow[];
+declare function buildMemberPaymentRequestRows(requests: TerekaPaymentRequest[]): Array<TerekaPaymentRequest & { action: string; actionId?: string; actionLabel: string }>;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;
