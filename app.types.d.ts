@@ -801,6 +801,13 @@ interface TerekaTableModel<T = any> {
   totalPages: number;
 }
 
+interface TerekaFormatterBridge {
+  formatMoneyValue(value: number | string | null | undefined, region: TerekaRegion): string;
+  formatDateValue(value: Date | number | string | null | undefined, region: TerekaRegion): string;
+  formatDateTimeValue(value: Date | number | string | null | undefined, region: TerekaRegion): string;
+  formatShortDateValue(value: Date | number | string | null | undefined, region: TerekaRegion): string;
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -827,4 +834,5 @@ interface TerekaState {
 declare function expireLocalSession(message?: string): void;
 declare function setModuleTab(view: string, tab: string): void;
 declare function buildRecordTableModel<T = any>(input: TerekaTableModelInput<T>): TerekaTableModel<T>;
+declare var TerekaFormatters: TerekaFormatterBridge;
 declare function render(): void;

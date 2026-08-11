@@ -50,13 +50,7 @@ const localeMetadata = Object.freeze({
 
 const money = {
   format(value) {
-    const region = currentRegion();
-    return new Intl.NumberFormat(region.locale, {
-      style: "currency",
-      currency: region.currency,
-      minimumFractionDigits: region.currencyDigits,
-      maximumFractionDigits: region.currencyDigits
-    }).format(Number(value || 0));
+    return TerekaFormatters.formatMoneyValue(value, currentRegion());
   }
 };
 
@@ -596,37 +590,15 @@ function formatTableDate(value, column) {
 }
 
 function formatDate(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString(currentRegion().locale, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
-  });
+  return TerekaFormatters.formatDateValue(value, currentRegion());
 }
 
 function formatDateTime(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString(currentRegion().locale, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+  return TerekaFormatters.formatDateTimeValue(value, currentRegion());
 }
 
 function shortDate(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString(currentRegion().locale, {
-    day: "2-digit",
-    month: "short"
-  });
+  return TerekaFormatters.formatShortDateValue(value, currentRegion());
 }
 
 function currentRegion() {

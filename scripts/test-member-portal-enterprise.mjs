@@ -205,6 +205,7 @@ sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 for (const file of [
   "app.i18n.js",
+  "app.formatters.js",
   "app.core.js",
   "app.api.js",
   "app.ui.js",

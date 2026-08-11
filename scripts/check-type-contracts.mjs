@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
   readText("app.types.d.ts"),
   readText("src/types/domain.ts"),
   readText("src/tables/tableModel.ts"),
+  readText("src/formatting/formatters.ts"),
   readText("app.state.js"),
 ]);
 
@@ -47,6 +48,7 @@ for (const marker of [
   "interface TerekaChatMessage",
   "interface TerekaTableModelInput",
   "interface TerekaTableModel",
+  "interface TerekaFormatterBridge",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -76,6 +78,15 @@ for (const marker of [
   "export function buildRecordTableModel",
 ]) {
   assert.ok(tableModelSource.includes(marker), `src/tables/tableModel.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export function formatMoneyValue",
+  "export function formatDateValue",
+  "export function formatDateTimeValue",
+  "export function formatShortDateValue",
+]) {
+  assert.ok(formatterSource.includes(marker), `src/formatting/formatters.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");
