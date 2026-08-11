@@ -292,22 +292,6 @@ function paymentRequestStatusNotice() {
 }
 
 /**
- * @param {TerekaPaymentRequest | TerekaStatementLine | TerekaOfflineDraft | Record<string, any>} row
- * @returns {string}
- */
-function paymentLifecycleStatus(row) {
-  return paymentLifecycleStatusFor(row);
-}
-
-/**
- * @param {TerekaPaymentRequest | TerekaStatementLine | Record<string, any>} row
- * @returns {string}
- */
-function receiptLifecycleStatus(row) {
-  return receiptLifecycleStatusFor(row);
-}
-
-/**
  * @param {TerekaStatementLine | TerekaFinancialTransaction} line
  * @returns {boolean}
  */
