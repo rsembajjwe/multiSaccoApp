@@ -358,10 +358,6 @@ function contextCode() {
   return state.tenant?.abbreviation || state.tenant?.registrationNo || state.tenant?.code || "GVS";
 }
 
-function memberStatementLines(dash) {
-  return buildMemberStatementLines(dash);
-}
-
 function paymentRoutePanel() {
   return rolePriorityPanel("Member payment routes", [
     ["Treasurer cash deposit", "Members can deposit savings, shares, welfare contributions or loan repayments at the SACCO office. Treasurer/Admin records the cash and issues a receipt after posting.", "Staff receipting"],
@@ -417,20 +413,8 @@ function saccoMonthlyPerformancePanel(rows) {
   `;
 }
 
-function saccoMonthlyPerformanceRows() {
-  return buildSaccoMonthlyPerformanceRows({
-    transactions: transactionRows(),
-    callbacks: dataRows("mobileMoneyCallbacks"),
-    memberName,
-  });
-}
-
 function monthlyPerformanceId(row) {
   return performanceRowId(row);
-}
-
-function memberMonthlyPerformanceRows(dash) {
-  return buildMemberMonthlyPerformanceRows(dash);
 }
 
 function initials(name) {

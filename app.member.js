@@ -69,7 +69,7 @@ function memberMoneyView(dash, balances) {
     { account: "Shares", balance: balances.shares || 0 },
     { account: "Welfare", balance: balances.welfare || 0 }
   ];
-  const lines = memberStatementLines(dash);
+  const lines = buildMemberStatementLines(dash);
   const receipts = lines
     .filter((line) => line.reference && (Number(line.credit || 0) > 0 || Number(line.debit || 0) > 0))
     .map((line) => ({

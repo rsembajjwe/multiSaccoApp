@@ -5,7 +5,11 @@ function savingsView() {
   const accounts = accountsByType("savings");
   const members = dataRows("members");
   const finance = buildSavingsSummary({ products, accounts, members });
-  const monthlyPerformance = saccoMonthlyPerformanceRows();
+  const monthlyPerformance = buildSaccoMonthlyPerformanceRows({
+    transactions: transactionRows(),
+    callbacks: dataRows("mobileMoneyCallbacks"),
+    memberName,
+  });
   const tabs = [["monthly", t("monthlyPerformance")], ["products", t("savingsProductSetup")], ["accounts", t("openSavingsAccount")], ["lists", t("savingsRecords")]];
   const tab = activeModuleTab("savings", tabs);
   return `

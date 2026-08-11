@@ -244,7 +244,7 @@ assert.match(statementHtml, /10 Aug 2026/);
 assert.match(statementHtml, /Mobile money savings deposit/);
 assert.match(statementHtml, /Treasurer cash loan repayment/);
 
-const monthlyRows = sandbox.memberMonthlyPerformanceRows(sandbox.state.memberData.dashboard);
+const monthlyRows = sandbox.buildMemberMonthlyPerformanceRows(sandbox.state.memberData.dashboard);
 assert.equal(monthlyRows.length, 2);
 assert.equal(monthlyRows[0].month, "2026-08");
 assert.match(sandbox.formatDate(monthlyRows[0].date), /31 Aug 2026/);
