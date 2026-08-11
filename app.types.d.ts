@@ -600,6 +600,15 @@ interface TerekaSaccoCollectionAccountReviewRow {
   status: string;
 }
 
+interface TerekaOnboardingOption {
+  currency?: string;
+  currencyDigits?: number;
+  label: string;
+  locale?: string;
+  selected?: boolean;
+  value: string;
+}
+
 interface TerekaFinancialTransaction {
   id?: string;
   tenantId?: string;
@@ -1919,6 +1928,10 @@ declare function buildPackageCardRows(packages: Array<TerekaSubscriptionPackage 
 declare function generateSaccoCode(name: any, existingTenants: Array<TerekaTenantSummary & Record<string, any>>): string;
 declare function saccoLocationAddress(district: any, parish: any, village: any, memberRange?: any): string;
 declare function profileLocationPart(profile: Record<string, any> | null | undefined, label: string): string;
+declare function tenantStatusOptions(): TerekaOnboardingOption[];
+declare function tenantStatusLabel(status: any): string;
+declare function memberRangeOptions(): TerekaOnboardingOption[];
+declare function countryRegionOptions(countryRegions: Record<string, TerekaRegion>, selectedCountry?: string): TerekaOnboardingOption[];
 declare function buildSaccoCollectionAccountReviewRows(accounts: Array<TerekaCollectionAccount & Record<string, any>>, labelize: (value: any) => string): TerekaSaccoCollectionAccountReviewRow[];
 declare function subscriptionAccessLabelFor(subscription: Partial<TerekaSubscription & Record<string, any>>, tenant?: Partial<TerekaTenantSummary & Record<string, any>>): string;
 declare function saccoPaymentStageFor(tenant: Partial<TerekaTenantSummary & Record<string, any>>, subscription?: Partial<TerekaSubscription & Record<string, any>>): string;

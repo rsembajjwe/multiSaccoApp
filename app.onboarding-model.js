@@ -107,6 +107,41 @@ function profileLocationPart(profile, label) {
   return match ? match[1].trim() : "";
 }
 
+function tenantStatusOptions() {
+  return [
+    { value: "pending_review", label: "Pending review / request changes" },
+    { value: "approved", label: "Approved" },
+    { value: "active", label: "Active / operating" },
+    { value: "suspended", label: "Suspended" },
+    { value: "terminated", label: "Rejected / terminated" }
+  ];
+}
+
+function tenantStatusLabel(status) {
+  return tenantStatusOptions().find((option) => option.value === status)?.label || String(status || "Pending");
+}
+
+function memberRangeOptions() {
+  return [
+    { value: "100-250", label: "100 to 250 members" },
+    { value: "251-500", label: "251 to 500 members" },
+    { value: "501-2500", label: "501 to 2,500 members" },
+    { value: "2501-10000", label: "2,501 to 10,000 members" },
+    { value: "10000+", label: "Above 10,000 members" }
+  ];
+}
+
+function countryRegionOptions(countryRegions, selectedCountry = "uganda") {
+  return Object.entries(countryRegions).map(([country, region]) => ({
+    currency: region.currency,
+    currencyDigits: region.currencyDigits,
+    label: `${labelizeOnboardingModelText(country)} - ${region.currency}`,
+    locale: region.locale,
+    selected: country === selectedCountry,
+    value: country
+  }));
+}
+
 function buildSaccoCollectionAccountReviewRows(accounts, labelize) {
   return accounts.map((account) => ({
     channel: labelize(account.channel || ""),

@@ -1,4 +1,4 @@
-import type { TerekaCollectionAccount, TerekaSubscription, TerekaSubscriptionPackage, TerekaTenantSummary, TerekaRecord } from "../types/domain";
+import type { TerekaCollectionAccount, TerekaRegion, TerekaSubscription, TerekaSubscriptionPackage, TerekaTenantSummary, TerekaRecord } from "../types/domain";
 
 export interface TerekaSaccoApplicationRow extends TerekaTenantSummary, TerekaRecord {
   action: string;
@@ -59,6 +59,15 @@ export interface TerekaSaccoCollectionAccountReviewRow {
   channel: string;
   provider: string;
   status: string;
+}
+
+export interface TerekaOnboardingOption {
+  currency?: string;
+  currencyDigits?: number;
+  label: string;
+  locale?: string;
+  selected?: boolean;
+  value: string;
 }
 
 export function buildSaccoApplicationRows(input: {
@@ -174,6 +183,41 @@ export function saccoLocationAddress(district: unknown, parish: unknown, village
 export function profileLocationPart(profile: TerekaRecord | null | undefined, label: string): string {
   const match = String(profile?.address || "").match(new RegExp(`${label}:\\s*([^;]+)`, "i"));
   return match ? match[1].trim() : "";
+}
+
+export function tenantStatusOptions(): TerekaOnboardingOption[] {
+  return [
+    { value: "pending_review", label: "Pending review / request changes" },
+    { value: "approved", label: "Approved" },
+    { value: "active", label: "Active / operating" },
+    { value: "suspended", label: "Suspended" },
+    { value: "terminated", label: "Rejected / terminated" },
+  ];
+}
+
+export function tenantStatusLabel(status: unknown): string {
+  return tenantStatusOptions().find((option) => option.value === status)?.label || String(status || "Pending");
+}
+
+export function memberRangeOptions(): TerekaOnboardingOption[] {
+  return [
+    { value: "100-250", label: "100 to 250 members" },
+    { value: "251-500", label: "251 to 500 members" },
+    { value: "501-2500", label: "501 to 2,500 members" },
+    { value: "2501-10000", label: "2,501 to 10,000 members" },
+    { value: "10000+", label: "Above 10,000 members" },
+  ];
+}
+
+export function countryRegionOptions(countryRegions: Record<string, TerekaRegion>, selectedCountry = "uganda"): TerekaOnboardingOption[] {
+  return Object.entries(countryRegions).map(([country, region]) => ({
+    currency: region.currency,
+    currencyDigits: region.currencyDigits,
+    label: `${labelizeOnboardingText(country)} - ${region.currency}`,
+    locale: region.locale,
+    value: country,
+    selected: country === selectedCountry,
+  }));
 }
 
 export function buildSaccoCollectionAccountReviewRows(accounts: Array<TerekaCollectionAccount & TerekaRecord>, labelize: (value: unknown) => string): TerekaSaccoCollectionAccountReviewRow[] {

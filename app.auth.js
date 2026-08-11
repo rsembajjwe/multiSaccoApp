@@ -172,13 +172,13 @@ function publicSaccoRegistrationPanel() {
       <label><span>${t("saccoName")}</span><input id="publicTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
       <label><span>${t("saccoCode")}</span><input id="publicTenantCode" readonly placeholder="${escapeHtml(t("saccoCodeGenerated"))}"></label>
       <label><span>${t("registrationNumber")}</span><input id="publicTenantRegistrationNo" required placeholder="${escapeHtml(t("registrationNumberPlaceholder"))}"></label>
-      <label><span>Country</span><select id="publicTenantCountry">${countryRegionOptions("uganda")}</select></label>
+      <label><span>Country</span><select id="publicTenantCountry">${countryRegionOptions(COUNTRY_REGIONS, "uganda").map((option) => `<option value="${escapeHtml(option.value)}" data-country-label="${escapeHtml(option.label.split(" - ")[0])}" data-locale="${escapeHtml(option.locale)}" data-currency="${escapeHtml(option.currency)}" data-digits="${option.currencyDigits}" ${option.selected ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}</select></label>
       <label><span>Currency</span><input id="publicTenantCurrencyCode" readonly value="UGX"></label>
       <label><span>${t("district")}</span><input id="publicTenantDistrict" required></label>
       <label><span>${t("parish")}</span><input id="publicTenantParish" required></label>
       <label><span>${t("village")}</span><input id="publicTenantVillage" required></label>
       <label><span>${t("contactNumber")}</span><input id="publicTenantContactNumber" required placeholder="+256..."></label>
-      <label><span>${t("memberRange")}</span><select id="publicTenantMemberRange">${memberRangeOptions()}</select></label>
+      <label><span>${t("memberRange")}</span><select id="publicTenantMemberRange">${memberRangeOptions().map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("")}</select></label>
       <label class="wide"><span>${t("mobileMoneyNumber")}</span><input id="publicTenantPaymentPhone" required placeholder="+256..."></label>
       <div class="mini-fact wide">
         <span>${t("paymentStep")}</span>

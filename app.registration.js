@@ -61,13 +61,13 @@ function platformSaccoRegistrationPanel() {
         <label><span>SACCO name</span><input id="newTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
         <label><span>SACCO code</span><input id="newTenantCode" readonly placeholder="Generated automatically"></label>
         <label><span>Registration number</span><input id="newTenantRegistrationNo" placeholder="Cooperative or UMRA registration"></label>
-        <label><span>Country</span><select id="newTenantCountry">${countryRegionOptions("uganda")}</select></label>
+        <label><span>Country</span><select id="newTenantCountry">${countryRegionOptions(COUNTRY_REGIONS, "uganda").map((option) => `<option value="${escapeHtml(option.value)}" data-country-label="${escapeHtml(option.label.split(" - ")[0])}" data-locale="${escapeHtml(option.locale)}" data-currency="${escapeHtml(option.currency)}" data-digits="${option.currencyDigits}" ${option.selected ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}</select></label>
         <label><span>Currency</span><input id="newTenantCurrencyCode" readonly value="UGX"></label>
         <label><span>District</span><input id="newTenantDistrict" required placeholder="e.g. Kampala"></label>
         <label><span>Parish</span><input id="newTenantParish" required placeholder="e.g. Central Parish"></label>
         <label><span>Village</span><input id="newTenantVillage" required placeholder="e.g. Market Zone"></label>
         <label><span>Contact number</span><input id="newTenantContactNumber" required placeholder="+256..."></label>
-        <label><span>Member range</span><select id="newTenantMemberRange">${memberRangeOptions()}</select></label>
+        <label><span>Member range</span><select id="newTenantMemberRange">${memberRangeOptions().map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("")}</select></label>
         <label><span>Payment status</span><select id="newTenantPaymentStatus">
           <option value="paid">Paid - activate SACCO</option>
           <option value="pending">Not paid - keep pending payment</option>
@@ -175,67 +175,20 @@ function tenantDetailPanel() {
   `;
 }
 
-function tenantStatusOptions() {
-  return [
-    { value: "pending_review", label: "Pending review / request changes" },
-    { value: "approved", label: "Approved" },
-    { value: "active", label: "Active / operating" },
-    { value: "suspended", label: "Suspended" },
-    { value: "terminated", label: "Rejected / terminated" }
-  ];
-}
-
-function tenantStatusLabel(status) {
-  return tenantStatusOptions().find((option) => option.value === status)?.label || status || "Pending";
-}
-
 function subscriptionAccessLabel(subscription, tenant) {
-  tenant = tenant || {};
-  subscription = subscription || {};
-  if (normal(tenant.status).includes("suspended")) return "Suspended";
-  if (normal(subscription.status) === "active" && normal(tenant.status) === "active") return "Active";
-  if (normal(subscription.status).includes("pending")) return "Payment pending";
-  if (normal(subscription.status).includes("expired")) return "Expired";
-  return subscription.status || tenant.status || "Pending";
+  return subscriptionAccessLabelFor(subscription || {}, tenant || {});
 }
 
 function saccoPaymentStage(tenant, subscription) {
-  tenant = tenant || {};
-  if (!subscription) return "No subscription";
-  const paid = Number(subscription.paid || subscription.amountPaid || 0);
-  const amount = Number(subscription.amount || 0);
-  const status = normal(subscription.status);
-  if (amount > 0 && paid >= amount) return "Callback received";
-  if (paid > 0) return "Part payment received";
-  if (normal(tenant.status).includes("pending_self_registration") || status.includes("pending")) return "Payment initiated";
-  if (status === "active") return "Callback received";
-  if (status.includes("expired")) return "Expired";
-  return "Payment pending";
+  return saccoPaymentStageFor(tenant || {}, subscription);
 }
 
 function saccoApprovalStage(tenant, subscription) {
-  tenant = tenant || {};
-  const tenantStatus = normal(tenant.status);
-  const paymentStage = normal(saccoPaymentStage(tenant, subscription));
-  if (tenantStatus === "active" && paymentStage.includes("callback")) return "Active";
-  if (tenantStatus === "pending_review" && paymentStage.includes("callback")) return "Ready for approval";
-  if (tenantStatus === "pending_self_registration") return "Awaiting payment";
-  if (tenantStatus === "approved" && paymentStage.includes("callback")) return "Ready for activation";
-  if (tenantStatus.includes("pending")) return "Application review";
-  if (tenantStatus.includes("suspended")) return "Suspended";
-  if (tenantStatus.includes("terminated")) return "Rejected";
-  return tenantStatus ? tenantStatus.replaceAll("_", " ") : "Pending";
+  return saccoApprovalStageFor(tenant || {}, subscription);
 }
 
 function subscriptionPaymentLabel(subscription) {
-  const amount = Number(subscription.amount || 0);
-  const paid = Number(subscription.paid || subscription.amountPaid || 0);
-  const status = normal(subscription.paymentStatus || subscription.status);
-  if (amount > 0 && paid >= amount) return "Paid";
-  if (status.includes("paid") || status === "active") return paid > 0 ? "Part paid" : "Payment confirmed";
-  if (paid > 0) return "Part paid";
-  if (status.includes("expired")) return "Expired";
-  return "Pending payment";
+  return subscriptionPaymentLabelFor(subscription || {});
 }
 
 function generatedSaccoCode(name) {
@@ -246,23 +199,4 @@ function updateGeneratedSaccoCode() {
   const input = document.getElementById("newTenantCode");
   const name = value("newTenantName");
   if (input) input.value = generatedSaccoCode(name);
-}
-
-function memberRangeOptions() {
-  return [
-    ["100-250", "100 to 250 members"],
-    ["251-500", "251 to 500 members"],
-    ["501-2500", "501 to 2,500 members"],
-    ["2501-10000", "2,501 to 10,000 members"],
-    ["10000+", "Above 10,000 members"]
-  ].map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
-}
-
-function countryRegionOptions(selectedCountry = "uganda") {
-  return Object.entries(COUNTRY_REGIONS)
-    .map(([country, region]) => {
-      const label = country.replace(/\b\w/g, (letter) => letter.toUpperCase());
-      return `<option value="${escapeHtml(country)}" data-country-label="${escapeHtml(label)}" data-locale="${escapeHtml(region.locale)}" data-currency="${escapeHtml(region.currency)}" data-digits="${region.currencyDigits}" ${country === selectedCountry ? "selected" : ""}>${escapeHtml(label)} - ${escapeHtml(region.currency)}</option>`;
-    })
-    .join("");
 }
