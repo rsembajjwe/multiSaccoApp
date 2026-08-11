@@ -259,10 +259,6 @@ function memberAdminMessageRows() {
   return buildMemberAdminMessageRows(state.memberData.notifications || []);
 }
 
-function memberMobileMoneyRows(dash) {
-  return buildMemberMobileMoneyRows(dash);
-}
-
 /**
  * Builds a member-facing payment lifecycle from requests, posted statement lines and offline drafts.
  * @param {TerekaMemberDashboard} dash
@@ -290,17 +286,6 @@ function paymentRequestStatusNotice() {
     </div>
   `;
 }
-
-/**
- * @param {TerekaStatementLine | TerekaFinancialTransaction} line
- * @returns {boolean}
- */
-function isMobileMoneyLine(line) {
-  return isMobileMoneyPerformanceLine(line);
-}
-
-
-
 
 function memberComplaintsView() {
   const notifications = memberAdminMessageRows().map((notification) => ({

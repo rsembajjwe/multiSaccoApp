@@ -145,7 +145,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   typing the savings, shares, welfare, loan-repayment, Treasurer cash, and mobile-money split logic.
   Member payment lifecycle rows, route labels, payment status, and receipt status are now typed in
   the same source boundary, along with member guarantor, SACCO-admin message, and mobile-money row
-  builders, member payment provider filtering, payment request action rows, offline draft rows, and removed classic payment-route/month and payment lifecycle wrappers.
+  builders, member payment provider filtering, payment request action rows, offline draft rows, and removed classic payment-route/month, payment lifecycle, and unused mobile-money wrappers.
 - SACCO admin member-document rows, member status/type/KYC options, KYC retention summaries, statement totals, receipt-ready rows,
   and mobile-money/Treasurer statement split summaries now live behind `src/member/admin.ts` plus
   `app.member-admin-model.js`.
