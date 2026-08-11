@@ -16,6 +16,13 @@ const checks = [
       ? ["/d", "/s", "/c", "npm.cmd", "run", "type:ui"]
       : ["run", "type:ui"],
   },
+  {
+    name: "SPA type contract markers",
+    command: process.platform === "win32" ? process.env.ComSpec || "cmd.exe" : "npm",
+    args: process.platform === "win32"
+      ? ["/d", "/s", "/c", "npm.cmd", "run", "type:check"]
+      : ["run", "type:check"],
+  },
 ];
 
 const results = checks.map(runCheck);
@@ -67,6 +74,7 @@ function renderReport(results) {
     "## Scope",
     "",
     "- Confirms the SPA passes the TypeScript `checkJs` gate in `tsconfig.ui.json`.",
+    "- Confirms key domain declarations and global-state type wiring are still present.",
     "- Confirms shared declarations cover runtime state, member portal, platform/SACCO admin, operations, integration, reconciliation, and regulatory-report data contracts.",
     "- Does not mean the frontend has completed native TypeScript source conversion or ES module migration.",
     "",
