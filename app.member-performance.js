@@ -116,6 +116,46 @@ function buildMemberPaymentLifecycleRows(input) {
     .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
 }
 
+function buildMemberGuarantorRows(requests) {
+  return requests.map((request) => {
+    const pending = normalizePerformanceText(request.status) === "pending";
+    return {
+      ...request,
+      borrower: request.loan?.memberName || request.loan?.membershipNo || request.loan?.memberId || "Borrower",
+      product: request.loan?.product || request.product || "Loan",
+      requestedAmount: request.loan?.amount || request.loan?.requestedAmount || 0,
+      action: pending ? "member-guarantor" : "",
+      actionLabel: pending ? "Decide" : "View",
+      actionId: request.id
+    };
+  });
+}
+
+function buildMemberAdminMessageRows(notifications) {
+  return notifications.map((notification) => ({
+    ...notification,
+    title: notification.title || "SACCO admin message",
+    message: notification.message || notification.body || "Message from SACCO administration",
+    channel: notification.channel || "in-app",
+    status: notification.status || (notification.readAt ? "read" : "unread"),
+    createdAt: notification.createdAt || notification.sentAt || ""
+  }));
+}
+
+function buildMemberMobileMoneyRows(dashboard) {
+  return buildMemberStatementLines(dashboard)
+    .filter((line) => isMobileMoneyPerformanceLine(line))
+    .map((line) => ({
+      postedAt: line.postedAt || line.createdAt || "",
+      reference: line.reference,
+      description: line.description || "Mobile money deposit",
+      credit: line.credit || line.amount || 0,
+      paymentStatus: paymentLifecycleStatusFor(line),
+      receiptStatus: receiptLifecycleStatusFor(line),
+      status: line.status || "posted"
+    }));
+}
+
 function paymentRouteLabelFor(row) {
   const text = normalizePerformanceText(`${row.route || ""} ${row.channel || ""} ${row.provider || ""} ${row.reference || ""} ${row.externalReference || ""} ${row.providerPayload?.route || ""}`);
   if (text.includes("treasurer") || text.includes("cash")) return "Treasurer cash";

@@ -28,7 +28,8 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    `app.formatters.js` for shared money/date formatting, labels, sums, status badges, escaping, and
    table value formatting. Member statement normalization and monthly performance aggregation now
    follow the same pattern through `src/member/performance.ts` plus `app.member-performance.js`,
-   including payment lifecycle rows, route labels, payment status, and receipt status.
+   including payment lifecycle rows, route labels, payment status, receipt status, guarantor rows,
+   SACCO-admin message rows, and mobile-money rows.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the

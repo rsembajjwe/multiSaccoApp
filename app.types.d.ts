@@ -850,6 +850,33 @@ interface TerekaPaymentLifecycleInput {
   paymentRequests: TerekaPaymentRequest[];
 }
 
+interface TerekaMemberGuarantorRow extends TerekaGuarantorRequest {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  borrower: string;
+  product: string;
+  requestedAmount: any;
+}
+
+interface TerekaMemberAdminMessageRow extends TerekaNotification {
+  title: string;
+  message: string;
+  channel: string;
+  status: string;
+  createdAt: string;
+}
+
+interface TerekaMemberMobileMoneyRow {
+  postedAt: string;
+  reference?: string;
+  description: string;
+  credit: any;
+  paymentStatus: string;
+  receiptStatus: string;
+  status: string;
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -882,6 +909,9 @@ declare function buildMemberStatementLines(dashboard: TerekaMemberDashboard | nu
 declare function buildSaccoMonthlyPerformanceRows(input: TerekaSaccoMonthlyPerformanceInput): TerekaMonthlyPerformanceRow[];
 declare function buildMemberMonthlyPerformanceRows(dashboard: TerekaMemberDashboard | null | undefined): TerekaMonthlyPerformanceRow[];
 declare function buildMemberPaymentLifecycleRows(input: TerekaPaymentLifecycleInput): TerekaPaymentLifecycleRow[];
+declare function buildMemberGuarantorRows(requests: TerekaGuarantorRequest[]): TerekaMemberGuarantorRow[];
+declare function buildMemberAdminMessageRows(notifications: TerekaNotification[]): TerekaMemberAdminMessageRow[];
+declare function buildMemberMobileMoneyRows(dashboard: TerekaMemberDashboard | null | undefined): TerekaMemberMobileMoneyRow[];
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

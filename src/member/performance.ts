@@ -2,6 +2,8 @@ import type {
   TerekaFinancialTransaction,
   TerekaMobileMoneyCallback,
   TerekaOfflineDraft,
+  TerekaGuarantorRequest,
+  TerekaNotification,
   TerekaPaymentLifecycleRow,
   TerekaPaymentRequest,
   TerekaRecord,
@@ -58,6 +60,33 @@ export interface TerekaPaymentLifecycleInput {
   drafts: TerekaOfflineDraft[];
   labelize: (value: unknown) => string;
   paymentRequests: TerekaPaymentRequest[];
+}
+
+export interface TerekaMemberGuarantorRow extends TerekaGuarantorRequest {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  borrower: string;
+  product: string;
+  requestedAmount: unknown;
+}
+
+export interface TerekaMemberAdminMessageRow extends TerekaNotification {
+  title: string;
+  message: string;
+  channel: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface TerekaMemberMobileMoneyRow {
+  postedAt: string;
+  reference?: string;
+  description: string;
+  credit: unknown;
+  paymentStatus: string;
+  receiptStatus: string;
+  status: string;
 }
 
 export function buildMemberStatementLines(dashboard: TerekaMemberStatementDashboard | null | undefined): TerekaStatementLine[] {
@@ -177,6 +206,46 @@ export function buildMemberPaymentLifecycleRows(input: TerekaPaymentLifecycleInp
   });
   return [...draftRows, ...requestRows, ...postedRows]
     .sort((a, b) => new Date(String(b.date || 0)).getTime() - new Date(String(a.date || 0)).getTime());
+}
+
+export function buildMemberGuarantorRows(requests: TerekaGuarantorRequest[]): TerekaMemberGuarantorRow[] {
+  return requests.map((request) => {
+    const pending = normalizePerformanceText(request.status) === "pending";
+    return {
+      ...request,
+      borrower: request.loan?.memberName || request.loan?.membershipNo || request.loan?.memberId || "Borrower",
+      product: request.loan?.product || request.product || "Loan",
+      requestedAmount: request.loan?.amount || request.loan?.requestedAmount || 0,
+      action: pending ? "member-guarantor" : "",
+      actionLabel: pending ? "Decide" : "View",
+      actionId: request.id,
+    };
+  });
+}
+
+export function buildMemberAdminMessageRows(notifications: TerekaNotification[]): TerekaMemberAdminMessageRow[] {
+  return notifications.map((notification) => ({
+    ...notification,
+    title: notification.title || "SACCO admin message",
+    message: notification.message || notification.body || "Message from SACCO administration",
+    channel: notification.channel || "in-app",
+    status: notification.status || (notification.readAt ? "read" : "unread"),
+    createdAt: notification.createdAt || notification.sentAt || "",
+  }));
+}
+
+export function buildMemberMobileMoneyRows(dashboard: TerekaMemberStatementDashboard | null | undefined): TerekaMemberMobileMoneyRow[] {
+  return buildMemberStatementLines(dashboard)
+    .filter((line) => isMobileMoneyPerformanceLine(line))
+    .map((line) => ({
+      postedAt: line.postedAt || line.createdAt || "",
+      reference: line.reference,
+      description: line.description || "Mobile money deposit",
+      credit: line.credit || line.amount || 0,
+      paymentStatus: paymentLifecycleStatusFor(line),
+      receiptStatus: receiptLifecycleStatusFor(line),
+      status: line.status || "posted",
+    }));
 }
 
 export function paymentRouteLabelFor(row: TerekaPaymentChannelLine): string {

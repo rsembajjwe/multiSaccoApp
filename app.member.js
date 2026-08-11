@@ -259,40 +259,15 @@ function memberPaymentProviderTile(provider, checked) {
 }
 
 function memberGuarantorRows() {
-  return (state.memberData.pendingGuarantors || []).map((request) => ({
-    ...request,
-    borrower: request.loan?.memberName || request.loan?.membershipNo || request.loan?.memberId || "Borrower",
-    product: request.loan?.product || request.product || "Loan",
-    requestedAmount: request.loan?.amount || request.loan?.requestedAmount || 0,
-    action: normal(request.status) === "pending" ? "member-guarantor" : "",
-    actionLabel: normal(request.status) === "pending" ? "Decide" : "View",
-    actionId: request.id
-  }));
+  return buildMemberGuarantorRows(state.memberData.pendingGuarantors || []);
 }
 
 function memberAdminMessageRows() {
-  return (state.memberData.notifications || []).map((notification) => ({
-    ...notification,
-    title: notification.title || "SACCO admin message",
-    message: notification.message || notification.body || "Message from SACCO administration",
-    channel: notification.channel || "in-app",
-    status: notification.status || (notification.readAt ? "read" : "unread"),
-    createdAt: notification.createdAt || notification.sentAt || ""
-  }));
+  return buildMemberAdminMessageRows(state.memberData.notifications || []);
 }
 
 function memberMobileMoneyRows(dash) {
-  return memberStatementLines(dash)
-    .filter((line) => isMobileMoneyLine(line))
-    .map((line) => ({
-      postedAt: line.postedAt || line.createdAt || "",
-      reference: line.reference,
-      description: line.description || "Mobile money deposit",
-      credit: line.credit || line.amount || 0,
-      paymentStatus: paymentLifecycleStatus(line),
-      receiptStatus: receiptLifecycleStatus(line),
-      status: line.status || "posted"
-    }));
+  return buildMemberMobileMoneyRows(dash);
 }
 
 /**
