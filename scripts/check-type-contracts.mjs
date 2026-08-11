@@ -92,6 +92,8 @@ for (const marker of [
   "interface TerekaLoanRow",
   "interface TerekaLoanRowsInput",
   "interface TerekaLoanPortfolioSummary",
+  "interface TerekaLoanMemberOption",
+  "interface TerekaLoanProductOption",
   "interface TerekaAccountingSummary",
   "interface TerekaAccountingSummaryInput",
   "interface TerekaPaymentRequestReviewRow",
@@ -246,7 +248,11 @@ for (const marker of [
   "export interface TerekaLoanRow",
   "export interface TerekaLoanRowsInput",
   "export interface TerekaLoanPortfolioSummary",
+  "export interface TerekaLoanMemberOption",
+  "export interface TerekaLoanProductOption",
   "export function buildLoanRows",
+  "export function activeLoanMemberOptions",
+  "export function loanProductOptions",
   "export function buildLoanPortfolioSummary",
 ]) {
   assert.ok(loanSource.includes(marker), `src/loans/loans.ts missing ${marker}`);

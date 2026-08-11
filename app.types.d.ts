@@ -1589,6 +1589,24 @@ interface TerekaLoanPortfolioSummary {
   total: number;
 }
 
+interface TerekaLoanMemberOption {
+  fullName?: string;
+  id?: string;
+  label: string;
+  membershipNo?: string;
+  status?: string;
+  [key: string]: any;
+}
+
+interface TerekaLoanProductOption {
+  id?: string;
+  label: string;
+  name: string;
+  productType?: string;
+  status?: string;
+  [key: string]: any;
+}
+
 interface TerekaAccountingSummary {
   accountCount: number;
   assetTotal: number;
@@ -1831,6 +1849,8 @@ declare function buildTransactionReceiptSummary(rows: TerekaTransactionRow[]): T
 declare function buildTransactionOverviewSummary(rows: TerekaTransactionRow[]): TerekaTransactionOverviewSummary;
 declare function buildLoanRows(input: TerekaLoanRowsInput): TerekaLoanRow[];
 declare function buildLoanPortfolioSummary(rows: TerekaLoanRow[]): TerekaLoanPortfolioSummary;
+declare function activeLoanMemberOptions(members: Array<TerekaMemberProfile & Record<string, any>>, excludedMemberId?: string): TerekaLoanMemberOption[];
+declare function loanProductOptions(products?: Array<TerekaFinancialProduct & Record<string, any>>): TerekaLoanProductOption[];
 declare function buildAccountingSummary(input: TerekaAccountingSummaryInput): TerekaAccountingSummary;
 declare function buildReconciliationReviewModel(input: { callbacks: Array<TerekaMobileMoneyCallback & Record<string, any>>; labelize: (value: any) => string; paymentRequests: Array<TerekaPaymentRequest & Record<string, any>>; reconciliation: TerekaReconciliationData | null | undefined }): TerekaReconciliationReviewModel;
 declare function buildPaymentRequestReviewRows(requests: Array<TerekaPaymentRequest & Record<string, any>> | null | undefined, labelize: (value: any) => string): TerekaPaymentRequestReviewRow[];

@@ -55,7 +55,8 @@ function guarantorsView() {
 
 function loanApplicationPanel() {
   const canCreate = hasPermission("loans:create");
-  const activeMembers = dataRows("members").filter((member) => normal(member.status) === "active");
+  const activeMembers = activeLoanMemberOptions(dataRows("members"));
+  const products = loanProductOptions(dataRows("financialProducts"));
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -68,8 +69,8 @@ function loanApplicationPanel() {
       ${state.loanFormError ? `<div class="notice warning"><strong>Loan application failed.</strong><span>${escapeHtml(state.loanFormError)}</span></div>` : ""}
       <form id="loanApplicationForm" class="form-grid">
         <input type="hidden" id="newLoanTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
-        <label><span>Borrower</span><select id="newLoanMemberId" ${canCreate ? "" : "disabled"}>${activeMembers.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
-        <label><span>Loan product</span><select id="newLoanProduct" ${canCreate ? "" : "disabled"}>${loanProductOptions().map((product) => `<option value="${escapeHtml(product)}">${escapeHtml(product)}</option>`).join("")}</select></label>
+        <label><span>Borrower</span><select id="newLoanMemberId" ${canCreate ? "" : "disabled"}>${activeMembers.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.label)}</option>`).join("")}</select></label>
+        <label><span>Loan product</span><select id="newLoanProduct" ${canCreate ? "" : "disabled"}>${products.map((product) => `<option value="${escapeHtml(product.name)}">${escapeHtml(product.label)}</option>`).join("")}</select></label>
         <label><span>Amount</span><input id="newLoanAmount" type="number" min="1" step="1" required value="500000" ${canCreate ? "" : "disabled"}></label>
         <label><span>Repayment period</span><input id="newLoanRepaymentMonths" type="number" min="1" max="60" step="1" required value="12" ${canCreate ? "" : "disabled"}></label>
         <label class="wide"><span>Purpose</span><input id="newLoanPurpose" placeholder="Business expansion, school fees, farming inputs..." ${canCreate ? "" : "disabled"}></label>
@@ -94,7 +95,7 @@ function loanDetailPanel(rows) {
   const canCreate = hasPermission("loans:create");
   const canApprove = hasPermission("loans:approve");
   const borrowerId = loan.memberId;
-  const guarantorOptions = dataRows("members").filter((member) => normal(member.status) === "active" && member.id !== borrowerId);
+  const guarantorOptions = activeLoanMemberOptions(dataRows("members"), borrowerId);
   const acceptedGuarantors = state.selectedLoanGuarantors.filter((request) => normal(request.status) === "accepted");
   const canApproveLoan = canApprove && ["submitted", "pending_approval"].includes(normal(loan.status)) && acceptedGuarantors.length > 0;
   const canRejectLoan = canApprove && ["submitted", "pending_approval"].includes(normal(loan.status));
@@ -153,7 +154,7 @@ function loanDetailPanel(rows) {
       <form id="loanGuarantorForm" class="form-grid single">
           <input type="hidden" id="selectedLoanId" value="${escapeHtml(loan.id)}">
           <h3>Add guarantor request</h3>
-          <label><span>Guarantor member</span><select id="newGuarantorMemberId" ${canCreate ? "" : "disabled"}>${guarantorOptions.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
+          <label><span>Guarantor member</span><select id="newGuarantorMemberId" ${canCreate ? "" : "disabled"}>${guarantorOptions.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.label)}</option>`).join("")}</select></label>
           <label><span>Guaranteed amount</span><input id="newGuarantorAmount" type="number" min="1" step="1" value="${Math.ceil(Number(loan.amount || loan.requestedAmount || 0) / 2)}" ${canCreate ? "" : "disabled"}></label>
           <div class="form-actions">${canCreate ? `<button class="button secondary" type="submit">Add guarantor request</button>` : `<span class="status pending">View only</span>`}</div>
         </form>
@@ -186,6 +187,3 @@ function loanDetailPanel(rows) {
   `;
 }
 
-function loanProductOptions() {
-  return ["Development Loan", "Emergency Loan"];
-}

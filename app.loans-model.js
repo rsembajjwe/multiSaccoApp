@@ -30,6 +30,37 @@ function buildLoanRows(input) {
   });
 }
 
+function activeLoanMemberOptions(members, excludedMemberId) {
+  return members
+    .filter((member) => normalizeLoanModelText(member.status) === "active")
+    .filter((member) => !excludedMemberId || member.id !== excludedMemberId)
+    .map((member) => ({
+      ...member,
+      fullName: member.fullName,
+      id: member.id,
+      label: `${member.membershipNo || ""} - ${member.fullName || ""}`.trim(),
+      membershipNo: member.membershipNo,
+      status: member.status
+    }));
+}
+
+function loanProductOptions(products = []) {
+  const loanProducts = products
+    .filter((product) => normalizeLoanModelText(product.productType || product.type) === "loan")
+    .filter((product) => !product.status || normalizeLoanModelText(product.status) === "active")
+    .map((product) => ({
+      ...product,
+      id: product.id,
+      label: String(product.name || product.code || "Loan product"),
+      name: String(product.name || product.code || "Loan product"),
+      productType: product.productType,
+      status: product.status
+    }));
+  return loanProducts.length
+    ? loanProducts
+    : ["Development Loan", "Emergency Loan"].map((name) => ({ label: name, name }));
+}
+
 function buildLoanPortfolioSummary(rows) {
   const submitted = rows.filter((loan) => ["submitted", "pending_approval"].includes(normalizeLoanModelText(loan.status)) || normalizeLoanModelText(loan.stage).includes("guarant")).length;
   const approved = rows.filter((loan) => normalizeLoanModelText(loan.status) === "approved").length;

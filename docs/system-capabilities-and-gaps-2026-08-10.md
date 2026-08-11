@@ -153,8 +153,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   receipt register rows, and receipt split summaries now live behind `src/transactions/transactions.ts` plus
   `app.transactions-model.js`, keeping Treasurer/Admin receipting and reversal evidence consistent
   while the classic Transactions screen remains in place.
-- Loan row shaping, guarantor readiness, approval readiness, servicing status, portfolio risk counts,
-  outstanding principal, and arrears-aging totals now live behind `src/loans/loans.ts` plus
+- Loan row shaping, borrower/guarantor option eligibility, product options, guarantor readiness,
+  approval readiness, servicing status, portfolio risk counts, outstanding principal, and arrears-aging totals now live behind `src/loans/loans.ts` plus
   `app.loans-model.js`, keeping the SACCO credit dashboard and loan list aligned during the
   TypeScript migration.
 - Accounting dashboard totals, unbalanced-journal counts, period-close counts, expense/asset account
@@ -239,7 +239,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   are also typed, along with payment provider filtering, payment request rows, and offline draft rows.
   SACCO admin member-document and statement summary builders are now typed too. Transaction row
   shaping, dashboard overview counts, receipting queue, receipt register, and receipt summaries now have the same typed boundary,
-  as do SACCO loan rows, portfolio risk summaries, accounting ledger totals, accounting account
+  as do SACCO loan rows, borrower/guarantor options, loan product options, portfolio risk summaries, accounting ledger totals, accounting account
   options, reconciliation review rows, SACCO finance summaries, notification delivery summaries, complaint/chat summaries, and
   governance meeting/resolution summaries, regulatory/platform report summaries, and audit
   classification summaries, onboarding and subscription billing summaries, and user/role access

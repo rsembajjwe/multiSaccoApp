@@ -35,8 +35,8 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    `app.member-admin-model.js`. Transaction row shaping, dashboard overview counts, approval readiness,
    payment route/status, receipting queue rows, receipt register rows, and receipt summaries now follow the same pattern
    through `src/transactions/transactions.ts` plus `app.transactions-model.js`. Loan row shaping,
-   guarantor readiness, approval readiness, servicing status, portfolio risk counts, outstanding
-   principal, and arrears-aging totals now follow the same pattern through `src/loans/loans.ts` plus
+   borrower/guarantor option eligibility, product options, guarantor readiness, approval readiness,
+   servicing status, portfolio risk counts, outstanding principal, and arrears-aging totals now follow the same pattern through `src/loans/loans.ts` plus
    `app.loans-model.js`. Accounting dashboard totals, unbalanced-journal counts, period-close counts,
    expense/asset account option filters, asset category options, reconciliation exception totals,
    payment request review rows, match rows, and reconciliation coverage now follow the same pattern through `src/accounting/accounting.ts` plus

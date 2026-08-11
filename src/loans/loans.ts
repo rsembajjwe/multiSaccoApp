@@ -1,4 +1,4 @@
-import type { TerekaLoan, TerekaMoney, TerekaRecord } from "../types/domain";
+import type { TerekaFinancialProduct, TerekaLoan, TerekaMemberProfile, TerekaMoney, TerekaRecord } from "../types/domain";
 
 export interface TerekaLoanRow extends TerekaLoan, TerekaRecord {
   action: string;
@@ -28,6 +28,22 @@ export interface TerekaLoanPortfolioSummary {
   over90Total: number;
   submitted: number;
   total: number;
+}
+
+export interface TerekaLoanMemberOption extends TerekaRecord {
+  fullName?: string;
+  id?: string;
+  label: string;
+  membershipNo?: string;
+  status?: string;
+}
+
+export interface TerekaLoanProductOption extends TerekaRecord {
+  id?: string;
+  label: string;
+  name: string;
+  productType?: string;
+  status?: string;
 }
 
 export function buildLoanRows(input: TerekaLoanRowsInput): TerekaLoanRow[] {
@@ -60,6 +76,37 @@ export function buildLoanRows(input: TerekaLoanRowsInput): TerekaLoanRow[] {
       actionId: loan.id,
     };
   });
+}
+
+export function activeLoanMemberOptions(members: Array<TerekaMemberProfile & TerekaRecord>, excludedMemberId?: string): TerekaLoanMemberOption[] {
+  return members
+    .filter((member) => normalizeLoanText(member.status) === "active")
+    .filter((member) => !excludedMemberId || member.id !== excludedMemberId)
+    .map((member) => ({
+      ...member,
+      fullName: member.fullName,
+      id: member.id,
+      label: `${member.membershipNo || ""} - ${member.fullName || ""}`.trim(),
+      membershipNo: member.membershipNo,
+      status: member.status,
+    }));
+}
+
+export function loanProductOptions(products: Array<TerekaFinancialProduct & TerekaRecord> = []): TerekaLoanProductOption[] {
+  const loanProducts = products
+    .filter((product) => normalizeLoanText(product.productType || product.type) === "loan")
+    .filter((product) => !product.status || normalizeLoanText(product.status) === "active")
+    .map((product) => ({
+      ...product,
+      id: product.id,
+      label: String(product.name || product.code || "Loan product"),
+      name: String(product.name || product.code || "Loan product"),
+      productType: product.productType,
+      status: product.status,
+    }));
+  return loanProducts.length
+    ? loanProducts
+    : ["Development Loan", "Emergency Loan"].map((name) => ({ label: name, name }));
 }
 
 export function buildLoanPortfolioSummary(rows: TerekaLoanRow[]): TerekaLoanPortfolioSummary {
