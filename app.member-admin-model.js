@@ -37,8 +37,63 @@ function buildMemberStatementSummary(member, lines) {
   };
 }
 
+function buildMemberDetailSummary(input) {
+  return {
+    beneficiaries: input.beneficiaries.length,
+    contacts: input.nextOfKin.length,
+    documents: input.documents.length,
+    statementLines: input.statementLines.length,
+    totalBalance: input.statementSummary.totalBalance
+  };
+}
+
+function memberKycReadinessFor(member) {
+  const missing = [];
+  if (!member.phone) missing.push("phone");
+  if (!member.nationalId) missing.push("national ID");
+  if (!member.fullName) missing.push("name");
+  if (normalizeMemberAdminText(member.kycStatus) === "verified" && normalizeMemberAdminText(member.status) === "active") return "Portal ready";
+  if (missing.length) return `Missing ${missing.join(", ")}`;
+  if (normalizeMemberAdminText(member.kycStatus).includes("pending")) return "Ready for review";
+  if (normalizeMemberAdminText(member.status).includes("pending")) return "Approval needed";
+  return "Review";
+}
+
+function buildMemberKycChecklistRows(member, labelize) {
+  return [
+    { area: "Identity", detail: member.nationalId ? "National ID captured" : "National ID missing", status: member.nationalId ? "Complete" : "Pending" },
+    { area: "Contact", detail: member.phone ? "Phone number captured" : "Phone number missing", status: member.phone ? "Complete" : "Pending" },
+    { area: "KYC decision", detail: labelize(member.kycStatus || "pending"), status: normalizeMemberAdminText(member.kycStatus) === "verified" ? "Complete" : "Review" },
+    { area: "Member status", detail: labelize(member.status || "pending"), status: normalizeMemberAdminText(member.status) === "active" ? "Active" : "Review" },
+    { area: "Portal login", detail: normalizeMemberAdminText(member.status) === "active" ? "Member can access portal after credential setup" : "Activate member before portal access", status: normalizeMemberAdminText(member.status) === "active" ? "Ready" : "Pending" }
+  ];
+}
+
 function buildReceiptReadyStatementLines(lines) {
   return lines.filter((line) => line.reference || line.receiptNo || normalizeMemberAdminText(line.status) === "posted");
+}
+
+function buildMemberReceiptEvidenceSummary(lines) {
+  const receiptRows = buildReceiptReadyStatementLines(lines);
+  const mobileRows = receiptRows.filter((line) => isMobileMoneyPerformanceLine(line));
+  return {
+    lastReceipt: receiptRows[0]?.receiptNo || receiptRows[0]?.reference || "No receipt yet",
+    mobileRows: mobileRows.length,
+    receiptRows: receiptRows.length,
+    treasurerRows: receiptRows.length - mobileRows.length
+  };
+}
+
+function buildStaffStatementExportSummary(lines) {
+  const receiptRows = buildReceiptReadyStatementLines(lines);
+  return {
+    auditTrail: "Included",
+    csvStatement: "Backend download",
+    excelSchedule: "Open CSV in Excel",
+    printStatement: "Available",
+    receiptBundle: receiptRows.length ? "Available" : "No receipts yet",
+    statementRows: lines.length
+  };
 }
 
 function statementCredit(line) {

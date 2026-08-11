@@ -44,6 +44,13 @@ function memberDetailPanel(mode = "kyc") {
   const branches = dataRows("branches");
   const statementLines = state.selectedMemberStatement?.lines || [];
   const statementSummary = buildMemberStatementSummary(member, statementLines);
+  const detailSummary = buildMemberDetailSummary({
+    beneficiaries: state.selectedMemberBeneficiaries || [],
+    documents: state.selectedMemberDocuments || [],
+    nextOfKin: state.selectedMemberNextOfKin || [],
+    statementLines,
+    statementSummary
+  });
   const title = mode === "contacts" ? "Member contacts and documents" : mode === "statement" ? "Member balance statement" : "Member detail and KYC approval";
   return `
     <section class="panel detail-panel">
@@ -57,11 +64,11 @@ function memberDetailPanel(mode = "kyc") {
       ${state.selectedMemberMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedMemberMessage)}</strong></div>` : ""}
       ${state.selectedMemberError ? `<div class="notice warning"><strong>Member update failed.</strong><span>${escapeHtml(state.selectedMemberError)}</span></div>` : ""}
       <div class="dashboard-grid">
-        ${summary("Total balance", money.format(statementSummary.totalBalance), "Savings, shares and welfare", "View")}
-        ${summary("Statement lines", statementLines.length, "Posted statement activity", "Review")}
-        ${summary("Documents", state.selectedMemberDocuments.length, "KYC evidence files", "Verify")}
-        ${summary("Contacts", state.selectedMemberNextOfKin.length, "Next-of-kin records", "Review")}
-        ${summary("Beneficiaries", state.selectedMemberBeneficiaries.length, "Allocation records", "Review")}
+        ${summary("Total balance", money.format(detailSummary.totalBalance), "Savings, shares and welfare", "View")}
+        ${summary("Statement lines", detailSummary.statementLines, "Posted statement activity", "Review")}
+        ${summary("Documents", detailSummary.documents, "KYC evidence files", "Verify")}
+        ${summary("Contacts", detailSummary.contacts, "Next-of-kin records", "Review")}
+        ${summary("Beneficiaries", detailSummary.beneficiaries, "Allocation records", "Review")}
       </div>
       <div class="source-grid">
         ${mini("Status", member.status)}
@@ -173,23 +180,8 @@ function memberStatementControlPanel(member, lines, statementSummary) {
   `;
 }
 
-function statementCredit(line) {
-  const amount = Number(line.amount || 0);
-  const credit = line.credit ?? (amount > 0 ? amount : 0);
-  return Number(credit || 0);
-}
-
-function statementDebit(line) {
-  const amount = Number(line.amount || 0);
-  const debit = line.debit ?? (amount < 0 ? Math.abs(amount) : 0);
-  return Number(debit || 0);
-}
-
 function memberStatementReceiptPanel(lines) {
-  const receiptRows = buildReceiptReadyStatementLines(lines);
-  const mobileRows = receiptRows.filter((line) => isMobileMoneyLine(line));
-  const treasurerRows = receiptRows.filter((line) => !isMobileMoneyLine(line));
-  const lastReceipt = receiptRows[0]?.receiptNo || receiptRows[0]?.reference || "No receipt yet";
+  const receiptSummary = buildMemberReceiptEvidenceSummary(lines);
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
@@ -197,20 +189,20 @@ function memberStatementReceiptPanel(lines) {
           <h2>Receipt evidence summary</h2>
           <p>Receipt readiness by posted statement line, mobile-money evidence and Treasurer office posting.</p>
         </div>
-        <span class="status ${receiptRows.length ? "active" : "pending"}">${receiptRows.length ? "Receipts ready" : "Awaiting receipts"}</span>
+        <span class="status ${receiptSummary.receiptRows ? "active" : "pending"}">${receiptSummary.receiptRows ? "Receipts ready" : "Awaiting receipts"}</span>
       </div>
       <div class="source-grid">
-        ${mini("Receipt-ready lines", receiptRows.length)}
-        ${mini("Mobile-money evidence", mobileRows.length)}
-        ${mini("Treasurer receipt evidence", treasurerRows.length)}
-        ${mini("Last receipt reference", lastReceipt)}
+        ${mini("Receipt-ready lines", receiptSummary.receiptRows)}
+        ${mini("Mobile-money evidence", receiptSummary.mobileRows)}
+        ${mini("Treasurer receipt evidence", receiptSummary.treasurerRows)}
+        ${mini("Last receipt reference", receiptSummary.lastReceipt)}
       </div>
     </section>
   `;
 }
 
 function staffStatementExportPanel(member, lines) {
-  const receiptRows = buildReceiptReadyStatementLines(lines);
+  const exportSummary = buildStaffStatementExportSummary(lines);
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
@@ -221,12 +213,12 @@ function staffStatementExportPanel(member, lines) {
         <span class="status active">Export ready</span>
       </div>
       <div class="source-grid">
-        ${mini("CSV statement", "Backend download")}
-        ${mini("Excel schedule", "Open CSV in Excel")}
-        ${mini("Print statement", "Available")}
-        ${mini("Receipt bundle", receiptRows.length ? "Available" : "No receipts yet")}
-        ${mini("Statement rows", lines.length)}
-        ${mini("Audit trail", "Included")}
+        ${mini("CSV statement", exportSummary.csvStatement)}
+        ${mini("Excel schedule", exportSummary.excelSchedule)}
+        ${mini("Print statement", exportSummary.printStatement)}
+        ${mini("Receipt bundle", exportSummary.receiptBundle)}
+        ${mini("Statement rows", exportSummary.statementRows)}
+        ${mini("Audit trail", exportSummary.auditTrail)}
       </div>
       <div class="form-actions inline">
         <button class="button primary" type="button" data-staff-statement-export="csv" data-member-id="${escapeHtml(member.id)}">Download CSV</button>
@@ -258,26 +250,11 @@ function memberTypeOptions() {
 }
 
 function memberKycReadiness(member) {
-  const missing = [];
-  if (!member.phone) missing.push("phone");
-  if (!member.nationalId) missing.push("national ID");
-  if (!member.fullName) missing.push("name");
-  if (normal(member.kycStatus) === "verified" && normal(member.status) === "active") return "Portal ready";
-  if (missing.length) return `Missing ${missing.join(", ")}`;
-  if (normal(member.kycStatus).includes("pending")) return "Ready for review";
-  if (normal(member.status).includes("pending")) return "Approval needed";
-  return "Review";
+  return memberKycReadinessFor(member);
 }
 
 function memberKycChecklist(member) {
-  const checks = [
-    ["Identity", member.nationalId ? "National ID captured" : "National ID missing", member.nationalId ? "Complete" : "Pending"],
-    ["Contact", member.phone ? "Phone number captured" : "Phone number missing", member.phone ? "Complete" : "Pending"],
-    ["KYC decision", labelize(member.kycStatus || "pending"), normal(member.kycStatus) === "verified" ? "Complete" : "Review"],
-    ["Member status", labelize(member.status || "pending"), normal(member.status) === "active" ? "Active" : "Review"],
-    ["Portal login", normal(member.status) === "active" ? "Member can access portal after credential setup" : "Activate member before portal access", normal(member.status) === "active" ? "Ready" : "Pending"]
-  ];
-  return rolePriorityPanel("Member KYC checklist", checks);
+  return rolePriorityPanel("Member KYC checklist", buildMemberKycChecklistRows(member, labelize).map((row) => [row.area, row.detail, row.status]));
 }
 
 function kycStatusOptions() {

@@ -1152,6 +1152,36 @@ interface TerekaMemberStatementSummary {
   treasurerRows: number;
 }
 
+interface TerekaMemberDetailSummary {
+  beneficiaries: number;
+  contacts: number;
+  documents: number;
+  statementLines: number;
+  totalBalance: number;
+}
+
+interface TerekaMemberKycCheckRow {
+  area: string;
+  detail: string;
+  status: string;
+}
+
+interface TerekaMemberReceiptEvidenceSummary {
+  lastReceipt: string;
+  mobileRows: number;
+  receiptRows: number;
+  treasurerRows: number;
+}
+
+interface TerekaStaffStatementExportSummary {
+  auditTrail: string;
+  csvStatement: string;
+  excelSchedule: string;
+  printStatement: string;
+  receiptBundle: string;
+  statementRows: number;
+}
+
 interface TerekaTransactionRow extends TerekaFinancialTransaction {
   action: string;
   actionId?: string;
@@ -1441,7 +1471,12 @@ declare function buildMemberPaymentRequestRows(requests: TerekaPaymentRequest[])
 declare function buildMemberDocumentRows(documents: Record<string, any>[], labelize: (value: any) => string, formatDateTime: (value: any) => string): TerekaMemberDocumentRow[];
 declare function buildMemberDocumentRetentionSummary(documents: Record<string, any>[]): TerekaMemberDocumentRetentionSummary;
 declare function buildMemberStatementSummary(member: Record<string, any>, lines: TerekaStatementLine[]): TerekaMemberStatementSummary;
+declare function buildMemberDetailSummary(input: { beneficiaries: Record<string, any>[]; documents: Record<string, any>[]; nextOfKin: Record<string, any>[]; statementLines: TerekaStatementLine[]; statementSummary: TerekaMemberStatementSummary }): TerekaMemberDetailSummary;
+declare function memberKycReadinessFor(member: Record<string, any>): string;
+declare function buildMemberKycChecklistRows(member: Record<string, any>, labelize: (value: any) => string): TerekaMemberKycCheckRow[];
 declare function buildReceiptReadyStatementLines(lines: TerekaStatementLine[]): TerekaStatementLine[];
+declare function buildMemberReceiptEvidenceSummary(lines: TerekaStatementLine[]): TerekaMemberReceiptEvidenceSummary;
+declare function buildStaffStatementExportSummary(lines: TerekaStatementLine[]): TerekaStaffStatementExportSummary;
 declare function buildTransactionRows(input: TerekaTransactionRowsInput): TerekaTransactionRow[];
 declare function buildTransactionReceiptingQueue(rows: TerekaTransactionRow[]): TerekaReceiptingQueueRow[];
 declare function buildTransactionReceiptRegister(rows: TerekaTransactionRow[]): TerekaReceiptRegisterRow[];

@@ -63,7 +63,10 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    `src/onboarding/onboarding.ts` plus `app.onboarding-model.js`. Platform/SACCO user access rows,
    access dashboard summaries, role coverage rows, SACCO staff role guide rows, permission-matrix
    rows, role purpose/scope text, and multi-role summary text now follow the same pattern through
-   `src/access/access.ts` plus `app.access-model.js`.
+   `src/access/access.ts` plus `app.access-model.js`. Member administration KYC readiness, KYC
+   checklist rows, member detail summary counts, receipt evidence summaries, and staff statement
+   export summaries now live in the existing `src/member/admin.ts` plus
+   `app.member-admin-model.js`.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the

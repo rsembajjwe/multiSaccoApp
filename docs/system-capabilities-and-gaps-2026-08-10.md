@@ -184,6 +184,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Platform/SACCO user access rows, access dashboard summaries, role coverage rows, SACCO staff role
   guide rows, permission-matrix rows, role purpose/scope text, and multi-role summary text now live
   behind `src/access/access.ts` plus `app.access-model.js`.
+- Member administration KYC readiness, KYC checklist rows, member detail summary counts, receipt
+  evidence summaries, and staff statement export summaries now live behind the existing
+  `src/member/admin.ts` plus `app.member-admin-model.js`.
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
   no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,
@@ -237,7 +240,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   rows, SACCO finance summaries, notification delivery summaries, complaint/chat summaries, and
   governance meeting/resolution summaries, regulatory/platform report summaries, and audit
   classification summaries, onboarding and subscription billing summaries, and user/role access
-  summaries.
+  summaries. Member administration KYC and statement evidence summaries are also covered by the
+  typed member-admin bridge.
   The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.
