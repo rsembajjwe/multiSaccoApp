@@ -137,8 +137,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   permissions, audit events, transactions, accounting/setup objects, integration configs, security
   policy summaries, reconciliation data, regulatory reports, and quick-search result navigation.
   `npm run type:check` verifies that the important type contracts and global-state wiring remain in
-  place, and `npm run type:evidence` records both the TypeScript gate and contract check as
-  timestamped release evidence under `reports/type-evidence/`.
+  place, `npm run check` runs both type gates in CI, and `npm run type:evidence` records the
+  TypeScript gate plus contract check as timestamped release evidence under `reports/type-evidence/`.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
   views.
 - i18n evidence now records supported locale metadata for English, French, Swahili, Portuguese,
