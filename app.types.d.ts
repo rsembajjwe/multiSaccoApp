@@ -1069,6 +1069,64 @@ interface TerekaWelfareClaimRow extends TerekaWelfareClaim {
   [key: string]: any;
 }
 
+interface TerekaNotificationDeliveryRow extends TerekaNotification {
+  acknowledgedAt: string;
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  alertStatus?: any;
+  deliveryStatus: string;
+  event: string;
+  memberName: string;
+  resource: string;
+  tenantName: string;
+  [key: string]: any;
+}
+
+interface TerekaNotificationTemplateRow extends TerekaNotificationTemplate {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  tenantName: string;
+  [key: string]: any;
+}
+
+interface TerekaProviderJobRunRow extends TerekaProviderJobRun {
+  finishedAtDisplay: string;
+  jobLabel: string;
+  runStatus: string;
+  startedAtDisplay: string;
+  [key: string]: any;
+}
+
+interface TerekaNotificationSummary {
+  activeTemplates: number;
+  deliveryCount: number;
+  failedDeliveries: number;
+  globalTemplates: number;
+  loginRiskAlerts: number;
+  paymentExceptions: number;
+  unreadAlerts: number;
+}
+
+interface TerekaNotificationFilters {
+  channel?: string;
+  date?: string;
+  provider?: string;
+  status?: string;
+  tenantId?: string;
+}
+
+interface TerekaNotificationRowsInput {
+  canManageNotifications: boolean;
+  deliveries: Array<TerekaNotification & Record<string, any>>;
+  formatDateTime: (value: any) => string;
+  labelize: (value: any) => string;
+  memberName: (memberId?: string) => string;
+  tenantName: (tenantId?: string) => string;
+  userName: (userId?: string) => string;
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -1128,6 +1186,17 @@ declare function buildWelfareSummary(input: { accounts: TerekaFinancialAccount[]
 declare function buildWelfareClaimRows(claims: TerekaWelfareClaim[]): TerekaWelfareClaimRow[];
 declare function activeFinanceProducts(products: TerekaFinancialProduct[]): TerekaFinancialProduct[];
 declare function welfareSubmittedClaims(claims: TerekaWelfareClaim[]): TerekaWelfareClaim[];
+declare function buildNotificationDeliveryRows(input: TerekaNotificationRowsInput): TerekaNotificationDeliveryRow[];
+declare function buildNotificationTemplateRows(input: { templates: Array<TerekaNotificationTemplate & Record<string, any>>; tenantName: (tenantId?: string) => string }): TerekaNotificationTemplateRow[];
+declare function buildProviderJobRunRows(input: { formatDateTime: (value: any) => string; jobRuns: Array<TerekaProviderJobRun & Record<string, any>>; labelize: (value: any) => string }): TerekaProviderJobRunRow[];
+declare function buildNotificationSummary(deliveries: TerekaNotificationDeliveryRow[], templates: TerekaNotificationTemplateRow[]): TerekaNotificationSummary;
+declare function filterNotificationDeliveryRows(deliveries: TerekaNotificationDeliveryRow[] | null | undefined, filters: TerekaNotificationFilters | null | undefined): TerekaNotificationDeliveryRow[];
+declare function loginRiskDeliveries(deliveries: TerekaNotificationDeliveryRow[]): TerekaNotificationDeliveryRow[];
+declare function unreadNotificationDeliveries(deliveries: TerekaNotificationDeliveryRow[]): TerekaNotificationDeliveryRow[];
+declare function failedNotificationDeliveries(deliveries: TerekaNotificationDeliveryRow[]): TerekaNotificationDeliveryRow[];
+declare function paymentExceptionDeliveries(deliveries: TerekaNotificationDeliveryRow[]): TerekaNotificationDeliveryRow[];
+declare function uniqueUnreadNotificationIds(deliveries: TerekaNotificationDeliveryRow[]): string[];
+declare function notificationDeliveryActionFor(delivery: Record<string, any>, canManageNotifications: boolean): string;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

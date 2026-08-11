@@ -1,28 +1,18 @@
 ﻿function notificationsView() {
-  const deliveries = dataRows("notifications").map((delivery) => ({
-    ...delivery,
-    tenantName: tenantName(delivery.tenantId),
-    memberName: delivery.memberId ? memberName(delivery.memberId) : delivery.userId ? userName(delivery.userId) : "SACCO broadcast",
-    event: delivery.eventType ? labelize(delivery.eventType) : delivery.title || "Notification",
-    resource: delivery.resourceType ? `${labelize(delivery.resourceType)} ${delivery.resourceId || ""}`.trim() : "-",
-    alertStatus: delivery.readAt ? "acknowledged" : delivery.notificationStatus || delivery.status,
-    deliveryStatus: delivery.status || "pending",
-    acknowledgedAt: delivery.readAt ? formatDateTime(delivery.readAt) : "-",
-    action: notificationDeliveryAction(delivery),
-    actionLabel: normal(delivery.status).includes("failed") && hasPermission("notifications:manage") ? "Retry" : "Acknowledge",
-    actionId: normal(delivery.status).includes("failed") && hasPermission("notifications:manage") ? delivery.id : delivery.notificationId || delivery.id
-  }));
-  const securityAlerts = deliveries.filter((delivery) => normal(`${delivery.message} ${delivery.provider} ${delivery.channel}`).includes("login"));
-  const unreadAlerts = deliveries.filter((delivery) => !delivery.readAt && normal(delivery.alertStatus).includes("unread"));
-  const failedDeliveries = deliveries.filter((row) => normal(row.status).includes("failed"));
-  const paymentExceptions = deliveries.filter((delivery) => normal(delivery.eventType) === "payment_request_closed");
-  const jobRuns = dataRows("providerJobRuns").map((run) => ({
-    ...run,
-    jobLabel: labelize(run.jobName || "provider_job"),
-    runStatus: labelize(run.status || "unknown"),
-    startedAtDisplay: run.startedAt ? formatDateTime(run.startedAt) : "-",
-    finishedAtDisplay: run.finishedAt ? formatDateTime(run.finishedAt) : "-"
-  }));
+  const deliveries = buildNotificationDeliveryRows({
+    deliveries: dataRows("notifications"),
+    tenantName,
+    memberName,
+    userName,
+    labelize,
+    formatDateTime,
+    canManageNotifications: hasPermission("notifications:manage")
+  });
+  const securityAlerts = loginRiskDeliveries(deliveries);
+  const unreadAlerts = unreadNotificationDeliveries(deliveries);
+  const failedDeliveries = failedNotificationDeliveries(deliveries);
+  const paymentExceptions = paymentExceptionDeliveries(deliveries);
+  const jobRuns = buildProviderJobRunRows({ jobRuns: dataRows("providerJobRuns"), labelize, formatDateTime });
   const tabs = [["delivery-log", "Delivery log"], ["payment-exceptions", "Payment exceptions"], ["failed", "Failed"], ["unread", "Unread"], ["login-risk", "Login risk"], ["templates", "Templates"], ["job-history", "Job history"]];
   const tab = activeModuleTab("notifications", tabs);
   const deliveryTabs = ["delivery-log", "payment-exceptions", "failed", "unread", "login-risk"];
@@ -36,26 +26,18 @@
           ? unreadAlerts
           : deliveries;
   const visibleDeliveries = deliveryTabs.includes(tab) ? filterNotificationDeliveries(tabDeliveries) : [];
-  const bulkAcknowledgeIds = visibleDeliveries
-    .filter((delivery) => delivery.notificationId && !delivery.readAt)
-    .map((delivery) => delivery.notificationId)
-    .filter((id, index, ids) => ids.indexOf(id) === index);
-  const templates = dataRows("notificationTemplates").map((template) => ({
-    ...template,
-    tenantName: template.tenantId ? tenantName(template.tenantId) : "Global template",
-    action: "template-detail",
-    actionLabel: "Edit",
-    actionId: template.id
-  }));
+  const bulkAcknowledgeIds = uniqueUnreadNotificationIds(visibleDeliveries);
+  const templates = buildNotificationTemplateRows({ templates: dataRows("notificationTemplates"), tenantName });
+  const notificationSummary = buildNotificationSummary(deliveries, templates);
   return `
     <div class="dashboard-grid">
-      ${summary(t("deliveries"), deliveries.length, "SMS, email and in-app events", "Monitor")}
-      ${summary("Payment exceptions", paymentExceptions.length, "Manually closed mobile-money requests", paymentExceptions.length ? "Review" : "Clear")}
-      ${summary(t("failedDeliveries"), failedDeliveries.length, "Provider exceptions", "Investigate")}
-      ${summary(t("loginRiskAlerts"), securityAlerts.length, "In-app admin security alerts", t("review"))}
-      ${summary(t("unreadAlerts"), unreadAlerts.length, "Need acknowledgement", "Clear")}
-      ${summary(t("activeTemplates"), templates.filter((row) => normal(row.status) === "active").length, "Reusable message rules", "Edit")}
-      ${summary(t("globalTemplates"), templates.filter((row) => !row.tenantId).length, "Platform defaults", t("review"))}
+      ${summary(t("deliveries"), notificationSummary.deliveryCount, "SMS, email and in-app events", "Monitor")}
+      ${summary("Payment exceptions", notificationSummary.paymentExceptions, "Manually closed mobile-money requests", notificationSummary.paymentExceptions ? "Review" : "Clear")}
+      ${summary(t("failedDeliveries"), notificationSummary.failedDeliveries, "Provider exceptions", "Investigate")}
+      ${summary(t("loginRiskAlerts"), notificationSummary.loginRiskAlerts, "In-app admin security alerts", t("review"))}
+      ${summary(t("unreadAlerts"), notificationSummary.unreadAlerts, "Need acknowledgement", "Clear")}
+      ${summary(t("activeTemplates"), notificationSummary.activeTemplates, "Reusable message rules", "Edit")}
+      ${summary(t("globalTemplates"), notificationSummary.globalTemplates, "Platform defaults", t("review"))}
     </div>
     ${state.notificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.notificationMessage)}</strong></div>` : ""}
     ${state.notificationError ? `<div class="notice warning"><strong>Notification action failed.</strong><span>${escapeHtml(state.notificationError)}</span></div>` : ""}
@@ -206,9 +188,7 @@ function notificationProviderStatusPanel() {
 }
 
 function notificationDeliveryAction(delivery) {
-  if (normal(delivery.status).includes("failed") && hasPermission("notifications:manage")) return "notification-retry";
-  if (delivery.notificationId && !delivery.readAt) return "notification-acknowledge";
-  return "none";
+  return notificationDeliveryActionFor(delivery, hasPermission("notifications:manage"));
 }
 
 function notificationDeliveryFilters(deliveries) {
@@ -242,15 +222,7 @@ function notificationDeliveryFilters(deliveries) {
 }
 
 function filterNotificationDeliveries(deliveries) {
-  const filters = state.notificationFilters || {};
-  return (deliveries || []).filter((delivery) => {
-    if (filters.status && filters.status !== "all" && normal(delivery.status) !== normal(filters.status)) return false;
-    if (filters.channel && filters.channel !== "all" && normal(delivery.channel) !== normal(filters.channel)) return false;
-    if (filters.provider && filters.provider !== "all" && normal(delivery.provider) !== normal(filters.provider)) return false;
-    if (filters.tenantId && filters.tenantId !== "all" && delivery.tenantId !== filters.tenantId) return false;
-    if (filters.date && String(delivery.createdAt || delivery.sentAt || "").slice(0, 10) !== filters.date) return false;
-    return true;
-  });
+  return filterNotificationDeliveryRows(deliveries, state.notificationFilters || {});
 }
 
 function notificationTemplatePanel() {

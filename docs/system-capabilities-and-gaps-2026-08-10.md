@@ -163,6 +163,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - SACCO finance summaries for savings, shares, welfare, active products, member balances,
   contribution totals, welfare claim counts, paid welfare amounts, and claim action rows now live
   behind `src/sacco-finance/finance.ts` plus `app.sacco-finance-model.js`.
+- Notification delivery rows, template rows, provider job rows, dashboard counts, delivery filters,
+  unread acknowledgement IDs, payment exception slices, and login-risk slices now live behind
+  `src/notifications/notifications.ts` plus `app.notifications-model.js`.
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
   no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,
@@ -213,7 +216,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   SACCO admin member-document and statement summary builders are now typed too. Transaction row
   shaping, receipting queue, receipt register, and receipt summaries now have the same typed boundary,
   as do SACCO loan rows, portfolio risk summaries, accounting ledger totals, reconciliation review
-  rows, and SACCO finance summaries.
+  rows, SACCO finance summaries, and notification delivery summaries.
   The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.

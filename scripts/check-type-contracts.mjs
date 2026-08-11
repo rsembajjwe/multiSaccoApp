@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -16,6 +16,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/loans/loans.ts"),
   readText("src/accounting/accounting.ts"),
   readText("src/sacco-finance/finance.ts"),
+  readText("src/notifications/notifications.ts"),
   readText("app.state.js"),
 ]);
 
@@ -83,6 +84,12 @@ for (const marker of [
   "interface TerekaSharesSummary",
   "interface TerekaWelfareSummary",
   "interface TerekaWelfareClaimRow",
+  "interface TerekaNotificationDeliveryRow",
+  "interface TerekaNotificationTemplateRow",
+  "interface TerekaProviderJobRunRow",
+  "interface TerekaNotificationSummary",
+  "interface TerekaNotificationFilters",
+  "interface TerekaNotificationRowsInput",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -217,6 +224,28 @@ for (const marker of [
   "export function welfareSubmittedClaims",
 ]) {
   assert.ok(financeSource.includes(marker), `src/sacco-finance/finance.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaNotificationDeliveryRow",
+  "export interface TerekaNotificationTemplateRow",
+  "export interface TerekaProviderJobRunRow",
+  "export interface TerekaNotificationSummary",
+  "export interface TerekaNotificationFilters",
+  "export interface TerekaNotificationRowsInput",
+  "export function buildNotificationDeliveryRows",
+  "export function buildNotificationTemplateRows",
+  "export function buildProviderJobRunRows",
+  "export function buildNotificationSummary",
+  "export function filterNotificationDeliveryRows",
+  "export function loginRiskDeliveries",
+  "export function unreadNotificationDeliveries",
+  "export function failedNotificationDeliveries",
+  "export function paymentExceptionDeliveries",
+  "export function uniqueUnreadNotificationIds",
+  "export function notificationDeliveryActionFor",
+]) {
+  assert.ok(notificationSource.includes(marker), `src/notifications/notifications.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");
