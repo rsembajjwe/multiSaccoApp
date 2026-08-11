@@ -49,7 +49,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    `app.notifications-model.js`. Complaint/chat thread rows, open/urgent/in-progress/resolved counts,
    member/platform split counts, complaint category/status options, unread and assignment counts,
    chat search filtering, participant labels, and avatar initials now follow the same pattern through `src/complaints/complaints.ts`
-   plus `app.complaints-model.js`. Governance meeting rows, resolution rows, meeting-detail
+   plus `app.complaints-model.js`, with redundant chat row/avatar wrapper helpers removed. Governance meeting rows, resolution rows, meeting-detail
    resolution rows, SACCO staff dropdown options, meeting type options, scheduled/completed
    slices, open and overdue resolution tracking, and minutes-evidence summaries now follow the same
    pattern through `src/governance/governance.ts` plus `app.governance-model.js`. Regulatory report

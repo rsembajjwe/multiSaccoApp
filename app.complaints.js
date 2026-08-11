@@ -1,5 +1,5 @@
 ﻿function complaintsView() {
-  const rows = chatThreadRows();
+  const rows = buildChatThreadRows({ threads: dataRows("chatThreads") || [], tenantName, memberName });
   const complaintSummary = buildComplaintSummary(rows);
   if (isPlatform()) {
     const tabs = [["chat", "SACCO admin chat"], ["capture", "Record SACCO message"], ["list", "Case list"]];
@@ -86,7 +86,7 @@ function complaintChatThreadButton(row, selected, mode) {
   const latest = row.lastMessagePreview || row.subject || "No messages yet.";
   return `
     <button class="chat-thread-button ${selected ? "active" : ""}" type="button" data-chat-complaint-id="${escapeHtml(row.id)}">
-      <span class="chat-avatar">${escapeHtml(chatInitials(participant))}</span>
+      <span class="chat-avatar">${escapeHtml(chatInitialsFor(participant))}</span>
       <span class="chat-thread-copy">
         <strong>${escapeHtml(participant)}</strong>
         <em>${escapeHtml(row.subject || "Support chat")}</em>
@@ -102,15 +102,6 @@ function complaintChatThreadButton(row, selected, mode) {
 
 function complaintChatParticipant(row, mode) {
   return chatParticipantLabel({ row, mode, tenantName, memberName, contextName });
-}
-
-function chatInitials(text) {
-  return chatInitialsFor(text);
-}
-
-function chatThreadRows(source) {
-  const threads = source || dataRows("chatThreads") || [];
-  return buildChatThreadRows({ threads, tenantName, memberName });
 }
 
 /**
@@ -291,7 +282,7 @@ async function pollChatThread() {
 }
 
 function memberChatWorkspace() {
-  const rows = chatThreadRows(state.memberData.chatThreads);
+  const rows = buildChatThreadRows({ threads: state.memberData.chatThreads || [], tenantName, memberName });
   const composer = `
     <section class="panel">
       <div class="panel-heading">

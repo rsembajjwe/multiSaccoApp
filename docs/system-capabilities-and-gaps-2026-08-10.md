@@ -169,7 +169,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   `src/notifications/notifications.ts` plus `app.notifications-model.js`.
 - Complaint/chat thread rows, open/urgent/in-progress/resolved counts, member/platform split counts,
   complaint category/status options, unread and assignment counts, chat search filtering, participant labels, and avatar initials now
-  live behind `src/complaints/complaints.ts` plus `app.complaints-model.js`.
+  live behind `src/complaints/complaints.ts` plus `app.complaints-model.js`, with redundant chat row/avatar wrapper helpers removed.
 - Governance meeting rows, resolution rows, meeting-detail resolution rows, SACCO staff dropdown
   options, meeting type options, scheduled/completed/open-resolution slices, overdue resolution
   detection, and meeting evidence summaries now live behind
