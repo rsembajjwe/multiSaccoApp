@@ -137,12 +137,8 @@ function reportReadinessPanel(consolidated) {
   `;
 }
 
-function normalizedAuditRows() {
-  return buildAuditRows({ events: dataRows("auditEvents"), tenantName, userName });
-}
-
 function auditView() {
-  const rows = normalizedAuditRows();
+  const rows = buildAuditRows({ events: dataRows("auditEvents"), tenantName, userName });
   const auditGroups = buildAuditGroups(rows);
   const auditSummary = buildAuditSummary(rows, auditGroups);
   const loginRisks = loginRiskEvents();

@@ -36,7 +36,7 @@ function notificationProviderRiskPanel() {
 }
 
 function loginRiskEvents() {
-  return filterLoginRiskEvents(normalizedAuditRows());
+  return filterLoginRiskEvents(buildAuditRows({ events: dataRows("auditEvents"), tenantName, userName }));
 }
 
 function loginRiskSummaryPanel(platformScope) {

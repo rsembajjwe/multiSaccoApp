@@ -179,7 +179,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   `src/reports/reports.ts` plus `app.reports-model.js`.
 - Audit row normalization, risk-level classification, category classification, sensitive/high-risk
   queues, category groups, unique actor/SACCO counts, and audit evidence summaries now live behind
-  `src/audit/audit.ts` plus `app.audit-model.js`.
+  `src/audit/audit.ts` plus `app.audit-model.js`, with the redundant audit normalization wrapper removed.
 - SACCO application rows, registration readiness counts, subscription table rows, billing/payment
   access summaries, package-card display rows, SACCO-code generation, registration location parsing,
   approval status options, member-range options, country/currency options, collection-account review rows,
