@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -12,6 +12,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/formatting/formatters.ts"),
   readText("src/member/performance.ts"),
   readText("src/member/admin.ts"),
+  readText("src/transactions/transactions.ts"),
   readText("app.state.js"),
 ]);
 
@@ -62,6 +63,11 @@ for (const marker of [
   "interface TerekaMemberDocumentRow",
   "interface TerekaMemberDocumentRetentionSummary",
   "interface TerekaMemberStatementSummary",
+  "interface TerekaTransactionRow",
+  "interface TerekaReceiptingQueueRow",
+  "interface TerekaReceiptRegisterRow",
+  "interface TerekaTransactionRowsInput",
+  "interface TerekaTransactionReceiptSummary",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -142,6 +148,20 @@ for (const marker of [
   "export function statementDebit",
 ]) {
   assert.ok(memberAdminSource.includes(marker), `src/member/admin.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaTransactionRow",
+  "export interface TerekaReceiptingQueueRow",
+  "export interface TerekaReceiptRegisterRow",
+  "export interface TerekaTransactionRowsInput",
+  "export interface TerekaTransactionReceiptSummary",
+  "export function buildTransactionRows",
+  "export function buildTransactionReceiptingQueue",
+  "export function buildTransactionReceiptRegister",
+  "export function buildTransactionReceiptSummary",
+]) {
+  assert.ok(transactionSource.includes(marker), `src/transactions/transactions.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");

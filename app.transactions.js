@@ -114,23 +114,9 @@ function transactionFormPanel() {
 
 
 function transactionRows() {
-  return dataRows("transactions").map((transaction) => {
-    const status = normal(transaction.status);
-    const original = Boolean(transaction.originalTransactionId);
-    const postedOriginal = status === "posted" && !original;
-    const paymentRoute = paymentRouteLabel(transaction);
-    return {
-      ...transaction,
-      memberName: memberName(transaction.memberId),
-      paymentRoute,
-      paymentStatus: paymentLifecycleStatus(transaction),
-      approvalReadiness: status.includes("pending") ? "Awaiting approval" : status === "posted" ? "Posted" : status.includes("rejected") ? "Rejected" : "Review",
-      receiptStatus: status === "posted" ? "Receipt ready" : "Post first",
-      reversalStatus: postedOriginal ? "Reversible with reason" : original ? "Reversal entry" : "Not available",
-      action: "transaction-detail",
-      actionLabel: status.includes("pending") ? "Approve" : "Review",
-      actionId: transaction.id
-    };
+  return buildTransactionRows({
+    transactions: dataRows("transactions"),
+    memberName
   });
 }
 
@@ -139,25 +125,7 @@ function transactionRows() {
  * @returns {Array<TerekaFinancialTransaction & { receiptingAction: string, action: string, actionLabel: string, actionId?: string }>}
  */
 function transactionReceiptingQueue(rows) {
-  return rows
-    .filter((row) => {
-      const status = normal(row.status);
-      const type = normal(row.type);
-      return (status.includes("pending") || status === "posted") && ["deposit", "repayment", "share", "welfare", "saving"].some((word) => type.includes(word));
-    })
-    .map((row) => ({
-      ...row,
-      receiptingAction: normal(row.status).includes("pending") ? "Approve/post first" : "Load receipt",
-      action: "transaction-detail",
-      actionLabel: normal(row.status).includes("pending") ? "Post" : "Receipt",
-      actionId: row.id
-    }))
-    .sort((a, b) => {
-      const aPending = normal(a.status).includes("pending") ? 0 : 1;
-      const bPending = normal(b.status).includes("pending") ? 0 : 1;
-      if (aPending !== bPending) return aPending - bPending;
-      return new Date(b.postedAt || b.createdAt || 0).getTime() - new Date(a.postedAt || a.createdAt || 0).getTime();
-    });
+  return buildTransactionReceiptingQueue(rows);
 }
 
 /**
@@ -165,17 +133,7 @@ function transactionReceiptingQueue(rows) {
  * @returns {Array<TerekaFinancialTransaction & { receiptNo: string, receiptStatus: string, action: string, actionLabel: string, actionId?: string }>}
  */
 function transactionReceiptRegister(rows) {
-  return rows
-    .filter((row) => normal(row.status) === "posted" && !row.originalTransactionId)
-    .map((row) => ({
-      ...row,
-      receiptNo: `RCT-${row.reference || row.id}`,
-      receiptStatus: "Receipted",
-      action: "transaction-detail",
-      actionLabel: "Receipt",
-      actionId: row.id
-    }))
-    .sort((a, b) => new Date(b.postedAt || b.createdAt || 0).getTime() - new Date(a.postedAt || a.createdAt || 0).getTime());
+  return buildTransactionReceiptRegister(rows);
 }
 
 function transactionDetailPanel(rows) {

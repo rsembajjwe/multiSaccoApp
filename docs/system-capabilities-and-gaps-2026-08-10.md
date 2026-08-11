@@ -149,6 +149,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - SACCO admin member-document rows, KYC retention summaries, statement totals, receipt-ready rows,
   and mobile-money/Treasurer statement split summaries now live behind `src/member/admin.ts` plus
   `app.member-admin-model.js`.
+- Transaction row shaping, approval readiness, payment route/status, receipting queue rows, receipt
+  register rows, and receipt split summaries now live behind `src/transactions/transactions.ts` plus
+  `app.transactions-model.js`, keeping Treasurer/Admin receipting and reversal evidence consistent
+  while the classic Transactions screen remains in place.
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
   no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,
@@ -196,7 +200,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   aggregation, payment lifecycle rows, route labels, payment status, and receipt status are now
   represented in named contracts. Member guarantor, SACCO-admin message, and mobile-money row builders
   are also typed, along with payment provider filtering, payment request rows, and offline draft rows.
-  SACCO admin member-document and statement summary builders are now typed too.
+  SACCO admin member-document and statement summary builders are now typed too. Transaction row
+  shaping, receipting queue, receipt register, and receipt summaries now have the same typed boundary.
   The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.

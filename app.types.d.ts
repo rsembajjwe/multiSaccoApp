@@ -918,6 +918,43 @@ interface TerekaMemberStatementSummary {
   treasurerRows: number;
 }
 
+interface TerekaTransactionRow extends TerekaFinancialTransaction {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  approvalReadiness: string;
+  memberName?: string;
+  paymentRoute: string;
+  paymentStatus: string;
+  receiptStatus: string;
+  reversalStatus: string;
+  [key: string]: any;
+}
+
+interface TerekaReceiptingQueueRow extends TerekaTransactionRow {
+  receiptingAction: string;
+}
+
+interface TerekaReceiptRegisterRow extends TerekaTransactionRow {
+  receiptNo: string;
+  receiptStatus: string;
+}
+
+interface TerekaTransactionRowsInput {
+  memberName: (memberId?: string) => string;
+  transactions: TerekaFinancialTransaction[];
+}
+
+interface TerekaTransactionReceiptSummary {
+  loanRepayments: number;
+  mobileMoney: number;
+  receiptReady: number;
+  savingsDeposits: number;
+  totalAmount: number | string;
+  totalRows: number;
+  treasurerCash: number;
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -960,6 +997,10 @@ declare function buildMemberDocumentRows(documents: Record<string, any>[], label
 declare function buildMemberDocumentRetentionSummary(documents: Record<string, any>[]): TerekaMemberDocumentRetentionSummary;
 declare function buildMemberStatementSummary(member: Record<string, any>, lines: TerekaStatementLine[]): TerekaMemberStatementSummary;
 declare function buildReceiptReadyStatementLines(lines: TerekaStatementLine[]): TerekaStatementLine[];
+declare function buildTransactionRows(input: TerekaTransactionRowsInput): TerekaTransactionRow[];
+declare function buildTransactionReceiptingQueue(rows: TerekaTransactionRow[]): TerekaReceiptingQueueRow[];
+declare function buildTransactionReceiptRegister(rows: TerekaTransactionRow[]): TerekaReceiptRegisterRow[];
+declare function buildTransactionReceiptSummary(rows: TerekaTransactionRow[]): TerekaTransactionReceiptSummary;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

@@ -32,7 +32,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    SACCO-admin message rows, mobile-money rows, provider filtering, payment request rows, and offline
    draft rows. SACCO admin member-document rows, retention summaries, statement totals, and
    receipt-ready statement summaries now follow the same pattern through `src/member/admin.ts` plus
-   `app.member-admin-model.js`.
+   `app.member-admin-model.js`. Transaction row shaping, approval readiness, payment route/status,
+   receipting queue rows, receipt register rows, and receipt summaries now follow the same pattern
+   through `src/transactions/transactions.ts` plus `app.transactions-model.js`.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the
