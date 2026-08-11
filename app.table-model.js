@@ -1,6 +1,16 @@
 // Typed table model bridge for the classic Tereka Online SPA.
 // Keep logic aligned with src/tables/tableModel.ts while runtime modules migrate to ES modules.
 
+function filterRecordRows(rows, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return rows || [];
+  return (rows || []).filter((row) => JSON.stringify(row).toLowerCase().includes(q));
+}
+
+function tableStateKeyFor(title) {
+  return String(title || "table").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "table";
+}
+
 function buildRecordTableModel(input) {
   const allRows = input.allRows;
   const backendTotal = Number(input.backendPage?.totalElements || 0);

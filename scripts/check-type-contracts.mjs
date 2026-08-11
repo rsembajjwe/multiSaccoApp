@@ -73,6 +73,8 @@ for (const marker of [
 }
 
 for (const marker of [
+  "export function filterRecordRows",
+  "export function tableStateKeyFor",
   "export interface TerekaTableModelInput",
   "export interface TerekaTableModel",
   "export function buildRecordTableModel",

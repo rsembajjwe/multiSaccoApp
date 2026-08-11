@@ -843,6 +843,8 @@ interface TerekaState {
 
 declare function expireLocalSession(message?: string): void;
 declare function setModuleTab(view: string, tab: string): void;
+declare function filterRecordRows<T = any>(rows: T[] | null | undefined, query: string): T[];
+declare function tableStateKeyFor(title: string | null | undefined): string;
 declare function buildRecordTableModel<T = any>(input: TerekaTableModelInput<T>): TerekaTableModel<T>;
 declare var TerekaFormatters: TerekaFormatterBridge;
 declare function render(): void;

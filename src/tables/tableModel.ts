@@ -34,6 +34,16 @@ export interface TerekaTableModel<T extends TerekaRecord> {
   totalPages: number;
 }
 
+export function filterRecordRows<T extends TerekaRecord>(rows: T[] | null | undefined, query: string): T[] {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return rows || [];
+  return (rows || []).filter((row) => JSON.stringify(row).toLowerCase().includes(q));
+}
+
+export function tableStateKeyFor(title: string | null | undefined): string {
+  return String(title || "table").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "table";
+}
+
 export function buildRecordTableModel<T extends TerekaRecord>(
   input: TerekaTableModelInput<T>
 ): TerekaTableModel<T> {

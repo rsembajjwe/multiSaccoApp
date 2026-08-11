@@ -24,7 +24,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    type:evidence`. Remaining work is migrating runtime modules from global classic scripts into typed
    ES modules and reducing broad compatibility index signatures. The first runtime migration slice is
    started with `src/tables/tableModel.ts` plus the classic `app.table-model.js` bridge for shared
-   table/search/pagination state, followed by `src/formatting/formatters.ts` plus
+   table/search/pagination state, row filtering, and table-state keys, followed by `src/formatting/formatters.ts` plus
    `app.formatters.js` for shared money/date formatting, labels, sums, status badges, escaping, and
    table value formatting.
 

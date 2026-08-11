@@ -205,13 +205,11 @@ function filterRows(rows) {
 }
 
 function filterRowsByQuery(rows, query) {
-  const q = String(query || "").trim().toLowerCase();
-  if (!q) return rows || [];
-  return (rows || []).filter((row) => JSON.stringify(row).toLowerCase().includes(q));
+  return filterRecordRows(rows, query);
 }
 
 function tableStateKey(title) {
-  return String(title || "table").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "table";
+  return tableStateKeyFor(title);
 }
 
 function operationAlerts() {
