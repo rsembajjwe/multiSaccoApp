@@ -21,9 +21,9 @@ function buildRecordTableModel(input) {
   const canLoadNextServerPage = Boolean(
     input.serverTable && input.backendPage && backendPageNumber + 1 < backendTotalPages
   );
-  const globalFiltered = input.filterRows(allRows);
+  const globalFiltered = filterRecordRows(allRows, input.globalSearch);
   const searchText = input.tableState.search || "";
-  const filteredRows = input.filterRowsByQuery(globalFiltered, searchText);
+  const filteredRows = filterRecordRows(globalFiltered, searchText);
   const pageSize = Number(input.tableState.pageSize || 10);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(Math.max(1, Number(input.tableState.page || 1)), totalPages);

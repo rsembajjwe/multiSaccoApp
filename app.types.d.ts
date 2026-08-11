@@ -1350,8 +1350,6 @@ interface TerekaQuickSearchModel {
 interface TerekaTableModelInput<T = any> {
   allRows: T[];
   backendPage: (TerekaPageEnvelope & { number?: number }) | null;
-  filterRows: (rows: T[]) => T[];
-  filterRowsByQuery: (rows: T[], query: string) => T[];
   globalSearch: string;
   serverTable: Record<string, any> | null;
   tableState: TerekaTableState;

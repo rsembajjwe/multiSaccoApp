@@ -8,8 +8,6 @@ export interface TerekaServerTableConfig {
 export interface TerekaTableModelInput<T extends TerekaRecord> {
   allRows: T[];
   backendPage: (TerekaPageEnvelope & { number?: number }) | null;
-  filterRows: (rows: T[]) => T[];
-  filterRowsByQuery: (rows: T[], query: string) => T[];
   globalSearch: string;
   serverTable: TerekaServerTableConfig | null;
   tableState: TerekaTableState;
@@ -56,9 +54,9 @@ export function buildRecordTableModel<T extends TerekaRecord>(
   const canLoadNextServerPage = Boolean(
     input.serverTable && input.backendPage && backendPageNumber + 1 < backendTotalPages
   );
-  const globalFiltered = input.filterRows(allRows);
+  const globalFiltered = filterRecordRows(allRows, input.globalSearch);
   const searchText = input.tableState.search || "";
-  const filteredRows = input.filterRowsByQuery(globalFiltered, searchText);
+  const filteredRows = filterRecordRows(globalFiltered, searchText);
   const pageSize = Number(input.tableState.pageSize || 10);
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const currentPage = Math.min(Math.max(1, Number(input.tableState.page || 1)), totalPages);

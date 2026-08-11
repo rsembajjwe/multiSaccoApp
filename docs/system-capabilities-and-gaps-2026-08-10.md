@@ -263,6 +263,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   retired wrapper helpers from being reintroduced across `app*.js`.
   The type-evidence report now prints the same bridge inventory so release evidence shows the
   remaining ES-module migration surface explicitly.
+  The table model now owns supplied-query filtering internally, reducing the remaining classic
+  bridge inventory from seven helpers to six.
   The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.

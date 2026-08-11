@@ -201,11 +201,7 @@ function uniqueCount(rows, key) {
 }
 
 function filterRows(rows) {
-  return filterRowsByQuery(rows, state.search);
-}
-
-function filterRowsByQuery(rows, query) {
-  return filterRecordRows(rows, query);
+  return filterRecordRows(rows, state.search);
 }
 
 function tableStateKey(title) {

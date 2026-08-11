@@ -165,8 +165,8 @@ const rows = [
 ];
 
 assert.equal(sandbox.tableStateKey("Member Directory / Active"), "member-directory-active");
-assert.equal(sandbox.filterRowsByQuery(rows, "kato").length, 1);
-assert.equal(sandbox.filterRowsByQuery(rows, "GVS-000").length, 3);
+assert.equal(sandbox.filterRecordRows(rows, "kato").length, 1);
+assert.equal(sandbox.filterRecordRows(rows, "GVS-000").length, 3);
 assert.equal(sandbox.escapeHtml("<b>Amina & Brian</b>"), "&lt;b&gt;Amina &amp; Brian&lt;/b&gt;");
 
 sandbox.state.tableState["member-directory"] = { search: "GVS-000", page: 1, pageSize: 2 };

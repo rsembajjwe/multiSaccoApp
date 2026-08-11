@@ -570,7 +570,6 @@ assert.ok(declarations.includes("user: TerekaPlatformUser | null;"), "TerekaStat
 
 const remainingClassicBridgeSurface = [
   [coreSource, "function filterRows(rows)"],
-  [coreSource, "function filterRowsByQuery(rows, query)"],
   [coreSource, "function tableStateKey(title)"],
   [usersSource, "function userRoleOptions(platformOnly)"],
   [transactionsClassicSource, "function transactionRows()"],
@@ -587,6 +586,7 @@ const retiredClassicWrappers = [
   "function saccoApprovalStage(",
   "function subscriptionPaymentLabel(",
   "function roleSummaryText(",
+  "function filterRowsByQuery(",
   "function rolePurpose(",
   "function roleModuleScope(",
   "function memberStatementLines(",

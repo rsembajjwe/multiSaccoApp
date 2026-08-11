@@ -9,7 +9,6 @@ const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/,
 const reportPath = join(reportDir, `type-evidence-${stamp}.md`);
 const remainingClassicBridgeHelpers = [
   { file: "app.core.js", marker: "function filterRows(rows)", purpose: "global table filtering by current search text" },
-  { file: "app.core.js", marker: "function filterRowsByQuery(rows, query)", purpose: "global table filtering by supplied query" },
   { file: "app.core.js", marker: "function tableStateKey(title)", purpose: "stable table state key generation" },
   { file: "app.users.js", marker: "function userRoleOptions(platformOnly)", purpose: "role filtering for platform/SACCO user-management forms" },
   { file: "app.transactions.js", marker: "function transactionRows()", purpose: "shared transaction display rows for transactions, approvals, and performance" },

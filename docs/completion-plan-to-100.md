@@ -188,6 +188,8 @@ The type-contract gate now also records the remaining intentional classic bridge
 retired wrapper helpers from being reintroduced across `app*.js`.
 The type-evidence report now prints the same bridge inventory so release evidence shows the
 remaining ES-module migration surface explicitly.
+The table model now owns supplied-query filtering internally, reducing the remaining classic bridge
+inventory from seven helpers to six.
 
 Ordered by leverage: **(1)** finish the Vite build + convert to ES modules, **(2)** add the Vitest
 frontend suite, **(3)** run load/soak + a two-instance failover rehearsal and capture HA evidence,

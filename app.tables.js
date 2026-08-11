@@ -11,8 +11,6 @@ function recordTable(title, rows, columns) {
   const model = buildRecordTableModel({
     allRows,
     backendPage,
-    filterRows,
-    filterRowsByQuery,
     globalSearch: state.search,
     serverTable,
     tableState,
