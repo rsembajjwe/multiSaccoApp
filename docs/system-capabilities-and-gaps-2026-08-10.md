@@ -131,6 +131,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   readiness/build output as timestamped evidence. The remaining frontend build work is converting the
   classic scripts to real ES `import`/`export` boundaries so Vite can natively bundle, minify, and
   tree-shake the application logic.
+- The shared table/search/pagination calculation is now split behind a typed table model in
+  `src/tables/tableModel.ts`, with a classic browser bridge in `app.table-model.js` so the current
+  SPA keeps running while runtime modules migrate into `src/`.
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
   no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,
@@ -166,8 +169,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 
 - **Frontend build maturity is partial.** The regular `dist/` build and Vite `dist-vite/` bridge
   build both emit one generated app bundle, but the source modules are still classic scripts sharing
-  global scope. There is not yet a completed ES module import/export structure, native
-  application-code tree-shaking, or deep domain-level type safety.
+  global scope. The first shared runtime helper now has a typed source model, but there is not yet a
+  completed ES module import/export structure, native application-code tree-shaking, or broad
+  runtime-module TypeScript conversion.
 - **Type safety is materially improved but runtime conversion remains.** A passing TypeScript
   `checkJs` gate covers the classic SPA, and a strict `src/types/domain.ts` module now gives future
   ES-module work a typed domain boundary. Member/payment portal contracts, platform/SACCO

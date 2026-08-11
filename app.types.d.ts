@@ -772,6 +772,35 @@ interface TerekaQuickSearchResult {
   [key: string]: any;
 }
 
+interface TerekaTableModelInput<T = any> {
+  allRows: T[];
+  backendPage: (TerekaPageEnvelope & { number?: number }) | null;
+  filterRows: (rows: T[]) => T[];
+  filterRowsByQuery: (rows: T[], query: string) => T[];
+  globalSearch: string;
+  serverTable: Record<string, any> | null;
+  tableState: TerekaTableState;
+}
+
+interface TerekaTableModel<T = any> {
+  backendLoaded: boolean;
+  backendPageNumber: number;
+  backendTotal: number;
+  backendTotalPages: number;
+  canLoadNextServerPage: boolean;
+  canLoadPreviousServerPage: boolean;
+  currentPage: number;
+  filteredRows: T[];
+  hasGlobalSearch: boolean;
+  hasTableSearch: boolean;
+  pageSize: number;
+  pagedRows: T[];
+  searchText: string;
+  searching: boolean;
+  start: number;
+  totalPages: number;
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -797,4 +826,5 @@ interface TerekaState {
 
 declare function expireLocalSession(message?: string): void;
 declare function setModuleTab(view: string, tab: string): void;
+declare function buildRecordTableModel<T = any>(input: TerekaTableModelInput<T>): TerekaTableModel<T>;
 declare function render(): void;

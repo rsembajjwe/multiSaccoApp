@@ -22,7 +22,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    *Current progress:* classic SPA `checkJs`, contract-marker checks, and a strict
    `src/types/domain.ts` source boundary now pass and run through `npm run check` / `npm run
    type:evidence`. Remaining work is migrating runtime modules from global classic scripts into typed
-   ES modules and reducing broad compatibility index signatures.
+   ES modules and reducing broad compatibility index signatures. The first runtime migration slice is
+   started with `src/tables/tableModel.ts` plus the classic `app.table-model.js` bridge for shared
+   table/search/pagination state.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the

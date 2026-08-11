@@ -8,23 +8,29 @@ function recordTable(title, rows, columns) {
   const serverTable = highVolumeTableConfig(tableKey);
   const backendPage = pageEnvelope(allRows) || (serverTable ? state.pageMeta[serverTable.key] : null);
   const backendTotal = Number(backendPage?.totalElements || 0);
-  const backendLoaded = backendTotal > allRows.length;
-  const backendPageNumber = Number(backendPage?.number || 0);
-  const backendTotalPages = Math.max(1, Number(backendPage?.totalPages || 1));
-  const canLoadPreviousServerPage = Boolean(serverTable && backendPage && backendPageNumber > 0);
-  const canLoadNextServerPage = Boolean(serverTable && backendPage && backendPageNumber + 1 < backendTotalPages);
-  const globalFiltered = filterRows(allRows);
-  const tableSearch = tableState.search || "";
-  const filtered = filterRowsByQuery(globalFiltered, tableSearch);
-  const pageSize = Number(tableState.pageSize || 10);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const currentPage = Math.min(Math.max(1, Number(tableState.page || 1)), totalPages);
+  const model = buildRecordTableModel({
+    allRows,
+    backendPage,
+    filterRows,
+    filterRowsByQuery,
+    globalSearch: state.search,
+    serverTable,
+    tableState,
+  });
+  const backendLoaded = model.backendLoaded;
+  const backendPageNumber = model.backendPageNumber;
+  const backendTotalPages = model.backendTotalPages;
+  const canLoadPreviousServerPage = model.canLoadPreviousServerPage;
+  const canLoadNextServerPage = model.canLoadNextServerPage;
+  const tableSearch = model.searchText;
+  const filtered = model.filteredRows;
+  const pageSize = model.pageSize;
+  const totalPages = model.totalPages;
+  const currentPage = model.currentPage;
   if (currentPage !== tableState.page) state.tableState[tableKey] = { ...tableState, page: currentPage };
-  const start = filtered.length ? (currentPage - 1) * pageSize : 0;
-  const pagedRows = filtered.slice(start, start + pageSize);
-  const hasGlobalSearch = Boolean(state.search.trim());
-  const hasTableSearch = Boolean(tableSearch.trim());
-  const searching = hasGlobalSearch || hasTableSearch;
+  const start = model.start;
+  const pagedRows = model.pagedRows;
+  const searching = model.searching;
   const headerCells = columns.map((column) => tableHeaderCell(tableKey, serverTable, tableState, column)).join("");
   const countLabel = searching
     ? `${filtered.length} ${t("of")} ${allRows.length} ${t("shown")}`

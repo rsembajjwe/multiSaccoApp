@@ -114,6 +114,7 @@ for (const file of [
   "app.core.js",
   "app.api.js",
   "app.ui.js",
+  "app.table-model.js",
   "app.tables.js",
   "app.auth.js",
   "app.member-admin.js",

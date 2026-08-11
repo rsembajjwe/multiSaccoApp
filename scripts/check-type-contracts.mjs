@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
   readText("app.types.d.ts"),
   readText("src/types/domain.ts"),
+  readText("src/tables/tableModel.ts"),
   readText("app.state.js"),
 ]);
 
@@ -44,6 +45,8 @@ for (const marker of [
   "interface TerekaCollectionAccount",
   "interface TerekaComplaintThread",
   "interface TerekaChatMessage",
+  "interface TerekaTableModelInput",
+  "interface TerekaTableModel",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -65,6 +68,14 @@ for (const marker of [
   "export type TerekaRecord = Record<string, unknown>",
 ]) {
   assert.ok(domainTypes.includes(marker), `src/types/domain.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaTableModelInput",
+  "export interface TerekaTableModel",
+  "export function buildRecordTableModel",
+]) {
+  assert.ok(tableModelSource.includes(marker), `src/tables/tableModel.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");
