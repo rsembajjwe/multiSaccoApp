@@ -274,6 +274,33 @@ interface TerekaCollectionAccountDisplayRow {
   title: string;
 }
 
+interface TerekaNotificationProviderRiskRow {
+  checkedAt?: string;
+  message?: string;
+  provider: string;
+  severity: string;
+  status: string;
+  title: string;
+}
+
+interface TerekaLoginRiskSummary {
+  blockedAttempts: number;
+  failedCredentials: number;
+  memberPortal: number;
+  riskEvents: number;
+  staffPortal: number;
+  uniqueScopeCount: number;
+}
+
+interface TerekaLoginRiskRow {
+  action?: string;
+  createdAt: string;
+  identity: string;
+  ipAddress: string;
+  portal: string;
+  sacco?: string;
+}
+
 interface TerekaSubscription {
   id?: string;
   tenantId?: string;
@@ -1628,6 +1655,12 @@ declare function buildMobileMoneyIntegrationSummary(input: { callbacks: Array<Re
 declare function notificationProviderNameFor(config: TerekaIntegrationConfig | null | undefined, channel: string): string;
 declare function buildStaffSecuritySettingsModel(input: { currentSessionExpiresAt?: string; formatDateTime: (value: any) => string; security: TerekaSecuritySummary | null | undefined }): TerekaStaffSecurityModel;
 declare function buildCollectionAccountDisplayRows(accounts: Array<TerekaCollectionAccount & Record<string, any>>, labelize: (value: any) => string): TerekaCollectionAccountDisplayRow[];
+declare function buildNotificationProviderRiskRows(input: { checkedAt?: string; labelize: (value: any) => string; rows: Array<Record<string, any>> }): TerekaNotificationProviderRiskRow[];
+declare function filterLoginRiskEvents(events: Array<TerekaAuditEvent & Record<string, any>>): Array<TerekaAuditEvent & Record<string, any>>;
+declare function buildLoginRiskSummary(events: Array<TerekaAuditEvent & Record<string, any>>, scopeKey: "tenantId" | "ipAddress"): TerekaLoginRiskSummary;
+declare function buildLoginRiskRows(input: { events: Array<TerekaAuditEvent & Record<string, any>>; formatDateTime: (value: any) => string }): TerekaLoginRiskRow[];
+declare function isLoginRiskEvent(event: TerekaAuditEvent & Record<string, any>): boolean;
+declare function loginRiskPortalFor(event: TerekaAuditEvent & Record<string, any>): string;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

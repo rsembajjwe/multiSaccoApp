@@ -243,7 +243,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   summaries. Member administration KYC and statement evidence summaries are also covered by the
   typed member-admin bridge. SACCO/platform settings setup summaries, notification and mobile-money
   provider readiness rows, administrator security-session rows, and collection-account display rows
-  are now typed behind the settings bridge.
+  are now typed behind the settings bridge. Operations provider-risk and login-risk summaries now
+  sit behind a typed operations bridge as well.
   The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.

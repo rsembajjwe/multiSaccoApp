@@ -220,6 +220,7 @@ for (const file of [
   "app.onboarding-model.js",
   "app.access-model.js",
   "app.settings-model.js",
+  "app.operations-model.js",
   "app.core.js",
   "app.api.js",
   "app.ui.js",

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, settingsSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, settingsSource, operationsSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -24,6 +24,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/onboarding/onboarding.ts"),
   readText("src/access/access.ts"),
   readText("src/settings/settings.ts"),
+  readText("src/operations/operations.ts"),
   readText("app.state.js"),
 ]);
 
@@ -416,6 +417,20 @@ for (const marker of [
   "export function buildCollectionAccountDisplayRows",
 ]) {
   assert.ok(settingsSource.includes(marker), `src/settings/settings.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaNotificationProviderRiskRow",
+  "export interface TerekaLoginRiskSummary",
+  "export interface TerekaLoginRiskRow",
+  "export function buildNotificationProviderRiskRows",
+  "export function filterLoginRiskEvents",
+  "export function buildLoginRiskSummary",
+  "export function buildLoginRiskRows",
+  "export function isLoginRiskEvent",
+  "export function loginRiskPortalFor",
+]) {
+  assert.ok(operationsSource.includes(marker), `src/operations/operations.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");
