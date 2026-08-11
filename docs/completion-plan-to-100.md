@@ -49,7 +49,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    `app.notifications-model.js`. Complaint/chat thread rows, open/urgent/in-progress/resolved counts,
    member/platform split counts, unread and assignment counts, chat search filtering, participant
    labels, and avatar initials now follow the same pattern through `src/complaints/complaints.ts`
-   plus `app.complaints-model.js`.
+   plus `app.complaints-model.js`. Governance meeting rows, resolution rows, scheduled/completed
+   slices, open and overdue resolution tracking, and minutes-evidence summaries now follow the same
+   pattern through `src/governance/governance.ts` plus `app.governance-model.js`.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the

@@ -1,31 +1,22 @@
 ﻿// Governance meeting and resolution rendering extracted from app.js.
 
 function governanceView() {
-  const meetings = dataRows("governanceMeetings").map((meeting) => ({
-    ...meeting,
-    chairName: userName(meeting.chairUserId),
-    action: "governance-meeting-detail",
-    actionLabel: "Open",
-    actionId: meeting.id
-  }));
-  const resolutions = meetings.flatMap((meeting) => (meeting.resolutions || []).map((resolution) => ({
-    ...resolution,
-    meetingTitle: meeting.title,
-    ownerName: userName(resolution.ownerUserId)
-  })));
-  const scheduled = meetings.filter((row) => normal(row.status) === "scheduled");
-  const openResolutions = resolutions.filter((row) => normal(row.status) !== "closed");
+  const meetings = buildGovernanceMeetingRows({ meetings: dataRows("governanceMeetings"), userName });
+  const resolutions = buildGovernanceResolutionRows(meetings, userName);
+  const scheduled = governanceScheduledMeetings(meetings);
+  const openResolutions = governanceOpenResolutions(resolutions);
+  const governanceSummary = buildGovernanceSummary(meetings, resolutions);
   const tabs = [["setup", t("governanceMeetingSetup")], ["register", t("governanceMeetingRegister")], ["resolutions", t("resolutionActionList")], ["detail", t("governanceMeetingDetail")]];
   const tab = activeModuleTab("governance", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary(t("meetings"), meetings.length, "Board, AGM and committee records", t("open"))}
-      ${summary(t("scheduledMeetings"), scheduled.length, "Upcoming governance events", "Prepare")}
-      ${summary(t("openResolutions"), openResolutions.length, "Action items needing follow-up", "Track")}
-      ${summary(t("completedMeetings"), meetings.filter((row) => normal(row.status) === "completed").length, "Minutes and decisions", t("review"))}
+      ${summary(t("meetings"), governanceSummary.totalMeetings, "Board, AGM and committee records", t("open"))}
+      ${summary(t("scheduledMeetings"), governanceSummary.scheduled, "Upcoming governance events", "Prepare")}
+      ${summary(t("openResolutions"), governanceSummary.openResolutions, "Action items needing follow-up", "Track")}
+      ${summary(t("completedMeetings"), governanceSummary.completed, "Minutes and decisions", t("review"))}
     </div>
     ${moduleTabs("governance", tabs, tab)}
-    ${tab === "overview" ? governanceActionControlPanel(meetings, scheduled, resolutions, openResolutions) : ""}
+    ${tab === "overview" ? governanceActionControlPanel(governanceSummary) : ""}
     ${tab === "setup" ? governanceMeetingPanel() : ""}
     ${tab === "detail" ? (governanceMeetingDetailPanel(meetings) || emptyState("Governance meeting detail", "Select a meeting from the register to record resolutions and decisions.")) : ""}
     ${tab === "register" ? recordTable("Governance meeting register", meetings, ["title", "meetingType", "scheduledAt", "chairName", "status", "openResolutions"]) : ""}
@@ -33,13 +24,11 @@ function governanceView() {
   `;
 }
 
-function governanceActionControlPanel(meetings, scheduled, resolutions, openResolutions) {
-  const withMinutes = meetings.filter((meeting) => meeting.minutes).length;
-  const overdue = openResolutions.filter((resolution) => resolution.dueDate && new Date(resolution.dueDate) < new Date()).length;
+function governanceActionControlPanel(governanceSummary) {
   return rolePriorityPanel(t("governanceActionControl"), [
-    ["Meeting preparedness", `${scheduled.length} scheduled meeting(s) need agenda, chairperson and attendance readiness.`, scheduled.length ? "Prepare" : "Clear"],
-    ["Resolution follow-up", `${openResolutions.length} open resolution(s), including ${overdue} overdue action(s).`, overdue ? "Escalate" : openResolutions.length ? "Track" : "Clear"],
-    ["Minutes evidence", `${withMinutes}/${meetings.length || 0} meeting(s) have captured minutes for audit and member trust.`, withMinutes === meetings.length && meetings.length ? "Complete" : "Capture"]
+    ["Meeting preparedness", `${governanceSummary.scheduled} scheduled meeting(s) need agenda, chairperson and attendance readiness.`, governanceSummary.scheduled ? "Prepare" : "Clear"],
+    ["Resolution follow-up", `${governanceSummary.openResolutions} open resolution(s), including ${governanceSummary.overdueResolutions} overdue action(s).`, governanceSummary.overdueResolutions ? "Escalate" : governanceSummary.openResolutions ? "Track" : "Clear"],
+    ["Minutes evidence", `${governanceSummary.withMinutes}/${governanceSummary.totalMeetings || 0} meeting(s) have captured minutes for audit and member trust.`, governanceSummary.withMinutes === governanceSummary.totalMeetings && governanceSummary.totalMeetings ? "Complete" : "Capture"]
   ]);
 }
 

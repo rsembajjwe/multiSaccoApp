@@ -169,6 +169,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Complaint/chat thread rows, open/urgent/in-progress/resolved counts, member/platform split counts,
   unread and assignment counts, chat search filtering, participant labels, and avatar initials now
   live behind `src/complaints/complaints.ts` plus `app.complaints-model.js`.
+- Governance meeting rows, resolution rows, scheduled/completed/open-resolution slices, overdue
+  resolution detection, and meeting evidence summaries now live behind
+  `src/governance/governance.ts` plus `app.governance-model.js`.
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
   no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,
@@ -219,7 +222,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   SACCO admin member-document and statement summary builders are now typed too. Transaction row
   shaping, receipting queue, receipt register, and receipt summaries now have the same typed boundary,
   as do SACCO loan rows, portfolio risk summaries, accounting ledger totals, reconciliation review
-  rows, SACCO finance summaries, notification delivery summaries, and complaint/chat summaries.
+  rows, SACCO finance summaries, notification delivery summaries, complaint/chat summaries, and
+  governance meeting/resolution summaries.
   The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.

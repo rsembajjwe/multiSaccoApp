@@ -355,6 +355,44 @@ interface TerekaGovernanceMeeting {
   [key: string]: any;
 }
 
+interface TerekaGovernanceResolutionRow {
+  id?: string;
+  meetingId?: string;
+  meetingTitle?: string;
+  title?: string;
+  ownerUserId?: string;
+  ownerName?: string;
+  dueDate?: string;
+  status?: string;
+  createdAt?: string;
+  [key: string]: any;
+}
+
+interface TerekaGovernanceMeetingRow extends TerekaGovernanceMeeting {
+  id: string;
+  action: string;
+  actionId: string;
+  actionLabel: string;
+  chairName: string;
+  openResolutions?: number;
+  resolutions?: TerekaGovernanceResolutionRow[];
+  [key: string]: any;
+}
+
+interface TerekaGovernanceSummary {
+  completed: number;
+  openResolutions: number;
+  overdueResolutions: number;
+  scheduled: number;
+  totalMeetings: number;
+  withMinutes: number;
+}
+
+interface TerekaGovernanceRowsInput {
+  meetings: Array<TerekaGovernanceMeeting & Record<string, any>> | null | undefined;
+  userName: (userId?: string) => string;
+}
+
 interface TerekaMobileMoneyCallback {
   id?: string;
   tenantId?: string;
@@ -1243,6 +1281,13 @@ declare function complaintUrgentRows(rows: TerekaChatThreadRow[]): TerekaChatThr
 declare function filterChatThreadRows(rows: TerekaChatThreadRow[], query: any): TerekaChatThreadRow[];
 declare function chatParticipantLabel(input: TerekaChatParticipantInput): string;
 declare function chatInitialsFor(text: any): string;
+declare function buildGovernanceMeetingRows(input: TerekaGovernanceRowsInput): TerekaGovernanceMeetingRow[];
+declare function buildGovernanceResolutionRows(meetings: TerekaGovernanceMeetingRow[], userName: (userId?: string) => string): TerekaGovernanceResolutionRow[];
+declare function governanceScheduledMeetings(meetings: TerekaGovernanceMeetingRow[]): TerekaGovernanceMeetingRow[];
+declare function governanceCompletedMeetings(meetings: TerekaGovernanceMeetingRow[]): TerekaGovernanceMeetingRow[];
+declare function governanceOpenResolutions(resolutions: TerekaGovernanceResolutionRow[]): TerekaGovernanceResolutionRow[];
+declare function buildGovernanceSummary(meetings: TerekaGovernanceMeetingRow[], resolutions: TerekaGovernanceResolutionRow[], now?: Date): TerekaGovernanceSummary;
+declare function isGovernanceResolutionOverdue(resolution: TerekaGovernanceResolutionRow, now?: Date): boolean;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;
