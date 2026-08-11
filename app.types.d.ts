@@ -843,6 +843,13 @@ interface TerekaSaccoMonthlyPerformanceInput {
   memberName: (memberId?: string) => string;
 }
 
+interface TerekaPaymentLifecycleInput {
+  dashboard: TerekaMemberDashboard | null | undefined;
+  drafts: TerekaOfflineDraft[];
+  labelize: (value: any) => string;
+  paymentRequests: TerekaPaymentRequest[];
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -874,10 +881,14 @@ declare function buildRecordTableModel<T = any>(input: TerekaTableModelInput<T>)
 declare function buildMemberStatementLines(dashboard: TerekaMemberDashboard | null | undefined): TerekaStatementLine[];
 declare function buildSaccoMonthlyPerformanceRows(input: TerekaSaccoMonthlyPerformanceInput): TerekaMonthlyPerformanceRow[];
 declare function buildMemberMonthlyPerformanceRows(dashboard: TerekaMemberDashboard | null | undefined): TerekaMonthlyPerformanceRow[];
+declare function buildMemberPaymentLifecycleRows(input: TerekaPaymentLifecycleInput): TerekaPaymentLifecycleRow[];
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;
 declare function performanceRowId(row: Pick<TerekaMonthlyPerformanceRow, "memberName" | "month">): string;
 declare function isMobileMoneyPerformanceLine(line: Record<string, any>): boolean;
+declare function paymentRouteLabelFor(row: Record<string, any>): string;
+declare function paymentLifecycleStatusFor(row: Record<string, any>): string;
+declare function receiptLifecycleStatusFor(row: Record<string, any>): string;
 declare var TerekaFormatters: TerekaFormatterBridge;
 declare function render(): void;

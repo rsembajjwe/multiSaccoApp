@@ -301,36 +301,12 @@ function memberMobileMoneyRows(dash) {
  * @returns {TerekaPaymentLifecycleRow[]}
  */
 function memberPaymentLifecycleRows(dash) {
-  const requestRows = (state.memberData.paymentRequests || []).map((request) => ({
-    date: request.requestedAt || request.createdAt || "",
-    reference: request.externalReference,
-    description: `${labelize(request.purpose)} request`,
-    paymentRoute: paymentRouteLabel(request),
-    amount: Number(request.amount || 0),
-    paymentStatus: paymentLifecycleStatus(request),
-    receiptStatus: receiptLifecycleStatus(request)
-  }));
-  const postedRows = memberStatementLines(dash)
-    .filter((line) => Number(line.credit || 0) > 0 || Number(line.debit || 0) > 0)
-    .map((line) => ({
-      date: line.postedAt || line.createdAt || "",
-      reference: line.reference,
-      description: line.description || "Member payment",
-      paymentRoute: paymentRouteLabel(line),
-      amount: Number(line.credit || 0) || Number(line.debit || 0),
-      paymentStatus: paymentLifecycleStatus(line),
-      receiptStatus: receiptLifecycleStatus(line)
-    }));
-  const draftRows = memberDraftRows("payment").map((draft) => ({
-    date: draft.updatedAt || draft.createdAt || "",
-    reference: draft.payload?.externalReference || draft.id,
-    description: draft.title || "Payment draft",
-    paymentRoute: paymentRouteLabel(draft.payload || draft),
-    amount: Number(draft.amount || draft.payload?.amount || 0),
-    paymentStatus: paymentLifecycleStatus(draft),
-    receiptStatus: "Not receipted"
-  }));
-  return [...draftRows, ...requestRows, ...postedRows].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+  return buildMemberPaymentLifecycleRows({
+    dashboard: dash,
+    drafts: memberDraftRows("payment"),
+    labelize,
+    paymentRequests: state.memberData.paymentRequests || [],
+  });
 }
 
 function memberPaymentRequestRows() {
@@ -357,11 +333,7 @@ function paymentRequestStatusNotice() {
  * @returns {string}
  */
 function paymentRouteLabel(row) {
-  const text = normal(`${row.route || ""} ${row.channel || ""} ${row.provider || ""} ${row.reference || ""} ${row.externalReference || ""} ${row.providerPayload?.route || ""}`);
-  if (text.includes("treasurer") || text.includes("cash")) return "Treasurer cash";
-  if (text.includes("mobile") || text.includes("mtn") || text.includes("airtel") || text.includes("mm-")) return "Mobile money";
-  if (text.includes("bank")) return "Bank";
-  return "Treasurer cash";
+  return paymentRouteLabelFor(row);
 }
 
 /**
@@ -369,13 +341,7 @@ function paymentRouteLabel(row) {
  * @returns {string}
  */
 function paymentLifecycleStatus(row) {
-  const text = normal(`${row.status || ""} ${row.receiptStatus || ""}`);
-  if (text.includes("failed")) return "Failed";
-  if (text.includes("draft")) return "Draft";
-  if (text.includes("pending") || text.includes("syncing")) return paymentRouteLabel(row) === "Mobile money" ? "Pending mobile money" : "Pending posting";
-  if (text.includes("receipt ready") || text.includes("available") || text.includes("receipted")) return "Receipted";
-  if (text.includes("posted") || text.includes("synced") || row.postedAt) return "Posted";
-  return "Draft";
+  return paymentLifecycleStatusFor(row);
 }
 
 /**
@@ -383,11 +349,7 @@ function paymentLifecycleStatus(row) {
  * @returns {string}
  */
 function receiptLifecycleStatus(row) {
-  const text = normal(`${row.receiptStatus || ""} ${row.status || ""}`);
-  if (text.includes("failed")) return "Failed";
-  if (text.includes("posted") || text.includes("available") || text.includes("receipt ready") || row.receiptNo) return "Receipted";
-  if (text.includes("pending")) return "Pending posting";
-  return "Not receipted";
+  return receiptLifecycleStatusFor(row);
 }
 
 /**

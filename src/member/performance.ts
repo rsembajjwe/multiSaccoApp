@@ -1,6 +1,9 @@
 import type {
   TerekaFinancialTransaction,
   TerekaMobileMoneyCallback,
+  TerekaOfflineDraft,
+  TerekaPaymentLifecycleRow,
+  TerekaPaymentRequest,
   TerekaRecord,
   TerekaStatementLine,
 } from "../types/domain";
@@ -37,10 +40,24 @@ export interface TerekaSaccoMonthlyPerformanceInput {
 
 export interface TerekaPaymentChannelLine {
   channel?: unknown;
+  externalReference?: unknown;
+  postedAt?: unknown;
   provider?: unknown;
+  providerPayload?: { route?: unknown } | null;
+  receiptNo?: unknown;
+  receiptStatus?: unknown;
   reference?: unknown;
+  route?: unknown;
+  status?: unknown;
   description?: unknown;
   type?: unknown;
+}
+
+export interface TerekaPaymentLifecycleInput {
+  dashboard: TerekaMemberStatementDashboard | null | undefined;
+  drafts: TerekaOfflineDraft[];
+  labelize: (value: unknown) => string;
+  paymentRequests: TerekaPaymentRequest[];
 }
 
 export function buildMemberStatementLines(dashboard: TerekaMemberStatementDashboard | null | undefined): TerekaStatementLine[] {
@@ -122,6 +139,74 @@ export function buildMemberMonthlyPerformanceRows(dashboard: TerekaMemberStateme
     target.closingBalance = Number(line.runningBalance || target.closingBalance || 0);
   });
   return [...rows.values()].sort((a, b) => b.month.localeCompare(a.month));
+}
+
+export function buildMemberPaymentLifecycleRows(input: TerekaPaymentLifecycleInput): TerekaPaymentLifecycleRow[] {
+  const requestRows = input.paymentRequests.map((request) => ({
+    date: request.requestedAt || request.createdAt || "",
+    reference: request.externalReference,
+    description: `${input.labelize(request.purpose)} request`,
+    paymentRoute: paymentRouteLabelFor(request),
+    amount: Number(request.amount || 0),
+    paymentStatus: paymentLifecycleStatusFor(request),
+    receiptStatus: receiptLifecycleStatusFor(request),
+  }));
+  const postedRows = buildMemberStatementLines(input.dashboard)
+    .filter((line) => Number(line.credit || 0) > 0 || Number(line.debit || 0) > 0)
+    .map((line) => ({
+      date: line.postedAt || line.createdAt || "",
+      reference: line.reference,
+      description: line.description || "Member payment",
+      paymentRoute: paymentRouteLabelFor(line),
+      amount: Number(line.credit || 0) || Number(line.debit || 0),
+      paymentStatus: paymentLifecycleStatusFor(line),
+      receiptStatus: receiptLifecycleStatusFor(line),
+    }));
+  const draftRows = input.drafts.map((draft) => {
+    const payload = (draft.payload || {}) as TerekaPaymentChannelLine & { amount?: unknown; externalReference?: unknown };
+    const reference = payload.externalReference ? String(payload.externalReference) : draft.id;
+    return {
+      date: draft.updatedAt || draft.createdAt || "",
+      reference,
+      description: draft.title || "Payment draft",
+      paymentRoute: paymentRouteLabelFor(payload),
+      amount: Number(draft.amount || payload.amount || 0),
+      paymentStatus: paymentLifecycleStatusFor(draft),
+      receiptStatus: "Not receipted",
+    };
+  });
+  return [...draftRows, ...requestRows, ...postedRows]
+    .sort((a, b) => new Date(String(b.date || 0)).getTime() - new Date(String(a.date || 0)).getTime());
+}
+
+export function paymentRouteLabelFor(row: TerekaPaymentChannelLine): string {
+  const text = normalizePerformanceText(
+    `${row.route || ""} ${row.channel || ""} ${row.provider || ""} ${row.reference || ""} ${row.externalReference || ""} ${row.providerPayload?.route || ""}`
+  );
+  if (text.includes("treasurer") || text.includes("cash")) return "Treasurer cash";
+  if (text.includes("mobile") || text.includes("mtn") || text.includes("airtel") || text.includes("mm-")) return "Mobile money";
+  if (text.includes("bank")) return "Bank";
+  return "Treasurer cash";
+}
+
+export function paymentLifecycleStatusFor(row: TerekaPaymentChannelLine): string {
+  const text = normalizePerformanceText(`${row.status || ""} ${row.receiptStatus || ""}`);
+  if (text.includes("failed")) return "Failed";
+  if (text.includes("draft")) return "Draft";
+  if (text.includes("pending") || text.includes("syncing")) {
+    return paymentRouteLabelFor(row) === "Mobile money" ? "Pending mobile money" : "Pending posting";
+  }
+  if (text.includes("receipt ready") || text.includes("available") || text.includes("receipted")) return "Receipted";
+  if (text.includes("posted") || text.includes("synced") || row.postedAt) return "Posted";
+  return "Draft";
+}
+
+export function receiptLifecycleStatusFor(row: TerekaPaymentChannelLine): string {
+  const text = normalizePerformanceText(`${row.receiptStatus || ""} ${row.status || ""}`);
+  if (text.includes("failed")) return "Failed";
+  if (text.includes("posted") || text.includes("available") || text.includes("receipt ready") || row.receiptNo) return "Receipted";
+  if (text.includes("pending")) return "Pending posting";
+  return "Not receipted";
 }
 
 export function addPerformanceAmount(target: TerekaMonthlyPerformanceRow, purpose: unknown, amount: number): void {

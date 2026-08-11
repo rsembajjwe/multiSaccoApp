@@ -52,6 +52,7 @@ for (const marker of [
   "interface TerekaFormatterBridge",
   "interface TerekaMonthlyPerformanceRow",
   "interface TerekaSaccoMonthlyPerformanceInput",
+  "interface TerekaPaymentLifecycleInput",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -104,11 +105,15 @@ for (const marker of [
   "export function buildMemberStatementLines",
   "export function buildSaccoMonthlyPerformanceRows",
   "export function buildMemberMonthlyPerformanceRows",
+  "export function buildMemberPaymentLifecycleRows",
   "export function addPerformanceAmount",
   "export function performanceMonthLabel",
   "export function performanceMonthEndDateLabel",
   "export function performanceRowId",
   "export function isMobileMoneyPerformanceLine",
+  "export function paymentRouteLabelFor",
+  "export function paymentLifecycleStatusFor",
+  "export function receiptLifecycleStatusFor",
 ]) {
   assert.ok(performanceSource.includes(marker), `src/member/performance.ts missing ${marker}`);
 }

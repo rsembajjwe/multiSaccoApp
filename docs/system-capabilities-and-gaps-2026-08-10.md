@@ -143,6 +143,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Member statement normalization and SACCO/member monthly performance aggregation now live behind
   `src/member/performance.ts` plus `app.member-performance.js`, preserving the classic portal while
   typing the savings, shares, welfare, loan-repayment, Treasurer cash, and mobile-money split logic.
+  Member payment lifecycle rows, route labels, payment status, and receipt status are now typed in
+  the same source boundary.
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
   no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,
@@ -187,7 +189,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   administration data, operational/configuration report objects, complaint/chat workflows, table
   model state, row filtering, table-state keys, shared money/date formatters, status badges, HTML
   escaping, table value formatting, member statement normalization, and monthly performance
-  aggregation are now represented in named contracts. The remaining type-safety work is reducing broad
+  aggregation, payment lifecycle rows, route labels, payment status, and receipt status are now
+  represented in named contracts. The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.
 - **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
