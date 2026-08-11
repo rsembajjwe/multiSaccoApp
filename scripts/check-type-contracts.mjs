@@ -2,15 +2,18 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, declarations, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
+  readJson("tsconfig.src.json"),
   readText("app.types.d.ts"),
+  readText("src/types/domain.ts"),
   readText("app.state.js"),
 ]);
 
 assert.equal(packageJson.scripts["type:ui"], "tsc -p tsconfig.ui.json");
 assert.equal(packageJson.scripts["type:check"], "node scripts/check-type-contracts.mjs");
+assert.equal(packageJson.scripts["type:src"], "tsc -p tsconfig.src.json");
 assert.equal(packageJson.scripts["type:evidence"], "node scripts/type-evidence.mjs");
 
 assert.equal(tsconfig.compilerOptions.allowJs, true);
@@ -20,6 +23,11 @@ assert.equal(tsconfig.compilerOptions.noImplicitReturns, true);
 assert.equal(tsconfig.compilerOptions.noFallthroughCasesInSwitch, true);
 assert.ok(tsconfig.include.includes("app.types.d.ts"), "tsconfig.ui.json must include shared declarations");
 assert.ok(tsconfig.include.includes("app*.js"), "tsconfig.ui.json must include classic frontend scripts");
+
+assert.equal(srcTsconfig.compilerOptions.strict, true);
+assert.equal(srcTsconfig.compilerOptions.noEmit, true);
+assert.equal(srcTsconfig.compilerOptions.moduleResolution, "Bundler");
+assert.ok(srcTsconfig.include.includes("src/**/*.ts"), "tsconfig.src.json must include TypeScript source modules");
 
 for (const marker of [
   "interface TerekaState",
@@ -45,13 +53,27 @@ for (const marker of [
   assert.ok(declarations.includes(marker), `app.types.d.ts missing ${marker}`);
 }
 
+for (const marker of [
+  "export interface TerekaState",
+  "export interface TerekaAppData",
+  "export interface TerekaMemberData",
+  "export interface TerekaPlatformUser",
+  "export interface TerekaTenantSummary",
+  "export interface TerekaPaymentLifecycleRow",
+  "export interface TerekaComplaintThread",
+  "export interface TerekaChatMessage",
+  "export type TerekaRecord = Record<string, unknown>",
+]) {
+  assert.ok(domainTypes.includes(marker), `src/types/domain.ts missing ${marker}`);
+}
+
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");
 assert.ok(declarations.includes("data: TerekaAppData;"), "TerekaState.data must use TerekaAppData");
 assert.ok(declarations.includes("memberData: TerekaMemberData;"), "TerekaState.memberData must use TerekaMemberData");
 assert.ok(declarations.includes("member: TerekaMemberProfile | null;"), "TerekaState.member must use TerekaMemberProfile");
 assert.ok(declarations.includes("user: TerekaPlatformUser | null;"), "TerekaState.user must use TerekaPlatformUser");
 
-console.log("Type contract check passed (SPA checkJs configuration, stricter options and domain declarations verified).");
+console.log("Type contract check passed (classic SPA checkJs gate and strict src domain module verified).");
 
 async function readText(file) {
   return readFile(new URL(file, root), "utf8");

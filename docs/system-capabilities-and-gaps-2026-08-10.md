@@ -8,7 +8,8 @@
 > The frontend is decomposed into **35 script modules** (`app.js` is a 5-line entry point); JS syntax
 > checks and the UI contract check pass, and `npm run build:ui` now produces a validated **`dist/`**
 > release artifact with one generated classic app bundle. `npm run type:ui` now runs a TypeScript
-> `checkJs` pass over the SPA. A no-dependency UI helper test covers shared table/search/pagination, MFA handoff,
+> `checkJs` pass over the SPA, and `npm run type:src` verifies a strict TypeScript domain module
+> under `src/types/domain.ts`. A no-dependency UI helper test covers shared table/search/pagination, MFA handoff,
 > password-reset-required routing, member/staff token isolation, logout cleanup, auth routing, and
 > per-portal rendering. **61** Flyway migrations. Backend role tests verify SACCO staff boundaries
 > plus branch-manager scope for member, transaction, loan, repayment, accounting journal, regulatory
@@ -138,8 +139,11 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   policy summaries, reconciliation data, regulatory reports, complaint/chat messages, and
   quick-search result navigation.
   `npm run type:check` verifies that the important type contracts and global-state wiring remain in
-  place, `npm run check` runs both type gates in CI, and `npm run type:evidence` records the
-  TypeScript gate plus contract check as timestamped release evidence under `reports/type-evidence/`.
+  place. `src/types/domain.ts` now provides a strict TypeScript module boundary for platform, SACCO,
+  member, payment, chat, reconciliation, regulatory-report, security, and app-state contracts, with
+  `tsconfig.src.json` running in strict mode. `npm run check` runs the classic SPA type gate, contract
+  marker gate, and strict source gate in CI, and `npm run type:evidence` records all three checks as
+  timestamped release evidence under `reports/type-evidence/`.
   The type gate now also enforces `noImplicitReturns` and `noFallthroughCasesInSwitch`, with JSDoc
   contracts on member payment lifecycle and transaction receipting helpers.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
@@ -164,12 +168,13 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   build both emit one generated app bundle, but the source modules are still classic scripts sharing
   global scope. There is not yet a completed ES module import/export structure, native
   application-code tree-shaking, or deep domain-level type safety.
-- **Type safety is started, not deep.** A passing TypeScript `checkJs` gate now covers the SPA and is
-  wired into `npm run check`. Member/payment portal contracts now have named JSDoc/TypeScript
-  declarations, platform/SACCO administration data now has first-pass named contracts, and
-  operational/configuration report objects plus complaint/chat workflows are typed. The remaining
-  type-safety work is reducing the broad compatibility index signatures and moving from global
-  scripts to ES module/TypeScript source files.
+- **Type safety is materially improved but runtime conversion remains.** A passing TypeScript
+  `checkJs` gate covers the classic SPA, and a strict `src/types/domain.ts` module now gives future
+  ES-module work a typed domain boundary. Member/payment portal contracts, platform/SACCO
+  administration data, operational/configuration report objects, and complaint/chat workflows are now
+  represented in named contracts. The remaining type-safety work is reducing broad compatibility
+  index signatures in the classic declarations and migrating runtime scripts into typed ES module
+  source files.
 - **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
   now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
   The project still lacks a real component/unit test framework over the large UI surface.
