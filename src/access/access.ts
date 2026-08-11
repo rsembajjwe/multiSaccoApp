@@ -1,4 +1,4 @@
-import type { TerekaPermission, TerekaPlatformUser, TerekaRecord, TerekaRole } from "../types/domain";
+import type { TerekaPasswordResetRecord, TerekaPermission, TerekaPlatformUser, TerekaRecord, TerekaRole, TerekaSecuritySession } from "../types/domain";
 
 export interface TerekaAccessUserRow extends TerekaPlatformUser, TerekaRecord {
   accessPurpose: string;
@@ -41,6 +41,33 @@ export interface TerekaPermissionMatrixRow {
   moduleName: string;
 }
 
+export interface TerekaUserDetailRoleModel {
+  assignedRoleIds: string[];
+  assignedRoleNamesText: string;
+  assignedRoles: Array<TerekaRole & TerekaRecord>;
+  primaryRole: TerekaRole & TerekaRecord;
+  roleSummaryText: string;
+}
+
+export interface TerekaUserSessionRow {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  createdAt: string;
+  device: string;
+  expiresAt: string;
+  id?: string;
+  ipAddress: string;
+}
+
+export interface TerekaPasswordResetRow {
+  createdAt: string;
+  expiresAt: string;
+  id?: string;
+  status: string;
+  usedAt: string;
+}
+
 export function buildAccessUserRows(input: {
   platformOnly: boolean;
   roles: Array<TerekaRole & TerekaRecord>;
@@ -70,6 +97,26 @@ export function buildAccessSummary(users: Array<TerekaPlatformUser & TerekaRecor
     roleCoverage: roleCoverageFor(users, roles),
     totalUsers: users.length,
   };
+}
+
+export function filterAccessUsersForScope(users: Array<TerekaPlatformUser & TerekaRecord>, platformOnly: boolean, tenantId?: string): Array<TerekaPlatformUser & TerekaRecord> {
+  const scopeTenantId = platformOnly ? "tenant_platform" : tenantId;
+  return scopeTenantId ? users.filter((user) => user.tenantId === scopeTenantId) : users;
+}
+
+export function filterRolesForScope(roles: Array<TerekaRole & TerekaRecord>, platformOnly: boolean, tenantId?: string): Array<TerekaRole & TerekaRecord> {
+  const scopeTenantId = platformOnly ? "tenant_platform" : tenantId;
+  const scopedRoles = scopeTenantId ? roles.filter((role) => role.tenantId === scopeTenantId) : roles;
+  const preferred = platformOnly ? [
+    "Platform Super Admin",
+    "Platform Operations Officer",
+    "Platform Billing Officer",
+    "Platform Compliance Officer",
+    "Platform Support Officer",
+  ] : [];
+  const filtered = preferred.length ? scopedRoles.filter((role) => preferred.includes(String(role.name || ""))) : scopedRoles;
+  if (filtered.length) return filtered;
+  return [{ id: platformOnly ? "role_platform_support_officer" : "", name: platformOnly ? "Platform Support Officer" : "Default staff role" }];
 }
 
 export function buildRoleCoverageRows(input: {
@@ -135,6 +182,57 @@ export function roleModuleScopeFor(roleName: unknown, platformOnly: boolean): st
   if (name.includes("auditor")) return "Read-only reports and audit";
   if (name.includes("loan")) return "Members, loans, guarantors, approvals, reports";
   return "Configured SACCO modules";
+}
+
+export function buildUserDetailRoleModel(input: {
+  platformOnly: boolean;
+  roleIds: string[];
+  roles: Array<TerekaRole & TerekaRecord>;
+  user: TerekaPlatformUser & TerekaRecord;
+}): TerekaUserDetailRoleModel {
+  const assignedRoleIds = input.roleIds.length ? input.roleIds : Array.isArray(input.user.roleIds) ? input.user.roleIds.map(String) : [String(input.user.roleId || "")].filter(Boolean);
+  const assignedRoles = input.roles.filter((role) => assignedRoleIds.includes(String(role.id || "")));
+  const primaryRole = assignedRoles[0] || input.roles[0] || {};
+  return {
+    assignedRoleIds,
+    assignedRoles,
+    primaryRole,
+    assignedRoleNamesText: assignedRoles.length ? assignedRoles.map((role) => String(role.name || "")).filter(Boolean).join(", ") : "Unassigned",
+    roleSummaryText: roleSummaryTextFor(assignedRoleIds, input.roles, input.platformOnly),
+  };
+}
+
+export function buildUserSessionRows(input: {
+  canManageUser: boolean;
+  currentUserId?: string;
+  deviceLabel: (userAgent: unknown) => string;
+  formatDateTime: (value: unknown) => string;
+  sessions: Array<TerekaSecuritySession & TerekaRecord>;
+  userId?: string;
+}): TerekaUserSessionRow[] {
+  return input.sessions.map((session) => ({
+    id: session.id,
+    ipAddress: String(session.ipAddress || "Not captured"),
+    device: input.deviceLabel(session.userAgent),
+    createdAt: input.formatDateTime(session.createdAt),
+    expiresAt: input.formatDateTime(session.expiresAt),
+    action: input.canManageUser && input.userId !== input.currentUserId ? "user-session-revoke" : "none",
+    actionLabel: "Revoke",
+    actionId: `${input.userId || ""}|${session.id || ""}`,
+  }));
+}
+
+export function buildPasswordResetRows(input: {
+  formatDateTime: (value: unknown) => string;
+  resets: Array<TerekaPasswordResetRecord & TerekaRecord>;
+}): TerekaPasswordResetRow[] {
+  return input.resets.map((request) => ({
+    id: request.id,
+    status: String(request.status || ""),
+    createdAt: input.formatDateTime(request.createdAt),
+    expiresAt: input.formatDateTime(request.expiresAt),
+    usedAt: request.usedAt ? input.formatDateTime(request.usedAt) : "-",
+  }));
 }
 
 export function buildSaccoStaffGuideRows(roles: Array<TerekaRole & TerekaRecord>): TerekaSaccoStaffGuideRow[] {

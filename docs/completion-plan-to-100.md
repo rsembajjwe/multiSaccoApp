@@ -178,7 +178,8 @@ provider readiness, security sessions, collection-account display rows, and Oper
 risk models. Platform role dashboard summaries are typed too; the remaining frontend work is
 increasingly about module packaging and real component tests. SACCO role dashboard summaries now use
 the same typed-source pattern, as do SACCO account-health, member directory navigation, and approval
-queue models.
+queue models. User-management scope filtering, role-option filtering, multi-role detail summaries,
+active-session rows, and password-reset rows now also live behind the typed access bridge.
 
 Ordered by leverage: **(1)** finish the Vite build + convert to ES modules, **(2)** add the Vitest
 frontend suite, **(3)** run load/soak + a two-instance failover rehearsal and capture HA evidence,

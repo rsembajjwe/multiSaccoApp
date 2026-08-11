@@ -249,7 +249,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   Admin, Accountant, Teller, Loans Officer, Auditor, Chairperson, Treasurer, and Secretary dashboard
   summary models are now typed behind a SACCO bridge. SACCO account-health rows and member directory
   summary rows are now typed behind a navigation bridge. Approval queue row preparation and summary
-  counts are now typed behind an approvals bridge.
+  counts are now typed behind an approvals bridge. Platform/SACCO user scope filtering, role options,
+  multi-role detail summaries, active-session rows, and password-reset rows now sit behind the typed
+  access bridge.
   The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.

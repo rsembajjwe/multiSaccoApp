@@ -25,6 +25,26 @@ function buildAccessSummary(users, roles) {
   };
 }
 
+function filterAccessUsersForScope(users, platformOnly, tenantId) {
+  const scopeTenantId = platformOnly ? "tenant_platform" : tenantId;
+  return scopeTenantId ? users.filter((user) => user.tenantId === scopeTenantId) : users;
+}
+
+function filterRolesForScope(roles, platformOnly, tenantId) {
+  const scopeTenantId = platformOnly ? "tenant_platform" : tenantId;
+  const scopedRoles = scopeTenantId ? roles.filter((role) => role.tenantId === scopeTenantId) : roles;
+  const preferred = platformOnly ? [
+    "Platform Super Admin",
+    "Platform Operations Officer",
+    "Platform Billing Officer",
+    "Platform Compliance Officer",
+    "Platform Support Officer"
+  ] : [];
+  const filtered = preferred.length ? scopedRoles.filter((role) => preferred.includes(String(role.name || ""))) : scopedRoles;
+  if (filtered.length) return filtered;
+  return [{ id: platformOnly ? "role_platform_support_officer" : "", name: platformOnly ? "Platform Support Officer" : "Default staff role" }];
+}
+
 function buildRoleCoverageRows(input) {
   return input.roles.map((role) => {
     const assignedUsers = input.users.filter((user) => accessUserHasRole(user, role)).length;
@@ -84,6 +104,42 @@ function roleModuleScopeFor(roleName, platformOnly) {
   if (name.includes("auditor")) return "Read-only reports and audit";
   if (name.includes("loan")) return "Members, loans, guarantors, approvals, reports";
   return "Configured SACCO modules";
+}
+
+function buildUserDetailRoleModel(input) {
+  const assignedRoleIds = input.roleIds.length ? input.roleIds : Array.isArray(input.user.roleIds) ? input.user.roleIds.map(String) : [String(input.user.roleId || "")].filter(Boolean);
+  const assignedRoles = input.roles.filter((role) => assignedRoleIds.includes(String(role.id || "")));
+  const primaryRole = assignedRoles[0] || input.roles[0] || {};
+  return {
+    assignedRoleIds,
+    assignedRoles,
+    primaryRole,
+    assignedRoleNamesText: assignedRoles.length ? assignedRoles.map((role) => String(role.name || "")).filter(Boolean).join(", ") : "Unassigned",
+    roleSummaryText: roleSummaryTextFor(assignedRoleIds, input.roles, input.platformOnly)
+  };
+}
+
+function buildUserSessionRows(input) {
+  return input.sessions.map((session) => ({
+    id: session.id,
+    ipAddress: String(session.ipAddress || "Not captured"),
+    device: input.deviceLabel(session.userAgent),
+    createdAt: input.formatDateTime(session.createdAt),
+    expiresAt: input.formatDateTime(session.expiresAt),
+    action: input.canManageUser && input.userId !== input.currentUserId ? "user-session-revoke" : "none",
+    actionLabel: "Revoke",
+    actionId: `${input.userId || ""}|${session.id || ""}`
+  }));
+}
+
+function buildPasswordResetRows(input) {
+  return input.resets.map((request) => ({
+    id: request.id,
+    status: String(request.status || ""),
+    createdAt: input.formatDateTime(request.createdAt),
+    expiresAt: input.formatDateTime(request.expiresAt),
+    usedAt: request.usedAt ? input.formatDateTime(request.usedAt) : "-"
+  }));
 }
 
 function buildSaccoStaffGuideRows(roles) {

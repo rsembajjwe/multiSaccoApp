@@ -84,6 +84,7 @@ export interface TerekaPlatformUser {
   username?: string;
   phone?: string;
   role?: string;
+  roleId?: string;
   roleIds?: string[];
   status?: string;
   mfaEnabled?: boolean;

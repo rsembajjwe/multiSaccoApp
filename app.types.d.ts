@@ -137,6 +137,7 @@ interface TerekaPlatformUser {
   username?: string;
   phone?: string;
   role?: string;
+  roleId?: string;
   roleIds?: string[];
   status?: string;
   mfaEnabled?: boolean;
@@ -203,6 +204,33 @@ interface TerekaPermissionMatrixRow {
   actions: string[];
   moduleId: string;
   moduleName: string;
+}
+
+interface TerekaUserDetailRoleModel {
+  assignedRoleIds: string[];
+  assignedRoleNamesText: string;
+  assignedRoles: Array<TerekaRole & Record<string, any>>;
+  primaryRole: TerekaRole & Record<string, any>;
+  roleSummaryText: string;
+}
+
+interface TerekaUserSessionRow {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  createdAt: string;
+  device: string;
+  expiresAt: string;
+  id?: string;
+  ipAddress: string;
+}
+
+interface TerekaPasswordResetRow {
+  createdAt: string;
+  expiresAt: string;
+  id?: string;
+  status: string;
+  usedAt: string;
 }
 
 interface TerekaSaccoSettingsReadiness {
@@ -1821,10 +1849,15 @@ declare function saccoApprovalStageFor(tenant: Partial<TerekaTenantSummary & Rec
 declare function subscriptionPaymentLabelFor(subscription: Partial<TerekaSubscription & Record<string, any>>): string;
 declare function buildAccessUserRows(input: { platformOnly: boolean; roles: Array<TerekaRole & Record<string, any>>; users: Array<TerekaPlatformUser & Record<string, any>> }): TerekaAccessUserRow[];
 declare function buildAccessSummary(users: Array<TerekaPlatformUser & Record<string, any>>, roles: Array<TerekaRole & Record<string, any>>): TerekaAccessSummary;
+declare function filterAccessUsersForScope(users: Array<TerekaPlatformUser & Record<string, any>>, platformOnly: boolean, tenantId?: string): Array<TerekaPlatformUser & Record<string, any>>;
+declare function filterRolesForScope(roles: Array<TerekaRole & Record<string, any>>, platformOnly: boolean, tenantId?: string): Array<TerekaRole & Record<string, any>>;
 declare function buildRoleCoverageRows(input: { platformOnly: boolean; roles: Array<TerekaRole & Record<string, any>>; users: Array<TerekaPlatformUser & Record<string, any>> }): TerekaRoleCoverageRow[];
 declare function roleCoverageFor(users: Array<TerekaPlatformUser & Record<string, any>>, roles: Array<TerekaRole & Record<string, any>>): string;
 declare function rolePurposeFor(roleName: any, platformOnly: boolean): string;
 declare function roleModuleScopeFor(roleName: any, platformOnly: boolean): string;
+declare function buildUserDetailRoleModel(input: { platformOnly: boolean; roleIds: string[]; roles: Array<TerekaRole & Record<string, any>>; user: TerekaPlatformUser & Record<string, any> }): TerekaUserDetailRoleModel;
+declare function buildUserSessionRows(input: { canManageUser: boolean; currentUserId?: string; deviceLabel: (userAgent: any) => string; formatDateTime: (value: any) => string; sessions: Array<TerekaSecuritySession & Record<string, any>>; userId?: string }): TerekaUserSessionRow[];
+declare function buildPasswordResetRows(input: { formatDateTime: (value: any) => string; resets: Array<TerekaPasswordResetRecord & Record<string, any>> }): TerekaPasswordResetRow[];
 declare function buildSaccoStaffGuideRows(roles: Array<TerekaRole & Record<string, any>>): TerekaSaccoStaffGuideRow[];
 declare function buildPermissionMatrixRows(modules: Array<[string, string] | string[]>, permissions?: TerekaPermission[]): TerekaPermissionMatrixRow[];
 declare function roleSummaryTextFor(roleIds: string[], roles: Array<TerekaRole & Record<string, any>>, platformOnly: boolean): string;

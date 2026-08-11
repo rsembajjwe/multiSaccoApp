@@ -1,6 +1,6 @@
 ﻿function usersView() {
   const platformOnly = isPlatform();
-  const users = platformOnly ? dataRows("users").filter((user) => user.tenantId === "tenant_platform") : dataRows("users");
+  const users = filterAccessUsersForScope(dataRows("users"), platformOnly, state.user?.tenantId);
   const canCreate = hasPermission("users:create") || hasPermission("roles:create");
   const roles = userRoleOptions(platformOnly);
   const rows = buildAccessUserRows({ platformOnly, roles, users });
@@ -117,29 +117,27 @@ function userDetailPanel(users, canManageRoles) {
   const selected = users.find((user) => user.id === state.selectedUserId);
   if (!selected) return "";
   const roles = userRoleOptions(selected.tenantId === "tenant_platform");
-  const assignedRoleIds = state.selectedUserRoles || [];
-  const assignedRoles = roles.filter((role) => assignedRoleIds.includes(role.id));
-  const primaryRole = assignedRoles[0] || roles[0] || {};
   const platformUser = selected.tenantId === "tenant_platform";
   const canManageUser = canManageRoles && (!platformUser || roleKind() === "super");
   const nextStatus = normal(selected.status) === "active" ? "suspended" : "active";
-  const sessionRows = (state.selectedUserSessions || []).map((session) => ({
-    id: session.id,
-    ipAddress: session.ipAddress || "Not captured",
-    device: deviceLabel(session.userAgent),
-    createdAt: formatDateTime(session.createdAt),
-    expiresAt: formatDateTime(session.expiresAt),
-    action: canManageUser && selected.id !== state.user?.id ? "user-session-revoke" : "none",
-    actionLabel: "Revoke",
-    actionId: `${selected.id}|${session.id}`
-  }));
-  const resetRows = (state.selectedUserPasswordResets || []).map((request) => ({
-    id: request.id,
-    status: request.status,
-    createdAt: formatDateTime(request.createdAt),
-    expiresAt: formatDateTime(request.expiresAt),
-    usedAt: request.usedAt ? formatDateTime(request.usedAt) : "-"
-  }));
+  const roleModel = buildUserDetailRoleModel({
+    platformOnly: platformUser,
+    roleIds: state.selectedUserRoles || [],
+    roles,
+    user: selected
+  });
+  const sessionRows = buildUserSessionRows({
+    canManageUser,
+    currentUserId: state.user?.id,
+    deviceLabel,
+    formatDateTime,
+    sessions: state.selectedUserSessions || [],
+    userId: selected.id
+  });
+  const resetRows = buildPasswordResetRows({
+    formatDateTime,
+    resets: state.selectedUserPasswordResets || []
+  });
   const latestReset = resetRows[0];
   return `
     <section class="panel detail-panel">
@@ -158,13 +156,13 @@ function userDetailPanel(users, canManageRoles) {
         ${mini("Status", selected.status)}
         ${mini("Phone", selected.phone)}
         ${mini("User ID", selected.id)}
-        ${mini("Current roles", assignedRoles.length ? assignedRoles.map((role) => role.name).join(", ") : "Unassigned")}
+        ${mini("Current roles", roleModel.assignedRoleNamesText)}
         ${mini("MFA", selected.mfaEnabled ? "Enabled" : "Not enabled")}
         ${mini("Login reset required", selected.passwordResetRequired ? "Yes" : "No")}
         ${mini("Password reset", latestReset ? `${latestReset.status} until ${latestReset.expiresAt}` : "No pending reset")}
         ${mini("Active sessions", selected.activeSessionCount || 0)}
-        ${mini("Access purpose", rolePurpose(primaryRole.name || selected.role || "", platformUser))}
-        ${mini("Module scope", roleModuleScope(primaryRole.name || selected.role || "", platformUser))}
+        ${mini("Access purpose", rolePurpose(roleModel.primaryRole.name || selected.role || "", platformUser))}
+        ${mini("Module scope", roleModuleScope(roleModel.primaryRole.name || selected.role || "", platformUser))}
         ${mini("User type", platformUser ? "Platform administrator" : "SACCO staff")}
       </div>
       <form id="userProfileForm" class="form-grid">
@@ -183,7 +181,7 @@ function userDetailPanel(users, canManageRoles) {
           <div class="role-checkbox-grid">
             ${roles.map((role) => `
               <label class="check-row">
-                <input type="checkbox" name="selectedUserRoleIds" value="${escapeHtml(role.id)}" data-role-checkbox="selected" ${assignedRoleIds.includes(role.id) ? "checked" : ""} ${canManageUser ? "" : "disabled"}>
+                <input type="checkbox" name="selectedUserRoleIds" value="${escapeHtml(role.id)}" data-role-checkbox="selected" ${roleModel.assignedRoleIds.includes(role.id) ? "checked" : ""} ${canManageUser ? "" : "disabled"}>
                 <span>${escapeHtml(role.name)}</span>
               </label>
             `).join("")}
@@ -191,7 +189,7 @@ function userDetailPanel(users, canManageRoles) {
         </div>
         <div class="mini-fact">
           <span>Selected access</span>
-          <strong id="selectedUserRolePreview">${escapeHtml(roleSummaryText(assignedRoleIds, platformUser))}</strong>
+          <strong id="selectedUserRolePreview">${escapeHtml(roleModel.roleSummaryText)}</strong>
         </div>
         <div class="form-actions">
           ${canManageUser ? `<button class="button primary" type="submit">Save role</button>` : `<span class="status pending">Role view only</span>`}
@@ -281,17 +279,7 @@ function permissionMatrix() {
 }
 
 function userRoleOptions(platformOnly) {
-  const tenantId = platformOnly ? "tenant_platform" : state.user?.tenantId;
-  const roles = dataRows("roles").filter((role) => role.tenantId === tenantId);
-  const preferred = platformOnly ? [
-    "Platform Super Admin",
-    "Platform Operations Officer",
-    "Platform Billing Officer",
-    "Platform Compliance Officer",
-    "Platform Support Officer"
-  ] : [];
-  const filtered = preferred.length ? roles.filter((role) => preferred.includes(role.name)) : roles;
-  return filtered.length ? filtered : [{ id: platformOnly ? "role_platform_support_officer" : "", name: platformOnly ? "Platform Support Officer" : "Default staff role" }];
+  return filterRolesForScope(dataRows("roles"), platformOnly, state.user?.tenantId);
 }
 
 function rolePreviewText(roleId, platformOnly) {
