@@ -37,6 +37,13 @@ export interface TerekaPaymentRequestReviewRow extends TerekaPaymentRequest, Ter
   reviewStatus: string;
 }
 
+export interface TerekaAccountingAccountOption extends TerekaRecord {
+  code?: string;
+  label: string;
+  name?: string;
+  type?: string;
+}
+
 export interface TerekaReconciliationMatchRow {
   accountCode?: unknown;
   externalReference?: unknown;
@@ -122,6 +129,24 @@ export function buildPaymentRequestReviewRows(
       actionId: row.id,
     };
   });
+}
+
+export function accountingAccountOptions(accounts: Array<TerekaChartAccount & TerekaRecord>, type: string, excludedCodes: string[] = []): TerekaAccountingAccountOption[] {
+  const excluded = new Set(excludedCodes.map((code) => normalizeAccountingText(code)));
+  return accounts
+    .filter((account) => normalizeAccountingText(account.type) === normalizeAccountingText(type))
+    .filter((account) => !excluded.has(normalizeAccountingText(account.code)))
+    .map((account) => ({
+      ...account,
+      code: account.code,
+      name: account.name,
+      type: account.type,
+      label: `${account.code || ""} - ${account.name || ""}`.trim(),
+    }));
+}
+
+export function assetCategoryOptions(): string[] {
+  return ["equipment", "furniture", "vehicle", "building", "technology", "other"];
 }
 
 export function buildReconciliationMatchRows(matches: TerekaRecord[] | null | undefined): TerekaReconciliationMatchRow[] {

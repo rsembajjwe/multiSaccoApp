@@ -157,9 +157,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   outstanding principal, and arrears-aging totals now live behind `src/loans/loans.ts` plus
   `app.loans-model.js`, keeping the SACCO credit dashboard and loan list aligned during the
   TypeScript migration.
-- Accounting dashboard totals, unbalanced-journal counts, period-close counts, reconciliation
-  exception totals, payment request review rows, match rows, and reconciliation coverage now live
-  behind `src/accounting/accounting.ts` plus `app.accounting-model.js`.
+- Accounting dashboard totals, unbalanced-journal counts, period-close counts, expense/asset account
+  option filters, asset category options, reconciliation exception totals, payment request review
+  rows, match rows, and reconciliation coverage now live behind `src/accounting/accounting.ts` plus
+  `app.accounting-model.js`.
 - SACCO finance summaries for savings, shares, welfare, active products, member balances,
   contribution totals, welfare claim counts, paid welfare amounts, and claim action rows now live
   behind `src/sacco-finance/finance.ts` plus `app.sacco-finance-model.js`.
@@ -238,8 +239,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   are also typed, along with payment provider filtering, payment request rows, and offline draft rows.
   SACCO admin member-document and statement summary builders are now typed too. Transaction row
   shaping, dashboard overview counts, receipting queue, receipt register, and receipt summaries now have the same typed boundary,
-  as do SACCO loan rows, portfolio risk summaries, accounting ledger totals, reconciliation review
-  rows, SACCO finance summaries, notification delivery summaries, complaint/chat summaries, and
+  as do SACCO loan rows, portfolio risk summaries, accounting ledger totals, accounting account
+  options, reconciliation review rows, SACCO finance summaries, notification delivery summaries, complaint/chat summaries, and
   governance meeting/resolution summaries, regulatory/platform report summaries, and audit
   classification summaries, onboarding and subscription billing summaries, and user/role access
   summaries. Member administration KYC and statement evidence summaries are also covered by the

@@ -55,6 +55,24 @@ function buildPaymentRequestReviewRows(requests, labelize) {
   });
 }
 
+function accountingAccountOptions(accounts, type, excludedCodes = []) {
+  const excluded = new Set(excludedCodes.map((code) => normalizeAccountingModelText(code)));
+  return accounts
+    .filter((account) => normalizeAccountingModelText(account.type) === normalizeAccountingModelText(type))
+    .filter((account) => !excluded.has(normalizeAccountingModelText(account.code)))
+    .map((account) => ({
+      ...account,
+      code: account.code,
+      name: account.name,
+      type: account.type,
+      label: `${account.code || ""} - ${account.name || ""}`.trim()
+    }));
+}
+
+function assetCategoryOptions() {
+  return ["equipment", "furniture", "vehicle", "building", "technology", "other"];
+}
+
 function buildReconciliationMatchRows(matches) {
   return (matches || []).map((match) => {
     const statementLine = match.statementLine || {};

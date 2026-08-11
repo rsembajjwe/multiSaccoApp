@@ -95,6 +95,7 @@ for (const marker of [
   "interface TerekaAccountingSummary",
   "interface TerekaAccountingSummaryInput",
   "interface TerekaPaymentRequestReviewRow",
+  "interface TerekaAccountingAccountOption",
   "interface TerekaReconciliationMatchRow",
   "interface TerekaReconciliationReviewModel",
   "interface TerekaSavingsSummary",
@@ -260,6 +261,8 @@ for (const marker of [
   "export function buildAccountingSummary",
   "export function buildReconciliationReviewModel",
   "export function buildPaymentRequestReviewRows",
+  "export function accountingAccountOptions",
+  "export function assetCategoryOptions",
   "export function buildReconciliationMatchRows",
   "export function reconciliationCoverage",
 ]) {

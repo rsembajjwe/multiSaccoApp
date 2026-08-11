@@ -38,8 +38,8 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    guarantor readiness, approval readiness, servicing status, portfolio risk counts, outstanding
    principal, and arrears-aging totals now follow the same pattern through `src/loans/loans.ts` plus
    `app.loans-model.js`. Accounting dashboard totals, unbalanced-journal counts, period-close counts,
-   reconciliation exception totals, payment request review rows, match rows, and reconciliation
-   coverage now follow the same pattern through `src/accounting/accounting.ts` plus
+   expense/asset account option filters, asset category options, reconciliation exception totals,
+   payment request review rows, match rows, and reconciliation coverage now follow the same pattern through `src/accounting/accounting.ts` plus
    `app.accounting-model.js`. SACCO finance summaries for savings, shares, welfare, active products,
    member balances, contribution totals, welfare claim counts, paid welfare amounts, and claim action
    rows now follow the same pattern through `src/sacco-finance/finance.ts` plus

@@ -2,7 +2,7 @@
 
 function expenseCapturePanel() {
   const canPost = hasPermission("accounting:post");
-  const expenseAccounts = dataRows("chartOfAccounts").filter((account) => normal(account.type) === "expense");
+  const expenseAccounts = accountingAccountOptions(dataRows("chartOfAccounts"), "expense");
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -15,7 +15,7 @@ function expenseCapturePanel() {
       ${state.expenseFormError ? `<div class="notice warning"><strong>Expense posting failed.</strong><span>${escapeHtml(state.expenseFormError)}</span></div>` : ""}
       <form id="expenseForm" class="form-grid">
         <input type="hidden" id="newExpenseTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
-        <label><span>Expense account</span><select id="newExpenseAccountCode" ${canPost ? "" : "disabled"}>${expenseAccounts.map((account) => `<option value="${escapeHtml(account.code)}">${escapeHtml(account.code)} - ${escapeHtml(account.name)}</option>`).join("")}</select></label>
+        <label><span>Expense account</span><select id="newExpenseAccountCode" ${canPost ? "" : "disabled"}>${expenseAccounts.map((account) => `<option value="${escapeHtml(account.code)}">${escapeHtml(account.label)}</option>`).join("")}</select></label>
         <label><span>Amount</span><input id="newExpenseAmount" type="number" min="1" step="1" value="25000" ${canPost ? "" : "disabled"}></label>
         <label><span>Channel</span><select id="newExpenseChannel" ${canPost ? "" : "disabled"}><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option><option value="payroll_deduction">Payroll deduction</option></select></label>
         <label><span>Expense date</span><input id="newExpenseDate" type="date" value="${new Date().toISOString().slice(0, 10)}" ${canPost ? "" : "disabled"}></label>
@@ -29,7 +29,7 @@ function expenseCapturePanel() {
 
 function assetCapturePanel() {
   const canPost = hasPermission("accounting:post");
-  const assetAccounts = dataRows("chartOfAccounts").filter((account) => normal(account.type) === "asset" && account.code !== "1310");
+  const assetAccounts = accountingAccountOptions(dataRows("chartOfAccounts"), "asset", ["1310"]);
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -44,7 +44,7 @@ function assetCapturePanel() {
         <input type="hidden" id="newAssetTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
         <label><span>Asset name</span><input id="newAssetName" required placeholder="Laptop, printer, motorcycle..." ${canPost ? "" : "disabled"}></label>
         <label><span>Category</span><select id="newAssetCategory" ${canPost ? "" : "disabled"}>${assetCategoryOptions().map((item) => `<option value="${escapeHtml(item)}">${labelize(item)}</option>`).join("")}</select></label>
-        <label><span>Asset account</span><select id="newAssetAccountCode" ${canPost ? "" : "disabled"}>${assetAccounts.map((account) => `<option value="${escapeHtml(account.code)}">${escapeHtml(account.code)} - ${escapeHtml(account.name)}</option>`).join("")}</select></label>
+        <label><span>Asset account</span><select id="newAssetAccountCode" ${canPost ? "" : "disabled"}>${assetAccounts.map((account) => `<option value="${escapeHtml(account.code)}">${escapeHtml(account.label)}</option>`).join("")}</select></label>
         <label><span>Cost</span><input id="newAssetCost" type="number" min="1" step="1" value="1500000" ${canPost ? "" : "disabled"}></label>
         <label><span>Salvage value</span><input id="newAssetSalvageValue" type="number" min="0" step="1" value="0" ${canPost ? "" : "disabled"}></label>
         <label><span>Useful life months</span><input id="newAssetLifeMonths" type="number" min="1" step="1" value="36" ${canPost ? "" : "disabled"}></label>
@@ -56,10 +56,6 @@ function assetCapturePanel() {
       </form>
     </section>
   `;
-}
-
-function assetCategoryOptions() {
-  return ["equipment", "furniture", "vehicle", "building", "technology", "other"];
 }
 
 function accountingView() {
