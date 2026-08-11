@@ -1,8 +1,8 @@
 ﻿function transactionsView() {
   const rows = transactionRows();
   const overview = buildTransactionOverviewSummary(rows);
-  const receiptingQueue = transactionReceiptingQueue(rows);
-  const receiptRegister = transactionReceiptRegister(rows);
+  const receiptingQueue = buildTransactionReceiptingQueue(rows);
+  const receiptRegister = buildTransactionReceiptRegister(rows);
   const tabs = [["capture", t("newTransactionScreen")], ["list", t("transactionList")], ["receipting", "Receipting queue"], ["receipts", "Receipt register"], ["detail", t("transactionDetail")]];
   const tab = activeModuleTab("transactions", tabs);
   return `
@@ -113,22 +113,6 @@ function transactionRows() {
     transactions: dataRows("transactions"),
     memberName
   });
-}
-
-/**
- * @param {TerekaFinancialTransaction[]} rows
- * @returns {Array<TerekaFinancialTransaction & { receiptingAction: string, action: string, actionLabel: string, actionId?: string }>}
- */
-function transactionReceiptingQueue(rows) {
-  return buildTransactionReceiptingQueue(rows);
-}
-
-/**
- * @param {TerekaFinancialTransaction[]} rows
- * @returns {Array<TerekaFinancialTransaction & { receiptNo: string, receiptStatus: string, action: string, actionLabel: string, actionId?: string }>}
- */
-function transactionReceiptRegister(rows) {
-  return buildTransactionReceiptRegister(rows);
 }
 
 function transactionDetailPanel(rows) {

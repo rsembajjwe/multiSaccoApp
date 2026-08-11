@@ -151,7 +151,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   `app.member-admin-model.js`.
 - Transaction row shaping, overview counts, approval readiness, payment route/status, receipting queue rows,
   receipt register rows, and receipt split summaries now live behind `src/transactions/transactions.ts` plus
-  `app.transactions-model.js`, keeping Treasurer/Admin receipting and reversal evidence consistent
+  `app.transactions-model.js`, with redundant receipting queue/register wrapper helpers removed and keeping Treasurer/Admin receipting and reversal evidence consistent
   while the classic Transactions screen remains in place.
 - Loan row shaping, borrower/guarantor option eligibility, product options, guarantor readiness,
   approval readiness, servicing status, portfolio risk counts, outstanding principal, and arrears-aging totals now live behind `src/loans/loans.ts` plus
