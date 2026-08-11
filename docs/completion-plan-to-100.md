@@ -183,7 +183,7 @@ the same typed-source pattern, as do SACCO account-health, member directory navi
 queue models. User-management scope filtering, role-option filtering, multi-role detail summaries,
 active-session rows, device labels, and password-reset rows now also live behind the typed access bridge. Global
 quick-search result creation, filtering, grouping, active-result cleanup, and topbar unread counts
-now sit behind the typed navigation bridge.
+now sit behind the typed navigation bridge, with the redundant quick-search result wrapper removed.
 
 Ordered by leverage: **(1)** finish the Vite build + convert to ES modules, **(2)** add the Vitest
 frontend suite, **(3)** run load/soak + a two-instance failover rehearsal and capture HA evidence,

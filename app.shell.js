@@ -1,4 +1,4 @@
-﻿// Application shell, navigation, quick search and session UI for Tereka Online.
+// Application shell, navigation, quick search and session UI for Tereka Online.
 // Loaded before app.js; functions intentionally remain global for classic script compatibility.
 
 function app() {
@@ -320,40 +320,36 @@ function quickSearchResults() {
 function quickSearchIndex() {
   if (state.auth === "member") {
     return [
-      ...state.memberData.loans.map((loan) => quickResult("Loans", loan.id, "loans", loan.applicationNo || loan.product || "Loan", `${loan.product || ""} ${money.format(loan.requestedAmount || loan.outstandingBalance || 0)} ${loan.status || ""}`)),
-      ...(state.memberData.chatThreads || []).map((thread) => quickResult("Support", thread.id, "complaints", thread.subject || "Support chat", `${thread.status || ""}`)),
-      ...state.memberData.notifications.map((notification) => quickResult("Notifications", notification.id, "complaints", notification.title || "Notification", `${notification.status || ""} ${formatDateTime(notification.createdAt)}`)),
-      ...state.memberData.pendingGuarantors.map((request) => quickResult("Guarantor Requests", request.id, "loans", request.loan?.applicationNo || request.borrower || "Guarantor request", `${request.status || ""} ${money.format(request.guaranteedAmount || 0)}`))
+      ...state.memberData.loans.map((loan) => buildQuickSearchResult("Loans", loan.id, "loans", loan.applicationNo || loan.product || "Loan", `${loan.product || ""} ${money.format(loan.requestedAmount || loan.outstandingBalance || 0)} ${loan.status || ""}`)),
+      ...(state.memberData.chatThreads || []).map((thread) => buildQuickSearchResult("Support", thread.id, "complaints", thread.subject || "Support chat", `${thread.status || ""}`)),
+      ...state.memberData.notifications.map((notification) => buildQuickSearchResult("Notifications", notification.id, "complaints", notification.title || "Notification", `${notification.status || ""} ${formatDateTime(notification.createdAt)}`)),
+      ...state.memberData.pendingGuarantors.map((request) => buildQuickSearchResult("Guarantor Requests", request.id, "loans", request.loan?.applicationNo || request.borrower || "Guarantor request", `${request.status || ""} ${money.format(request.guaranteedAmount || 0)}`))
     ];
   }
   const visible = new Set(visibleModules().map((module) => module[0]));
   const results = [];
   if (visible.has("sacco-applications")) {
-    results.push(...tenantRows().map((tenant) => quickResult("SACCOs", tenant.id, "sacco-applications", tenant.name, `${tenant.saccoCode || tenant.abbreviation || ""} ${tenant.status || ""}`, { selectedTenantId: tenant.id, saccoRegistrationTab: "applications" })));
+    results.push(...tenantRows().map((tenant) => buildQuickSearchResult("SACCOs", tenant.id, "sacco-applications", tenant.name, `${tenant.saccoCode || tenant.abbreviation || ""} ${tenant.status || ""}`, { selectedTenantId: tenant.id, saccoRegistrationTab: "applications" })));
   }
   if (visible.has("subscriptions")) {
-    results.push(...dataRows("subscriptions").map((subscription) => quickResult("Subscriptions", subscription.id, "subscriptions", subscription.tenantName || tenantName(subscription.tenantId), `${subscription.packageName || ""} ${subscription.status || ""}`, { selectedSubscriptionId: subscription.id })));
+    results.push(...dataRows("subscriptions").map((subscription) => buildQuickSearchResult("Subscriptions", subscription.id, "subscriptions", subscription.tenantName || tenantName(subscription.tenantId), `${subscription.packageName || ""} ${subscription.status || ""}`, { selectedSubscriptionId: subscription.id })));
   }
   if (visible.has("members")) {
-    results.push(...dataRows("members").map((member) => quickResult("Members", member.id, "members", member.fullName, `${member.membershipNo || ""} ${member.phone || ""}`, { selectedMemberId: member.id, memberTab: "kyc" })));
+    results.push(...dataRows("members").map((member) => buildQuickSearchResult("Members", member.id, "members", member.fullName, `${member.membershipNo || ""} ${member.phone || ""}`, { selectedMemberId: member.id, memberTab: "kyc" })));
   }
   if (visible.has("transactions")) {
-    results.push(...dataRows("transactions").map((transaction) => quickResult("Transactions", transaction.id, "transactions", transaction.reference || transaction.id, `${memberName(transaction.memberId)} ${money.format(transaction.amount || 0)} ${transaction.status || ""}`)));
+    results.push(...dataRows("transactions").map((transaction) => buildQuickSearchResult("Transactions", transaction.id, "transactions", transaction.reference || transaction.id, `${memberName(transaction.memberId)} ${money.format(transaction.amount || 0)} ${transaction.status || ""}`)));
   }
   if (visible.has("loans")) {
-    results.push(...dataRows("loans").map((loan) => quickResult("Loans", loan.id, "loans", loan.applicationNo || loan.id, `${loan.memberName || memberName(loan.memberId)} ${money.format(loan.requestedAmount || loan.outstandingBalance || 0)} ${loan.status || ""}`, { selectedLoanId: loan.id, moduleTabView: "loans", moduleTab: "detail" })));
+    results.push(...dataRows("loans").map((loan) => buildQuickSearchResult("Loans", loan.id, "loans", loan.applicationNo || loan.id, `${loan.memberName || memberName(loan.memberId)} ${money.format(loan.requestedAmount || loan.outstandingBalance || 0)} ${loan.status || ""}`, { selectedLoanId: loan.id, moduleTabView: "loans", moduleTab: "detail" })));
   }
   if (visible.has("users")) {
-    results.push(...dataRows("users").map((user) => quickResult(isPlatform() ? "Platform Users" : "SACCO Users", user.id, "users", user.fullName || user.email, `${user.email || ""} ${user.status || ""}`, { selectedUserId: user.id, userAdminTab: "detail" })));
+    results.push(...dataRows("users").map((user) => buildQuickSearchResult(isPlatform() ? "Platform Users" : "SACCO Users", user.id, "users", user.fullName || user.email, `${user.email || ""} ${user.status || ""}`, { selectedUserId: user.id, userAdminTab: "detail" })));
   }
   if (visible.has("complaints")) {
-    results.push(...dataRows("complaints").map((complaint) => quickResult("Complaints", complaint.id, "complaints", complaint.subject || complaint.category || complaint.id, `${complaint.status || ""} ${complaint.priority || ""}`, { selectedComplaintId: complaint.id })));
+    results.push(...dataRows("complaints").map((complaint) => buildQuickSearchResult("Complaints", complaint.id, "complaints", complaint.subject || complaint.category || complaint.id, `${complaint.status || ""} ${complaint.priority || ""}`, { selectedComplaintId: complaint.id })));
   }
   return results;
-}
-
-function quickResult(group, recordId, view, title, meta, options = {}) {
-  return buildQuickSearchResult(group, recordId, view, title, meta, options);
 }
 
 function topbarNotificationButton(modules) {
