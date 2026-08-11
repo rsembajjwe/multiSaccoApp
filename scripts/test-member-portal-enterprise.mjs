@@ -224,6 +224,7 @@ for (const file of [
   "app.platform-model.js",
   "app.sacco-model.js",
   "app.navigation-model.js",
+  "app.approvals-model.js",
   "app.core.js",
   "app.api.js",
   "app.ui.js",

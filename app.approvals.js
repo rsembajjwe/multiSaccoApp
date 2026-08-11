@@ -1,20 +1,25 @@
 ﻿// Approval queue rendering and decision handlers extracted from app.js.
 
 function approvalsView() {
-  const pendingTx = transactionRows().filter((row) => normal(row.status).includes("pending"));
-  const pendingRepayments = dataRows("pendingLoanRepayments").map((row) => ({ ...row, memberName: memberName(row.memberId) }));
-  const loans = isPlatform() ? [] : dataRows("loans").filter((row) => normal(row.status).includes("review") || normal(row.status).includes("submitted")).map((row) => ({ ...row, memberName: row.memberName || memberName(row.memberId) }));
-  const members = isPlatform() ? [] : dataRows("members").filter((row) => normal(row.status).includes("pending")).map((row) => ({ ...row, memberName: row.fullName, action: "member-detail", actionLabel: "Review", actionId: row.id }));
+  const queue = buildApprovalQueueModel({
+    isPlatform: isPlatform(),
+    loans: dataRows("loans"),
+    memberName,
+    members: dataRows("members"),
+    pendingRepayments: dataRows("pendingLoanRepayments"),
+    transactions: transactionRows()
+  });
+  const queueSummary = buildApprovalQueueSummary(queue);
   const canApproveTx = hasPermission("transactions:approve");
   const canApproveLoans = !isPlatform() && hasPermission("loans:approve");
   const canApproveMembers = !isPlatform() && hasPermission("members:approve");
   const viewOnly = !canApproveTx && !canApproveLoans && !canApproveMembers;
   return `
     <div class="dashboard-grid">
-      ${canApproveTx || pendingTx.length ? summary("Transactions to approve", pendingTx.length, "Finance maker-checker", "Decide") : ""}
-      ${canApproveTx || pendingRepayments.length ? summary("Loan repayments to approve", pendingRepayments.length, "Mobile-money collections", "Decide") : ""}
-      ${canApproveLoans || (!isPlatform() && loans.length) ? summary("Loans to approve", loans.length, "Credit workflow", "Decide") : ""}
-      ${canApproveMembers || (!isPlatform() && members.length) ? summary("Members to verify", members.length, "KYC and onboarding", "Review") : ""}
+      ${canApproveTx || queueSummary.transactionsToApprove ? summary("Transactions to approve", queueSummary.transactionsToApprove, "Finance maker-checker", "Decide") : ""}
+      ${canApproveTx || queueSummary.repaymentsToApprove ? summary("Loan repayments to approve", queueSummary.repaymentsToApprove, "Mobile-money collections", "Decide") : ""}
+      ${canApproveLoans || (!isPlatform() && queueSummary.loansToApprove) ? summary("Loans to approve", queueSummary.loansToApprove, "Credit workflow", "Decide") : ""}
+      ${canApproveMembers || (!isPlatform() && queueSummary.membersToVerify) ? summary("Members to verify", queueSummary.membersToVerify, "KYC and onboarding", "Review") : ""}
     </div>
     ${state.selectedTransactionMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedTransactionMessage)}</strong></div>` : ""}
     ${state.selectedTransactionError ? `<div class="notice warning"><strong>Approval action failed.</strong><span>${escapeHtml(state.selectedTransactionError)}</span></div>` : ""}
@@ -24,11 +29,11 @@ function approvalsView() {
     ${state.selectedMemberError ? `<div class="notice warning"><strong>Member decision failed.</strong><span>${escapeHtml(state.selectedMemberError)}</span></div>` : ""}
     ${state.selectedRepaymentMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedRepaymentMessage)}</strong></div>` : ""}
     ${state.selectedRepaymentError ? `<div class="notice warning"><strong>Repayment decision failed.</strong><span>${escapeHtml(state.selectedRepaymentError)}</span></div>` : ""}
-    ${canApproveTx ? transactionApprovalPanel(pendingTx, true) : ""}
-    ${canApproveTx ? repaymentApprovalPanel(pendingRepayments, true) : ""}
-    ${canApproveLoans ? loanApprovalPanel(loans, true) : ""}
-    ${canApproveMembers ? memberApprovalPanel(members, true) : ""}
-    ${viewOnly ? recordTable("Approval queue", [...pendingTx, ...pendingRepayments, ...loans, ...members], ["reference", "applicationNo", "membershipNo", "memberName", "type", "amount", "status"]) : ""}
+    ${canApproveTx ? transactionApprovalPanel(queue.pendingTransactions, true) : ""}
+    ${canApproveTx ? repaymentApprovalPanel(queue.pendingRepayments, true) : ""}
+    ${canApproveLoans ? loanApprovalPanel(queue.loans, true) : ""}
+    ${canApproveMembers ? memberApprovalPanel(queue.members, true) : ""}
+    ${viewOnly ? recordTable("Approval queue", queue.viewOnlyQueue, ["reference", "applicationNo", "membershipNo", "memberName", "type", "amount", "status"]) : ""}
   `;
 }
 

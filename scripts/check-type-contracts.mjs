@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, settingsSource, operationsSource, platformSource, saccoSource, navigationSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, settingsSource, operationsSource, platformSource, saccoSource, navigationSource, approvalsSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -28,6 +28,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/platform/platform.ts"),
   readText("src/sacco/sacco.ts"),
   readText("src/navigation/navigation.ts"),
+  readText("src/approvals/approvals.ts"),
   readText("app.state.js"),
 ]);
 
@@ -487,6 +488,18 @@ for (const marker of [
   "export function uniqueNavigationValues",
 ]) {
   assert.ok(navigationSource.includes(marker), `src/navigation/navigation.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaLoanRepaymentApprovalRow",
+  "export interface TerekaLoanApprovalRow",
+  "export interface TerekaMemberApprovalRow",
+  "export interface TerekaApprovalQueueModel",
+  "export interface TerekaApprovalQueueSummary",
+  "export function buildApprovalQueueModel",
+  "export function buildApprovalQueueSummary",
+]) {
+  assert.ok(approvalsSource.includes(marker), `src/approvals/approvals.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");

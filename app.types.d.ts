@@ -451,6 +451,40 @@ interface TerekaMemberDirectorySummary {
   totalBalances: number;
 }
 
+interface TerekaLoanRepaymentApprovalRow {
+  memberId?: string;
+  memberName?: string;
+  [key: string]: any;
+}
+
+interface TerekaLoanApprovalRow extends TerekaLoan {
+  memberName?: string;
+  [key: string]: any;
+}
+
+interface TerekaMemberApprovalRow extends TerekaMemberProfile {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  memberName?: string;
+  [key: string]: any;
+}
+
+interface TerekaApprovalQueueModel {
+  loans: TerekaLoanApprovalRow[];
+  members: TerekaMemberApprovalRow[];
+  pendingRepayments: TerekaLoanRepaymentApprovalRow[];
+  pendingTransactions: Array<TerekaFinancialTransaction & Record<string, any>>;
+  viewOnlyQueue: Array<Record<string, any>>;
+}
+
+interface TerekaApprovalQueueSummary {
+  loansToApprove: number;
+  membersToVerify: number;
+  repaymentsToApprove: number;
+  transactionsToApprove: number;
+}
+
 interface TerekaSubscription {
   id?: string;
   tenantId?: string;
@@ -1831,6 +1865,8 @@ declare function buildMemberDirectoryRows(input: { kycReadiness: (member: Tereka
 declare function buildMemberDirectorySummary(rows: TerekaMemberDirectoryRow[]): TerekaMemberDirectorySummary;
 declare function pendingMemberKycRows<T extends TerekaMemberProfile & Record<string, any>>(members: T[]): T[];
 declare function uniqueNavigationValues(rows: Array<Record<string, any>> | null | undefined, key: string): any[];
+declare function buildApprovalQueueModel(input: { isPlatform: boolean; loans: Array<TerekaLoan & Record<string, any>>; memberName: (memberId?: string) => string; members: Array<TerekaMemberProfile & Record<string, any>>; pendingRepayments: Array<Record<string, any>>; transactions: Array<TerekaFinancialTransaction & Record<string, any>> }): TerekaApprovalQueueModel;
+declare function buildApprovalQueueSummary(model: TerekaApprovalQueueModel): TerekaApprovalQueueSummary;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;
