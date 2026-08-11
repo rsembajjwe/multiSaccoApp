@@ -1,4 +1,4 @@
-import type { TerekaMemberProfile, TerekaRecord, TerekaSubscription, TerekaTenantSummary } from "../types/domain";
+import type { TerekaMemberProfile, TerekaNotification, TerekaRecord, TerekaSubscription, TerekaTenantSummary } from "../types/domain";
 
 export interface TerekaSaccoAccountHealthRow extends TerekaTenantSummary, TerekaRecord {
   accountHealth: string;
@@ -35,6 +35,35 @@ export interface TerekaMemberDirectorySummary {
   portalReady: number;
   registeredMembers: number;
   totalBalances: number;
+}
+
+export interface TerekaQuickSearchResult {
+  id: string;
+  recordId?: string;
+  group?: string;
+  view: string;
+  title: string;
+  meta?: string;
+  saccoRegistrationTab?: string;
+  memberTab?: string;
+  userAdminTab?: string;
+  moduleTabView?: string;
+  moduleTab?: string;
+  selectedTenantId?: string;
+  selectedMemberId?: string;
+  selectedLoanId?: string;
+  selectedUserId?: string;
+  selectedSubscriptionId?: string;
+  selectedComplaintId?: string;
+}
+
+export interface TerekaQuickSearchModel {
+  activeId: string;
+  groups: Array<{
+    group: string;
+    rows: TerekaQuickSearchResult[];
+  }>;
+  results: TerekaQuickSearchResult[];
 }
 
 export function buildSaccoAccountHealthRows(input: {
@@ -103,6 +132,63 @@ export function pendingMemberKycRows<T extends TerekaMemberProfile & TerekaRecor
 export function uniqueNavigationValues(rows: Array<TerekaRecord> | null | undefined, key: string): unknown[] {
   return [...new Set((rows || []).map((row) => row[key]).filter((value) => value !== undefined && value !== null && String(value).trim()))]
     .sort((a, b) => String(a).localeCompare(String(b)));
+}
+
+export function buildQuickSearchResult(group: string, recordId: unknown, view: string, title: unknown, meta: unknown, options: Partial<TerekaQuickSearchResult> = {}): TerekaQuickSearchResult {
+  const safeRecordId = String(recordId || "");
+  return {
+    id: `${view}:${safeRecordId}`,
+    recordId: safeRecordId,
+    group,
+    view,
+    title: String(title || safeRecordId || "Record"),
+    meta: String(meta || view),
+    ...options,
+  };
+}
+
+export function buildQuickSearchModel(input: {
+  activeId?: string;
+  index: TerekaQuickSearchResult[];
+  limit?: number;
+  query?: string;
+}): TerekaQuickSearchModel {
+  const query = String(input.query || "").trim();
+  const results = query.length < 2
+    ? []
+    : input.index
+      .filter((result) => normalizeNavigationText(`${result.group || ""} ${result.title || ""} ${result.meta || ""}`).includes(normalizeNavigationText(query)))
+      .slice(0, input.limit || 8);
+  const activeId = input.activeId && results.some((result) => result.id === input.activeId) ? input.activeId : "";
+  return {
+    activeId,
+    results,
+    groups: groupQuickSearchResults(results),
+  };
+}
+
+export function groupQuickSearchResults(results: TerekaQuickSearchResult[]): TerekaQuickSearchModel["groups"] {
+  const groups = new Map<string, TerekaQuickSearchResult[]>();
+  results.forEach((result) => {
+    const group = result.group || "Results";
+    groups.set(group, [...(groups.get(group) || []), result]);
+  });
+  return [...groups.entries()].map(([group, rows]) => ({ group, rows }));
+}
+
+export function memberUnreadNotificationCount(notifications: Array<TerekaNotification & TerekaRecord>): number {
+  return notifications.filter((row) => !row.readAt && !normalizeNavigationText(row.status).includes("read")).length;
+}
+
+export function staffUnreadNotificationCount(deliveries: Array<TerekaNotification & TerekaRecord>): number {
+  return uniqueStaffUnreadNotificationIds(deliveries).length;
+}
+
+export function uniqueStaffUnreadNotificationIds(deliveries: Array<TerekaNotification & TerekaRecord>): string[] {
+  return deliveries
+    .filter((row) => row.notificationId && !row.readAt)
+    .map((row) => String(row.notificationId))
+    .filter((id, index, ids) => ids.indexOf(id) === index);
 }
 
 function normalizeNavigationText(value: unknown): string {

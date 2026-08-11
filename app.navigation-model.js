@@ -57,6 +57,58 @@ function uniqueNavigationValues(rows, key) {
     .sort((a, b) => String(a).localeCompare(String(b)));
 }
 
+function buildQuickSearchResult(group, recordId, view, title, meta, options = {}) {
+  const safeRecordId = String(recordId || "");
+  return {
+    id: `${view}:${safeRecordId}`,
+    recordId: safeRecordId,
+    group,
+    view,
+    title: String(title || safeRecordId || "Record"),
+    meta: String(meta || view),
+    ...options
+  };
+}
+
+function buildQuickSearchModel(input) {
+  const query = String(input.query || "").trim();
+  const results = query.length < 2
+    ? []
+    : input.index
+      .filter((result) => normalizeNavigationModelText(`${result.group || ""} ${result.title || ""} ${result.meta || ""}`).includes(normalizeNavigationModelText(query)))
+      .slice(0, input.limit || 8);
+  const activeId = input.activeId && results.some((result) => result.id === input.activeId) ? input.activeId : "";
+  return {
+    activeId,
+    results,
+    groups: groupQuickSearchResults(results)
+  };
+}
+
+function groupQuickSearchResults(results) {
+  const groups = new Map();
+  results.forEach((result) => {
+    const group = result.group || "Results";
+    groups.set(group, [...(groups.get(group) || []), result]);
+  });
+  return [...groups.entries()].map(([group, rows]) => ({ group, rows }));
+}
+
+function memberUnreadNotificationCount(notifications) {
+  return notifications.filter((row) => !row.readAt && !normalizeNavigationModelText(row.status).includes("read")).length;
+}
+
+function staffUnreadNotificationCount(deliveries) {
+  return uniqueStaffUnreadNotificationIds(deliveries).length;
+}
+
+function uniqueStaffUnreadNotificationIds(deliveries) {
+  return deliveries
+    .filter((row) => row.notificationId && !row.readAt)
+    .map((row) => String(row.notificationId))
+    .filter((id, index, ids) => ids.indexOf(id) === index);
+}
+
 function normalizeNavigationModelText(value) {
   return String(value || "").toLowerCase();
 }

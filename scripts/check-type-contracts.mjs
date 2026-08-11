@@ -141,6 +141,7 @@ for (const marker of [
   "interface TerekaIntegrationConfig",
   "interface TerekaSecuritySummary",
   "interface TerekaQuickSearchResult",
+  "interface TerekaQuickSearchModel",
 ]) {
   assert.ok(declarations.includes(marker), `app.types.d.ts missing ${marker}`);
 }
@@ -494,6 +495,12 @@ for (const marker of [
   "export function buildMemberDirectorySummary",
   "export function pendingMemberKycRows",
   "export function uniqueNavigationValues",
+  "export function buildQuickSearchResult",
+  "export function buildQuickSearchModel",
+  "export function groupQuickSearchResults",
+  "export function memberUnreadNotificationCount",
+  "export function staffUnreadNotificationCount",
+  "export function uniqueStaffUnreadNotificationIds",
 ]) {
   assert.ok(navigationSource.includes(marker), `src/navigation/navigation.ts missing ${marker}`);
 }

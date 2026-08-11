@@ -284,13 +284,10 @@ function renderShell() {
 
 function quickSearchPanel(results) {
   if (!state.search.trim()) return "";
-  const grouped = results.reduce((groups, result) => {
-    groups[result.group] = [...(groups[result.group] || []), result];
-    return groups;
-  }, {});
+  const groups = groupQuickSearchResults(results);
   return `
     <div class="quick-search-panel" id="quickSearchResults" role="listbox" aria-label="Quick search results">
-      ${results.length ? Object.entries(grouped).map(([group, rows]) => `
+      ${results.length ? groups.map(({ group, rows }) => `
         <div class="quick-search-group">
           <strong>${escapeHtml(group)}</strong>
           ${rows.map((result) => `
@@ -310,15 +307,14 @@ function networkStatusChip() {
 }
 
 function quickSearchResults() {
-  const query = state.search.trim();
-  if (query.length < 2) return [];
-  const results = quickSearchIndex()
-    .filter((result) => normal(`${result.group} ${result.title} ${result.meta}`).includes(normal(query)))
-    .slice(0, 8);
-  if (state.quickSearchActiveId && !results.some((result) => result.id === state.quickSearchActiveId)) {
-    state.quickSearchActiveId = "";
-  }
-  return results;
+  const model = buildQuickSearchModel({
+    activeId: state.quickSearchActiveId,
+    index: quickSearchIndex(),
+    query: state.search,
+    limit: 8
+  });
+  state.quickSearchActiveId = model.activeId;
+  return model.results;
 }
 
 function quickSearchIndex() {
@@ -357,15 +353,7 @@ function quickSearchIndex() {
 }
 
 function quickResult(group, recordId, view, title, meta, options = {}) {
-  return {
-    id: `${view}:${recordId}`,
-    recordId,
-    group,
-    view,
-    title: title || recordId || "Record",
-    meta: meta || view,
-    ...options
-  };
+  return buildQuickSearchResult(group, recordId, view, title, meta, options);
 }
 
 function topbarNotificationButton(modules) {
@@ -383,13 +371,9 @@ function topbarNotificationButton(modules) {
 
 function unreadNotificationCount() {
   if (state.auth === "member") {
-    return state.memberData.notifications.filter((row) => !row.readAt && !normal(row.status).includes("read")).length;
+    return memberUnreadNotificationCount(state.memberData.notifications);
   }
-  return dataRows("notifications")
-    .filter((row) => row.notificationId && !row.readAt)
-    .map((row) => row.notificationId)
-    .filter((id, index, ids) => ids.indexOf(id) === index)
-    .length;
+  return staffUnreadNotificationCount(dataRows("notifications"));
 }
 
 function sessionSecurityMenu() {

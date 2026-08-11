@@ -1314,6 +1314,15 @@ interface TerekaQuickSearchResult {
   [key: string]: any;
 }
 
+interface TerekaQuickSearchModel {
+  activeId: string;
+  groups: Array<{
+    group: string;
+    rows: TerekaQuickSearchResult[];
+  }>;
+  results: TerekaQuickSearchResult[];
+}
+
 interface TerekaTableModelInput<T = any> {
   allRows: T[];
   backendPage: (TerekaPageEnvelope & { number?: number }) | null;
@@ -1898,6 +1907,12 @@ declare function buildMemberDirectoryRows(input: { kycReadiness: (member: Tereka
 declare function buildMemberDirectorySummary(rows: TerekaMemberDirectoryRow[]): TerekaMemberDirectorySummary;
 declare function pendingMemberKycRows<T extends TerekaMemberProfile & Record<string, any>>(members: T[]): T[];
 declare function uniqueNavigationValues(rows: Array<Record<string, any>> | null | undefined, key: string): any[];
+declare function buildQuickSearchResult(group: string, recordId: any, view: string, title: any, meta: any, options?: Partial<TerekaQuickSearchResult>): TerekaQuickSearchResult;
+declare function buildQuickSearchModel(input: { activeId?: string; index: TerekaQuickSearchResult[]; limit?: number; query?: string }): TerekaQuickSearchModel;
+declare function groupQuickSearchResults(results: TerekaQuickSearchResult[]): TerekaQuickSearchModel["groups"];
+declare function memberUnreadNotificationCount(notifications: Array<TerekaNotification & Record<string, any>>): number;
+declare function staffUnreadNotificationCount(deliveries: Array<TerekaNotification & Record<string, any>>): number;
+declare function uniqueStaffUnreadNotificationIds(deliveries: Array<TerekaNotification & Record<string, any>>): string[];
 declare function buildApprovalQueueModel(input: { isPlatform: boolean; loans: Array<TerekaLoan & Record<string, any>>; memberName: (memberId?: string) => string; members: Array<TerekaMemberProfile & Record<string, any>>; pendingRepayments: Array<Record<string, any>>; transactions: Array<TerekaFinancialTransaction & Record<string, any>> }): TerekaApprovalQueueModel;
 declare function buildApprovalQueueSummary(model: TerekaApprovalQueueModel): TerekaApprovalQueueSummary;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;

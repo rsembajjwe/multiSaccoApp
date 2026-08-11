@@ -251,7 +251,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   summary rows are now typed behind a navigation bridge. Approval queue row preparation and summary
   counts are now typed behind an approvals bridge. Platform/SACCO user scope filtering, role options,
   multi-role detail summaries, active-session rows, and password-reset rows now sit behind the typed
-  access bridge.
+  access bridge. Global quick-search result construction/filtering/grouping and topbar unread
+  notification counts now also live behind the typed navigation bridge.
   The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.
