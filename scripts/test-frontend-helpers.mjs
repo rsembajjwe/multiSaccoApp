@@ -1141,7 +1141,13 @@ assert.match(readonlyPaymentRequestsHtml, /data-payment-request-status="failed" 
 const readonlyLoanApplicationHtml = sandbox.loanApplicationPanel();
 assert.match(readonlyLoanApplicationHtml, /View only/);
 assert.match(readonlyLoanApplicationHtml, /id="newLoanMemberId" disabled/);
-const readonlyLoanDetailHtml = sandbox.loanDetailPanel(sandbox.loanRows());
+const readonlyLoanRows = sandbox.buildLoanRows({
+  loans: sandbox.dataRows("loans"),
+  memberName: sandbox.memberName,
+  labelize: sandbox.labelize,
+  formatMoney: (value) => `USh ${Number(value || 0).toLocaleString("en-UG")}`
+});
+const readonlyLoanDetailHtml = sandbox.loanDetailPanel(readonlyLoanRows);
 assert.match(readonlyLoanDetailHtml, /View only/);
 assert.match(readonlyLoanDetailHtml, /id="loanRepaymentAmount"[^>]*disabled/);
 assert.doesNotMatch(readonlyLoanDetailHtml, /Approve loan<\/button>/);

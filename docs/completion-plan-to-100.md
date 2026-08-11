@@ -37,7 +37,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    through `src/transactions/transactions.ts` plus `app.transactions-model.js`, with redundant receipting queue/register wrapper helpers removed. Loan row shaping,
    borrower/guarantor option eligibility, product options, guarantor readiness, approval readiness,
    servicing status, portfolio risk counts, outstanding principal, and arrears-aging totals now follow the same pattern through `src/loans/loans.ts` plus
-   `app.loans-model.js`. Accounting dashboard totals, unbalanced-journal counts, period-close counts,
+   `app.loans-model.js`, with the redundant local loan row wrapper removed. Accounting dashboard totals, unbalanced-journal counts, period-close counts,
    expense/asset account option filters, asset category options, reconciliation exception totals,
    payment request review rows, match rows, and reconciliation coverage now follow the same pattern through `src/accounting/accounting.ts` plus
    `app.accounting-model.js`, with redundant payment/reconciliation wrapper helpers removed. SACCO finance summaries for savings, shares, welfare, active products,

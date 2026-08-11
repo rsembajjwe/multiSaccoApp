@@ -1,7 +1,12 @@
 ﻿// Loan and guarantor workflow rendering extracted from app.js.
 
 function loansView() {
-  const loans = loanRows();
+  const loans = buildLoanRows({
+    loans: dataRows("loans"),
+    memberName,
+    labelize,
+    formatMoney: (value) => money.format(value)
+  });
   const portfolio = buildLoanPortfolioSummary(loans);
   const tabs = [["application", t("loanApplicationForm")], ["list", t("loanApplicationList")], ["detail", t("loanDetailGuarantors")]];
   const tab = activeModuleTab("loans", tabs);
@@ -29,7 +34,12 @@ function loansView() {
 
 function guarantorsView() {
   const requests = dataRows("guarantorRequests").map((request) => ({ ...request, memberName: memberName(request.memberId) }));
-  const loans = loanRows().filter((loan) => normal(loan.stage).includes("guarant") || normal(loan.guarantorReadiness).includes("guarant"));
+  const loans = buildLoanRows({
+    loans: dataRows("loans"),
+    memberName,
+    labelize,
+    formatMoney: (value) => money.format(value)
+  }).filter((loan) => normal(loan.stage).includes("guarant") || normal(loan.guarantorReadiness).includes("guarant"));
   const rows = requests.length ? requests : loans;
   const pending = rows.filter((row) => normal(row.status).includes("pending") || normal(row.guarantorReadiness).includes("pending"));
   const accepted = rows.filter((row) => normal(row.status).includes("accepted") || normal(row.guarantorReadiness).includes("accepted"));
@@ -78,15 +88,6 @@ function loanApplicationPanel() {
       </form>
     </section>
   `;
-}
-
-function loanRows() {
-  return buildLoanRows({
-    loans: dataRows("loans"),
-    memberName,
-    labelize,
-    formatMoney: (value) => money.format(value)
-  });
 }
 
 function loanDetailPanel(rows) {

@@ -155,7 +155,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   while the classic Transactions screen remains in place.
 - Loan row shaping, borrower/guarantor option eligibility, product options, guarantor readiness,
   approval readiness, servicing status, portfolio risk counts, outstanding principal, and arrears-aging totals now live behind `src/loans/loans.ts` plus
-  `app.loans-model.js`, keeping the SACCO credit dashboard and loan list aligned during the
+  `app.loans-model.js`, with the redundant local loan row wrapper removed and keeping the SACCO credit dashboard and loan list aligned during the
   TypeScript migration.
 - Accounting dashboard totals, unbalanced-journal counts, period-close counts, expense/asset account
   option filters, asset category options, reconciliation exception totals, payment request review
