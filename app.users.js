@@ -2,17 +2,18 @@
   const platformOnly = isPlatform();
   const users = platformOnly ? dataRows("users").filter((user) => user.tenantId === "tenant_platform") : dataRows("users");
   const canCreate = hasPermission("users:create") || hasPermission("roles:create");
-  const rows = users.map((user) => ({ ...staffAccessRow(user, platformOnly), action: "user-detail", actionLabel: "Manage access", actionId: user.id }));
   const roles = userRoleOptions(platformOnly);
+  const rows = buildAccessUserRows({ platformOnly, roles, users });
+  const accessSummary = buildAccessSummary(users, roles);
   const listPanel = recordTable(platformOnly ? "Platform administrator list" : "SACCO staff access list", rows, ["fullName", "email", "phone", "role", "mfa", "activeSessions", "accessPurpose", "moduleScope", "lastLogin", "status"]);
   const detailPanel = userDetailPanel(users, canCreate) || emptyState("User detail and role assignment", "Select Manage access from the administrator list to review roles and module access.");
   if (platformOnly) {
     return `
       <div class="dashboard-grid">
-        ${summary(t("platformUsers"), users.length, "Administrators only", t("review"))}
-        ${summary(t("activeUsers"), users.filter((user) => normal(user.status) === "active").length, "Can sign in", "Monitor")}
-        ${summary(t("configuredRoles"), roles.length, "Available assignments", "Manage")}
-        ${summary(t("roleCoverage"), roleCoverage(users, roles), "Users with assigned roles", "Audit")}
+        ${summary(t("platformUsers"), accessSummary.totalUsers, "Administrators only", t("review"))}
+        ${summary(t("activeUsers"), accessSummary.activeUsers, "Can sign in", "Monitor")}
+        ${summary(t("configuredRoles"), accessSummary.configuredRoles, "Available assignments", "Manage")}
+        ${summary(t("roleCoverage"), accessSummary.roleCoverage, "Users with assigned roles", "Audit")}
       </div>
       ${userManagementTabs(canCreate)}
       ${platformUserTabContent({
@@ -28,10 +29,10 @@
   }
   return `
     <div class="dashboard-grid">
-      ${summary("SACCO staff users", users.length, "Staff accounts only, not members", "Review")}
-      ${summary("Active users", users.filter((user) => normal(user.status) === "active").length, "Can sign in", "Monitor")}
-      ${summary("Configured roles", roles.length, "Available assignments", "Manage")}
-      ${summary("Role coverage", roleCoverage(users, roles), "Users with assigned roles", "Audit")}
+      ${summary("SACCO staff users", accessSummary.totalUsers, "Staff accounts only, not members", "Review")}
+      ${summary("Active users", accessSummary.activeUsers, "Can sign in", "Monitor")}
+      ${summary("Configured roles", accessSummary.configuredRoles, "Available assignments", "Manage")}
+      ${summary("Role coverage", accessSummary.roleCoverage, "Users with assigned roles", "Audit")}
     </div>
     ${!platformOnly ? saccoStaffAccessGuide(roles) : ""}
     ${canCreate ? addUserPanel(platformOnly) : ""}
@@ -218,65 +219,20 @@ function userDetailPanel(users, canManageRoles) {
 }
 
 function roleCoveragePanel(users, roles, platformOnly) {
-  const rows = roles.map((role) => {
-    const assignedUsers = users.filter((user) => normal(user.role).includes(normal(role.name)) || user.roleId === role.id);
-    return {
-      roleName: role.name,
-      scope: platformOnly ? "Platform administration" : "SACCO staff",
-      assignedUsers: assignedUsers.length,
-      accessPurpose: rolePurpose(role.name, platformOnly),
-      moduleScope: roleModuleScope(role.name, platformOnly),
-      status: role.status || "active"
-    };
-  });
+  const rows = buildRoleCoverageRows({ platformOnly, roles, users });
   return recordTable(platformOnly ? "Platform role coverage" : "SACCO staff role coverage", rows, ["roleName", "scope", "assignedUsers", "accessPurpose", "moduleScope", "status"]);
 }
 
 function roleCoverage(users, roles) {
-  if (!users.length) return "0%";
-  const assigned = users.filter((user) => user.role || user.roleId || roles.some((role) => normal(user.role).includes(normal(role.name)))).length;
-  return `${Math.round((assigned / users.length) * 100)}%`;
+  return roleCoverageFor(users, roles);
 }
 
 function rolePurpose(roleName, platformOnly) {
-  const name = normal(roleName);
-  if (platformOnly) {
-    if (name.includes("super")) return "Full platform control";
-    if (name.includes("billing")) return "Subscriptions and payments";
-    if (name.includes("compliance")) return "Audit and oversight";
-    if (name.includes("support")) return "SACCO support";
-    if (name.includes("operations")) return "Monitoring and operations";
-    return "Platform administration";
-  }
-  if (name.includes("treasurer")) return "Finance and cash control";
-  if (name.includes("secretary")) return "Membership and governance";
-  if (name.includes("chair")) return "Oversight and approvals";
-  if (name.includes("accountant")) return "Accounting and reconciliation";
-  if (name.includes("teller")) return "Transactions and cashiering";
-  if (name.includes("auditor")) return "Read-only audit review";
-  if (name.includes("loan")) return "Loan origination";
-  return "SACCO administration";
+  return rolePurposeFor(roleName, platformOnly);
 }
 
 function roleModuleScope(roleName, platformOnly) {
-  const name = normal(roleName);
-  if (platformOnly) {
-    if (name.includes("super")) return "All platform modules";
-    if (name.includes("billing")) return "Dashboard, subscriptions, reports";
-    if (name.includes("compliance")) return "Dashboard, reports, audit";
-    if (name.includes("support")) return "Dashboard, SACCOs, complaints";
-    if (name.includes("operations")) return "Dashboard, SACCOs, complaints, notifications";
-    return "Platform administration";
-  }
-  if (name.includes("administrator") || name.includes("admin")) return "All SACCO modules";
-  if (name.includes("treasurer")) return "Transactions, savings, shares, welfare, approvals, accounting, reconciliation, reports";
-  if (name.includes("secretary")) return "Members, shares, welfare, approvals, reports, governance, complaints";
-  if (name.includes("chair")) return "Loans, guarantors, approvals, reports, governance";
-  if (name.includes("accountant")) return "Transactions, accounting, reconciliation, reports";
-  if (name.includes("teller")) return "Transactions and receipts";
-  if (name.includes("auditor")) return "Read-only reports and audit";
-  if (name.includes("loan")) return "Members, loans, guarantors, approvals, reports";
-  return "Configured SACCO modules";
+  return roleModuleScopeFor(roleName, platformOnly);
 }
 
 function staffAccessRow(user, platformOnly) {
@@ -314,22 +270,14 @@ function roleNameFromId(roleId, platformOnly) {
 }
 
 function saccoStaffAccessGuide(roles) {
-  const preferred = ["SACCO Chairperson", "SACCO Treasurer", "SACCO Secretary", "Loans Officer", "Accountant", "Teller", "Auditor"];
-  const rows = preferred.map((name) => {
-    const configured = roles.find((role) => normal(role.name) === normal(name) || normal(role.name).includes(normal(name.replace("SACCO ", ""))));
-    return {
-      roleName: configured?.name || name,
-      accessPurpose: rolePurpose(configured?.name || name, false),
-      moduleScope: roleModuleScope(configured?.name || name, false),
-      configured: configured ? "Available" : "Template"
-    };
-  });
+  const rows = buildSaccoStaffGuideRows(roles);
   return recordTable("SACCO staff role guide", rows, ["roleName", "accessPurpose", "moduleScope", "configured"]);
 }
 
 function permissionMatrix() {
   const modules = isPlatform() ? platformModules : saccoModules;
-  return `<section class="panel"><h2>Permission matrix</h2><div class="permission-grid">${modules.slice(0, 10).map((item) => `<div><strong>${item[1]}</strong>${["View", "Create", "Edit", "Approve", "Export", "Manage"].map((action) => `<span>${action}</span>`).join("")}</div>`).join("")}</div></section>`;
+  const rows = buildPermissionMatrixRows(modules, dataRows("permissions"));
+  return `<section class="panel"><h2>Permission matrix</h2><div class="permission-grid">${rows.map((item) => `<div><strong>${escapeHtml(item.moduleName)}</strong>${item.actions.map((action) => `<span>${escapeHtml(action)}</span>`).join("")}</div>`).join("")}</div></section>`;
 }
 
 function userRoleOptions(platformOnly) {
@@ -353,11 +301,7 @@ function rolePreviewText(roleId, platformOnly) {
 }
 
 function roleSummaryText(roleIds, platformOnly) {
-  const roles = userRoleOptions(platformOnly).filter((role) => (roleIds || []).includes(role.id));
-  if (!roles.length) return "Select at least one role.";
-  return roles
-    .map((role) => `${role.name}: ${rolePurpose(role.name, platformOnly)} / ${roleModuleScope(role.name, platformOnly)}`)
-    .join(" | ");
+  return roleSummaryTextFor(roleIds || [], userRoleOptions(platformOnly), platformOnly);
 }
 
 function checkedRoleIds(name) {

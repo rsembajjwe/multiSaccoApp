@@ -124,6 +124,7 @@ for (const file of [
   "app.reports-model.js",
   "app.audit-model.js",
   "app.onboarding-model.js",
+  "app.access-model.js",
   "app.core.js",
   "app.api.js",
   "app.ui.js",

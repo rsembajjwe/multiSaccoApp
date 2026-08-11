@@ -181,6 +181,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - SACCO application rows, registration readiness counts, subscription table rows, billing/payment
   access summaries, package-card display rows, and shared onboarding/payment stage labels now live
   behind `src/onboarding/onboarding.ts` plus `app.onboarding-model.js`.
+- Platform/SACCO user access rows, access dashboard summaries, role coverage rows, SACCO staff role
+  guide rows, permission-matrix rows, role purpose/scope text, and multi-role summary text now live
+  behind `src/access/access.ts` plus `app.access-model.js`.
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
   no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,
@@ -233,7 +236,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   as do SACCO loan rows, portfolio risk summaries, accounting ledger totals, reconciliation review
   rows, SACCO finance summaries, notification delivery summaries, complaint/chat summaries, and
   governance meeting/resolution summaries, regulatory/platform report summaries, and audit
-  classification summaries, plus onboarding and subscription billing summaries.
+  classification summaries, onboarding and subscription billing summaries, and user/role access
+  summaries.
   The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.

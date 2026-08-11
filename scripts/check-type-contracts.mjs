@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, onboardingSource, accessSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -22,6 +22,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/reports/reports.ts"),
   readText("src/audit/audit.ts"),
   readText("src/onboarding/onboarding.ts"),
+  readText("src/access/access.ts"),
   readText("app.state.js"),
 ]);
 
@@ -117,6 +118,11 @@ for (const marker of [
   "interface TerekaSubscriptionRow",
   "interface TerekaSubscriptionSummary",
   "interface TerekaPackageCardRow",
+  "interface TerekaAccessUserRow",
+  "interface TerekaAccessSummary",
+  "interface TerekaRoleCoverageRow",
+  "interface TerekaSaccoStaffGuideRow",
+  "interface TerekaPermissionMatrixRow",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -357,6 +363,25 @@ for (const marker of [
   "export function subscriptionPaymentLabelFor",
 ]) {
   assert.ok(onboardingSource.includes(marker), `src/onboarding/onboarding.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaAccessUserRow",
+  "export interface TerekaAccessSummary",
+  "export interface TerekaRoleCoverageRow",
+  "export interface TerekaSaccoStaffGuideRow",
+  "export interface TerekaPermissionMatrixRow",
+  "export function buildAccessUserRows",
+  "export function buildAccessSummary",
+  "export function buildRoleCoverageRows",
+  "export function roleCoverageFor",
+  "export function rolePurposeFor",
+  "export function roleModuleScopeFor",
+  "export function buildSaccoStaffGuideRows",
+  "export function buildPermissionMatrixRows",
+  "export function roleSummaryTextFor",
+]) {
+  assert.ok(accessSource.includes(marker), `src/access/access.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");
