@@ -9,6 +9,8 @@
     "moduleDetection": "legacy",
     "skipLibCheck": true,
     "strict": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "noImplicitAny": false,
     "noPropertyAccessFromIndexSignature": false
   },

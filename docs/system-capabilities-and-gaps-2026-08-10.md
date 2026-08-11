@@ -135,10 +135,13 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,
   offline drafts, privacy requests, platform/SACCO administration data, subscriptions, roles,
   permissions, audit events, transactions, accounting/setup objects, integration configs, security
-  policy summaries, reconciliation data, regulatory reports, and quick-search result navigation.
+  policy summaries, reconciliation data, regulatory reports, complaint/chat messages, and
+  quick-search result navigation.
   `npm run type:check` verifies that the important type contracts and global-state wiring remain in
   place, `npm run check` runs both type gates in CI, and `npm run type:evidence` records the
   TypeScript gate plus contract check as timestamped release evidence under `reports/type-evidence/`.
+  The type gate now also enforces `noImplicitReturns` and `noFallthroughCasesInSwitch`, with JSDoc
+  contracts on member payment lifecycle and transaction receipting helpers.
 - Production UI hides development/source panels and uses role-specific platform, SACCO, and member
   views.
 - i18n evidence now records supported locale metadata for English, French, Swahili, Portuguese,
@@ -164,8 +167,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - **Type safety is started, not deep.** A passing TypeScript `checkJs` gate now covers the SPA and is
   wired into `npm run check`. Member/payment portal contracts now have named JSDoc/TypeScript
   declarations, platform/SACCO administration data now has first-pass named contracts, and
-  operational/configuration report objects are typed. The remaining type-safety work is tightening
-  object field optionality and moving from global scripts to ES module/TypeScript source files.
+  operational/configuration report objects plus complaint/chat workflows are typed. The remaining
+  type-safety work is reducing the broad compatibility index signatures and moving from global
+  scripts to ES module/TypeScript source files.
 - **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
   now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
   The project still lacks a real component/unit test framework over the large UI surface.

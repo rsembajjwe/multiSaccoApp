@@ -140,6 +140,11 @@ function chatThreadRows(source) {
   }));
 }
 
+/**
+ * @param {TerekaComplaintThread | undefined} selected
+ * @param {string} mode
+ * @returns {string}
+ */
 function chatConversationPanel(selected, mode) {
   if (!selected) return emptyState("No conversation", "Select a chat to view messages.");
   const messages = state.chatMessages[selected.id];
@@ -196,11 +201,20 @@ function chatApiBase() {
   return state.auth === "member" ? "/member-auth/chat" : "/chat";
 }
 
+/**
+ * @param {string} threadId
+ * @returns {TerekaComplaintThread | undefined}
+ */
 function chatThreadById(threadId) {
   const collection = state.auth === "member" ? (state.memberData.chatThreads || []) : (dataRows("chatThreads") || []);
   return collection.find((thread) => thread.id === threadId);
 }
 
+/**
+ * @param {string} threadId
+ * @param {{ markRead?: boolean }} [options]
+ * @returns {Promise<void>}
+ */
 async function loadChatMessages(threadId, { markRead = true } = {}) {
   if (!threadId) return;
   const base = chatApiBase();
@@ -227,6 +241,9 @@ function selectChatThread(threadId) {
   loadChatMessages(threadId);
 }
 
+/**
+ * @returns {Promise<void>}
+ */
 async function refreshChatThreads() {
   const base = chatApiBase();
   const threads = await optionalApi(`${base}/threads`, []);
@@ -234,6 +251,10 @@ async function refreshChatThreads() {
   else state.data.chatThreads = threads;
 }
 
+/**
+ * @param {string} threadId
+ * @returns {Promise<void>}
+ */
 async function sendChatMessage(threadId) {
   const input = document.querySelector("#chatComposerInput");
   const text = input ? input.value.trim() : "";

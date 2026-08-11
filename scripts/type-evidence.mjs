@@ -74,7 +74,7 @@ function renderReport(results) {
     "## Scope",
     "",
     "- Confirms the SPA passes the TypeScript `checkJs` gate in `tsconfig.ui.json`.",
-    "- Confirms key domain declarations and global-state type wiring are still present.",
+    "- Confirms stricter TypeScript options, key domain declarations and global-state type wiring are still present.",
     "- Confirms shared declarations cover runtime state, member portal, platform/SACCO admin, operations, integration, reconciliation, and regulatory-report data contracts.",
     "- Does not mean the frontend has completed native TypeScript source conversion or ES module migration.",
     "",

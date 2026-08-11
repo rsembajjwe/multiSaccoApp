@@ -582,6 +582,17 @@ interface TerekaPaymentRequest {
   [key: string]: any;
 }
 
+interface TerekaPaymentLifecycleRow {
+  date?: string;
+  reference?: string;
+  description?: string;
+  paymentRoute?: string;
+  amount?: number | string;
+  paymentStatus?: string;
+  receiptStatus?: string;
+  [key: string]: any;
+}
+
 interface TerekaCollectionAccount {
   id?: string;
   active?: boolean;
@@ -620,6 +631,38 @@ interface TerekaNotification {
   [key: string]: any;
 }
 
+interface TerekaComplaintThread {
+  id?: string;
+  tenantId?: string;
+  tenantName?: string;
+  memberId?: string;
+  memberName?: string;
+  subject?: string;
+  description?: string;
+  category?: string;
+  type?: string;
+  status?: string;
+  assignedTo?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  lastMessageAt?: string;
+  lastMessagePreview?: string;
+  lastMessageSenderType?: string;
+  unreadCount?: number;
+  [key: string]: any;
+}
+
+interface TerekaChatMessage {
+  id?: string;
+  threadId?: string;
+  senderType?: string;
+  senderName?: string;
+  body?: string;
+  createdAt?: string;
+  readAt?: string;
+  [key: string]: any;
+}
+
 interface TerekaGuarantorRequest {
   id?: string;
   status?: string;
@@ -627,12 +670,6 @@ interface TerekaGuarantorRequest {
   guaranteedAmount?: number | string;
   capacity?: number | string;
   loan?: TerekaLoan;
-  [key: string]: any;
-}
-
-interface TerekaChatThread {
-  id?: string;
-  unreadCount?: number;
   [key: string]: any;
 }
 
@@ -663,8 +700,8 @@ interface TerekaMemberData {
   loans: TerekaLoan[];
   notifications: TerekaNotification[];
   pendingGuarantors: TerekaGuarantorRequest[];
-  complaints: any[];
-  chatThreads: TerekaChatThread[];
+  complaints: TerekaComplaintThread[];
+  chatThreads: TerekaComplaintThread[];
   collectionAccounts: TerekaCollectionAccount[];
   privacyRequests: TerekaPrivacyRequest[];
   drafts: TerekaOfflineDraft[];
@@ -682,7 +719,8 @@ interface TerekaAppData {
   loans: TerekaLoan[];
   operations: Record<string, any> | null;
   notifications: TerekaNotification[];
-  complaints: any[];
+  complaints: TerekaComplaintThread[];
+  chatThreads?: TerekaComplaintThread[];
   users: TerekaPlatformUser[];
   branches: TerekaBranch[];
   financialProducts: TerekaFinancialProduct[];
@@ -751,7 +789,7 @@ interface TerekaState {
   tableState: Record<string, TerekaTableState>;
   pageMeta: Record<string, TerekaPageEnvelope>;
   chatFilters: Record<string, any>;
-  chatMessages: Record<string, any[]>;
+  chatMessages: Record<string, TerekaChatMessage[] | undefined>;
   data: TerekaAppData;
   memberData: TerekaMemberData;
   [key: string]: any;

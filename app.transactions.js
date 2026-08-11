@@ -134,6 +134,10 @@ function transactionRows() {
   });
 }
 
+/**
+ * @param {TerekaFinancialTransaction[]} rows
+ * @returns {Array<TerekaFinancialTransaction & { receiptingAction: string, action: string, actionLabel: string, actionId?: string }>}
+ */
 function transactionReceiptingQueue(rows) {
   return rows
     .filter((row) => {
@@ -156,6 +160,10 @@ function transactionReceiptingQueue(rows) {
     });
 }
 
+/**
+ * @param {TerekaFinancialTransaction[]} rows
+ * @returns {Array<TerekaFinancialTransaction & { receiptNo: string, receiptStatus: string, action: string, actionLabel: string, actionId?: string }>}
+ */
 function transactionReceiptRegister(rows) {
   return rows
     .filter((row) => normal(row.status) === "posted" && !row.originalTransactionId)

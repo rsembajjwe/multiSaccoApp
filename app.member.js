@@ -56,6 +56,11 @@ function memberQuickActionsPanel() {
   `;
 }
 
+/**
+ * @param {TerekaMemberDashboard} dash
+ * @param {TerekaBalances} balances
+ * @returns {string}
+ */
 function memberMoneyView(dash, balances) {
   const tabs = [["accounts", "Accounts"], ["statement", "Statement"], ["receipts", "Receipts"]];
   const tab = activeModuleTab("money", tabs);
@@ -290,6 +295,11 @@ function memberMobileMoneyRows(dash) {
     }));
 }
 
+/**
+ * Builds a member-facing payment lifecycle from requests, posted statement lines and offline drafts.
+ * @param {TerekaMemberDashboard} dash
+ * @returns {TerekaPaymentLifecycleRow[]}
+ */
 function memberPaymentLifecycleRows(dash) {
   const requestRows = (state.memberData.paymentRequests || []).map((request) => ({
     date: request.requestedAt || request.createdAt || "",
@@ -342,6 +352,10 @@ function paymentRequestStatusNotice() {
   `;
 }
 
+/**
+ * @param {TerekaPaymentRequest | TerekaStatementLine | TerekaOfflineDraft | Record<string, any>} row
+ * @returns {string}
+ */
 function paymentRouteLabel(row) {
   const text = normal(`${row.route || ""} ${row.channel || ""} ${row.provider || ""} ${row.reference || ""} ${row.externalReference || ""} ${row.providerPayload?.route || ""}`);
   if (text.includes("treasurer") || text.includes("cash")) return "Treasurer cash";
@@ -350,6 +364,10 @@ function paymentRouteLabel(row) {
   return "Treasurer cash";
 }
 
+/**
+ * @param {TerekaPaymentRequest | TerekaStatementLine | TerekaOfflineDraft | Record<string, any>} row
+ * @returns {string}
+ */
 function paymentLifecycleStatus(row) {
   const text = normal(`${row.status || ""} ${row.receiptStatus || ""}`);
   if (text.includes("failed")) return "Failed";
@@ -360,6 +378,10 @@ function paymentLifecycleStatus(row) {
   return "Draft";
 }
 
+/**
+ * @param {TerekaPaymentRequest | TerekaStatementLine | Record<string, any>} row
+ * @returns {string}
+ */
 function receiptLifecycleStatus(row) {
   const text = normal(`${row.receiptStatus || ""} ${row.status || ""}`);
   if (text.includes("failed")) return "Failed";
@@ -368,6 +390,10 @@ function receiptLifecycleStatus(row) {
   return "Not receipted";
 }
 
+/**
+ * @param {TerekaStatementLine | TerekaFinancialTransaction} line
+ * @returns {boolean}
+ */
 function isMobileMoneyLine(line) {
   const text = normal(`${line.channel || ""} ${line.provider || ""} ${line.reference || ""} ${line.description || ""} ${line.type || ""}`);
   return text.includes("mobile") || text.includes("mtn") || text.includes("airtel") || text.includes("mm-");
