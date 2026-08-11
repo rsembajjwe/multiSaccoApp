@@ -1,31 +1,16 @@
 function subscriptionsView() {
   const rows = dataRows("subscriptions");
-  const tableRows = rows.map((subscription) => {
-    const tenant = tenantRows().find((item) => item.id === subscription.tenantId) || {};
-    return {
-      ...subscription,
-      saccoCode: tenant.abbreviation || tenant.code || subscription.tenantCode || subscription.tenantId,
-      packageName: subscription.tierLabel || subscription.packageName || subscription.packageId,
-      paymentStatus: subscriptionPaymentLabel(subscription),
-      paymentStage: saccoPaymentStage(tenant, subscription),
-      operatingAccess: subscriptionAccessLabel(subscription, tenant),
-      approvalStage: saccoApprovalStage(tenant, subscription),
-      billableMembers: subscription.billableMembers || subscription.memberCount || tenant.memberCount || 0,
-      balanceDue: Math.max(0, Number(subscription.amount || 0) - Number(subscription.paid || subscription.amountPaid || 0)),
-      action: "subscription-detail",
-      actionLabel: "Manage",
-      actionId: subscription.id
-    };
-  });
+  const tableRows = buildSubscriptionRows({ subscriptions: rows, tenants: tenantRows() });
+  const subscriptionSummary = buildSubscriptionSummary(rows, tableRows);
   return `
     <div class="dashboard-grid">
-      ${summary(t("activeSubscriptions"), rows.filter((row) => normal(row.status) === "active").length, "Operating access", "View")}
-      ${summary(t("pendingPayments"), rows.filter((row) => normal(row.paymentStatus || row.status).includes("pending")).length, "Awaiting confirmation", "Record payment")}
-      ${summary(t("suspendedAccess"), tableRows.filter((row) => normal(row.operatingAccess).includes("suspended")).length, "Blocked from operating", t("review"))}
-      ${summary(t("revenueThisMonth"), money.format(sum(rows, "amount")), "Invoice value", t("export"))}
-      ${summary(t("outstandingInvoices"), money.format(rows.reduce((total, row) => total + Number(row.amount || 0) - Number(row.paid || row.amountPaid || 0), 0)), "Unpaid balance", "Follow up")}
+      ${summary(t("activeSubscriptions"), subscriptionSummary.activeSubscriptions, "Operating access", "View")}
+      ${summary(t("pendingPayments"), subscriptionSummary.pendingPayments, "Awaiting confirmation", "Record payment")}
+      ${summary(t("suspendedAccess"), subscriptionSummary.suspendedAccess, "Blocked from operating", t("review"))}
+      ${summary(t("revenueThisMonth"), money.format(subscriptionSummary.revenueThisMonth), "Invoice value", t("export"))}
+      ${summary(t("outstandingInvoices"), money.format(subscriptionSummary.outstandingInvoices), "Unpaid balance", "Follow up")}
     </div>
-    ${subscriptionStatusGuide(rows, tableRows)}
+    ${subscriptionStatusGuide(subscriptionSummary)}
     ${filterToolbar("Search by SACCO code, SACCO name, package, payment status, access status or expiry", "Record payment", "Generate invoice")}
     ${subscriptionDetailPanel(rows)}
     ${recordTable("Subscription list", tableRows, ["saccoCode", "tenantName", "packageName", "billingDescription", "billableMembers", "amount", "paid", "balanceDue", "paymentStage", "approvalStage", "operatingAccess", "expiry"])}
@@ -34,12 +19,12 @@ function subscriptionsView() {
   `;
 }
 
-function subscriptionStatusGuide(rows, tableRows) {
+function subscriptionStatusGuide(subscriptionSummary) {
   return rolePriorityPanel(t("subscriptionPaymentAccessStatus"), [
-    ["Paid and active", `${tableRows.filter((row) => normal(row.paymentStatus) === "paid" && normal(row.operatingAccess) === "active").length} SACCO(s) have confirmed payment and operating access.`, "Active"],
-    ["Payment initiated", `${tableRows.filter((row) => normal(row.paymentStage).includes("initiated")).length} SACCO(s) are waiting for payment confirmation before activation or renewal.`, "Follow up"],
-    ["Callback received", `${tableRows.filter((row) => normal(row.paymentStage).includes("callback")).length} SACCO(s) have confirmed payment and need approval or activation follow-through.`, "Review"],
-    ["Expired or suspended", `${tableRows.filter((row) => normal(row.operatingAccess).includes("expired") || normal(row.operatingAccess).includes("suspended")).length} SACCO(s) need renewal, payment confirmation or manual access review.`, "Review"]
+    ["Paid and active", `${subscriptionSummary.paidAndActive} SACCO(s) have confirmed payment and operating access.`, "Active"],
+    ["Payment initiated", `${subscriptionSummary.paymentInitiated} SACCO(s) are waiting for payment confirmation before activation or renewal.`, "Follow up"],
+    ["Callback received", `${subscriptionSummary.callbackReceived} SACCO(s) have confirmed payment and need approval or activation follow-through.`, "Review"],
+    ["Expired or suspended", `${subscriptionSummary.expiredOrSuspended} SACCO(s) need renewal, payment confirmation or manual access review.`, "Review"]
   ]);
 }
 
@@ -96,7 +81,7 @@ function subscriptionDetailPanel(rows) {
 
 function packageCards() {
   const packages = dataRows("subscriptionPackages");
-  const rows = packages.length ? packages : fallbackPackages();
+  const rows = buildPackageCardRows(packages.length ? packages : fallbackPackages());
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -107,25 +92,18 @@ function packageCards() {
         <span class="status active">${rows.length} active package(s)</span>
       </div>
       <div class="package-grid">
-        ${rows.map((pkg) => {
-          const packageId = pkg.id || pkg.packageId || pkg.name;
-          const amount = pkg.price || pkg.amount || 0;
-          const memberLimit = pkg.memberRange || pkg.members || (pkg.maxMembers ? `Up to ${pkg.maxMembers}` : "Configured range");
-          const branchLimit = pkg.maxBranches || pkg.branches || "Configured";
-          const status = normal(pkg.status || "active");
-          return `
+        ${rows.map((pkg) => `
             <article>
               <div class="card-title-row">
                 <h3>${escapeHtml(pkg.name || pkg.packageName || "Subscription package")}</h3>
-                <span class="status ${status === "active" ? "active" : "pending"}">${escapeHtml(labelize(status || "active"))}</span>
+                <span class="status ${pkg.statusTone}">${escapeHtml(pkg.statusLabel)}</span>
               </div>
-              <strong>${money.format(amount)}</strong>
-              <p>${escapeHtml(memberLimit)} members / ${escapeHtml(branchLimit)} branch${String(branchLimit) === "1" ? "" : "es"}</p>
+              <strong>${money.format(pkg.amount)}</strong>
+              <p>${escapeHtml(pkg.memberLimit)} members / ${escapeHtml(pkg.branchLimit)} branch${String(pkg.branchLimit) === "1" ? "" : "es"}</p>
               <span>${escapeHtml(pkg.modules || pkg.description || "Included modules, SMS, storage and support level")}</span>
-              <button class="button secondary" type="button" data-package-manage="${escapeHtml(packageId)}">Manage package</button>
+              <button class="button secondary" type="button" data-package-manage="${escapeHtml(pkg.packageId)}">Manage package</button>
             </article>
-          `;
-        }).join("")}
+          `).join("")}
       </div>
     </section>
   `;

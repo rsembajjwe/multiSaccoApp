@@ -186,6 +186,61 @@ interface TerekaSubscriptionPackage {
   [key: string]: any;
 }
 
+interface TerekaSaccoApplicationRow extends TerekaTenantSummary {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  approvalStage: string;
+  operatingAccess: string;
+  paymentStage: string;
+  [key: string]: any;
+}
+
+interface TerekaSaccoRegistrationSummary {
+  active: number;
+  callbackReceived: number;
+  paymentInitiated: number;
+  readyForApproval: number;
+  totalApplications: number;
+}
+
+interface TerekaSubscriptionRow extends TerekaSubscription {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  approvalStage: string;
+  balanceDue: number;
+  billableMembers: number | string;
+  operatingAccess: string;
+  packageName?: string;
+  paymentStage: string;
+  paymentStatus: string;
+  saccoCode?: string;
+  [key: string]: any;
+}
+
+interface TerekaSubscriptionSummary {
+  activeSubscriptions: number;
+  callbackReceived: number;
+  expiredOrSuspended: number;
+  outstandingInvoices: number;
+  paidAndActive: number;
+  paymentInitiated: number;
+  pendingPayments: number;
+  revenueThisMonth: number;
+  suspendedAccess: number;
+}
+
+interface TerekaPackageCardRow extends TerekaSubscriptionPackage {
+  amount: number | string;
+  branchLimit: number | string;
+  memberLimit: number | string;
+  packageId: string;
+  statusLabel: string;
+  statusTone: "active" | "pending";
+  [key: string]: any;
+}
+
 interface TerekaFinancialTransaction {
   id?: string;
   tenantId?: string;
@@ -1398,6 +1453,15 @@ declare function buildAuditSummary(rows: TerekaAuditRow[], groups: TerekaAuditGr
 declare function auditRiskLevelFor(event: TerekaAuditEvent & Record<string, any>): TerekaAuditRiskLevel;
 declare function auditCategoryFor(event: TerekaAuditEvent & Record<string, any>): TerekaAuditCategory;
 declare function uniqueAuditCount(rows: TerekaAuditRow[], key: string): number;
+declare function buildSaccoApplicationRows(input: { subscriptions: Array<TerekaSubscription & Record<string, any>>; tenants: Array<TerekaTenantSummary & Record<string, any>> }): TerekaSaccoApplicationRow[];
+declare function buildSaccoRegistrationSummary(applications: TerekaSaccoApplicationRow[]): TerekaSaccoRegistrationSummary;
+declare function buildSubscriptionRows(input: { subscriptions: Array<TerekaSubscription & Record<string, any>>; tenants: Array<TerekaTenantSummary & Record<string, any>> }): TerekaSubscriptionRow[];
+declare function buildSubscriptionSummary(rows: Array<TerekaSubscription & Record<string, any>>, tableRows: TerekaSubscriptionRow[]): TerekaSubscriptionSummary;
+declare function buildPackageCardRows(packages: Array<TerekaSubscriptionPackage & Record<string, any>>): TerekaPackageCardRow[];
+declare function subscriptionAccessLabelFor(subscription: Partial<TerekaSubscription & Record<string, any>>, tenant?: Partial<TerekaTenantSummary & Record<string, any>>): string;
+declare function saccoPaymentStageFor(tenant: Partial<TerekaTenantSummary & Record<string, any>>, subscription?: Partial<TerekaSubscription & Record<string, any>>): string;
+declare function saccoApprovalStageFor(tenant: Partial<TerekaTenantSummary & Record<string, any>>, subscription?: Partial<TerekaSubscription & Record<string, any>>): string;
+declare function subscriptionPaymentLabelFor(subscription: Partial<TerekaSubscription & Record<string, any>>): string;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

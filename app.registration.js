@@ -1,16 +1,5 @@
 ﻿function saccoApplications() {
-  const applications = tenantRows().map((tenant) => {
-    const subscription = subscriptionForTenant(tenant.id);
-    return {
-      ...tenant,
-      paymentStage: saccoPaymentStage(tenant, subscription),
-      approvalStage: saccoApprovalStage(tenant, subscription),
-      operatingAccess: subscriptionAccessLabel(subscription || {}, tenant),
-      action: "tenant-detail",
-      actionLabel: "Review",
-      actionId: tenant.id
-    };
-  });
+  const applications = buildSaccoApplicationRows({ subscriptions: dataRows("subscriptions"), tenants: tenantRows() });
   return `
     ${filterToolbar("Search applications by SACCO, district, contact or status", "Assign reviewer", "Export applications")}
     ${saccoRegistrationReadinessPanel(applications)}
@@ -20,11 +9,12 @@
 }
 
 function saccoRegistrationReadinessPanel(applications) {
+  const registrationSummary = buildSaccoRegistrationSummary(applications);
   return rolePriorityPanel("SACCO registration readiness", [
-    ["Payment initiated", `${applications.filter((row) => normal(row.paymentStage).includes("initiated")).length} SACCO(s) have a subscription bill awaiting mobile-money callback or manual payment.`, "Track"],
-    ["Callback received", `${applications.filter((row) => normal(row.paymentStage).includes("callback")).length} SACCO(s) have confirmed subscription payment.`, "Confirm"],
-    ["Ready for approval", `${applications.filter((row) => normal(row.approvalStage).includes("ready")).length} paid self-registration(s) are ready for platform review.`, "Review"],
-    ["Active", `${applications.filter((row) => normal(row.operatingAccess) === "active").length} SACCO(s) have active subscription and operating access.`, "Live"]
+    ["Payment initiated", `${registrationSummary.paymentInitiated} SACCO(s) have a subscription bill awaiting mobile-money callback or manual payment.`, "Track"],
+    ["Callback received", `${registrationSummary.callbackReceived} SACCO(s) have confirmed subscription payment.`, "Confirm"],
+    ["Ready for approval", `${registrationSummary.readyForApproval} paid self-registration(s) are ready for platform review.`, "Review"],
+    ["Active", `${registrationSummary.active} SACCO(s) have active subscription and operating access.`, "Live"]
   ]);
 }
 
@@ -314,4 +304,3 @@ function countryRegionOptions(selectedCountry = "uganda") {
     })
     .join("");
 }
-

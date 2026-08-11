@@ -57,7 +57,10 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    `src/reports/reports.ts` plus `app.reports-model.js`. Audit row normalization, risk-level
    classification, category classification, sensitive/high-risk queues, category groups, unique
    actor/SACCO counts, and audit evidence summaries now follow the same pattern through
-   `src/audit/audit.ts` plus `app.audit-model.js`.
+   `src/audit/audit.ts` plus `app.audit-model.js`. SACCO application rows, registration readiness
+   counts, subscription table rows, billing/payment access summaries, package-card display rows, and
+   shared onboarding/payment stage labels now follow the same pattern through
+   `src/onboarding/onboarding.ts` plus `app.onboarding-model.js`.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the
