@@ -51,7 +51,10 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    labels, and avatar initials now follow the same pattern through `src/complaints/complaints.ts`
    plus `app.complaints-model.js`. Governance meeting rows, resolution rows, scheduled/completed
    slices, open and overdue resolution tracking, and minutes-evidence summaries now follow the same
-   pattern through `src/governance/governance.ts` plus `app.governance-model.js`.
+   pattern through `src/governance/governance.ts` plus `app.governance-model.js`. Regulatory report
+   rows, display data-protection fields, consolidated totals, exception counts, platform reporting
+   dashboard counts, and report catalogue entries now follow the same pattern through
+   `src/reports/reports.ts` plus `app.reports-model.js`.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the

@@ -172,6 +172,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Governance meeting rows, resolution rows, scheduled/completed/open-resolution slices, overdue
   resolution detection, and meeting evidence summaries now live behind
   `src/governance/governance.ts` plus `app.governance-model.js`.
+- Regulatory report rows, display data-protection fields, consolidated report totals, exception
+  counts, platform reporting dashboard counts, and report catalogue entries now live behind
+  `src/reports/reports.ts` plus `app.reports-model.js`.
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
   no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,
@@ -223,7 +226,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   shaping, receipting queue, receipt register, and receipt summaries now have the same typed boundary,
   as do SACCO loan rows, portfolio risk summaries, accounting ledger totals, reconciliation review
   rows, SACCO finance summaries, notification delivery summaries, complaint/chat summaries, and
-  governance meeting/resolution summaries.
+  governance meeting/resolution summaries, and regulatory/platform report summaries.
   The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.

@@ -1,9 +1,9 @@
 ﻿function reportsView() {
   const platform = isPlatform();
-  const rows = regulatoryReportRows(platform);
-  const consolidated = regulatoryConsolidated(rows);
-  const catalogue = reportCatalogue(platform);
-  const exceptions = Number(consolidated.reconciliationExceptions || 0) + Number(consolidated.unbalancedJournalEntries || 0);
+  const rows = reportRowsForCurrentContext(platform);
+  const consolidated = buildRegulatoryConsolidatedReport({ currentTenantId: state.currentTenantId, platform, report: state.data.regulatoryReport || {}, rows });
+  const catalogue = buildReportCatalogue(platform);
+  const exceptions = reportExceptionCount(consolidated);
   const dataProtection = consolidated.dataProtectionEvidence || {};
   if (platform) return platformSuperAdminReportsView(rows, exceptions);
   const tabs = [["catalogue", "Report catalogue"], ["readiness", "Report readiness"], ["regulatory", "SACCO regulatory report"]];
@@ -58,24 +58,32 @@ function platformSuperAdminReportsView(rows, exceptions) {
   const subscriptions = dataRows("subscriptions");
   const users = platformUsers();
   const supportTickets = saccoSupportTickets();
-  const dataProtection = regulatoryConsolidated(rows).dataProtectionEvidence || {};
+  const consolidated = buildRegulatoryConsolidatedReport({ currentTenantId: state.currentTenantId, platform: true, report: state.data.regulatoryReport || {}, rows });
+  const dataProtection = consolidated.dataProtectionEvidence || {};
+  const platformSummary = buildPlatformReportSummary({
+    complaints: supportTickets,
+    subscriptions,
+    tenants,
+    transactions: dataRows("transactions"),
+    users
+  });
   return `
     <div class="dashboard-grid">
-      ${summary(t("registeredSaccos"), tenants.length, "All SACCO accounts", t("review"))}
-      ${summary(t("activeSaccos"), tenants.filter((tenant) => normal(tenant.status) === "active").length, "Allowed to operate", t("open"))}
-      ${summary(t("subscriptionRevenue"), money.format(sum(subscriptions, "amount")), "Platform billing", t("export"))}
-      ${summary(t("platformAdministrators"), users.length, "Users and roles", "Audit")}
-      ${summary(t("pendingRegistrations"), tenants.filter((tenant) => normal(tenant.status).includes("pending")).length, "Onboarding decisions", t("review"))}
-      ${summary(t("openSaccoComplaints"), supportTickets.filter((ticket) => !["closed", "resolved"].includes(normal(ticket.status))).length, "Escalations from SACCO admins", t("review"))}
-      ${summary(t("failedPayments"), dataRows("transactions").filter((transaction) => normal(transaction.status).includes("failed")).length, "Provider exceptions", t("review"))}
+      ${summary(t("registeredSaccos"), platformSummary.registeredSaccos, "All SACCO accounts", t("review"))}
+      ${summary(t("activeSaccos"), platformSummary.activeSaccos, "Allowed to operate", t("open"))}
+      ${summary(t("subscriptionRevenue"), money.format(platformSummary.subscriptionRevenue), "Platform billing", t("export"))}
+      ${summary(t("platformAdministrators"), platformSummary.platformAdministrators, "Users and roles", "Audit")}
+      ${summary(t("pendingRegistrations"), platformSummary.pendingRegistrations, "Onboarding decisions", t("review"))}
+      ${summary(t("openSaccoComplaints"), platformSummary.openSaccoComplaints, "Escalations from SACCO admins", t("review"))}
+      ${summary(t("failedPayments"), platformSummary.failedPayments, "Provider exceptions", t("review"))}
       ${summary(t("complianceExceptions"), exceptions, "Reconciliation and journal checks", "Investigate")}
       ${summary("Privacy requests", dataProtection.privacyRequests || 0, "Across SACCOs", "Review")}
       ${summary("KYC disposals", dataProtection.kycDocumentsDisposed || 0, "File-store evidence", "Trace")}
     </div>
     ${rolePriorityPanel(t("superAdminReportingControl"), [
-      ["SACCO account status", `${tenants.length} SACCO account(s) tracked for activation, suspension and payment eligibility.`, tenants.some((tenant) => normal(tenant.status).includes("pending")) ? "Review" : "Clear"],
-      ["Billing control", `${subscriptions.length} subscription record(s) available for renewal, arrears and package reporting.`, subscriptions.some((row) => normal(row.status).includes("expired")) ? "Review" : "Current"],
-      ["Access governance", `${users.length} platform administrator account(s) included in role and permission reporting.`, users.length ? "Monitored" : "Setup needed"]
+      ["SACCO account status", `${platformSummary.registeredSaccos} SACCO account(s) tracked for activation, suspension and payment eligibility.`, platformSummary.pendingRegistrations ? "Review" : "Clear"],
+      ["Billing control", `${subscriptions.length} subscription record(s) available for renewal, arrears and package reporting.`, platformSummary.expiredSubscriptions ? "Review" : "Current"],
+      ["Access governance", `${platformSummary.platformAdministrators} platform administrator account(s) included in role and permission reporting.`, platformSummary.platformAdministrators ? "Monitored" : "Setup needed"]
     ])}
     ${filterToolbar("Search Super Admin reports by SACCO, billing status, administrator, compliance status or export type", "Export report", "Schedule report")}
     ${recordTable("Super Admin SACCO report", rows, ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "privacyRequests", "openPrivacyRequests", "kycReviewDue", "kycDisposed", "dataProtectionStatus", "complianceStatus"])}
@@ -83,105 +91,25 @@ function platformSuperAdminReportsView(rows, exceptions) {
   `;
 }
 
-function regulatoryReportRows(platform) {
-  const report = state.data.regulatoryReport || {};
-  /** @type {TerekaRegulatoryReportRow[]} */
-  const rawRows = Array.isArray(report.reports) ? report.reports : [];
-  /** @type {TerekaRegulatoryReportRow[]} */
-  const rows = rawRows.length ? rawRows : tenantRows().map((tenant) => ({
-    tenantId: tenant.id,
-    tenantName: tenant.name,
-    memberCount: dataRows("members").filter((member) => member.tenantId === tenant.id).length,
-    activeMembers: dataRows("members").filter((member) => member.tenantId === tenant.id && normal(member.status) === "active").length,
-    savings: sum(dataRows("members").filter((member) => member.tenantId === tenant.id), "savingsBalance", "savings"),
-    shares: sum(dataRows("members").filter((member) => member.tenantId === tenant.id), "sharesBalance", "shares"),
-    welfare: sum(dataRows("members").filter((member) => member.tenantId === tenant.id), "welfareBalance", "welfare"),
-    loanPortfolio: sum(dataRows("loans").filter((loan) => loan.tenantId === tenant.id), "outstandingBalance", "balance", "amount"),
-    activeLoans: dataRows("loans").filter((loan) => loan.tenantId === tenant.id && !["rejected", "closed"].includes(normal(loan.status))).length,
-    expenseTotal: sum(dataRows("expenses").filter((expense) => expense.tenantId === tenant.id), "amount"),
-    assetNetBookValue: sum(dataRows("assets").filter((asset) => asset.tenantId === tenant.id), "netBookValue", "cost"),
-    reconciliationExceptions: 0,
-    openComplaints: dataRows("complaints").filter((complaint) => complaint.tenantId === tenant.id && !["resolved", "closed"].includes(normal(complaint.status))).length,
-    complianceStatus: "local fallback"
-  }));
-  const scopedRows = platform ? rows : rows.filter((row) => !row.tenantId || row.tenantId === state.user?.tenantId || row.tenantId === state.tenant?.id);
-  return scopedRows.map((row) => ({
-    ...row,
-    tenantName: row.tenantName || tenantName(row.tenantId),
-    privacyRequests: row.dataProtectionEvidence?.privacyRequests || 0,
-    openPrivacyRequests: row.dataProtectionEvidence?.openPrivacyRequests || 0,
-    completedPrivacyRequests: row.dataProtectionEvidence?.completedPrivacyRequests || 0,
-    erasureRequestsCompleted: row.dataProtectionEvidence?.erasureRequestsCompleted || 0,
-    kycDocuments: row.dataProtectionEvidence?.kycDocuments || 0,
-    kycReviewDue: row.dataProtectionEvidence?.kycDocumentsReviewDue || 0,
-    kycRetained: row.dataProtectionEvidence?.kycDocumentsRetained || 0,
-    kycDisposed: row.dataProtectionEvidence?.kycDocumentsDisposed || 0,
-    kycStorageActions: row.dataProtectionEvidence?.kycStorageActions || 0,
-    dataProtectionStatus: labelize(row.dataProtectionEvidence?.evidenceStatus || "review")
-  }));
-}
-
-function regulatoryConsolidated(rows) {
-  const report = state.data.regulatoryReport || {};
-  if (report.consolidated && (isPlatform() || report.consolidated.tenantId === state.currentTenantId || report.reports?.length === 1)) {
-    return report.consolidated;
-  }
-  return {
-    memberCount: sum(rows, "memberCount"),
-    activeMembers: sum(rows, "activeMembers"),
-    savings: sum(rows, "savings"),
-    shares: sum(rows, "shares"),
-    welfare: sum(rows, "welfare"),
-    loanPortfolio: sum(rows, "loanPortfolio"),
-    activeLoans: sum(rows, "activeLoans"),
-    expenseTotal: sum(rows, "expenseTotal"),
-    assetNetBookValue: sum(rows, "assetNetBookValue"),
-    journalEntries: sum(rows, "journalEntries"),
-    unbalancedJournalEntries: sum(rows, "unbalancedJournalEntries"),
-    reconciliationExceptions: sum(rows, "reconciliationExceptions"),
-    openComplaints: sum(rows, "openComplaints"),
-    openResolutions: sum(rows, "openResolutions"),
-    dataProtectionEvidence: {
-      privacyRequests: sum(rows, "privacyRequests"),
-      openPrivacyRequests: sum(rows, "openPrivacyRequests"),
-      completedPrivacyRequests: sum(rows, "completedPrivacyRequests"),
-      erasureRequestsCompleted: sum(rows, "erasureRequestsCompleted"),
-      kycDocuments: sum(rows, "kycDocuments"),
-      kycDocumentsReviewDue: sum(rows, "kycReviewDue"),
-      kycDocumentsRetained: sum(rows, "kycRetained"),
-      kycDocumentsDisposed: sum(rows, "kycDisposed"),
-      kycStorageActions: sum(rows, "kycStorageActions"),
-      evidenceStatus: rows.some((row) => normal(row.dataProtectionStatus) !== "ready") ? "review" : "ready"
-    },
-    complianceStatus: rows.some((row) => normal(row.complianceStatus) !== "clear") ? "review" : "clear"
-  };
-}
-
-function reportCatalogue(platform) {
-  if (platform) {
-    return [
-      { title: "SACCO account register", copy: "Registered SACCOs, generated codes, activation status, contact details and member ranges.", owner: "Super Admin", output: "PDF / Excel", action: "Open SACCO accounts" },
-      { title: "Registration pipeline", copy: "Platform-created registrations, self-service applications, payment status and approval outcomes.", owner: "Super Admin", output: "Onboarding pack", action: "Open applications" },
-      { title: "Subscription control", copy: "Packages, billable members, received payments, arrears, renewals and operating eligibility.", owner: "Super Admin", output: "Billing pack", action: "Open billing" },
-      { title: "Platform administrator access", copy: "Administrator accounts, assigned roles, module access, status and last-login review.", owner: "Super Admin", output: "Access review", action: "Open users" },
-      { title: "SACCO support escalations", copy: "Complaints raised by SACCO administrators, unresolved cases and escalation status.", owner: "Super Admin", output: "Support report", action: "Open complaints" },
-      { title: "Compliance and audit", copy: "Regulatory consolidation, reconciliation exceptions, sensitive activity and role changes.", owner: "Super Admin", output: "Audit pack", action: "Open audit" }
-    ];
-  }
-  return [
-    { title: "Membership", copy: "Member register, KYC status, contacts, beneficiaries and branch distribution.", owner: "Secretary", output: "Excel / PDF", action: "Open members" },
-    { title: "Savings", copy: "Savings products, member deposits, withdrawals and dormant account positions.", owner: "Treasurer", output: "Statement pack", action: "Open savings" },
-    { title: "Shares", copy: "Share capital, member share accounts, contribution cycles and ownership totals.", owner: "Treasurer", output: "Share register", action: "Open shares" },
-    { title: "Welfare", copy: "Welfare contributions, claims, approvals, payment status and fund exposure.", owner: "Committee", output: "Claims report", action: "Open welfare" },
-    { title: "Loans", copy: "Applications, guarantors, repayments, arrears, PAR and portfolio balances.", owner: "Credit", output: "Portfolio report", action: "Open loans" },
-    { title: "Accounting", copy: "Chart of accounts, expenses, assets, journals and trial-balance readiness.", owner: "Accountant", output: "Ledger pack", action: "Open accounting" },
-    { title: "Governance", copy: "Meetings, resolutions, action owners and committee follow-up status.", owner: "Chairperson", output: "Governance pack", action: "Open governance" },
-    { title: "Audit", copy: "User activity, approvals, reversals and high-risk operational events.", owner: "Auditor", output: "Audit pack", action: "Open audit" }
-  ];
+function reportRowsForCurrentContext(platform) {
+  return buildRegulatoryReportRows({
+    assets: dataRows("assets"),
+    complaints: dataRows("complaints"),
+    currentTenantId: state.currentTenantId,
+    expenses: dataRows("expenses"),
+    labelize,
+    loans: dataRows("loans"),
+    members: dataRows("members"),
+    platform,
+    report: state.data.regulatoryReport || {},
+    selectedTenantId: state.tenant?.id,
+    tenantName,
+    tenants: tenantRows()
+  });
 }
 
 function reportReadinessPanel(consolidated) {
-  const exceptions = Number(consolidated.reconciliationExceptions || 0) + Number(consolidated.unbalancedJournalEntries || 0);
+  const exceptions = reportExceptionCount(consolidated);
   const dataProtection = consolidated.dataProtectionEvidence || {};
   return `
     <section class="panel">

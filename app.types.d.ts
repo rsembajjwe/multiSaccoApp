@@ -468,6 +468,63 @@ interface TerekaRegulatoryReport {
   [key: string]: any;
 }
 
+interface TerekaReportCatalogueItem {
+  action: string;
+  copy: string;
+  output: string;
+  owner: string;
+  title: string;
+}
+
+interface TerekaRegulatoryReportDisplayRow extends TerekaRegulatoryReportRow {
+  completedPrivacyRequests?: number;
+  dataProtectionStatus?: string;
+  erasureRequestsCompleted?: number;
+  kycDisposed?: number;
+  kycDocuments?: number;
+  kycRetained?: number;
+  kycReviewDue?: number;
+  kycStorageActions?: number;
+  openPrivacyRequests?: number;
+  openResolutions?: number;
+  privacyRequests?: number;
+  [key: string]: any;
+}
+
+interface TerekaRegulatoryReportRowsInput {
+  assets: Array<TerekaAsset & Record<string, any>>;
+  complaints: Array<TerekaComplaintThread & Record<string, any>>;
+  currentTenantId?: string;
+  expenses: Array<TerekaExpense & Record<string, any>>;
+  labelize: (value: any) => string;
+  loans: Array<TerekaLoan & Record<string, any>>;
+  members: Array<TerekaMemberProfile & Record<string, any>>;
+  platform: boolean;
+  report: TerekaRegulatoryReport | null | undefined;
+  selectedTenantId?: string;
+  tenantName: (tenantId?: string) => string;
+  tenants: Array<TerekaTenantSummary & Record<string, any>>;
+}
+
+interface TerekaPlatformReportSummaryInput {
+  complaints: Array<TerekaComplaintThread & Record<string, any>>;
+  subscriptions: Array<TerekaSubscription & Record<string, any>>;
+  tenants: Array<TerekaTenantSummary & Record<string, any>>;
+  transactions: Array<TerekaFinancialTransaction & Record<string, any>>;
+  users: Array<TerekaPlatformUser & Record<string, any>>;
+}
+
+interface TerekaPlatformReportSummary {
+  activeSaccos: number;
+  expiredSubscriptions: number;
+  failedPayments: number;
+  openSaccoComplaints: number;
+  pendingRegistrations: number;
+  platformAdministrators: number;
+  registeredSaccos: number;
+  subscriptionRevenue: number;
+}
+
 interface TerekaReconciliationSummary {
   matched?: number | string;
   matchedAmount?: number | string;
@@ -1288,6 +1345,11 @@ declare function governanceCompletedMeetings(meetings: TerekaGovernanceMeetingRo
 declare function governanceOpenResolutions(resolutions: TerekaGovernanceResolutionRow[]): TerekaGovernanceResolutionRow[];
 declare function buildGovernanceSummary(meetings: TerekaGovernanceMeetingRow[], resolutions: TerekaGovernanceResolutionRow[], now?: Date): TerekaGovernanceSummary;
 declare function isGovernanceResolutionOverdue(resolution: TerekaGovernanceResolutionRow, now?: Date): boolean;
+declare function buildRegulatoryReportRows(input: TerekaRegulatoryReportRowsInput): TerekaRegulatoryReportDisplayRow[];
+declare function buildRegulatoryConsolidatedReport(input: { currentTenantId?: string; platform: boolean; report: TerekaRegulatoryReport | null | undefined; rows: TerekaRegulatoryReportDisplayRow[] }): TerekaRegulatoryReportDisplayRow;
+declare function reportExceptionCount(consolidated: TerekaRegulatoryReportDisplayRow): number;
+declare function buildReportCatalogue(platform: boolean): TerekaReportCatalogueItem[];
+declare function buildPlatformReportSummary(input: TerekaPlatformReportSummaryInput): TerekaPlatformReportSummary;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;
