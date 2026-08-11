@@ -189,6 +189,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Platform/SACCO user access rows, access dashboard summaries, role coverage rows, SACCO staff role
   guide rows, permission-matrix rows, role purpose/scope text, and multi-role summary text now live
   behind `src/access/access.ts` plus `app.access-model.js`.
+  Redundant role-purpose and role-coverage wrapper helpers have also been removed.
 - Member administration status/type/KYC options, KYC readiness, KYC checklist rows, member detail summary counts, receipt
   evidence summaries, and staff statement export summaries now live behind the existing
   `src/member/admin.ts` plus `app.member-admin-model.js`.

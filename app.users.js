@@ -161,8 +161,8 @@ function userDetailPanel(users, canManageRoles) {
         ${mini("Login reset required", selected.passwordResetRequired ? "Yes" : "No")}
         ${mini("Password reset", latestReset ? `${latestReset.status} until ${latestReset.expiresAt}` : "No pending reset")}
         ${mini("Active sessions", selected.activeSessionCount || 0)}
-        ${mini("Access purpose", rolePurpose(roleModel.primaryRole.name || selected.role || "", platformUser))}
-        ${mini("Module scope", roleModuleScope(roleModel.primaryRole.name || selected.role || "", platformUser))}
+        ${mini("Access purpose", rolePurposeFor(roleModel.primaryRole.name || selected.role || "", platformUser))}
+        ${mini("Module scope", roleModuleScopeFor(roleModel.primaryRole.name || selected.role || "", platformUser))}
         ${mini("User type", platformUser ? "Platform administrator" : "SACCO staff")}
       </div>
       <form id="userProfileForm" class="form-grid">
@@ -221,33 +221,17 @@ function roleCoveragePanel(users, roles, platformOnly) {
   return recordTable(platformOnly ? "Platform role coverage" : "SACCO staff role coverage", rows, ["roleName", "scope", "assignedUsers", "accessPurpose", "moduleScope", "status"]);
 }
 
-function roleCoverage(users, roles) {
-  return roleCoverageFor(users, roles);
-}
-
-function rolePurpose(roleName, platformOnly) {
-  return rolePurposeFor(roleName, platformOnly);
-}
-
-function roleModuleScope(roleName, platformOnly) {
-  return roleModuleScopeFor(roleName, platformOnly);
-}
-
 function staffAccessRow(user, platformOnly) {
-  const role = user.role || user.roleName || roleNameFromId(user.roleId, platformOnly) || "Unassigned";
+  const role = user.role || user.roleName || userRoleOptions(platformOnly).find((item) => item.id === user.roleId)?.name || "Unassigned";
   return {
     ...user,
     role,
     mfa: user.mfaEnabled ? "Enabled" : "Not enabled",
     activeSessions: user.activeSessionCount || 0,
-    accessPurpose: rolePurpose(role, platformOnly),
-    moduleScope: roleModuleScope(role, platformOnly),
+    accessPurpose: rolePurposeFor(role, platformOnly),
+    moduleScope: roleModuleScopeFor(role, platformOnly),
     status: user.status || "active"
   };
-}
-
-function roleNameFromId(roleId, platformOnly) {
-  return userRoleOptions(platformOnly).find((role) => role.id === roleId)?.name || "";
 }
 
 function saccoStaffAccessGuide(roles) {
@@ -263,12 +247,6 @@ function permissionMatrix() {
 
 function userRoleOptions(platformOnly) {
   return filterRolesForScope(dataRows("roles"), platformOnly, state.user?.tenantId);
-}
-
-function rolePreviewText(roleId, platformOnly) {
-  const role = userRoleOptions(platformOnly).find((item) => item.id === roleId) || {};
-  const roleName = role.name || "Staff";
-  return `${rolePurpose(roleName, platformOnly)} - ${roleModuleScope(roleName, platformOnly)}`;
 }
 
 function roleSummaryText(roleIds, platformOnly) {
