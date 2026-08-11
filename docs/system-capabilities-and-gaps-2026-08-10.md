@@ -179,8 +179,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   queues, category groups, unique actor/SACCO counts, and audit evidence summaries now live behind
   `src/audit/audit.ts` plus `app.audit-model.js`.
 - SACCO application rows, registration readiness counts, subscription table rows, billing/payment
-  access summaries, package-card display rows, and shared onboarding/payment stage labels now live
-  behind `src/onboarding/onboarding.ts` plus `app.onboarding-model.js`.
+  access summaries, package-card display rows, SACCO-code generation, registration location parsing,
+  collection-account review rows, and shared onboarding/payment stage labels now live behind
+  `src/onboarding/onboarding.ts` plus `app.onboarding-model.js`.
 - Platform/SACCO user access rows, access dashboard summaries, role coverage rows, SACCO staff role
   guide rows, permission-matrix rows, role purpose/scope text, and multi-role summary text now live
   behind `src/access/access.ts` plus `app.access-model.js`.

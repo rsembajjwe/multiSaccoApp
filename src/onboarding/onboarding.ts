@@ -1,4 +1,4 @@
-import type { TerekaSubscription, TerekaSubscriptionPackage, TerekaTenantSummary, TerekaRecord } from "../types/domain";
+import type { TerekaCollectionAccount, TerekaSubscription, TerekaSubscriptionPackage, TerekaTenantSummary, TerekaRecord } from "../types/domain";
 
 export interface TerekaSaccoApplicationRow extends TerekaTenantSummary, TerekaRecord {
   action: string;
@@ -50,6 +50,15 @@ export interface TerekaPackageCardRow extends TerekaSubscriptionPackage, TerekaR
   packageId: string;
   statusLabel: string;
   statusTone: "active" | "pending";
+}
+
+export interface TerekaSaccoCollectionAccountReviewRow {
+  accountName?: string;
+  accountNumber?: string;
+  branch: string;
+  channel: string;
+  provider: string;
+  status: string;
 }
 
 export function buildSaccoApplicationRows(input: {
@@ -130,6 +139,52 @@ export function buildPackageCardRows(packages: Array<TerekaSubscriptionPackage &
       statusTone: status === "active" ? "active" : "pending",
     };
   });
+}
+
+export function generateSaccoCode(name: unknown, existingTenants: Array<TerekaTenantSummary & TerekaRecord>): string {
+  const words = String(name || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((word) => !["SACCO", "COOPERATIVE", "COOP", "LIMITED", "LTD", "THE", "AND", "OF"].includes(word));
+  const base = (words.length > 1 ? words.map((word) => word[0]).join("") : (words[0] || "SACCO").slice(0, 5))
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8) || "SACCO";
+  const existingCodes = new Set(existingTenants.map((tenant) => normalizeOnboardingText(tenant.saccoCode || tenant.abbreviation || tenant.code)));
+  let code = base.length >= 3 ? base : `${base}S`.slice(0, 3);
+  let suffix = 2;
+  while (existingCodes.has(normalizeOnboardingText(code))) {
+    const suffixText = String(suffix);
+    code = `${base.slice(0, Math.max(1, 8 - suffixText.length))}${suffixText}`;
+    suffix += 1;
+  }
+  return code.slice(0, 12);
+}
+
+export function saccoLocationAddress(district: unknown, parish: unknown, village: unknown, memberRange: unknown = ""): string {
+  return [
+    district ? `District: ${district}` : "",
+    parish ? `Parish: ${parish}` : "",
+    village ? `Village: ${village}` : "",
+    memberRange ? `Member range: ${memberRange}` : "",
+  ].filter(Boolean).join("; ");
+}
+
+export function profileLocationPart(profile: TerekaRecord | null | undefined, label: string): string {
+  const match = String(profile?.address || "").match(new RegExp(`${label}:\\s*([^;]+)`, "i"));
+  return match ? match[1].trim() : "";
+}
+
+export function buildSaccoCollectionAccountReviewRows(accounts: Array<TerekaCollectionAccount & TerekaRecord>, labelize: (value: unknown) => string): TerekaSaccoCollectionAccountReviewRow[] {
+  return accounts.map((account) => ({
+    channel: labelize(account.channel || ""),
+    provider: account.channel === "bank" ? String(account.bankName || "") : String(account.network || "").toUpperCase(),
+    accountName: account.accountName,
+    accountNumber: account.accountNumber,
+    branch: String(account.branch || ""),
+    status: account.active ? "active" : "inactive",
+  }));
 }
 
 export function subscriptionAccessLabelFor(subscription: Partial<TerekaSubscription & TerekaRecord>, tenant: Partial<TerekaTenantSummary & TerekaRecord> = {}): string {

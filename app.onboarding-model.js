@@ -72,6 +72,52 @@ function buildPackageCardRows(packages) {
   });
 }
 
+function generateSaccoCode(name, existingTenants) {
+  const words = String(name || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((word) => !["SACCO", "COOPERATIVE", "COOP", "LIMITED", "LTD", "THE", "AND", "OF"].includes(word));
+  const base = (words.length > 1 ? words.map((word) => word[0]).join("") : (words[0] || "SACCO").slice(0, 5))
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8) || "SACCO";
+  const existingCodes = new Set(existingTenants.map((tenant) => normalizeOnboardingModelText(tenant.saccoCode || tenant.abbreviation || tenant.code)));
+  let code = base.length >= 3 ? base : `${base}S`.slice(0, 3);
+  let suffix = 2;
+  while (existingCodes.has(normalizeOnboardingModelText(code))) {
+    const suffixText = String(suffix);
+    code = `${base.slice(0, Math.max(1, 8 - suffixText.length))}${suffixText}`;
+    suffix += 1;
+  }
+  return code.slice(0, 12);
+}
+
+function saccoLocationAddress(district, parish, village, memberRange = "") {
+  return [
+    district ? `District: ${district}` : "",
+    parish ? `Parish: ${parish}` : "",
+    village ? `Village: ${village}` : "",
+    memberRange ? `Member range: ${memberRange}` : ""
+  ].filter(Boolean).join("; ");
+}
+
+function profileLocationPart(profile, label) {
+  const match = String(profile?.address || "").match(new RegExp(`${label}:\\s*([^;]+)`, "i"));
+  return match ? match[1].trim() : "";
+}
+
+function buildSaccoCollectionAccountReviewRows(accounts, labelize) {
+  return accounts.map((account) => ({
+    channel: labelize(account.channel || ""),
+    provider: account.channel === "bank" ? String(account.bankName || "") : String(account.network || "").toUpperCase(),
+    accountName: account.accountName,
+    accountNumber: account.accountNumber,
+    branch: String(account.branch || ""),
+    status: account.active ? "active" : "inactive"
+  }));
+}
+
 function subscriptionAccessLabelFor(subscription, tenant = {}) {
   if (normalizeOnboardingModelText(tenant.status).includes("suspended")) return "Suspended";
   if (normalizeOnboardingModelText(subscription.status) === "active" && normalizeOnboardingModelText(tenant.status) === "active") return "Active";

@@ -58,7 +58,8 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    classification, category classification, sensitive/high-risk queues, category groups, unique
    actor/SACCO counts, and audit evidence summaries now follow the same pattern through
    `src/audit/audit.ts` plus `app.audit-model.js`. SACCO application rows, registration readiness
-   counts, subscription table rows, billing/payment access summaries, package-card display rows, and
+   counts, subscription table rows, billing/payment access summaries, package-card display rows,
+   SACCO-code generation, registration location parsing, collection-account review rows, and
    shared onboarding/payment stage labels now follow the same pattern through
    `src/onboarding/onboarding.ts` plus `app.onboarding-model.js`. Platform/SACCO user access rows,
    access dashboard summaries, role coverage rows, SACCO staff role guide rows, permission-matrix

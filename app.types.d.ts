@@ -591,6 +591,15 @@ interface TerekaPackageCardRow extends TerekaSubscriptionPackage {
   [key: string]: any;
 }
 
+interface TerekaSaccoCollectionAccountReviewRow {
+  accountName?: string;
+  accountNumber?: string;
+  branch: string;
+  channel: string;
+  provider: string;
+  status: string;
+}
+
 interface TerekaFinancialTransaction {
   id?: string;
   tenantId?: string;
@@ -1860,6 +1869,10 @@ declare function buildSaccoRegistrationSummary(applications: TerekaSaccoApplicat
 declare function buildSubscriptionRows(input: { subscriptions: Array<TerekaSubscription & Record<string, any>>; tenants: Array<TerekaTenantSummary & Record<string, any>> }): TerekaSubscriptionRow[];
 declare function buildSubscriptionSummary(rows: Array<TerekaSubscription & Record<string, any>>, tableRows: TerekaSubscriptionRow[]): TerekaSubscriptionSummary;
 declare function buildPackageCardRows(packages: Array<TerekaSubscriptionPackage & Record<string, any>>): TerekaPackageCardRow[];
+declare function generateSaccoCode(name: any, existingTenants: Array<TerekaTenantSummary & Record<string, any>>): string;
+declare function saccoLocationAddress(district: any, parish: any, village: any, memberRange?: any): string;
+declare function profileLocationPart(profile: Record<string, any> | null | undefined, label: string): string;
+declare function buildSaccoCollectionAccountReviewRows(accounts: Array<TerekaCollectionAccount & Record<string, any>>, labelize: (value: any) => string): TerekaSaccoCollectionAccountReviewRow[];
 declare function subscriptionAccessLabelFor(subscription: Partial<TerekaSubscription & Record<string, any>>, tenant?: Partial<TerekaTenantSummary & Record<string, any>>): string;
 declare function saccoPaymentStageFor(tenant: Partial<TerekaTenantSummary & Record<string, any>>, subscription?: Partial<TerekaSubscription & Record<string, any>>): string;
 declare function saccoApprovalStageFor(tenant: Partial<TerekaTenantSummary & Record<string, any>>, subscription?: Partial<TerekaSubscription & Record<string, any>>): string;

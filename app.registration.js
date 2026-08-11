@@ -151,14 +151,7 @@ function tenantDetailPanel() {
         ${recordTable("Approval history", dataRows("auditEvents").filter((event) => event.recordReference === tenant.id || event.recordId === tenant.id), ["createdAt", "actor", "action", "module", "result"])}
       </div>
       ${(state.selectedTenantPaymentAccounts || []).length
-        ? recordTable("Collection accounts (SACCO-owned, read-only)", (state.selectedTenantPaymentAccounts || []).map((a) => ({
-            channel: labelize(a.channel || ""),
-            provider: a.channel === "bank" ? (a.bankName || "") : String(a.network || "").toUpperCase(),
-            accountName: a.accountName,
-            accountNumber: a.accountNumber,
-            branch: a.branch || "",
-            status: a.active ? "active" : "inactive"
-          })), ["channel", "provider", "accountName", "accountNumber", "branch", "status"])
+        ? recordTable("Collection accounts (SACCO-owned, read-only)", buildSaccoCollectionAccountReviewRows(state.selectedTenantPaymentAccounts || [], labelize), ["channel", "provider", "accountName", "accountNumber", "branch", "status"])
         : `<div class="notice compact"><span>This SACCO has not configured any collection accounts yet.</span></div>`}
       <form id="tenantStatusForm" class="form-grid single">
         <input type="hidden" id="selectedTenantId" value="${escapeHtml(tenant.id)}">
@@ -246,44 +239,13 @@ function subscriptionPaymentLabel(subscription) {
 }
 
 function generatedSaccoCode(name) {
-  const words = String(name || "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .filter((word) => !["SACCO", "COOPERATIVE", "COOP", "LIMITED", "LTD", "THE", "AND", "OF"].includes(word));
-  const base = (words.length > 1 ? words.map((word) => word[0]).join("") : (words[0] || "SACCO").slice(0, 5))
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 8) || "SACCO";
-  const existingCodes = new Set(tenantRows().map((tenant) => normal(tenant.saccoCode || tenant.abbreviation || tenant.code)));
-  let code = base.length >= 3 ? base : `${base}S`.slice(0, 3);
-  let suffix = 2;
-  while (existingCodes.has(normal(code))) {
-    const suffixText = String(suffix);
-    code = `${base.slice(0, Math.max(1, 8 - suffixText.length))}${suffixText}`;
-    suffix += 1;
-  }
-  return code.slice(0, 12);
+  return generateSaccoCode(name, tenantRows());
 }
 
 function updateGeneratedSaccoCode() {
   const input = document.getElementById("newTenantCode");
   const name = value("newTenantName");
   if (input) input.value = generatedSaccoCode(name);
-}
-
-function saccoLocationAddress(district, parish, village, memberRange = "") {
-  return [
-    district ? `District: ${district}` : "",
-    parish ? `Parish: ${parish}` : "",
-    village ? `Village: ${village}` : "",
-    memberRange ? `Member range: ${memberRange}` : ""
-  ].filter(Boolean).join("; ");
-}
-
-function profileLocationPart(profile, label) {
-  const match = String(profile?.address || "").match(new RegExp(`${label}:\\\\s*([^;]+)`, "i"));
-  return match ? match[1].trim() : "";
 }
 
 function memberRangeOptions() {
