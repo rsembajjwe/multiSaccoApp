@@ -85,6 +85,12 @@ for (const marker of [
   "export function formatDateValue",
   "export function formatDateTimeValue",
   "export function formatShortDateValue",
+  "export function labelizeValue",
+  "export function normalizeValue",
+  "export function sumValues",
+  "export function formatTableValue",
+  "export function statusClassValue",
+  "export function escapeHtmlValue",
 ]) {
   assert.ok(formatterSource.includes(marker), `src/formatting/formatters.ts missing ${marker}`);
 }

@@ -137,6 +137,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Shared money/date formatting now follows the same migration pattern through
   `src/formatting/formatters.ts` plus the classic `app.formatters.js` bridge, keeping platform,
   SACCO admin, and member portal amounts and full dates consistent during the TypeScript conversion.
+  The same typed formatter boundary now also owns label normalization, sums, status badge classes,
+  HTML escaping, and table value formatting.
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
   no-emit type check over the classic frontend scripts, using shared declarations for runtime state,
   API errors, legacy DOM event handling, member portal data, payment requests, collection accounts,
@@ -179,9 +181,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   `checkJs` gate covers the classic SPA, and a strict `src/types/domain.ts` module now gives future
   ES-module work a typed domain boundary. Member/payment portal contracts, platform/SACCO
   administration data, operational/configuration report objects, complaint/chat workflows, table
-  model state, and shared money/date formatters are now represented in named contracts. The remaining
-  type-safety work is reducing broad compatibility index signatures in the classic declarations and
-  migrating runtime scripts into typed ES module source files.
+  model state, shared money/date formatters, status badges, HTML escaping, and table value formatting
+  are now represented in named contracts. The remaining type-safety work is reducing broad
+  compatibility index signatures in the classic declarations and migrating runtime scripts into typed
+  ES module source files.
 - **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
   now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
   The project still lacks a real component/unit test framework over the large UI surface.

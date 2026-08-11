@@ -25,7 +25,8 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    ES modules and reducing broad compatibility index signatures. The first runtime migration slice is
    started with `src/tables/tableModel.ts` plus the classic `app.table-model.js` bridge for shared
    table/search/pagination state, followed by `src/formatting/formatters.ts` plus
-   `app.formatters.js` for shared money/date formatting.
+   `app.formatters.js` for shared money/date formatting, labels, sums, status badges, escaping, and
+   table value formatting.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the

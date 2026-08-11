@@ -806,6 +806,16 @@ interface TerekaFormatterBridge {
   formatDateValue(value: Date | number | string | null | undefined, region: TerekaRegion): string;
   formatDateTimeValue(value: Date | number | string | null | undefined, region: TerekaRegion): string;
   formatShortDateValue(value: Date | number | string | null | undefined, region: TerekaRegion): string;
+  labelizeValue(value: any): string;
+  normalizeValue(value: any): string;
+  sumValues(rows: Record<string, any>[], ...keys: string[]): number;
+  formatTableValue(row: Record<string, any>, column: string, region: TerekaRegion): string;
+  isDateColumnValue(column: string): boolean;
+  formatTableDateValue(value: any, column: string, region: TerekaRegion): string;
+  snakeColumn(column: string): string;
+  camelFallbackColumn(column: string): string;
+  statusClassValue(value: any): "active" | "danger" | "pending";
+  escapeHtmlValue(value: any): string;
 }
 
 interface TerekaState {

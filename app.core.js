@@ -543,50 +543,27 @@ function initials(name) {
 }
 
 function labelize(value) {
-  const displayLabels = {
-    tenantId: "SACCO ID",
-    tenantName: "SACCO",
-    tenant: "SACCO",
-    tenants: "SACCOs",
-    arrears1To30Amount: "1-30 days",
-    arrears31To60Amount: "31-60 days",
-    arrears61To90Amount: "61-90 days",
-    arrearsOver90Amount: "90+ days",
-    oldestArrearsDays: "Oldest arrears days",
-    currentDueAmount: "Current due",
-    daysPastDue: "Days past due",
-    agingBucket: "Aging bucket"
-  };
-  if (displayLabels[value]) return displayLabels[value];
-  return String(value).replace(/[_-]+/g, " ").replace(/([A-Z])/g, " $1").replace(/\s+/g, " ").trim().replace(/^./, (char) => char.toUpperCase());
+  return TerekaFormatters.labelizeValue(value);
 }
 
 function normal(value) {
-  return String(value || "").toLowerCase();
+  return TerekaFormatters.normalizeValue(value);
 }
 
 function sum(rows, ...keys) {
-  return rows.reduce((total, row) => total + Number(keys.map((key) => row[key]).find((item) => item !== undefined) || 0), 0);
+  return TerekaFormatters.sumValues(rows, ...keys);
 }
 
 function formatValue(row, column) {
-  const value = row[column] ?? row[snake(column)] ?? row[camelFallback(column)] ?? "";
-  if (column.toLowerCase().includes("amount") || column.toLowerCase().includes("balance") || ["debit", "credit", "savings", "shares", "welfare", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "loanPortfolio", "loansAtRisk", "expenseTotal", "assetCost", "assetNetBookValue", "monthlyInstallment", "principalDue", "interestDue", "totalDue", "paidAmount", "balanceDue"].includes(column)) return money.format(Number(value || 0));
-  if (column.toLowerCase().includes("status") || column.toLowerCase().includes("severity")) return `<span class="status ${statusClass(value)}">${escapeHtml(String(value || "Pending"))}</span>`;
-  if (isDateColumn(column)) return escapeHtml(formatTableDate(value, column));
-  return escapeHtml(String(value || "-"));
+  return TerekaFormatters.formatTableValue(row, column, currentRegion());
 }
 
 function isDateColumn(column) {
-  const text = column.toLowerCase();
-  return text === "date" || text.endsWith("date") || text.endsWith("at") || ["createdat", "updatedat", "postedat", "sentat", "readat", "expiresat", "usedat"].includes(text);
+  return TerekaFormatters.isDateColumnValue(column);
 }
 
 function formatTableDate(value, column) {
-  if (!value) return "-";
-  const text = String(value);
-  const isDateOnly = column.toLowerCase() === "date" || column.toLowerCase().endsWith("date") || /^\d{4}-\d{2}-\d{2}$/.test(text);
-  return isDateOnly ? formatDate(value) : formatDateTime(value);
+  return TerekaFormatters.formatTableDateValue(value, column, currentRegion());
 }
 
 function formatDate(value) {
@@ -643,35 +620,18 @@ function registerServiceWorker() {
 }
 
 function snake(column) {
-  return column.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  return TerekaFormatters.snakeColumn(column);
 }
 
 function camelFallback(column) {
-  const aliases = {
-    tenantName: "tenant",
-    packageName: "package",
-    expiryDate: "expiry",
-    postedAt: "date",
-    applicationNo: "id",
-    requestedAmount: "amount",
-    fullName: "name",
-    membershipNo: "no",
-    kycStatus: "kyc",
-    savingsBalance: "savings",
-    sharesBalance: "shares",
-    welfareBalance: "welfare"
-  };
-  return aliases[column] || column;
+  return TerekaFormatters.camelFallbackColumn(column);
 }
 
 function statusClass(value) {
-  const text = normal(value);
-  if (["active", "approved", "paid", "healthy", "resolved", "completed", "posted"].some((item) => text.includes(item))) return "active";
-  if (["failed", "rejected", "suspended", "expired", "overdue", "arrears"].some((item) => text.includes(item))) return "danger";
-  return "pending";
+  return TerekaFormatters.statusClassValue(value);
 }
 
 function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[char]));
+  return TerekaFormatters.escapeHtmlValue(value);
 }
 
