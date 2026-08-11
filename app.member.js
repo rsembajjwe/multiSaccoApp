@@ -395,8 +395,7 @@ function receiptLifecycleStatus(row) {
  * @returns {boolean}
  */
 function isMobileMoneyLine(line) {
-  const text = normal(`${line.channel || ""} ${line.provider || ""} ${line.reference || ""} ${line.description || ""} ${line.type || ""}`);
-  return text.includes("mobile") || text.includes("mtn") || text.includes("airtel") || text.includes("mm-");
+  return isMobileMoneyPerformanceLine(line);
 }
 
 

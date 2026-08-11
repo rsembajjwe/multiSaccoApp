@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -10,6 +10,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/types/domain.ts"),
   readText("src/tables/tableModel.ts"),
   readText("src/formatting/formatters.ts"),
+  readText("src/member/performance.ts"),
   readText("app.state.js"),
 ]);
 
@@ -49,6 +50,8 @@ for (const marker of [
   "interface TerekaTableModelInput",
   "interface TerekaTableModel",
   "interface TerekaFormatterBridge",
+  "interface TerekaMonthlyPerformanceRow",
+  "interface TerekaSaccoMonthlyPerformanceInput",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -95,6 +98,19 @@ for (const marker of [
   "export function escapeHtmlValue",
 ]) {
   assert.ok(formatterSource.includes(marker), `src/formatting/formatters.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export function buildMemberStatementLines",
+  "export function buildSaccoMonthlyPerformanceRows",
+  "export function buildMemberMonthlyPerformanceRows",
+  "export function addPerformanceAmount",
+  "export function performanceMonthLabel",
+  "export function performanceMonthEndDateLabel",
+  "export function performanceRowId",
+  "export function isMobileMoneyPerformanceLine",
+]) {
+  assert.ok(performanceSource.includes(marker), `src/member/performance.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");

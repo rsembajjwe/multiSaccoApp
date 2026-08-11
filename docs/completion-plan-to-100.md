@@ -26,7 +26,8 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    started with `src/tables/tableModel.ts` plus the classic `app.table-model.js` bridge for shared
    table/search/pagination state, row filtering, and table-state keys, followed by `src/formatting/formatters.ts` plus
    `app.formatters.js` for shared money/date formatting, labels, sums, status badges, escaping, and
-   table value formatting.
+   table value formatting. Member statement normalization and monthly performance aggregation now
+   follow the same pattern through `src/member/performance.ts` plus `app.member-performance.js`.
 
 3. **Bank collection — real integration** — [code + external]
    *Done when:* a real bank/aggregator API (or a defined file/host-to-host settlement) replaces the

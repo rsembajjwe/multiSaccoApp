@@ -359,16 +359,7 @@ function contextCode() {
 }
 
 function memberStatementLines(dash) {
-  const source = dash.statementLines || dash.recentTransactions || [];
-  return source.map((line) => ({
-    ...line,
-    reference: line.reference || line.transactionReference || line.id,
-    description: line.description || line.narration || line.type || "Member transaction",
-    debit: line.debit ?? (Number(line.amount || 0) < 0 ? Math.abs(Number(line.amount || 0)) : 0),
-    credit: line.credit ?? (Number(line.amount || 0) > 0 ? Number(line.amount || 0) : 0),
-    runningBalance: line.runningBalance ?? Number(line.savingsBalance || 0) + Number(line.sharesBalance || 0) + Number(line.welfareBalance || 0),
-    postedAt: line.postedAt || line.createdAt || line.date || ""
-  }));
+  return buildMemberStatementLines(dash);
 }
 
 function paymentRoutePanel() {
@@ -427,113 +418,31 @@ function saccoMonthlyPerformancePanel(rows) {
 }
 
 function saccoMonthlyPerformanceRows() {
-  const rows = new Map();
-  const ensure = (month, memberId, memberLabel) => {
-    const key = `${month}:${memberId || memberLabel || "unknown"}`;
-    if (!rows.has(key)) {
-      rows.set(key, {
-        month,
-        memberId,
-        memberName: memberLabel || memberName(memberId),
-        savingsDeposits: 0,
-        shareDeposits: 0,
-        welfareDeposits: 0,
-        loanRepayments: 0,
-        treasurerCash: 0,
-        mobileMoney: 0,
-        totalDeposits: 0
-      });
-    }
-    return rows.get(key);
-  };
-
-  transactionRows()
-    .filter((row) => normal(row.status) === "posted")
-    .forEach((transaction) => {
-      const month = monthLabel(transaction.postedAt || transaction.createdAt);
-      const target = ensure(month, transaction.memberId, transaction.memberName);
-      const amount = Number(transaction.amount || transaction.credit || 0);
-      addPerformanceAmount(target, transaction.type, amount);
-      if (isMobileMoneyLine(transaction)) target.mobileMoney += amount;
-      else target.treasurerCash += amount;
-    });
-
-  dataRows("mobileMoneyCallbacks")
-    .filter((callback) => normal(callback.status) === "posted")
-    .forEach((callback) => {
-      const month = monthLabel(callback.receivedAt || callback.createdAt);
-      const target = ensure(month, callback.memberId, memberName(callback.memberId));
-      const amount = Number(callback.amount || 0);
-      addPerformanceAmount(target, callback.purpose, amount);
-      target.mobileMoney += amount;
-    });
-
-  return [...rows.values()]
-    .map((row) => ({
-      ...row,
-      performanceId: monthlyPerformanceId(row),
-      action: "monthly-performance-detail",
-      actionLabel: "Review",
-      actionId: monthlyPerformanceId(row),
-      totalDeposits: row.savingsDeposits + row.shareDeposits + row.welfareDeposits + row.loanRepayments
-    }))
-    .sort((a, b) => b.month.localeCompare(a.month) || a.memberName.localeCompare(b.memberName));
+  return buildSaccoMonthlyPerformanceRows({
+    transactions: transactionRows(),
+    callbacks: dataRows("mobileMoneyCallbacks"),
+    memberName,
+  });
 }
 
 function monthlyPerformanceId(row) {
-  return `${row.month || ""}::${row.memberName || ""}`;
+  return performanceRowId(row);
 }
 
 function memberMonthlyPerformanceRows(dash) {
-  const rows = new Map();
-  memberStatementLines(dash).forEach((line) => {
-    const month = monthLabel(line.postedAt || line.createdAt);
-    if (!rows.has(month)) {
-      rows.set(month, {
-        month,
-        date: monthEndDateLabel(month),
-        savingsDeposits: 0,
-        shareDeposits: 0,
-        welfareDeposits: 0,
-        loanRepayments: 0,
-        treasurerCash: 0,
-        mobileMoney: 0,
-        totalDeposits: 0,
-        closingBalance: 0
-      });
-    }
-    const target = rows.get(month);
-    const amount = Number(line.credit || 0);
-    addPerformanceAmount(target, `${line.description || ""} ${line.type || ""}`, amount);
-    if (amount) {
-      if (isMobileMoneyLine(line)) target.mobileMoney += amount;
-      else target.treasurerCash += amount;
-    }
-    target.totalDeposits = target.savingsDeposits + target.shareDeposits + target.welfareDeposits + target.loanRepayments;
-    target.closingBalance = Number(line.runningBalance || target.closingBalance || 0);
-  });
-  return [...rows.values()].sort((a, b) => b.month.localeCompare(a.month));
+  return buildMemberMonthlyPerformanceRows(dash);
 }
 
 function addPerformanceAmount(target, purpose, amount) {
-  const text = normal(purpose);
-  if (!amount) return;
-  if (text.includes("loan") || text.includes("repayment")) target.loanRepayments += amount;
-  else if (text.includes("share")) target.shareDeposits += amount;
-  else if (text.includes("welfare")) target.welfareDeposits += amount;
-  else target.savingsDeposits += amount;
+  return addPerformanceAmountToRow(target, purpose, amount);
 }
 
 function monthLabel(value) {
-  const date = value ? new Date(value) : new Date();
-  if (Number.isNaN(date.getTime())) return "Unknown month";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  return performanceMonthLabel(value);
 }
 
 function monthEndDateLabel(month) {
-  const [year, monthNumber] = String(month || "").split("-").map(Number);
-  if (!year || !monthNumber) return month || "";
-  return new Date(year, monthNumber, 0).toISOString();
+  return performanceMonthEndDateLabel(month);
 }
 
 function initials(name) {

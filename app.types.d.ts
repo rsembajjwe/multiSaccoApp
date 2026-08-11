@@ -818,6 +818,31 @@ interface TerekaFormatterBridge {
   escapeHtmlValue(value: any): string;
 }
 
+interface TerekaMonthlyPerformanceRow {
+  month: string;
+  date?: string;
+  memberId?: string;
+  memberName: string;
+  savingsDeposits: number;
+  shareDeposits: number;
+  welfareDeposits: number;
+  loanRepayments: number;
+  treasurerCash: number;
+  mobileMoney: number;
+  totalDeposits: number;
+  closingBalance?: number;
+  performanceId?: string;
+  action?: string;
+  actionLabel?: string;
+  actionId?: string;
+}
+
+interface TerekaSaccoMonthlyPerformanceInput {
+  transactions: Array<TerekaFinancialTransaction & Record<string, any>>;
+  callbacks: Array<TerekaMobileMoneyCallback & Record<string, any>>;
+  memberName: (memberId?: string) => string;
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -846,5 +871,13 @@ declare function setModuleTab(view: string, tab: string): void;
 declare function filterRecordRows<T = any>(rows: T[] | null | undefined, query: string): T[];
 declare function tableStateKeyFor(title: string | null | undefined): string;
 declare function buildRecordTableModel<T = any>(input: TerekaTableModelInput<T>): TerekaTableModel<T>;
+declare function buildMemberStatementLines(dashboard: TerekaMemberDashboard | null | undefined): TerekaStatementLine[];
+declare function buildSaccoMonthlyPerformanceRows(input: TerekaSaccoMonthlyPerformanceInput): TerekaMonthlyPerformanceRow[];
+declare function buildMemberMonthlyPerformanceRows(dashboard: TerekaMemberDashboard | null | undefined): TerekaMonthlyPerformanceRow[];
+declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
+declare function performanceMonthLabel(value: any): string;
+declare function performanceMonthEndDateLabel(month: any): string;
+declare function performanceRowId(row: Pick<TerekaMonthlyPerformanceRow, "memberName" | "month">): string;
+declare function isMobileMoneyPerformanceLine(line: Record<string, any>): boolean;
 declare var TerekaFormatters: TerekaFormatterBridge;
 declare function render(): void;
