@@ -18,12 +18,12 @@ function memberRegistrationPanel() {
         <label><span>Membership number</span><input id="newMemberNo" placeholder="Auto if blank"></label>
         <label><span>Branch</span><select id="newMemberBranchId">${branches.map((branch) => `<option value="${escapeHtml(branch.id)}" ${branch.id === defaultBranch ? "selected" : ""}>${escapeHtml(branch.name || branch.code)}</option>`).join("")}</select></label>
         <label><span>Full name</span><input id="newMemberFullName" required placeholder="Member full name"></label>
-        <label><span>Member type</span><select id="newMemberType"><option value="individual">Individual</option><option value="group">Group</option><option value="institutional">Institutional</option><option value="corporate">Corporate</option></select></label>
+        <label><span>Member type</span><select id="newMemberType">${memberTypeOptions().map((type) => `<option value="${escapeHtml(type.value)}">${escapeHtml(type.label)}</option>`).join("")}</select></label>
         <label><span>Phone</span><input id="newMemberPhone" required placeholder="+256..."></label>
         <label><span>Email</span><input id="newMemberEmail" type="email" placeholder="member@example.com"></label>
         <label><span>National ID</span><input id="newMemberNationalId" placeholder="CM..."></label>
         <label><span>Temporary password</span><input id="newMemberPassword" type="password" value="Member@12345"></label>
-        <label><span>KYC status</span><select id="newMemberKycStatus"><option value="pending_verification">Pending verification</option><option value="not_verified">Not verified</option><option value="verified">Verified</option></select></label>
+        <label><span>KYC status</span><select id="newMemberKycStatus">${kycStatusOptions().map((status) => `<option value="${escapeHtml(status.value)}" ${status.value === "pending_verification" ? "selected" : ""}>${escapeHtml(status.label)}</option>`).join("")}</select></label>
         <label><span>Joining date</span><input id="newMemberJoiningDate" type="date" value="${new Date().toISOString().slice(0, 10)}"></label>
         <div class="form-actions inline"><button class="button primary" type="submit">Create member</button></div>
       </form>
@@ -228,27 +228,6 @@ function staffStatementExportPanel(member, lines) {
   `;
 }
 
-function memberStatusOptions() {
-  return [
-    { value: "applicant", label: "Applicant" },
-    { value: "pending_approval", label: "Pending approval" },
-    { value: "active", label: "Active" },
-    { value: "inactive", label: "Inactive" },
-    { value: "dormant", label: "Dormant" },
-    { value: "suspended", label: "Suspended" },
-    { value: "exited", label: "Exited" }
-  ];
-}
-
-function memberTypeOptions() {
-  return [
-    { value: "individual", label: "Individual" },
-    { value: "group", label: "Group" },
-    { value: "institutional", label: "Institutional" },
-    { value: "corporate", label: "Corporate" }
-  ];
-}
-
 function memberKycReadiness(member) {
   return memberKycReadinessFor(member);
 }
@@ -257,12 +236,3 @@ function memberKycChecklist(member) {
   return rolePriorityPanel("Member KYC checklist", buildMemberKycChecklistRows(member, labelize).map((row) => [row.area, row.detail, row.status]));
 }
 
-function kycStatusOptions() {
-  return [
-    { value: "not_verified", label: "Not verified" },
-    { value: "pending_verification", label: "Pending verification" },
-    { value: "verified", label: "Verified" },
-    { value: "rejected", label: "Rejected" },
-    { value: "expired", label: "Expired" }
-  ];
-}

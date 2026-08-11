@@ -1498,6 +1498,11 @@ interface TerekaMemberKycCheckRow {
   status: string;
 }
 
+interface TerekaMemberOption {
+  label: string;
+  value: string;
+}
+
 interface TerekaMemberReceiptEvidenceSummary {
   lastReceipt: string;
   mobileRows: number;
@@ -1839,6 +1844,9 @@ declare function buildMemberStatementSummary(member: Record<string, any>, lines:
 declare function buildMemberDetailSummary(input: { beneficiaries: Record<string, any>[]; documents: Record<string, any>[]; nextOfKin: Record<string, any>[]; statementLines: TerekaStatementLine[]; statementSummary: TerekaMemberStatementSummary }): TerekaMemberDetailSummary;
 declare function memberKycReadinessFor(member: Record<string, any>): string;
 declare function buildMemberKycChecklistRows(member: Record<string, any>, labelize: (value: any) => string): TerekaMemberKycCheckRow[];
+declare function memberStatusOptions(): TerekaMemberOption[];
+declare function memberTypeOptions(): TerekaMemberOption[];
+declare function kycStatusOptions(): TerekaMemberOption[];
 declare function buildReceiptReadyStatementLines(lines: TerekaStatementLine[]): TerekaStatementLine[];
 declare function buildMemberReceiptEvidenceSummary(lines: TerekaStatementLine[]): TerekaMemberReceiptEvidenceSummary;
 declare function buildStaffStatementExportSummary(lines: TerekaStatementLine[]): TerekaStaffStatementExportSummary;

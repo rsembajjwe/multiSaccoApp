@@ -42,6 +42,11 @@ export interface TerekaMemberKycCheckRow {
   status: string;
 }
 
+export interface TerekaMemberOption {
+  label: string;
+  value: string;
+}
+
 export interface TerekaMemberReceiptEvidenceSummary {
   lastReceipt: string;
   mobileRows: number;
@@ -136,6 +141,37 @@ export function buildMemberKycChecklistRows(member: TerekaRecord, labelize: (val
     { area: "KYC decision", detail: labelize(member.kycStatus || "pending"), status: normalizeMemberAdminText(member.kycStatus) === "verified" ? "Complete" : "Review" },
     { area: "Member status", detail: labelize(member.status || "pending"), status: normalizeMemberAdminText(member.status) === "active" ? "Active" : "Review" },
     { area: "Portal login", detail: normalizeMemberAdminText(member.status) === "active" ? "Member can access portal after credential setup" : "Activate member before portal access", status: normalizeMemberAdminText(member.status) === "active" ? "Ready" : "Pending" },
+  ];
+}
+
+export function memberStatusOptions(): TerekaMemberOption[] {
+  return [
+    { value: "applicant", label: "Applicant" },
+    { value: "pending_approval", label: "Pending approval" },
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+    { value: "dormant", label: "Dormant" },
+    { value: "suspended", label: "Suspended" },
+    { value: "exited", label: "Exited" },
+  ];
+}
+
+export function memberTypeOptions(): TerekaMemberOption[] {
+  return [
+    { value: "individual", label: "Individual" },
+    { value: "group", label: "Group" },
+    { value: "institutional", label: "Institutional" },
+    { value: "corporate", label: "Corporate" },
+  ];
+}
+
+export function kycStatusOptions(): TerekaMemberOption[] {
+  return [
+    { value: "not_verified", label: "Not verified" },
+    { value: "pending_verification", label: "Pending verification" },
+    { value: "verified", label: "Verified" },
+    { value: "rejected", label: "Rejected" },
+    { value: "expired", label: "Expired" },
   ];
 }
 

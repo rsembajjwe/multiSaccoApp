@@ -146,7 +146,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   Member payment lifecycle rows, route labels, payment status, and receipt status are now typed in
   the same source boundary, along with member guarantor, SACCO-admin message, and mobile-money row
   builders, member payment provider filtering, payment request action rows, and offline draft rows.
-- SACCO admin member-document rows, KYC retention summaries, statement totals, receipt-ready rows,
+- SACCO admin member-document rows, member status/type/KYC options, KYC retention summaries, statement totals, receipt-ready rows,
   and mobile-money/Treasurer statement split summaries now live behind `src/member/admin.ts` plus
   `app.member-admin-model.js`.
 - Transaction row shaping, overview counts, approval readiness, payment route/status, receipting queue rows,
@@ -187,7 +187,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Platform/SACCO user access rows, access dashboard summaries, role coverage rows, SACCO staff role
   guide rows, permission-matrix rows, role purpose/scope text, and multi-role summary text now live
   behind `src/access/access.ts` plus `app.access-model.js`.
-- Member administration KYC readiness, KYC checklist rows, member detail summary counts, receipt
+- Member administration status/type/KYC options, KYC readiness, KYC checklist rows, member detail summary counts, receipt
   evidence summaries, and staff statement export summaries now live behind the existing
   `src/member/admin.ts` plus `app.member-admin-model.js`.
 - TypeScript is installed for the SPA and `npm run type:ui` performs a passing JSDoc/checkJs
@@ -243,7 +243,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   options, reconciliation review rows, SACCO finance summaries, notification delivery summaries, complaint/chat summaries, and
   governance meeting/resolution summaries, regulatory/platform report summaries, and audit
   classification summaries, onboarding and subscription billing summaries, and user/role access
-  summaries. Member administration KYC and statement evidence summaries are also covered by the
+  summaries. Member administration option lists, KYC and statement evidence summaries are also covered by the
   typed member-admin bridge. SACCO/platform settings setup summaries, notification and mobile-money
   provider readiness rows, administrator security-session rows, and collection-account display rows
   are now typed behind the settings bridge. Operations provider-risk and login-risk summaries now

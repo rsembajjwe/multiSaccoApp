@@ -69,6 +69,37 @@ function buildMemberKycChecklistRows(member, labelize) {
   ];
 }
 
+function memberStatusOptions() {
+  return [
+    { value: "applicant", label: "Applicant" },
+    { value: "pending_approval", label: "Pending approval" },
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+    { value: "dormant", label: "Dormant" },
+    { value: "suspended", label: "Suspended" },
+    { value: "exited", label: "Exited" }
+  ];
+}
+
+function memberTypeOptions() {
+  return [
+    { value: "individual", label: "Individual" },
+    { value: "group", label: "Group" },
+    { value: "institutional", label: "Institutional" },
+    { value: "corporate", label: "Corporate" }
+  ];
+}
+
+function kycStatusOptions() {
+  return [
+    { value: "not_verified", label: "Not verified" },
+    { value: "pending_verification", label: "Pending verification" },
+    { value: "verified", label: "Verified" },
+    { value: "rejected", label: "Rejected" },
+    { value: "expired", label: "Expired" }
+  ];
+}
+
 function buildReceiptReadyStatementLines(lines) {
   return lines.filter((line) => line.reference || line.receiptNo || normalizeMemberAdminText(line.status) === "posted");
 }
