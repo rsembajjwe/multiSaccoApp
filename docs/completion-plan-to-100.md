@@ -32,8 +32,8 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    SACCO-admin message rows, mobile-money rows, provider filtering, payment request rows, and offline
    draft rows. SACCO admin member-document rows, retention summaries, statement totals, and
    receipt-ready statement summaries now follow the same pattern through `src/member/admin.ts` plus
-   `app.member-admin-model.js`. Transaction row shaping, approval readiness, payment route/status,
-   receipting queue rows, receipt register rows, and receipt summaries now follow the same pattern
+   `app.member-admin-model.js`. Transaction row shaping, dashboard overview counts, approval readiness,
+   payment route/status, receipting queue rows, receipt register rows, and receipt summaries now follow the same pattern
    through `src/transactions/transactions.ts` plus `app.transactions-model.js`. Loan row shaping,
    guarantor readiness, approval readiness, servicing status, portfolio risk counts, outstanding
    principal, and arrears-aging totals now follow the same pattern through `src/loans/loans.ts` plus

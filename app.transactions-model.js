@@ -68,6 +68,16 @@ function buildTransactionReceiptSummary(rows) {
   };
 }
 
+function buildTransactionOverviewSummary(rows) {
+  const posted = rows.filter((row) => normalizeTransactionModelText(row.status) === "posted");
+  return {
+    totalRows: rows.length,
+    pendingApproval: rows.filter((row) => normalizeTransactionModelText(row.status).includes("pending")).length,
+    postedValue: posted.reduce((total, row) => total + Number(row.amount || 0), 0),
+    reversed: rows.filter((row) => row.originalTransactionId || normalizeTransactionModelText(row.status).includes("reversed")).length
+  };
+}
+
 function sortTransactionNewestWithPendingFirst(a, b) {
   const aPending = normalizeTransactionModelText(a.status).includes("pending") ? 0 : 1;
   const bPending = normalizeTransactionModelText(b.status).includes("pending") ? 0 : 1;

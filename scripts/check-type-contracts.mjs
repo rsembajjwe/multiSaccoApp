@@ -88,6 +88,7 @@ for (const marker of [
   "interface TerekaReceiptRegisterRow",
   "interface TerekaTransactionRowsInput",
   "interface TerekaTransactionReceiptSummary",
+  "interface TerekaTransactionOverviewSummary",
   "interface TerekaLoanRow",
   "interface TerekaLoanRowsInput",
   "interface TerekaLoanPortfolioSummary",
@@ -234,6 +235,7 @@ for (const marker of [
   "export function buildTransactionReceiptingQueue",
   "export function buildTransactionReceiptRegister",
   "export function buildTransactionReceiptSummary",
+  "export function buildTransactionOverviewSummary",
 ]) {
   assert.ok(transactionSource.includes(marker), `src/transactions/transactions.ts missing ${marker}`);
 }

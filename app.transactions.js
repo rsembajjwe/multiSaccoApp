@@ -1,17 +1,15 @@
 ﻿function transactionsView() {
   const rows = transactionRows();
-  const pending = rows.filter((row) => normal(row.status).includes("pending"));
-  const posted = rows.filter((row) => normal(row.status) === "posted");
-  const reversed = rows.filter((row) => row.originalTransactionId || normal(row.status).includes("reversed"));
+  const overview = buildTransactionOverviewSummary(rows);
   const receiptingQueue = transactionReceiptingQueue(rows);
   const receiptRegister = transactionReceiptRegister(rows);
   const tabs = [["capture", t("newTransactionScreen")], ["list", t("transactionList")], ["receipting", "Receipting queue"], ["receipts", "Receipt register"], ["detail", t("transactionDetail")]];
   const tab = activeModuleTab("transactions", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary(t("transactions"), rows.length, "Deposits, withdrawals and corrections", t("review"))}
-      ${summary(t("pendingApproval"), pending.length, "Maker-checker queue", "Approve")}
-      ${summary(t("postedValue"), money.format(sum(posted, "amount")), "Receipt-ready transactions", t("receipts"))}
+      ${summary(t("transactions"), overview.totalRows, "Deposits, withdrawals and corrections", t("review"))}
+      ${summary(t("pendingApproval"), overview.pendingApproval, "Maker-checker queue", "Approve")}
+      ${summary(t("postedValue"), money.format(overview.postedValue), "Receipt-ready transactions", t("receipts"))}
     </div>
     ${moduleTabs("transactions", tabs, tab)}
     ${tab === "capture" ? transactionFormPanel() : ""}
@@ -26,8 +24,7 @@
 }
 
 function transactionReceiptRegisterPanel(rows) {
-  const mobile = rows.filter((row) => row.paymentRoute === "Mobile money");
-  const treasurer = rows.filter((row) => row.paymentRoute === "Treasurer cash");
+  const receiptSummary = buildTransactionReceiptSummary(rows);
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
@@ -38,12 +35,12 @@ function transactionReceiptRegisterPanel(rows) {
         <span class="status ${rows.length ? "active" : "pending"}">${rows.length ? "Receipts available" : "No receipts"}</span>
       </div>
       <div class="source-grid">
-        ${mini("Receipts", rows.length)}
-        ${mini("Total receipted", money.format(sum(rows, "amount")))}
-        ${mini("Mobile money", mobile.length)}
-        ${mini("Treasurer cash", treasurer.length)}
-        ${mini("Loan repayments", rows.filter((row) => normal(row.type).includes("loan")).length)}
-        ${mini("Savings deposits", rows.filter((row) => normal(row.type).includes("saving")).length)}
+        ${mini("Receipts", receiptSummary.totalRows)}
+        ${mini("Total receipted", money.format(receiptSummary.totalAmount))}
+        ${mini("Mobile money", receiptSummary.mobileMoney)}
+        ${mini("Treasurer cash", receiptSummary.treasurerCash)}
+        ${mini("Loan repayments", receiptSummary.loanRepayments)}
+        ${mini("Savings deposits", receiptSummary.savingsDeposits)}
       </div>
     </section>
     ${filterToolbar("Search receipts by receipt number, member, route, reference or amount", "Download register", "Print receipts")}
@@ -52,10 +49,8 @@ function transactionReceiptRegisterPanel(rows) {
 }
 
 function transactionReceiptingPanel(rows) {
-  const pending = rows.filter((row) => normal(row.status).includes("pending"));
-  const ready = rows.filter((row) => normal(row.status) === "posted");
-  const mobile = rows.filter((row) => row.paymentRoute === "Mobile money");
-  const treasurer = rows.filter((row) => row.paymentRoute === "Treasurer cash");
+  const receiptSummary = buildTransactionReceiptSummary(rows);
+  const pendingPosting = rows.filter((row) => normal(row.status).includes("pending")).length;
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
@@ -66,16 +61,16 @@ function transactionReceiptingPanel(rows) {
         <span class="status ${rows.length ? "pending" : "active"}">${rows.length ? "Action queue" : "Clear"}</span>
       </div>
       <div class="source-grid">
-        ${mini("Pending posting", pending.length)}
-        ${mini("Receipt ready", ready.length)}
-        ${mini("Mobile money", mobile.length)}
-        ${mini("Treasurer cash", treasurer.length)}
-        ${mini("Loan repayments", rows.filter((row) => normal(row.type).includes("loan")).length)}
-        ${mini("Savings deposits", rows.filter((row) => normal(row.type).includes("saving")).length)}
+        ${mini("Pending posting", pendingPosting)}
+        ${mini("Receipt ready", receiptSummary.receiptReady)}
+        ${mini("Mobile money", receiptSummary.mobileMoney)}
+        ${mini("Treasurer cash", receiptSummary.treasurerCash)}
+        ${mini("Loan repayments", receiptSummary.loanRepayments)}
+        ${mini("Savings deposits", receiptSummary.savingsDeposits)}
       </div>
       <ul class="activity-list">
-        <li><strong>Pending posting</strong><span>Approve/post verified Treasurer cash, bank or manual entries before issuing receipts.</span><em>${pending.length ? "Review" : "Clear"}</em></li>
-        <li><strong>Receipt ready</strong><span>Load receipt for posted transactions, then confirm the member can see the same reference in the member portal.</span><em>${ready.length ? "Ready" : "Waiting"}</em></li>
+        <li><strong>Pending posting</strong><span>Approve/post verified Treasurer cash, bank or manual entries before issuing receipts.</span><em>${pendingPosting ? "Review" : "Clear"}</em></li>
+        <li><strong>Receipt ready</strong><span>Load receipt for posted transactions, then confirm the member can see the same reference in the member portal.</span><em>${receiptSummary.receiptReady ? "Ready" : "Waiting"}</em></li>
         <li><strong>Payment route</strong><span>Mobile-money and Treasurer cash are separated so reconciliation and monthly performance remain clear.</span><em>Controlled</em></li>
       </ul>
     </section>

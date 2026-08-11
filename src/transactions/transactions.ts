@@ -40,6 +40,13 @@ export interface TerekaTransactionReceiptSummary {
   treasurerCash: number;
 }
 
+export interface TerekaTransactionOverviewSummary {
+  pendingApproval: number;
+  postedValue: TerekaMoney;
+  reversed: number;
+  totalRows: number;
+}
+
 export function buildTransactionRows(input: TerekaTransactionRowsInput): TerekaTransactionRow[] {
   return input.transactions.map((transaction) => {
     const status = normalizeTransactionText(transaction.status);
@@ -107,6 +114,16 @@ export function buildTransactionReceiptSummary(rows: TerekaTransactionRow[]): Te
     treasurerCash: rows.filter((row) => row.paymentRoute === "Treasurer cash").length,
     loanRepayments: rows.filter((row) => normalizeTransactionText(row.type).includes("loan")).length,
     savingsDeposits: rows.filter((row) => normalizeTransactionText(row.type).includes("saving")).length,
+  };
+}
+
+export function buildTransactionOverviewSummary(rows: TerekaTransactionRow[]): TerekaTransactionOverviewSummary {
+  const posted = rows.filter((row) => normalizeTransactionText(row.status) === "posted");
+  return {
+    totalRows: rows.length,
+    pendingApproval: rows.filter((row) => normalizeTransactionText(row.status).includes("pending")).length,
+    postedValue: posted.reduce((total, row) => total + Number(row.amount || 0), 0),
+    reversed: rows.filter((row) => row.originalTransactionId || normalizeTransactionText(row.status).includes("reversed")).length,
   };
 }
 

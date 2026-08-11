@@ -149,8 +149,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - SACCO admin member-document rows, KYC retention summaries, statement totals, receipt-ready rows,
   and mobile-money/Treasurer statement split summaries now live behind `src/member/admin.ts` plus
   `app.member-admin-model.js`.
-- Transaction row shaping, approval readiness, payment route/status, receipting queue rows, receipt
-  register rows, and receipt split summaries now live behind `src/transactions/transactions.ts` plus
+- Transaction row shaping, overview counts, approval readiness, payment route/status, receipting queue rows,
+  receipt register rows, and receipt split summaries now live behind `src/transactions/transactions.ts` plus
   `app.transactions-model.js`, keeping Treasurer/Admin receipting and reversal evidence consistent
   while the classic Transactions screen remains in place.
 - Loan row shaping, guarantor readiness, approval readiness, servicing status, portfolio risk counts,
@@ -235,7 +235,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   represented in named contracts. Member guarantor, SACCO-admin message, and mobile-money row builders
   are also typed, along with payment provider filtering, payment request rows, and offline draft rows.
   SACCO admin member-document and statement summary builders are now typed too. Transaction row
-  shaping, receipting queue, receipt register, and receipt summaries now have the same typed boundary,
+  shaping, dashboard overview counts, receipting queue, receipt register, and receipt summaries now have the same typed boundary,
   as do SACCO loan rows, portfolio risk summaries, accounting ledger totals, reconciliation review
   rows, SACCO finance summaries, notification delivery summaries, complaint/chat summaries, and
   governance meeting/resolution summaries, regulatory/platform report summaries, and audit

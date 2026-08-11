@@ -1536,6 +1536,13 @@ interface TerekaTransactionReceiptSummary {
   treasurerCash: number;
 }
 
+interface TerekaTransactionOverviewSummary {
+  pendingApproval: number;
+  postedValue: number | string;
+  reversed: number;
+  totalRows: number;
+}
+
 interface TerekaLoanRow extends TerekaLoan {
   action: string;
   actionId?: string;
@@ -1798,6 +1805,7 @@ declare function buildTransactionRows(input: TerekaTransactionRowsInput): Tereka
 declare function buildTransactionReceiptingQueue(rows: TerekaTransactionRow[]): TerekaReceiptingQueueRow[];
 declare function buildTransactionReceiptRegister(rows: TerekaTransactionRow[]): TerekaReceiptRegisterRow[];
 declare function buildTransactionReceiptSummary(rows: TerekaTransactionRow[]): TerekaTransactionReceiptSummary;
+declare function buildTransactionOverviewSummary(rows: TerekaTransactionRow[]): TerekaTransactionOverviewSummary;
 declare function buildLoanRows(input: TerekaLoanRowsInput): TerekaLoanRow[];
 declare function buildLoanPortfolioSummary(rows: TerekaLoanRow[]): TerekaLoanPortfolioSummary;
 declare function buildAccountingSummary(input: TerekaAccountingSummaryInput): TerekaAccountingSummary;
