@@ -186,6 +186,8 @@ quick-search result creation, filtering, grouping, active-result cleanup, and to
 now sit behind the typed navigation bridge, with the redundant quick-search result wrapper removed.
 The type-contract gate now also records the remaining intentional classic bridge helpers and blocks
 retired wrapper helpers from being reintroduced across `app*.js`.
+The type-evidence report now prints the same bridge inventory so release evidence shows the
+remaining ES-module migration surface explicitly.
 
 Ordered by leverage: **(1)** finish the Vite build + convert to ES modules, **(2)** add the Vitest
 frontend suite, **(3)** run load/soak + a two-instance failover rehearsal and capture HA evidence,
