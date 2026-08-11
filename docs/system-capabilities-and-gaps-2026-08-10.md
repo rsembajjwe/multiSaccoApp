@@ -185,6 +185,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   approval status options, member-range options, country/currency options, collection-account review rows,
   and shared onboarding/payment stage labels now live behind
   `src/onboarding/onboarding.ts` plus `app.onboarding-model.js`.
+  Redundant classic onboarding/payment wrapper helpers have also been removed.
 - Platform/SACCO user access rows, access dashboard summaries, role coverage rows, SACCO staff role
   guide rows, permission-matrix rows, role purpose/scope text, and multi-role summary text now live
   behind `src/access/access.ts` plus `app.access-model.js`.
@@ -243,7 +244,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   as do SACCO loan rows, borrower/guarantor options, loan product options, portfolio risk summaries, accounting ledger totals, accounting account
   options, reconciliation review rows, SACCO finance summaries and member options, notification delivery summaries and options, complaint/chat summaries and options, and
   governance meeting/resolution summaries, regulatory/platform report summaries, and audit
-  classification summaries, onboarding and subscription billing summaries, onboarding option models, and user/role access
+  classification summaries, onboarding and subscription billing summaries, onboarding option models, onboarding/payment stage labels, and user/role access
   summaries. Member administration option lists, KYC and statement evidence summaries are also covered by the
   typed member-admin bridge. SACCO/platform settings setup summaries, notification and mobile-money
   provider readiness rows, administrator security-session rows, and collection-account display rows

@@ -119,9 +119,9 @@ function tenantDetailPanel() {
       ${state.selectedTenantError ? `<div class="notice warning"><strong>Application update failed.</strong><span>${escapeHtml(state.selectedTenantError)}</span></div>` : ""}
       <div class="source-grid">
         ${mini("Activation state", tenantStatusLabel(tenant.status))}
-        ${mini("Payment stage", saccoPaymentStage(tenant, subscription))}
-        ${mini("Approval stage", saccoApprovalStage(tenant, subscription))}
-        ${mini("Operating access", subscriptionAccessLabel(subscription || {}, tenant))}
+        ${mini("Payment stage", saccoPaymentStageFor(tenant || {}, subscription))}
+        ${mini("Approval stage", saccoApprovalStageFor(tenant || {}, subscription))}
+        ${mini("Operating access", subscriptionAccessLabelFor(subscription || {}, tenant || {}))}
         ${mini("SACCO code", tenant.abbreviation)}
         ${mini("Country", tenant.country)}
         ${mini("Currency", tenant.currencyCode)}
@@ -141,9 +141,9 @@ function tenantDetailPanel() {
         amount: subscription.amount,
         paid: subscription.paid,
         balanceDue: Math.max(0, Number(subscription.amount || 0) - Number(subscription.paid || 0)),
-        paymentStage: saccoPaymentStage(tenant, subscription),
-        approvalStage: saccoApprovalStage(tenant, subscription),
-        operatingAccess: subscriptionAccessLabel(subscription, tenant),
+        paymentStage: saccoPaymentStageFor(tenant || {}, subscription),
+        approvalStage: saccoApprovalStageFor(tenant || {}, subscription),
+        operatingAccess: subscriptionAccessLabelFor(subscription || {}, tenant || {}),
         expiry: subscription.expiry
       }], ["invoice", "packageName", "amount", "paid", "balanceDue", "paymentStage", "approvalStage", "operatingAccess", "expiry"]) : ""}
       <div class="grid two">
@@ -173,22 +173,6 @@ function tenantDetailPanel() {
       </form>
     </section>
   `;
-}
-
-function subscriptionAccessLabel(subscription, tenant) {
-  return subscriptionAccessLabelFor(subscription || {}, tenant || {});
-}
-
-function saccoPaymentStage(tenant, subscription) {
-  return saccoPaymentStageFor(tenant || {}, subscription);
-}
-
-function saccoApprovalStage(tenant, subscription) {
-  return saccoApprovalStageFor(tenant || {}, subscription);
-}
-
-function subscriptionPaymentLabel(subscription) {
-  return subscriptionPaymentLabelFor(subscription || {});
 }
 
 function generatedSaccoCode(name) {

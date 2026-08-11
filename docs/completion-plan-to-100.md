@@ -62,7 +62,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    counts, subscription table rows, billing/payment access summaries, package-card display rows,
    SACCO-code generation, registration location parsing, approval status options, member-range options,
    country/currency options, collection-account review rows, and shared onboarding/payment stage labels now follow the same pattern through
-   `src/onboarding/onboarding.ts` plus `app.onboarding-model.js`. Platform/SACCO user access rows,
+   `src/onboarding/onboarding.ts` plus `app.onboarding-model.js`, with redundant classic onboarding/payment wrapper helpers removed. Platform/SACCO user access rows,
    access dashboard summaries, role coverage rows, SACCO staff role guide rows, permission-matrix
    rows, role purpose/scope text, and multi-role summary text now follow the same pattern through
    `src/access/access.ts` plus `app.access-model.js`. Member administration status/type/KYC options,

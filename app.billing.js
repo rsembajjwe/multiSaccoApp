@@ -46,10 +46,10 @@ function subscriptionDetailPanel(rows) {
       ${state.selectedSubscriptionMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedSubscriptionMessage)}</strong></div>` : ""}
       ${state.selectedSubscriptionError ? `<div class="notice warning"><strong>Subscription update failed.</strong><span>${escapeHtml(state.selectedSubscriptionError)}</span></div>` : ""}
       <div class="source-grid">
-        ${mini("Operating access", subscriptionAccessLabel(subscription, tenant))}
-        ${mini("Payment status", subscriptionPaymentLabel(subscription))}
-        ${mini("Payment stage", saccoPaymentStage(tenant, subscription))}
-        ${mini("Approval stage", saccoApprovalStage(tenant, subscription))}
+        ${mini("Operating access", subscriptionAccessLabelFor(subscription || {}, tenant || {}))}
+        ${mini("Payment status", subscriptionPaymentLabelFor(subscription || {}))}
+        ${mini("Payment stage", saccoPaymentStageFor(tenant || {}, subscription))}
+        ${mini("Approval stage", saccoApprovalStageFor(tenant || {}, subscription))}
         ${mini("Subscription status", subscription.status)}
         ${mini("SACCO code", tenant.abbreviation || tenant.code || subscription.tenantCode || subscription.tenantId)}
         ${mini("Package", subscription.tierLabel || subscription.packageId)}

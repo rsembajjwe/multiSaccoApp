@@ -48,8 +48,8 @@ function saccoAccounts() {
   const subscriptions = dataRows("subscriptions");
   const rows = buildSaccoAccountHealthRows({
     accountHealth: tenantAccountHealth,
-    approvalStage: saccoApprovalStage,
-    paymentStage: saccoPaymentStage,
+    approvalStage: (tenant, subscription) => saccoApprovalStageFor(tenant || {}, subscription),
+    paymentStage: (tenant, subscription) => saccoPaymentStageFor(tenant || {}, subscription),
     subscriptionForTenant,
     tenants: tenantRows()
   });
