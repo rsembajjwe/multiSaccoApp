@@ -138,58 +138,44 @@ function reportReadinessPanel(consolidated) {
 }
 
 function normalizedAuditRows() {
-  return dataRows("auditEvents").map((event) => ({
-    ...event,
-    tenantName: tenantName(event.tenantId),
-    actor: event.actorName || userName(event.actorUserId),
-    module: event.resourceType || event.module || "system",
-    recordReference: event.resourceId || event.recordReference || event.recordId || "",
-    category: auditCategory(event),
-    riskLevel: auditRiskLevel(event),
-    result: event.result || "Recorded"
-  }));
+  return buildAuditRows({ events: dataRows("auditEvents"), tenantName, userName });
 }
 
 function auditView() {
   const rows = normalizedAuditRows();
-  const sensitive = rows.filter((event) => event.riskLevel !== "Normal");
-  const highRisk = rows.filter((event) => event.riskLevel === "High");
+  const auditGroups = buildAuditGroups(rows);
+  const auditSummary = buildAuditSummary(rows, auditGroups);
   const loginRisks = loginRiskEvents();
-  const approvals = rows.filter((event) => event.category === "Approvals");
-  const reversals = rows.filter((event) => event.category === "Reversals");
-  const access = rows.filter((event) => event.category === "Access control");
-  const finance = rows.filter((event) => event.category === "Financial activity");
   const tabs = [["evidence", isPlatform() ? t("platformAuditEvidence") : t("saccoAuditEvidence")], ["sensitive", t("sensitiveAuditQueue")], ["trail", isPlatform() ? t("platformAuditTrail") : t("saccoAuditTrail")]];
   const tab = activeModuleTab("audit", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary(t("auditEvents"), rows.length, "Immutable activity trail", "Inspect")}
-      ${summary(t("highRiskEvents"), highRisk.length, "Roles, sessions and reversals", t("review"))}
+      ${summary(t("auditEvents"), auditSummary.totalEvents, "Immutable activity trail", "Inspect")}
+      ${summary(t("highRiskEvents"), auditSummary.highRiskEvents, "Roles, sessions and reversals", t("review"))}
       ${summary(t("loginRiskEvents"), loginRisks.length, "Failed and blocked sign-ins", t("review"))}
-      ${summary(isPlatform() ? "SACCOs affected" : t("actorsInvolved"), isPlatform() ? uniqueCount(rows, "tenantId") : uniqueCount(rows, "actorUserId"), isPlatform() ? "Across visible SACCOs" : "Within this SACCO", "Filter")}
-      ${summary(t("actors"), uniqueCount(rows, "actorUserId"), "Users and system actions", "Trace")}
+      ${summary(isPlatform() ? "SACCOs affected" : t("actorsInvolved"), isPlatform() ? auditSummary.affectedSaccos : auditSummary.actors, isPlatform() ? "Across visible SACCOs" : "Within this SACCO", "Filter")}
+      ${summary(t("actors"), auditSummary.actors, "Users and system actions", "Trace")}
     </div>
     ${moduleTabs("audit", tabs, tab)}
-    ${tab === "overview" ? auditControlPanel(rows, highRisk, approvals, reversals, access, finance) : ""}
+    ${tab === "overview" ? auditControlPanel(auditSummary) : ""}
     ${tab === "evidence" ? `
       ${filterToolbar("Search audit logs by SACCO, actor, action, module, IP address or record ID", "Export audit log", "Print report")}
-      ${auditEvidencePanel(rows, sensitive, approvals, reversals, access, finance)}
+      ${auditEvidencePanel(auditSummary, auditGroups)}
     ` : ""}
-    ${tab === "sensitive" ? recordTable("Sensitive audit queue", sensitive, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "riskLevel"]) : ""}
+    ${tab === "sensitive" ? recordTable("Sensitive audit queue", auditGroups.sensitive, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "riskLevel"]) : ""}
     ${tab === "trail" ? recordTable(isPlatform() ? t("platformAuditTrail") : t("saccoAuditTrail"), rows, ["createdAt", "tenantName", "actor", "category", "action", "module", "recordReference", "ipAddress", "result"]) : ""}
   `;
 }
 
-function auditControlPanel(rows, highRisk, approvals, reversals, access, finance) {
+function auditControlPanel(auditSummary) {
   return rolePriorityPanel(t("auditEvidenceControl"), [
-    ["High-risk review", `${highRisk.length} event(s) involve sessions, roles, reversals or sensitive state changes.`, highRisk.length ? "Review" : "Clear"],
-    ["Decision evidence", `${approvals.length} approval event(s) and ${reversals.length} reversal event(s) are available for follow-up.`, approvals.length || reversals.length ? "Trace" : "Empty"],
-    ["Access and finance", `${access.length} access event(s) and ${finance.length} finance event(s) can be filtered for audit review.`, rows.length ? "Available" : "No events"]
+    ["High-risk review", `${auditSummary.highRiskEvents} event(s) involve sessions, roles, reversals or sensitive state changes.`, auditSummary.highRiskEvents ? "Review" : "Clear"],
+    ["Decision evidence", `${auditSummary.approvalEvents} approval event(s) and ${auditSummary.reversalEvents} reversal event(s) are available for follow-up.`, auditSummary.approvalEvents || auditSummary.reversalEvents ? "Trace" : "Empty"],
+    ["Access and finance", `${auditSummary.accessEvents} access event(s) and ${auditSummary.financeEvents} finance event(s) can be filtered for audit review.`, auditSummary.totalEvents ? "Available" : "No events"]
   ]);
 }
 
-function auditEvidencePanel(rows, sensitive, approvals, reversals, access, finance) {
-  const recent = rows[0]?.createdAt || "No event yet";
+function auditEvidencePanel(auditSummary, auditGroups) {
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -197,22 +183,22 @@ function auditEvidencePanel(rows, sensitive, approvals, reversals, access, finan
           <h2>${isPlatform() ? "Platform audit evidence" : "SACCO audit evidence"}</h2>
           <p>${isPlatform() ? "System-wide oversight for administrator actions, SACCO account changes and sensitive access." : "Read-only evidence for SACCO approvals, finance actions, reversals, role changes and session activity."}</p>
         </div>
-        <span class="status ${sensitive.length ? "pending" : "active"}">${sensitive.length ? "Review queue" : "Clear"}</span>
+        <span class="status ${auditSummary.sensitiveEvents ? "pending" : "active"}">${auditSummary.sensitiveEvents ? "Review queue" : "Clear"}</span>
       </div>
       <div class="source-grid">
-        ${mini("Latest event", recent)}
-        ${mini("Approval events", approvals.length)}
-        ${mini("Reversal events", reversals.length)}
-        ${mini("Access events", access.length)}
-        ${mini("Finance events", finance.length)}
-        ${mini("Sensitive queue", sensitive.length)}
+        ${mini("Latest event", auditSummary.latestEvent)}
+        ${mini("Approval events", auditSummary.approvalEvents)}
+        ${mini("Reversal events", auditSummary.reversalEvents)}
+        ${mini("Access events", auditSummary.accessEvents)}
+        ${mini("Finance events", auditSummary.financeEvents)}
+        ${mini("Sensitive queue", auditSummary.sensitiveEvents)}
       </div>
     </section>
     <div class="report-grid">
-      ${auditCategoryCard("Approvals", approvals, "Maker-checker decisions, status changes and review outcomes.")}
-      ${auditCategoryCard("Reversals", reversals, "Financial corrections that require follow-up evidence.")}
-      ${auditCategoryCard("Access control", access, "Logins, sessions, password, role and permission changes.")}
-      ${auditCategoryCard("Financial activity", finance, "Transactions, repayments, expenses, assets and contribution setup.")}
+      ${auditCategoryCard("Approvals", auditGroups.approvals, "Maker-checker decisions, status changes and review outcomes.")}
+      ${auditCategoryCard("Reversals", auditGroups.reversals, "Financial corrections that require follow-up evidence.")}
+      ${auditCategoryCard("Access control", auditGroups.access, "Logins, sessions, password, role and permission changes.")}
+      ${auditCategoryCard("Financial activity", auditGroups.finance, "Transactions, repayments, expenses, assets and contribution setup.")}
     </div>
   `;
 }
@@ -230,23 +216,5 @@ function auditCategoryCard(title, rows, copy) {
       <button class="button secondary" type="button">Review</button>
     </article>
   `;
-}
-
-function auditRiskLevel(event) {
-  const text = normal(`${event.action || ""} ${event.resourceType || ""} ${event.module || ""}`);
-  if (["failed", "blocked", "too many", "invalid sacco"].some((word) => text.includes(word)) && text.includes("login")) return "High";
-  if (["password", "role", "permission", "session", "reversal", "disbursed", "suspended", "terminated"].some((word) => text.includes(word))) return "High";
-  if (["approved", "rejected", "status", "payment", "template", "complaint", "loan"].some((word) => text.includes(word))) return "Review";
-  return "Normal";
-}
-
-function auditCategory(event) {
-  const text = normal(`${event.action || ""} ${event.resourceType || ""} ${event.module || ""}`);
-  if (["role", "permission", "password", "session", "login", "logout", "user"].some((word) => text.includes(word))) return "Access control";
-  if (["reversal", "reverse", "corrected"].some((word) => text.includes(word))) return "Reversals";
-  if (["approved", "rejected", "approval", "status", "decision", "submitted"].some((word) => text.includes(word))) return "Approvals";
-  if (["transaction", "payment", "loan", "repayment", "expense", "asset", "product", "account", "branch"].some((word) => text.includes(word))) return "Financial activity";
-  if (["complaint", "template", "notification"].some((word) => text.includes(word))) return "Operations";
-  return "General";
 }
 

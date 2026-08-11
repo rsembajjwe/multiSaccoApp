@@ -346,6 +346,48 @@ interface TerekaAsset {
   [key: string]: any;
 }
 
+type TerekaAuditRiskLevel = "High" | "Normal" | "Review";
+type TerekaAuditCategory = "Access control" | "Approvals" | "Financial activity" | "General" | "Operations" | "Reversals";
+
+interface TerekaAuditRow extends TerekaAuditEvent {
+  actor: string;
+  category: TerekaAuditCategory;
+  module: string;
+  recordReference: string;
+  result: string;
+  riskLevel: TerekaAuditRiskLevel;
+  tenantName: string;
+  [key: string]: any;
+}
+
+interface TerekaAuditRowsInput {
+  events: Array<TerekaAuditEvent & Record<string, any>> | null | undefined;
+  tenantName: (tenantId?: string) => string;
+  userName: (userId?: string) => string;
+}
+
+interface TerekaAuditGroupModel {
+  access: TerekaAuditRow[];
+  approvals: TerekaAuditRow[];
+  finance: TerekaAuditRow[];
+  highRisk: TerekaAuditRow[];
+  reversals: TerekaAuditRow[];
+  sensitive: TerekaAuditRow[];
+}
+
+interface TerekaAuditSummary {
+  accessEvents: number;
+  actors: number;
+  affectedSaccos: number;
+  approvalEvents: number;
+  financeEvents: number;
+  highRiskEvents: number;
+  latestEvent: string;
+  reversalEvents: number;
+  sensitiveEvents: number;
+  totalEvents: number;
+}
+
 interface TerekaGovernanceMeeting {
   id?: string;
   tenantId?: string;
@@ -1350,6 +1392,12 @@ declare function buildRegulatoryConsolidatedReport(input: { currentTenantId?: st
 declare function reportExceptionCount(consolidated: TerekaRegulatoryReportDisplayRow): number;
 declare function buildReportCatalogue(platform: boolean): TerekaReportCatalogueItem[];
 declare function buildPlatformReportSummary(input: TerekaPlatformReportSummaryInput): TerekaPlatformReportSummary;
+declare function buildAuditRows(input: TerekaAuditRowsInput): TerekaAuditRow[];
+declare function buildAuditGroups(rows: TerekaAuditRow[]): TerekaAuditGroupModel;
+declare function buildAuditSummary(rows: TerekaAuditRow[], groups: TerekaAuditGroupModel): TerekaAuditSummary;
+declare function auditRiskLevelFor(event: TerekaAuditEvent & Record<string, any>): TerekaAuditRiskLevel;
+declare function auditCategoryFor(event: TerekaAuditEvent & Record<string, any>): TerekaAuditCategory;
+declare function uniqueAuditCount(rows: TerekaAuditRow[], key: string): number;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, accountingSource, financeSource, notificationSource, complaintSource, governanceSource, reportSource, auditSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -20,6 +20,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/complaints/complaints.ts"),
   readText("src/governance/governance.ts"),
   readText("src/reports/reports.ts"),
+  readText("src/audit/audit.ts"),
   readText("app.state.js"),
 ]);
 
@@ -106,6 +107,10 @@ for (const marker of [
   "interface TerekaRegulatoryReportRowsInput",
   "interface TerekaPlatformReportSummaryInput",
   "interface TerekaPlatformReportSummary",
+  "interface TerekaAuditRow",
+  "interface TerekaAuditRowsInput",
+  "interface TerekaAuditGroupModel",
+  "interface TerekaAuditSummary",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -310,6 +315,23 @@ for (const marker of [
   "export function buildPlatformReportSummary",
 ]) {
   assert.ok(reportSource.includes(marker), `src/reports/reports.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export type TerekaAuditRiskLevel",
+  "export type TerekaAuditCategory",
+  "export interface TerekaAuditRow",
+  "export interface TerekaAuditRowsInput",
+  "export interface TerekaAuditGroupModel",
+  "export interface TerekaAuditSummary",
+  "export function buildAuditRows",
+  "export function buildAuditGroups",
+  "export function buildAuditSummary",
+  "export function auditRiskLevelFor",
+  "export function auditCategoryFor",
+  "export function uniqueAuditCount",
+]) {
+  assert.ok(auditSource.includes(marker), `src/audit/audit.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");
