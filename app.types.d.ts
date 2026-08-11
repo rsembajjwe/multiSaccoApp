@@ -955,6 +955,37 @@ interface TerekaTransactionReceiptSummary {
   treasurerCash: number;
 }
 
+interface TerekaLoanRow extends TerekaLoan {
+  action: string;
+  actionId?: string;
+  actionLabel: string;
+  approvalReadiness: string;
+  guarantorReadiness: string;
+  memberName?: string;
+  outstandingBalance: number;
+  requestedAmount?: number | string;
+  servicingStatus: string;
+  [key: string]: any;
+}
+
+interface TerekaLoanRowsInput {
+  formatMoney: (value: number | string) => string;
+  labelize: (value: any) => string;
+  loans: Array<TerekaLoan & Record<string, any>>;
+  memberName: (memberId?: string) => string;
+}
+
+interface TerekaLoanPortfolioSummary {
+  active: number;
+  approved: number;
+  arrearsTotal: number;
+  atRisk: number;
+  outstandingPrincipal: number;
+  over90Total: number;
+  submitted: number;
+  total: number;
+}
+
 interface TerekaState {
   auth: string;
   authTab: string;
@@ -1001,6 +1032,8 @@ declare function buildTransactionRows(input: TerekaTransactionRowsInput): Tereka
 declare function buildTransactionReceiptingQueue(rows: TerekaTransactionRow[]): TerekaReceiptingQueueRow[];
 declare function buildTransactionReceiptRegister(rows: TerekaTransactionRow[]): TerekaReceiptRegisterRow[];
 declare function buildTransactionReceiptSummary(rows: TerekaTransactionRow[]): TerekaTransactionReceiptSummary;
+declare function buildLoanRows(input: TerekaLoanRowsInput): TerekaLoanRow[];
+declare function buildLoanPortfolioSummary(rows: TerekaLoanRow[]): TerekaLoanPortfolioSummary;
 declare function addPerformanceAmountToRow(target: TerekaMonthlyPerformanceRow, purpose: any, amount: number): void;
 declare function performanceMonthLabel(value: any): string;
 declare function performanceMonthEndDateLabel(month: any): string;

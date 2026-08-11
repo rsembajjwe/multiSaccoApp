@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
-const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, stateSource] = await Promise.all([
+const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModelSource, formatterSource, performanceSource, memberAdminSource, transactionSource, loanSource, stateSource] = await Promise.all([
   readJson("package.json"),
   readJson("tsconfig.ui.json"),
   readJson("tsconfig.src.json"),
@@ -13,6 +13,7 @@ const [packageJson, tsconfig, srcTsconfig, declarations, domainTypes, tableModel
   readText("src/member/performance.ts"),
   readText("src/member/admin.ts"),
   readText("src/transactions/transactions.ts"),
+  readText("src/loans/loans.ts"),
   readText("app.state.js"),
 ]);
 
@@ -68,6 +69,9 @@ for (const marker of [
   "interface TerekaReceiptRegisterRow",
   "interface TerekaTransactionRowsInput",
   "interface TerekaTransactionReceiptSummary",
+  "interface TerekaLoanRow",
+  "interface TerekaLoanRowsInput",
+  "interface TerekaLoanPortfolioSummary",
   "interface TerekaReconciliationData",
   "interface TerekaRegulatoryReport",
   "interface TerekaIntegrationConfig",
@@ -162,6 +166,16 @@ for (const marker of [
   "export function buildTransactionReceiptSummary",
 ]) {
   assert.ok(transactionSource.includes(marker), `src/transactions/transactions.ts missing ${marker}`);
+}
+
+for (const marker of [
+  "export interface TerekaLoanRow",
+  "export interface TerekaLoanRowsInput",
+  "export interface TerekaLoanPortfolioSummary",
+  "export function buildLoanRows",
+  "export function buildLoanPortfolioSummary",
+]) {
+  assert.ok(loanSource.includes(marker), `src/loans/loans.ts missing ${marker}`);
 }
 
 assert.ok(stateSource.includes("/** @type {TerekaState} */"), "app.state.js must type the global state object");

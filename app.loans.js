@@ -2,29 +2,24 @@
 
 function loansView() {
   const loans = loanRows();
-  const submitted = loans.filter((loan) => ["submitted", "pending_approval"].includes(normal(loan.status)) || normal(loan.stage).includes("guarant"));
-  const approved = loans.filter((loan) => normal(loan.status) === "approved");
-  const active = loans.filter((loan) => normal(loan.status) === "active");
-  const atRisk = loans.filter((loan) => Number(loan.dsr || 0) >= 40 || ["arrears", "overdue", "default"].some((word) => normal(`${loan.status} ${loan.stage}`).includes(word)));
-  const arrearsTotal = sum(loans, "arrearsAmount");
-  const over90Total = sum(loans, "arrearsOver90Amount");
+  const portfolio = buildLoanPortfolioSummary(loans);
   const tabs = [["application", t("loanApplicationForm")], ["list", t("loanApplicationList")], ["detail", t("loanDetailGuarantors")]];
   const tab = activeModuleTab("loans", tabs);
   return `
     <div class="dashboard-grid">
-      ${summary(t("activeLoans"), active.length, "Disbursed portfolio", t("open"))}
-      ${summary(t("outstandingPrincipal"), money.format(sum(loans, "outstandingBalance", "balance")), "Portfolio balance", t("review"))}
-      ${summary(t("awaitingApproval"), submitted.length, "Guarantor and decision queue", "Approve")}
-      ${summary(t("readyToDisburse"), approved.length, "Approved but not active", "Disburse")}
-      ${summary(t("portfolioAtRisk"), atRisk.length, "Arrears and DSR risk", "Report")}
-      ${summary("Arrears aging", money.format(arrearsTotal), "Past-due credit exposure", "Follow up")}
-      ${summary("90+ days", money.format(over90Total), "High-risk overdue balances", "Escalate")}
+      ${summary(t("activeLoans"), portfolio.active, "Disbursed portfolio", t("open"))}
+      ${summary(t("outstandingPrincipal"), money.format(portfolio.outstandingPrincipal), "Portfolio balance", t("review"))}
+      ${summary(t("awaitingApproval"), portfolio.submitted, "Guarantor and decision queue", "Approve")}
+      ${summary(t("readyToDisburse"), portfolio.approved, "Approved but not active", "Disburse")}
+      ${summary(t("portfolioAtRisk"), portfolio.atRisk, "Arrears and DSR risk", "Report")}
+      ${summary("Arrears aging", money.format(portfolio.arrearsTotal), "Past-due credit exposure", "Follow up")}
+      ${summary("90+ days", money.format(portfolio.over90Total), "High-risk overdue balances", "Escalate")}
     </div>
     ${moduleTabs("loans", tabs, tab)}
     ${tab === "overview" ? rolePriorityPanel(t("loanLifecycleControl"), [
-      ["Application", `${submitted.length} loan file(s) are in application, guarantor or approval review.`, submitted.length ? "Pending" : "Clear"],
-      ["Disbursement", `${approved.length} approved loan(s) are ready for disbursement after final checks.`, approved.length ? "Ready" : "Clear"],
-      ["Servicing", `${active.length} active loan(s) can receive repayments and arrears monitoring.`, active.length ? "Active" : "Pending"]
+      ["Application", `${portfolio.submitted} loan file(s) are in application, guarantor or approval review.`, portfolio.submitted ? "Pending" : "Clear"],
+      ["Disbursement", `${portfolio.approved} approved loan(s) are ready for disbursement after final checks.`, portfolio.approved ? "Ready" : "Clear"],
+      ["Servicing", `${portfolio.active} active loan(s) can receive repayments and arrears monitoring.`, portfolio.active ? "Active" : "Pending"]
     ]) : ""}
     ${tab === "application" ? loanApplicationPanel() : ""}
     ${tab === "detail" ? (loanDetailPanel(loans) || emptyState("Loan detail and guarantors", "Select a loan application from the list to review guarantors, decisions and repayments.")) : ""}
@@ -85,24 +80,11 @@ function loanApplicationPanel() {
 }
 
 function loanRows() {
-  return dataRows("loans").map((loan) => {
-    const status = normal(loan.status);
-    const stage = normal(loan.stage);
-    const guarantors = Number(loan.guarantors || loan.guarantorCount || 0);
-    const repaymentTotal = Number(loan.repaymentTotal || loan.repayments || 0);
-    const balance = Number(loan.outstandingBalance ?? loan.balance ?? loan.amount ?? 0);
-    return {
-      ...loan,
-      memberName: loan.memberName || memberName(loan.memberId),
-      requestedAmount: loan.requestedAmount || loan.amount,
-      outstandingBalance: balance,
-      guarantorReadiness: guarantors ? `${guarantors} guarantor(s)` : stage.includes("guarant") ? "Guarantor pending" : "Needs guarantor",
-      approvalReadiness: status === "approved" ? "Ready for disbursement" : status === "active" ? "Disbursed" : ["submitted", "pending_approval"].includes(status) ? "Awaiting approval" : labelize(loan.status || "review"),
-      servicingStatus: status === "active" ? `Outstanding ${money.format(balance)}` : repaymentTotal ? `Repaid ${money.format(repaymentTotal)}` : "Not in servicing",
-      action: "loan-detail",
-      actionLabel: status === "approved" ? "Disburse" : status === "active" ? "Service" : "Review",
-      actionId: loan.id
-    };
+  return buildLoanRows({
+    loans: dataRows("loans"),
+    memberName,
+    labelize,
+    formatMoney: (value) => money.format(value)
   });
 }
 
