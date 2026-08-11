@@ -102,7 +102,7 @@ function addUserPanel(platformOnly) {
         </div>
         <div class="mini-fact wide">
           <span>Role access preview</span>
-          <strong id="newUserRolePreview">${escapeHtml(roleSummaryText(defaultRole.id ? [defaultRole.id] : [], platformOnly))}</strong>
+          <strong id="newUserRolePreview">${escapeHtml(roleSummaryTextFor(defaultRole.id ? [defaultRole.id] : [], roles, platformOnly))}</strong>
         </div>
         <div class="form-actions inline">
           <button class="button primary" type="submit">Create user</button>
@@ -247,10 +247,6 @@ function permissionMatrix() {
 
 function userRoleOptions(platformOnly) {
   return filterRolesForScope(dataRows("roles"), platformOnly, state.user?.tenantId);
-}
-
-function roleSummaryText(roleIds, platformOnly) {
-  return roleSummaryTextFor(roleIds || [], userRoleOptions(platformOnly), platformOnly);
 }
 
 function checkedRoleIds(name) {

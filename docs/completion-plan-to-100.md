@@ -65,7 +65,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    `src/onboarding/onboarding.ts` plus `app.onboarding-model.js`, with redundant classic onboarding/payment wrapper helpers removed. Platform/SACCO user access rows,
    access dashboard summaries, role coverage rows, SACCO staff role guide rows, permission-matrix
    rows, role purpose/scope text, and multi-role summary text now follow the same pattern through
-   `src/access/access.ts` plus `app.access-model.js`, with redundant role-purpose and role-coverage wrapper helpers removed. Member administration status/type/KYC options,
+   `src/access/access.ts` plus `app.access-model.js`, with redundant role-purpose, role-coverage, and role-summary wrapper helpers removed. Member administration status/type/KYC options,
    KYC readiness, KYC checklist rows, document rows, member detail summary counts, receipt evidence summaries, and staff statement
    export summaries now live in the existing `src/member/admin.ts` plus
    `app.member-admin-model.js`, with redundant KYC/document wrapper helpers removed.

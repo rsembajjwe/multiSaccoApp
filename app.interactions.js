@@ -697,7 +697,13 @@ function bindEvents() {
       const platformOnly = input.dataset.roleCheckbox === "selected" ? selected?.tenantId === "tenant_platform" : isPlatform();
       const name = input.dataset.roleCheckbox === "selected" ? "selectedUserRoleIds" : "newUserRoleIds";
       const preview = document.getElementById(input.dataset.roleCheckbox === "selected" ? "selectedUserRolePreview" : "newUserRolePreview");
-      if (preview) preview.textContent = roleSummaryText(checkedRoleIds(name), platformOnly);
+      if (preview) {
+        preview.textContent = roleSummaryTextFor(
+          checkedRoleIds(name),
+          filterRolesForScope(dataRows("roles"), platformOnly, state.user?.tenantId),
+          platformOnly
+        );
+      }
     });
   });
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
