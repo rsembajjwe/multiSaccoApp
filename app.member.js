@@ -295,14 +295,6 @@ function paymentRequestStatusNotice() {
  * @param {TerekaPaymentRequest | TerekaStatementLine | TerekaOfflineDraft | Record<string, any>} row
  * @returns {string}
  */
-function paymentRouteLabel(row) {
-  return paymentRouteLabelFor(row);
-}
-
-/**
- * @param {TerekaPaymentRequest | TerekaStatementLine | TerekaOfflineDraft | Record<string, any>} row
- * @returns {string}
- */
 function paymentLifecycleStatus(row) {
   return paymentLifecycleStatusFor(row);
 }

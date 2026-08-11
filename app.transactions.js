@@ -201,7 +201,7 @@ function transactionReceiptPreview(receipt) {
         ${mini("Receipt number", receipt.receiptNo)}
         ${mini("SACCO", receipt.tenantName)}
         ${mini("Member", receipt.membershipNo ? `${receipt.memberName || "Member"} (${receipt.membershipNo})` : receipt.memberName)}
-        ${mini("Payment route", paymentRouteLabel(receipt))}
+        ${mini("Payment route", paymentRouteLabelFor(receipt))}
         ${mini("Amount", money.format(receipt.amount || 0))}
         ${mini("Issued at", receipt.issuedAt ? formatDateTime(receipt.issuedAt) : formatDateTime(new Date().toISOString()))}
       </div>

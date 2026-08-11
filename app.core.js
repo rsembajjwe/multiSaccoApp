@@ -433,18 +433,6 @@ function memberMonthlyPerformanceRows(dash) {
   return buildMemberMonthlyPerformanceRows(dash);
 }
 
-function addPerformanceAmount(target, purpose, amount) {
-  return addPerformanceAmountToRow(target, purpose, amount);
-}
-
-function monthLabel(value) {
-  return performanceMonthLabel(value);
-}
-
-function monthEndDateLabel(month) {
-  return performanceMonthEndDateLabel(month);
-}
-
 function initials(name) {
   return String(name || "TO").split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 }

@@ -145,7 +145,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   typing the savings, shares, welfare, loan-repayment, Treasurer cash, and mobile-money split logic.
   Member payment lifecycle rows, route labels, payment status, and receipt status are now typed in
   the same source boundary, along with member guarantor, SACCO-admin message, and mobile-money row
-  builders, member payment provider filtering, payment request action rows, and offline draft rows.
+  builders, member payment provider filtering, payment request action rows, offline draft rows, and removed classic payment-route/month wrappers.
 - SACCO admin member-document rows, member status/type/KYC options, KYC retention summaries, statement totals, receipt-ready rows,
   and mobile-money/Treasurer statement split summaries now live behind `src/member/admin.ts` plus
   `app.member-admin-model.js`.
@@ -236,7 +236,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   model state, row filtering, table-state keys, shared money/date formatters, status badges, HTML
   escaping, table value formatting, member statement normalization, and monthly performance
   aggregation, payment lifecycle rows, route labels, payment status, and receipt status are now
-  represented in named contracts. Member guarantor, SACCO-admin message, and mobile-money row builders
+  represented in named contracts, with redundant classic wrappers removed. Member guarantor, SACCO-admin message, and mobile-money row builders
   are also typed, along with payment provider filtering, payment request rows, and offline draft rows.
   SACCO admin member-document and statement summary builders are now typed too. Transaction row
   shaping, dashboard overview counts, receipting queue, receipt register, and receipt summaries now have the same typed boundary,

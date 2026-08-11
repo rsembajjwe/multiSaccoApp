@@ -30,7 +30,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    follow the same pattern through `src/member/performance.ts` plus `app.member-performance.js`,
    including payment lifecycle rows, route labels, payment status, receipt status, guarantor rows,
    SACCO-admin message rows, mobile-money rows, provider filtering, payment request rows, and offline
-   draft rows. SACCO admin member-document rows, retention summaries, statement totals, and
+   draft rows; redundant classic payment-route/month wrappers have also been removed. SACCO admin member-document rows, retention summaries, statement totals, and
    receipt-ready statement summaries now follow the same pattern through `src/member/admin.ts` plus
    `app.member-admin-model.js`. Transaction row shaping, dashboard overview counts, approval readiness,
    payment route/status, receipting queue rows, receipt register rows, and receipt summaries now follow the same pattern
