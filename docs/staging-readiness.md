@@ -26,6 +26,7 @@ A build can be called staging-ready only when every required gate passes.
 | Staging handoff checklist | `docs/staging-handoff-checklist.md` | Environment, secrets, release gates, operations, UAT accounts, and decision evidence are recorded. | Required before staging handoff |
 | Staging handoff contract | `npm.cmd run staging:handoff-check` | The handoff checklist still contains the required environment, secrets, release-gate, operations, UAT, and blocker controls. | Ready for use |
 | Incident readiness | `npm.cmd run incident:check` | Monitoring, alert rules, rollback, log-capture, restore-owner, and secret-safe incident controls remain documented. | Ready for use |
+| Compliance readiness | `npm.cmd run compliance:check` | Data-protection, SACCO/regulatory, payment/provider, legal-document, and sign-off evidence remain visible before launch. | Ready for use |
 | Release evidence pack | `docs/release-evidence-template.md` | Command results, environment evidence, UAT sign-off, load-test numbers, and release decision are recorded. | Ready for use |
 | Local release evidence command | `npm.cmd run release:evidence` | Deployment, DR, secrets, database, HA, data-protection, Vite, i18n, accessibility, and repository hygiene contracts pass and produce a timestamped local release pack. | Ready for use |
 | UAT findings tracker | `docs/uat-findings-template.md` | Findings have severity, owner, status, retest result, and acceptance notes. | Ready for use |
@@ -70,6 +71,7 @@ Use this checklist before tagging a staging or production release.
 - Database backup and restore have been rehearsed on a non-production copy.
 - Browser UAT and manual UAT scripts cover Dashboard, SACCO Registration, Subscriptions, Members, Transactions, Loans, Approvals, Reports, Operations, and Member Portal.
 - Release evidence and findings tracker are completed for the release candidate.
+- Compliance readiness owner/sign-off evidence is attached using `docs/compliance-readiness.md`.
 - Staging secrets are stored outside git.
 - Deployment owner confirms HTTPS, CORS origin, backup schedule, and monitoring destinations.
 - Incident readiness evidence covers monitoring thresholds, Prometheus runbook links, rollback, log capture, restore ownership, and secret-safe escalation notes.

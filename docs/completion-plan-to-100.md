@@ -257,6 +257,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 18. **Data protection (Uganda DPA 2019)** — [code + external]
     *Done when:* the existing evidence (privacy requests, consent, masking, retention) is completed into
     policy, encryption at rest is enabled for PII, and registration/DPO obligations are met.
+    *Current readiness guard:* `npm.cmd run compliance:check` now verifies that data-protection,
+    SACCO/regulatory, payment/provider, legal-document, and owner sign-off evidence stays explicit in
+    `docs/compliance-readiness.md` and release evidence before launch.
 
 19. **Sector regulation (Bank of Uganda / UMRA)** — [external]
     *Done when:* licensing/supervision requirements and regulator-facing reporting are satisfied.
@@ -267,6 +270,8 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 
 21. **Legal** — [external]
     *Done when:* Terms of Service, Privacy Policy, and data-processing agreements are finalized.
+    *Current readiness guard:* legal documents are now listed as production release blockers in
+    `docs/compliance-readiness.md`; final drafting and approval remain external legal work.
 
 ---
 

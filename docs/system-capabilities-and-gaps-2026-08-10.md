@@ -145,6 +145,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Incident readiness is now guarded by `npm.cmd run incident:check`, which verifies monitoring
   thresholds, Prometheus runbook links, callback/delivery/reconciliation alert coverage, rollback,
   log-capture, restore-owner, and secret-safe escalation controls.
+- Compliance readiness is now guarded by `npm.cmd run compliance:check`, which keeps
+  data-protection, SACCO/regulatory, payment/provider, legal-document, and owner sign-off evidence
+  visible before pilot or production launch.
 - Repository hygiene is now guarded by `npm.cmd run repo:hygiene`, which verifies ignore rules for
   local logs, environment files, generated builds, backups, reports, IDE files, and temporary files,
   then scans tracked files so those artifacts cannot quietly enter a release commit.

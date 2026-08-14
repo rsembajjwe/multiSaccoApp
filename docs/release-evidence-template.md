@@ -40,6 +40,7 @@ Latest local backup rehearsal evidence: `npm.cmd run backup:evidence` passed on 
 | Release evidence pack | `npm.cmd run release:evidence` |  |  |
 | Staging handoff contract | `npm.cmd run staging:handoff-check` |  |  |
 | Incident readiness | `npm.cmd run incident:check` |  |  |
+| Compliance readiness | `npm.cmd run compliance:check` |  | Attach `docs/compliance-readiness.md` owner/sign-off evidence. |
 | Local verification | `npm.cmd run check` |  |  |
 | Production readiness | `npm.cmd run ready:check` |  |  |
 | PostgreSQL/Flyway | `npm.cmd run postgres:check` or hosted migration artifact |  |  |
@@ -79,6 +80,18 @@ Latest local backup rehearsal evidence: `npm.cmd run backup:evidence` passed on 
 | Platform admin | `docs/uat-scripts.md` |  |  |  |  |
 | SACCO staff | `docs/uat-scripts.md` |  |  |  |  |
 | Member portal | `docs/uat-scripts.md` |  |  |  |  |
+
+## Compliance Sign-Off
+
+Use `docs/compliance-readiness.md` for the detailed checklist.
+
+| Area | Owner | Evidence | Status |
+| --- | --- | --- | --- |
+| Data protection |  |  |  |
+| SACCO/regulatory review |  |  |  |
+| Payment/provider compliance |  |  |  |
+| Legal documents |  |  |  |
+| Security review |  |  |  |
 
 ## Findings Summary
 
