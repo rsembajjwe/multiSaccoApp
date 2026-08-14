@@ -26,6 +26,8 @@ Use this guide when preparing a hosted staging environment for pilot SACCO testi
 | `SACCO_GMAIL_SMTP_PASSWORD` | Required for `gmail_smtp` | Gmail app password or Workspace-approved SMTP password. |
 | `SACCO_GMAIL_SMTP_SSL_TRUST` | Optional | Defaults to `*` for Gmail SMTP TLS trust. |
 | `SACCO_GMAIL_FROM_ADDRESS` | Required for `gmail_smtp` | Sender address, preferably on `tereka.online`. |
+| `SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD` | Yes for first hosted bootstrap | Strong one-time platform owner password; rotate immediately after first login. |
+| `SACCO_MOBILE_MONEY_CALLBACK_SECRET` | Yes for signed callbacks | Strong shared HMAC secret for mobile-money callbacks; never reuse a sandbox or demo value. |
 | `SACCO_MOBILE_MONEY_PROVIDER` | Yes | Use `demo_mobile_money` for local-only demos, `mtn_momo` for MTN MoMo, `airtel_money` for Airtel Money, or `mpesa_daraja` for M-PESA. |
 | `SACCO_MTN_MOMO_SUBSCRIPTION_KEY` | Required for `mtn_momo` | Provider-issued MTN MoMo Collections subscription key. |
 | `SACCO_MTN_MOMO_API_USER_ID` | Required for `mtn_momo` | Provider-issued MTN MoMo API user. |

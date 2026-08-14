@@ -66,6 +66,8 @@ function renderReport(results) {
     "",
     "- Scans deployment example files for committed real-looking secret values.",
     "- Confirms the secrets runbook still documents rotation and emergency rotation.",
+    "- Confirms the production secrets inventory covers required database, PII, bootstrap, notification, mobile-money, callback, and Redis secret names.",
+    "- Confirms the staging guide documents required hosted-environment secret names.",
     "- Confirms production secret/provider readiness validators remain documented.",
     "- Does not prove a hosted Vault/KMS/secret-manager connection; that remains deployment evidence.",
     "",

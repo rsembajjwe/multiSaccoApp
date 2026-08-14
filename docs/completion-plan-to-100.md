@@ -202,6 +202,12 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 14. **Managed secrets** — [code + external]
     *Done when:* production secrets live in a managed store (Vault/cloud KMS) with rotation and audit —
     no secrets in env files.
+    *Current progress:* `docs/secrets-inventory.md` now lists 25 production secret names across
+    database, PII, bootstrap admin, AfroSMS, Gmail SMTP, mobile-money providers, signed callbacks, and
+    Redis HA. `npm.cmd run secrets:evidence` now verifies deployment examples contain placeholders,
+    the runbook contains rotation/emergency procedures, the staging guide covers required secret
+    names, and the inventory includes rotation evidence fields. Hosted secret-store wiring and a real
+    rotation audit remain external deployment evidence.
 
 15. **Monitoring, alerting & on-call** — [code + external]
     *Done when:* Prometheus metrics feed dashboards (Grafana) and alerts (error rate, latency, callback

@@ -53,8 +53,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - RBAC with platform roles, SACCO roles, permission matrix, tenant isolation, and branch isolation.
 - MFA, password reset, failure-based login lockout, audit trail, security headers, demo-seed
   sanitizer, and bootstrap-admin provisioning.
-- Secrets evidence scans deployment examples for real-looking secret values and records the
-  production secret/provider readiness contract under `reports/secrets-evidence/`.
+- Secrets evidence scans deployment examples for real-looking secret values, verifies the 25-name
+  production secrets inventory and staging guide coverage, and records the production
+  secret/provider readiness contract under `reports/secrets-evidence/`.
 - HMAC-verified mobile-money callbacks, per-IP rate limiting, request correlation IDs, and scheduled
   cleanup of expired sessions/MFA/reset tokens.
 
@@ -355,8 +356,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   focus markers, and role journey structure; screen-reader flows, contrast, focus management, and
   WCAG AA testing still need assistive-technology validation.
 - **Secrets management needs hosted managed-store evidence.** Environment-backed config, placeholder
-  scanning, production startup guards, and rotation procedures exist; the remaining work is wiring
-  and proving a hosted Vault/KMS/secret-manager integration with operational rotation evidence.
+  scanning, production startup guards, rotation procedures, required-secret inventory, and rotation
+  evidence templates exist; the remaining work is wiring and proving a hosted Vault/KMS/secret-manager
+  integration with operational rotation evidence.
 - **Bank collection depth is partial.** SACCO-owned collection account setup, member-facing direct
   payment instructions, reference/draft flow, and reconciliable single-line/batch statement imports
   exist, but real bank API integration and bank notification workflows remain.
