@@ -99,9 +99,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 
 - Flyway migrations, H2-for-dev / PostgreSQL-for-prod parity, no `ddl-auto` in prod.
 - GitHub Actions CI, PostgreSQL/browser release gate, backup-restore rehearsal, production readiness
-  checks, Docker/dev/prod compose, and Caddy edge with TLS. `npm.cmd run backup:evidence` now writes
-  timestamped restore evidence; the 10 August 2026 run restored
-  `backups\rehearsals\sacco_app_backup_rehearsal-20260810-161957.dump` successfully.
+  checks, Docker/dev/prod compose, and Caddy edge with TLS. `npm.cmd run backup:evidence` now verifies
+  the DR runbook contract and writes timestamped restore evidence; the 14 August 2026 run restored
+  `backups\rehearsals\sacco_app_backup_rehearsal-20260814-164712.dump` successfully.
 - Prometheus metrics, production structured JSON logs with request correlation context, deployable
   Prometheus alert rules, Resilience4j circuit breakers, idempotent-only retries, bounded provider HTTP
   timeouts, pagination/search/sort on high-volume endpoints, and curated OpenAPI documentation.
@@ -295,8 +295,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   Redis smoke test passed on 10 August 2026; the 14 August 2026 HA evidence rerun cleanly records that
   Docker Desktop was not reachable, so Redis evidence must be rerun before using it for release
   sign-off. A local Java-backed baseline load evidence run passed on 14 August 2026. Backup/restore
-  evidence also passed on 10 August 2026. Live Redis deployment, staging load/soak execution,
-  production RTO/RPO evidence, and failover rehearsal are still needed.
+  evidence also passed on 14 August 2026 with a DR runbook contract and disposable PostgreSQL restore.
+  Live Redis deployment, staging load/soak execution, production RPO/RTO measurement, and failover
+  rehearsal are still needed.
 - **Mobile money is not production-live.** Adapters and routing exist, but MTN/Airtel production use
   requires merchant onboarding/KYC, real credentials, live callback validation, and production
   settlement reconciliation.

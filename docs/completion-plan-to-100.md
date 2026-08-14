@@ -178,6 +178,12 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 10. **DR / backup-restore** — [code]
     *Done when:* backup + point-in-time restore is rehearsed on production-like data against target
     RPO/RTO, with signed-off evidence.
+    *Current progress:* `docs/disaster-recovery.md` now defines local, staging, small-start production,
+    and enterprise production RPO/RTO targets, restore-owner evidence fields, hosted restore steps,
+    emergency recovery, and release gates. `npm.cmd run backup:evidence` now checks the DR runbook
+    before running the disposable PostgreSQL backup/restore rehearsal. The 14 August 2026 local
+    evidence passed and restored `backups\rehearsals\sacco_app_backup_rehearsal-20260814-164712.dump`.
+    Hosted PITR/off-server backup evidence remains external deployment work.
 
 11. **Security penetration test** — [external]
     *Done when:* an independent pen test / code audit is passed and findings remediated.
