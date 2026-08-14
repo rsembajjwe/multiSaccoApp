@@ -330,7 +330,7 @@ function allowRequest(request, response, correlationId, policyName) {
 
 async function login(request, response, correlationId) {
   const body = await readJson(request);
-  const email = String(body.email || "").toLowerCase().trim();
+  const email = String(body.email || body.username || body.identifier || "").toLowerCase().trim();
   const password = String(body.password || "");
   const tenantId = String(body.tenantId || "").trim();
 

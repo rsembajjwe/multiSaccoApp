@@ -187,8 +187,10 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
     an audit report.
     *Current code-side evidence:* skip links, landmarks, current-page markers, topbar labels,
     assertive auth errors, described field hints, reduced motion, coarse-pointer touch targets, and
-    visible focus are covered by `npm run accessibility:evidence`. Manual browser and assistive
-    technology validation remains required.
+    visible focus are covered by `npm run accessibility:evidence`. The same command now runs a
+    browser journey across login, public SACCO registration, platform admin, SACCO admin, and member
+    portal where the active profile allows it. Manual assistive-technology, contrast, and WCAG AA
+    audit signoff remains required.
 
 13. **User Acceptance Testing (UAT)** — [external]
     *Done when:* real SACCO staff and members complete scripted UAT and sign off.

@@ -14,6 +14,11 @@ const checks = [
     command: process.execPath,
     args: ["scripts/check-accessibility-contracts.mjs"],
   },
+  {
+    name: "Browser accessibility journey",
+    command: process.execPath,
+    args: ["scripts/check-browser-accessibility.mjs"],
+  },
 ];
 
 const results = checks.map(runCheck);
@@ -71,6 +76,8 @@ function renderReport(results) {
     "- Confirms field helper text is linked to inputs with aria-describedby.",
     "- Confirms visible keyboard focus styling.",
     "- Confirms reduced-motion support and coarse-pointer touch target sizing.",
+    "- Runs a browser journey through login, public SACCO registration, platform admin, SACCO admin, and member portal where the active profile allows member login.",
+    "- Confirms live pages expose document language, main landmarks, skip links, labelled controls, image alt text, and alert live regions.",
     "- Does not replace a manual WCAG 2.1 AA screen-reader, contrast, and keyboard audit.",
     "",
     "## Checks",

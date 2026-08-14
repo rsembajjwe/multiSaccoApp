@@ -229,7 +229,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Accessibility evidence now records static checks for skip links, named navigation landmarks,
   current-page state, topbar menu labels, assertive auth error announcements, described field
   hints, reduced-motion support, coarse-pointer touch targets, and visible keyboard focus under
-  `reports/accessibility-evidence/`.
+  `reports/accessibility-evidence/`. It also runs a Playwright browser journey across login, public
+  SACCO registration, platform admin, SACCO admin, and member portal pages where the active profile
+  exposes those views.
 
 ---
 
@@ -348,10 +350,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - **Internationalization depth is incomplete.** Locale and RTL wiring are evidenced for English,
   French, Swahili, Portuguese, Arabic, and Amharic, but Luganda and professional in-country
   translation/QA for broader regional coverage are still needed.
-- **Accessibility needs real audits.** Static evidence now covers baseline skip links, landmarks,
-  labels, assertive auth errors, described form hints, reduced motion, touch targets, and focus
-  markers; keyboard journeys, screen-reader flows, contrast, focus management, and WCAG AA testing
-  still need deeper browser-level validation.
+- **Accessibility needs real audits.** Static and browser evidence now covers baseline skip links,
+  landmarks, labels, assertive auth errors, described form hints, reduced motion, touch targets,
+  focus markers, and role journey structure; screen-reader flows, contrast, focus management, and
+  WCAG AA testing still need assistive-technology validation.
 - **Secrets management needs hosted managed-store evidence.** Environment-backed config, placeholder
   scanning, production startup guards, and rotation procedures exist; the remaining work is wiring
   and proving a hosted Vault/KMS/secret-manager integration with operational rotation evidence.
