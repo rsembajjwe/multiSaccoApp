@@ -142,6 +142,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - The Hetzner CX22 deployment runbook now covers first platform owner bootstrap, bootstrap credential
   rotation, pre-update backup, post-deploy health verification, rollback by previous commit,
   restore-owner evidence, and secret-safe log handling.
+- Incident readiness is now guarded by `npm.cmd run incident:check`, which verifies monitoring
+  thresholds, Prometheus runbook links, callback/delivery/reconciliation alert coverage, rollback,
+  log-capture, restore-owner, and secret-safe escalation controls.
 - Repository hygiene is now guarded by `npm.cmd run repo:hygiene`, which verifies ignore rules for
   local logs, environment files, generated builds, backups, reports, IDE files, and temporary files,
   then scans tracked files so those artifacts cannot quietly enter a release commit.

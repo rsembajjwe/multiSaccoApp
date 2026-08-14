@@ -39,6 +39,7 @@ Latest local backup rehearsal evidence: `npm.cmd run backup:evidence` passed on 
 | --- | --- | --- | --- |
 | Release evidence pack | `npm.cmd run release:evidence` |  |  |
 | Staging handoff contract | `npm.cmd run staging:handoff-check` |  |  |
+| Incident readiness | `npm.cmd run incident:check` |  |  |
 | Local verification | `npm.cmd run check` |  |  |
 | Production readiness | `npm.cmd run ready:check` |  |  |
 | PostgreSQL/Flyway | `npm.cmd run postgres:check` or hosted migration artifact |  |  |

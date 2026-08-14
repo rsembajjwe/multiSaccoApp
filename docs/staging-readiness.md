@@ -25,6 +25,7 @@ A build can be called staging-ready only when every required gate passes.
 | Staging environment secrets | `docs/staging-environment.md` plus staging host secret store | Database password, rate-limit settings, API base URL, and demo-login flag are environment-managed. | Ready for handoff |
 | Staging handoff checklist | `docs/staging-handoff-checklist.md` | Environment, secrets, release gates, operations, UAT accounts, and decision evidence are recorded. | Required before staging handoff |
 | Staging handoff contract | `npm.cmd run staging:handoff-check` | The handoff checklist still contains the required environment, secrets, release-gate, operations, UAT, and blocker controls. | Ready for use |
+| Incident readiness | `npm.cmd run incident:check` | Monitoring, alert rules, rollback, log-capture, restore-owner, and secret-safe incident controls remain documented. | Ready for use |
 | Release evidence pack | `docs/release-evidence-template.md` | Command results, environment evidence, UAT sign-off, load-test numbers, and release decision are recorded. | Ready for use |
 | Local release evidence command | `npm.cmd run release:evidence` | Deployment, DR, secrets, database, HA, data-protection, Vite, i18n, accessibility, and repository hygiene contracts pass and produce a timestamped local release pack. | Ready for use |
 | UAT findings tracker | `docs/uat-findings-template.md` | Findings have severity, owner, status, retest result, and acceptance notes. | Ready for use |
@@ -71,3 +72,4 @@ Use this checklist before tagging a staging or production release.
 - Release evidence and findings tracker are completed for the release candidate.
 - Staging secrets are stored outside git.
 - Deployment owner confirms HTTPS, CORS origin, backup schedule, and monitoring destinations.
+- Incident readiness evidence covers monitoring thresholds, Prometheus runbook links, rollback, log capture, restore ownership, and secret-safe escalation notes.

@@ -223,6 +223,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
     for business alerts such as callback exceptions, pending postings, open complaints, and notification
     delivery exceptions. External work remains: deploy Prometheus/Grafana or the hosting equivalent and
     route alerts to email/SMS/incident channels.
+    *Current readiness guard:* `npm.cmd run incident:check` now verifies monitoring guidance,
+    Prometheus alert/runbook links, rollback/log-capture instructions, restore-owner requirements, and
+    secret-safe incident escalation notes remain present before release handoff.
 
 16. **Centralized logging & tracing** — [code]
     *Done when:* structured logs (with the existing correlation IDs) are shipped to a central store;
