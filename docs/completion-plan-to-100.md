@@ -202,6 +202,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 
 13. **User Acceptance Testing (UAT)** — [external]
     *Done when:* real SACCO staff and members complete scripted UAT and sign off.
+    *Current readiness guard:* `npm.cmd run uat:readiness` now verifies UAT scripts, generated data
+    setup, automated browser UAT instructions, findings severity rules, accepted-finding ownership,
+    and role sign-off evidence are present before external testers start.
 
 ---
 
@@ -287,7 +290,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 23. **Commit & release hygiene** — [code]
     *Done when:* the working set is committed in focused commits; a tagged release + changelog exists.
     *Current progress:* `npm.cmd run release:evidence` now creates a timestamped local release pack
-    covering deployment, DR, secrets, database tuning, HA, data protection, Vite, i18n,
+    covering deployment, UAT readiness, DR, secrets, database tuning, HA, data protection, Vite, i18n,
     accessibility, and repository hygiene contracts. It gives release owners one summary artifact before hosted staging
     handoff, while still requiring the heavier Docker/browser/load gates and external hosted proof.
     `npm.cmd run repo:hygiene` now also verifies ignore rules and scans tracked files so local logs,

@@ -139,6 +139,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - The staging handoff checklist is now protected by `npm.cmd run staging:handoff-check`, covering
   required environment, secrets, release-gate, operations, UAT-readiness, and no-unaccepted-P0/P1
   blocker controls.
+- UAT readiness is now guarded by `npm.cmd run uat:readiness`, covering role scripts, generated data
+  setup, browser UAT, findings severity, accepted-finding ownership, and final role sign-off.
 - The Hetzner CX22 deployment runbook now covers first platform owner bootstrap, bootstrap credential
   rotation, pre-update backup, post-deploy health verification, rollback by previous commit,
   restore-owner evidence, and secret-safe log handling.
