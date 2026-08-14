@@ -67,12 +67,16 @@ Before starting, replace:
 
 - `POSTGRES_PASSWORD` with a unique 24+ character password.
 - `ACME_EMAIL` with your real certificate contact email.
+- `SACCO_BOOTSTRAP_PLATFORM_ADMIN_FULL_NAME`, `SACCO_BOOTSTRAP_PLATFORM_ADMIN_EMAIL`, and
+  `SACCO_BOOTSTRAP_PLATFORM_ADMIN_PASSWORD` with the first real platform owner account.
 - Provider values when real SMS, email, or mobile-money adapters are ready.
 
 Confirm the preflight:
 
 ```bash
 npm run staging:preflight
+npm run staging:handoff-check
+npm run release:evidence
 ```
 
 Start the production stack:
@@ -88,13 +92,29 @@ curl -fsS https://tereka.online/api/v1/health
 docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
+Confirm the first platform owner can sign in, create another Platform Super Admin, then rotate or
+remove the bootstrap password from the server environment. Do not keep a shared bootstrap password as
+the daily administration credential.
+
 ## Update Deployment
 
 ```bash
 cd /opt/saccoApp
+git fetch origin main
+git rev-parse --short HEAD
+git rev-parse --short origin/main
+npm run release:evidence
+set -a
+. ./.env
+set +a
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc > "sacco_app_pre_update_$(date +%Y%m%d_%H%M%S).dump"
 git pull
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+curl -fsS https://tereka.online/api/v1/health
 ```
+
+If the update fails, do not keep retrying blindly. Capture logs, restore the previous commit or image,
+and only restore the database from backup if a migration or data change requires it.
 
 ## Backups
 
@@ -107,7 +127,25 @@ set +a
 docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc > "sacco_app_$(date +%Y%m%d_%H%M%S).dump"
 ```
 
-Copy backups off the server regularly. The cheapest first step is to download them to your local machine after each release.
+Name a restore owner for every release and record the latest successful backup filename in the release
+evidence pack. Copy backups off the server regularly. The cheapest first step is to download them to
+your local machine after each release.
+
+## Rollback
+
+Use this only after preserving logs and confirming the target commit:
+
+```bash
+cd /opt/saccoApp
+git log --oneline -5
+git checkout <previous-good-commit>
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+curl -fsS https://tereka.online/api/v1/health
+```
+
+If the database must be restored, stop the backend first, restore only from the approved backup for
+that release, and record the restore owner, start time, finish time, backup filename, and health-check
+result in `docs/release-evidence-template.md`.
 
 ## Logs
 
@@ -116,6 +154,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f caddy
 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f backend
 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f postgres
 ```
+
+Capture backend, Caddy, and PostgreSQL logs before rollback or incident escalation. Do not paste
+secrets, `.env` values, authorization headers, or provider credentials into tickets or release notes.
 
 ## Stop
 

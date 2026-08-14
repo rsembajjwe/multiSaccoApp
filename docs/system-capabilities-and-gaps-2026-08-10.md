@@ -139,6 +139,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - The staging handoff checklist is now protected by `npm.cmd run staging:handoff-check`, covering
   required environment, secrets, release-gate, operations, UAT-readiness, and no-unaccepted-P0/P1
   blocker controls.
+- The Hetzner CX22 deployment runbook now covers first platform owner bootstrap, bootstrap credential
+  rotation, pre-update backup, post-deploy health verification, rollback by previous commit,
+  restore-owner evidence, and secret-safe log handling.
 - Repository hygiene is now guarded by `npm.cmd run repo:hygiene`, which verifies ignore rules for
   local logs, environment files, generated builds, backups, reports, IDE files, and temporary files,
   then scans tracked files so those artifacts cannot quietly enter a release commit.

@@ -243,7 +243,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
     `tereka.online` DNS/HTTPS, production/staging secrets, hosted API/UI endpoints, rollback
     rehearsal, and deployment sign-off. `npm.cmd run staging:handoff-check` now also guards the
     human handoff checklist so required environment, secrets, release-gate, operations, UAT, and
-    blocker controls are not accidentally removed.
+    blocker controls are not accidentally removed. The Hetzner CX22 runbook now includes first
+    platform owner bootstrap, bootstrap credential rotation, pre-update backup, post-deploy health
+    verification, rollback, restore-owner evidence, and secret-safe log handling.
 
 ---
 
