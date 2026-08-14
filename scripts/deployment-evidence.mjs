@@ -7,21 +7,32 @@ const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const envFile = process.env.DEPLOYMENT_ENV_FILE || process.env.STAGING_ENV_FILE || ".env";
 const reportDir = join(repoRoot, "reports", "deployment-evidence");
 const values = loadValues(envFile);
+const hasExplicitEnvFile = Boolean(process.env.DEPLOYMENT_ENV_FILE || process.env.STAGING_ENV_FILE);
+const hasEnvFile = existsSync(envFile);
+const hasHostedEnv = hasEnvFile || ["STAGING_UI_BASE_URL", "STAGING_API_BASE_URL", "POSTGRES_PASSWORD"].every((name) => process.env[name]);
 
-const preflight = spawnSync(
-  process.execPath,
-  ["scripts/check-staging-preflight.mjs"],
+const checks = [
   {
-    cwd: repoRoot,
-    env: { ...process.env, STAGING_ENV_FILE: envFile },
-    encoding: "utf8"
-  }
-);
+    name: "Deployment contract",
+    command: process.execPath,
+    args: ["scripts/check-deployment-contract.mjs"],
+  },
+  hasHostedEnv
+    ? {
+      name: "Hosted staging preflight",
+      command: process.execPath,
+      args: ["scripts/check-staging-preflight.mjs"],
+      env: { ...process.env, STAGING_ENV_FILE: envFile },
+    }
+    : skippedCheck("Hosted staging preflight", hasExplicitEnvFile
+      ? `Environment file was explicitly requested but not found: ${envFile}`
+      : "No hosted .env or staging environment variables were supplied. Create .env from deploy/staging.env.example to run hosted preflight."),
+];
 
-if (preflight.stdout.trim()) process.stdout.write(preflight.stdout);
-if (preflight.stderr.trim()) process.stderr.write(preflight.stderr);
-if (preflight.status !== 0) {
-  process.exit(preflight.status ?? 1);
+const results = checks.map((check) => check.optional && !check.command ? check : runCheck(check));
+const blockingFailures = results.filter((result) => result.status !== 0 && !result.optional);
+if (blockingFailures.length > 0) {
+  process.exit(1);
 }
 
 mkdirSync(reportDir, { recursive: true });
@@ -35,11 +46,17 @@ const report = [
   "",
   "## Result",
   "",
-  "- Preflight: PASS",
+  ...results.map((result) => `- ${result.name}: ${result.status === 0 ? "PASS" : result.optional ? "SKIPPED/BLOCKED" : "FAIL"}`),
   "- Docker required: no",
-  "- Demo logins: disabled",
-  "- Provider values: real provider IDs required",
-  "- Callback signing: required",
+  "- Demo logins: disabled before handoff",
+  "- Provider values: real provider IDs required before handoff",
+  "- Callback signing: required before handoff",
+  "",
+  "## Scope",
+  "",
+  "- Confirms deployment, Hetzner, staging, handoff, release evidence, readiness, package, and CI release-gate contracts are still documented.",
+  "- Runs hosted staging preflight only when a real environment file or equivalent variables are supplied.",
+  "- Does not prove a live hosted deployment, DNS, HTTPS certificate, managed secret store, or production provider credentials.",
   "",
   "## Redacted Configuration",
   "",
@@ -70,16 +87,53 @@ const report = [
     "STAGING_API_BASE_URL"
   ].map((name) => `| ${name} | ${redact(name, values[name])} |`),
   "",
-  "## Preflight Output",
+  "## Checks",
   "",
-  "```text",
-  preflight.stdout.trim(),
-  "```",
-  ""
+  ...results.flatMap((result) => [
+    `### ${result.name}`,
+    "",
+    `Command: \`${result.command ? [result.command, ...(result.args || [])].join(" ") : "not run"}\``,
+    `Exit code: ${result.status}`,
+    "",
+    "```text",
+    [result.stdout?.trim(), result.stderr?.trim(), result.error?.trim()].filter(Boolean).join("\n"),
+    "```",
+    "",
+  ]),
 ].join("\n");
 
 writeFileSync(reportPath, report);
 console.log(`Deployment evidence written to ${reportPath}`);
+
+function runCheck(check) {
+  const result = spawnSync(check.command, check.args, {
+    cwd: repoRoot,
+    env: check.env || process.env,
+    encoding: "utf8"
+  });
+  if (result.stdout.trim()) process.stdout.write(result.stdout);
+  if (result.stderr.trim()) process.stderr.write(result.stderr);
+  return {
+    ...check,
+    status: result.status ?? 1,
+    stdout: result.stdout || "",
+    stderr: result.stderr || "",
+    error: result.error ? result.error.message : "",
+    optional: Boolean(check.optional),
+  };
+}
+
+function skippedCheck(name, reason) {
+  console.log(`SKIP ${name}: ${reason}`);
+  return {
+    name,
+    status: 1,
+    stdout: `SKIP ${reason}`,
+    stderr: "",
+    error: "",
+    optional: true,
+  };
+}
 
 function loadValues(path) {
   const loaded = { ...process.env };

@@ -124,6 +124,8 @@ npm.cmd run deploy:evidence
 
 This reads `.env` by default, runs the staging preflight checks, and writes a redacted Markdown evidence file under `reports/deployment-evidence`. Use `DEPLOYMENT_ENV_FILE=path\to\envfile` to check another file.
 
+When serving the SPA through `server.mjs` outside Compose, set `JAVA_API_BASE` to the Java backend base URL so `/api/v1` requests proxy to the production backend instead of the local demo fallback. In hosted deployment, Caddy normally performs this routing on the same domain.
+
 If a port is already in use, call the script directly with alternate ports:
 
 ```powershell

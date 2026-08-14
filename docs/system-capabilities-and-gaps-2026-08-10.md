@@ -127,6 +127,11 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   evidence. The latest 14 August 2026 report, `reports/ha-evidence/ha-evidence-20260814T135205Z.md`,
   passed against an isolated `redis:7-alpine` container and confirmed Redis-backed shared state for
   rate limits and idempotency.
+- Deployment evidence now has a local contract gate. `npm.cmd run deploy:evidence` verifies the
+  deployment guide, Hetzner/Caddy runbook, staging environment guide, handoff checklist, release
+  evidence template, staging readiness notes, CI gates, and package scripts, then writes timestamped
+  release evidence. Hosted preflight is skipped until real staging `.env` or environment variables
+  are supplied.
 
 ### Frontend
 
@@ -293,9 +298,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   Redis-backed shared counter, and payment idempotency has a Redis reservation store. A Docker-backed
   Redis smoke test passed on 14 August 2026, proving local Redis shared-state behavior. A local
   Java-backed baseline load evidence run passed on 14 August 2026. Backup/restore evidence also passed
-  on 14 August 2026 with a DR runbook contract and disposable PostgreSQL restore. Hosted Redis
-  deployment, staging load/soak execution, production RPO/RTO measurement, and load-balancer failover
-  rehearsal are still needed.
+  on 14 August 2026 with a DR runbook contract and disposable PostgreSQL restore. Deployment contract
+  evidence also now passes locally. Hosted Redis deployment, staging load/soak execution, hosted
+  DNS/HTTPS deployment proof, production RPO/RTO measurement, and load-balancer failover rehearsal are
+  still needed.
 - **Mobile money is not production-live.** Adapters and routing exist, but MTN/Airtel production use
   requires merchant onboarding/KYC, real credentials, live callback validation, and production
   settlement reconciliation.

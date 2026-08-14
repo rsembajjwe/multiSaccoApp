@@ -235,6 +235,13 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 17. **Production deployment + runbooks** — [code + external]
     *Done when:* a repeatable prod deploy (CI/CD to real infra) exists with rollback, plus runbooks for
     common incidents.
+    *Current progress:* `npm.cmd run deploy:evidence` now runs a deployment contract checker covering
+    the deployment guide, Hetzner/Caddy runbook, staging environment guide, staging handoff checklist,
+    release evidence template, staging readiness notes, CI gates, and package scripts. Local evidence
+    now records the contract result and deliberately skips hosted staging preflight when no hosted
+    `.env` or staging variables are supplied. Remaining work is the external hosted proof: real
+    `tereka.online` DNS/HTTPS, production/staging secrets, hosted API/UI endpoints, rollback
+    rehearsal, and deployment sign-off.
 
 ---
 
