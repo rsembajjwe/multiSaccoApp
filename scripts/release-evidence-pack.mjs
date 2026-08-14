@@ -10,6 +10,7 @@ const reportPath = join(reportDir, `release-evidence-pack-${stamp}.md`);
 
 const checks = [
   ["Deployment contract", "scripts/check-deployment-contract.mjs"],
+  ["Staging handoff contract", "scripts/check-staging-handoff-contract.mjs"],
   ["Disaster recovery contract", "scripts/check-disaster-recovery.mjs"],
   ["Secrets management contract", "scripts/check-secrets-management.mjs"],
   ["Database tuning contract", "scripts/check-db-tuning.mjs"],
@@ -73,7 +74,7 @@ function renderReport(results) {
     "",
     "## Local Scope",
     "",
-    "- Confirms documented release contracts for deployment, DR, secrets, database tuning, HA, data protection, Vite, i18n, accessibility, and repository hygiene.",
+    "- Confirms documented release contracts for deployment, staging handoff, DR, secrets, database tuning, HA, data protection, Vite, i18n, accessibility, and repository hygiene.",
     "- Gives a release owner one timestamped local evidence pack before hosted staging or production handoff.",
     "- Does not replace heavy gates such as `npm.cmd run ready:check`, `npm.cmd run backup:evidence`, `npm.cmd run ha:evidence`, `npm.cmd run load:evidence`, or hosted `npm.cmd run deploy:evidence` with real staging variables.",
     "- Does not prove third-party provider credentials, live mobile-money settlement, bank integration, external UAT, pen-test sign-off, or legal/regulatory approval.",

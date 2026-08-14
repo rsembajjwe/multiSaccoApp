@@ -241,7 +241,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
     now records the contract result and deliberately skips hosted staging preflight when no hosted
     `.env` or staging variables are supplied. Remaining work is the external hosted proof: real
     `tereka.online` DNS/HTTPS, production/staging secrets, hosted API/UI endpoints, rollback
-    rehearsal, and deployment sign-off.
+    rehearsal, and deployment sign-off. `npm.cmd run staging:handoff-check` now also guards the
+    human handoff checklist so required environment, secrets, release-gate, operations, UAT, and
+    blocker controls are not accidentally removed.
 
 ---
 

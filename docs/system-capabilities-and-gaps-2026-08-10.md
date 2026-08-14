@@ -136,6 +136,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   secrets, database tuning, HA, data protection, Vite, i18n, accessibility, and repository hygiene.
   It is intended as a release-owner handoff artifact before heavier hosted evidence and external
   sign-offs.
+- The staging handoff checklist is now protected by `npm.cmd run staging:handoff-check`, covering
+  required environment, secrets, release-gate, operations, UAT-readiness, and no-unaccepted-P0/P1
+  blocker controls.
 - Repository hygiene is now guarded by `npm.cmd run repo:hygiene`, which verifies ignore rules for
   local logs, environment files, generated builds, backups, reports, IDE files, and temporary files,
   then scans tracked files so those artifacts cannot quietly enter a release commit.

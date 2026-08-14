@@ -67,6 +67,7 @@ Run the staging preflight check before handoff:
 
 ```powershell
 npm.cmd run staging:preflight
+npm.cmd run staging:handoff-check
 ```
 
 Start the production-profile stack:
@@ -123,6 +124,7 @@ Attach or record:
 - Staging API base URL.
 - Backend health response timestamp.
 - `npm.cmd run staging:preflight` result.
+- `npm.cmd run staging:handoff-check` result.
 - `flyway_schema_history` version count from PostgreSQL.
 - `npm.cmd run check` result.
 - `npm.cmd run ready:check` result.
