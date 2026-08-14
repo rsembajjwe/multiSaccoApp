@@ -46,6 +46,7 @@ Latest local backup rehearsal evidence: `npm.cmd run backup:evidence` passed on 
 | Load test | `npm.cmd run load:test` |  |  |
 | Browser regression | `npm.cmd run ui:browser` |  |  |
 | Browser UAT | `npm.cmd run uat:browser` |  |  |
+| Repository hygiene | `npm.cmd run repo:hygiene` |  |  |
 | CI release gate | GitHub Actions run |  |  |
 
 ## Database And Backup

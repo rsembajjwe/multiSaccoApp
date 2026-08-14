@@ -18,6 +18,7 @@ const checks = [
   ["Vite readiness contract", "scripts/check-vite-readiness.mjs"],
   ["i18n contract", "scripts/check-i18n-contracts.mjs"],
   ["Accessibility contract", "scripts/check-accessibility-contracts.mjs"],
+  ["Repository hygiene contract", "scripts/check-repo-hygiene.mjs"],
 ].map(([name, script]) => ({
   name,
   command: process.execPath,
@@ -72,7 +73,7 @@ function renderReport(results) {
     "",
     "## Local Scope",
     "",
-    "- Confirms documented release contracts for deployment, DR, secrets, database tuning, HA, data protection, Vite, i18n, and accessibility.",
+    "- Confirms documented release contracts for deployment, DR, secrets, database tuning, HA, data protection, Vite, i18n, accessibility, and repository hygiene.",
     "- Gives a release owner one timestamped local evidence pack before hosted staging or production handoff.",
     "- Does not replace heavy gates such as `npm.cmd run ready:check`, `npm.cmd run backup:evidence`, `npm.cmd run ha:evidence`, `npm.cmd run load:evidence`, or hosted `npm.cmd run deploy:evidence` with real staging variables.",
     "- Does not prove third-party provider credentials, live mobile-money settlement, bank integration, external UAT, pen-test sign-off, or legal/regulatory approval.",

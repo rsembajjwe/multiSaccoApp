@@ -133,8 +133,12 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   release evidence. Hosted preflight is skipped until real staging `.env` or environment variables
   are supplied.
 - A release evidence pack command now summarizes the local release contracts across deployment, DR,
-  secrets, database tuning, HA, data protection, Vite, i18n, and accessibility. It is intended as a
-  release-owner handoff artifact before heavier hosted evidence and external sign-offs.
+  secrets, database tuning, HA, data protection, Vite, i18n, accessibility, and repository hygiene.
+  It is intended as a release-owner handoff artifact before heavier hosted evidence and external
+  sign-offs.
+- Repository hygiene is now guarded by `npm.cmd run repo:hygiene`, which verifies ignore rules for
+  local logs, environment files, generated builds, backups, reports, IDE files, and temporary files,
+  then scans tracked files so those artifacts cannot quietly enter a release commit.
 
 ### Frontend
 
@@ -380,7 +384,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   API is deliberately enabled, and `server.mjs` remains useful as the SPA host/Java proxy. `npm run
   node:quarantine` now enforces the production guard, source-code demo-only markers, and documentation
   boundary.
-- **Repo hygiene needs cleanup.** Ignore IDE files and remove stray temporary logs.
+- **Repo hygiene is now guarded.** Local logs and IDE files may still exist on a developer machine,
+  but ignore rules and the tracked-file hygiene gate prevent them from entering release commits.
 - **OpenAPI is hand-maintained with a new coverage gate.** It now covers the integrator-facing surface,
   SACCO collection mode/settings controls, platform access/admin routes, operations status, and member
   money paths. `npm run openapi:check` protects 36 enterprise-critical Java operations and 10 schemas;
