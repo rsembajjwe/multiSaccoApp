@@ -124,10 +124,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   wired into mobile-money callbacks and subscription payment references. A Docker-backed Redis smoke
   check verifies both shared-state primitives against a real Redis container, and `npm.cmd run
   ha:evidence` records the HA contract, Docker engine preflight, and Redis smoke output as timestamped
-  evidence. A 10 August 2026 run passed against an isolated `redis:7-alpine` container. The latest
-  14 August 2026 report, `reports/ha-evidence/ha-evidence-20260814T130639Z.md`, confirms the static HA
-  contract still passes but records Docker availability as failed, so the Redis smoke was skipped until
-  Docker Desktop is reachable again.
+  evidence. The latest 14 August 2026 report, `reports/ha-evidence/ha-evidence-20260814T135205Z.md`,
+  passed against an isolated `redis:7-alpine` container and confirmed Redis-backed shared state for
+  rate limits and idempotency.
 
 ### Frontend
 
@@ -292,11 +291,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - **Horizontal scale / HA is partly proven.** Single-node assumptions remain. Startup guards now
   require Redis configuration before multi-instance production, request rate limiting has a
   Redis-backed shared counter, and payment idempotency has a Redis reservation store. A Docker-backed
-  Redis smoke test passed on 10 August 2026; the 14 August 2026 HA evidence rerun cleanly records that
-  Docker Desktop was not reachable, so Redis evidence must be rerun before using it for release
-  sign-off. A local Java-backed baseline load evidence run passed on 14 August 2026. Backup/restore
-  evidence also passed on 14 August 2026 with a DR runbook contract and disposable PostgreSQL restore.
-  Live Redis deployment, staging load/soak execution, production RPO/RTO measurement, and failover
+  Redis smoke test passed on 14 August 2026, proving local Redis shared-state behavior. A local
+  Java-backed baseline load evidence run passed on 14 August 2026. Backup/restore evidence also passed
+  on 14 August 2026 with a DR runbook contract and disposable PostgreSQL restore. Hosted Redis
+  deployment, staging load/soak execution, production RPO/RTO measurement, and load-balancer failover
   rehearsal are still needed.
 - **Mobile money is not production-live.** Adapters and routing exist, but MTN/Airtel production use
   requires merchant onboarding/KYC, real credentials, live callback validation, and production

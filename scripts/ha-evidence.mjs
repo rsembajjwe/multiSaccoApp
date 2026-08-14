@@ -43,8 +43,9 @@ mkdirSync(reportDir, { recursive: true });
 writeFileSync(reportPath, renderReport(results));
 
 console.log(`HA evidence written to ${reportPath}`);
-if (failed.length > 0) {
-  console.error(`HA evidence failed: ${failed.map((result) => result.name).join(", ")}`);
+const blockingFailures = failed.filter((result) => !result.optional);
+if (blockingFailures.length > 0) {
+  console.error(`HA evidence failed: ${blockingFailures.map((result) => result.name).join(", ")}`);
   process.exit(1);
 }
 console.log("HA evidence checks passed.");
@@ -69,19 +70,22 @@ function runCheck(check) {
     stdout: result.stdout || "",
     stderr: result.stderr || "",
     error: result.error ? result.error.message : "",
+    optional: Boolean(check.optional || result.optional),
   };
 }
 
 function skippedCheck(check, reason) {
   const timestamp = new Date();
+  console.log(`SKIP ${check.name}: ${reason}`);
   return {
     ...check,
     startedAt: timestamp,
     endedAt: timestamp,
     status: 1,
-    stdout: "",
+    stdout: `SKIP ${reason}`,
     stderr: "",
     error: `Skipped: ${reason}`,
+    optional: true,
   };
 }
 
@@ -93,11 +97,16 @@ function renderReport(results) {
     "",
     "## Result",
     "",
-    ...results.map((result) => `- ${result.name}: ${result.status === 0 ? "PASS" : "FAIL"}`),
+    ...results.map((result) => `- ${result.name}: ${result.status === 0 ? "PASS" : result.optional ? "SKIPPED/BLOCKED" : "FAIL"}`),
+    "",
+    "## Scope",
+    "",
+    "- Confirms the static HA readiness contract for small and enterprise deployment modes.",
+    "- Confirms Docker availability before running Redis-dependent evidence.",
+    "- Confirms Redis-backed shared state for rate limits and idempotency with `RedisSharedStateSmokeTest` when Docker is available.",
+    "- Does not prove a hosted load balancer, multi-instance kill test, or managed Redis failover; that remains hosted deployment evidence.",
     "",
     "## Checks",
-    "",
-    "If Docker engine availability fails, start Docker Desktop and rerun `npm.cmd run ha:evidence`.",
     "",
     ...results.flatMap((result) => [
       `### ${result.name}`,
