@@ -121,9 +121,12 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   store boundary plus a Redis-backed shared counter implementation for multi-instance deployments.
   Idempotency keys now have matching memory and Redis reservation stores with a configurable TTL,
   wired into mobile-money callbacks and subscription payment references. A Docker-backed Redis smoke
-  check now verifies both shared-state primitives against a real Redis container, and `npm.cmd run
-  ha:evidence` records the HA contract plus Redis smoke output as timestamped evidence. The latest
-  run on 10 August 2026 passed against an isolated `redis:7-alpine` container.
+  check verifies both shared-state primitives against a real Redis container, and `npm.cmd run
+  ha:evidence` records the HA contract, Docker engine preflight, and Redis smoke output as timestamped
+  evidence. A 10 August 2026 run passed against an isolated `redis:7-alpine` container. The latest
+  14 August 2026 report, `reports/ha-evidence/ha-evidence-20260814T130639Z.md`, confirms the static HA
+  contract still passes but records Docker availability as failed, so the Redis smoke was skipped until
+  Docker Desktop is reachable again.
 
 ### Frontend
 
@@ -285,10 +288,11 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - **Horizontal scale / HA is partly proven.** Single-node assumptions remain. Startup guards now
   require Redis configuration before multi-instance production, request rate limiting has a
   Redis-backed shared counter, and payment idempotency has a Redis reservation store. A Docker-backed
-  Redis smoke test passed on 10 August 2026, and a local Java-backed baseline load evidence run also
-  passed on 10 August 2026. Backup/restore evidence also passed on 10 August 2026. Live Redis
-  deployment, staging load/soak execution, production RTO/RPO evidence, and failover rehearsal are
-  still needed.
+  Redis smoke test passed on 10 August 2026; the 14 August 2026 HA evidence rerun cleanly records that
+  Docker Desktop was not reachable, so Redis evidence must be rerun before using it for release
+  sign-off. A local Java-backed baseline load evidence run passed on 14 August 2026. Backup/restore
+  evidence also passed on 10 August 2026. Live Redis deployment, staging load/soak execution,
+  production RTO/RPO evidence, and failover rehearsal are still needed.
 - **Mobile money is not production-live.** Adapters and routing exist, but MTN/Airtel production use
   requires merchant onboarding/KYC, real credentials, live callback validation, and production
   settlement reconciliation.

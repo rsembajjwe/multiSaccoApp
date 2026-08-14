@@ -15,6 +15,11 @@ const checks = [
     args: ["scripts/check-ha-readiness.mjs"],
   },
   {
+    name: "Docker engine availability",
+    command: "docker",
+    args: ["info", "--format", "{{.ServerVersion}}"],
+  },
+  {
     name: "Redis shared-state smoke",
     command: process.platform === "win32" ? process.env.ComSpec || "cmd.exe" : "npm",
     args:
@@ -24,7 +29,14 @@ const checks = [
   },
 ];
 
-const results = checks.map(runCheck);
+const results = [];
+for (const check of checks) {
+  if (check.name === "Redis shared-state smoke" && results.some((result) => result.name === "Docker engine availability" && result.status !== 0)) {
+    results.push(skippedCheck(check, "Docker engine is not running. Start Docker Desktop, then rerun npm.cmd run ha:evidence."));
+    continue;
+  }
+  results.push(runCheck(check));
+}
 const failed = results.filter((result) => result.status !== 0);
 
 mkdirSync(reportDir, { recursive: true });
@@ -60,6 +72,19 @@ function runCheck(check) {
   };
 }
 
+function skippedCheck(check, reason) {
+  const timestamp = new Date();
+  return {
+    ...check,
+    startedAt: timestamp,
+    endedAt: timestamp,
+    status: 1,
+    stdout: "",
+    stderr: "",
+    error: `Skipped: ${reason}`,
+  };
+}
+
 function renderReport(results) {
   return [
     "# Tereka Online HA Evidence",
@@ -71,6 +96,8 @@ function renderReport(results) {
     ...results.map((result) => `- ${result.name}: ${result.status === 0 ? "PASS" : "FAIL"}`),
     "",
     "## Checks",
+    "",
+    "If Docker engine availability fails, start Docker Desktop and rerun `npm.cmd run ha:evidence`.",
     "",
     ...results.flatMap((result) => [
       `### ${result.name}`,

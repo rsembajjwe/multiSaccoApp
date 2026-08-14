@@ -166,6 +166,14 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 9. **HA / failover rehearsal** — [code]
    *Done when:* a two-instance deployment behind a load balancer, sharing Redis, survives an instance
    kill with no lost rate-limit/idempotency state; documented RTO/RPO; failover evidence recorded.
+   *Current progress:* The static HA readiness contract passes with 40 markers covering the HA runbook,
+   production scale guards, Redis-backed rate-limit/idempotency boundaries, Redis smoke-test wiring,
+   and idempotent mobile-money/subscription hot-key protection. `npm.cmd run ha:evidence` now includes
+   an explicit Docker engine preflight and records Docker-dependent Redis smoke failures cleanly. The
+   latest evidence report is `reports/ha-evidence/ha-evidence-20260814T130639Z.md`: HA contract PASS,
+   Docker availability FAIL, Redis shared-state smoke skipped/failed because Docker Desktop was not
+   reachable. Remaining work is to start Docker Desktop, rerun `npm.cmd run ha:evidence`, then run a
+   true two-instance/load-balancer failover rehearsal against PostgreSQL + Redis.
 
 10. **DR / backup-restore** — [code]
     *Done when:* backup + point-in-time restore is rehearsed on production-like data against target
