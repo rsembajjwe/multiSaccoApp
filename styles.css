@@ -92,6 +92,36 @@ textarea:focus-visible,
   transform: translateY(0);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (pointer: coarse) {
+  .button,
+  .icon-button,
+  .profile-chip,
+  .logout-button,
+  .table-action,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  .check-row input,
+  .check-card input {
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
+
 .login-page {
   background: linear-gradient(180deg, #f7fbf9 0%, #eef6f2 100%);
 }

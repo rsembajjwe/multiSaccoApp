@@ -120,7 +120,7 @@ function mfaVerificationPanel() {
     </section>
     ${state.mfaDemoCode ? `<div class="notice compact"><strong>Development MFA code</strong><span>${escapeHtml(state.mfaDemoCode)}</span></div>` : ""}
     ${state.mfaMessage ? `<div class="notice compact"><strong>${escapeHtml(state.mfaMessage)}</strong></div>` : ""}
-    ${state.mfaError ? `<div class="notice warning"><strong>MFA verification failed.</strong><span>${escapeHtml(state.mfaError)}</span></div>` : ""}
+    ${state.mfaError ? `<div class="notice warning" role="alert" aria-live="assertive"><strong>MFA verification failed.</strong><span>${escapeHtml(state.mfaError)}</span></div>` : ""}
     <form id="mfaVerifyForm" class="form-grid single">
       <label><span>Verification code</span><input id="mfaCode" required inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code"></label>
       <button id="mfaVerifyButton" class="button primary" type="submit">Verify and continue</button>
@@ -136,7 +136,7 @@ function loginPanel() {
       <h2>${t("loginTitle")}</h2>
       <p>${t("loginCopy")}</p>
     </div>
-    ${state.lastError ? `<div class="alert error">${escapeHtml(state.lastError)}</div>` : ""}
+    ${state.lastError ? `<div class="alert error" role="alert" aria-live="assertive">${escapeHtml(state.lastError)}</div>` : ""}
     <div class="login-context-strip">
       <div><span>${t("platformCode")}</span><strong>PLATFORM</strong></div>
       <div><span>${t("saccoCode")}</span><strong>${t("saccoCodeExample")}</strong></div>
@@ -153,7 +153,7 @@ function loginPanel() {
         </div>
       </label>
       <label class="check-row"><input id="remember" type="checkbox" checked> <span>${t("rememberDevice")}</span></label>
-      <div id="loginError" class="alert error" hidden></div>
+      <div id="loginError" class="alert error" role="alert" aria-live="assertive" hidden></div>
       <button id="loginButton" class="button primary" type="submit">${t("loginSecurely")}</button>
     </form>
   `;
@@ -167,7 +167,7 @@ function publicSaccoRegistrationPanel() {
       <p>${t("registerSaccoCopy")}</p>
     </div>
     ${state.publicRegistrationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.publicRegistrationMessage)}</strong></div>` : ""}
-    ${state.publicRegistrationError ? `<div class="notice warning"><strong>${t("registrationFailed")}</strong><span>${escapeHtml(state.publicRegistrationError)}</span></div>` : ""}
+    ${state.publicRegistrationError ? `<div class="notice warning" role="alert" aria-live="assertive"><strong>${t("registrationFailed")}</strong><span>${escapeHtml(state.publicRegistrationError)}</span></div>` : ""}
     <form id="publicSaccoRegistrationForm" class="form-grid">
       <label><span>${t("saccoName")}</span><input id="publicTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
       <label><span>${t("saccoCode")}</span><input id="publicTenantCode" readonly placeholder="${escapeHtml(t("saccoCodeGenerated"))}"></label>
@@ -202,7 +202,7 @@ function passwordRecoveryPanel() {
       <div><strong>3</strong><span>After reset, active staff sessions are revoked for safety.</span></div>
     </section>
     ${state.passwordResetMessage ? `<div class="notice compact"><strong>${escapeHtml(state.passwordResetMessage)}</strong>${state.passwordResetExpiresAt ? `<span>Expires ${escapeHtml(formatDateTime(state.passwordResetExpiresAt))}</span>` : ""}</div>` : ""}
-    ${state.passwordResetError ? `<div class="notice warning"><strong>Password reset request failed.</strong><span>${escapeHtml(state.passwordResetError)}</span></div>` : ""}
+    ${state.passwordResetError ? `<div class="notice warning" role="alert" aria-live="assertive"><strong>Password reset request failed.</strong><span>${escapeHtml(state.passwordResetError)}</span></div>` : ""}
     <form id="passwordResetRequestForm" class="form-grid single">
       <label><span>Staff email</span><input id="passwordResetEmail" type="email" required placeholder="name@sacco.org"></label>
       <button class="button primary" type="submit">Request password reset</button>
@@ -216,7 +216,7 @@ function passwordRecoveryPanel() {
         <code class="token-box">${escapeHtml(state.passwordResetToken)}</code>
       </section>
       ${state.passwordResetConfirmMessage ? `<div class="notice compact"><strong>${escapeHtml(state.passwordResetConfirmMessage)}</strong></div>` : ""}
-      ${state.passwordResetConfirmError ? `<div class="notice warning"><strong>Password reset failed.</strong><span>${escapeHtml(state.passwordResetConfirmError)}</span></div>` : ""}
+      ${state.passwordResetConfirmError ? `<div class="notice warning" role="alert" aria-live="assertive"><strong>Password reset failed.</strong><span>${escapeHtml(state.passwordResetConfirmError)}</span></div>` : ""}
       <form id="passwordResetConfirmForm" class="form-grid single">
         <label><span>Reset token</span><input id="passwordResetToken" required value="${escapeHtml(state.passwordResetToken)}"></label>
         <label><span>New password</span><input id="passwordResetNewPassword" type="password" required minlength="10" placeholder="At least 10 characters"></label>

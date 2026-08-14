@@ -330,7 +330,8 @@ function updateMemberDraft(draftId, patch) {
 }
 
 function field(label, id, type, placeholder, hint) {
-  return `<label><span>${label}</span><input id="${id}" type="${type}" placeholder="${placeholder || ""}" autocomplete="${type === "password" ? "current-password" : "on"}">${hint ? `<small>${hint}</small>` : ""}</label>`;
+  const hintId = hint ? `${id}Hint` : "";
+  return `<label><span>${label}</span><input id="${id}" type="${type}" placeholder="${placeholder || ""}" autocomplete="${type === "password" ? "current-password" : "on"}" ${hintId ? `aria-describedby="${hintId}"` : ""}>${hint ? `<small id="${hintId}">${hint}</small>` : ""}</label>`;
 }
 
 function logo(size = "") {

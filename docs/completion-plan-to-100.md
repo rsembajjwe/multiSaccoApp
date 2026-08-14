@@ -185,6 +185,10 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 12. **Accessibility (WCAG)** — [code + external]
     *Done when:* keyboard navigation, ARIA, contrast, and screen-reader support meet WCAG 2.1 AA, with
     an audit report.
+    *Current code-side evidence:* skip links, landmarks, current-page markers, topbar labels,
+    assertive auth errors, described field hints, reduced motion, coarse-pointer touch targets, and
+    visible focus are covered by `npm run accessibility:evidence`. Manual browser and assistive
+    technology validation remains required.
 
 13. **User Acceptance Testing (UAT)** — [external]
     *Done when:* real SACCO staff and members complete scripted UAT and sign off.

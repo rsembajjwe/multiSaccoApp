@@ -2,12 +2,16 @@ import { readFile } from "node:fs/promises";
 
 const root = new URL("..", import.meta.url);
 const auth = await readFile(new URL("app.auth.js", root), "utf8");
+const core = await readFile(new URL("app.core.js", root), "utf8");
 const shell = await readFile(new URL("app.shell.js", root), "utf8");
 const styles = await readFile(new URL("styles.css", root), "utf8");
 
 const checks = [
   [auth, 'class="skip-link" href="#login-main"', "login skip link"],
   [auth, 'id="login-main" tabindex="-1"', "login main landmark target"],
+  [auth, 'role="alert" aria-live="assertive"', "auth errors announce assertively"],
+  [core, 'aria-describedby="${hintId}"', "field hints connect to inputs"],
+  [core, '<small id="${hintId}">', "field hints expose stable ids"],
   [shell, 'class="skip-link" href="#main-content"', "authenticated skip link"],
   [shell, 'id="main-content" tabindex="-1"', "authenticated main landmark target"],
   [shell, 'aria-label="${escapeHtml(portal)} navigation"', "named sidebar navigation"],
@@ -16,7 +20,11 @@ const checks = [
   [shell, 'aria-label="Help menu"', "help menu accessible label"],
   [shell, 'aria-label="Account menu for ${escapeHtml(displayName())}"', "account menu accessible label"],
   [styles, "button:focus-visible", "visible button focus"],
-  [styles, ".skip-link:focus", "visible skip link focus"]
+  [styles, ".skip-link:focus", "visible skip link focus"],
+  [styles, "@media (prefers-reduced-motion: reduce)", "reduced motion media query"],
+  [styles, "@media (pointer: coarse)", "coarse pointer touch target media query"],
+  [styles, "min-height: 44px", "44px coarse pointer controls"],
+  [styles, "min-width: 24px", "coarse pointer checkbox target"]
 ];
 
 for (const [content, marker, label] of checks) {
