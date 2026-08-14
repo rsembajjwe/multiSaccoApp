@@ -186,6 +186,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 
 11. **Security penetration test** — [external]
     *Done when:* an independent pen test / code audit is passed and findings remediated.
+    *Current readiness guard:* `npm.cmd run security:audit-check` now verifies the audit scope,
+    required evidence, temporary test-account rules, rules of engagement, severity triage, and closure
+    requirements are documented before engaging an external auditor. The audit itself remains external.
 
 12. **Accessibility (WCAG)** — [code + external]
     *Done when:* keyboard navigation, ARIA, contrast, and screen-reader support meet WCAG 2.1 AA, with

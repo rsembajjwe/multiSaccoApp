@@ -40,6 +40,7 @@ Latest local backup rehearsal evidence: `npm.cmd run backup:evidence` passed on 
 | Release evidence pack | `npm.cmd run release:evidence` |  |  |
 | Staging handoff contract | `npm.cmd run staging:handoff-check` |  |  |
 | Incident readiness | `npm.cmd run incident:check` |  |  |
+| Security audit readiness | `npm.cmd run security:audit-check` |  | Attach `docs/security-audit-readiness.md` and auditor rules of engagement. |
 | Compliance readiness | `npm.cmd run compliance:check` |  | Attach `docs/compliance-readiness.md` owner/sign-off evidence. |
 | Local verification | `npm.cmd run check` |  |  |
 | Production readiness | `npm.cmd run ready:check` |  |  |
@@ -92,6 +93,7 @@ Use `docs/compliance-readiness.md` for the detailed checklist.
 | Payment/provider compliance |  |  |  |
 | Legal documents |  |  |  |
 | Security review |  |  |  |
+| Independent security audit |  |  |  |
 
 ## Findings Summary
 

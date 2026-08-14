@@ -145,6 +145,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Incident readiness is now guarded by `npm.cmd run incident:check`, which verifies monitoring
   thresholds, Prometheus runbook links, callback/delivery/reconciliation alert coverage, rollback,
   log-capture, restore-owner, and secret-safe escalation controls.
+- Security audit readiness is now guarded by `npm.cmd run security:audit-check`, covering audit
+  scope, evidence pack, temporary accounts, rules of engagement, finding severity, and closure rules
+  for an independent tester.
 - Compliance readiness is now guarded by `npm.cmd run compliance:check`, which keeps
   data-protection, SACCO/regulatory, payment/provider, legal-document, and owner sign-off evidence
   visible before pilot or production launch.
