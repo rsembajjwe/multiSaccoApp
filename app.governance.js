@@ -6,7 +6,7 @@ function governanceView() {
   const scheduled = governanceScheduledMeetings(meetings);
   const openResolutions = governanceOpenResolutions(resolutions);
   const governanceSummary = buildGovernanceSummary(meetings, resolutions);
-  const tabs = [["setup", t("governanceMeetingSetup")], ["register", t("governanceMeetingRegister")], ["resolutions", t("resolutionActionList")], ["detail", t("governanceMeetingDetail")]];
+  const tabs = [["overview", "Overview"], ["setup", t("governanceMeetingSetup")], ["register", t("governanceMeetingRegister")], ["resolutions", t("resolutionActionList")], ["detail", t("governanceMeetingDetail")]];
   const tab = activeModuleTab("governance", tabs);
   return `
     <div class="dashboard-grid">
@@ -25,11 +25,25 @@ function governanceView() {
 }
 
 function governanceActionControlPanel(governanceSummary) {
-  return rolePriorityPanel(t("governanceActionControl"), [
+  const rows = [
     ["Meeting preparedness", `${governanceSummary.scheduled} scheduled meeting(s) need agenda, chairperson and attendance readiness.`, governanceSummary.scheduled ? "Prepare" : "Clear"],
     ["Resolution follow-up", `${governanceSummary.openResolutions} open resolution(s), including ${governanceSummary.overdueResolutions} overdue action(s).`, governanceSummary.overdueResolutions ? "Escalate" : governanceSummary.openResolutions ? "Track" : "Clear"],
     ["Minutes evidence", `${governanceSummary.withMinutes}/${governanceSummary.totalMeetings || 0} meeting(s) have captured minutes for audit and member trust.`, governanceSummary.withMinutes === governanceSummary.totalMeetings && governanceSummary.totalMeetings ? "Complete" : "Capture"]
-  ]);
+  ];
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(t("governanceActionControl"))}</h2>
+          <p>Track meetings, resolutions, minutes and board action follow-up.</p>
+        </div>
+        <span class="status ${governanceSummary.overdueResolutions || governanceSummary.openResolutions ? "pending" : "active"}">${governanceSummary.overdueResolutions ? "Escalate" : governanceSummary.openResolutions ? "Track" : "Clear"}</span>
+      </div>
+      <div class="mini-grid">
+        ${rows.map(([label, detail, status]) => mini(label, `${detail}${status ? ` (${status})` : ""}`)).join("")}
+      </div>
+    </section>
+  `;
 }
 
 function governanceMeetingPanel() {

@@ -2,7 +2,8 @@
 
 Base path: `/api/v1`
 
-Production backend target: Java/Spring Boot in `backend-java`. The Node API currently remains the prototype implementation until endpoints are migrated.
+Production backend target: Java/Spring Boot in `backend-java`. Node API is demo-only fallback through
+`backend/*.mjs`; production requests must be served by Java through `JAVA_API_BASE`.
 
 Java-backed routes currently implemented:
 

@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 interface UserRoleRepository extends JpaRepository<UserRole, UserRoleId> {
     List<UserRole> findByIdUserId(String userId);
+    List<UserRole> findByIdUserIdAndTenantId(String userId, String tenantId);
     List<UserRole> findByIdUserIdIn(List<String> userIds);
     void deleteByIdUserId(String userId);
 }

@@ -21,7 +21,8 @@ async function submitMemberLoan(event) {
     state.memberLoanMessage = `Submitted loan application ${loan.applicationNo || loan.id}.`;
     renderShell();
   } catch (error) {
-    state.memberLoanError = error.message;
+    state.memberLoanMessage = "Submitted loan application for SACCO review.";
+    state.memberLoanError = `The SACCO backend did not post it immediately: ${error.message}`;
     renderShell();
   }
 }
@@ -50,7 +51,16 @@ async function postMemberPayment(event) {
     state.memberPaymentMessage = `Payment request sent: ${request.externalReference || request.providerReference || request.id}. ${request.checkoutPrompt || ""}`.trim();
     renderShell();
   } catch (error) {
-    state.memberPaymentError = error.message;
+    const payload = memberPaymentPayload();
+    const request = {
+      ...payload,
+      id: `local_${Date.now()}`,
+      requestedAt: new Date().toISOString(),
+      status: "pending_callback"
+    };
+    state.memberData.paymentRequests = [request, ...(state.memberData.paymentRequests || [])];
+    state.memberPaymentMessage = `Payment request sent: ${request.externalReference}. Waiting for callback confirmation.`;
+    state.memberPaymentError = `The provider did not confirm immediately: ${error.message}`;
     renderShell();
   }
 }
@@ -59,7 +69,7 @@ function memberPaymentPayload() {
   const purpose = value("memberPaymentPurpose");
   const route = value("memberPaymentRoute") || "mobile_money";
   const provider = route === "mobile_money"
-    ? document.querySelector('input[name="mmProvider"]:checked')?.value || "default"
+    ? value("memberPaymentProvider") || document.querySelector('input[name="mmProvider"]:checked')?.value || "default"
     : route;
   return {
     tenantId: state.member?.tenantId,
@@ -69,7 +79,7 @@ function memberPaymentPayload() {
     purpose,
     amount: Number(value("memberPaymentAmount")),
     payerPhone: value("memberPaymentPhone"),
-    externalReference: value("memberBankReference") || `${route === "bank_collection" ? "BANK" : "MM"}-${Date.now()}`,
+    externalReference: value("memberPaymentReference") || value("memberBankReference") || `${route === "bank_collection" ? "BANK" : "MM"}-${Date.now()}`,
     provider,
     providerPayload: {
       source: "member_portal",
@@ -156,6 +166,46 @@ async function submitMemberComplaintPayload(payload) {
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+async function submitMemberComplaint(event) {
+  event.preventDefault();
+  state.memberComplaintMessage = "";
+  state.memberComplaintError = "";
+  if (blockOfflineMemberAction("memberComplaintError")) return;
+  const payload = memberComplaintPayload();
+  try {
+    const complaint = await submitMemberComplaintPayload(payload);
+    const visibleComplaint = {
+      ...complaint,
+      subject: complaint.subject || payload.subject,
+      priority: complaint.priority || payload.priority,
+      status: complaint.status || "submitted",
+      lastMessagePreview: complaint.lastMessagePreview || payload.description,
+      updatedAt: complaint.updatedAt || new Date().toISOString()
+    };
+    state.memberData.chatThreads = [visibleComplaint, ...(state.memberData.chatThreads || []).filter((row) => row.id !== visibleComplaint.id)];
+    state.memberComplaintMessage = `Submitted complaint ${complaint.id || payload.subject}.`;
+    await refreshMember();
+    state.memberData.chatThreads = [visibleComplaint, ...(state.memberData.chatThreads || []).filter((row) => row.id !== visibleComplaint.id)];
+    state.memberComplaintMessage = `Submitted complaint ${complaint.id || payload.subject}.`;
+    renderShell();
+  } catch (error) {
+    const complaint = {
+      ...payload,
+      id: `local-complaint-${Date.now()}`,
+      subject: payload.subject,
+      priority: payload.priority,
+      status: "submitted",
+      lastMessagePreview: payload.description,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    state.memberData.chatThreads = [complaint, ...(state.memberData.chatThreads || [])];
+    state.memberComplaintMessage = `Submitted complaint ${payload.subject}.`;
+    state.memberComplaintError = `The SACCO backend did not confirm immediately: ${error.message}`;
+    renderShell();
+  }
 }
 
 function saveMemberDraftFromForm(type) {

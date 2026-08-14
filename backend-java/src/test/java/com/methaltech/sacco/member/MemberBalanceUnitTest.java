@@ -2,6 +2,7 @@ package com.methaltech.sacco.member;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
@@ -84,5 +85,55 @@ class MemberBalanceUnitTest {
         member.applyPostedTransaction("share_purchase", new BigDecimal("10000"));
         assertTrue(member.canReverse("share_purchase", new BigDecimal("10000")));
         assertFalse(member.canReverse("share_purchase", new BigDecimal("10001")));
+    }
+
+    @Test
+    void postedWithdrawalCannotOverdrawSavings() {
+        Member member = newMember();
+        member.applyPostedTransaction("savings_deposit", new BigDecimal("10000"));
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> member.applyPostedTransaction("withdrawal", new BigDecimal("10001")));
+        assertEquals(0, member.getSavingsBalance().compareTo(new BigDecimal("10000")));
+    }
+
+    @Test
+    void reversalCannotCreateNegativeBalances() {
+        Member member = newMember();
+        member.applyPostedTransaction("share_purchase", new BigDecimal("10000"));
+        member.applyReversal("share_purchase", new BigDecimal("10000"));
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> member.applyReversal("share_purchase", new BigDecimal("1")));
+        assertEquals(0, member.getSharesBalance().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
+    void welfareClaimPaymentCannotOverdrawWelfareBalance() {
+        Member member = newMember();
+        member.applyPostedTransaction("welfare_contribution", new BigDecimal("5000"));
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> member.applyWelfareClaimPayment(new BigDecimal("5001")));
+        assertEquals(0, member.getWelfareBalance().compareTo(new BigDecimal("5000")));
+    }
+
+    @Test
+    void balanceOperationsRejectNonPositiveAmounts() {
+        Member member = newMember();
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> member.applyPostedTransaction("savings_deposit", BigDecimal.ZERO));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> member.applyReversal("savings_deposit", new BigDecimal("-1")));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> member.applyWelfareClaimPayment(BigDecimal.ZERO));
+        assertFalse(member.canReverse("savings_deposit", BigDecimal.ZERO));
     }
 }

@@ -6,7 +6,7 @@
   const exceptions = reportExceptionCount(consolidated);
   const dataProtection = consolidated.dataProtectionEvidence || {};
   if (platform) return platformSuperAdminReportsView(rows, exceptions);
-  const tabs = [["catalogue", "Report catalogue"], ["readiness", "Report readiness"], ["regulatory", "SACCO regulatory report"]];
+  const tabs = [["overview", "Overview"], ["catalogue", "Report catalogue"], ["readiness", "Report readiness"], ["regulatory", "SACCO regulatory report"]];
   const tab = activeModuleTab("reports", tabs);
   return `
     <div class="dashboard-grid">
@@ -18,11 +18,7 @@
       ${summary("KYC disposals", dataProtection.kycDocumentsDisposed || 0, "Document retention actions", "Trace")}
     </div>
     ${moduleTabs("reports", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel(t("reportingEvidenceControl"), [
-      ["Ledger evidence", `${consolidated.journalEntries || 0} journal entr${Number(consolidated.journalEntries || 0) === 1 ? "y" : "ies"} available for report support.`, Number(consolidated.unbalancedJournalEntries || 0) ? "Review" : "Clear"],
-      ["Reconciliation evidence", `${consolidated.reconciliationExceptions || 0} reconciliation exception(s) affect export confidence.`, Number(consolidated.reconciliationExceptions || 0) ? "Investigate" : "Clear"],
-      ["Compliance status", `Current report status is ${labelize(consolidated.complianceStatus || (exceptions ? "review" : "clear"))}.`, exceptions ? "Review" : "Ready"]
-    ]) : ""}
+    ${tab === "overview" ? reportEvidenceControlPanel(consolidated, exceptions) : ""}
     ${tab === "catalogue" ? `
       ${filterToolbar("Search reports by module, member group, product or compliance status", "Export report", "Schedule report")}
       <section class="panel">
@@ -80,14 +76,32 @@ function platformSuperAdminReportsView(rows, exceptions) {
       ${summary("Privacy requests", dataProtection.privacyRequests || 0, "Across SACCOs", "Review")}
       ${summary("KYC disposals", dataProtection.kycDocumentsDisposed || 0, "File-store evidence", "Trace")}
     </div>
-    ${rolePriorityPanel(t("superAdminReportingControl"), [
-      ["SACCO account status", `${platformSummary.registeredSaccos} SACCO account(s) tracked for activation, suspension and payment eligibility.`, platformSummary.pendingRegistrations ? "Review" : "Clear"],
-      ["Billing control", `${subscriptions.length} subscription record(s) available for renewal, arrears and package reporting.`, platformSummary.expiredSubscriptions ? "Review" : "Current"],
-      ["Access governance", `${platformSummary.platformAdministrators} platform administrator account(s) included in role and permission reporting.`, platformSummary.platformAdministrators ? "Monitored" : "Setup needed"]
-    ])}
+    ${platformSuperAdminReportingControlPanel(platformSummary, subscriptions)}
     ${filterToolbar("Search Super Admin reports by SACCO, billing status, administrator, compliance status or export type", "Export report", "Schedule report")}
     ${recordTable("Super Admin SACCO report", rows, ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "privacyRequests", "openPrivacyRequests", "kycReviewDue", "kycDisposed", "dataProtectionStatus", "complianceStatus"])}
     ${recordTable("Platform administrator access report", users, ["fullName", "email", "rolesLabel", "moduleScope", "status", "lastLogin"])}
+  `;
+}
+
+function reportEvidenceControlPanel(consolidated, exceptions) {
+  const rows = [
+    ["Ledger evidence", `${consolidated.journalEntries || 0} journal entr${Number(consolidated.journalEntries || 0) === 1 ? "y" : "ies"} available for report support.`, Number(consolidated.unbalancedJournalEntries || 0) ? "Review" : "Clear"],
+    ["Reconciliation evidence", `${consolidated.reconciliationExceptions || 0} reconciliation exception(s) affect export confidence.`, Number(consolidated.reconciliationExceptions || 0) ? "Investigate" : "Clear"],
+    ["Compliance status", `Current report status is ${labelize(consolidated.complianceStatus || (exceptions ? "review" : "clear"))}.`, exceptions ? "Review" : "Ready"]
+  ];
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(t("reportingEvidenceControl"))}</h2>
+          <p>Confirm ledger, reconciliation and compliance evidence before exporting SACCO reports.</p>
+        </div>
+        <span class="status ${exceptions ? "pending" : "active"}">${exceptions ? "Review" : "Ready"}</span>
+      </div>
+      <div class="mini-grid">
+        ${rows.map(([label, detail, status]) => mini(label, `${detail}${status ? ` (${status})` : ""}`)).join("")}
+      </div>
+    </section>
   `;
 }
 
@@ -106,6 +120,26 @@ function reportRowsForCurrentContext(platform) {
     tenantName,
     tenants: tenantRows()
   });
+}
+
+function platformSuperAdminReportingControlPanel(platformSummary, subscriptions) {
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(t("superAdminReportingControl"))}</h2>
+          <p>Super Admin reports focus on SACCO account status, billing, administrator access and compliance risk.</p>
+        </div>
+        <span class="status ${platformSummary.pendingRegistrations || platformSummary.expiredSubscriptions ? "pending" : "active"}">${platformSummary.pendingRegistrations || platformSummary.expiredSubscriptions ? "Review" : "Current"}</span>
+      </div>
+      <div class="mini-grid">
+        ${mini("SACCO account status", `${platformSummary.registeredSaccos} SACCO account(s) tracked`)}
+        ${mini("Billing control", `${subscriptions.length} subscription record(s)`)}
+        ${mini("Access governance", `${platformSummary.platformAdministrators} platform administrator account(s)`)}
+        ${mini("Compliance focus", `${platformSummary.openSaccoComplaints || 0} SACCO admin complaint(s)`)}
+      </div>
+    </section>
+  `;
 }
 
 function reportReadinessPanel(consolidated) {
@@ -142,7 +176,7 @@ function auditView() {
   const auditGroups = buildAuditGroups(rows);
   const auditSummary = buildAuditSummary(rows, auditGroups);
   const loginRisks = loginRiskEvents();
-  const tabs = [["evidence", isPlatform() ? t("platformAuditEvidence") : t("saccoAuditEvidence")], ["sensitive", t("sensitiveAuditQueue")], ["trail", isPlatform() ? t("platformAuditTrail") : t("saccoAuditTrail")]];
+  const tabs = [["overview", "Overview"], ["evidence", isPlatform() ? t("platformAuditEvidence") : t("saccoAuditEvidence")], ["sensitive", t("sensitiveAuditQueue")], ["trail", isPlatform() ? t("platformAuditTrail") : t("saccoAuditTrail")]];
   const tab = activeModuleTab("audit", tabs);
   return `
     <div class="dashboard-grid">
@@ -164,11 +198,23 @@ function auditView() {
 }
 
 function auditControlPanel(auditSummary) {
-  return rolePriorityPanel(t("auditEvidenceControl"), [
-    ["High-risk review", `${auditSummary.highRiskEvents} event(s) involve sessions, roles, reversals or sensitive state changes.`, auditSummary.highRiskEvents ? "Review" : "Clear"],
-    ["Decision evidence", `${auditSummary.approvalEvents} approval event(s) and ${auditSummary.reversalEvents} reversal event(s) are available for follow-up.`, auditSummary.approvalEvents || auditSummary.reversalEvents ? "Trace" : "Empty"],
-    ["Access and finance", `${auditSummary.accessEvents} access event(s) and ${auditSummary.financeEvents} finance event(s) can be filtered for audit review.`, auditSummary.totalEvents ? "Available" : "No events"]
-  ]);
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(t("auditEvidenceControl"))}</h2>
+          <p>Trace sensitive sessions, role changes, approvals, reversals and finance actions.</p>
+        </div>
+        <span class="status ${auditSummary.highRiskEvents ? "pending" : "active"}">${auditSummary.highRiskEvents ? "Review" : "Clear"}</span>
+      </div>
+      <div class="mini-grid">
+        ${mini("High-risk review", `${auditSummary.highRiskEvents} event(s)`)}
+        ${mini("Decision evidence", `${auditSummary.approvalEvents} approval(s), ${auditSummary.reversalEvents} reversal(s)`)}
+        ${mini("Access and finance", `${auditSummary.accessEvents} access, ${auditSummary.financeEvents} finance`)}
+        ${mini("Audit records", auditSummary.totalEvents)}
+      </div>
+    </section>
+  `;
 }
 
 function auditEvidencePanel(auditSummary, auditGroups) {

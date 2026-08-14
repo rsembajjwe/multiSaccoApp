@@ -50,3 +50,16 @@ npm.cmd start
 ## Automated Proxy Verification
 
 `node scripts/check-java-proxy-mode.mjs` starts a mock Java API and verifies that `server.mjs` forwards `/api/v1` requests, response headers, authorization headers, and JSON request bodies while still applying local security headers. The full `npm.cmd run check` command includes this verification before running the Java backend tests.
+
+## OpenAPI Contract Guard
+
+`npm.cmd run openapi:check` verifies that `openapi.yaml` keeps the enterprise-critical Java API
+surface documented: health, staff/member authentication, operations status, SACCO administration,
+platform users/roles/permissions/audit, member self-service, SACCO-owned payment collection,
+financial transactions, loans, mobile-money callbacks, and provider evidence.
+
+## Legacy Node Quarantine Guard
+
+`npm.cmd run node:quarantine` verifies that the legacy `backend/*.mjs` business API remains clearly
+marked as demo-only, production fails closed without `JAVA_API_BASE`, and the manuals continue to point
+production-style local development at the Java backend.

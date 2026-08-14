@@ -1,3 +1,7 @@
+// DEMO_ONLY_LEGACY_NODE_API
+// Production business rules live in backend-java. This module is retained only for local/demo
+// fallback when SACCO_NODE_API_ENABLED=true or NODE_ENV is not production; server.mjs refuses it in
+// production unless JAVA_API_BASE points to the Java backend.
 import { hashPassword, newId, verifyPassword } from "./security.mjs";
 import {
   calculateSubscriptionBilling,
@@ -35,6 +39,7 @@ const allowedExpenseAccountCodes = new Set(["5000", "5010", "5020", "5030", "504
 const allowedAssetChannels = new Set(["mobile_money", "cash", "bank", "payroll_deduction"]);
 const allowedAssetCategories = new Set(["equipment", "furniture", "vehicle", "building", "technology", "other"]);
 const allowedMobileMoneyPurposes = new Set(["savings_deposit", "share_purchase", "welfare_contribution", "loan_repayment"]);
+const allowedPaymentRequestClosureStatuses = new Set(["failed", "expired", "cancelled"]);
 const allowedLoanProducts = new Set(["Development Loan", "Emergency Loan", "Agriculture Loan", "School Fees Loan"]);
 const allowedGuarantorStatuses = new Set(["accepted", "rejected"]);
 const allowedLoanDecisionStatuses = new Set(["approved", "rejected"]);
@@ -84,6 +89,18 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path === "/integrations/mobile-money/callback") {
       if (!allowRequest(request, response, correlationId, "mobileMoneyCallback")) return;
       return receiveMobileMoneyCallback(request, response, correlationId);
+    }
+    if (method === "POST" && path === "/integrations/mobile-money/payment-requests") {
+      const memberAuth = requireMemberAuth(request, response, correlationId);
+      if (!memberAuth) return;
+      return createMobileMoneyPaymentRequest(request, response, memberAuth, correlationId);
+    }
+    if (method === "GET" && (path === "/integrations/mobile-money/payment-requests" || path.startsWith("/integrations/mobile-money/payment-requests/"))) {
+      const memberAuth = currentMemberAuth(request);
+      if (memberAuth) {
+        if (path === "/integrations/mobile-money/payment-requests") return listMemberPaymentRequests(response, memberAuth);
+        if (path.endsWith("/provider-status")) return refreshMemberPaymentRequestStatus(response, memberAuth, path.split("/")[4], correlationId);
+      }
     }
     if (method === "POST" && path === "/public/sacco-registrations") {
       return createPublicSaccoRegistration(request, response, correlationId);
@@ -165,7 +182,19 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path === "/reconciliation") return getReconciliation(response, auth, url);
     if (method === "GET" && path === "/regulatory-report") return getRegulatoryReport(response, auth, url);
     if (method === "GET" && path === "/integrations/mobile-money/callbacks") return listMobileMoneyCallbacks(response, auth, url);
+    if (method === "GET" && path === "/integrations/mobile-money/payment-requests") return listPaymentRequests(response, auth, url);
+    if (method === "GET" && path.startsWith("/integrations/mobile-money/payment-requests/") && path.endsWith("/provider-status")) {
+      return refreshStaffPaymentRequestStatus(response, auth, path.split("/")[4], url, correlationId);
+    }
+    if (method === "PATCH" && path.startsWith("/integrations/mobile-money/payment-requests/") && path.endsWith("/status")) {
+      return updatePaymentRequestStatus(request, response, auth, path.split("/")[4], url, correlationId);
+    }
     if (method === "GET" && path === "/notifications/deliveries") return listNotificationDeliveries(response, auth, url);
+    if (method === "GET" && path === "/notifications/provider-evidence") return getProviderEvidence(response, auth, url);
+    if (method === "GET" && path === "/notifications/provider-job-runs") return listProviderJobRuns(response, auth, url);
+    if (method === "POST" && path === "/notifications/provider-job-runs/mobile-money-reconciliation") {
+      return runMobileMoneyReconciliation(response, auth);
+    }
     if (method === "GET" && path === "/notification-templates") return listNotificationTemplates(response, auth, url, correlationId);
     if (method === "POST" && path === "/notification-templates") return createNotificationTemplate(request, response, auth, correlationId);
     if (method === "PATCH" && path.startsWith("/notification-templates/")) {
@@ -230,6 +259,9 @@ export async function handleApi(request, response, url) {
     }
     if (method === "POST" && path.startsWith("/loans/") && path.endsWith("/disburse")) {
       return disburseLoan(request, response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "GET" && path.startsWith("/loans/") && path.endsWith("/schedule")) {
+      return listLoanSchedule(response, auth, path.split("/")[2], correlationId);
     }
     if (method === "GET" && path.startsWith("/loans/") && path.endsWith("/repayments")) {
       return listLoanRepayments(response, auth, path.split("/")[2], correlationId);
@@ -437,6 +469,12 @@ function requireMemberAuth(request, response, correlationId) {
   return { ...auth, token };
 }
 
+function currentMemberAuth(request) {
+  const token = authToken(request);
+  const auth = findMemberSessionByToken(token);
+  return auth ? { ...auth, token } : null;
+}
+
 function isPlatform(auth) {
   return auth.user.tenantId === "tenant_platform";
 }
@@ -531,6 +569,10 @@ async function createTenant(request, response, auth, correlationId) {
     status: "pending_review",
     registrationNo: String(body.registrationNo || ""),
     district: String(body.district || ""),
+    country: String(body.country || "Uganda"),
+    localeCode: String(body.localeCode || "en-UG"),
+    currencyCode: String(body.currencyCode || "UGX"),
+    currencyDigits: Number.isFinite(Number(body.currencyDigits)) ? Number(body.currencyDigits) : 0,
     licenseExpiry: String(body.licenseExpiry || ""),
     packageId: String(body.packageId || ""),
     onboardingPercent: 0,
@@ -577,6 +619,10 @@ async function createPublicSaccoRegistration(request, response, correlationId) {
     status: "pending_review",
     registrationNo: String(body.registrationNo || "").trim(),
     district: String(body.district || "").trim(),
+    country: String(body.country || "Uganda").trim(),
+    localeCode: String(body.localeCode || "en-UG").trim(),
+    currencyCode: String(body.currencyCode || "UGX").trim(),
+    currencyDigits: Number.isFinite(Number(body.currencyDigits)) ? Number(body.currencyDigits) : 0,
     licenseExpiry: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
     packageId: "pending_self_registration",
     onboardingPercent: 0,
@@ -1049,7 +1095,7 @@ async function createStatementLine(request, response, auth, correlationId) {
 
   const channel = String(body.channel || "");
   const amount = Number(body.amount);
-  const externalReference = String(body.externalReference || "").trim();
+  const externalReference = String(body.externalReference || body.reference || "").trim();
   const statementDate = String(body.statementDate || new Date().toISOString().slice(0, 10));
   if (!allowedStatementChannels.has(channel)) return sendError(response, 400, "INVALID_STATEMENT_CHANNEL", "Unsupported statement channel.", correlationId);
   if (!Number.isFinite(amount) || amount === 0) return sendError(response, 400, "INVALID_STATEMENT_AMOUNT", "Statement amount cannot be zero.", correlationId);
@@ -1159,12 +1205,220 @@ function listMobileMoneyCallbacks(response, auth, url) {
   return sendData(response, callbacks.sort((a, b) => String(b.receivedAt).localeCompare(String(a.receivedAt))));
 }
 
+function listPaymentRequests(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const requests = isPlatform(auth) && !url.searchParams.get("tenantId")
+    ? db.mobileMoneyPaymentRequests
+    : db.mobileMoneyPaymentRequests.filter((item) => item.tenantId === tenantId);
+  return sendData(response, [...requests].sort((a, b) => String(b.requestedAt).localeCompare(String(a.requestedAt))));
+}
+
+function listMemberPaymentRequests(response, memberAuth) {
+  const requests = db.mobileMoneyPaymentRequests
+    .filter((item) => item.memberId === memberAuth.member.id)
+    .sort((a, b) => String(b.requestedAt).localeCompare(String(a.requestedAt)));
+  return sendData(response, requests);
+}
+
+function refreshMemberPaymentRequestStatus(response, memberAuth, requestId, correlationId) {
+  const paymentRequest = db.mobileMoneyPaymentRequests.find((item) => item.id === requestId);
+  if (!paymentRequest) return sendError(response, 404, "PAYMENT_REQUEST_NOT_FOUND", "Mobile-money payment request was not found.", correlationId);
+  if (paymentRequest.memberId !== memberAuth.member.id) {
+    return sendError(response, 403, "MEMBER_ACCESS_DENIED", "Cannot refresh another member's mobile-money payment request.", correlationId);
+  }
+  return sendData(response, paymentRequest);
+}
+
+function refreshStaffPaymentRequestStatus(response, auth, requestId, url, correlationId) {
+  const paymentRequest = db.mobileMoneyPaymentRequests.find((item) => item.id === requestId);
+  if (!paymentRequest) return sendError(response, 404, "PAYMENT_REQUEST_NOT_FOUND", "Mobile-money payment request was not found.", correlationId);
+  const tenantId = requestedTenant(auth, url);
+  if (!isPlatform(auth) && paymentRequest.tenantId !== tenantId) {
+    return sendError(response, 403, "TENANT_ACCESS_DENIED", "Cannot refresh another SACCO's mobile-money payment request.", correlationId);
+  }
+  if (isPlatform(auth) && url.searchParams.get("tenantId") && paymentRequest.tenantId !== url.searchParams.get("tenantId")) {
+    return sendError(response, 403, "TENANT_ACCESS_DENIED", "Requested SACCO scope does not match this mobile-money payment request.", correlationId);
+  }
+  return sendData(response, paymentRequest);
+}
+
+async function createMobileMoneyPaymentRequest(request, response, memberAuth, correlationId) {
+  const member = memberAuth.member;
+  if (member.status !== "active") {
+    return sendError(response, 409, "MEMBER_NOT_ACTIVE", "Only active members can initiate mobile-money payments.", correlationId);
+  }
+
+  const body = await readJson(request);
+  const purpose = String(body.purpose || "").trim();
+  const amount = Number(body.amount);
+  const payerPhone = String(body.payerPhone || member.phone || "").trim();
+  const provider = String(body.provider || "demo_mobile_money").trim();
+  const loanId = body.loanId ? String(body.loanId) : null;
+  const externalReference = String(body.externalReference || `MM-${newId("ref")}`).trim();
+  const tenant = db.tenants.find((item) => item.id === member.tenantId);
+
+  if (!allowedMobileMoneyPurposes.has(purpose)) {
+    return sendError(response, 400, "INVALID_PAYMENT_PURPOSE", "Unsupported mobile-money payment purpose.", correlationId);
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return sendError(response, 400, "INVALID_PAYMENT_AMOUNT", "Payment amount must be greater than zero.", correlationId);
+  }
+  if (!payerPhone) {
+    return sendError(response, 400, "PAYER_PHONE_REQUIRED", "A mobile-money phone number is required.", correlationId);
+  }
+  if (db.mobileMoneyPaymentRequests.some((item) => item.tenantId === member.tenantId && item.externalReference.toLowerCase() === externalReference.toLowerCase())) {
+    return sendError(response, 409, "PAYMENT_REFERENCE_EXISTS", "A mobile-money payment request with that reference already exists.", correlationId);
+  }
+  if (purpose === "loan_repayment") {
+    const loan = loanId
+      ? db.loans.find((item) => item.id === loanId && item.tenantId === member.tenantId && item.memberId === member.id)
+      : db.loans.find((item) => item.tenantId === member.tenantId && item.memberId === member.id && item.status === "active");
+    if (!loan) return sendError(response, 400, "INVALID_LOAN", "No active loan was found for this repayment request.", correlationId);
+    if (amount > loan.balance) return sendError(response, 409, "REPAYMENT_EXCEEDS_BALANCE", "Repayment cannot exceed the outstanding loan balance.", correlationId);
+  }
+
+  const timestamp = new Date().toISOString();
+  const paymentRequest = {
+    id: newId("mm_request"),
+    tenantId: member.tenantId,
+    memberId: member.id,
+    loanId,
+    purpose,
+    amount,
+    currencyCode: tenant?.currencyCode || "UGX",
+    payerPhone,
+    externalReference,
+    provider,
+    providerReference: `${provider.toUpperCase()}-${externalReference}`,
+    status: "pending_demo_callback",
+    statusMessage: "Awaiting provider callback in demo fallback mode.",
+    checkoutPrompt: `Confirm ${tenant?.currencyCode || "UGX"} ${amount} payment from ${payerPhone}.`,
+    callbackPosting: true,
+    requestedAt: timestamp,
+    completedAt: null,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+  db.mobileMoneyPaymentRequests.push(paymentRequest);
+  return sendData(response, paymentRequest, 202);
+}
+
+async function updatePaymentRequestStatus(request, response, auth, requestId, url, correlationId) {
+  const body = await readJson(request);
+  const status = String(body.status || "").trim();
+  if (!allowedPaymentRequestClosureStatuses.has(status)) {
+    return sendError(response, 400, "INVALID_PAYMENT_REQUEST_STATUS", "Payment requests can only be marked failed, expired or cancelled by staff.", correlationId);
+  }
+
+  const paymentRequest = db.mobileMoneyPaymentRequests.find((item) => item.id === requestId);
+  if (!paymentRequest) return sendError(response, 404, "PAYMENT_REQUEST_NOT_FOUND", "Mobile-money payment request was not found.", correlationId);
+  const tenantId = requestedTenant(auth, url);
+  if (!isPlatform(auth) && paymentRequest.tenantId !== tenantId) {
+    return sendError(response, 403, "TENANT_ACCESS_DENIED", "Cannot update another SACCO's mobile-money payment request.", correlationId);
+  }
+  if (isPlatform(auth) && url.searchParams.get("tenantId") && paymentRequest.tenantId !== url.searchParams.get("tenantId")) {
+    return sendError(response, 403, "TENANT_ACCESS_DENIED", "Requested SACCO scope does not match this mobile-money payment request.", correlationId);
+  }
+  if (paymentRequest.status === "posted") {
+    return sendError(response, 409, "PAYMENT_REQUEST_ALREADY_POSTED", "Posted payment requests cannot be changed manually.", correlationId);
+  }
+
+  const timestamp = new Date().toISOString();
+  paymentRequest.status = status;
+  paymentRequest.statusMessage = String(body.reason || `Marked ${status} by SACCO staff.`);
+  paymentRequest.completedAt = timestamp;
+  paymentRequest.updatedAt = timestamp;
+  createAuditEvent({
+    tenantId: paymentRequest.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Marked mobile-money payment request ${paymentRequest.externalReference} ${status}`,
+    resourceType: "mobile_money_payment_request",
+    resourceId: paymentRequest.id,
+    ipAddress: requestIp(request)
+  });
+
+  createMemberNotification({
+    tenantId: paymentRequest.tenantId,
+    memberId: paymentRequest.memberId,
+    eventType: "payment_request_closed",
+    resourceType: "mobile_money_payment_request",
+    resourceId: paymentRequest.id,
+    title: "Payment request closed",
+    body: `Mobile-money payment request ${paymentRequest.externalReference} was marked ${status}. ${paymentRequest.statusMessage}`.trim()
+  });
+  return sendData(response, paymentRequest);
+}
+
 function listNotificationDeliveries(response, auth, url) {
   const tenantId = requestedTenant(auth, url);
   const deliveries = isPlatform(auth) && !url.searchParams.get("tenantId")
     ? db.notificationDeliveries
     : db.notificationDeliveries.filter((delivery) => delivery.tenantId === tenantId);
   return sendData(response, deliveries.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+}
+
+function getProviderEvidence(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const platformWide = isPlatform(auth) && !url.searchParams.get("tenantId");
+  const inScope = (item) => platformWide || item.tenantId === tenantId;
+  const callbacks = db.mobileMoneyCallbacks.filter(inScope);
+  const paymentRequests = db.mobileMoneyPaymentRequests.filter(inScope);
+  const deliveries = db.notificationDeliveries.filter(inScope);
+  return sendData(response, {
+    generatedAt: new Date().toISOString(),
+    notificationDeliveries: deliveries.length,
+    failedNotificationDeliveries: deliveries.filter((delivery) => delivery.status !== "sent").length,
+    mobileMoney: {
+      callbacksReceived: callbacks.length,
+      paymentRequests: paymentRequests.length,
+      pendingPaymentRequests: paymentRequests.filter((item) => item.status === "pending_demo_callback").length,
+      failedPaymentRequests: paymentRequests.filter((item) => ["failed", "expired", "cancelled"].includes(item.status)).length,
+      providerOptions: [
+        { id: "mtn", label: "MTN MoMo", status: "demo_ready" },
+        { id: "airtel", label: "Airtel Money", status: "demo_ready" }
+      ],
+      reconciliationSummary: {
+        postedCallbacks: callbacks.filter((callback) => callback.status === "posted").length,
+        callbackPostingRequests: paymentRequests.filter((item) => item.callbackPosting).length,
+        openExceptions: paymentRequests.filter((item) => ["failed", "expired", "cancelled"].includes(item.status)).length
+      }
+    },
+    evidenceStatus: deliveries.every((delivery) => delivery.status === "sent") ? "ready" : "review"
+  });
+}
+
+function listProviderJobRuns(response, auth, url) {
+  const tenantId = requestedTenant(auth, url);
+  const platformWide = isPlatform(auth) && !url.searchParams.get("tenantId");
+  const jobName = url.searchParams.get("jobName");
+  const runs = db.providerJobRuns
+    .filter((run) => (platformWide || run.tenantId === tenantId) && (!jobName || run.jobType === jobName))
+    .sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)));
+  return sendData(response, runs);
+}
+
+function runMobileMoneyReconciliation(response, auth) {
+  const timestamp = new Date().toISOString();
+  const tenantId = auth.user.tenantId;
+  const inScope = (item) => isPlatform(auth) || item.tenantId === tenantId;
+  const pendingPaymentRequests = db.mobileMoneyPaymentRequests.filter((item) => inScope(item) && item.status === "pending_demo_callback").length;
+  const postedCallbacks = db.mobileMoneyCallbacks.filter((item) => inScope(item) && item.status === "posted").length;
+  const failedPaymentRequests = db.mobileMoneyPaymentRequests.filter((item) => inScope(item) && ["failed", "expired", "cancelled"].includes(item.status)).length;
+  const summary = {
+    id: newId("job_run"),
+    tenantId,
+    provider: "demo_mobile_money",
+    jobType: "mobile_money_reconciliation",
+    status: "completed",
+    pendingPaymentRequests,
+    postedCallbacks,
+    failedPaymentRequests,
+    startedAt: timestamp,
+    finishedAt: timestamp
+  };
+  db.providerJobRuns.unshift(summary);
+  return sendData(response, summary, 202);
 }
 
 function listNotificationTemplates(response, auth, url, correlationId) {
@@ -1280,7 +1534,7 @@ async function receiveMobileMoneyCallback(request, response, correlationId) {
   if (!allowedMobileMoneyPurposes.has(purpose)) return sendError(response, 400, "INVALID_CALLBACK_PURPOSE", "Unsupported mobile-money purpose.", correlationId);
 
   const existing = db.mobileMoneyCallbacks.find((callback) => callback.tenantId === tenantId && callback.externalReference === externalReference);
-  if (existing) return sendData(response, { callback: existing, result: callbackResult(existing), idempotent: true });
+  if (existing) return sendData(response, { ...existing, result: callbackResult(existing), duplicate: true, idempotent: true });
 
   const member = findCallbackMember(tenantId, body);
   if (!member) return sendError(response, 400, "INVALID_MEMBER", "Callback member was not found for this tenant.", correlationId);
@@ -1336,6 +1590,7 @@ async function receiveMobileMoneyCallback(request, response, correlationId) {
   }
 
   db.mobileMoneyCallbacks.push(callback);
+  markMatchingPaymentRequestPosted(callback);
   db.statementLines.push({
     id: newId("statement"),
     tenantId,
@@ -1358,12 +1613,12 @@ async function receiveMobileMoneyCallback(request, response, correlationId) {
     resourceId: callback.resourceId,
     ipAddress: requestIp(request)
   });
-  return sendData(response, { callback, result: callbackResult(callback), notification, deliveries: notification?.deliveries || [], idempotent: false }, 201);
+  return sendData(response, { ...callback, result: callbackResult(callback), notification, deliveries: notification?.deliveries || [], duplicate: false, idempotent: false }, 201);
 }
 
 function findCallbackMember(tenantId, body) {
   const memberId = body.memberId ? String(body.memberId) : "";
-  const membershipNo = body.membershipNo ? String(body.membershipNo).toLowerCase().trim() : "";
+  const membershipNo = body.membershipNo || body.memberIdentifier ? String(body.membershipNo || body.memberIdentifier).toLowerCase().trim() : "";
   const phone = body.phone ? String(body.phone).toLowerCase().trim() : "";
   return db.members.find((member) => {
     if (member.tenantId !== tenantId) return false;
@@ -1372,6 +1627,19 @@ function findCallbackMember(tenantId, body) {
     if (phone && member.phone.toLowerCase() === phone) return true;
     return false;
   });
+}
+
+function markMatchingPaymentRequestPosted(callback) {
+  const paymentRequest = db.mobileMoneyPaymentRequests.find((item) =>
+    item.tenantId === callback.tenantId &&
+    item.externalReference.toLowerCase() === callback.externalReference.toLowerCase());
+  if (!paymentRequest) return;
+  paymentRequest.status = "posted";
+  paymentRequest.statusMessage = "Provider callback was received and posted.";
+  paymentRequest.resourceType = callback.resourceType;
+  paymentRequest.resourceId = callback.resourceId;
+  paymentRequest.completedAt = callback.receivedAt;
+  paymentRequest.updatedAt = new Date().toISOString();
 }
 
 function postMemberCollection({ tenantId, member, purpose, amount, externalReference, receivedAt }) {
@@ -1454,10 +1722,13 @@ function createNotificationDeliveries(notification, member) {
     notificationId: notification.id,
     memberId: notification.memberId,
     channel: recipient.channel,
+    eventType: notification.eventType,
     provider: recipient.provider,
     recipient: recipient.recipient,
     status: "sent",
     message: notification.body,
+    resourceType: notification.resourceType,
+    resourceId: notification.resourceId,
     sentAt: new Date().toISOString(),
     createdAt: new Date().toISOString()
   }));
@@ -1704,6 +1975,7 @@ function buildTenantRegulatoryReport(tenantId) {
   const reconciliationData = reconciliationForTenantIds([tenantId]);
   const openComplaints = db.complaints.filter((complaint) => complaint.tenantId === tenantId && !["resolved", "closed"].includes(complaint.status)).length;
   const openResolutions = db.governanceResolutions.filter((resolution) => resolution.tenantId === tenantId && resolution.status !== "closed").length;
+  const dataProtectionEvidence = buildDataProtectionEvidence(tenantId);
 
   return {
     tenantId,
@@ -1725,7 +1997,27 @@ function buildTenantRegulatoryReport(tenantId) {
     reconciliationExceptions: reconciliationData.summary.unmatchedStatementLines + reconciliationData.summary.unmatchedLedgerLines,
     openComplaints,
     openResolutions,
-    complianceStatus: entries.every((entry) => entry.isBalanced) && reconciliationData.summary.unmatchedStatementLines === 0 ? "review" : "action_required"
+    dataProtectionEvidence,
+    complianceStatus: entries.every((entry) => entry.isBalanced) && reconciliationData.summary.unmatchedStatementLines === 0 && dataProtectionEvidence.evidenceStatus === "ready" ? "review" : "action_required"
+  };
+}
+
+function buildDataProtectionEvidence(tenantId) {
+  const documents = db.memberDocuments.filter((document) => document.tenantId === tenantId);
+  const reviewDue = documents.filter((document) => String(document.status || "").includes("review")).length;
+  const disposed = documents.filter((document) => ["disposed", "deleted"].includes(document.status)).length;
+  return {
+    privacyRequests: 0,
+    openPrivacyRequests: 0,
+    completedPrivacyRequests: 0,
+    erasureRequestsCompleted: 0,
+    kycDocuments: documents.length,
+    kycDocumentsReviewDue: reviewDue,
+    kycDocumentsRetained: documents.length - disposed,
+    kycDocumentsDisposed: disposed,
+    kycStorageActions: documents.length,
+    consentRecords: db.members.filter((member) => member.tenantId === tenantId).length,
+    evidenceStatus: reviewDue === 0 ? "ready" : "review"
   };
 }
 
@@ -1747,8 +2039,19 @@ function consolidateRegulatoryReports(reports) {
     totals.reconciliationExceptions += report.reconciliationExceptions;
     totals.openComplaints += report.openComplaints;
     totals.openResolutions += report.openResolutions;
+    totals.dataProtectionEvidence.privacyRequests += report.dataProtectionEvidence.privacyRequests;
+    totals.dataProtectionEvidence.openPrivacyRequests += report.dataProtectionEvidence.openPrivacyRequests;
+    totals.dataProtectionEvidence.completedPrivacyRequests += report.dataProtectionEvidence.completedPrivacyRequests;
+    totals.dataProtectionEvidence.erasureRequestsCompleted += report.dataProtectionEvidence.erasureRequestsCompleted;
+    totals.dataProtectionEvidence.kycDocuments += report.dataProtectionEvidence.kycDocuments;
+    totals.dataProtectionEvidence.kycDocumentsReviewDue += report.dataProtectionEvidence.kycDocumentsReviewDue;
+    totals.dataProtectionEvidence.kycDocumentsRetained += report.dataProtectionEvidence.kycDocumentsRetained;
+    totals.dataProtectionEvidence.kycDocumentsDisposed += report.dataProtectionEvidence.kycDocumentsDisposed;
+    totals.dataProtectionEvidence.kycStorageActions += report.dataProtectionEvidence.kycStorageActions;
+    totals.dataProtectionEvidence.consentRecords += report.dataProtectionEvidence.consentRecords;
+    totals.dataProtectionEvidence.evidenceStatus = totals.dataProtectionEvidence.kycDocumentsReviewDue === 0 && totals.dataProtectionEvidence.openPrivacyRequests === 0 ? "ready" : "review";
     totals.parPercent = totals.loanPortfolio ? Math.round((totals.loansAtRisk / totals.loanPortfolio) * 100) : 0;
-    totals.complianceStatus = totals.unbalancedJournalEntries === 0 && totals.reconciliationExceptions === 0 ? "clear" : "review";
+    totals.complianceStatus = totals.unbalancedJournalEntries === 0 && totals.reconciliationExceptions === 0 && totals.dataProtectionEvidence.evidenceStatus === "ready" ? "clear" : "review";
     return totals;
   }, {
     memberCount: 0,
@@ -1768,6 +2071,19 @@ function consolidateRegulatoryReports(reports) {
     reconciliationExceptions: 0,
     openComplaints: 0,
     openResolutions: 0,
+    dataProtectionEvidence: {
+      privacyRequests: 0,
+      openPrivacyRequests: 0,
+      completedPrivacyRequests: 0,
+      erasureRequestsCompleted: 0,
+      kycDocuments: 0,
+      kycDocumentsReviewDue: 0,
+      kycDocumentsRetained: 0,
+      kycDocumentsDisposed: 0,
+      kycStorageActions: 0,
+      consentRecords: 0,
+      evidenceStatus: "ready"
+    },
     complianceStatus: "clear"
   });
 }
@@ -1789,6 +2105,10 @@ function regulatoryReportCsv(reports) {
     "reconciliation_exceptions",
     "open_complaints",
     "open_resolutions",
+    "privacy_requests",
+    "kyc_documents",
+    "kyc_documents_review_due",
+    "data_protection_status",
     "compliance_status"
   ];
   const rows = reports.map((report) => [
@@ -1807,6 +2127,10 @@ function regulatoryReportCsv(reports) {
     report.reconciliationExceptions,
     report.openComplaints,
     report.openResolutions,
+    report.dataProtectionEvidence.privacyRequests,
+    report.dataProtectionEvidence.kycDocuments,
+    report.dataProtectionEvidence.kycDocumentsReviewDue,
+    report.dataProtectionEvidence.evidenceStatus,
     report.complianceStatus
   ]);
   return [headers, ...rows]
@@ -3245,13 +3569,15 @@ function publicLoan(loan) {
   if (!loan) return null;
   const guarantors = db.loanGuarantors.filter((item) => item.loanId === loan.id);
   const repayments = db.loanRepayments.filter((item) => item.loanId === loan.id);
+  const scheduleSummary = loanScheduleSummary(loan);
   return {
     ...loan,
     guarantors: guarantors.filter((item) => item.status === "accepted").length || loan.guarantors,
     guarantorRequests: guarantors.length,
     pendingGuarantors: guarantors.filter((item) => item.status === "pending").length,
     repayments: repayments.length,
-    repaymentTotal: repayments.reduce((sum, item) => sum + item.amount, 0)
+    repaymentTotal: repayments.reduce((sum, item) => sum + item.amount, 0),
+    ...scheduleSummary
   };
 }
 
@@ -3375,6 +3701,7 @@ function createLoanForMember({ body, member, actorUserId, response, correlationI
 
   const balances = memberBalances(member.id);
   const dsr = Math.min(65, Math.round((amount / Math.max(balances.savings * 3, 1)) * 35));
+  const terms = loanTerms(product, amount, repaymentMonths);
   const loan = {
     id: newId("loan"),
     tenantId: member.tenantId,
@@ -3382,6 +3709,10 @@ function createLoanForMember({ body, member, actorUserId, response, correlationI
     product,
     amount,
     balance: 0,
+    interestRate: terms.interestRate,
+    interestAmount: terms.interestAmount,
+    totalPayable: terms.totalPayable,
+    monthlyInstallment: terms.monthlyInstallment,
     status: "submitted",
     stage: "Credit Appraisal",
     guarantors: 0,
@@ -3443,10 +3774,11 @@ async function disburseLoan(request, response, auth, loanId, correlationId) {
 
   loan.status = "active";
   loan.stage = "Disbursed";
-  loan.balance = loan.amount;
+  loan.balance = loan.totalPayable || loan.amount;
   loan.disbursedByUserId = auth.user.id;
   loan.disbursedAt = new Date().toISOString();
   loan.updatedAt = loan.disbursedAt;
+  createRepaymentSchedule(loan);
   createAuditEvent({
     tenantId: loan.tenantId,
     actorUserId: auth.user.id,
@@ -3457,6 +3789,118 @@ async function disburseLoan(request, response, auth, loanId, correlationId) {
     ipAddress: requestIp(request)
   });
   return sendData(response, publicLoan(loan));
+}
+
+function loanTerms(product, amount, repaymentMonths) {
+  const interestRate = product === "Emergency Loan"
+    ? 2
+    : product === "Agriculture Loan"
+      ? 1.25
+      : product === "School Fees Loan"
+        ? 1
+        : 1.5;
+  const months = Math.max(1, Number(repaymentMonths) || 1);
+  const interestAmount = money(amount * interestRate * months / 100);
+  const totalPayable = money(amount + interestAmount);
+  const monthlyInstallment = money(totalPayable / months);
+  return { interestRate, interestAmount, totalPayable, monthlyInstallment };
+}
+
+function money(value) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+function createRepaymentSchedule(loan) {
+  if (db.loanRepaymentSchedules.some((item) => item.loanId === loan.id)) return;
+  const months = Math.max(1, Number(loan.repaymentMonths) || 1);
+  const firstDueDate = addMonths((loan.disbursedAt || new Date().toISOString()).slice(0, 10), 1);
+  const principalBase = money(loan.amount / months);
+  const interestBase = money((loan.interestAmount || 0) / months);
+  let principalAllocated = 0;
+  let interestAllocated = 0;
+  for (let installmentNo = 1; installmentNo <= months; installmentNo += 1) {
+    const last = installmentNo === months;
+    const principalDue = last ? money(loan.amount - principalAllocated) : principalBase;
+    const interestDue = last ? money((loan.interestAmount || 0) - interestAllocated) : interestBase;
+    principalAllocated = money(principalAllocated + principalDue);
+    interestAllocated = money(interestAllocated + interestDue);
+    db.loanRepaymentSchedules.push({
+      id: newId("schedule"),
+      tenantId: loan.tenantId,
+      loanId: loan.id,
+      installmentNo,
+      dueDate: addMonths(firstDueDate, installmentNo - 1),
+      principalDue,
+      interestDue,
+      totalDue: money(principalDue + interestDue),
+      createdAt: new Date().toISOString()
+    });
+  }
+}
+
+function addMonths(dateText, months) {
+  const date = new Date(`${dateText}T00:00:00.000Z`);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 10);
+}
+
+function loanScheduleRows(loan) {
+  const schedules = db.loanRepaymentSchedules
+    .filter((item) => item.loanId === loan.id)
+    .sort((a, b) => a.installmentNo - b.installmentNo);
+  let remainingPaid = db.loanRepayments
+    .filter((item) => item.loanId === loan.id)
+    .reduce((sum, item) => sum + item.amount, 0);
+  const today = new Date().toISOString().slice(0, 10);
+  return schedules.map((schedule) => {
+    const paidAmount = money(Math.min(Math.max(remainingPaid, 0), schedule.totalDue));
+    remainingPaid = money(remainingPaid - paidAmount);
+    const balanceDue = money(Math.max(0, schedule.totalDue - paidAmount));
+    const status = scheduleRowStatus(schedule, paidAmount, balanceDue, today);
+    return {
+      ...schedule,
+      paidAmount,
+      balanceDue,
+      daysPastDue: balanceDue > 0 && schedule.dueDate < today ? Math.ceil((new Date(`${today}T00:00:00.000Z`) - new Date(`${schedule.dueDate}T00:00:00.000Z`)) / 86_400_000) : 0,
+      agingBucket: balanceDue === 0 ? "paid" : schedule.dueDate < today ? "1_30" : "not_due",
+      status
+    };
+  });
+}
+
+function scheduleRowStatus(schedule, paidAmount, balanceDue, today) {
+  if (balanceDue <= 0) return "paid";
+  if (paidAmount > 0) return "partial";
+  if (schedule.dueDate < today) return "arrears";
+  if (schedule.dueDate.slice(0, 7) === today.slice(0, 7)) return "due";
+  return "upcoming";
+}
+
+function loanScheduleSummary(loan) {
+  const rows = loanScheduleRows(loan);
+  const paidInstallments = rows.filter((row) => row.status === "paid").length;
+  const arrears = rows.filter((row) => row.status === "arrears");
+  return {
+    scheduledInstallments: rows.length,
+    paidInstallments,
+    arrearsInstallments: arrears.length,
+    arrearsAmount: money(arrears.reduce((sum, row) => sum + row.balanceDue, 0)),
+    currentDueAmount: money(rows.filter((row) => row.status === "due").reduce((sum, row) => sum + row.balanceDue, 0)),
+    arrears1To30Amount: money(arrears.reduce((sum, row) => sum + row.balanceDue, 0)),
+    arrears31To60Amount: 0,
+    arrears61To90Amount: 0,
+    arrearsOver90Amount: 0,
+    oldestArrearsDays: arrears.reduce((max, row) => Math.max(max, row.daysPastDue), 0),
+    nextDueDate: rows.find((row) => row.balanceDue > 0)?.dueDate || null,
+    scheduleStatus: rows.length === 0 ? (loan.status === "active" ? "not_generated" : "waiting") : arrears.length ? "arrears" : paidInstallments === rows.length ? "settled" : "on_track"
+  };
+}
+
+function listLoanSchedule(response, auth, loanId, correlationId) {
+  const loan = db.loans.find((item) => item.id === loanId);
+  if (!loan) return sendError(response, 404, "LOAN_NOT_FOUND", "Loan not found.", correlationId);
+  if (!assertTenantAccess(auth, loan.tenantId, response, correlationId)) return;
+  return sendData(response, loanScheduleRows(loan));
 }
 
 function listLoanRepayments(response, auth, loanId, correlationId) {
@@ -3474,15 +3918,14 @@ async function recordLoanRepayment(request, response, auth, loanId, correlationI
   const body = await readJson(request);
   const amount = Number(body.amount);
   const channel = String(body.channel || "");
-  const externalReference = String(body.externalReference || "").trim();
+  const externalReference = String(body.externalReference || body.reference || "").trim();
   if (!externalReference) {
     return sendError(response, 400, "INVALID_REPAYMENT_REFERENCE", "External repayment reference is required.", correlationId);
   }
 
   const existing = db.loanRepayments.find((item) => item.tenantId === loan.tenantId && item.externalReference === externalReference);
   if (existing) {
-    const existingLoan = db.loans.find((item) => item.id === existing.loanId);
-    return sendData(response, { repayment: existing, loan: publicLoan(existingLoan), idempotent: true });
+    return sendError(response, 409, "REPAYMENT_REFERENCE_EXISTS", "A loan repayment with that reference already exists.", correlationId);
   }
 
   if (loan.status !== "active") {
@@ -3534,7 +3977,7 @@ async function recordLoanRepayment(request, response, auth, loanId, correlationI
     resourceId: repayment.id,
     ipAddress: requestIp(request)
   });
-  return sendData(response, { repayment, loan: publicLoan(loan) }, 201);
+  return sendData(response, { ...repayment, loan: publicLoan(loan) }, 201);
 }
 
 function listLoanGuarantors(response, auth, loanId, correlationId) {

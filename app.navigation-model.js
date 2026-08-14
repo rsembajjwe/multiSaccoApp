@@ -95,7 +95,7 @@ function groupQuickSearchResults(results) {
 }
 
 function memberUnreadNotificationCount(notifications) {
-  return notifications.filter((row) => !row.readAt && !normalizeNavigationModelText(row.status).includes("read")).length;
+  return notifications.filter((row) => !row.readAt && normalizeNavigationModelText(row.status) !== "read").length;
 }
 
 function staffUnreadNotificationCount(deliveries) {

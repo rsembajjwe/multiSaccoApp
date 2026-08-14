@@ -72,4 +72,41 @@ class FinancialTransactionUnitTest {
         assertEquals("Unverified payer", txn.getRejectionReason());
         assertNull(txn.getPostedAt(), "a rejected transaction is never posted");
     }
+
+    @Test
+    void reversalKeepsOriginalTransactionTraceAndPostsImmediately() {
+        FinancialTransaction original = FinancialTransaction.postedProviderTransaction(
+                "txn_5", TENANT, BRANCH, MEMBER, "savings_deposit", "cash",
+                new BigDecimal("45000"), "RCPT-5", "Treasurer cash savings deposit", SYSTEM);
+
+        FinancialTransaction reversal = FinancialTransaction.reversalOf(
+                original, "txn_5_rev", "RCPT-5-REV", "Duplicate receipt", "user_green_treasurer");
+
+        assertEquals("posted", reversal.getStatus());
+        assertEquals("txn_5", reversal.getOriginalTransactionId());
+        assertEquals("Duplicate receipt", reversal.getReversalReason());
+        assertEquals("RCPT-5-REV", reversal.getReference());
+        assertEquals("user_green_treasurer", reversal.getMakerUserId());
+        assertEquals("user_green_treasurer", reversal.getCheckerUserId());
+        assertEquals(original.getAmount(), reversal.getAmount());
+        assertEquals(original.getType(), reversal.getType());
+        assertNotNull(reversal.getPostedAt());
+    }
+
+    @Test
+    void reversalTrimsReasonAndHandlesBlankReason() {
+        FinancialTransaction original = FinancialTransaction.postedProviderTransaction(
+                "txn_6", TENANT, BRANCH, MEMBER, "share_purchase", "cash",
+                new BigDecimal("10000"), "RCPT-6", "Treasurer share purchase", SYSTEM);
+
+        FinancialTransaction reversal = FinancialTransaction.reversalOf(
+                original, "txn_6_rev", "RCPT-6-REV", "  Wrong member  ", "user_green_treasurer");
+        FinancialTransaction blankReasonReversal = FinancialTransaction.reversalOf(
+                original, "txn_6_rev_2", "RCPT-6-REV-2", " ", "user_green_treasurer");
+
+        assertEquals("Wrong member", reversal.getReversalReason());
+        assertEquals("Reversal of RCPT-6: Wrong member", reversal.getNarration());
+        assertEquals("", blankReasonReversal.getReversalReason());
+        assertEquals("Reversal of RCPT-6", blankReasonReversal.getNarration());
+    }
 }

@@ -34,6 +34,7 @@ writeFileSync(reportPath, renderReport({
   stdout: result.stdout || "",
   stderr: result.stderr || "",
   error: result.error ? result.error.message : "",
+  summary: parseSummary(result.stdout || ""),
 }));
 
 console.log(`Load evidence written to ${reportPath}`);
@@ -60,8 +61,12 @@ function renderReport(run) {
     `- LOAD_CONCURRENCY: ${process.env.LOAD_CONCURRENCY || "10"}`,
     `- LOAD_P95_MS: ${process.env.LOAD_P95_MS || "1000"}`,
     `- LOAD_P99_MS: ${process.env.LOAD_P99_MS || "2000"}`,
+    `- LOAD_MIN_RPS: ${process.env.LOAD_MIN_RPS || "1"}`,
+    `- LOAD_TIMEOUT_MS: ${process.env.LOAD_TIMEOUT_MS || "5000"}`,
     `- LOAD_LOGIN_CODE: ${process.env.LOAD_LOGIN_CODE || "PLATFORM"}`,
     `- LOAD_LOGIN_USERNAME: ${process.env.LOAD_LOGIN_USERNAME || process.env.LOAD_LOGIN_EMAIL || "admin@platform.local"}`,
+    "",
+    ...renderSummary(run.summary),
     "",
     "## Check",
     "",
@@ -75,4 +80,42 @@ function renderReport(run) {
     "```",
     "",
   ].join("\n");
+}
+
+function parseSummary(stdout) {
+  const line = stdout.split(/\r?\n/).find((item) => item.startsWith("LOAD_SUMMARY_JSON="));
+  if (!line) return null;
+  try {
+    return JSON.parse(line.slice("LOAD_SUMMARY_JSON=".length));
+  } catch {
+    return null;
+  }
+}
+
+function renderSummary(summary) {
+  if (!summary) {
+    return [
+      "## Summary",
+      "",
+      "- Structured summary: not found",
+    ];
+  }
+  return [
+    "## Summary",
+    "",
+    `- Target: ${summary.target}`,
+    `- Requests: ${summary.requests}`,
+    `- Concurrency: ${summary.concurrency}`,
+    `- Duration: ${summary.durationMs} ms`,
+    `- Failures: ${summary.failures}`,
+    `- Throughput: ${summary.throughputRps} req/s`,
+    `- p50 / p95 / p99: ${summary.p50Ms} ms / ${summary.p95Ms} ms / ${summary.p99Ms} ms`,
+    "",
+    "## Scenario Metrics",
+    "",
+    "| Scenario | Requests | Failures | p95 ms | Path |",
+    "|---|---:|---:|---:|---|",
+    ...summary.scenarios.map((scenario) =>
+      `| ${scenario.name} | ${scenario.requests} | ${scenario.failures} | ${scenario.p95Ms} | \`${scenario.path}\` |`),
+  ];
 }

@@ -261,7 +261,7 @@ class AuthController {
 
     private boolean isPrivileged(User user) {
         if (authService.isPlatform(user)) return true;
-        List<String> roleIds = userRoleRepository.findByIdUserId(user.getId()).stream()
+        List<String> roleIds = userRoleRepository.findByIdUserIdAndTenantId(user.getId(), user.getTenantId()).stream()
                 .map(userRole -> userRole.getId().getRoleId())
                 .toList();
         if (roleIds.isEmpty()) return false;
@@ -306,7 +306,7 @@ class AuthController {
     }
 
     private UserAccessResponse accessFor(User user) {
-        List<String> roleIds = userRoleRepository.findByIdUserId(user.getId()).stream()
+        List<String> roleIds = userRoleRepository.findByIdUserIdAndTenantId(user.getId(), user.getTenantId()).stream()
                 .map(userRole -> userRole.getId().getRoleId())
                 .sorted()
                 .toList();

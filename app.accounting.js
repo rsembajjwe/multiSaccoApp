@@ -65,7 +65,7 @@ function accountingView() {
   const expenses = dataRows("expenses");
   const assets = dataRows("assets");
   const accounting = buildAccountingSummary({ accounts, periods, journals, expenses, assets });
-  const tabs = [["capture", t("expenseAssetCapture")], ["journals", t("recentJournalEntries")], ["registers", t("expenseAssetRegisters")], ["setup", t("chartPeriods")]];
+  const tabs = [["overview", "Overview"], ["capture", t("expenseAssetCapture")], ["setup", t("chartPeriods")], ["journals", t("recentJournalEntries")], ["registers", t("expenseAssetRegisters")]];
   const tab = activeModuleTab("accounting", tabs);
   return `
     <div class="dashboard-grid">
@@ -77,7 +77,7 @@ function accountingView() {
       ${summary(t("assets"), money.format(accounting.assetTotal), "Fixed asset register", "View")}
     </div>
     ${moduleTabs("accounting", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel(t("accountingLedgerConfidence"), [
+    ${tab === "overview" ? accountingControlPanel(t("accountingLedgerConfidence"), "Review ledger balance, period control, expenses and assets before reporting.", [
       ["Trial balance", accounting.unbalancedCount ? `${accounting.unbalancedCount} unbalanced journal entr${accounting.unbalancedCount === 1 ? "y" : "ies"} need correction.` : "All loaded journal entries are balanced.", accounting.unbalancedCount ? "Review" : "Clear"],
       ["Period control", `${accounting.openPeriods} open period(s), ${accounting.closedPeriods} closed period(s). Closed periods block ordinary postings.`, accounting.openPeriods ? "Open" : "Review"],
       ["Asset and expense evidence", `${expenses.length} expense record(s) and ${assets.length} asset record(s) support management reports.`, "Ready"]
@@ -124,7 +124,7 @@ function reconciliationView() {
     ${tab === "overview" ? `
       ${reconciliationControlPanel(summaryData)}
       ${mobileMoneyCallbackOperationsPanel()}
-      ${rolePriorityPanel(t("reconciliationReadinessChecks"), [
+      ${accountingControlPanel(t("reconciliationReadinessChecks"), "Check matching, ledger exceptions, payment requests and callback evidence before closing.", [
       ["Statement matching", `${summaryData.matched ?? matches.length} matched record(s) against ${summaryData.statementLines || unmatchedStatementLines.length + matches.length} statement line(s).`, Number(summaryData.unmatchedStatementLines ?? unmatchedStatementLines.length) ? "Review" : "Clear"],
       ["Ledger exceptions", `${summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length} ledger line(s) remain unmatched.`, Number(summaryData.unmatchedLedgerLines ?? unmatchedLedgerLines.length) ? "Investigate" : "Clear"],
       ["Payment requests", `${pendingPaymentRequests.length} mobile-money request(s) are awaiting provider callback posting.`, pendingPaymentRequests.length ? "Track" : "Clear"],
@@ -245,6 +245,24 @@ function paymentRequestOperationsPanel(requests) {
         <button class="button danger" type="button" data-payment-request-status="cancelled" ${canManage && selectedOpen ? "" : "disabled"}>Cancel request</button>
       </div>
       ${canManage ? "" : `<p class="muted-note">Only users with posting rights can change payment request status.</p>`}
+    </section>
+  `;
+}
+
+function accountingControlPanel(title, copy, rows) {
+  const needsReview = rows.some((row) => ["review", "investigate", "blocked"].includes(normal(row[2])));
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(title)}</h2>
+          <p>${escapeHtml(copy)}</p>
+        </div>
+        <span class="status ${needsReview ? "pending" : "active"}">${needsReview ? "Review" : "Ready"}</span>
+      </div>
+      <div class="mini-grid">
+        ${rows.map(([label, detail, status]) => mini(label, `${detail}${status ? ` (${status})` : ""}`)).join("")}
+      </div>
     </section>
   `;
 }

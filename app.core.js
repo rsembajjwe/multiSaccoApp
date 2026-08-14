@@ -355,11 +355,22 @@ function contextCode() {
 }
 
 function paymentRoutePanel() {
-  return rolePriorityPanel("Member payment routes", [
-    ["Treasurer cash deposit", "Members can deposit savings, shares, welfare contributions or loan repayments at the SACCO office. Treasurer/Admin records the cash and issues a receipt after posting.", "Staff receipting"],
-    ["Mobile money self payment", "Members can pay from the member portal. The payment posts through the mobile-money callback and appears in statements after successful posting.", "Self-service"],
-    ["Monthly performance", "Admin and Treasurer can review member monthly deposits, cash collections, mobile-money collections and loan repayments.", "Visible"]
-  ]);
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member payment routes</h2>
+          <p>Members can pay through SACCO office receipt routes or approved mobile-money channels.</p>
+        </div>
+        <span class="status active">Visible</span>
+      </div>
+      <div class="mini-grid">
+        ${mini("Treasurer cash deposit", "Staff records office deposits and issues receipts after posting. (Staff receipting)")}
+        ${mini("Mobile money self payment", "Member portal payments post after provider callback confirmation. (Self-service)")}
+        ${mini("Monthly performance", "Admin and Treasurer review deposits, collections and repayments. (Visible)")}
+      </div>
+    </section>
+  `;
 }
 
 

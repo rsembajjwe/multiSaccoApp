@@ -102,6 +102,61 @@ class LoanRepaymentUnitTest {
         assertEquals("closed", loan.getStatus());
     }
 
+    @Test
+    void recordRepaymentClampsOverpaymentAtZero() {
+        Loan loan = LoanFixtures.activeLoanWithBalance(new BigDecimal("100000"));
+
+        loan.recordRepayment(new BigDecimal("120000"));
+
+        assertEquals(0, loan.getBalance().compareTo(BigDecimal.ZERO));
+        assertEquals("closed", loan.getStatus());
+        assertEquals("Closed", loan.getStage());
+    }
+
+    @Test
+    void submittedLoanAppliesProductInterestAndInstallmentTerms() {
+        Loan loan = Loan.submitted(
+                "loan_6", TENANT, MEMBER, "Emergency Loan", new BigDecimal("1000000"),
+                30, 4, "Medical expense", "member_portal", MEMBER);
+
+        assertEquals(0, loan.getInterestRate().compareTo(new BigDecimal("2.0")));
+        assertEquals(0, loan.getInterestAmount().compareTo(new BigDecimal("80000.00")));
+        assertEquals(0, loan.getTotalPayable().compareTo(new BigDecimal("1080000.00")));
+        assertEquals(0, loan.getMonthlyInstallment().compareTo(new BigDecimal("270000.00")));
+        assertEquals("submitted", loan.getStatus());
+        assertEquals("Credit Appraisal", loan.getStage());
+        assertEquals(MEMBER, loan.getSubmittedByMemberId());
+    }
+
+    @Test
+    void disbursedLoanBalanceUsesTotalPayableIncludingInterest() {
+        Loan loan = Loan.submitted(
+                "loan_7", TENANT, MEMBER, "School Fees Loan", new BigDecimal("600000"),
+                35, 6, "Fees", "staff", null);
+        loan.decide("approved", "user_green_chairperson", "");
+
+        loan.disburse("user_green_treasurer");
+
+        assertEquals("active", loan.getStatus());
+        assertEquals("Disbursed", loan.getStage());
+        assertEquals("user_green_treasurer", loan.getDisbursedByUserId());
+        assertNotNull(loan.getDisbursedAt());
+        assertEquals(0, loan.getBalance().compareTo(loan.getTotalPayable()));
+        assertEquals(0, loan.getBalance().compareTo(new BigDecimal("636000.00")));
+    }
+
+    @Test
+    void guarantorAcceptanceMovesSubmittedLoanToCommitteeStage() {
+        Loan loan = Loan.submitted(
+                "loan_8", TENANT, MEMBER, "Agriculture Loan", new BigDecimal("800000"),
+                25, 8, "Inputs", "staff", null);
+
+        loan.refreshGuarantors(2);
+
+        assertEquals(2, loan.getGuarantors());
+        assertEquals("Loan Committee", loan.getStage());
+    }
+
     /** Small fixture helper kept package-private so tests build active loans without disbursing. */
     static final class LoanFixtures {
         private LoanFixtures() {

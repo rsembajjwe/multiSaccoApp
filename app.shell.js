@@ -353,7 +353,9 @@ function quickSearchIndex() {
 }
 
 function topbarNotificationButton(modules) {
-  const canOpen = modules.some((item) => item[0] === "notifications");
+  const canOpen = state.auth === "member"
+    ? modules.some((item) => item[0] === "complaints")
+    : modules.some((item) => item[0] === "notifications");
   const unreadCount = unreadNotificationCount();
   const countLabel = unreadCount > 99 ? "99+" : String(unreadCount);
   const title = unreadCount ? `${countLabel} unread notification${unreadCount === 1 ? "" : "s"}` : "No unread notifications";
@@ -513,7 +515,8 @@ function openSecuritySettings() {
 
 function openMemberSecurity() {
   state.sessionMenuOpen = false;
-  state.currentView = "security";
+  state.currentView = "profile";
+  state.moduleTabs.profile = "security";
   renderShell();
 }
 
@@ -531,7 +534,8 @@ function openHelpNotifications() {
 
 function openHelpSecurity() {
   state.helpMenuOpen = false;
-  state.currentView = state.auth === "member" ? "security" : "settings";
+  state.currentView = state.auth === "member" ? "profile" : "settings";
+  if (state.auth === "member") state.moduleTabs.profile = "security";
   if (state.auth === "staff") state.moduleTabs.settings = "security";
   renderShell();
 }
@@ -540,6 +544,7 @@ async function openAccountProfile() {
   state.accountMenuOpen = false;
   if (state.auth === "member") {
     state.currentView = "profile";
+    state.moduleTabs.profile = "overview";
     renderShell();
     return;
   }

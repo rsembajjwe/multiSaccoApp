@@ -844,7 +844,7 @@ async function assertMemberPaymentPosting(page) {
   await expectText(page, "Payment draft workspace", "member payment drafts tab");
   await expectText(page, "Payment offline drafts", "member payment offline drafts panel");
   await page.locator("[data-module-tab-view='payments'][data-module-tab='mobile-money']").click();
-  await expectText(page, "M-PESA", "member payment M-PESA provider option");
+  await expectText(page, "MTN", "member payment MTN provider option");
   await page.locator("#memberPaymentPurpose").selectOption("savings_deposit");
   await page.locator("#memberPaymentAmount").fill("5000");
   await page.locator("#memberPaymentProvider").selectOption({ index: 0 });

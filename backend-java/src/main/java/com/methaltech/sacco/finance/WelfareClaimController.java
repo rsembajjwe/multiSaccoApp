@@ -15,7 +15,6 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -35,9 +34,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/v1/welfare-claims")
 class WelfareClaimController {
-
-    private static final Set<String> DECISION_STATUSES = Set.of("approved", "rejected");
-    private static final Set<String> PAYMENT_CHANNELS = Set.of("mobile_money", "cash", "bank");
 
     private final WelfareClaimRepository claimRepository;
     private final MemberRepository memberRepository;
@@ -160,7 +156,7 @@ class WelfareClaimController {
         }
 
         String status = body.status().trim();
-        if (!DECISION_STATUSES.contains(status)) {
+        if (!WelfareClaimRules.isDecisionStatus(status)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_WELFARE_CLAIM_STATUS", "Welfare claims can only be approved or rejected."));
         }
@@ -185,7 +181,7 @@ class WelfareClaimController {
         }
 
         String channel = body.channel().trim();
-        if (!PAYMENT_CHANNELS.contains(channel)) {
+        if (!WelfareClaimRules.isPaymentChannel(channel)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_WELFARE_PAYMENT_CHANNEL", "Unsupported welfare claim payment channel."));
         }
@@ -207,7 +203,7 @@ class WelfareClaimController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "WELFARE_CLAIM_ALREADY_DECIDED", "Only submitted welfare claims can be decided."));
         }
-        if ("rejected".equals(status) && (reason == null || reason.isBlank())) {
+        if (WelfareClaimRules.requiresRejectionReason(status) && (reason == null || reason.isBlank())) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "WELFARE_REJECTION_REASON_REQUIRED", "A rejection reason is required."));
         }
@@ -234,7 +230,7 @@ class WelfareClaimController {
             AuthService.CurrentSession currentSession,
             HttpServletRequest request) {
         if (!canAccess(currentSession, claim.getTenantId())) return tenantAccessDenied();
-        if (!"approved".equals(claim.getStatus())) {
+        if (!WelfareClaimRules.isPayableStatus(claim.getStatus())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "WELFARE_CLAIM_NOT_PAYABLE", "Only approved welfare claims can be paid."));
         }

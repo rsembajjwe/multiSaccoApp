@@ -47,7 +47,7 @@ function saccoSettingsTabs(activeTab) {
 }
 
 function saccoSettingsControlPanel(branches, products, accounts, missingProducts) {
-  return rolePriorityPanel(t("saccoSettingsControl"), buildSaccoSettingsControlRows({ accounts, branches, labelize, missingProducts, products }));
+  return compactControlPanel(t("saccoSettingsControl"), "Confirm branches, contribution products and collection accounts before members transact.", buildSaccoSettingsControlRows({ accounts, branches, labelize, missingProducts, products }));
 }
 
 function settingsReadinessPanel(readiness) {
@@ -239,7 +239,7 @@ function platformMobileMoneyIntegrationPanel() {
 }
 
 function platformSettingsControlPanel(packages, roles, permissions, templates, canManage) {
-  return rolePriorityPanel(t("platformSettingsControl"), buildPlatformSettingsControlRows({ canManage, packages, permissions, roles, templates }));
+  return compactControlPanel(t("platformSettingsControl"), "Manage protected platform configuration for packages, roles, permissions and global templates.", buildPlatformSettingsControlRows({ canManage, packages, permissions, roles, templates }));
 }
 
 function staffSecuritySettingsPanel(security, platformScope) {
@@ -252,7 +252,7 @@ function staffSecuritySettingsPanel(security, platformScope) {
       ${summary("Password resets", model.resetCount, "Requests recorded for this administrator", "Audit")}
       ${summary("Session expiry", model.currentExpiry ? formatDateTime(model.currentExpiry) : "Not reported", "Current token lifetime", "Extend")}
     </div>
-    ${rolePriorityPanel(platformScope ? "Platform security settings" : "SACCO security settings", [
+    ${compactControlPanel(platformScope ? "Platform security settings" : "SACCO security settings", "Review administrator sessions, MFA, password resets and lockout policy evidence.", [
       ["Active sessions", `${model.activeCount} active staff session(s) are server-side and expire automatically.`, model.activeCount ? "Monitor" : "None"],
       ["MFA posture", security.mfaEnabled ? "MFA is enabled for this administrator account." : "MFA is not yet enabled for this administrator account.", security.mfaEnabled ? "Ready" : "Improve"],
       ["Password reset evidence", `${model.resetCount} password reset request(s) are available in the audit trail for this account.`, model.resetCount ? "Trace" : "No resets"],
@@ -283,6 +283,24 @@ function staffSecuritySettingsPanel(security, platformScope) {
       ${recordTable("Password reset history", model.resetRows, ["id", "status", "createdAt", "expiresAt", "usedAt"])}
     </div>
     ${platformScope ? platformPasswordPolicyPanel(policy) : ""}
+  `;
+}
+
+function compactControlPanel(title, copy, rows) {
+  const needsReview = rows.some((row) => ["review", "configure", "setup needed", "improve", "incomplete"].includes(normal(row[2])));
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(title)}</h2>
+          <p>${escapeHtml(copy)}</p>
+        </div>
+        <span class="status ${needsReview ? "pending" : "active"}">${needsReview ? "Review" : "Ready"}</span>
+      </div>
+      <div class="mini-grid">
+        ${rows.map(([label, detail, status]) => mini(label, `${detail} ${status ? `(${status})` : ""}`)).join("")}
+      </div>
+    </section>
   `;
 }
 

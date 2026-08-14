@@ -34,12 +34,17 @@
       ${summary("Configured roles", accessSummary.configuredRoles, "Available assignments", "Manage")}
       ${summary("Role coverage", accessSummary.roleCoverage, "Users with assigned roles", "Audit")}
     </div>
-    ${!platformOnly ? saccoStaffAccessGuide(roles) : ""}
-    ${canCreate ? addUserPanel(platformOnly) : ""}
-    ${userDetailPanel(users, canCreate)}
-    ${roleCoveragePanel(users, roles, platformOnly)}
-    ${listPanel}
-    ${permissionMatrix()}
+    ${saccoUserManagementTabs(canCreate)}
+    ${saccoUserTabContent({
+      activeTab: state.userAdminTab,
+      canCreate,
+      addPanel: canCreate ? addUserPanel(false) : emptyState("Add SACCO staff user", "Only SACCO Admin users can create staff logins."),
+      detailPanel,
+      guidePanel: saccoStaffAccessGuide(roles),
+      coveragePanel: roleCoveragePanel(users, roles, false),
+      listPanel,
+      permissionPanel: permissionMatrix()
+    })}
   `;
 }
 
@@ -65,6 +70,35 @@ function userManagementTabs(canCreate) {
 function platformUserTabContent({ activeTab, canCreate, addPanel, detailPanel, coveragePanel, listPanel, permissionPanel }) {
   if (activeTab === "add") return addPanel;
   if (activeTab === "detail") return detailPanel;
+  if (activeTab === "coverage") return coveragePanel;
+  if (activeTab === "matrix") return permissionPanel;
+  return listPanel;
+}
+
+function saccoUserManagementTabs(canCreate) {
+  const tabs = [
+    ["add", "Add SACCO staff user", canCreate],
+    ["detail", "User detail and role assignment", true],
+    ["guide", "SACCO staff role guide", true],
+    ["coverage", "SACCO staff role coverage", true],
+    ["list", "SACCO staff access list", true],
+    ["matrix", "Permission matrix", true]
+  ];
+  if (!tabs.some(([id]) => id === state.userAdminTab)) state.userAdminTab = "list";
+  if (state.userAdminTab === "add" && !canCreate) state.userAdminTab = "list";
+  return `
+    <section class="panel compact-panel">
+      <div class="tabs management-tabs">
+        ${tabs.map(([id, label, enabled]) => `<button class="${state.userAdminTab === id ? "active" : ""}" type="button" data-user-tab="${id}" ${enabled ? "" : "disabled"}>${escapeHtml(label)}</button>`).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function saccoUserTabContent({ activeTab, canCreate, addPanel, detailPanel, guidePanel, coveragePanel, listPanel, permissionPanel }) {
+  if (activeTab === "add") return addPanel;
+  if (activeTab === "detail") return detailPanel;
+  if (activeTab === "guide") return guidePanel;
   if (activeTab === "coverage") return coveragePanel;
   if (activeTab === "matrix") return permissionPanel;
   return listPanel;

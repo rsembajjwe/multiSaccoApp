@@ -260,7 +260,7 @@ async function openQuickSearchResult(resultId) {
   /** @type {TerekaQuickSearchResult | undefined} */
   const result = quickSearchResults().find((item) => item.id === resultId);
   if (!result) return;
-  state.currentView = result.view;
+  openView(result.view);
   if (result.saccoRegistrationTab) state.saccoRegistrationTab = result.saccoRegistrationTab;
   if (result.memberTab) state.memberTab = result.memberTab;
   if (result.userAdminTab) state.userAdminTab = result.userAdminTab;
@@ -318,6 +318,11 @@ async function activateQuickSearchSelection() {
   if (!results.length) return;
   const resultId = state.quickSearchActiveId || results[0].id;
   await openQuickSearchResult(resultId);
+}
+
+function openView(view) {
+  state.currentView = view;
+  state.lastError = "";
 }
 
 async function loadServerTablePage(tableKey, pageNumber) {
@@ -417,7 +422,12 @@ function bindEvents() {
     event.currentTarget.textContent = showing ? "Show" : "Hide";
   });
   document.querySelector("[data-action='open-notifications']")?.addEventListener("click", () => {
-    state.currentView = "notifications";
+    if (state.auth === "member") {
+      state.moduleTabs.complaints = "notifications";
+      openView("complaints");
+    } else {
+      openView("notifications");
+    }
     renderShell();
   });
   document.querySelector("#passwordResetRequestForm")?.addEventListener("submit", requestPasswordResetFromForm);
@@ -431,13 +441,13 @@ function bindEvents() {
   document.querySelector(".nav-list")?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-view]");
     if (button) {
-      state.currentView = button.dataset.view;
+      openView(button.dataset.view);
       renderShell();
     }
   });
   document.querySelectorAll("[data-summary-view]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.currentView = button.dataset.summaryView;
+      openView(button.dataset.summaryView);
       renderShell();
     });
   });
@@ -446,7 +456,7 @@ function bindEvents() {
       const view = button.dataset.memberShortcutView;
       const tab = button.dataset.memberShortcutTab;
       if (tab) state.moduleTabs[view] = tab;
-      state.currentView = view;
+      openView(view);
       renderShell();
     });
   });
@@ -736,6 +746,7 @@ function bindEvents() {
   document.querySelectorAll("[data-account-form]").forEach((form) => form.addEventListener("submit", openFinancialAccount));
   document.querySelector("#memberLoanForm")?.addEventListener("submit", submitMemberLoan);
   document.querySelector("#memberPaymentForm")?.addEventListener("submit", postMemberPayment);
+  document.querySelector("#memberComplaintForm")?.addEventListener("submit", submitMemberComplaint);
   document.querySelector("#memberPrivacyConsentForm")?.addEventListener("submit", saveMemberPrivacyConsents);
   document.querySelector("#memberPrivacyRequestForm")?.addEventListener("submit", submitMemberPrivacyRequest);
   document.querySelector("#welfareClaimForm")?.addEventListener("submit", submitWelfareClaim);

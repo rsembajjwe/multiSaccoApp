@@ -22,12 +22,11 @@ The production backend path is Java/Spring Boot in `backend-java`. The Node serv
 
 ## How to run
 
-Option 1: open `index.html` in a modern browser.
-
-Option 2: run a local server:
+Recommended local development path: run the Java backend, then run the frontend proxy:
 
 ```powershell
-npm.cmd start
+npm.cmd run java:start
+npm.cmd run start:java-api
 ```
 
 Then open:
@@ -36,28 +35,21 @@ Then open:
 http://127.0.0.1:5173
 ```
 
-No installation is required. The app uses browser `localStorage` for demo data, and the **Reset demo** button restores the original dataset.
+This keeps the app at `http://127.0.0.1:5173` while proxying `/api/v1/*` requests to `http://127.0.0.1:8080`.
 
-Run the Java backend:
+Legacy demo fallback, for UI demonstrations only:
 
 ```powershell
-npm.cmd run java:start
+npm.cmd start
 ```
 
-Then open:
+This starts `server.mjs` without `JAVA_API_BASE`, so `/api/v1` uses the in-memory Node fallback. Do not use this mode for production-style testing.
+
+Check only the Java backend health:
 
 ```text
 http://127.0.0.1:8080/api/v1/health
 ```
-
-Run the frontend against the Java backend:
-
-```powershell
-npm.cmd run java:start
-npm.cmd run start:java-api
-```
-
-This keeps the app at `http://127.0.0.1:5173` while proxying `/api/v1/*` requests to `http://127.0.0.1:8080`.
 
 For production-style local checks, always run the frontend with `JAVA_API_BASE`. Starting `server.mjs` with `NODE_ENV=production` and no Java API now returns `503 JAVA_API_REQUIRED` for `/api/v1/*` instead of silently serving the legacy Node prototype.
 

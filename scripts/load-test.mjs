@@ -3,9 +3,22 @@ const totalRequests = numberFromEnv("LOAD_REQUESTS", 100);
 const concurrency = numberFromEnv("LOAD_CONCURRENCY", 10);
 const p95LimitMs = numberFromEnv("LOAD_P95_MS", 1000);
 const p99LimitMs = numberFromEnv("LOAD_P99_MS", 2000);
+const minThroughputRps = numberFromEnv("LOAD_MIN_RPS", 1);
+const timeoutMs = numberFromEnv("LOAD_TIMEOUT_MS", 5000);
 const loginCode = process.env.LOAD_LOGIN_CODE || "PLATFORM";
 const loginUsername = process.env.LOAD_LOGIN_USERNAME || process.env.LOAD_LOGIN_EMAIL || "admin@platform.local";
 const loginPassword = process.env.LOAD_LOGIN_PASSWORD || "Admin@12345";
+
+const scenarios = [
+  { name: "health", path: "/api/v1/health", auth: false },
+  { name: "operations", path: "/api/v1/operations/status", auth: true },
+  { name: "saccos", path: "/api/v1/tenants", auth: true },
+  { name: "subscriptions", path: "/api/v1/subscriptions", auth: true },
+  { name: "users", path: "/api/v1/users", auth: true },
+  { name: "audit", path: "/api/v1/audit-events", auth: true },
+  { name: "reports", path: "/api/v1/regulatory-report", auth: true },
+  { name: "provider-evidence", path: "/api/v1/notifications/provider-evidence", auth: true },
+];
 
 function numberFromEnv(name, defaultValue) {
   const value = Number.parseInt(process.env[name] || "", 10);
@@ -14,7 +27,10 @@ function numberFromEnv(name, defaultValue) {
 
 async function request(path, options = {}) {
   const startedAt = performance.now();
-  const response = await fetch(`${baseUrl}${path}`, options);
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   const elapsedMs = performance.now() - startedAt;
   const body = await response.text();
   return { status: response.status, elapsedMs, body };
@@ -37,16 +53,15 @@ async function worker(id, token, queue, results) {
   while (queue.next < totalRequests) {
     const requestNumber = queue.next;
     queue.next += 1;
-    const path = requestNumber % 2 === 0 ? "/api/v1/health" : "/api/v1/operations/status";
-    const headers = path.includes("/operations/")
-      ? { Authorization: `Bearer ${token}` }
-      : {};
+    const scenario = scenarios[requestNumber % scenarios.length];
+    const headers = scenario.auth ? { Authorization: `Bearer ${token}` } : {};
 
     try {
-      const result = await request(path, { headers });
+      const result = await request(scenario.path, { headers });
       results.push({
         worker: id,
-        path,
+        scenario: scenario.name,
+        path: scenario.path,
         status: result.status,
         elapsedMs: result.elapsedMs,
         ok: result.status >= 200 && result.status < 300,
@@ -54,7 +69,8 @@ async function worker(id, token, queue, results) {
     } catch (error) {
       results.push({
         worker: id,
-        path,
+        scenario: scenario.name,
+        path: scenario.path,
         status: 0,
         elapsedMs: 0,
         ok: false,
@@ -71,9 +87,25 @@ function percentile(values, ratio) {
   return sorted[index];
 }
 
+function summarizeScenario(results, scenario) {
+  const scenarioResults = results.filter((result) => result.scenario === scenario.name);
+  const okResults = scenarioResults.filter((result) => result.ok);
+  const latencies = okResults.map((result) => result.elapsedMs);
+  return {
+    name: scenario.name,
+    path: scenario.path,
+    requests: scenarioResults.length,
+    failures: scenarioResults.length - okResults.length,
+    p50Ms: Number(percentile(latencies, 0.5).toFixed(1)),
+    p95Ms: Number(percentile(latencies, 0.95).toFixed(1)),
+    p99Ms: Number(percentile(latencies, 0.99).toFixed(1)),
+  };
+}
+
 async function main() {
   console.log(`Load target: ${baseUrl}`);
-  console.log(`Requests: ${totalRequests}, concurrency: ${concurrency}, p95 limit: ${p95LimitMs}ms, p99 limit: ${p99LimitMs}ms`);
+  console.log(`Requests: ${totalRequests}, concurrency: ${concurrency}, p95 limit: ${p95LimitMs}ms, p99 limit: ${p99LimitMs}ms, min throughput: ${minThroughputRps} req/s`);
+  console.log(`Scenario mix: ${scenarios.map((scenario) => scenario.name).join(", ")}`);
 
   const token = await login();
   const results = [];
@@ -90,6 +122,25 @@ async function main() {
   const p95 = percentile(latencies, 0.95);
   const p99 = percentile(latencies, 0.99);
   const requestsPerSecond = results.length / (durationMs / 1000);
+  const scenarioSummaries = scenarios.map((scenario) => summarizeScenario(results, scenario));
+  const summary = {
+    target: baseUrl,
+    requests: results.length,
+    concurrency,
+    durationMs: Number(durationMs.toFixed(1)),
+    failures: failures.length,
+    throughputRps: Number(requestsPerSecond.toFixed(2)),
+    p50Ms: Number(p50.toFixed(1)),
+    p95Ms: Number(p95.toFixed(1)),
+    p99Ms: Number(p99.toFixed(1)),
+    thresholds: {
+      p95Ms: p95LimitMs,
+      p99Ms: p99LimitMs,
+      minThroughputRps,
+      timeoutMs,
+    },
+    scenarios: scenarioSummaries,
+  };
 
   console.log(`Completed: ${results.length}`);
   console.log(`Failures: ${failures.length}`);
@@ -97,6 +148,10 @@ async function main() {
   console.log(`Latency p50: ${p50.toFixed(1)}ms`);
   console.log(`Latency p95: ${p95.toFixed(1)}ms`);
   console.log(`Latency p99: ${p99.toFixed(1)}ms`);
+  for (const scenario of scenarioSummaries) {
+    console.log(`Scenario ${scenario.name}: requests=${scenario.requests}, failures=${scenario.failures}, p95=${scenario.p95Ms.toFixed(1)}ms`);
+  }
+  console.log(`LOAD_SUMMARY_JSON=${JSON.stringify(summary)}`);
 
   if (failures.length > 0) {
     console.error("First failure:", JSON.stringify(failures[0], null, 2));
@@ -108,6 +163,10 @@ async function main() {
   }
   if (p99 > p99LimitMs) {
     console.error(`p99 latency ${p99.toFixed(1)}ms exceeded ${p99LimitMs}ms`);
+    process.exit(1);
+  }
+  if (requestsPerSecond < minThroughputRps) {
+    console.error(`Throughput ${requestsPerSecond.toFixed(2)} req/s was below ${minThroughputRps} req/s`);
     process.exit(1);
   }
 }

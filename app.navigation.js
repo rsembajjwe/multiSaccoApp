@@ -38,10 +38,16 @@ const saccoModules = [
 const memberModules = [
   ["home", "Home", "Balances and quick actions"],
   ["money", "Money", "Accounts, statement and receipts"],
+  ["accounts", "Accounts", "Balances and verification"],
+  ["statements", "Statements", "Activity and monthly evidence"],
+  ["receipts", "Receipts", "Payment receipt evidence"],
   ["loans", "Loans", "Loans and guarantor requests"],
+  ["guarantor-requests", "Guarantors", "Guarantee requests"],
   ["payments", "Payments", "Deposit and repay"],
+  ["notifications", "Messages", "SACCO notices and alerts"],
   ["complaints", "Support", "Messages and notifications"],
-  ["profile", "Profile", "Your details and security"]
+  ["profile", "Profile", "Your details and KYC"],
+  ["security", "Security", "Login and recovery controls"]
 ];
 
 function saccoAccounts() {
@@ -72,7 +78,8 @@ function membersView() {
   const rows = buildMemberDirectoryRows({ kycReadiness: memberKycReadinessFor, members });
   const memberSummary = buildMemberDirectorySummary(rows);
   const pendingKyc = pendingMemberKycRows(rows);
-  const tab = state.memberTab || "overview";
+  const availableTabs = ["overview", "list", "register", "kyc", "contacts", "statement"];
+  const tab = availableTabs.includes(state.memberTab) ? state.memberTab : "overview";
   return `
     <div class="dashboard-grid">
       ${summary(t("registeredMembers"), memberSummary.registeredMembers, "Member register only, not staff users", t("review"))}
@@ -82,11 +89,7 @@ function membersView() {
       ${summary(t("portalReady"), memberSummary.portalReady, "Can use member login", "Audit")}
     </div>
     ${memberTabs(tab)}
-    ${tab === "overview" ? rolePriorityPanel(t("memberManagementFocus"), [
-      ["Member and staff separation", "Members are managed here. SACCO staff logins are managed under Users and Roles.", "Clear"],
-      ["KYC workflow", `${pendingKyc.length} member profile(s) need verification, document review or approval action.`, pendingKyc.length ? "Pending" : "Clear"],
-      ["Balances and statements", "Open a member profile to review balances, contacts, beneficiaries, documents and statement lines.", "Ready"]
-    ]) : ""}
+    ${tab === "overview" ? memberManagementOverviewPanel(memberSummary, pendingKyc) : ""}
     ${tab === "register" ? memberRegistrationPanel() : ""}
     ${tab === "list" ? `
       ${filterToolbar("Search by member number, name, phone, branch, KYC or status", "Register member", "Download statement")}
@@ -100,6 +103,7 @@ function membersView() {
 
 function memberTabs(activeTab) {
   const tabs = [
+    ["overview", "Member Overview"],
     ["list", t("memberList")],
     ["register", t("registerMember")],
     ["kyc", t("kycDetail")],
@@ -110,6 +114,27 @@ function memberTabs(activeTab) {
     <div class="tabs management-tabs">
       ${tabs.map(([id, label]) => `<button class="${activeTab === id ? "active" : ""}" type="button" data-member-tab="${id}">${label}</button>`).join("")}
     </div>
+  `;
+}
+
+function memberManagementOverviewPanel(memberSummary, pendingKyc) {
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member management focus</h2>
+          <p>Manage SACCO members here. Staff users remain under Users and Roles.</p>
+        </div>
+        <span class="status ${pendingKyc.length ? "pending" : "active"}">${pendingKyc.length ? "KYC follow-up" : "Current"}</span>
+      </div>
+      <div class="source-grid">
+        ${mini("Member and staff separation", "Members only")}
+        ${mini("KYC workflow", `${pendingKyc.length} pending`)}
+        ${mini("Portal access", `${memberSummary.portalReady} ready`)}
+        ${mini("Balances and statements", money.format(memberSummary.totalBalances))}
+      </div>
+      ${pendingKyc.length ? recordTable("KYC follow-up", pendingKyc, ["membershipNo", "fullName", "phone", "kycReadiness", "kycStatus", "status"]) : emptyState("No KYC follow-up", "Member KYC records are current.")}
+    </section>
   `;
 }
 

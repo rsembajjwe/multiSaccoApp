@@ -20,12 +20,23 @@ function subscriptionsView() {
 }
 
 function subscriptionStatusGuide(subscriptionSummary) {
-  return rolePriorityPanel(t("subscriptionPaymentAccessStatus"), [
-    ["Paid and active", `${subscriptionSummary.paidAndActive} SACCO(s) have confirmed payment and operating access.`, "Active"],
-    ["Payment initiated", `${subscriptionSummary.paymentInitiated} SACCO(s) are waiting for payment confirmation before activation or renewal.`, "Follow up"],
-    ["Callback received", `${subscriptionSummary.callbackReceived} SACCO(s) have confirmed payment and need approval or activation follow-through.`, "Review"],
-    ["Expired or suspended", `${subscriptionSummary.expiredOrSuspended} SACCO(s) need renewal, payment confirmation or manual access review.`, "Review"]
-  ]);
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(t("subscriptionPaymentAccessStatus"))}</h2>
+          <p>Track subscription payment, callback confirmation and operating access before a SACCO can transact.</p>
+        </div>
+        <span class="status ${subscriptionSummary.pendingPayments || subscriptionSummary.expiredOrSuspended ? "pending" : "active"}">${subscriptionSummary.pendingPayments || subscriptionSummary.expiredOrSuspended ? "Follow up" : "Current"}</span>
+      </div>
+      <div class="mini-grid">
+        ${mini("Paid and active", `${subscriptionSummary.paidAndActive} SACCO(s)`)}
+        ${mini("Payment initiated", `${subscriptionSummary.paymentInitiated} SACCO(s) waiting for confirmation`)}
+        ${mini("Callback received", `${subscriptionSummary.callbackReceived} SACCO(s) confirmed`)}
+        ${mini("Expired or suspended", `${subscriptionSummary.expiredOrSuspended} SACCO(s)`)}
+      </div>
+    </section>
+  `;
 }
 
 function subscriptionDetailPanel(rows) {
@@ -115,7 +126,7 @@ function packageSetupPanel() {
   if (!pkg) return "";
   const canManage = isPlatform() && (roleKind() === "super" || roleKind() === "billing" || hasPermission("subscriptions:manage"));
   return `
-    <section class="panel detail-panel">
+    <section class="panel detail-panel package-dialog-panel">
       <div class="panel-heading">
         <div>
           <h2>Package Setup</h2>

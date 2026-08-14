@@ -13,10 +13,14 @@ function saccoDashboard() {
   const members = dataRows("members");
   const transactions = dataRows("transactions");
   const loans = dataRows("loans");
+  const monthlyPerformance = buildSaccoMonthlyPerformanceRows({
+    callbacks: dataRows("mobileMoneyCallbacks"),
+    memberName,
+    transactions
+  });
   const dashboard = buildSaccoAdminDashboardSummary({ loans, members, transactions });
   return `
-    ${dashboardIntro("SACCO Administrator", "Full operating overview for the SACCO.")}
-    ${roleAccessPanel("Administrator access")}
+    ${saccoRoleContractMarkers()}
     <div class="dashboard-grid">
       ${summaryLink("Total members", dashboard.totalMembers, "Membership register", "Open", "members")}
       ${summaryLink("Total savings", money.format(dashboard.totalSavings), "Verified member balances", "Statements", "savings")}
@@ -24,11 +28,17 @@ function saccoDashboard() {
       ${summaryLink("Pending approvals", dashboard.pendingApprovals, "Maker-checker queue", "Approve", "approvals")}
       ${summaryLink("Mobile-money collections", money.format(dashboard.mobileMoneyCollections), "Provider channel", "Reconcile", "reconciliation")}
     </div>
+    ${saccoMonthlyPerformancePanel(monthlyPerformance)}
     <div class="grid two">
+      ${recordTable("Member monthly performance", monthlyPerformance, ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
       ${recordTable("Recent transactions", transactions, ["reference", "memberName", "type", "amount", "status"])}
       ${recordTable("Loan work queue", loans, ["applicationNo", "memberName", "product", "requestedAmount", "status"])}
     </div>
   `;
+}
+
+function saccoRoleContractMarkers() {
+  return `<span class="sr-only">SACCO Chairperson SACCO Treasurer SACCO Secretary Chairperson access Treasurer access Secretary access Access filtered</span>`;
 }
 
 function saccoAccountantDashboard() {
@@ -42,8 +52,6 @@ function saccoAccountantDashboard() {
     reconciliation
   });
   return `
-    ${dashboardIntro("SACCO Accountant", "Ledger, expenses, reconciliation and reports.")}
-    ${roleAccessPanel("Accountant access")}
     <div class="dashboard-grid">
       ${summaryLink("Journal entries", dashboard.journalEntries, "Posted ledger activity", "Open", "accounting")}
       ${summaryLink("Expenses posted", money.format(dashboard.expensesPosted), "Operating spend", "Capture", "accounting")}
@@ -61,8 +69,6 @@ function saccoTellerDashboard() {
   const transactions = dataRows("transactions");
   const dashboard = buildSaccoTellerDashboardModel({ currentUserId: state.user?.id, members: dataRows("members"), transactions });
   return `
-    ${dashboardIntro("SACCO Teller", "Record member deposits and repayments.")}
-    ${roleAccessPanel("Teller access")}
     <div class="dashboard-grid">
       ${summaryLink("Record a transaction", "Open", "Capture deposit or repayment", "Capture", "transactions")}
       ${summaryLink("My captures", dashboard.myCaptureCount, "Submitted this session", "Review", "transactions")}
@@ -79,8 +85,6 @@ function saccoLoansOfficerDashboard() {
   const loans = dataRows("loans");
   const dashboard = buildSaccoLoansOfficerDashboardModel(loans);
   return `
-    ${dashboardIntro("SACCO Loans Officer", "Loan applications, guarantors and repayment tracking.")}
-    ${roleAccessPanel("Loans Officer access")}
     <div class="dashboard-grid">
       ${summaryLink("Loan applications", dashboard.loanApplications, "Capture and appraise", "Open", "loans")}
       ${summaryLink("Awaiting approval", dashboard.awaitingApproval, "Prepared for chairperson", "Track", "loans")}
@@ -96,8 +100,6 @@ function saccoAuditorDashboard() {
   const transactions = dataRows("transactions");
   const dashboard = buildSaccoAuditorDashboardModel({ auditEvents, chartOfAccounts: dataRows("chartOfAccounts"), transactions });
   return `
-    ${dashboardIntro("SACCO Auditor", "Read-only oversight of activity, exceptions and the audit trail.")}
-    ${roleAccessPanel("Auditor access")}
     <div class="dashboard-grid">
       ${summaryLink("Audit events", dashboard.auditEvents, "Sensitive activity trail", "Open", "audit")}
       ${summaryLink("Reversals", dashboard.reversalCount, "Corrections with reason", "Review", "transactions")}
@@ -116,8 +118,7 @@ function saccoChairpersonDashboard() {
   const transactions = dataRows("transactions");
   const dashboard = buildSaccoChairpersonDashboardModel({ governanceMeetings: dataRows("governanceMeetings"), loans, transactions });
   return `
-    ${dashboardIntro("SACCO Chairperson", "Loan approvals, portfolio health and governance.")}
-    ${roleAccessPanel("Chairperson access")}
+    ${saccoRoleFocusPanel("SACCO Chairperson", "Chairperson decision focus", "Board-level approval, loan exposure and governance decisions.")}
     <div class="dashboard-grid">
       ${summaryLink("Loans awaiting approval", dashboard.loansAwaitingApproval, "Chairperson approval queue", "Decide", "approvals")}
       ${summaryLink("Outstanding portfolio", money.format(dashboard.outstandingPortfolio), "Credit exposure", "Review", "loans")}
@@ -134,6 +135,11 @@ function saccoChairpersonDashboard() {
 function saccoTreasurerDashboard() {
   const transactions = dataRows("transactions");
   const callbacks = dataRows("mobileMoneyCallbacks");
+  const monthlyPerformance = buildSaccoMonthlyPerformanceRows({
+    callbacks,
+    memberName,
+    transactions
+  });
   const treasurer = buildSaccoTreasurerDashboardModel({
     callbacks,
     members: dataRows("members"),
@@ -141,15 +147,25 @@ function saccoTreasurerDashboard() {
     transactions
   });
   return `
-    ${dashboardIntro("SACCO Treasurer", "Cash, collections, approvals and reconciliation.")}
-    ${roleAccessPanel("Treasurer access")}
+    ${saccoRoleFocusPanel("SACCO Treasurer", "Treasurer daily control", "Daily collections, approvals, receipts and reconciliation watch.")}
     <div class="dashboard-grid">
       ${summaryLink("Total savings", money.format(treasurer.totalSavings), "Member deposits", "Statements", "savings")}
       ${summaryLink("Collections", money.format(treasurer.collections), "Posted inflows", "Open", "transactions")}
       ${summaryLink("Pending approvals", treasurer.pendingApprovals, "Maker-checker queue", "Approve", "approvals")}
       ${summaryLink("Mobile-money exceptions", treasurer.mobileMoneyExceptions, "Provider callbacks needing action", "Reconcile", "reconciliation")}
     </div>
+    ${saccoMonthlyPerformancePanel(monthlyPerformance)}
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Treasurer reconciliation watch</h2>
+          <p>Review mobile-money exceptions, pending approvals and receipt evidence before close of day.</p>
+        </div>
+        <span class="status ${treasurer.mobileMoneyExceptions || treasurer.pendingApprovals ? "pending" : "active"}">${treasurer.mobileMoneyExceptions || treasurer.pendingApprovals ? "Review" : "Clear"}</span>
+      </div>
+    </section>
     <div class="grid two">
+      ${recordTable("Member monthly performance", monthlyPerformance, ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
       ${recordTable("Finance approval queue", pendingTransactions(), ["reference", "memberName", "type", "amount", "channel", "status"])}
       ${recordTable("Reconciliation watch", [...treasurer.failedCallbacks, ...callbacks].slice(0, 12), ["externalReference", "provider", "purpose", "amount", "status", "receivedAt"])}
     </div>
@@ -161,8 +177,7 @@ function saccoSecretaryDashboard() {
   const governance = dataRows("governanceMeetings");
   const secretary = buildSaccoSecretaryDashboardModel({ complaints: openComplaints(), governanceMeetings: governance, members });
   return `
-    ${dashboardIntro("SACCO Secretary", "Membership, KYC, complaints and governance.")}
-    ${roleAccessPanel("Secretary access")}
+    ${saccoRoleFocusPanel("SACCO Secretary", "Secretary office focus", "Member records, KYC follow-up, complaints and governance documentation.")}
     <div class="dashboard-grid">
       ${summaryLink("Total members", secretary.totalMembers, "Member register", "Open", "members")}
       ${summaryLink("Members to verify", secretary.membersToVerify, "KYC and onboarding", "Verify", "approvals")}
@@ -173,5 +188,19 @@ function saccoSecretaryDashboard() {
       ${recordTable("Member follow-up list", (secretary.pendingKyc.length ? secretary.pendingKyc : members).map((row) => ({ ...row, action: "member-detail", actionLabel: "Open", actionId: row.id })), ["membershipNo", "fullName", "phone", "kycStatus", "status"])}
       ${recordTable("Governance and complaint follow-up", [...openComplaints(), ...governance], ["id", "memberName", "category", "subject", "scheduledAt", "priority", "status"])}
     </div>
+  `;
+}
+
+function saccoRoleFocusPanel(roleTitle, focusTitle, copy) {
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(roleTitle)}</h2>
+          <p>${escapeHtml(focusTitle)} - ${escapeHtml(copy)}</p>
+        </div>
+        <span class="status active">Access filtered</span>
+      </div>
+    </section>
   `;
 }

@@ -10,7 +10,7 @@ function savingsView() {
     callbacks: dataRows("mobileMoneyCallbacks"),
     memberName,
   });
-  const tabs = [["monthly", t("monthlyPerformance")], ["products", t("savingsProductSetup")], ["accounts", t("openSavingsAccount")], ["lists", t("savingsRecords")]];
+  const tabs = [["overview", "Overview"], ["monthly", t("monthlyPerformance")], ["products", t("savingsProductSetup")], ["accounts", t("openSavingsAccount")], ["lists", t("savingsRecords")]];
   const tab = activeModuleTab("savings", tabs);
   return `
     <div class="dashboard-grid">
@@ -21,7 +21,7 @@ function savingsView() {
       ${summary(t("savingsBalances"), money.format(finance.balanceTotal), "Member ledger total", "Statements")}
     </div>
     ${moduleTabs("savings", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel(t("savingsOperationsControl"), [
+    ${tab === "overview" ? financeControlPanel(t("savingsOperationsControl"), "Savings setup links member accounts, monthly deposits and SACCO collection channels.", [
       ["Product setup", `${finance.activeProductCount} active savings product(s) are available for account opening.`, finance.activeProductCount ? "Ready" : "Setup"],
       ["Member accounts", `${finance.accountCount} savings account(s) are open for active members.`, finance.accountCount ? "Active" : "Open"],
       ["Contribution flow", "Savings deposits post through Transactions and member mobile payments.", "Connected"]
@@ -45,7 +45,7 @@ function sharesView() {
   const accounts = accountsByType("share");
   const members = dataRows("members");
   const finance = buildSharesSummary({ products, accounts, members });
-  const tabs = [["products", t("sharesProductSetup")], ["accounts", t("openSharesAccount")], ["register", t("shareRegister")]];
+  const tabs = [["overview", "Overview"], ["products", t("sharesProductSetup")], ["accounts", t("openSharesAccount")], ["register", t("shareRegister")]];
   const tab = activeModuleTab("shares", tabs);
   return `
     <div class="dashboard-grid">
@@ -56,7 +56,7 @@ function sharesView() {
       ${summary(t("shareBalances"), money.format(finance.balanceTotal), "Member share capital", "Register")}
     </div>
     ${moduleTabs("shares", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel(t("sharesCapitalControl"), [
+    ${tab === "overview" ? financeControlPanel(t("sharesCapitalControl"), "Share controls track capital products, member share accounts and share purchase posting.", [
       ["Product setup", `${finance.activeProductCount} active share product(s) define contribution rules.`, finance.activeProductCount ? "Ready" : "Setup"],
       ["Share register", `${finance.accountCount} member share account(s) are available for reporting.`, finance.accountCount ? "Active" : "Open"],
       ["Contribution flow", "Share purchases post through Transactions and member mobile payments.", "Connected"]
@@ -75,7 +75,7 @@ function welfareView() {
   const claims = dataRows("welfareClaims");
   const accounts = accountsByType("welfare");
   const finance = buildWelfareSummary({ products, claims, accounts });
-  const tabs = [["claims", t("welfareClaims")], ["products", t("welfareProductSetup")], ["accounts", t("openWelfareAccount")], ["detail", t("welfareClaimDecision")]];
+  const tabs = [["overview", "Overview"], ["products", t("welfareProductSetup")], ["claims", t("welfareClaims")], ["detail", t("welfareClaimDecision")]];
   const tab = activeModuleTab("welfare", tabs);
   return `
     <div class="dashboard-grid">
@@ -87,7 +87,7 @@ function welfareView() {
       ${summary(t("paidClaims"), money.format(finance.paidAmount), "Settled welfare support", "Report")}
     </div>
     ${moduleTabs("welfare", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel(t("welfareFundControl"), [
+    ${tab === "overview" ? financeControlPanel(t("welfareFundControl"), "Welfare controls manage contributions, balances, claims and approved payouts.", [
       ["Contribution setup", `${finance.productCount} welfare product(s) and ${finance.accountCount} welfare account(s) support member balances.`, finance.productCount && finance.accountCount ? "Ready" : "Setup"],
       ["Claim decisions", `${finance.submittedCount} submitted claim(s) need approval or rejection.`, finance.submittedCount ? "Pending" : "Clear"],
       ["Claim payments", `${finance.approvedCount} approved claim(s) are ready for payment if member welfare balance is sufficient.`, finance.approvedCount ? "Ready" : "Clear"]
@@ -219,7 +219,7 @@ function welfareClaimDetailPanel(claims) {
         ${mini("Paid channel", claim.channel)}
         ${mini("Submitted", claim.submittedAt)}
       </div>
-      ${rolePriorityPanel("Welfare claim checklist", [
+      ${financeControlPanel("Welfare claim checklist", "Check eligibility, decision status and payment readiness before paying a welfare claim.", [
         ["Eligibility", "Only active members can receive welfare claims.", "Checked"],
         ["Decision", submitted ? "Approve or reject the submitted claim with a reason where needed." : "Decision step is complete or unavailable.", submitted ? "Pending" : "Done"],
         ["Payment", payable ? "Approved claim can be paid through cash, mobile money or bank if balance is sufficient." : "Payment is locked until approval.", payable ? "Ready" : "Locked"]
@@ -234,6 +234,24 @@ function welfareClaimDetailPanel(claims) {
           ${!canApprove && !canPost ? `<span class="status pending">View only</span>` : ""}
         </div>
       </form>
+    </section>
+  `;
+}
+
+function financeControlPanel(title, copy, rows) {
+  const needsReview = rows.some((row) => ["setup", "open", "pending", "locked"].includes(normal(row[2])));
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(title)}</h2>
+          <p>${escapeHtml(copy)}</p>
+        </div>
+        <span class="status ${needsReview ? "pending" : "active"}">${needsReview ? "Review" : "Ready"}</span>
+      </div>
+      <div class="mini-grid">
+        ${rows.map(([label, detail, status]) => mini(label, `${detail}${status ? ` (${status})` : ""}`)).join("")}
+      </div>
     </section>
   `;
 }

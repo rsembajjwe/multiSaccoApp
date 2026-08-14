@@ -91,6 +91,22 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void inboundCorrelationIdIsBoundedForLogsAndResponses() throws Exception {
+		String longCorrelationId = "trace-" + "x".repeat(80);
+
+		mockMvc.perform(get("/api/v1/health").header("X-Correlation-Id", longCorrelationId))
+				.andExpect(status().isOk())
+				.andExpect(header().string("X-Correlation-Id", is(longCorrelationId.substring(0, 64))));
+	}
+
+	@Test
+	void legacyRequestIdHeaderCanProvideCorrelationId() throws Exception {
+		mockMvc.perform(get("/api/v1/health").header("X-Request-Id", "legacy-trace-123"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("X-Correlation-Id", is("legacy-trace-123")));
+	}
+
+	@Test
 	void prometheusAndMetricsEndpointsAreExposed() throws Exception {
 		mockMvc.perform(get("/actuator/metrics"))
 				.andExpect(status().isOk());

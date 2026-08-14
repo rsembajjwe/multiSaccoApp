@@ -101,12 +101,19 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   checks, Docker/dev/prod compose, and Caddy edge with TLS. `npm.cmd run backup:evidence` now writes
   timestamped restore evidence; the 10 August 2026 run restored
   `backups\rehearsals\sacco_app_backup_rehearsal-20260810-161957.dump` successfully.
-- Prometheus metrics, Resilience4j circuit breakers, idempotent-only retries, bounded provider HTTP
+- Prometheus metrics, production structured JSON logs with request correlation context, deployable
+  Prometheus alert rules, Resilience4j circuit breakers, idempotent-only retries, bounded provider HTTP
   timeouts, pagination/search/sort on high-volume endpoints, and curated OpenAPI documentation.
 - A load evidence wrapper now captures `npm.cmd run load:test` output as timestamped release
-  evidence under `reports/load-evidence/`, using the current SACCO-code login contract. A local
-  baseline on 10 August 2026 completed 100 requests at concurrency 10 with 0 failures, 258.37 req/s,
-  p95 93.1 ms, and p99 135.0 ms against the Java backend.
+  evidence under `reports/load-evidence/`, using the current SACCO-code login contract. The harness
+  now uses a mixed scenario set covering health, operations status, SACCO account listing,
+  subscriptions, platform users, audit events, regulatory reports, and provider operational evidence.
+  It enforces p95, p99, timeout, and minimum-throughput thresholds and emits structured scenario
+  metrics for release evidence. A refreshed local Java/H2 baseline on 14 August 2026 completed 100
+  requests at concurrency 10 with 0 failures, 176.70 req/s, p95 137.8 ms, and p99 306.0 ms against
+  `http://127.0.0.1:18084`; the timestamped report is
+  `reports/load-evidence/load-evidence-20260814T125818Z.md`. This should still be repeated against a
+  PostgreSQL-backed staging clone at higher volumes before production launch.
 - A database evidence wrapper now records the production HikariCP pool contract, small-server tuning
   guidance, and HA recovery-target markers under `reports/db-evidence/`.
 - Production multi-instance startup is guarded by Redis scale settings for rate limits,
@@ -268,9 +275,13 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   The remaining type-safety work is reducing broad
   compatibility index signatures in the classic declarations and migrating runtime scripts into typed
   ES module source files.
-- **Frontend tests are still early but improving.** Backend tests are strong, and the helper suites
-  now cover many high-risk renderers, auth/session transitions, and member portal enterprise flows.
-  The project still lacks a real component/unit test framework over the large UI surface.
+- **Frontend tests now have a real runner and coverage floor.** Backend tests are strong, the helper
+  suites cover many high-risk renderers, auth/session transitions, and member portal enterprise flows,
+  and Block 2 added a Vitest gate for typed frontend models plus DOM renderer coverage. The Vitest
+  suites cover table/search/pagination behavior, member monthly savings and payment lifecycle helpers,
+  provider filtering, row actions, quick search, member directory summaries, notification unread
+  counts, and enterprise member-portal rendering. Remaining frontend work is broadening this coverage
+  across more platform and SACCO admin screens.
 - **Horizontal scale / HA is partly proven.** Single-node assumptions remain. Startup guards now
   require Redis configuration before multi-instance production, request rate limiting has a
   Redis-backed shared counter, and payment idempotency has a Redis reservation store. A Docker-backed
@@ -286,8 +297,46 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 
 - **Large uncommitted working set.** Commit in focused commits to protect the work and restore clean
   history.
-- **Test pyramid is still integration-weighted.** End-to-end and integration coverage is good, but
-  focused service/domain unit coverage should grow outside recently changed areas.
+- **Backend test-pyramid depth is now complete for this pass.** End-to-end and integration coverage is good, and
+  focused service/domain unit coverage now protects the main money and permission rules. Block 3 has completed
+  closing this with focused subscription billing tests for the SACCO pricing rules and AuthService
+  unit tests for bearer sessions, suspended users, platform/SACCO identity separation, multi-role
+  permission matching, and fail-closed permission checks. It now also covers loan interest and
+  installment terms, disbursement balances, guarantor stage progression, and overpayment clamping so
+  repayments cannot drive loan balances below zero. Accounting-period and mobile-money payment
+  request lifecycle tests now cover closed/open period behavior, period key derivation, callback
+  posting, failed/expired completion, pending provider status, and provider-status retry evidence.
+  Member balance and finance tests now cover withdrawal overdraw protection, reversal guardrails,
+  non-positive amount rejection, welfare-claim balance protection, and financial transaction reversal
+  audit metadata. Auth permission checks and login access payloads now use tenant-scoped role
+  assignments, with focused coverage proving cross-SACCO stale role rows cannot grant permissions.
+  SACCO payment-collection domain tests now cover collection-mode channel rules, safe parsing/defaulting,
+  new-SACCO no-online-collection defaults, platform mode changes deactivating disallowed channels, and
+  SACCO-owned mobile-money/bank account response details. Branch-scope tests now cover branch
+  tenant/manager metadata, response scope fields, tenant mismatch rejection, default branch lookup,
+  and manager-scoped branch ID lookup used by member, loan, transaction, chat, and complaint access
+  controls. Privacy/data-protection tests now cover member privacy request transitions,
+  completion/rejection metadata, document retention and storage-action audit fields, truncation of
+  long storage details, and evidence readiness calculations for open requests, erasure completion,
+  retained/disposed KYC documents, and storage action coverage. Regulatory-report aggregation now has
+  focused backend coverage for consolidated SACCO totals, PAR rounding, compliance status,
+  data-protection evidence rollups, and CSV export escaping. Approval workflow tests now cover
+  supported approval modules, decision normalization, reason-required rules for rejections/corrections,
+  response audit fields, and a null-safe approval reason check so invalid decisions fail closed.
+  Fixed-asset valuation is now shared by accounting and regulatory reports, with focused tests for
+  future depreciation starts, current-month depreciation, useful-life caps, inactive assets,
+  net-book salvage floors, and response valuation evidence. Bank statement import validation is now
+  extracted from the controller, with focused tests for supported channels, required fields, zero
+  amounts, duplicate references in a file, existing references, closed accounting periods, and
+  defaulting missing statement dates to today. Mobile-money payment rules now cover allowed
+  contribution purposes, staff-only manual closure statuses, terminal payment states, trimmed
+  cancellation reasons, and provider-confirmed posted status completing requests at the provider check
+  time. Welfare claim tests now cover submitted audit fields, approval/rejection audit metadata,
+  rejection reason rules, payable statuses, and supported payment channels for cash, bank, and mobile
+  money.
+  JaCoCo now enforces a Java backend coverage floor in `npm run java:test`: 80% line coverage and 55%
+  branch coverage, with the current measured baseline at 83.37% lines and 59.28% branches. The Java
+  backend suite passes with 345 tests, 0 failures, and 1 skipped test.
 - **Data protection and regulation need deeper evidence.** Current evidence covers privacy requests,
   consent, masking/encryption helpers, and retention/disposal flows; Uganda DPA, BoU, and UMRA
   operating procedures still need policy-level completion and external review.
@@ -308,11 +357,16 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 
 ### Low
 
-- **Legacy Node prototype remains tracked.** `backend/*.mjs` is still present alongside the Java
-  backend. `server.mjs` remains useful as the SPA host/proxy.
+- **Legacy Node prototype remains tracked but quarantined.** `backend/*.mjs` is still present alongside
+  the Java backend. Production refuses the Node API unless `JAVA_API_BASE` is configured or the Node
+  API is deliberately enabled, and `server.mjs` remains useful as the SPA host/Java proxy. `npm run
+  node:quarantine` now enforces the production guard, source-code demo-only markers, and documentation
+  boundary.
 - **Repo hygiene needs cleanup.** Ignore IDE files and remove stray temporary logs.
-- **OpenAPI is hand-maintained.** It now covers the integrator-facing surface plus SACCO collection
-  mode/settings controls, but schema-drift checks should continue to grow.
+- **OpenAPI is hand-maintained with a new coverage gate.** It now covers the integrator-facing surface,
+  SACCO collection mode/settings controls, platform access/admin routes, operations status, and member
+  money paths. `npm run openapi:check` protects 36 enterprise-critical Java operations and 10 schemas;
+  schema-drift checks should continue to grow.
 
 ---
 

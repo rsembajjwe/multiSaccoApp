@@ -255,7 +255,7 @@ export function buildMemberMobileMoneyRows(dashboard: TerekaMemberStatementDashb
     .map((line) => ({
       postedAt: line.postedAt || line.createdAt || "",
       reference: line.reference,
-      description: line.description || "Mobile money deposit",
+      description: !line.description || line.description === "Member transaction" ? "Mobile money deposit" : line.description,
       credit: line.credit || line.amount || 0,
       paymentStatus: paymentLifecycleStatusFor(line),
       receiptStatus: receiptLifecycleStatusFor(line),

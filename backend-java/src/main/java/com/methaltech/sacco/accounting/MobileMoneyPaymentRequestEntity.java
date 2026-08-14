@@ -6,7 +6,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -107,7 +106,7 @@ class MobileMoneyPaymentRequestEntity {
     void updateStatus(String status, String reason) {
         this.status = status;
         this.statusMessage = reason == null || reason.isBlank() ? "Payment request marked " + status + "." : reason.trim();
-        if (Set.of("failed", "expired", "cancelled").contains(status)) {
+        if (MobileMoneyPaymentRules.terminalStatus(status)) {
             this.completedAt = Instant.now();
         }
         this.updatedAt = Instant.now();
@@ -118,7 +117,7 @@ class MobileMoneyPaymentRequestEntity {
         this.statusMessage = result.statusMessage();
         this.providerReference = result.providerReference();
         this.callbackPosting = result.callbackPosting();
-        if (Set.of("failed", "expired", "cancelled").contains(result.status())) {
+        if (MobileMoneyPaymentRules.terminalStatus(result.status())) {
             this.completedAt = result.checkedAt();
         }
         this.updatedAt = result.checkedAt();

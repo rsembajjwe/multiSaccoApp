@@ -49,11 +49,11 @@ function recordTable(title, rows, columns) {
       </div>
       <div class="table-tools">
         <label>
-          <span>${t("searchThisTable")}</span>
-          <input value="${escapeHtml(tableSearch)}" data-table-search="${escapeHtml(tableKey)}" placeholder="Search ${escapeHtml(title.toLowerCase())}">
+          <span>${t("search") || "Search"}</span>
+          <input value="${escapeHtml(tableSearch)}" data-table-search="${escapeHtml(tableKey)}" placeholder="Search ${escapeHtml(title.toLowerCase())}" autocomplete="off" spellcheck="false">
         </label>
         <label>
-          <span>${t("rowsPerPage")}</span>
+          <span>Rows</span>
           <select data-table-page-size="${escapeHtml(tableKey)}">
             ${[10, 25, 50, 100].map((size) => `<option value="${size}" ${pageSize === size ? "selected" : ""}>${size}</option>`).join("")}
           </select>
@@ -76,10 +76,10 @@ function recordTable(title, rows, columns) {
         </div>
         ${backendPage && serverTable ? `
           <div class="pagination server-pagination">
-            <span>Server page ${backendPageNumber + 1} of ${backendTotalPages}</span>
+            <span>Loaded page ${backendPageNumber + 1} of ${backendTotalPages}</span>
             <div>
-              <button class="table-action" type="button" data-server-table-page="${escapeHtml(tableKey)}" data-page="${backendPageNumber - 1}" ${canLoadPreviousServerPage ? "" : "disabled"}>Previous server page</button>
-              <button class="table-action" type="button" data-server-table-page="${escapeHtml(tableKey)}" data-page="${backendPageNumber + 1}" ${canLoadNextServerPage ? "" : "disabled"}>Next server page</button>
+              <button class="table-action" type="button" data-server-table-page="${escapeHtml(tableKey)}" data-page="${backendPageNumber - 1}" ${canLoadPreviousServerPage ? "" : "disabled"}>Load previous</button>
+              <button class="table-action" type="button" data-server-table-page="${escapeHtml(tableKey)}" data-page="${backendPageNumber + 1}" ${canLoadNextServerPage ? "" : "disabled"}>Load next</button>
             </div>
           </div>
         ` : ""}

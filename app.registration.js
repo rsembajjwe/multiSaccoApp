@@ -10,12 +10,23 @@
 
 function saccoRegistrationReadinessPanel(applications) {
   const registrationSummary = buildSaccoRegistrationSummary(applications);
-  return rolePriorityPanel("SACCO registration readiness", [
-    ["Payment initiated", `${registrationSummary.paymentInitiated} SACCO(s) have a subscription bill awaiting mobile-money callback or manual payment.`, "Track"],
-    ["Callback received", `${registrationSummary.callbackReceived} SACCO(s) have confirmed subscription payment.`, "Confirm"],
-    ["Ready for approval", `${registrationSummary.readyForApproval} paid self-registration(s) are ready for platform review.`, "Review"],
-    ["Active", `${registrationSummary.active} SACCO(s) have active subscription and operating access.`, "Live"]
-  ]);
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>SACCO registration readiness</h2>
+          <p>Track payment confirmation, self-registration approval and activation before a SACCO starts operating.</p>
+        </div>
+        <span class="status ${registrationSummary.readyForApproval ? "pending" : "active"}">${registrationSummary.readyForApproval ? "Review due" : "Current"}</span>
+      </div>
+      <div class="mini-grid">
+        ${mini("Payment initiated", `${registrationSummary.paymentInitiated} SACCO(s) awaiting payment confirmation`)}
+        ${mini("Callback received", `${registrationSummary.callbackReceived} SACCO(s) with confirmed payment`)}
+        ${mini("Ready for approval", `${registrationSummary.readyForApproval} paid self-registration(s)`)}
+        ${mini("Active", `${registrationSummary.active} SACCO(s) operating`)}
+      </div>
+    </section>
+  `;
 }
 
 function saccoRegistrationTabs() {

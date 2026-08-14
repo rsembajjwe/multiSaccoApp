@@ -8,7 +8,7 @@ function loansView() {
     formatMoney: (value) => money.format(value)
   });
   const portfolio = buildLoanPortfolioSummary(loans);
-  const tabs = [["application", t("loanApplicationForm")], ["list", t("loanApplicationList")], ["detail", t("loanDetailGuarantors")]];
+  const tabs = [["overview", "Overview"], ["application", t("loanApplicationForm")], ["list", t("loanApplicationList")], ["detail", t("loanDetailGuarantors")]];
   const tab = activeModuleTab("loans", tabs);
   return `
     <div class="dashboard-grid">
@@ -21,7 +21,7 @@ function loansView() {
       ${summary("90+ days", money.format(portfolio.over90Total), "High-risk overdue balances", "Escalate")}
     </div>
     ${moduleTabs("loans", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel(t("loanLifecycleControl"), [
+    ${tab === "overview" ? loanControlPanel(t("loanLifecycleControl"), "Track applications, guarantor consent, approval, disbursement, repayments and arrears.", [
       ["Application", `${portfolio.submitted} loan file(s) are in application, guarantor or approval review.`, portfolio.submitted ? "Pending" : "Clear"],
       ["Disbursement", `${portfolio.approved} approved loan(s) are ready for disbursement after final checks.`, portfolio.approved ? "Ready" : "Clear"],
       ["Servicing", `${portfolio.active} active loan(s) can receive repayments and arrears monitoring.`, portfolio.active ? "Active" : "Pending"]
@@ -43,7 +43,7 @@ function guarantorsView() {
   const rows = requests.length ? requests : loans;
   const pending = rows.filter((row) => normal(row.status).includes("pending") || normal(row.guarantorReadiness).includes("pending"));
   const accepted = rows.filter((row) => normal(row.status).includes("accepted") || normal(row.guarantorReadiness).includes("accepted"));
-  const tabs = [["requests", "Guarantor requests"]];
+  const tabs = [["overview", "Overview"], ["requests", "Guarantor requests"]];
   const tab = activeModuleTab("guarantors", tabs);
   return `
     <div class="dashboard-grid">
@@ -54,11 +54,13 @@ function guarantorsView() {
       ${summary("Member exposure", "Review", "Guarantee capacity", "Assess")}
     </div>
     ${moduleTabs("guarantors", tabs, tab)}
-    ${tab === "overview" ? rolePriorityPanel("Guarantor control focus", [
+    ${tab === "overview" ? loanControlPanel("Guarantor control focus", "Control borrower protection, guarantor consent and loan approval readiness.", [
       ["Borrower protection", "Borrowers cannot guarantee their own loan and guarantors must be active members.", "Controlled"],
       ["Member consent", `${pending.length} guarantor request(s) still need member acceptance before approval.`, pending.length ? "Pending" : "Clear"],
-      ["Approval readiness", `${accepted.length} guarantee record(s) can support loan approval decisions.`, accepted.length ? "Ready" : "Waiting"]
+      ["Approval readiness", `${accepted.length} guarantee record(s) can support loan approval decisions.`, accepted.length ? "Ready" : "Waiting"],
+      ["Capacity", "Review each guarantor exposure before approval.", "Assess"]
     ]) : ""}
+    ${tab === "overview" ? recordTable("Guarantor requests", rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "capacity", "guarantorReadiness", "status"]) : ""}
     ${tab === "requests" ? recordTable("Guarantor requests", rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "capacity", "guarantorReadiness", "status"]) : ""}
   `;
 }
@@ -144,7 +146,7 @@ function loanDetailPanel(rows) {
         ${mini("61-90 days", money.format(loan.arrears61To90Amount || 0))}
         ${mini("90+ days", money.format(loan.arrearsOver90Amount || 0))}
       </div>
-      ${rolePriorityPanel("Loan decision checklist", [
+      ${loanControlPanel("Loan decision checklist", "Check guarantor consent, approval, disbursement and repayment conditions before action.", [
         ["Guarantor consent", acceptedGuarantors.length ? `${acceptedGuarantors.length} guarantor(s) accepted the request.` : "At least one accepted guarantor is required before approval.", acceptedGuarantors.length ? "Ready" : "Pending"],
         ["Approval", canApproveLoan ? "Loan can be approved after appraisal checks." : "Approval is locked until status and guarantor rules are satisfied.", canApproveLoan ? "Available" : "Locked"],
         ["Disbursement", canDisburseLoan ? "Approved loan can be disbursed into active servicing." : "Disbursement is available only after approval.", canDisburseLoan ? "Ready" : "Waiting"],
@@ -184,6 +186,24 @@ function loanDetailPanel(rows) {
         ${recordTable("Loan repayment history", state.selectedLoanRepayments, ["reference", "amount", "channel", "narration", "receivedAt"])}
       </div>
       ${recordTable("Loan repayment schedule", scheduleRows, ["installmentNo", "dueDate", "principalDue", "interestDue", "totalDue", "paidAmount", "balanceDue", "daysPastDue", "agingBucket", "status"])}
+    </section>
+  `;
+}
+
+function loanControlPanel(title, copy, rows) {
+  const needsReview = rows.some((row) => ["pending", "locked", "waiting"].includes(normal(row[2])));
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(title)}</h2>
+          <p>${escapeHtml(copy)}</p>
+        </div>
+        <span class="status ${needsReview ? "pending" : "active"}">${needsReview ? "Review" : "Ready"}</span>
+      </div>
+      <div class="mini-grid">
+        ${rows.map(([label, detail, status]) => mini(label, `${detail}${status ? ` (${status})` : ""}`)).join("")}
+      </div>
     </section>
   `;
 }

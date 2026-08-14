@@ -225,6 +225,21 @@ function staffStatementExportPanel(member, lines) {
 }
 
 function memberKycChecklist(member) {
-  return rolePriorityPanel("Member KYC checklist", buildMemberKycChecklistRows(member, labelize).map((row) => [row.area, row.detail, row.status]));
+  const rows = buildMemberKycChecklistRows(member, labelize);
+  const needsReview = rows.some((row) => ["missing", "review", "pending", "incomplete"].includes(normal(row.status)));
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member KYC checklist</h2>
+          <p>Verify identity, contact details, profile status and evidence before approving member access.</p>
+        </div>
+        <span class="status ${needsReview ? "pending" : "active"}">${needsReview ? "Review" : "Ready"}</span>
+      </div>
+      <div class="mini-grid">
+        ${rows.map((row) => mini(row.area, `${row.detail}${row.status ? ` (${row.status})` : ""}`)).join("")}
+      </div>
+    </section>
+  `;
 }
 

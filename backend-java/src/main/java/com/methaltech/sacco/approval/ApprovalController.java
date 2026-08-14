@@ -8,7 +8,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,11 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
 class ApprovalController {
-
-    private static final Set<String> MODULES = Set.of(
-            "members", "transactions", "loans", "expenses", "assets", "subscriptions", "governance");
-    private static final Set<String> DECISIONS = Set.of("pending", "approved", "rejected", "corrections_requested");
-    private static final Set<String> DECISIONS_REQUIRING_REASON = Set.of("rejected", "corrections_requested");
 
     private final ApprovalWorkflowRepository workflowRepository;
     private final ApprovalDecisionRepository decisionRepository;
@@ -70,7 +64,7 @@ class ApprovalController {
         if (tenantId == null) return tenantAccessDenied();
 
         String module = body.module().trim();
-        if (!MODULES.contains(module)) {
+        if (!ApprovalRules.supportsModule(module)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_APPROVAL_MODULE", "Unsupported approval module."));
         }
@@ -108,7 +102,7 @@ class ApprovalController {
             return authService.permissionRequired("approvals:view");
         }
 
-        String decision = normalizeDecision(requestedDecision);
+        String decision = ApprovalRules.normalizeDecision(requestedDecision);
         if (requestedDecision != null && decision == null) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_APPROVAL_DECISION", "Unsupported approval decision."));
@@ -141,12 +135,12 @@ class ApprovalController {
             return authService.permissionRequired("approvals:decide");
         }
 
-        String decisionValue = normalizeDecision(body.decision());
+        String decisionValue = ApprovalRules.normalizeDecision(body.decision());
         if (decisionValue == null) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_APPROVAL_DECISION", "Unsupported approval decision."));
         }
-        if (DECISIONS_REQUIRING_REASON.contains(decisionValue)
+        if (ApprovalRules.requiresReason(decisionValue)
                 && (body.reason() == null || body.reason().isBlank())) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "APPROVAL_REASON_REQUIRED", "A reason is required for this approval decision."));
@@ -180,12 +174,6 @@ class ApprovalController {
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "APPROVAL_WORKFLOW_NOT_FOUND", "Approval workflow not found.")));
-    }
-
-    private String normalizeDecision(String requestedDecision) {
-        if (requestedDecision == null || requestedDecision.isBlank()) return null;
-        String decision = requestedDecision.trim();
-        return DECISIONS.contains(decision) ? decision : null;
     }
 
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {

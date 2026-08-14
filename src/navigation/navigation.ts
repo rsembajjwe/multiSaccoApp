@@ -177,7 +177,7 @@ export function groupQuickSearchResults(results: TerekaQuickSearchResult[]): Ter
 }
 
 export function memberUnreadNotificationCount(notifications: Array<TerekaNotification & TerekaRecord>): number {
-  return notifications.filter((row) => !row.readAt && !normalizeNavigationText(row.status).includes("read")).length;
+  return notifications.filter((row) => !row.readAt && normalizeNavigationText(row.status) !== "read").length;
 }
 
 export function staffUnreadNotificationCount(deliveries: Array<TerekaNotification & TerekaRecord>): number {

@@ -1157,7 +1157,7 @@ sandbox.state.user = null;
 sandbox.state.roleNames = [];
 sandbox.state.permissionIds = [];
 const memberModules = sandbox.visibleModules().map(([id]) => id);
-assert.equal(JSON.stringify(memberModules), JSON.stringify(["home", "money", "loans", "payments", "complaints", "profile"]));
+assert.equal(JSON.stringify(memberModules), JSON.stringify(["home", "money", "accounts", "statements", "receipts", "loans", "guarantor-requests", "payments", "notifications", "complaints", "profile", "security"]));
 assert.equal(sandbox.canAccessView("users"), false);
 
 sandbox.state.memberData.dashboard = { tenant: { mobileMoneyCollectionAvailable: false, bankCollectionAvailable: false } };

@@ -23,7 +23,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -46,8 +45,6 @@ import tools.jackson.databind.ObjectMapper;
 class MobileMoneyController {
 
     private static final String SYSTEM_USER_ID = "user_platform_admin";
-    private static final Set<String> CONTRIBUTION_PURPOSES = Set.of("savings_deposit", "share_purchase", "welfare_contribution");
-    private static final Set<String> PAYMENT_REQUEST_STATUSES = Set.of("failed", "expired", "cancelled");
 
     private final MobileMoneyCallbackRepository callbackRepository;
     private final MemberRepository memberRepository;
@@ -78,7 +75,7 @@ class MobileMoneyController {
                     .body(ApiErrorResponse.of(409, "MEMBER_NOT_ACTIVE", "Only active members can initiate mobile-money payments."));
         }
         String purpose = body.purpose().trim();
-        if (!CONTRIBUTION_PURPOSES.contains(purpose) && !"loan_repayment".equals(purpose)) {
+        if (!MobileMoneyPaymentRules.contributionPurpose(purpose) && !"loan_repayment".equals(purpose)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_PURPOSE", "Unsupported mobile-money payment purpose."));
         }
@@ -168,7 +165,7 @@ class MobileMoneyController {
 
         String purpose = body.purpose().trim();
         String provider = mobileMoneyRouter.resolve(body.provider()).normalizeProvider(body.provider());
-        if (CONTRIBUTION_PURPOSES.contains(purpose)) {
+        if (MobileMoneyPaymentRules.contributionPurpose(purpose)) {
             return postContribution(body, tenantId, externalReference, provider, member, amount);
         }
         if ("loan_repayment".equals(purpose)) {
@@ -274,7 +271,7 @@ class MobileMoneyController {
             return authService.permissionRequired("accounting:post");
         }
         String status = body.status().trim();
-        if (!PAYMENT_REQUEST_STATUSES.contains(status)) {
+        if (!MobileMoneyPaymentRules.staffClosureStatus(status)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_REQUEST_STATUS", "Payment requests can only be marked failed, expired or cancelled by staff."));
         }

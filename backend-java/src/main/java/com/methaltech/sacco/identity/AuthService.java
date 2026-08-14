@@ -51,7 +51,7 @@ public class AuthService {
 
     public boolean hasPermission(User user, String permissionId) {
         if (user == null || permissionId == null || permissionId.isBlank()) return false;
-        var roleIds = userRoleRepository.findByIdUserId(user.getId()).stream()
+        var roleIds = userRoleRepository.findByIdUserIdAndTenantId(user.getId(), user.getTenantId()).stream()
                 .map(userRole -> userRole.getId().getRoleId())
                 .toList();
         if (roleIds.isEmpty()) return false;

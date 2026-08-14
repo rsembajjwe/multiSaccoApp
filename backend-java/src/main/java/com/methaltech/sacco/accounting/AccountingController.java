@@ -24,11 +24,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.Period;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -52,7 +49,6 @@ import org.springframework.web.bind.annotation.RestController;
 class AccountingController {
 
     private static final Set<String> PERIOD_STATUSES = Set.of("open", "closed");
-    private static final Set<String> STATEMENT_CHANNELS = Set.of("cash", "bank", "mobile_money", "payroll_deduction");
     private static final Set<String> CASH_ACCOUNTS = Set.of("1000", "1010", "1020", "1030");
     private static final Set<String> EXPENSE_CHANNELS = Set.of("mobile_money", "cash", "bank", "payroll_deduction");
     private static final Set<String> ASSET_CATEGORIES = Set.of("equipment", "furniture", "vehicle", "building", "technology", "other");
@@ -515,7 +511,7 @@ class AccountingController {
         if (tenantId == null) return tenantAccessDenied();
 
         String channel = body.channel().trim();
-        if (!STATEMENT_CHANNELS.contains(channel)) {
+        if (!AccountingRules.statementChannel(channel)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_STATEMENT_CHANNEL", "Unsupported statement channel."));
         }
@@ -851,7 +847,7 @@ class AccountingController {
                             List.of(
                                     line(asset.getAssetAccountCode(), asset.getCost(), BigDecimal.ZERO, null, accounts),
                                     line(accountForChannel(asset.getChannel()), BigDecimal.ZERO, asset.getCost(), null, accounts)));
-                    BigDecimal depreciation = accumulatedDepreciation(asset);
+                    BigDecimal depreciation = AssetValuation.accumulatedDepreciation(asset);
                     if (depreciation.compareTo(BigDecimal.ZERO) <= 0) {
                         return java.util.stream.Stream.of(acquisition);
                     }
@@ -1012,27 +1008,8 @@ class AccountingController {
     }
 
     private AssetResponse assetResponse(Asset asset) {
-        BigDecimal depreciation = accumulatedDepreciation(asset);
-        return AssetResponse.from(asset, depreciation, netBookValue(asset));
-    }
-
-    private BigDecimal netBookValue(Asset asset) {
-        BigDecimal value = asset.getCost().subtract(accumulatedDepreciation(asset));
-        return value.max(asset.getSalvageValue());
-    }
-
-    private BigDecimal accumulatedDepreciation(Asset asset) {
-        if (!"active".equals(asset.getStatus()) || asset.getDepreciationStartDate() == null) return BigDecimal.ZERO;
-        LocalDate today = LocalDate.now();
-        LocalDate start = asset.getDepreciationStartDate().withDayOfMonth(1);
-        if (start.isAfter(today)) return BigDecimal.ZERO;
-        LocalDate currentMonth = today.withDayOfMonth(1);
-        int elapsedMonths = (int) Period.between(start, currentMonth).toTotalMonths() + 1;
-        int depreciatedMonths = Math.min(elapsedMonths, asset.getUsefulLifeMonths());
-        BigDecimal depreciableAmount = asset.getCost().subtract(asset.getSalvageValue());
-        return depreciableAmount
-                .multiply(BigDecimal.valueOf(depreciatedMonths))
-                .divide(BigDecimal.valueOf(asset.getUsefulLifeMonths()), 2, RoundingMode.HALF_UP);
+        BigDecimal depreciation = AssetValuation.accumulatedDepreciation(asset);
+        return AssetResponse.from(asset, depreciation, AssetValuation.netBookValue(asset));
     }
 
     private String accountForChannel(String channel) {
@@ -1063,38 +1040,20 @@ class AccountingController {
     }
 
     private List<StatementImportError> validateStatementImport(String tenantId, List<CreateStatementLineRequest> lines) {
-        List<StatementImportError> errors = new ArrayList<>();
-        Set<String> seenReferences = new HashSet<>();
-        for (int index = 0; index < lines.size(); index++) {
-            CreateStatementLineRequest line = lines.get(index);
-            int rowNumber = index + 1;
-            if (line.channel() == null || line.channel().isBlank()) {
-                errors.add(new StatementImportError(rowNumber, "channel", "REQUIRED", "Statement channel is required."));
-            } else if (!STATEMENT_CHANNELS.contains(line.channel().trim())) {
-                errors.add(new StatementImportError(rowNumber, "channel", "INVALID_STATEMENT_CHANNEL", "Unsupported statement channel."));
-            }
-            if (line.amount() == null) {
-                errors.add(new StatementImportError(rowNumber, "amount", "REQUIRED", "Statement amount is required."));
-            } else if (Money.normalize(line.amount()).compareTo(BigDecimal.ZERO) == 0) {
-                errors.add(new StatementImportError(rowNumber, "amount", "INVALID_STATEMENT_AMOUNT", "Statement amount cannot be zero."));
-            }
-            if (line.externalReference() == null || line.externalReference().isBlank()) {
-                errors.add(new StatementImportError(rowNumber, "externalReference", "REQUIRED", "Statement reference is required."));
-            } else {
-                String reference = line.externalReference().trim().toUpperCase();
-                if (!seenReferences.add(reference)) {
-                    errors.add(new StatementImportError(rowNumber, "externalReference", "DUPLICATE_REFERENCE_IN_FILE", "Statement reference is repeated in this import."));
-                }
-                if (statementLineRepository.existsByTenantIdAndExternalReferenceIgnoreCase(tenantId, line.externalReference().trim())) {
-                    errors.add(new StatementImportError(rowNumber, "externalReference", "STATEMENT_LINE_EXISTS", "Statement line reference already exists."));
-                }
-            }
-            LocalDate statementDate = line.statementDate() == null ? LocalDate.now() : line.statementDate();
-            if (periodService.isClosed(tenantId, statementDate)) {
-                errors.add(new StatementImportError(rowNumber, "statementDate", "ACCOUNTING_PERIOD_CLOSED", "Accounting period " + periodService.periodKey(statementDate) + " is closed."));
-            }
-        }
-        return errors;
+        return StatementImportValidator.validate(
+                        lines.stream()
+                                .map(line -> new StatementImportValidator.ImportLine(
+                                        line.channel(),
+                                        line.amount(),
+                                        line.externalReference(),
+                                        line.statementDate()))
+                                .toList(),
+                        reference -> statementLineRepository.existsByTenantIdAndExternalReferenceIgnoreCase(tenantId, reference),
+                        statementDate -> periodService.isClosed(tenantId, statementDate),
+                        periodService::periodKey)
+                .stream()
+                .map(error -> new StatementImportError(error.rowNumber(), error.field(), error.code(), error.message()))
+                .toList();
     }
 
     private String blankToNull(String value) {

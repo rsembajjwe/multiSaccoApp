@@ -83,6 +83,16 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 5. **Retire the legacy Node prototype** — [code]
    *Done when:* `backend/*.mjs` is removed or clearly quarantined; only the Java backend + SPA host
    remain; docs updated.
+   *Current progress:* Production already refuses the legacy Node API unless `JAVA_API_BASE` points to
+   the Java backend or `SACCO_NODE_API_ENABLED=true` is deliberately set. `server.mjs` is therefore
+   treated as a local SPA host/Java proxy, while `backend/*.mjs` remains quarantined for local demo
+   fallback only. The quarantine is now enforced by `npm run node:quarantine`, which checks the runtime
+   production guard, source-code demo-only markers, docs, and that legacy API smoke tests opt into
+   demo fallback explicitly. The OpenAPI contract has also been
+   strengthened with a new `npm run openapi:check` gate covering 36 enterprise-critical Java operations and 10 schemas across health, auth, operations,
+   SACCO administration, platform access, member self-service, payments, loans, transactions, and
+   callbacks. Remaining work is physically removing or archiving the Node business implementation once
+   all local/demo flows have a Java-backed replacement.
 
 ---
 
@@ -91,14 +101,67 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 6. **Frontend test framework + suite** — [code]
    *Done when:* a real runner (Vitest) with component/DOM tests covers the high-risk renderers and
    flows; runs in CI; a coverage floor is enforced.
+   *Current progress:* Block 2 is complete. Vitest is installed, `npm run test:frontend` is wired into
+   `npm run check`, and a V8 coverage floor is enforced. The suite covers table filtering/pagination,
+   member monthly savings/deposit aggregation, payment lifecycle rows, mobile-money provider filtering,
+   draft and guarantor row actions, quick-search grouping, member-directory summaries, filter values,
+   unread notification counts, and DOM renderer coverage for the enterprise member portal.
 
 7. **Backend test-pyramid depth** — [code]
    *Done when:* focused service/domain unit tests exist for every money path and permission rule (not
    just the big integration suite); coverage floor enforced in CI.
+   *Current progress:* Block 3 is complete for the agreed backend test-pyramid pass. Focused unit tests now cover subscription billing tier
+   boundaries, the 100-member minimum, 5,000-per-member pricing up to 250 members, fixed tiers above
+   250 members, paid/unpaid initial subscription activation, live-member-count billing refresh,
+   bearer-session acceptance/rejection, suspended-user rejection, platform/SACCO identity separation,
+   multi-role permission matching, fail-closed permission checks, loan interest/installment terms,
+   disbursement balance creation, guarantor stage progression, loan overpayment clamping so a
+   repayment cannot push a loan balance below zero, accounting-period closure/reopen behavior, period
+   key derivation, and mobile-money payment request lifecycle states for pending, posted, failed,
+   expired, and provider-check retry paths. Member balance tests now also cover withdrawal overdraw
+   protection, reversal guardrails for savings/shares/welfare balances, non-positive amount rejection,
+   welfare-claim balance protection, and financial transaction reversal audit metadata. Permission
+   checks and login access payloads now use tenant-scoped role assignments, with focused coverage that
+   proves cross-SACCO stale role rows cannot grant permissions. SACCO payment-collection domain tests
+   now cover collection-mode channel rules, safe parsing/defaulting, new-SACCO no-online-collection
+   defaults, platform mode changes deactivating disallowed channels, and SACCO-owned mobile-money/bank
+   account response details. Branch-scope tests now cover branch tenant/manager metadata, branch
+   response scope fields, tenant mismatch rejection, default branch lookup, and manager-scoped branch
+   ID lookup that member/loan/transaction/chat/complaint access controls rely on. Privacy/data-protection
+   tests now cover member privacy request transitions, completion/rejection metadata, document retention
+   and storage-action audit fields, truncation of long storage details, and data-protection evidence
+   readiness calculations for open requests, erasure completion, retained/disposed KYC documents, and
+   storage action coverage. Regulatory-report aggregation now has a tested backend assembler covering
+   consolidated SACCO totals, PAR rounding, compliance status, data-protection evidence rollups, and
+   CSV export escaping so regulator-facing evidence is protected outside the controller integration
+   suite. Approval workflow tests now cover supported approval modules, decision normalization,
+   reason-required rules for rejections/corrections, response audit fields, and a null-safe approval
+   reason check so invalid decisions fail closed. Fixed-asset valuation is now shared by accounting
+   and regulatory reports, with focused tests for future depreciation starts, current-month
+   depreciation, useful-life caps, inactive assets, net-book salvage floors, and response valuation
+   evidence. Bank statement import validation is now extracted from the controller, with focused tests
+   for supported channels, required fields, zero amounts, duplicate references in a file, existing
+   references, closed accounting periods, and defaulting missing statement dates to today. Mobile-money
+   payment rules now cover allowed contribution purposes, staff-only manual closure statuses,
+   terminal payment states, trimmed cancellation reasons, and provider-confirmed posted status
+   completing requests at the provider check time. Welfare claim tests now cover submitted audit fields,
+   approval/rejection audit metadata, rejection reason rules, payable statuses, and supported payment
+   channels for cash, bank, and mobile money. JaCoCo is now wired into `npm run java:test` with an
+   enforced backend coverage floor of 80% line coverage and 55% branch coverage. The measured baseline
+   is 83.37% line coverage and 59.28% branch coverage. Backend suite passed with 345 tests, 0 failures,
+   1 skipped. Future backend tests can continue opportunistically as new production features are added.
 
 8. **Performance & load/soak testing** — [code]
    *Done when:* load and soak runs hit defined throughput/latency targets; DB indexes/N+1 hotspots
    fixed; connection pool tuned; results captured as evidence.
+   *Current progress:* The load harness now runs a mixed enterprise scenario set instead of only
+   health/status requests. It covers health, operations status, SACCO account listing, subscriptions,
+   platform users, audit events, regulatory reports, and provider operational evidence with
+   authenticated platform traffic. It enforces p95, p99, timeout, and minimum-throughput thresholds,
+   emits scenario-level latency/failure metrics, and writes a structured `LOAD_SUMMARY_JSON` record
+   that `npm.cmd run load:evidence` renders into release evidence. Remaining work is to run this
+   against a PostgreSQL-backed staging clone at realistic request volumes, capture repeated baseline
+   and soak evidence, and tune indexes/queries where the evidence shows hotspots.
 
 9. **HA / failover rehearsal** — [code]
    *Done when:* a two-instance deployment behind a load balancer, sharing Redis, survives an instance
@@ -129,10 +192,20 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 15. **Monitoring, alerting & on-call** — [code + external]
     *Done when:* Prometheus metrics feed dashboards (Grafana) and alerts (error rate, latency, callback
     failures, queue depth) route to an on-call channel; SLO/SLA defined.
+    *Current progress:* Code-side alert rules now exist in `deploy/prometheus-alerts.yml` for API down,
+    5xx error rate, p95 latency, database pool pressure, and JVM heap pressure. The monitoring guide
+    links these Prometheus rules and keeps the authenticated Operations Status endpoint as the source
+    for business alerts such as callback exceptions, pending postings, open complaints, and notification
+    delivery exceptions. External work remains: deploy Prometheus/Grafana or the hosting equivalent and
+    route alerts to email/SMS/incident channels.
 
 16. **Centralized logging & tracing** — [code]
     *Done when:* structured logs (with the existing correlation IDs) are shipped to a central store;
     optional distributed tracing for cross-service flows.
+    *Current progress:* Production logging is configured for structured JSON console output. The request
+    correlation filter now enriches MDC with bounded `correlationId`, `requestMethod`, `requestPath`,
+    and `clientIp` fields while avoiding query strings, request bodies, and credentials. Regression
+    tests cover generated IDs, inbound IDs, legacy request IDs, and bounded correlation headers.
 
 17. **Production deployment + runbooks** — [code + external]
     *Done when:* a repeatable prod deploy (CI/CD to real infra) exists with rollback, plus runbooks for
@@ -191,10 +264,10 @@ remaining ES-module migration surface explicitly.
 The table model now owns supplied-query filtering internally, reducing the remaining classic bridge
 inventory from seven helpers to six.
 
-Ordered by leverage: **(1)** finish the Vite build + convert to ES modules, **(2)** add the Vitest
-frontend suite, **(3)** run load/soak + a two-instance failover rehearsal and capture HA evidence,
-**(4)** deepen backend unit tests to a coverage floor, **(5)** structured logging + alert rules,
-**(6)** retire the Node prototype and complete OpenAPI, **(7)** commit the working set.
+Ordered by leverage: **(1)** finish the Vite build + convert to ES modules, **(2)** expand the Vitest
+frontend suite into renderer/component coverage with a coverage floor, **(3)** run load/soak + a two-instance failover rehearsal and capture HA evidence,
+**(4)** ship alert routing/centralized log collection in the deployment environment, **(5)** retire the
+Node prototype and complete OpenAPI, **(6)** commit the working set.
 
 The items that **cannot** be finished purely in code — and therefore cap "100%" on external timelines —
 are: MTN/Airtel and bank **merchant onboarding**, **regulatory licensing** (BoU/UMRA), an independent

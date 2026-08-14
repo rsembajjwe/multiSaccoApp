@@ -35,6 +35,17 @@ class AccountingPeriod {
     protected AccountingPeriod() {
     }
 
+    AccountingPeriod(String id, String tenantId, String period, String status, String actorUserId) {
+        this.id = id;
+        this.tenantId = tenantId;
+        this.period = period;
+        this.status = status;
+        this.closedByUserId = "closed".equals(status) ? actorUserId : null;
+        this.closedAt = "closed".equals(status) ? Instant.now() : null;
+        this.createdAt = Instant.now();
+        this.updatedAt = this.createdAt;
+    }
+
     void updateStatus(String status, String actorUserId) {
         this.status = status;
         this.closedByUserId = "closed".equals(status) ? actorUserId : null;

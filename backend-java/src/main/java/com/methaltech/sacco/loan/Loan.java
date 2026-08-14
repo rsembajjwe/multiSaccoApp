@@ -196,7 +196,7 @@ public class Loan {
     }
 
     public void recordRepayment(BigDecimal amount) {
-        this.balance = this.balance.subtract(amount);
+        this.balance = this.balance.subtract(amount).max(BigDecimal.ZERO);
         this.status = this.balance.compareTo(BigDecimal.ZERO) == 0 ? "closed" : "active";
         this.stage = this.balance.compareTo(BigDecimal.ZERO) == 0 ? "Closed" : "Repayment";
         this.updatedAt = Instant.now();

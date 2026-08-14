@@ -1,3 +1,6 @@
+// DEMO_ONLY_LEGACY_NODE_STORE
+// Production data and business rules live in backend-java/PostgreSQL. This in-memory store supports
+// local/demo fallback only and must not be treated as the production source of truth.
 import { hashPassword, hashToken, newId } from "./security.mjs";
 
 const now = () => new Date().toISOString();
@@ -735,6 +738,7 @@ export const db = {
       updatedAt: now()
     }
   ],
+  loanRepaymentSchedules: [],
   loanRepayments: [
     {
       id: "loan_repayment_green_0001",
@@ -751,6 +755,7 @@ export const db = {
     }
   ],
   mobileMoneyCallbacks: [],
+  mobileMoneyPaymentRequests: [],
   notificationTemplates: [
     {
       id: "template_payment_received",
@@ -839,6 +844,18 @@ export const db = {
       message: "Mobile money savings deposit GVS-TX-0001 for UGX 250000 was posted.",
       sentAt: now(),
       createdAt: now()
+    }
+  ],
+  providerJobRuns: [
+    {
+      id: "job_run_mobile_money_reconciliation_seed",
+      tenantId: "tenant_green",
+      provider: "demo_mobile_money",
+      jobType: "mobile_money_reconciliation",
+      status: "completed",
+      startedAt: now(),
+      finishedAt: now(),
+      summary: "Demo fallback reconciliation baseline"
     }
   ],
   statementLines: [

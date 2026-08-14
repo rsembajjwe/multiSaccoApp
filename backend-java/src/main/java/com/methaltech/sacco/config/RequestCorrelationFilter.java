@@ -27,7 +27,10 @@ class RequestCorrelationFilter extends OncePerRequestFilter {
 
     static final String CORRELATION_ID_HEADER = "X-Correlation-Id";
     static final String LEGACY_REQUEST_ID_HEADER = "X-Request-Id";
-    static final String MDC_KEY = "correlationId";
+    static final String CORRELATION_ID_MDC_KEY = "correlationId";
+    static final String METHOD_MDC_KEY = "requestMethod";
+    static final String PATH_MDC_KEY = "requestPath";
+    static final String CLIENT_IP_MDC_KEY = "clientIp";
 
     @Override
     protected void doFilterInternal(
@@ -35,12 +38,18 @@ class RequestCorrelationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
         String correlationId = resolveCorrelationId(request);
-        MDC.put(MDC_KEY, correlationId);
+        MDC.put(CORRELATION_ID_MDC_KEY, correlationId);
+        MDC.put(METHOD_MDC_KEY, sanitizeForLogs(request.getMethod(), 16));
+        MDC.put(PATH_MDC_KEY, sanitizeForLogs(request.getRequestURI(), 200));
+        MDC.put(CLIENT_IP_MDC_KEY, clientIp(request));
         response.setHeader(CORRELATION_ID_HEADER, correlationId);
         try {
             filterChain.doFilter(request, response);
         } finally {
-            MDC.remove(MDC_KEY);
+            MDC.remove(CORRELATION_ID_MDC_KEY);
+            MDC.remove(METHOD_MDC_KEY);
+            MDC.remove(PATH_MDC_KEY);
+            MDC.remove(CLIENT_IP_MDC_KEY);
         }
     }
 
@@ -51,12 +60,26 @@ class RequestCorrelationFilter extends OncePerRequestFilter {
         if (provided == null) {
             return UUID.randomUUID().toString();
         }
-        // Bound the length and strip control characters so a hostile header cannot poison logs.
-        String sanitized = provided.replaceAll("[\\p{Cntrl}]", "").trim();
+        String sanitized = sanitizeForLogs(provided, 64);
         if (sanitized.isEmpty()) {
             return UUID.randomUUID().toString();
         }
-        return sanitized.length() > 64 ? sanitized.substring(0, 64) : sanitized;
+        return sanitized;
+    }
+
+    private String clientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return sanitizeForLogs(forwardedFor.split(",")[0], 64);
+        }
+        return sanitizeForLogs(request.getRemoteAddr(), 64);
+    }
+
+    private static String sanitizeForLogs(String value, int maxLength) {
+        if (value == null) return "";
+        // Bound the length and strip control characters so hostile headers cannot poison logs.
+        String sanitized = value.replaceAll("[\\p{Cntrl}]", "").trim();
+        return sanitized.length() > maxLength ? sanitized.substring(0, maxLength) : sanitized;
     }
 
     private static String firstNonBlank(String a, String b) {

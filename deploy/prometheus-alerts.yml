@@ -1,0 +1,64 @@
+groups:
+  - name: tereka-online-api
+    rules:
+      - alert: TerekaApiDown
+        expr: up{job="tereka-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tereka Online API is down"
+          description: "The backend health scrape has failed for more than one minute."
+          runbook: "docs/monitoring.md#operations-runbook"
+
+      - alert: TerekaApiHighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="tereka-backend",status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_server_requests_seconds_count{job="tereka-backend"}[5m])), 1)
+          > 0.02
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tereka Online API 5xx error rate is high"
+          description: "More than 2% of backend requests have returned 5xx for 10 minutes."
+          runbook: "docs/monitoring.md#operations-runbook"
+
+      - alert: TerekaApiHighLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_server_requests_seconds_bucket{job="tereka-backend"}[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tereka Online API p95 latency is high"
+          description: "p95 backend latency has been above 2 seconds for 10 minutes."
+          runbook: "docs/monitoring.md#operations-runbook"
+
+      - alert: TerekaDatabasePoolPressure
+        expr: hikaricp_connections_pending{job="tereka-backend"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tereka Online database pool has pending borrowers"
+          description: "Application threads are waiting for database connections."
+          runbook: "docs/database-performance.md"
+
+      - alert: TerekaJvmHeapPressure
+        expr: |
+          sum(jvm_memory_used_bytes{job="tereka-backend",area="heap"})
+          /
+          sum(jvm_memory_max_bytes{job="tereka-backend",area="heap"})
+          > 0.85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tereka Online JVM heap usage is high"
+          description: "Heap usage has remained above 85% for 15 minutes."
+          runbook: "docs/monitoring.md#operations-runbook"

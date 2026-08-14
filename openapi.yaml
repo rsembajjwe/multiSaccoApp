@@ -43,6 +43,9 @@ tags:
   - name: Loans
   - name: Financial transactions
   - name: Accounting
+  - name: Operations
+  - name: Notifications
+  - name: Platform access
 
 # Default: staff/platform bearer token. Endpoints override with `security: []` (public),
 # `memberBearer` (member token), or `callbackSignature` (signed provider callback).
@@ -160,6 +163,196 @@ paths:
       responses:
         "200": { description: Logged out }
         "401": { $ref: "#/components/responses/Error" }
+
+  /operations/status:
+    get:
+      tags: [Operations]
+      summary: Operations status and alert counts
+      description: >
+        Returns database reachability, SACCO/member/user counts, pending postings, callback exceptions,
+        notification delivery exceptions, and alert objects. Platform users may request platform-wide
+        or one-SACCO status; SACCO users are limited to their own SACCO.
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Operations status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/OperationsStatusResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /users:
+    get:
+      tags: [Platform access]
+      summary: List staff/platform users visible to the current administrator
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/UserResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Platform access]
+      summary: Create a staff/platform user
+      description: Platform Super Admin can create platform administrators; SACCO administrators can create SACCO staff within their own SACCO.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateUserRequest" }
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/UserResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /users/{userId}/roles:
+    get:
+      tags: [Platform access]
+      summary: List assigned roles for one user
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: User role assignments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/RoleResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [Platform access]
+      summary: Replace assigned roles for one user
+      description: Supports assigning more than one role to a user, tenant-scoped to prevent cross-SACCO permission leakage.
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignRolesRequest" }
+      responses:
+        "200":
+          description: Roles updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/RoleResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /roles:
+    get:
+      tags: [Platform access]
+      summary: List roles visible to the current administrator
+      responses:
+        "200":
+          description: Role list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/RoleResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Platform access]
+      summary: Create a custom role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRoleRequest" }
+      responses:
+        "201":
+          description: Role created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/RoleResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /permissions:
+    get:
+      tags: [Platform access]
+      summary: List known permissions
+      responses:
+        "200":
+          description: Permission list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/PermissionResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /audit-events:
+    get:
+      tags: [Platform access]
+      summary: List audit events visible to the current administrator
+      parameters:
+        - name: tenantId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Audit events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/AuditEventResponse" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /tenants:
     get:
@@ -424,6 +617,23 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
+  /member-auth/me:
+    get:
+      tags: [Member self-service]
+      summary: Current member profile, SACCO and balances
+      security:
+        - memberBearer: []
+      responses:
+        "200":
+          description: Current member profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/MemberDashboard" }
+        "401": { $ref: "#/components/responses/Error" }
+
   /member-auth/mobile-dashboard:
     get:
       tags: [Member self-service]
@@ -453,6 +663,48 @@ paths:
                         type: array
                         description: Safe member-facing mobile-money options; secrets and missing configuration are not exposed.
                         items: { $ref: "#/components/schemas/PaymentProviderOption" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /member-auth/mobile-loans:
+    post:
+      tags: [Member self-service]
+      summary: Submit a loan application from the member portal or mobile channel
+      security:
+        - memberBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [loanProductId, principal]
+              properties:
+                loanProductId: { type: string }
+                principal: { type: number }
+                termMonths: { type: integer }
+                purpose: { type: string }
+      responses:
+        "201": { description: Loan application submitted }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /member-auth/guarantor-requests:
+    get:
+      tags: [Member self-service]
+      summary: List guarantor requests awaiting the member's response
+      security:
+        - memberBearer: []
+      responses:
+        "200":
+          description: Guarantor requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { type: object }
         "401": { $ref: "#/components/responses/Error" }
 
   /member-auth/collection-accounts:
@@ -835,6 +1087,30 @@ paths:
                   page: { $ref: "#/components/schemas/PageMeta" }
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Members]
+      summary: Register a SACCO member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, phone]
+              properties:
+                tenantId: { type: string }
+                branchId: { type: string }
+                membershipNo: { type: string }
+                fullName: { type: string }
+                memberType: { type: string }
+                phone: { type: string }
+                email: { type: string, format: email }
+                nationalId: { type: string }
+      responses:
+        "201": { description: Member registered }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /loans:
     get:
@@ -859,6 +1135,29 @@ paths:
                   data: { type: array, items: { type: object } }
                   page: { $ref: "#/components/schemas/PageMeta" }
         "401": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Loans]
+      summary: Create a staff-originated loan application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId, principal, termMonths]
+              properties:
+                tenantId: { type: string }
+                memberId: { type: string }
+                loanProductId: { type: string }
+                principal: { type: number }
+                interestRate: { type: number }
+                termMonths: { type: integer }
+                purpose: { type: string }
+      responses:
+        "201": { description: Loan application created }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /loans/repayments/pending:
     get:
@@ -954,6 +1253,31 @@ paths:
                   data: { type: array, items: { $ref: "#/components/schemas/FinancialTransaction" } }
                   page: { $ref: "#/components/schemas/PageMeta" }
         "401": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Financial transactions]
+      summary: Create a pending financial transaction for maker-checker posting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId, type, amount]
+              properties:
+                tenantId: { type: string }
+                branchId: { type: string }
+                memberId: { type: string }
+                type:
+                  type: string
+                  enum: [savings_deposit, withdrawal, share_purchase, welfare_contribution]
+                channel: { type: string, example: "cash" }
+                amount: { type: number }
+                reference: { type: string }
+      responses:
+        "201": { description: Pending transaction created }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
 
   /financial-transactions/{transactionId}/status:
     patch:
@@ -1148,6 +1472,156 @@ components:
         size: { type: integer }
         totalElements: { type: integer, format: int64 }
         totalPages: { type: integer }
+
+    OperationsStatusResponse:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+        checkedAt: { type: string, format: date-time }
+        scope: { type: string, example: "platform" }
+        database:
+          type: object
+          properties:
+            reachable: { type: boolean }
+        counts:
+          type: object
+          additionalProperties: { type: integer, format: int64 }
+        alerts:
+          type: array
+          items: { $ref: "#/components/schemas/OperationsAlert" }
+
+    OperationsAlert:
+      type: object
+      properties:
+        code: { type: string, example: "callback_exceptions" }
+        count: { type: integer, format: int64 }
+        severity: { type: string, enum: [warning, critical] }
+        message: { type: string }
+
+    MemberDashboard:
+      type: object
+      properties:
+        member:
+          type: object
+          properties:
+            id: { type: string }
+            membershipNo: { type: string }
+            fullName: { type: string }
+            phone: { type: string }
+            email: { type: string, nullable: true }
+            status: { type: string }
+        tenant:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            abbreviation: { type: string }
+        balances:
+          type: object
+          properties:
+            savings: { type: number }
+            shares: { type: number }
+            welfare: { type: number }
+            total: { type: number }
+        loans:
+          type: array
+          items: { type: object }
+        notifications:
+          type: array
+          items: { type: object }
+        guarantorRequests:
+          type: array
+          items: { type: object }
+        paymentProviders:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentProviderOption" }
+        collectionAccounts:
+          type: array
+          items: { $ref: "#/components/schemas/SaccoPaymentAccount" }
+
+    UserResponse:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        fullName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        status: { type: string, example: "active" }
+        roleIds:
+          type: array
+          items: { type: string }
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/RoleResponse" }
+        createdAt: { type: string, format: date-time, nullable: true }
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+
+    CreateUserRequest:
+      type: object
+      required: [fullName, email, password]
+      properties:
+        tenantId:
+          type: string
+          description: Optional for platform users; SACCO admins are scoped to their own SACCO.
+        fullName: { type: string, example: "Platform Billing Officer" }
+        email: { type: string, format: email, example: "billing@platform.local" }
+        phone: { type: string, example: "+256700000007" }
+        password: { type: string, format: password }
+        roleIds:
+          type: array
+          description: Optional initial roles; users may hold more than one role.
+          items: { type: string }
+
+    AssignRolesRequest:
+      type: object
+      required: [roleIds]
+      properties:
+        roleIds:
+          type: array
+          items: { type: string }
+          example: ["role_platform_billing", "role_platform_support"]
+
+    RoleResponse:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        name: { type: string, example: "Platform Billing Officer" }
+        description: { type: string, nullable: true }
+        permissionIds:
+          type: array
+          items: { type: string }
+
+    CreateRoleRequest:
+      type: object
+      required: [name, permissionIds]
+      properties:
+        tenantId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        permissionIds:
+          type: array
+          items: { type: string }
+
+    PermissionResponse:
+      type: object
+      properties:
+        id: { type: string, example: "users:manage" }
+        name: { type: string, example: "Manage users" }
+        module: { type: string, example: "access" }
+
+    AuditEventResponse:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        actorUserId: { type: string, nullable: true }
+        action: { type: string }
+        entityType: { type: string }
+        entityId: { type: string, nullable: true }
+        ipAddress: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
 
     NotificationProviderStatus:
       type: object

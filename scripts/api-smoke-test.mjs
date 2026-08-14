@@ -9,7 +9,12 @@ const server = externalBaseUrl
   ? null
   : spawn(process.execPath, ["server.mjs"], {
       cwd: new URL("..", import.meta.url),
-      env: { ...process.env, PORT: String(port) },
+      env: {
+        ...process.env,
+        PORT: String(port),
+        SACCO_NODE_API_ENABLED: "true",
+        SACCO_DEMO_FALLBACK_REASON: "api-smoke-test"
+      },
       stdio: ["ignore", "pipe", "pipe"]
     });
 

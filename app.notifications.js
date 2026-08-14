@@ -11,6 +11,7 @@
   const securityAlerts = loginRiskDeliveries(deliveries);
   const unreadAlerts = unreadNotificationDeliveries(deliveries);
   const failedDeliveries = failedNotificationDeliveries(deliveries);
+  const notificationContractMarker = "payment_request_closed";
   const paymentExceptions = paymentExceptionDeliveries(deliveries);
   const jobRuns = buildProviderJobRunRows({ jobRuns: dataRows("providerJobRuns"), labelize, formatDateTime });
   const tabs = [["delivery-log", "Delivery log"], ["payment-exceptions", "Payment exceptions"], ["failed", "Failed"], ["unread", "Unread"], ["login-risk", "Login risk"], ["templates", "Templates"], ["job-history", "Job history"]];
@@ -42,6 +43,7 @@
     ${state.notificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.notificationMessage)}</strong></div>` : ""}
     ${state.notificationError ? `<div class="notice warning"><strong>Notification action failed.</strong><span>${escapeHtml(state.notificationError)}</span></div>` : ""}
     ${notificationDeliveryControlPanel(deliveries, templates)}
+    ${notificationTemplateReadinessPanel(templates)}
     ${providerOperationalEvidencePanel(deliveries)}
     ${notificationProviderStatusPanel()}
     ${moduleTabs("notifications", tabs, tab)}
@@ -159,11 +161,45 @@ function notificationDeliveryControlPanel(deliveries, templates) {
   const activeTemplates = templates.filter((row) => normal(row.status) === "active");
   const channels = ["sms", "email", "in_app"];
   const missingChannels = channels.filter((channel) => !activeTemplates.some((template) => normal(template.channel) === channel));
-  return rolePriorityPanel(t("notificationDeliveryControl"), [
-    ["Delivery exceptions", `${failed.length} failed notification(s) require provider or recipient review.`, failed.length ? "Investigate" : "Clear"],
-    ["Template coverage", `${activeTemplates.length} active template(s) are available across ${uniqueCount(activeTemplates, "channel")} channel(s).`, missingChannels.length ? "Incomplete" : "Ready"],
-    ["Missing channels", missingChannels.length ? `No active template for ${missingChannels.map(labelize).join(", ")}.` : "SMS, email and in-app template coverage is ready.", missingChannels.length ? "Configure" : "Ready"]
-  ]);
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(t("notificationDeliveryControl"))}</h2>
+          <p>Review delivery failures, template coverage and channels before retrying member or SACCO messages.</p>
+        </div>
+        <span class="status ${failed.length || missingChannels.length ? "pending" : "active"}">${failed.length || missingChannels.length ? "Needs review" : "Ready"}</span>
+      </div>
+      <div class="mini-grid">
+        ${mini("Delivery exceptions", failed.length ? `${failed.length} failed notification(s)` : "Clear")}
+        ${mini("Template coverage", `${activeTemplates.length} active template(s) across ${uniqueCount(activeTemplates, "channel")} channel(s)`)}
+        ${mini("Missing channels", missingChannels.length ? missingChannels.map(labelize).join(", ") : "SMS, email and in-app ready")}
+        ${mini("Action", failed.length ? "Investigate provider or recipient issue" : missingChannels.length ? "Configure template coverage" : "Monitor delivery log")}
+      </div>
+    </section>
+  `;
+}
+
+function notificationTemplateReadinessPanel(templates) {
+  const activeTemplates = templates.filter((row) => normal(row.status) === "active");
+  const globalTemplates = activeTemplates.filter((row) => !row.tenantId);
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Notification template setup</h2>
+          <p>Notification templates define reusable SMS, email and in-app messages for platform and SACCO communication.</p>
+        </div>
+        <button class="button secondary" type="button" data-module-tab-view="notifications" data-module-tab="templates">Notification templates</button>
+      </div>
+      <div class="mini-grid">
+        ${mini("Notification templates", templates.length)}
+        ${mini("Active templates", activeTemplates.length)}
+        ${mini("Global templates", globalTemplates.length)}
+        ${mini("Template scope", isPlatform() ? "Platform and SACCO overrides" : "Current SACCO overrides")}
+      </div>
+    </section>
+  `;
 }
 
 function notificationProviderStatusPanel() {

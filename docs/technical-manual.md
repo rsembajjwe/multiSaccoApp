@@ -7,18 +7,29 @@ This manual is for developers and operators maintaining the SACCO Management Pla
 The platform has three main parts:
 
 - Browser frontend in `index.html`, `app.js`, and `styles.css`.
-- Prototype Node API in `server.mjs` and `backend/`.
+- SPA host and Java API proxy in `server.mjs`.
+- Legacy demo fallback in `backend/`; this is not the production business backend.
 - Java/Spring Boot production backend in `backend-java/`.
 
 The Java backend is the production path. It uses Spring Boot, Spring MVC, Spring Data JPA, Flyway migrations, H2 for development tests, and PostgreSQL for production-like deployments.
 
 ## Running Locally
 
-Frontend and prototype API:
+Production-style local development:
+
+```powershell
+npm.cmd run java:start
+npm.cmd run start:java-api
+```
+
+Legacy demo fallback:
 
 ```powershell
 npm.cmd start
 ```
+
+This starts `server.mjs` without `JAVA_API_BASE`, so `/api/v1` uses the legacy in-memory Node fallback
+only for local demonstrations. Do not use this mode for production-style testing.
 
 Java backend:
 
@@ -60,11 +71,15 @@ Run only Java tests:
 npm.cmd run java:test
 ```
 
-Run the prototype API smoke test:
+Run the legacy demo API smoke test:
 
 ```powershell
 npm.cmd run test:api
 ```
+
+This smoke test is retained only to keep the local/demo fallback from breaking while the Java backend
+remains the production source of truth. When it starts `server.mjs` itself, it explicitly sets
+`SACCO_NODE_API_ENABLED=true` and a demo-fallback reason so the legacy mode cannot look accidental.
 
 Run only the Java proxy-mode check:
 
@@ -74,13 +89,15 @@ node scripts/check-java-proxy-mode.mjs
 
 This starts a mock Java API, runs `server.mjs` with `JAVA_API_BASE`, and verifies `/api/v1` status, headers, authorization, and request-body forwarding.
 
-Run a lightweight load test against a running Java backend:
+Run a lightweight mixed-scenario load test against a running Java backend:
 
 ```powershell
 npm.cmd run load:test
 ```
 
-The load test defaults to `http://127.0.0.1:8080`, 100 requests, concurrency 10, and a 1,000 ms p95 latency limit. Override values with `LOAD_BASE_URL`, `LOAD_REQUESTS`, `LOAD_CONCURRENCY`, and `LOAD_P95_MS`.
+The load test defaults to `http://127.0.0.1:8080`, 100 requests, concurrency 10, a 1,000 ms p95 latency limit, a 2,000 ms p99 latency limit, a 1 req/s minimum throughput, and a 5,000 ms per-request timeout. It logs total throughput, p50/p95/p99 latency, scenario-level metrics, and a `LOAD_SUMMARY_JSON` line for release evidence. Override values with `LOAD_BASE_URL`, `LOAD_REQUESTS`, `LOAD_CONCURRENCY`, `LOAD_P95_MS`, `LOAD_P99_MS`, `LOAD_MIN_RPS`, and `LOAD_TIMEOUT_MS`.
+
+The default scenario mix covers health, operations status, SACCO account listing, subscriptions, platform users, audit events, regulatory reports, and provider operational evidence. Use `npm.cmd run load:evidence` to write the timestamped report under `reports/load-evidence/`.
 
 ## Database Migrations
 

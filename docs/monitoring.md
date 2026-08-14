@@ -2,6 +2,10 @@
 
 The Java backend exposes two monitoring surfaces.
 
+Production logs are written as structured JSON when the `prod` profile is active. Each request adds
+`correlationId`, `requestMethod`, `requestPath`, and `clientIp` to the logging context. Query strings,
+request bodies, and credentials are intentionally not added to logs.
+
 ## Public Liveness
 
 ```text
@@ -61,6 +65,15 @@ SACCO_MOBILE_MONEY_RECONCILIATION_BATCH_SIZE=50
 ```
 
 ## Suggested Alerts
+
+Prometheus-ready API/JVM/database alert rules live in:
+
+```text
+deploy/prometheus-alerts.yml
+```
+
+Those rules cover API down, 5xx error rate, p95 latency, database pool pressure, and JVM heap pressure.
+The authenticated Operations Status endpoint remains the source for business/operations alerts:
 
 - `callback_exceptions > 0`: critical, review payment provider callbacks.
 - `pending_financial_transactions > 0` for more than one business day: warning, checker action required.

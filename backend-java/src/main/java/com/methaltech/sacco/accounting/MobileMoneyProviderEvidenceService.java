@@ -21,11 +21,11 @@ public class MobileMoneyProviderEvidenceService {
                 ? callbackRepository.findAllByOrderByTenantIdAscReceivedAtDesc()
                 : callbackRepository.findByTenantIdOrderByReceivedAtDesc(tenantId);
 
-        int pendingRequests = countByStatus(paymentRequests, "pending_provider_callback", "accepted", "pending");
-        int failedRequests = countByStatus(paymentRequests, "failed", "expired", "cancelled");
-        int postedRequests = countByStatus(paymentRequests, "posted");
-        int pendingCallbacks = countByStatus(callbacks, "pending_approval");
-        int postedCallbacks = countByStatus(callbacks, "posted");
+        int pendingRequests = countPaymentRequestsByStatus(paymentRequests, "pending_provider_callback", "accepted", "pending");
+        int failedRequests = countPaymentRequestsByStatus(paymentRequests, "failed", "expired", "cancelled");
+        int postedRequests = countPaymentRequestsByStatus(paymentRequests, "posted");
+        int pendingCallbacks = countCallbacksByStatus(callbacks, "pending_approval");
+        int postedCallbacks = countCallbacksByStatus(callbacks, "posted");
         String evidenceStatus = failedRequests == 0 && pendingRequests == 0 ? "ready" : "review";
 
         return new MobileMoneyProviderEvidence(
@@ -41,17 +41,23 @@ public class MobileMoneyProviderEvidenceService {
                 evidenceStatus);
     }
 
-    private static int countByStatus(List<?> rows, String... statuses) {
+    private static int countPaymentRequestsByStatus(List<MobileMoneyPaymentRequestEntity> rows, String... statuses) {
         List<String> allowed = java.util.Arrays.stream(statuses)
                 .map(String::toLowerCase)
                 .toList();
         return (int) rows.stream()
-                .filter(row -> {
-                    String status = row instanceof MobileMoneyPaymentRequestEntity request
-                            ? request.getStatus()
-                            : ((MobileMoneyCallback) row).getStatus();
-                    return status != null && allowed.contains(status.toLowerCase());
-                })
+                .map(MobileMoneyPaymentRequestEntity::getStatus)
+                .filter(status -> status != null && allowed.contains(status.toLowerCase()))
+                .count();
+    }
+
+    private static int countCallbacksByStatus(List<MobileMoneyCallback> rows, String... statuses) {
+        List<String> allowed = java.util.Arrays.stream(statuses)
+                .map(String::toLowerCase)
+                .toList();
+        return (int) rows.stream()
+                .map(MobileMoneyCallback::getStatus)
+                .filter(status -> status != null && allowed.contains(status.toLowerCase()))
                 .count();
     }
 }

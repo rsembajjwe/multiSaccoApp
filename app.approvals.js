@@ -14,6 +14,8 @@ function approvalsView() {
   const canApproveLoans = !isPlatform() && hasPermission("loans:approve");
   const canApproveMembers = !isPlatform() && hasPermission("members:approve");
   const viewOnly = !canApproveTx && !canApproveLoans && !canApproveMembers;
+  const tabs = [["overview", "Overview"], ["queue", "Approval queue"]];
+  const tab = activeModuleTab("approvals", tabs);
   return `
     <div class="dashboard-grid">
       ${canApproveTx || queueSummary.transactionsToApprove ? summary("Transactions to approve", queueSummary.transactionsToApprove, "Finance maker-checker", "Decide") : ""}
@@ -29,11 +31,36 @@ function approvalsView() {
     ${state.selectedMemberError ? `<div class="notice warning"><strong>Member decision failed.</strong><span>${escapeHtml(state.selectedMemberError)}</span></div>` : ""}
     ${state.selectedRepaymentMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedRepaymentMessage)}</strong></div>` : ""}
     ${state.selectedRepaymentError ? `<div class="notice warning"><strong>Repayment decision failed.</strong><span>${escapeHtml(state.selectedRepaymentError)}</span></div>` : ""}
-    ${canApproveTx ? transactionApprovalPanel(queue.pendingTransactions, true) : ""}
-    ${canApproveTx ? repaymentApprovalPanel(queue.pendingRepayments, true) : ""}
-    ${canApproveLoans ? loanApprovalPanel(queue.loans, true) : ""}
-    ${canApproveMembers ? memberApprovalPanel(queue.members, true) : ""}
-    ${viewOnly ? recordTable("Approval queue", queue.viewOnlyQueue, ["reference", "applicationNo", "membershipNo", "memberName", "type", "amount", "status"]) : ""}
+    ${moduleTabs("approvals", tabs, tab)}
+    ${tab === "overview" ? approvalDecisionCenterPanel(queueSummary) : ""}
+    ${tab === "queue" ? `
+      ${canApproveTx ? transactionApprovalPanel(queue.pendingTransactions, true) : ""}
+      ${canApproveTx ? repaymentApprovalPanel(queue.pendingRepayments, true) : ""}
+      ${canApproveLoans ? loanApprovalPanel(queue.loans, true) : ""}
+      ${canApproveMembers ? memberApprovalPanel(queue.members, true) : ""}
+      ${viewOnly ? recordTable("Approval queue", queue.viewOnlyQueue, ["reference", "applicationNo", "membershipNo", "memberName", "type", "amount", "status"]) : ""}
+    ` : ""}
+  `;
+}
+
+function approvalDecisionCenterPanel(queueSummary) {
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Approval decision center</h2>
+          <p>Maker-checker queue for transaction posting, repayments, loans and member verification.</p>
+        </div>
+        <span class="status ${queueSummary.total ? "pending" : "active"}">${queueSummary.total ? "Decision queue" : "Clear"}</span>
+      </div>
+      <div class="mini-grid">
+        ${mini("Transactions", queueSummary.transactionsToApprove)}
+        ${mini("Loan repayments", queueSummary.repaymentsToApprove)}
+        ${mini("Loans", queueSummary.loansToApprove)}
+        ${mini("Members", queueSummary.membersToVerify)}
+      </div>
+    </section>
+    ${recordTable("Approval queue", [], ["reference", "type", "amount", "status"])}
   `;
 }
 

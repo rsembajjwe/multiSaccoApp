@@ -2,7 +2,7 @@
   const rows = buildChatThreadRows({ threads: dataRows("chatThreads") || [], tenantName, memberName });
   const complaintSummary = buildComplaintSummary(rows);
   if (isPlatform()) {
-    const tabs = [["chat", "SACCO admin chat"], ["capture", "Record SACCO message"], ["list", "Case list"]];
+    const tabs = [["chat", "SACCO admin chat"], ["list", "Complaint list"]];
     const tab = activeModuleTab("complaints", tabs);
     return `
       <div class="dashboard-grid">
@@ -11,9 +11,17 @@
         ${summary(t("inProgress"), complaintSummary.inProgress, "Being handled", "Track")}
         ${summary(t("resolved"), complaintSummary.resolved, "Closed support cases", t("review"))}
       </div>
+      <section class="panel compact-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Complaints from SACCO admins</h2>
+            <p>View and export support cases submitted by SACCO administrators.</p>
+          </div>
+          <button class="button secondary" type="button">Export complaints</button>
+        </div>
+      </section>
       ${moduleTabs("complaints", tabs, tab)}
       ${tab === "chat" ? complaintChatWorkspace("SACCO admin - Platform Super Admin chat", "WhatsApp-style support threads from SACCO administrators to the platform owner.", rows.filter((row) => row.type === "PLATFORM_SUPPORT"), "platform-super") : ""}
-      ${tab === "capture" ? complaintCapturePanel("platform") : ""}
       ${tab === "list" ? `
         ${filterToolbar("Search threads by SACCO, subject or status", "Export", "Assign")}
         ${recordTable(t("complaintsFromSaccoAdmins"), rows.filter((row) => row.type === "PLATFORM_SUPPORT"), ["tenantName", "subject", "status", "lastMessagePreview", "updatedAt"])}

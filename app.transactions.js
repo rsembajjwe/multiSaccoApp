@@ -3,7 +3,7 @@
   const overview = buildTransactionOverviewSummary(rows);
   const receiptingQueue = buildTransactionReceiptingQueue(rows);
   const receiptRegister = buildTransactionReceiptRegister(rows);
-  const tabs = [["capture", t("newTransactionScreen")], ["list", t("transactionList")], ["receipting", "Receipting queue"], ["receipts", "Receipt register"], ["detail", t("transactionDetail")]];
+  const tabs = [["overview", "Overview"], ["capture", t("newTransactionScreen")], ["receipting", "Receipting queue"], ["receipts", "Receipt register"], ["list", t("transactionList")], ["detail", t("transactionDetail")]];
   const tab = activeModuleTab("transactions", tabs);
   return `
     <div class="dashboard-grid">
@@ -12,6 +12,7 @@
       ${summary(t("postedValue"), money.format(overview.postedValue), "Receipt-ready transactions", t("receipts"))}
     </div>
     ${moduleTabs("transactions", tabs, tab)}
+    ${tab === "overview" ? transactionControlFocusPanel(overview, receiptingQueue, receiptRegister) : ""}
     ${tab === "capture" ? transactionFormPanel() : ""}
     ${tab === "receipting" ? transactionReceiptingPanel(receiptingQueue) : ""}
     ${tab === "receipts" ? transactionReceiptRegisterPanel(receiptRegister) : ""}
@@ -20,6 +21,28 @@
       ${filterToolbar("Search by reference, member, channel, status, amount or user", "New transaction", "Print receipt")}
       ${recordTable("Transaction list", rows, ["reference", "postedAt", "memberName", "type", "paymentRoute", "amount", "paymentStatus", "receiptStatus", "reversalStatus", "status"])}
     ` : ""}
+  `;
+}
+
+function transactionControlFocusPanel(overview, receiptingQueue, receiptRegister) {
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Transaction control focus</h2>
+          <p>Control deposits, loan repayments, approvals, receipts and reversals from one transaction workflow.</p>
+        </div>
+        <span class="status ${overview.pendingApproval ? "pending" : "active"}">${overview.pendingApproval ? "Approval queue" : "Current"}</span>
+      </div>
+      <div class="mini-grid">
+        ${mini("Pending approval", overview.pendingApproval)}
+        ${mini("Posted value", money.format(overview.postedValue))}
+        ${mini("Receipting queue", receiptingQueue.length)}
+        ${mini("Receipt register", receiptRegister.length)}
+        ${mini("Payment routes", "Treasurer cash, mobile money and bank")}
+        ${mini("Reversal control", "Reason required for posted corrections")}
+      </div>
+    </section>
   `;
 }
 
@@ -84,6 +107,21 @@ function transactionFormPanel() {
   const members = dataRows("members");
   const branches = dataRows("branches");
   return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Office receipt controls</h2>
+          <p>Treasurer/Admin captures office cash, bank and mobile-money evidence before approval and receipt printing.</p>
+        </div>
+        <span class="status active">Controlled capture</span>
+      </div>
+      <div class="mini-grid">
+        ${mini("Treasurer cash", "Available for deposits and loan repayments")}
+        ${mini("Mobile money", "Use provider reference or callback evidence")}
+        ${mini("Bank", "Record bank slip or transaction reference")}
+        ${mini("Receipt", "Issued after posting")}
+      </div>
+    </section>
     <section class="panel">
       <div class="panel-heading">
         <div>
@@ -149,11 +187,7 @@ function transactionDetailPanel(rows) {
         ${mini("Reversal reason", transaction.reversalReason)}
         ${mini("Rejection reason", transaction.rejectionReason)}
       </div>
-      ${rolePriorityPanel("Transaction decision checklist", [
-        ["Approval", pending ? "Review member, amount, channel and narration before posting or rejecting." : "Approval action is only available while pending.", pending ? "Pending" : "Done"],
-        ["Receipt", receiptReady ? "Posted transaction can generate an official receipt preview." : "Receipt becomes available after posting.", receiptReady ? "Ready" : "Waiting"],
-        ["Reversal", postedOriginal ? "Enter a reason before reversing this original posted transaction." : "Reversal is only available for posted original transactions.", postedOriginal ? "Available" : "Locked"]
-      ])}
+      ${transactionDecisionChecklistPanel(pending, receiptReady, postedOriginal)}
       <form id="transactionDecisionForm" class="form-grid single">
         <input type="hidden" id="selectedTransactionId" value="${escapeHtml(transaction.id)}">
         <label><span>Decision / reversal reason</span><input id="transactionDecisionReason" placeholder="Required for rejection or reversal" ${canApprove ? "" : "disabled"}></label>
@@ -167,6 +201,25 @@ function transactionDetailPanel(rows) {
         </div>
       </form>
       ${state.selectedTransactionReceipt ? transactionReceiptPreview(state.selectedTransactionReceipt) : ""}
+    </section>
+  `;
+}
+
+function transactionDecisionChecklistPanel(pending, receiptReady, postedOriginal) {
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Transaction decision checklist</h2>
+          <p>Review approval, receipt and reversal conditions before changing a transaction.</p>
+        </div>
+        <span class="status ${pending || postedOriginal ? "pending" : "active"}">${pending || postedOriginal ? "Action available" : "Reviewed"}</span>
+      </div>
+      <div class="mini-grid">
+        ${mini("Approval", pending ? "Review member, amount, channel and narration before posting or rejecting. (Pending)" : "Approval action is only available while pending. (Done)")}
+        ${mini("Receipt", receiptReady ? "Posted transaction can generate an official receipt preview. (Ready)" : "Receipt becomes available after posting. (Waiting)")}
+        ${mini("Reversal", postedOriginal ? "Enter a reason before reversing this original posted transaction. (Available)" : "Reversal is only available for posted original transactions. (Locked)")}
+      </div>
     </section>
   `;
 }

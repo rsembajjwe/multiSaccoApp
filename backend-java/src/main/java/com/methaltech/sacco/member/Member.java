@@ -203,18 +203,20 @@ public class Member {
     }
 
     public void applyPostedTransaction(String type, BigDecimal amount) {
+        requirePositiveAmount(amount);
         if ("savings_deposit".equals(type)) this.savingsBalance = this.savingsBalance.add(amount);
-        if ("withdrawal".equals(type)) this.savingsBalance = this.savingsBalance.subtract(amount);
+        if ("withdrawal".equals(type)) this.savingsBalance = subtractAvailableBalance(this.savingsBalance, amount, "Savings");
         if ("share_purchase".equals(type)) this.sharesBalance = this.sharesBalance.add(amount);
         if ("welfare_contribution".equals(type)) this.welfareBalance = this.welfareBalance.add(amount);
         this.updatedAt = Instant.now();
     }
 
     public void applyReversal(String type, BigDecimal amount) {
-        if ("savings_deposit".equals(type)) this.savingsBalance = this.savingsBalance.subtract(amount);
+        requirePositiveAmount(amount);
+        if ("savings_deposit".equals(type)) this.savingsBalance = subtractAvailableBalance(this.savingsBalance, amount, "Savings");
         if ("withdrawal".equals(type)) this.savingsBalance = this.savingsBalance.add(amount);
-        if ("share_purchase".equals(type)) this.sharesBalance = this.sharesBalance.subtract(amount);
-        if ("welfare_contribution".equals(type)) this.welfareBalance = this.welfareBalance.subtract(amount);
+        if ("share_purchase".equals(type)) this.sharesBalance = subtractAvailableBalance(this.sharesBalance, amount, "Shares");
+        if ("welfare_contribution".equals(type)) this.welfareBalance = subtractAvailableBalance(this.welfareBalance, amount, "Welfare");
         this.updatedAt = Instant.now();
     }
 
@@ -227,15 +229,31 @@ public class Member {
     }
 
     public void applyWelfareClaimPayment(BigDecimal amount) {
-        this.welfareBalance = this.welfareBalance.subtract(amount);
+        requirePositiveAmount(amount);
+        this.welfareBalance = subtractAvailableBalance(this.welfareBalance, amount, "Welfare");
         this.updatedAt = Instant.now();
     }
 
     public boolean canReverse(String type, BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) return false;
         if ("savings_deposit".equals(type)) return savingsBalance.compareTo(amount) >= 0;
         if ("share_purchase".equals(type)) return sharesBalance.compareTo(amount) >= 0;
         if ("welfare_contribution".equals(type)) return welfareBalance.compareTo(amount) >= 0;
         return true;
+    }
+
+    private static void requirePositiveAmount(BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Transaction amount must be greater than zero.");
+        }
+    }
+
+    private static BigDecimal subtractAvailableBalance(BigDecimal current, BigDecimal amount, String balanceName) {
+        BigDecimal next = current.subtract(amount);
+        if (next.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalStateException(balanceName + " balance cannot go below zero.");
+        }
+        return next;
     }
 
     public String getId() {
