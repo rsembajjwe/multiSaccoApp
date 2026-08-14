@@ -132,6 +132,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   evidence template, staging readiness notes, CI gates, and package scripts, then writes timestamped
   release evidence. Hosted preflight is skipped until real staging `.env` or environment variables
   are supplied.
+- A release evidence pack command now summarizes the local release contracts across deployment, DR,
+  secrets, database tuning, HA, data protection, Vite, i18n, and accessibility. It is intended as a
+  release-owner handoff artifact before heavier hosted evidence and external sign-offs.
 
 ### Frontend
 

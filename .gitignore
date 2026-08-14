@@ -27,6 +27,8 @@ reports/vite-evidence/*
 !reports/vite-evidence/.gitkeep
 reports/type-evidence/*
 !reports/type-evidence/.gitkeep
+reports/release-evidence/*
+!reports/release-evidence/.gitkeep
 .env
 .env.*
 *.log

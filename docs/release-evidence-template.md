@@ -37,6 +37,7 @@ Latest local backup rehearsal evidence: `npm.cmd run backup:evidence` passed on 
 
 | Gate | Command or artifact | Pass/fail | Evidence link or notes |
 | --- | --- | --- | --- |
+| Release evidence pack | `npm.cmd run release:evidence` |  |  |
 | Local verification | `npm.cmd run check` |  |  |
 | Production readiness | `npm.cmd run ready:check` |  |  |
 | PostgreSQL/Flyway | `npm.cmd run postgres:check` or hosted migration artifact |  |  |

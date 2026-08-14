@@ -271,6 +271,10 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 
 23. **Commit & release hygiene** — [code]
     *Done when:* the working set is committed in focused commits; a tagged release + changelog exists.
+    *Current progress:* `npm.cmd run release:evidence` now creates a timestamped local release pack
+    covering deployment, DR, secrets, database tuning, HA, data protection, Vite, i18n, and
+    accessibility contracts. It gives release owners one summary artifact before hosted staging
+    handoff, while still requiring the heavier Docker/browser/load gates and external hosted proof.
 
 24. **Pilot → production sign-off** — [external]
     *Done when:* a supervised pilot runs clean for an agreed period, then a formal go-live decision is
