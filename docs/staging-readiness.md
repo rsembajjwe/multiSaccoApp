@@ -26,6 +26,7 @@ A build can be called staging-ready only when every required gate passes.
 | Staging handoff checklist | `docs/staging-handoff-checklist.md` | Environment, secrets, release gates, operations, UAT accounts, and decision evidence are recorded. | Required before staging handoff |
 | Staging handoff contract | `npm.cmd run staging:handoff-check` | The handoff checklist still contains the required environment, secrets, release-gate, operations, UAT, and blocker controls. | Ready for use |
 | UAT readiness | `npm.cmd run uat:readiness` | UAT scripts, findings template, data setup guide, browser UAT, and sign-off rules remain complete. | Ready for use |
+| Load/soak readiness | `npm.cmd run load:readiness` | Hosted load targets, soak targets, scenario coverage, evidence fields, and production blockers remain documented. | Ready for use |
 | Incident readiness | `npm.cmd run incident:check` | Monitoring, alert rules, rollback, log-capture, restore-owner, and secret-safe incident controls remain documented. | Ready for use |
 | Security audit readiness | `npm.cmd run security:audit-check` | Audit scope, evidence, test accounts, rules of engagement, severity triage, and closure rules remain documented. | Ready for use |
 | Compliance readiness | `npm.cmd run compliance:check` | Data-protection, SACCO/regulatory, payment/provider, legal-document, and sign-off evidence remain visible before launch. | Ready for use |
@@ -68,6 +69,7 @@ Use this checklist before tagging a staging or production release.
 - `npm.cmd run check` passes.
 - `npm.cmd run ready:check` passes.
 - `npm.cmd run load:test` meets the agreed request and p95 threshold.
+- `npm.cmd run load:readiness` passes and hosted load/soak evidence is attached when the release targets production.
 - No P0 security findings are open in `docs/security-review.md`.
 - Demo logins are disabled outside explicit demo verification.
 - Database backup and restore have been rehearsed on a non-production copy.

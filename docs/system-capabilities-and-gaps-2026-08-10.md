@@ -141,6 +141,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   blocker controls.
 - UAT readiness is now guarded by `npm.cmd run uat:readiness`, covering role scripts, generated data
   setup, browser UAT, findings severity, accepted-finding ownership, and final role sign-off.
+- Load/soak readiness is now guarded by `npm.cmd run load:readiness`, covering hosted environment
+  metadata, scenario coverage, starter and enterprise targets, soak evidence, DB/Redis/provider
+  observations, and production blockers.
 - The Hetzner CX22 deployment runbook now covers first platform owner bootstrap, bootstrap credential
   rotation, pre-update backup, post-deploy health verification, rollback by previous commit,
   restore-owner evidence, and secret-safe log handling.
@@ -323,7 +326,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   Redis smoke test passed on 14 August 2026, proving local Redis shared-state behavior. A local
   Java-backed baseline load evidence run passed on 14 August 2026. Backup/restore evidence also passed
   on 14 August 2026 with a DR runbook contract and disposable PostgreSQL restore. Deployment contract
-  evidence also now passes locally. Hosted Redis deployment, staging load/soak execution, hosted
+  evidence also now passes locally. Load/soak readiness targets are now documented and guarded. Hosted Redis deployment, staging load/soak execution, hosted
   DNS/HTTPS deployment proof, production RPO/RTO measurement, and load-balancer failover rehearsal are
   still needed.
 - **Mobile money is not production-live.** Adapters and routing exist, but MTN/Airtel production use

@@ -161,7 +161,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    emits scenario-level latency/failure metrics, and writes a structured `LOAD_SUMMARY_JSON` record
    that `npm.cmd run load:evidence` renders into release evidence. Remaining work is to run this
    against a PostgreSQL-backed staging clone at realistic request volumes, capture repeated baseline
-   and soak evidence, and tune indexes/queries where the evidence shows hotspots.
+   and soak evidence, and tune indexes/queries where the evidence shows hotspots. `npm.cmd run
+   load:readiness` now guards the hosted load/soak targets, scenario coverage, evidence fields, and
+   production blockers before that external run.
 
 9. **HA / failover rehearsal** — [code]
    *Done when:* a two-instance deployment behind a load balancer, sharing Redis, survives an instance
@@ -290,7 +292,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 23. **Commit & release hygiene** — [code]
     *Done when:* the working set is committed in focused commits; a tagged release + changelog exists.
     *Current progress:* `npm.cmd run release:evidence` now creates a timestamped local release pack
-    covering deployment, UAT readiness, DR, secrets, database tuning, HA, data protection, Vite, i18n,
+    covering deployment, UAT readiness, load/soak readiness, DR, secrets, database tuning, HA, data protection, Vite, i18n,
     accessibility, and repository hygiene contracts. It gives release owners one summary artifact before hosted staging
     handoff, while still requiring the heavier Docker/browser/load gates and external hosted proof.
     `npm.cmd run repo:hygiene` now also verifies ignore rules and scans tracked files so local logs,
