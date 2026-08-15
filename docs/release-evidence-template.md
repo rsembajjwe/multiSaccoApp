@@ -42,6 +42,7 @@ Latest local backup rehearsal evidence: `npm.cmd run backup:evidence` passed on 
 | UAT readiness | `npm.cmd run uat:readiness` |  | Confirm UAT scripts, findings, setup, and sign-off evidence are ready. |
 | Load/soak readiness | `npm.cmd run load:readiness` |  | Attach `docs/load-soak-readiness.md` targets and hosted evidence. |
 | Incident readiness | `npm.cmd run incident:check` |  |  |
+| Hosted operations evidence | `npm.cmd run operations:hosted-check` |  | Attach `docs/hosted-operations-evidence.md`, alert routing, dashboard, log sink, backup schedule, and restore drill evidence. |
 | Security audit readiness | `npm.cmd run security:audit-check` |  | Attach `docs/security-audit-readiness.md` and auditor rules of engagement. |
 | Compliance readiness | `npm.cmd run compliance:check` |  | Attach `docs/compliance-readiness.md` owner/sign-off evidence. |
 | Provider sandbox readiness | `npm.cmd run provider:sandbox-check` |  | Attach `docs/provider-sandbox-readiness.md`, redacted provider setup, sandbox callback, and delivery evidence. |
