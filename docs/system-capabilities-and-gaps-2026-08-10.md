@@ -133,7 +133,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   release evidence. Hosted preflight is skipped until real staging `.env` or environment variables
   are supplied.
 - A release evidence pack command now summarizes the local release contracts across deployment, DR,
-  secrets, database tuning, HA, data protection, Vite, i18n, accessibility, and repository hygiene.
+  secrets, database tuning, HA, data protection, Vite, i18n, accessibility, accessibility audit
+  readiness, and repository hygiene.
   It is intended as a release-owner handoff artifact before heavier hosted evidence and external
   sign-offs.
 - The staging handoff checklist is now protected by `npm.cmd run staging:handoff-check`, covering
@@ -264,6 +265,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   `reports/accessibility-evidence/`. It also runs a Playwright browser journey across login, public
   SACCO registration, platform admin, SACCO admin, and member portal pages where the active profile
   exposes those views.
+- Accessibility audit readiness is now guarded by `npm.cmd run accessibility:audit-check`, covering
+  WCAG 2.1 AA scope, keyboard-only navigation, screen-reader smoke tests, contrast, 200% zoom,
+  touch targets, reduced motion, assistive-technology coverage, severity triage, and closure rules.
 
 ---
 
@@ -383,10 +387,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - **Internationalization depth is incomplete.** Locale and RTL wiring are evidenced for English,
   French, Swahili, Portuguese, Arabic, and Amharic, but Luganda and professional in-country
   translation/QA for broader regional coverage are still needed.
-- **Accessibility needs real audits.** Static and browser evidence now covers baseline skip links,
-  landmarks, labels, assertive auth errors, described form hints, reduced motion, touch targets,
-  focus markers, and role journey structure; screen-reader flows, contrast, focus management, and
-  WCAG AA testing still need assistive-technology validation.
+- **Accessibility needs real audits.** Static/browser evidence and audit-readiness checks now cover
+  baseline skip links, labels, landmarks, focus styling, reduced motion, login, registration,
+  platform admin, SACCO staff, member-portal journeys, WCAG scope, and closure rules. Manual
+  assistive-technology validation and final auditor sign-off still remain external.
 - **Secrets management needs hosted managed-store evidence.** Environment-backed config, placeholder
   scanning, production startup guards, rotation procedures, required-secret inventory, and rotation
   evidence templates exist; the remaining work is wiring and proving a hosted Vault/KMS/secret-manager

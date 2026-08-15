@@ -200,7 +200,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
     visible focus are covered by `npm run accessibility:evidence`. The same command now runs a
     browser journey across login, public SACCO registration, platform admin, SACCO admin, and member
     portal where the active profile allows it. Manual assistive-technology, contrast, and WCAG AA
-    audit signoff remains required.
+    audit signoff remains required. `npm.cmd run accessibility:audit-check` now guards the manual
+    audit scope, evidence list, assistive-technology matrix, severity model, and closure rules before
+    launch.
 
 13. **User Acceptance Testing (UAT)** — [external]
     *Done when:* real SACCO staff and members complete scripted UAT and sign off.
@@ -293,7 +295,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
     *Done when:* the working set is committed in focused commits; a tagged release + changelog exists.
     *Current progress:* `npm.cmd run release:evidence` now creates a timestamped local release pack
     covering deployment, UAT readiness, load/soak readiness, DR, secrets, database tuning, HA, data protection, Vite, i18n,
-    accessibility, and repository hygiene contracts. It gives release owners one summary artifact before hosted staging
+    accessibility, accessibility audit readiness, and repository hygiene contracts. It gives release owners one summary artifact before hosted staging
     handoff, while still requiring the heavier Docker/browser/load gates and external hosted proof.
     `npm.cmd run repo:hygiene` now also verifies ignore rules and scans tracked files so local logs,
     reports, builds, backups, IDE files, temporary files, and environment files cannot become part of
