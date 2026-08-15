@@ -133,7 +133,8 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   release evidence. Hosted preflight is skipped until real staging `.env` or environment variables
   are supplied.
 - A release evidence pack command now summarizes the local release contracts across deployment, DR,
-  secrets, database tuning, HA, data protection, hosted operations evidence, provider sandbox readiness, Vite, i18n, accessibility, accessibility audit
+  secrets, database tuning, HA, data protection, hosted operations evidence, pilot launch decision,
+  provider sandbox readiness, Vite, i18n, accessibility, accessibility audit
   readiness, and repository hygiene.
   It is intended as a release-owner handoff artifact before heavier hosted evidence and external
   sign-offs.
@@ -154,6 +155,10 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Hosted operations evidence is now guarded by `npm.cmd run operations:hosted-check`, covering
   hosted alert routing, dashboards, centralized log sinks, off-server backup schedules, restore drill
   evidence, RPO/RTO, and incident contacts.
+- Pilot launch decision readiness is now guarded by `npm.cmd run pilot:launch-check`, covering
+  go/no-go owners, release inputs, hosted operations evidence, provider readiness, migration evidence,
+  UAT sign-off, audit/compliance paths, accepted-finding limits, launch-window checks, and
+  rollback/restore/incident ownership.
 - Security audit readiness is now guarded by `npm.cmd run security:audit-check`, covering audit
   scope, evidence pack, temporary accounts, rules of engagement, finding severity, and closure rules
   for an independent tester.

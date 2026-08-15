@@ -300,7 +300,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 23. **Commit & release hygiene** — [code]
     *Done when:* the working set is committed in focused commits; a tagged release + changelog exists.
     *Current progress:* `npm.cmd run release:evidence` now creates a timestamped local release pack
-    covering deployment, UAT readiness, load/soak readiness, DR, secrets, database tuning, HA, data protection, hosted operations evidence, provider sandbox readiness, Vite, i18n,
+    covering deployment, UAT readiness, load/soak readiness, DR, secrets, database tuning, HA, data protection, hosted operations evidence, pilot launch decision, provider sandbox readiness, Vite, i18n,
     accessibility, accessibility audit readiness, and repository hygiene contracts. It gives release owners one summary artifact before hosted staging
     handoff, while still requiring the heavier Docker/browser/load gates and external hosted proof.
     `npm.cmd run repo:hygiene` now also verifies ignore rules and scans tracked files so local logs,
@@ -310,6 +310,10 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 24. **Pilot → production sign-off** — [external]
     *Done when:* a supervised pilot runs clean for an agreed period, then a formal go-live decision is
     recorded.
+    *Current readiness guard:* `npm.cmd run pilot:launch-check` now verifies go/no-go owners, release
+    evidence inputs, hosted operations evidence, provider readiness, migration evidence, UAT sign-off,
+    audit/compliance paths, accepted-finding limits, launch-window checks, and rollback/restore/incident
+    ownership before the external decision meeting.
 
 ---
 
