@@ -133,7 +133,7 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
   release evidence. Hosted preflight is skipped until real staging `.env` or environment variables
   are supplied.
 - A release evidence pack command now summarizes the local release contracts across deployment, DR,
-  secrets, database tuning, HA, data protection, Vite, i18n, accessibility, accessibility audit
+  secrets, database tuning, HA, data protection, provider sandbox readiness, Vite, i18n, accessibility, accessibility audit
   readiness, and repository hygiene.
   It is intended as a release-owner handoff artifact before heavier hosted evidence and external
   sign-offs.
@@ -157,6 +157,9 @@ Readiness: **about 80% for a supervised pilot; about 60% for unattended enterpri
 - Compliance readiness is now guarded by `npm.cmd run compliance:check`, which keeps
   data-protection, SACCO/regulatory, payment/provider, legal-document, and owner sign-off evidence
   visible before pilot or production launch.
+- Provider sandbox readiness is now guarded by `npm.cmd run provider:sandbox-check`, covering
+  AfroSMS, Gmail SMTP, SACCO-owned bank collection, MTN MoMo, Airtel Money, callback idempotency,
+  provider timeout evidence, and M-Pesa exclusion from required launch scope.
 - Repository hygiene is now guarded by `npm.cmd run repo:hygiene`, which verifies ignore rules for
   local logs, environment files, generated builds, backups, reports, IDE files, and temporary files,
   then scans tracked files so those artifacts cannot quietly enter a release commit.

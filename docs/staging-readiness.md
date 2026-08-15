@@ -30,9 +30,10 @@ A build can be called staging-ready only when every required gate passes.
 | Incident readiness | `npm.cmd run incident:check` | Monitoring, alert rules, rollback, log-capture, restore-owner, and secret-safe incident controls remain documented. | Ready for use |
 | Security audit readiness | `npm.cmd run security:audit-check` | Audit scope, evidence, test accounts, rules of engagement, severity triage, and closure rules remain documented. | Ready for use |
 | Compliance readiness | `npm.cmd run compliance:check` | Data-protection, SACCO/regulatory, payment/provider, legal-document, and sign-off evidence remain visible before launch. | Ready for use |
+| Provider sandbox readiness | `npm.cmd run provider:sandbox-check` | AfroSMS, Gmail SMTP, bank collection, MTN MoMo, Airtel Money, callback idempotency, and M-Pesa exclusion rules remain documented. | Ready for use |
 | Accessibility audit readiness | `npm.cmd run accessibility:audit-check` | WCAG scope, keyboard, screen-reader, contrast, zoom, touch, reduced-motion, assistive-technology, and closure rules remain documented. | Ready for use |
 | Release evidence pack | `docs/release-evidence-template.md` | Command results, environment evidence, UAT sign-off, load-test numbers, and release decision are recorded. | Ready for use |
-| Local release evidence command | `npm.cmd run release:evidence` | Deployment, DR, secrets, database, HA, data-protection, Vite, i18n, accessibility, accessibility audit readiness, and repository hygiene contracts pass and produce a timestamped local release pack. | Ready for use |
+| Local release evidence command | `npm.cmd run release:evidence` | Deployment, DR, secrets, database, HA, data-protection, provider sandbox readiness, Vite, i18n, accessibility, accessibility audit readiness, and repository hygiene contracts pass and produce a timestamped local release pack. | Ready for use |
 | UAT findings tracker | `docs/uat-findings-template.md` | Findings have severity, owner, status, retest result, and acceptance notes. | Ready for use |
 | Backup restore rehearsal | `npm.cmd run backup:evidence` | Backup file restores cleanly on an isolated non-production database. | Passed on 2026-08-14 |
 
@@ -78,6 +79,7 @@ Use this checklist before tagging a staging or production release.
 - UAT readiness evidence confirms scripts, generated data setup, browser UAT, findings severity, accepted-finding ownership, and sign-off rules remain ready.
 - Release evidence and findings tracker are completed for the release candidate.
 - Compliance readiness owner/sign-off evidence is attached using `docs/compliance-readiness.md`.
+- Provider sandbox readiness evidence covers AfroSMS, Gmail SMTP, SACCO-owned bank collection, MTN MoMo, Airtel Money, callback idempotency, provider timeout handling, and M-Pesa exclusion.
 - Staging secrets are stored outside git.
 - Deployment owner confirms HTTPS, CORS origin, backup schedule, and monitoring destinations.
 - Incident readiness evidence covers monitoring thresholds, Prometheus runbook links, rollback, log capture, restore ownership, and secret-safe escalation notes.

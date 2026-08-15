@@ -44,6 +44,7 @@ Latest local backup rehearsal evidence: `npm.cmd run backup:evidence` passed on 
 | Incident readiness | `npm.cmd run incident:check` |  |  |
 | Security audit readiness | `npm.cmd run security:audit-check` |  | Attach `docs/security-audit-readiness.md` and auditor rules of engagement. |
 | Compliance readiness | `npm.cmd run compliance:check` |  | Attach `docs/compliance-readiness.md` owner/sign-off evidence. |
+| Provider sandbox readiness | `npm.cmd run provider:sandbox-check` |  | Attach `docs/provider-sandbox-readiness.md`, redacted provider setup, sandbox callback, and delivery evidence. |
 | Accessibility audit readiness | `npm.cmd run accessibility:audit-check` |  | Attach `docs/accessibility-audit-readiness.md`, assistive-technology notes, and open finding status. |
 | Local verification | `npm.cmd run check` |  |  |
 | Production readiness | `npm.cmd run ready:check` |  |  |

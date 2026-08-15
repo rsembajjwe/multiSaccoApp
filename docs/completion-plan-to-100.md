@@ -79,6 +79,9 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    *Done when:* MTN/Airtel **merchant/KYC onboarding** is complete; production credentials + signed
    callbacks are configured; a real payment to a live number completes and reconciles; optionally
    per-SACCO settlement credentials.
+   *Current readiness guard:* `npm.cmd run provider:sandbox-check` now verifies the launch provider
+   scope, AfroSMS/Gmail evidence expectations, SACCO-owned bank collection, MTN/Airtel sandbox
+   callback evidence, callback idempotency, timeout handling, and M-Pesa exclusion before live testing.
 
 5. **Retire the legacy Node prototype** — [code]
    *Done when:* `backend/*.mjs` is removed or clearly quarantined; only the Java backend + SPA host
@@ -294,7 +297,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
 23. **Commit & release hygiene** — [code]
     *Done when:* the working set is committed in focused commits; a tagged release + changelog exists.
     *Current progress:* `npm.cmd run release:evidence` now creates a timestamped local release pack
-    covering deployment, UAT readiness, load/soak readiness, DR, secrets, database tuning, HA, data protection, Vite, i18n,
+    covering deployment, UAT readiness, load/soak readiness, DR, secrets, database tuning, HA, data protection, provider sandbox readiness, Vite, i18n,
     accessibility, accessibility audit readiness, and repository hygiene contracts. It gives release owners one summary artifact before hosted staging
     handoff, while still requiring the heavier Docker/browser/load gates and external hosted proof.
     `npm.cmd run repo:hygiene` now also verifies ignore rules and scans tracked files so local logs,
