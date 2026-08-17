@@ -1,0 +1,34 @@
+# Normalize line endings: store and check out all text files as LF, regardless of
+# the contributor's OS. This prevents the whole-file CRLF/LF churn that otherwise makes
+# unrelated files appear modified. Renormalize once with: git add --renormalize .
+* text=auto eol=lf
+
+# Explicit LF for the project's source and config so editors never flip them to CRLF.
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.ts    text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.java  text eol=lf
+*.sql   text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
+*.webmanifest text eol=lf
+Caddyfile text eol=lf
+
+# Windows-specific tooling stays CRLF.
+*.ps1   text eol=crlf
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+
+# Binary assets — never touch.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
