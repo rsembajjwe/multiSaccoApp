@@ -67,6 +67,7 @@ class AccountingController {
     private final MemberRepository memberRepository;
     private final BranchRepository branchRepository;
     private final SubscriptionPaymentRepository subscriptionPaymentRepository;
+    private final com.methaltech.sacco.tenant.SaccoPaymentAccountRepository paymentAccountRepository;
     private final AuthService authService;
     private final AuditService auditService;
 
@@ -85,6 +86,7 @@ class AccountingController {
             MemberRepository memberRepository,
             BranchRepository branchRepository,
             SubscriptionPaymentRepository subscriptionPaymentRepository,
+            com.methaltech.sacco.tenant.SaccoPaymentAccountRepository paymentAccountRepository,
             AuthService authService,
             AuditService auditService) {
         this.periodRepository = periodRepository;
@@ -101,6 +103,7 @@ class AccountingController {
         this.memberRepository = memberRepository;
         this.branchRepository = branchRepository;
         this.subscriptionPaymentRepository = subscriptionPaymentRepository;
+        this.paymentAccountRepository = paymentAccountRepository;
         this.authService = authService;
         this.auditService = auditService;
     }
@@ -554,6 +557,58 @@ class AccountingController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(StatementLineResponse.from(line)));
     }
 
+    @PatchMapping("/statement-lines/{lineId}/collection-account")
+    ResponseEntity<?> assignStatementLineCollectionAccount(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String lineId,
+            @Valid @RequestBody AssignCollectionAccountRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "accounting:post")) {
+            return authService.permissionRequired("accounting:post");
+        }
+
+        StatementLine line = statementLineRepository.findById(lineId).orElse(null);
+        if (line == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "STATEMENT_LINE_NOT_FOUND", "Statement line not found."));
+        }
+        if (!canAccess(currentSession, line.getTenantId())) return tenantAccessDenied();
+        if (!branchScope(currentSession, line.getTenantId()).isEmpty()) {
+            return branchAccessDenied("Cannot reconcile SACCO-wide statement lines from a branch-scoped account.");
+        }
+
+        String requestedAccountId = body.collectionAccountId() == null || body.collectionAccountId().isBlank()
+                ? null
+                : body.collectionAccountId().trim();
+        com.methaltech.sacco.tenant.SaccoPaymentAccount account = null;
+        if (requestedAccountId != null) {
+            account = paymentAccountRepository.findByIdAndTenantId(requestedAccountId, line.getTenantId()).orElse(null);
+            if (account == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "PAYMENT_ACCOUNT_NOT_FOUND", "Collection account not found for this SACCO."));
+            }
+            if (!account.isActive()) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "PAYMENT_ACCOUNT_INACTIVE", "Cannot attribute reconciliation to a deactivated collection account."));
+            }
+        }
+
+        line.assignCollectionAccount(requestedAccountId);
+        StatementLine saved = statementLineRepository.save(line);
+        auditService.record(
+                saved.getTenantId(),
+                currentSession.user(),
+                requestedAccountId == null
+                        ? "Cleared collection account for statement line " + saved.getExternalReference()
+                        : "Attributed statement line " + saved.getExternalReference() + " to collection account " + account.getAccountNumber(),
+                "statement_line",
+                saved.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(StatementLineResponse.from(saved, null, account)));
+    }
+
     @PostMapping("/statement-lines/batch")
     ResponseEntity<?> importStatementLines(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -891,6 +946,17 @@ class AccountingController {
                         .filter(line -> tenantIds.contains(line.getTenantId()))
                         .toList();
         List<LedgerLineResponse> ledgerLines = cashLedgerLines(entries);
+        Map<String, List<com.methaltech.sacco.tenant.SaccoPaymentAccount>> collectionAccountsByTenant = new java.util.HashMap<>();
+        Map<String, com.methaltech.sacco.tenant.SaccoPaymentAccount> collectionAccountsById = new java.util.HashMap<>();
+        for (String tenantId : tenantIds.stream().distinct().toList()) {
+            List<com.methaltech.sacco.tenant.SaccoPaymentAccount> tenantAccounts =
+                    paymentAccountRepository.findByTenantIdOrderByChannelAscCreatedAtAsc(tenantId);
+            // Suggestions only consider active accounts; confirmed lookups resolve any account (even deactivated).
+            collectionAccountsByTenant.put(tenantId, tenantAccounts.stream()
+                    .filter(com.methaltech.sacco.tenant.SaccoPaymentAccount::isActive)
+                    .toList());
+            tenantAccounts.forEach(account -> collectionAccountsById.put(account.getId(), account));
+        }
         List<ReconciliationResponse.ReconciliationMatch> matches = new java.util.ArrayList<>();
         Set<String> matchedStatementIds = new HashSet<>();
         Set<String> matchedLedgerIds = new HashSet<>();
@@ -907,12 +973,20 @@ class AccountingController {
             if (match == null) continue;
             matchedStatementIds.add(statementLine.getId());
             matchedLedgerIds.add(match.id());
-            matches.add(new ReconciliationResponse.ReconciliationMatch(StatementLineResponse.from(statementLine), match));
+            matches.add(new ReconciliationResponse.ReconciliationMatch(
+                    StatementLineResponse.from(
+                            statementLine,
+                            suggestCollectionAccount(statementLine, collectionAccountsByTenant),
+                            collectionAccountsById.get(statementLine.getCollectionAccountId())),
+                    match));
         }
 
         List<StatementLineResponse> unmatchedStatementLines = statementLines.stream()
                 .filter(line -> !matchedStatementIds.contains(line.getId()))
-                .map(StatementLineResponse::from)
+                .map(line -> StatementLineResponse.from(
+                        line,
+                        suggestCollectionAccount(line, collectionAccountsByTenant),
+                        collectionAccountsById.get(line.getCollectionAccountId())))
                 .toList();
         List<LedgerLineResponse> unmatchedLedgerLines = ledgerLines.stream()
                 .filter(line -> !matchedLedgerIds.contains(line.id()))
@@ -941,6 +1015,29 @@ class AccountingController {
                 matches,
                 unmatchedStatementLines,
                 unmatchedLedgerLines);
+    }
+
+    /**
+     * Best-effort suggestion of which SACCO-owned collection account a statement line settled into,
+     * so imported bank/mobile-money lines can be attributed to the right destination account. A line is
+     * attributed to the first active collection account (for the line's tenant) whose account number
+     * appears in the line's external reference or description. Returns null when no account matches.
+     */
+    private com.methaltech.sacco.tenant.SaccoPaymentAccount suggestCollectionAccount(
+            StatementLine line,
+            Map<String, List<com.methaltech.sacco.tenant.SaccoPaymentAccount>> collectionAccountsByTenant) {
+        List<com.methaltech.sacco.tenant.SaccoPaymentAccount> accounts =
+                collectionAccountsByTenant.get(line.getTenantId());
+        if (accounts == null || accounts.isEmpty()) return null;
+        String haystack = ((line.getExternalReference() == null ? "" : line.getExternalReference())
+                + " " + (line.getDescription() == null ? "" : line.getDescription()))
+                .toLowerCase(java.util.Locale.ROOT);
+        if (haystack.isBlank()) return null;
+        return accounts.stream()
+                .filter(account -> account.getAccountNumber() != null && !account.getAccountNumber().isBlank())
+                .filter(account -> haystack.contains(account.getAccountNumber().toLowerCase(java.util.Locale.ROOT)))
+                .findFirst()
+                .orElse(null);
     }
 
     private List<LedgerLineResponse> cashLedgerLines(List<JournalEntryResponse> entries) {
@@ -1109,6 +1206,10 @@ class AccountingController {
     record ImportStatementLinesRequest(
             String tenantId,
             @NotNull List<CreateStatementLineRequest> lines) {
+    }
+
+    /** Confirm/override the SACCO collection account for a statement line; null/blank clears the attribution. */
+    record AssignCollectionAccountRequest(String collectionAccountId) {
     }
 
     record StatementImportResponse(

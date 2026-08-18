@@ -13,6 +13,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
+import com.methaltech.sacco.member.Member;
+import com.methaltech.sacco.member.MemberRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
@@ -39,7 +41,9 @@ class NotificationController {
 
     private final NotificationDeliveryRepository deliveryRepository;
     private final NotificationRepository notificationRepository;
+    private final MemberRepository memberRepository;
     private final NotificationService notificationService;
+    private final NotificationBroadcastDispatcher broadcastDispatcher;
     private final List<NotificationProvider> notificationProviders;
     private final MobileMoneyProviderEvidenceService mobileMoneyEvidenceService;
     private final IntegrationJobRunHistoryService integrationJobRunHistoryService;
@@ -323,6 +327,107 @@ class NotificationController {
                         request.getRemoteAddr()));
     }
 
+    @GetMapping("/messages")
+    ResponseEntity<?> listMessages(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId,
+            @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "notifications:view")) {
+            return authService.permissionRequired("notifications:view");
+        }
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null && !authService.isPlatform(currentSession.user())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access messages for another SACCO."));
+        }
+        boolean platformAll = authService.isPlatform(currentSession.user()) && requestedTenantId == null;
+        String categoryFilter = category == null || category.isBlank() || "all".equalsIgnoreCase(category) ? null : category.trim();
+        String searchTerm = search == null || search.isBlank() ? null : search.trim().toLowerCase();
+
+        // Opt-in pagination bounds the query so an established SACCO's message history is never loaded whole.
+        if (PageParams.requested(page, size)) {
+            Sort sort = Sort.by(Sort.Direction.DESC, "createdAt");
+            Pageable pageable = PageParams.toPageable(page, size, sort);
+            Page<Notification> pageResult = platformAll
+                    ? notificationRepository.findAll(pageable)
+                    : notificationRepository.findByTenantId(tenantId, pageable);
+            List<NotificationResponse> pageResponses = filterMessages(pageResult.getContent(), categoryFilter, searchTerm);
+            return ResponseEntity.ok(PagedResponse.of(
+                    pageResponses, pageResult.getNumber(), pageResult.getSize(), pageResult.getTotalElements(), pageResult.getTotalPages()));
+        }
+
+        List<Notification> messages = platformAll
+                ? notificationRepository.findAllByOrderByTenantIdAscCreatedAtDesc()
+                : notificationRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        return ResponseEntity.ok(ApiResponse.of(filterMessages(messages, categoryFilter, searchTerm)));
+    }
+
+    private List<NotificationResponse> filterMessages(List<Notification> messages, String categoryFilter, String searchTerm) {
+        return messages.stream()
+                .filter(notification -> categoryFilter == null || categoryFilter.equals(NotificationResponse.categoryFor(notification.getEventType())))
+                .filter(notification -> searchTerm == null
+                        || (notification.getTitle() != null && notification.getTitle().toLowerCase().contains(searchTerm))
+                        || (notification.getBody() != null && notification.getBody().toLowerCase().contains(searchTerm)))
+                .map(NotificationResponse::from)
+                .toList();
+    }
+
+    @PostMapping("/messages/broadcast")
+    ResponseEntity<?> broadcastMessage(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestBody BroadcastMessageRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "notifications:manage")) {
+            return authService.permissionRequired("notifications:manage");
+        }
+
+        String tenantId = tenantScope(currentSession, body == null ? null : body.tenantId());
+        if (tenantId == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "TENANT_REQUIRED", "Select a SACCO to send the message to."));
+        }
+        String title = body == null || body.title() == null ? "" : body.title().trim();
+        String message = body == null || body.body() == null ? "" : body.body().trim();
+        if (title.isBlank() || message.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "MESSAGE_CONTENT_REQUIRED", "A subject and message body are required."));
+        }
+
+        List<String> memberIds = body.memberIds() == null
+                ? List.of()
+                : body.memberIds().stream().filter(id -> id != null && !id.isBlank()).map(String::trim).distinct().toList();
+        List<Member> recipients = memberIds.isEmpty()
+                ? memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId)
+                : memberRepository.findAllById(memberIds).stream()
+                        .filter(member -> tenantId.equals(member.getTenantId()))
+                        .toList();
+        if (recipients.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "NO_RECIPIENTS", "No members were found to receive this message."));
+        }
+
+        int recipientCount = recipients.size();
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Queued SACCO message \"" + title + "\" to " + recipientCount + " member(s)",
+                "notification",
+                "broadcast_" + recipientCount,
+                request.getRemoteAddr());
+        // Fan-out runs off the request thread so a large SACCO cannot block or time out the call.
+        broadcastDispatcher.dispatch(tenantId, recipients, title, message);
+        return ResponseEntity.accepted()
+                .body(ApiResponse.of(new BroadcastMessageResponse(recipientCount, title)));
+    }
+
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
         if (authService.isPlatform(currentSession.user()) && (requestedTenantId == null || requestedTenantId.isBlank())) {
             return null;
@@ -350,5 +455,11 @@ class NotificationController {
     }
 
     record BulkAcknowledgeResponse(int acknowledged) {
+    }
+
+    record BroadcastMessageRequest(String tenantId, String title, String body, List<String> memberIds) {
+    }
+
+    record BroadcastMessageResponse(int recipients, String title) {
     }
 }

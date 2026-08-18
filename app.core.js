@@ -116,6 +116,8 @@ function emptyMemberData() {
     chatThreads: [],
     collectionAccounts: [],
     privacyRequests: [],
+    notificationPreferences: {},
+    membership: null,
     drafts: [],
     sessionExpiresAt: ""
   };

@@ -65,7 +65,7 @@ function accountingView() {
   const expenses = dataRows("expenses");
   const assets = dataRows("assets");
   const accounting = buildAccountingSummary({ accounts, periods, journals, expenses, assets });
-  const tabs = [["overview", "Overview"], ["capture", t("expenseAssetCapture")], ["setup", t("chartPeriods")], ["journals", t("recentJournalEntries")], ["registers", t("expenseAssetRegisters")]];
+  const tabs = [["overview", "Overview"], ["capture", t("expenseAssetCapture")], ["setup", t("chartPeriods")], ["journals", t("recentJournalEntries")], ["statements", "Financial statements"], ["registers", t("expenseAssetRegisters")]];
   const tab = activeModuleTab("accounting", tabs);
   return `
     <div class="dashboard-grid">
@@ -91,6 +91,7 @@ function accountingView() {
       ${recordTable("Accounting periods", periods, ["name", "startDate", "endDate", "status"])}
     </div>` : ""}
     ${tab === "journals" ? recordTable("Recent journal entries", journals, ["reference", "description", "amount", "status", "postedAt"]) : ""}
+    ${tab === "statements" ? financialStatementsPanels(journals, accounts) : ""}
     ${tab === "registers" ? `<div class="grid two">
       ${recordTable("Expenses", expenses, ["supplierId", "accountCode", "amount", "channel", "reference", "status"])}
       ${recordTable("Assets", assets, ["name", "category", "cost", "netBookValue", "location", "status"])}
@@ -133,17 +134,204 @@ function reconciliationView() {
     ])}` : ""}
     ${tab === "matches" ? `<div class="grid two">
       ${recordTable("Bank and mobile-money matching", buildReconciliationMatchRows(matches), ["externalReference", "statementAmount", "ledgerAmount", "accountCode", "sourceType", "postedAt"])}
-      ${recordTable("Provider callback exceptions", callbackExceptions, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"])}
+      ${recordTable("Provider callback exceptions", callbackExceptions, ["externalReference", "provider", "purpose", "amount", "suggestedCollectionAccount", "collectionAccount", "resourceType", "status", "receivedAt"])}
     </div>` : ""}
-    ${tab === "exceptions" ? `<div class="grid two">
-      ${recordTable("Unmatched bank statement lines", unmatchedStatementLines, ["externalReference", "accountCode", "channel", "amount", "description", "statementDate"])}
+    ${tab === "exceptions" ? `
+      ${collectionAttributionPanel(unmatchedStatementLines)}
+      <div class="grid two">
+      ${recordTable("Unmatched bank statement lines", unmatchedStatementLines, ["externalReference", "accountCode", "channel", "amount", "suggestedCollectionAccount", "collectionAccount", "description", "statementDate"])}
       ${recordTable("Unmatched ledger lines", unmatchedLedgerLines, ["reference", "accountCode", "accountName", "sourceType", "amount", "postedAt"])}
-    </div>` : ""}
+      </div>` : ""}
     ${tab === "requests" ? `
       ${paymentRequestOperationsPanel(paymentRequests)}
       ${recordTable("Mobile-money payment request review queue", paymentRequestRows, ["externalReference", "provider", "purpose", "amount", "currencyCode", "payerPhone", "reviewStatus", "statusMessage", "requestedAt", "completedAt"])}
     ` : ""}
-    ${tab === "callbacks" ? recordTable("Provider callbacks", callbacks, ["externalReference", "provider", "purpose", "amount", "resourceType", "status", "receivedAt"]) : ""}
+    ${tab === "callbacks" ? `
+      ${callbackAttributionPanel(callbacks)}
+      ${recordTable("Provider callbacks", callbacks, ["externalReference", "provider", "purpose", "amount", "suggestedCollectionAccount", "collectionAccount", "resourceType", "status", "receivedAt"])}
+    ` : ""}
+  `;
+}
+
+function financialStatementsPanels(journals, accounts) {
+  const trial = buildTrialBalance(journals, accounts);
+  const income = buildIncomeStatement(journals, accounts);
+  const balance = buildBalanceSheet(journals, accounts);
+  const badge = (ok) => `<span class="status ${ok ? "active" : "pending"}">${ok ? "Balanced" : "Out of balance"}</span>`;
+  const money0 = (value) => money.format(value || 0);
+  const itemRows = (items) => items.map((item) => `<tr><td>${escapeHtml(item.code || "")}</td><td>${escapeHtml(item.name)}</td><td class="amount">${money0(item.amount)}</td></tr>`).join("");
+  const totalRow = (label, value) => `<tr class="total-row"><td></td><td><strong>${escapeHtml(label)}</strong></td><td class="amount"><strong>${money0(value)}</strong></td></tr>`;
+  return `
+    <div class="grid two">
+      <section class="panel">
+        <div class="panel-heading"><div><h2>Trial balance</h2><p>Net posted balances per ledger account.</p></div>${badge(trial.balanced)}</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Code</th><th>Account</th><th class="amount">Debit</th><th class="amount">Credit</th></tr></thead>
+          <tbody>
+            ${trial.rows.length ? trial.rows.map((row) => `<tr><td>${escapeHtml(row.code)}</td><td>${escapeHtml(row.name)}</td><td class="amount">${row.debit ? money0(row.debit) : ""}</td><td class="amount">${row.credit ? money0(row.credit) : ""}</td></tr>`).join("") : `<tr><td colspan="4">No posted journal entries yet.</td></tr>`}
+            <tr class="total-row"><td></td><td><strong>Totals</strong></td><td class="amount"><strong>${money0(trial.totalDebit)}</strong></td><td class="amount"><strong>${money0(trial.totalCredit)}</strong></td></tr>
+          </tbody>
+        </table></div>
+      </section>
+      <section class="panel">
+        <div class="panel-heading"><div><h2>Income statement</h2><p>Income and expenditure for posted entries.</p></div><span class="status ${income.netSurplus >= 0 ? "active" : "pending"}">${income.netSurplus >= 0 ? "Surplus" : "Deficit"} ${money0(Math.abs(income.netSurplus))}</span></div>
+        <div class="chart-figure">${svgBarChart([
+          { label: "Income", value: income.totalIncome, color: "#2f8f6b" },
+          { label: "Expenditure", value: income.totalExpense, color: "#b4552d" }
+        ], { title: "Income vs expenditure", format: money0 })}</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Code</th><th>Line</th><th class="amount">Amount</th></tr></thead>
+          <tbody>
+            <tr class="section-row"><td></td><td><strong>Income</strong></td><td></td></tr>
+            ${income.income.length ? itemRows(income.income) : `<tr><td></td><td>No income posted.</td><td></td></tr>`}
+            ${totalRow("Total income", income.totalIncome)}
+            <tr class="section-row"><td></td><td><strong>Expenditure</strong></td><td></td></tr>
+            ${income.expenses.length ? itemRows(income.expenses) : `<tr><td></td><td>No expenditure posted.</td><td></td></tr>`}
+            ${totalRow("Total expenditure", income.totalExpense)}
+            ${totalRow(income.netSurplus >= 0 ? "Net surplus" : "Net deficit", income.netSurplus)}
+          </tbody>
+        </table></div>
+      </section>
+    </div>
+    <section class="panel">
+      <div class="panel-heading"><div><h2>Balance sheet</h2><p>Statement of financial position (assets = liabilities + equity).</p></div>${badge(balance.balanced)}</div>
+      <div class="chart-figure">
+        ${svgDonutChart([
+          { label: "Liabilities", value: balance.totalLiabilities, color: "#c8a24a" },
+          { label: "Equity", value: balance.totalEquity, color: "#0f4638" }
+        ], { title: "How assets are financed", centreLabel: money0(balance.totalAssets) })}
+        ${chartLegend([
+          { label: "Liabilities", value: balance.totalLiabilities, color: "#c8a24a" },
+          { label: "Equity", value: balance.totalEquity, color: "#0f4638" }
+        ], { format: money0 })}
+      </div>
+      <div class="grid two">
+        <div class="table-wrap"><table>
+          <thead><tr><th>Code</th><th>Assets</th><th class="amount">Amount</th></tr></thead>
+          <tbody>
+            ${balance.assets.length ? itemRows(balance.assets) : `<tr><td></td><td>No assets posted.</td><td></td></tr>`}
+            ${totalRow("Total assets", balance.totalAssets)}
+          </tbody>
+        </table></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Code</th><th>Liabilities &amp; equity</th><th class="amount">Amount</th></tr></thead>
+          <tbody>
+            <tr class="section-row"><td></td><td><strong>Liabilities</strong></td><td></td></tr>
+            ${balance.liabilities.length ? itemRows(balance.liabilities) : `<tr><td></td><td>No liabilities posted.</td><td></td></tr>`}
+            ${totalRow("Total liabilities", balance.totalLiabilities)}
+            <tr class="section-row"><td></td><td><strong>Equity</strong></td><td></td></tr>
+            ${balance.equity.length ? itemRows(balance.equity) : `<tr><td></td><td>No equity posted.</td><td></td></tr>`}
+            ${totalRow("Total equity", balance.totalEquity)}
+            ${totalRow("Total liabilities & equity", balance.totalLiabilities + balance.totalEquity)}
+          </tbody>
+        </table></div>
+      </div>
+    </section>
+  `;
+}
+
+function collectionAccountOptionLabel(account) {
+  const title = normal(account.channel) === "bank"
+    ? (account.bankName || "Bank")
+    : String(account.network || "Mobile money").toUpperCase();
+  return `${title} ${account.accountNumber || ""}`.trim();
+}
+
+function collectionAttributionPanel(unmatchedStatementLines) {
+  const lines = unmatchedStatementLines || [];
+  if (!lines.length) return "";
+  const canManage = hasPermission("accounting:post");
+  const accounts = dataRows("saccoPaymentAccounts").filter((account) => account.active);
+  const selectedLine = lines.find((row) => row.id === state.selectedReconAttributionLineId) || lines[0];
+  const selectedAccountId = state.selectedReconAttributionAccountId
+    || selectedLine.collectionAccountId
+    || selectedLine.suggestedCollectionAccountId
+    || (accounts[0]?.id || "");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Confirm collection account</h2>
+          <p>Confirm the account this line settled into. Override the suggestion if needed.</p>
+        </div>
+      </div>
+      ${state.reconAttributionMessage ? `<div class="notice success">${escapeHtml(state.reconAttributionMessage)}</div>` : ""}
+      ${state.reconAttributionError ? `<div class="notice warning">${escapeHtml(state.reconAttributionError)}</div>` : ""}
+      ${accounts.length ? "" : `<div class="notice warning">No active collection accounts yet. Add one under Settings before attributing statement lines.</div>`}
+      <div class="form-grid">
+        <label>
+          <span>Statement line</span>
+          <select id="reconAttributionLineSelect" ${canManage ? "" : "disabled"}>
+            ${lines.map((row) => `<option value="${escapeHtml(row.id)}" ${row.id === selectedLine.id ? "selected" : ""}>${escapeHtml(row.externalReference || row.id)} - ${escapeHtml(money.format(row.amount || 0))}</option>`).join("")}
+          </select>
+        </label>
+        <label>
+          <span>Collection account</span>
+          <select id="reconAttributionAccountSelect" ${canManage && accounts.length ? "" : "disabled"}>
+            ${accounts.map((account) => `<option value="${escapeHtml(account.id)}" ${account.id === selectedAccountId ? "selected" : ""}>${escapeHtml(collectionAccountOptionLabel(account))}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <div class="source-grid compact">
+        ${mini("Suggested", selectedLine.suggestedCollectionAccount || "None")}
+        ${mini("Confirmed", selectedLine.collectionAccount || "Not set")}
+        ${mini("Amount", money.format(selectedLine.amount || 0))}
+      </div>
+      <div class="action-row">
+        <button class="button primary" type="button" data-save-collection-account="${escapeHtml(selectedLine.id)}" ${canManage && accounts.length ? "" : "disabled"}>Save attribution</button>
+        <button class="button secondary" type="button" data-clear-collection-account="${escapeHtml(selectedLine.id)}" ${canManage && selectedLine.collectionAccountId ? "" : "disabled"}>Clear</button>
+      </div>
+      ${canManage ? "" : `<p class="muted-note">Only users with posting rights can confirm collection accounts.</p>`}
+    </section>
+  `;
+}
+
+function callbackAttributionPanel(callbacks) {
+  const rows = callbacks || [];
+  if (!rows.length) return "";
+  const canManage = hasPermission("accounting:post");
+  const accounts = dataRows("saccoPaymentAccounts").filter((account) => account.active && normal(account.channel) !== "bank");
+  const selected = rows.find((row) => row.id === state.selectedCallbackAttributionId) || rows[0];
+  const selectedAccountId = state.selectedCallbackAttributionAccountId
+    || selected.collectionAccountId
+    || selected.suggestedCollectionAccountId
+    || (accounts[0]?.id || "");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Confirm callback account</h2>
+          <p>Confirm the mobile-money account this callback settled into. Override if needed.</p>
+        </div>
+      </div>
+      ${state.callbackAttributionMessage ? `<div class="notice success">${escapeHtml(state.callbackAttributionMessage)}</div>` : ""}
+      ${state.callbackAttributionError ? `<div class="notice warning">${escapeHtml(state.callbackAttributionError)}</div>` : ""}
+      ${accounts.length ? "" : `<div class="notice warning">No active mobile-money collection accounts yet. Add one under Settings before attributing callbacks.</div>`}
+      <div class="form-grid">
+        <label>
+          <span>Callback</span>
+          <select id="callbackAttributionSelect" ${canManage ? "" : "disabled"}>
+            ${rows.map((row) => `<option value="${escapeHtml(row.id)}" ${row.id === selected.id ? "selected" : ""}>${escapeHtml(row.externalReference || row.id)} - ${escapeHtml(money.format(row.amount || 0))}</option>`).join("")}
+          </select>
+        </label>
+        <label>
+          <span>Mobile-money account</span>
+          <select id="callbackAttributionAccountSelect" ${canManage && accounts.length ? "" : "disabled"}>
+            ${accounts.map((account) => `<option value="${escapeHtml(account.id)}" ${account.id === selectedAccountId ? "selected" : ""}>${escapeHtml(collectionAccountOptionLabel(account))}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <div class="source-grid compact">
+        ${mini("Provider", labelize(selected.provider || "unknown"))}
+        ${mini("Suggested", selected.suggestedCollectionAccount || "None")}
+        ${mini("Confirmed", selected.collectionAccount || "Not set")}
+      </div>
+      <div class="action-row">
+        <button class="button primary" type="button" data-save-callback-account="${escapeHtml(selected.id)}" ${canManage && accounts.length ? "" : "disabled"}>Save attribution</button>
+        <button class="button secondary" type="button" data-clear-callback-account="${escapeHtml(selected.id)}" ${canManage && selected.collectionAccountId ? "" : "disabled"}>Clear</button>
+      </div>
+      ${canManage ? "" : `<p class="muted-note">Only users with posting rights can confirm collection accounts.</p>`}
+    </section>
   `;
 }
 
@@ -180,7 +368,7 @@ function reconciliationControlPanel(summaryData) {
       <div class="panel-heading">
         <div>
           <h2>Reconciliation command center</h2>
-          <p>Review backend-matched bank statement lines against cash ledger lines before period close.</p>
+          <p>Match bank statement lines to ledger lines before period close.</p>
         </div>
         <span class="status ${coverage >= 90 ? "active" : "pending"}">${coverage}% matched</span>
       </div>
@@ -211,7 +399,7 @@ function paymentRequestOperationsPanel(requests) {
       <div class="panel-heading">
         <div>
           <h2>Payment request operations</h2>
-          <p>Track member-initiated mobile-money requests and close stale provider prompts with audit-ready statuses.</p>
+          <p>Track member requests and close stale prompts with audit-ready statuses.</p>
         </div>
         <span class="status ${actionable.length ? "pending" : "active"}">${actionable.length ? `${actionable.length} open` : "All closed"}</span>
       </div>

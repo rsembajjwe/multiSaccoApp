@@ -51,6 +51,9 @@ public class Subscription {
 
     private LocalDate expiry;
 
+    @Column(name = "last_reminder_on")
+    private LocalDate lastReminderOn;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -106,7 +109,22 @@ public class Subscription {
     void recordPayment(BigDecimal paymentAmount, LocalDate activeExpiry) {
         this.paid = this.paid.add(paymentAmount).min(this.amount);
         this.status = this.paid.compareTo(this.amount) >= 0 ? "active" : "pending_payment";
-        if ("active".equals(this.status)) this.expiry = activeExpiry;
+        if ("active".equals(this.status)) {
+            this.expiry = activeExpiry;
+            this.lastReminderOn = null;
+        }
+        this.updatedAt = Instant.now();
+    }
+
+    /** Marks the subscription expired once it has lapsed past its grace window. */
+    void markExpired() {
+        this.status = "expired";
+        this.updatedAt = Instant.now();
+    }
+
+    /** Records that a renewal reminder was sent on the given day (deduplicates daily reminders). */
+    void markReminded(LocalDate on) {
+        this.lastReminderOn = on;
         this.updatedAt = Instant.now();
     }
 }

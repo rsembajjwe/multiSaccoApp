@@ -707,6 +707,33 @@ paths:
                     items: { type: object }
         "401": { $ref: "#/components/responses/Error" }
 
+  /member-auth/fund-balances:
+    get:
+      tags: [Member self-service]
+      summary: Member per-fund balances
+      description: >
+        The member's balance in every fund they hold — the built-in Savings/Shares/Welfare and any
+        custom SACCO fund (e.g. Burial, Education). Sourced from the per-member fund-balance ledger.
+      security:
+        - memberBearer: []
+      responses:
+        "200":
+          description: Member per-fund balances
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        fundCode: { type: string, example: burial }
+                        balance: { type: number, example: 40000 }
+                        updatedAt: { type: string, format: date-time }
+        "401": { $ref: "#/components/responses/Error" }
+
   /member-auth/collection-accounts:
     get:
       tags: [Member self-service]
@@ -1037,6 +1064,41 @@ paths:
                   data: { $ref: "#/components/schemas/MobileMoneyPaymentRequest" }
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /integrations/mobile-money/callbacks/{callbackId}/collection-account:
+    patch:
+      tags: [Mobile money]
+      summary: Confirm/override the SACCO collection account for a callback (staff)
+      description: Persists the destination collection account this callback settled into. Send a null/blank collectionAccountId to clear. Requires accounting:post; the account must belong to the same SACCO and be active.
+      parameters:
+        - name: callbackId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: tenantId
+          in: query
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                collectionAccountId: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Updated callback
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/MobileMoneyCallback" }
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
@@ -1384,6 +1446,159 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
 
+  /fund-types:
+    get:
+      tags: [Accounting]
+      summary: List the SACCO configurable fund types (fund-types:view)
+      parameters:
+        - { name: tenantId, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Fund types
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/FundType" } }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Accounting]
+      summary: Add a SACCO fund type (fund-types:manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FundTypeRequest" }
+      responses:
+        "201":
+          description: Created fund type
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/FundType" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /fund-types/{fundTypeId}:
+    patch:
+      tags: [Accounting]
+      summary: Edit a SACCO fund type (fund-types:manage)
+      parameters:
+        - { name: fundTypeId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FundTypeRequest" }
+      responses:
+        "200":
+          description: Updated fund type
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/FundType" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /funding-sources:
+    get:
+      tags: [Accounting]
+      summary: List the SACCO sources-of-funds register (finance-source:view)
+      parameters:
+        - { name: tenantId, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Funding sources
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/FundingSource" } }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [Accounting]
+      summary: Add a funding source (finance-source:manage)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FundingSourceRequest" }
+      responses:
+        "201":
+          description: Created funding source
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/FundingSource" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /funding-sources/{sourceId}:
+    patch:
+      tags: [Accounting]
+      summary: Edit a funding source (finance-source:manage)
+      parameters:
+        - { name: sourceId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FundingSourceRequest" }
+      responses:
+        "200":
+          description: Updated funding source
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/FundingSource" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /statement-lines/{lineId}/collection-account:
+    patch:
+      tags: [Accounting]
+      summary: Confirm/override the SACCO collection account for a statement line (staff)
+      description: Persists the destination collection account this line settled into. Send a null/blank collectionAccountId to clear. Requires accounting:post; the account must belong to the same SACCO and be active.
+      parameters:
+        - name: lineId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                collectionAccountId: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Updated statement line
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/StatementLine" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
   /statement-lines/batch:
     post:
       tags: [Accounting]
@@ -1702,6 +1917,67 @@ components:
           minItems: 1
           items: { $ref: "#/components/schemas/StatementLineImportItem" }
 
+    FundType:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        code: { type: string, example: burial }
+        name: { type: string, example: Burial Fund }
+        basis: { type: string, description: savings | shares | welfare }
+        description: { type: string, nullable: true }
+        system: { type: boolean, description: true for built-in Savings/Shares/Welfare }
+        active: { type: boolean }
+        displayOrder: { type: integer }
+        createdByUserId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    FundTypeRequest:
+      type: object
+      required: [name]
+      properties:
+        tenantId: { type: string, nullable: true }
+        code: { type: string, description: "lowercase; required on create, ignored on edit" }
+        name: { type: string }
+        basis: { type: string, description: savings | shares | welfare }
+        description: { type: string, nullable: true }
+        active: { type: boolean, nullable: true }
+        displayOrder: { type: integer, nullable: true }
+
+    FundingSource:
+      type: object
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        sourceType:
+          type: string
+          description: share_capital | member_savings | grant | donation | external_borrowing | retained_earnings | investment_income | other
+        provider: { type: string, nullable: true }
+        amount: { type: number, example: 50000000 }
+        currencyCode: { type: string, example: UGX }
+        reference: { type: string, nullable: true }
+        dateReceived: { type: string, format: date, nullable: true }
+        status: { type: string, description: active | closed }
+        notes: { type: string, nullable: true }
+        recordedByUserId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    FundingSourceRequest:
+      type: object
+      required: [sourceType, amount]
+      properties:
+        tenantId: { type: string, nullable: true }
+        sourceType: { type: string }
+        provider: { type: string, nullable: true }
+        amount: { type: number }
+        currencyCode: { type: string, nullable: true }
+        reference: { type: string, nullable: true }
+        dateReceived: { type: string, format: date, nullable: true }
+        status: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+
     StatementLine:
       type: object
       properties:
@@ -1715,6 +1991,22 @@ components:
         statementDate: { type: string, format: date }
         importedByUserId: { type: string }
         createdAt: { type: string, format: date-time }
+        suggestedCollectionAccountId:
+          type: string
+          nullable: true
+          description: Reconciliation only. SACCO collection account whose account number appears in this line's reference/description; null when none matches.
+        suggestedCollectionAccount:
+          type: string
+          nullable: true
+          description: Reconciliation only. Human-readable label of the suggested collection account (e.g. "Stanbic 01234567890").
+        collectionAccountId:
+          type: string
+          nullable: true
+          description: The collection account a staff member confirmed/persisted for this line (takes precedence over the suggestion); null when not yet confirmed.
+        collectionAccount:
+          type: string
+          nullable: true
+          description: Human-readable label of the confirmed collection account; null when not yet confirmed.
 
     StatementImportError:
       type: object
@@ -2202,6 +2494,22 @@ components:
         resourceType: { type: string }
         resourceId: { type: string }
         duplicate: { type: boolean }
+        suggestedCollectionAccountId:
+          type: string
+          nullable: true
+          description: Reconciliation only. SACCO mobile-money collection account whose network matches this callback's provider; null when none matches.
+        suggestedCollectionAccount:
+          type: string
+          nullable: true
+          description: Reconciliation only. Human-readable label of the suggested collection account (e.g. "MTN 0779494225").
+        collectionAccountId:
+          type: string
+          nullable: true
+          description: The collection account a staff member confirmed/persisted for this callback (takes precedence over the suggestion); null when not yet confirmed.
+        collectionAccount:
+          type: string
+          nullable: true
+          description: Human-readable label of the confirmed collection account; null when not yet confirmed.
 
     MemberPaymentRequest:
       type: object

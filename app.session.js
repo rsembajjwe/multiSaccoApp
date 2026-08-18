@@ -301,13 +301,19 @@ async function refreshAll() {
     ["securitySummary", "/auth/security-summary"]
   ];
   if (isPlatform()) endpoints.push(["platformSecurityPolicy", "/platform-security-policy"]);
+  if (isPlatform() && hasPermission("subscriptions:view")) endpoints.push(["billingCatalog", "/platform-billing/catalog"]);
   if (!isPlatform()) endpoints.push(["saccoPaymentAccounts", "/sacco-payment-accounts"]);
+  if (hasPermission("finance-source:view")) endpoints.push(["fundingSources", "/funding-sources"]);
+  if (hasPermission("fund-types:view")) endpoints.push(["fundTypes", "/fund-types"]);
+  if (!isPlatform() && hasPermission("members:view")) endpoints.push(["memberSubscriptions", "/member-subscriptions"]);
   if (isPlatform() && hasPermission("roles:create")) endpoints.push(["notificationIntegrationConfig", "/platform-integrations/notification-config"]);
   if (isPlatform() && hasPermission("roles:create")) endpoints.push(["mobileMoneyIntegrationConfig", "/platform-integrations/mobile-money-config"]);
   if (canAccessView("notifications")) endpoints.push(["notificationProviderStatus", "/notifications/provider-status"]);
   if (canAccessView("notifications")) endpoints.push(["providerOperationalEvidence", "/notifications/provider-evidence"]);
   if (canAccessView("notifications")) endpoints.push(["providerJobRuns", "/notifications/provider-job-runs"]);
-  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy", "notificationIntegrationConfig", "mobileMoneyIntegrationConfig", "providerOperationalEvidence"]);
+  if (canAccessView("notifications")) endpoints.push(["messages", "/notifications/messages"]);
+  if (canAccessView("notifications")) endpoints.push(["notificationChannels", "/notification-channels"]);
+  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy", "notificationIntegrationConfig", "mobileMoneyIntegrationConfig", "providerOperationalEvidence", "notificationChannels"]);
   const results = await Promise.all(endpoints.map(async ([key, path]) => {
     const resolvedPath = pagedEndpointPath(key, path);
     return [key, await optionalApi(resolvedPath, objectKeys.has(key) ? null : [])];
@@ -318,6 +324,8 @@ async function refreshAll() {
       state.notificationProviderStatusCheckedAt = new Date().toISOString();
     } else if (key === "providerOperationalEvidence") {
       state.providerOperationalEvidence = value || null;
+    } else if (key === "notificationChannels") {
+      state.notificationChannels = value && typeof value === "object" ? value : {};
     } else {
       state.pageMeta[key] = pageEnvelope(value);
       state.data[key] = value;
@@ -349,6 +357,9 @@ async function refreshMember() {
   state.memberData.chatThreads = await optionalApi("/member-auth/chat/threads", []);
   state.memberData.privacyRequests = await optionalApi("/member-auth/privacy-requests", []);
   state.memberData.collectionAccounts = await optionalApi("/member-auth/collection-accounts", []);
+  state.memberData.fundBalances = await optionalApi("/member-auth/fund-balances", []);
+  state.memberData.notificationPreferences = await optionalApi("/member-auth/notification-preferences", {});
+  state.memberData.membership = await optionalApi("/member-auth/membership", null);
   state.memberData.drafts = loadMemberDrafts();
   state.lastSync = new Date().toISOString();
   state.loading = false;

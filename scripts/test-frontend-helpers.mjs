@@ -670,7 +670,7 @@ sandbox.state.moduleTabs.reconciliation = "requests";
 sandbox.state.selectedPaymentRequestId = "request_open";
 const reconciliationRequestsHtml = sandbox.reconciliationView();
 assert.match(reconciliationRequestsHtml, /Payment request operations/);
-assert.match(reconciliationRequestsHtml, /Track member-initiated mobile-money requests/);
+assert.match(reconciliationRequestsHtml, /Track member requests and close stale prompts/);
 assert.match(reconciliationRequestsHtml, /Check provider status/);
 assert.match(reconciliationRequestsHtml, /Mark failed/);
 assert.match(reconciliationRequestsHtml, /Mark expired/);
@@ -1033,7 +1033,7 @@ assert.match(sharesProductHtml, /Create Shares product/);
 sandbox.state.moduleTabs.shares = "accounts";
 const sharesAccountHtml = sandbox.sharesView();
 assert.match(sharesAccountHtml, /Open Shares account/);
-assert.match(sharesAccountHtml, /Duplicate member-product accounts are rejected by the backend/);
+assert.match(sharesAccountHtml, /Link an active member to a shares product/);
 assert.match(sharesAccountHtml, /SHARE-STD - Standard Shares/);
 
 sandbox.state.moduleTabs.shares = "register";

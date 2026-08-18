@@ -37,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @SpringBootTest(
 		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-		properties = "sacco.rate-limit.enabled=false")
+		properties = {"sacco.rate-limit.enabled=false", "sacco.notifications.broadcast-async=false"})
 class SaccoBackendApplicationTests {
 
 	@Autowired
@@ -54,6 +54,12 @@ class SaccoBackendApplicationTests {
 
 	@Autowired
 	private MobileMoneyReconciliationJob mobileMoneyReconciliationJob;
+
+	@Autowired
+	private com.methaltech.sacco.subscription.SubscriptionLifecycleService subscriptionLifecycleService;
+
+	@Autowired
+	private com.methaltech.sacco.member.MemberSubscriptionService memberSubscriptionService;
 
 	@Test
 	void contextLoads() {
@@ -5426,6 +5432,622 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.summary.matched", greaterThanOrEqualTo(1)))
 				.andExpect(jsonPath("$.data.summary.unmatchedStatementLines", greaterThanOrEqualTo(1)))
 				.andExpect(jsonPath("$.data.summary.unmatchedLedgerLines", greaterThanOrEqualTo(1)));
+	}
+
+	@Test
+	void reconciliationSuggestsSaccoCollectionAccountWhenAccountNumberAppearsInStatementLine() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String accountId = "paymentaccount_recon_test";
+		String accountNumber = "RECON-ACCT-98765";
+		String statementLineId = "statement_recon_test";
+		String externalReference = "RECON-UNMATCHED-0001";
+		try {
+			jdbcTemplate.update("""
+					INSERT INTO sacco_payment_accounts
+					    (id, tenant_id, channel, network, account_name, account_number, bank_name, branch, active)
+					VALUES (?, 'tenant_green', 'bank', NULL, 'Green Valley SACCO', ?, 'Stanbic', 'Kampala', TRUE)
+					""", accountId, accountNumber);
+			jdbcTemplate.update("""
+					INSERT INTO statement_lines
+					    (id, tenant_id, account_code, channel, amount, external_reference, description, statement_date, imported_by_user_id)
+					VALUES (?, 'tenant_green', '1010', 'bank', 424242, ?, ?, DATE '2026-07-14', 'user_green_admin')
+					""", statementLineId, externalReference, "Deposit into " + accountNumber);
+
+			mockMvc.perform(get("/api/v1/reconciliation")
+							.header("Authorization", "Bearer " + token))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath(
+							"$.data.unmatchedStatementLines[?(@.externalReference=='" + externalReference + "')].suggestedCollectionAccountId",
+							hasItem(accountId)))
+					.andExpect(jsonPath(
+							"$.data.unmatchedStatementLines[?(@.externalReference=='" + externalReference + "')].suggestedCollectionAccount",
+							hasItem("Stanbic " + accountNumber)));
+		} finally {
+			jdbcTemplate.update("DELETE FROM statement_lines WHERE id = ?", statementLineId);
+			jdbcTemplate.update("DELETE FROM sacco_payment_accounts WHERE id = ?", accountId);
+		}
+	}
+
+	@Test
+	void callbackListingAttributesCallbackToSaccoMobileMoneyAccountByNetwork() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String accountId = "paymentaccount_recon_mtn";
+		String accountNumber = "0779494225";
+		String callbackId = "callback_recon_mtn";
+		String externalReference = "MTN-RECON-0001";
+		try {
+			jdbcTemplate.update("""
+					INSERT INTO sacco_payment_accounts
+					    (id, tenant_id, channel, network, account_name, account_number, active)
+					VALUES (?, 'tenant_green', 'mobile_money', 'mtn', 'Green Valley SACCO', ?, TRUE)
+					""", accountId, accountNumber);
+			jdbcTemplate.update("""
+					INSERT INTO mobile_money_callbacks
+					    (id, tenant_id, member_id, purpose, amount, external_reference, provider, status, received_at)
+					VALUES (?, 'tenant_green', 'member_green_amina', 'savings_deposit', 50000, ?, 'mtn_momo', 'posted', CURRENT_TIMESTAMP)
+					""", callbackId, externalReference);
+
+			mockMvc.perform(get("/api/v1/integrations/mobile-money/callbacks")
+							.header("Authorization", "Bearer " + token))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath(
+							"$.data[?(@.externalReference=='" + externalReference + "')].suggestedCollectionAccountId",
+							hasItem(accountId)))
+					.andExpect(jsonPath(
+							"$.data[?(@.externalReference=='" + externalReference + "')].suggestedCollectionAccount",
+							hasItem("MTN " + accountNumber)));
+		} finally {
+			jdbcTemplate.update("DELETE FROM mobile_money_callbacks WHERE id = ?", callbackId);
+			jdbcTemplate.update("DELETE FROM sacco_payment_accounts WHERE id = ?", accountId);
+		}
+	}
+
+	@Test
+	void chairpersonReviewsAndMaintainsFundingSourceRegisterWithTenantIsolation() throws Exception {
+		String chairToken = loginAndReturnToken("chairperson@greenvalley.local", "Chair@12345");
+		String lakeSourceId = "fundingsource_lake_seed";
+		String createdId = null;
+		try {
+			// A funding source belonging to another SACCO must never be visible or editable here.
+			jdbcTemplate.update("""
+					INSERT INTO sacco_funding_sources
+					    (id, tenant_id, source_type, provider, amount, currency_code, status, recorded_by_user_id)
+					VALUES (?, 'tenant_lake', 'grant', 'Other Donor', 1000000, 'UGX', 'active', 'user_green_admin')
+					""", lakeSourceId);
+
+			// Chairperson adds a funding source.
+			String createBody = """
+					{"sourceType":"external_borrowing","provider":"Centenary Bank","amount":50000000,
+					 "currencyCode":"UGX","reference":"LOAN-2026-01","dateReceived":"2026-06-01","status":"active",
+					 "notes":"5-year development facility"}
+					""";
+			var createResult = mockMvc.perform(post("/api/v1/funding-sources")
+							.header("Authorization", "Bearer " + chairToken)
+							.contentType("application/json")
+							.content(createBody))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.data.sourceType", is("external_borrowing")))
+					.andExpect(jsonPath("$.data.amount", org.hamcrest.Matchers.closeTo(50000000.0, 0.001)))
+					.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
+					.andReturn();
+			createdId = objectMapper.readTree(createResult.getResponse().getContentAsString())
+					.path("data").path("id").asText();
+
+			// Chairperson edits it (amount + status).
+			mockMvc.perform(patch("/api/v1/funding-sources/" + createdId)
+							.header("Authorization", "Bearer " + chairToken)
+							.contentType("application/json")
+							.content("""
+									{"sourceType":"external_borrowing","provider":"Centenary Bank","amount":45000000,
+									 "currencyCode":"UGX","status":"closed"}
+									"""))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.amount", org.hamcrest.Matchers.closeTo(45000000.0, 0.001)))
+					.andExpect(jsonPath("$.data.status", is("closed")));
+
+			// The register lists only this SACCO's sources.
+			mockMvc.perform(get("/api/v1/funding-sources").header("Authorization", "Bearer " + chairToken))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
+					.andExpect(jsonPath("$.data[*].id", hasItem(createdId)));
+
+			// Editing another SACCO's source is not found (tenant isolation).
+			mockMvc.perform(patch("/api/v1/funding-sources/" + lakeSourceId)
+							.header("Authorization", "Bearer " + chairToken)
+							.contentType("application/json")
+							.content("{\"sourceType\":\"grant\",\"amount\":1}"))
+					.andExpect(status().isNotFound())
+					.andExpect(jsonPath("$.error.code", is("FUNDING_SOURCE_NOT_FOUND")));
+
+			// Invalid source type is rejected.
+			mockMvc.perform(post("/api/v1/funding-sources")
+							.header("Authorization", "Bearer " + chairToken)
+							.contentType("application/json")
+							.content("{\"sourceType\":\"lottery\",\"amount\":1000}"))
+					.andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.error.code", is("INVALID_FUNDING_SOURCE_TYPE")));
+
+			// A user without finance-source:view (platform admin) cannot read the register.
+			mockMvc.perform(get("/api/v1/funding-sources").header("Authorization", "Bearer " + loginAndReturnToken()))
+					.andExpect(status().isForbidden());
+		} finally {
+			if (createdId != null) jdbcTemplate.update("DELETE FROM sacco_funding_sources WHERE id = ?", createdId);
+			jdbcTemplate.update("DELETE FROM sacco_funding_sources WHERE id = ?", lakeSourceId);
+		}
+	}
+
+	@Test
+	void adminConfiguresCustomFundTypeAndCanCreateAProductOfThatFund() throws Exception {
+		String adminToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String createdFundId = null;
+		String productCode = "BURIAL-MONTHLY-" + System.currentTimeMillis();
+		try {
+			// The three built-in funds are seeded and listed.
+			mockMvc.perform(get("/api/v1/fund-types").header("Authorization", "Bearer " + adminToken))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data[*].code", hasItem("savings")))
+					.andExpect(jsonPath("$.data[*].code", hasItem("welfare")))
+					.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))));
+
+			// A product of an unregistered fund type is rejected before the fund exists.
+			mockMvc.perform(post("/api/v1/financial-products")
+							.header("Authorization", "Bearer " + adminToken)
+							.contentType("application/json")
+							.content("{\"productType\":\"burial\",\"code\":\"" + productCode + "\",\"name\":\"Burial monthly\",\"contributionAmount\":5000,\"minimumBalance\":0}"))
+					.andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.error.code", is("INVALID_PRODUCT_TYPE")));
+
+			// Admin creates a custom Burial fund (behaves like welfare).
+			var created = mockMvc.perform(post("/api/v1/fund-types")
+							.header("Authorization", "Bearer " + adminToken)
+							.contentType("application/json")
+							.content("{\"code\":\"burial\",\"name\":\"Burial Fund\",\"basis\":\"welfare\",\"description\":\"Bereavement support\"}"))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.data.code", is("burial")))
+					.andExpect(jsonPath("$.data.basis", is("welfare")))
+					.andExpect(jsonPath("$.data.system", is(false)))
+					.andReturn();
+			createdFundId = objectMapper.readTree(created.getResponse().getContentAsString()).path("data").path("id").asText();
+
+			// Now a product of the custom fund type is accepted.
+			mockMvc.perform(post("/api/v1/financial-products")
+							.header("Authorization", "Bearer " + adminToken)
+							.contentType("application/json")
+							.content("{\"productType\":\"burial\",\"code\":\"" + productCode + "\",\"name\":\"Burial monthly\",\"contributionAmount\":5000,\"minimumBalance\":0}"))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.data.productType", is("burial")));
+
+			// Built-in funds cannot be deactivated.
+			mockMvc.perform(patch("/api/v1/fund-types/fundtype_tenant_green_savings")
+							.header("Authorization", "Bearer " + adminToken)
+							.contentType("application/json")
+							.content("{\"name\":\"Savings\",\"active\":false}"))
+					.andExpect(status().isConflict())
+					.andExpect(jsonPath("$.error.code", is("SYSTEM_FUND_TYPE_LOCKED")));
+
+			// A user without fund-types:view (platform admin) cannot read the registry.
+			mockMvc.perform(get("/api/v1/fund-types").header("Authorization", "Bearer " + loginAndReturnToken()))
+					.andExpect(status().isForbidden());
+		} finally {
+			jdbcTemplate.update("DELETE FROM financial_products WHERE tenant_id = 'tenant_green' AND code = ?", productCode);
+			if (createdFundId != null) jdbcTemplate.update("DELETE FROM sacco_fund_types WHERE id = ?", createdFundId);
+		}
+	}
+
+	@Test
+	void newTenantIsSeededWithTheThreeBuiltInFundTypes() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String unique = String.valueOf(System.currentTimeMillis());
+		String abbreviation = ("FT" + unique.substring(unique.length() - 4)).toUpperCase();
+		String tenantId = null;
+		try {
+			var created = mockMvc.perform(post("/api/v1/tenants")
+							.header("Authorization", "Bearer " + platformToken)
+							.contentType("application/json")
+							.content("""
+									{
+									  "name": "Fund Seed SACCO",
+									  "abbreviation": "%s",
+									  "registrationNo": "COOP-FUND-%s",
+									  "district": "Kampala",
+									  "parish": "Central",
+									  "village": "Zone",
+									  "contactNumber": "+256701234000",
+									  "memberRange": "100-250",
+									  "country": "Uganda",
+									  "localeCode": "en-UG",
+									  "currencyCode": "UGX",
+									  "currencyDigits": 0,
+									  "licenseExpiry": "2027-12-31",
+									  "packageId": "starter",
+									  "paymentStatus": "paid"
+									}
+									""".formatted(abbreviation, unique)))
+					.andExpect(status().isCreated())
+					.andReturn();
+			tenantId = objectMapper.readTree(created.getResponse().getContentAsString()).path("data").path("id").asText();
+
+			Integer systemFunds = jdbcTemplate.queryForObject(
+					"SELECT COUNT(*) FROM sacco_fund_types WHERE tenant_id = ? AND is_system = TRUE", Integer.class, tenantId);
+			org.hamcrest.MatcherAssert.assertThat(systemFunds, is(3));
+			Integer savings = jdbcTemplate.queryForObject(
+					"SELECT COUNT(*) FROM sacco_fund_types WHERE tenant_id = ? AND code = 'savings'", Integer.class, tenantId);
+			org.hamcrest.MatcherAssert.assertThat(savings, is(1));
+		} finally {
+			if (tenantId != null) jdbcTemplate.update("DELETE FROM sacco_fund_types WHERE tenant_id = ?", tenantId);
+		}
+	}
+
+	@Test
+	void platformBillingComposesBaseSubscriptionWithAddOnRevenueAvenues() throws Exception {
+		String platformToken = loginAndReturnToken();
+		String addedItemId = null;
+		try {
+			// Catalog exposes the add-on rate card.
+			mockMvc.perform(get("/api/v1/platform-billing/catalog").header("Authorization", "Bearer " + platformToken))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data[*].code", hasItem("addon_advanced_reporting")))
+					.andExpect(jsonPath("$.data[*].code", hasItem("sms_rate")));
+
+			// The composed bill for Green Valley = base subscription + its seeded add-ons.
+			mockMvc.perform(get("/api/v1/platform-billing/summary?tenantId=tenant_green").header("Authorization", "Bearer " + platformToken))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.baseSubscription", org.hamcrest.Matchers.closeTo(500000.0, 0.001)))
+					.andExpect(jsonPath("$.data.lines[?(@.description=='Advanced reporting & analytics')].amount", hasItem(org.hamcrest.Matchers.closeTo(600000.0, 0.001))))
+					.andExpect(jsonPath("$.data.lines[?(@.description=='Premium support (priority SLA)')].amount", hasItem(org.hamcrest.Matchers.closeTo(1000000.0, 0.001))))
+					.andExpect(jsonPath("$.data.total", greaterThanOrEqualTo(2100000.0)));
+
+			// Adding an API-access add-on increases the composed total by its rate.
+			var added = mockMvc.perform(post("/api/v1/platform-billing/items")
+							.header("Authorization", "Bearer " + platformToken)
+							.contentType("application/json")
+							.content("{\"tenantId\":\"tenant_green\",\"catalogCode\":\"addon_api_access\"}"))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.data.amount", org.hamcrest.Matchers.closeTo(900000.0, 0.001)))
+					.andReturn();
+			addedItemId = objectMapper.readTree(added.getResponse().getContentAsString()).path("data").path("id").asText();
+
+			mockMvc.perform(get("/api/v1/platform-billing/summary?tenantId=tenant_green").header("Authorization", "Bearer " + platformToken))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.lines[?(@.description=='API access')].amount", hasItem(org.hamcrest.Matchers.closeTo(900000.0, 0.001))))
+					.andExpect(jsonPath("$.data.total", greaterThanOrEqualTo(3000000.0)));
+
+			// A SACCO user cannot see platform billing.
+			String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+			mockMvc.perform(get("/api/v1/platform-billing/catalog").header("Authorization", "Bearer " + saccoToken))
+					.andExpect(status().isForbidden());
+		} finally {
+			if (addedItemId != null) jdbcTemplate.update("DELETE FROM tenant_billing_items WHERE id = ?", addedItemId);
+		}
+	}
+
+	@Test
+	void saccoBroadcastFansOutAcrossChannelsAndAppearsInRepositoryAndWhatsAppIsBilled() throws Exception {
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		// A SACCO admin broadcasts a message to all members.
+		mockMvc.perform(post("/api/v1/notifications/messages/broadcast")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("{\"title\":\"Annual general meeting\",\"body\":\"The AGM is on Saturday at 10am.\"}"))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.data.recipients", greaterThanOrEqualTo(1)));
+
+		// It is stored in the consolidated message repository and classified as a SACCO message.
+		mockMvc.perform(get("/api/v1/notifications/messages?category=sacco_message")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].title", hasItem("Annual general meeting")))
+				.andExpect(jsonPath("$.data[*].category", everyItem(is("sacco_message"))));
+
+		// It fanned out across the enabled channels, including the new WhatsApp and mobile-push channels.
+		mockMvc.perform(get("/api/v1/notifications/deliveries")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[*].channel", hasItem("whatsapp")))
+				.andExpect(jsonPath("$.data[*].channel", hasItem("push")));
+
+		// WhatsApp is metered as charged usage in the composed platform bill (SMS + WhatsApp are charged).
+		String platformToken = loginAndReturnToken();
+		mockMvc.perform(get("/api/v1/platform-billing/summary?tenantId=tenant_green")
+						.header("Authorization", "Bearer " + platformToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.lines[*].category", hasItem("whatsapp_rate")));
+
+		// Empty content is rejected.
+		mockMvc.perform(post("/api/v1/notifications/messages/broadcast")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("{\"title\":\"\",\"body\":\"\"}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("MESSAGE_CONTENT_REQUIRED")));
+	}
+
+	@Test
+	void saccoAndMemberControlNotificationChannelsAndFanOutRespectsThem() throws Exception {
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		try {
+			// Default: channels enabled at SACCO level.
+			mockMvc.perform(get("/api/v1/notification-channels").header("Authorization", "Bearer " + staffToken))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.whatsapp", is(true)))
+					.andExpect(jsonPath("$.data.sms", is(true)));
+
+			// SACCO disables WhatsApp for cost control.
+			mockMvc.perform(patch("/api/v1/notification-channels/whatsapp")
+							.header("Authorization", "Bearer " + staffToken)
+							.contentType("application/json").content("{\"enabled\":false}"))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.whatsapp", is(false)));
+
+			// Unknown channel is rejected.
+			mockMvc.perform(patch("/api/v1/notification-channels/telegram")
+							.header("Authorization", "Bearer " + staffToken)
+							.contentType("application/json").content("{\"enabled\":true}"))
+					.andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.error.code", is("UNKNOWN_CHANNEL")));
+
+			// A member opts out of push; the SACCO-disabled WhatsApp also reads as off for the member.
+			String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+			mockMvc.perform(put("/api/v1/member-auth/notification-preferences")
+							.header("Authorization", "Bearer " + memberToken)
+							.contentType("application/json").content("{\"channel\":\"push\",\"enabled\":false}"))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.push", is(false)))
+					.andExpect(jsonPath("$.data.whatsapp", is(false)));
+
+			mockMvc.perform(get("/api/v1/member-auth/notification-preferences")
+							.header("Authorization", "Bearer " + memberToken))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.push", is(false)));
+		} finally {
+			// Restore so other tests that assert WhatsApp fan-out / billing are unaffected.
+			mockMvc.perform(patch("/api/v1/notification-channels/whatsapp")
+					.header("Authorization", "Bearer " + staffToken)
+					.contentType("application/json").content("{\"enabled\":true}"));
+			jdbcTemplate.update("DELETE FROM notification_channel_preferences WHERE member_id <> '' AND channel = 'push'");
+		}
+	}
+
+	@Test
+	void memberDuesAssignPayAndLifecycle() throws Exception {
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String membershipId = null;
+		try {
+			// Staff assign a membership: it starts pending payment.
+			MvcResult assigned = mockMvc.perform(post("/api/v1/member-subscriptions")
+							.header("Authorization", "Bearer " + staffToken)
+							.contentType("application/json")
+							.content("{\"memberId\":\"member_green_amina\",\"planName\":\"Test dues\",\"amount\":40000,\"billingPeriod\":\"annual\"}"))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.data.status", is("pending_payment")))
+					.andReturn();
+			membershipId = objectMapper.readTree(assigned.getResponse().getContentAsString()).path("data").path("id").asText();
+
+			// Full dues payment activates it.
+			mockMvc.perform(post("/api/v1/member-subscriptions/" + membershipId + "/payments")
+							.header("Authorization", "Bearer " + staffToken)
+							.contentType("application/json").content("{\"amount\":40000}"))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.status", is("active")));
+
+			// The member can see their membership through the portal.
+			String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+			mockMvc.perform(get("/api/v1/member-auth/membership").header("Authorization", "Bearer " + memberToken))
+					.andExpect(status().isOk());
+
+			// A lapsed membership is expired by the job.
+			jdbcTemplate.update("UPDATE member_subscriptions SET status = 'active', last_reminder_on = NULL, expiry = ? WHERE id = ?",
+					java.sql.Date.valueOf(java.time.LocalDate.now().minusDays(30)), membershipId);
+			org.junit.jupiter.api.Assertions.assertTrue(memberSubscriptionService.expireLapsed() >= 1);
+			org.junit.jupiter.api.Assertions.assertEquals("expired",
+					jdbcTemplate.queryForObject("SELECT status FROM member_subscriptions WHERE id = ?", String.class, membershipId));
+
+			// A membership expiring soon triggers exactly one reminder per day.
+			jdbcTemplate.update("UPDATE member_subscriptions SET status = 'active', last_reminder_on = NULL, expiry = ? WHERE id = ?",
+					java.sql.Date.valueOf(java.time.LocalDate.now().plusDays(5)), membershipId);
+			org.junit.jupiter.api.Assertions.assertTrue(memberSubscriptionService.sendExpiryReminders() >= 1);
+			org.junit.jupiter.api.Assertions.assertEquals(0, memberSubscriptionService.sendExpiryReminders());
+
+			// Dunning: a membership lapsed but still within grace triggers an escalated overdue reminder.
+			jdbcTemplate.update("UPDATE member_subscriptions SET status = 'active', last_reminder_on = NULL, expiry = ? WHERE id = ?",
+					java.sql.Date.valueOf(java.time.LocalDate.now().minusDays(3)), membershipId);
+			org.junit.jupiter.api.Assertions.assertTrue(memberSubscriptionService.sendExpiryReminders() >= 1);
+		} finally {
+			if (membershipId != null) {
+				jdbcTemplate.update("DELETE FROM member_subscriptions WHERE id = ?", membershipId);
+			}
+		}
+	}
+
+	@Test
+	void subscriptionLifecycleExpiresLapsedRemindsBeforeExpiryAndExposesState() throws Exception {
+		java.sql.Date originalExpiry = jdbcTemplate.queryForObject(
+				"SELECT expiry FROM subscriptions WHERE tenant_id = 'tenant_green'", java.sql.Date.class);
+		String originalStatus = jdbcTemplate.queryForObject(
+				"SELECT status FROM subscriptions WHERE tenant_id = 'tenant_green'", String.class);
+		try {
+			// A lapsed active subscription (past expiry + grace) is expired by the lifecycle job.
+			jdbcTemplate.update(
+					"UPDATE subscriptions SET status = 'active', last_reminder_on = NULL, expiry = ? WHERE tenant_id = 'tenant_green'",
+					java.sql.Date.valueOf(java.time.LocalDate.now().minusDays(30)));
+			org.junit.jupiter.api.Assertions.assertTrue(subscriptionLifecycleService.expireLapsed() >= 1);
+			org.junit.jupiter.api.Assertions.assertEquals("expired",
+					jdbcTemplate.queryForObject("SELECT status FROM subscriptions WHERE tenant_id = 'tenant_green'", String.class));
+
+			// A subscription expiring soon triggers exactly one renewal reminder per day (deduplicated).
+			jdbcTemplate.update(
+					"UPDATE subscriptions SET status = 'active', last_reminder_on = NULL, expiry = ? WHERE tenant_id = 'tenant_green'",
+					java.sql.Date.valueOf(java.time.LocalDate.now().plusDays(5)));
+			org.junit.jupiter.api.Assertions.assertTrue(subscriptionLifecycleService.sendExpiryReminders() >= 1);
+			org.junit.jupiter.api.Assertions.assertNotNull(
+					jdbcTemplate.queryForObject("SELECT last_reminder_on FROM subscriptions WHERE tenant_id = 'tenant_green'", java.sql.Date.class));
+			org.junit.jupiter.api.Assertions.assertEquals(0, subscriptionLifecycleService.sendExpiryReminders());
+
+			// Dunning: a subscription lapsed but still within grace triggers an escalated overdue reminder.
+			jdbcTemplate.update("UPDATE subscriptions SET status = 'active', last_reminder_on = NULL, expiry = ? WHERE tenant_id = 'tenant_green'",
+					java.sql.Date.valueOf(java.time.LocalDate.now().minusDays(3)));
+			org.junit.jupiter.api.Assertions.assertTrue(subscriptionLifecycleService.sendExpiryReminders() >= 1);
+		} finally {
+			jdbcTemplate.update(
+					"UPDATE subscriptions SET status = ?, last_reminder_on = NULL, expiry = ? WHERE tenant_id = 'tenant_green'",
+					originalStatus, originalExpiry);
+		}
+	}
+
+	@Test
+	void memberHoldsAndSeesAPerFundBalanceForACustomFund() throws Exception {
+		String adminToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String treasurerToken = loginAndReturnToken("treasurer@greenvalley.local", "Treasurer@12345");
+		String createdFundId = null;
+		String txnId = null;
+		try {
+			// 1) Admin configures a custom Burial fund.
+			var fund = mockMvc.perform(post("/api/v1/fund-types")
+							.header("Authorization", "Bearer " + adminToken)
+							.contentType("application/json")
+							.content("{\"code\":\"burial\",\"name\":\"Burial Fund\",\"basis\":\"welfare\"}"))
+					.andExpect(status().isCreated())
+					.andReturn();
+			createdFundId = objectMapper.readTree(fund.getResponse().getContentAsString()).path("data").path("id").asText();
+
+			// 2) A burial contribution is captured for a member (maker = admin) ...
+			var created = mockMvc.perform(post("/api/v1/financial-transactions")
+							.header("Authorization", "Bearer " + adminToken)
+							.contentType("application/json")
+							.content("""
+									{
+									  "branchId": "branch_green_main",
+									  "memberId": "member_green_amina",
+									  "type": "burial_contribution",
+									  "channel": "cash",
+									  "amount": 40000,
+									  "narration": "Burial fund contribution"
+									}
+									"""))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.data.type", is("burial_contribution")))
+					.andExpect(jsonPath("$.data.status", is("pending_approval")))
+					.andReturn();
+			txnId = objectMapper.readTree(created.getResponse().getContentAsString()).path("data").path("id").asText();
+
+			// ... and posted by a different approver (checker = treasurer).
+			mockMvc.perform(patch("/api/v1/financial-transactions/" + txnId + "/status")
+							.header("Authorization", "Bearer " + treasurerToken)
+							.contentType("application/json")
+							.content("{ \"status\": \"posted\" }"))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.status", is("posted")));
+
+			// 3) The per-fund ledger now holds the member's burial balance.
+			java.math.BigDecimal burial = jdbcTemplate.queryForObject(
+					"SELECT balance FROM member_fund_balances WHERE member_id = 'member_green_amina' AND fund_code = 'burial'",
+					java.math.BigDecimal.class);
+			org.hamcrest.MatcherAssert.assertThat(burial.compareTo(new java.math.BigDecimal("40000")), is(0));
+
+			// 4) The member sees all their fund balances (backfilled savings + the new burial fund).
+			String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+			mockMvc.perform(get("/api/v1/member-auth/fund-balances").header("Authorization", "Bearer " + memberToken))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data[*].fundCode", hasItem("savings")))
+					.andExpect(jsonPath("$.data[?(@.fundCode=='burial')].balance", hasItem(org.hamcrest.Matchers.closeTo(40000.0, 0.001))));
+		} finally {
+			jdbcTemplate.update("DELETE FROM member_fund_balances WHERE fund_code = 'burial'");
+			if (txnId != null) jdbcTemplate.update("DELETE FROM financial_transactions WHERE id = ?", txnId);
+			if (createdFundId != null) jdbcTemplate.update("DELETE FROM sacco_fund_types WHERE id = ?", createdFundId);
+		}
+	}
+
+	@Test
+	void staffCanConfirmAndClearStatementLineCollectionAccountWithTenantIsolation() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String accountId = "paymentaccount_confirm_bank";
+		String otherTenantAccountId = "paymentaccount_confirm_other";
+		String statementLineId = "statement_confirm_test";
+		String externalReference = "CONFIRM-0001";
+		try {
+			jdbcTemplate.update("""
+					INSERT INTO sacco_payment_accounts
+					    (id, tenant_id, channel, network, account_name, account_number, bank_name, active)
+					VALUES (?, 'tenant_green', 'bank', NULL, 'Green Valley SACCO', '01234567890', 'Stanbic', TRUE)
+					""", accountId);
+			jdbcTemplate.update("""
+					INSERT INTO sacco_payment_accounts
+					    (id, tenant_id, channel, network, account_name, account_number, bank_name, active)
+					VALUES (?, 'tenant_lake', 'bank', NULL, 'Lake SACCO', '99999999999', 'Centenary', TRUE)
+					""", otherTenantAccountId);
+			jdbcTemplate.update("""
+					INSERT INTO statement_lines
+					    (id, tenant_id, account_code, channel, amount, external_reference, description, statement_date, imported_by_user_id)
+					VALUES (?, 'tenant_green', '1010', 'bank', 500000, ?, 'Bulk deposit', DATE '2026-07-14', 'user_green_admin')
+					""", statementLineId, externalReference);
+
+			// Confirm attribution.
+			mockMvc.perform(patch("/api/v1/statement-lines/" + statementLineId + "/collection-account")
+							.header("Authorization", "Bearer " + token)
+							.contentType("application/json")
+							.content("{\"collectionAccountId\":\"" + accountId + "\"}"))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.collectionAccountId", is(accountId)))
+					.andExpect(jsonPath("$.data.collectionAccount", is("Stanbic 01234567890")));
+
+			// Cross-tenant account is rejected (tenant isolation).
+			mockMvc.perform(patch("/api/v1/statement-lines/" + statementLineId + "/collection-account")
+							.header("Authorization", "Bearer " + token)
+							.contentType("application/json")
+							.content("{\"collectionAccountId\":\"" + otherTenantAccountId + "\"}"))
+					.andExpect(status().isNotFound())
+					.andExpect(jsonPath("$.error.code", is("PAYMENT_ACCOUNT_NOT_FOUND")));
+
+			// Clear attribution.
+			mockMvc.perform(patch("/api/v1/statement-lines/" + statementLineId + "/collection-account")
+							.header("Authorization", "Bearer " + token)
+							.contentType("application/json")
+							.content("{\"collectionAccountId\":null}"))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.collectionAccountId", org.hamcrest.Matchers.nullValue()));
+		} finally {
+			jdbcTemplate.update("DELETE FROM statement_lines WHERE id = ?", statementLineId);
+			jdbcTemplate.update("DELETE FROM sacco_payment_accounts WHERE id IN (?, ?)", accountId, otherTenantAccountId);
+		}
+	}
+
+	@Test
+	void staffCanConfirmMobileMoneyCallbackCollectionAccount() throws Exception {
+		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String accountId = "paymentaccount_confirm_callback";
+		String callbackId = "callback_confirm_test";
+		String externalReference = "CB-CONFIRM-0001";
+		try {
+			jdbcTemplate.update("""
+					INSERT INTO sacco_payment_accounts
+					    (id, tenant_id, channel, network, account_name, account_number, active)
+					VALUES (?, 'tenant_green', 'mobile_money', 'airtel', 'Green Valley SACCO', '0700940858', TRUE)
+					""", accountId);
+			jdbcTemplate.update("""
+					INSERT INTO mobile_money_callbacks
+					    (id, tenant_id, member_id, purpose, amount, external_reference, provider, status, received_at)
+					VALUES (?, 'tenant_green', 'member_green_amina', 'savings_deposit', 75000, ?, 'airtel_money', 'posted', CURRENT_TIMESTAMP)
+					""", callbackId, externalReference);
+
+			mockMvc.perform(patch("/api/v1/integrations/mobile-money/callbacks/" + callbackId + "/collection-account")
+							.header("Authorization", "Bearer " + token)
+							.contentType("application/json")
+							.content("{\"collectionAccountId\":\"" + accountId + "\"}"))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.collectionAccountId", is(accountId)))
+					.andExpect(jsonPath("$.data.collectionAccount", is("AIRTEL 0700940858")));
+
+			mockMvc.perform(patch("/api/v1/integrations/mobile-money/callbacks/" + callbackId + "/collection-account")
+							.header("Authorization", "Bearer " + token)
+							.contentType("application/json")
+							.content("{\"collectionAccountId\":null}"))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.collectionAccountId", org.hamcrest.Matchers.nullValue()));
+		} finally {
+			jdbcTemplate.update("DELETE FROM mobile_money_callbacks WHERE id = ?", callbackId);
+			jdbcTemplate.update("DELETE FROM sacco_payment_accounts WHERE id = ?", accountId);
+		}
 	}
 
 	@Test

@@ -61,6 +61,7 @@ class MobileMoneyController {
     private final ObjectMapper objectMapper;
     private final MobileMoneyProviderRouter mobileMoneyRouter;
     private final IdempotencyGuard idempotencyGuard;
+    private final com.methaltech.sacco.tenant.SaccoPaymentAccountRepository paymentAccountRepository;
 
     @PostMapping("/payment-requests")
     ResponseEntity<?> requestPayment(
@@ -195,7 +196,61 @@ class MobileMoneyController {
                 ? callbackRepository.findAllByOrderByTenantIdAscReceivedAtDesc()
                 : callbackRepository.findByTenantIdOrderByReceivedAtDesc(tenantId);
 
-        return ResponseEntity.ok(ApiResponse.of(callbacks.stream().map(MobileMoneyCallbackResponse::from).toList()));
+        java.util.Map<String, java.util.List<com.methaltech.sacco.tenant.SaccoPaymentAccount>> accountsByTenant =
+                new java.util.HashMap<>();
+        return ResponseEntity.ok(ApiResponse.of(callbacks.stream()
+                .map(callback -> {
+                    java.util.List<com.methaltech.sacco.tenant.SaccoPaymentAccount> tenantAccounts =
+                            accountsByTenant.computeIfAbsent(
+                                    callback.getTenantId(),
+                                    paymentAccountRepository::findByTenantIdOrderByChannelAscCreatedAtAsc);
+                    return MobileMoneyCallbackResponse.from(
+                            callback,
+                            false,
+                            suggestCollectionAccount(callback, tenantAccounts),
+                            confirmedCollectionAccount(callback, tenantAccounts));
+                })
+                .toList()));
+    }
+
+    /**
+     * Best-effort attribution of a mobile-money callback to the SACCO-owned collection account whose
+     * network matches the callback provider (e.g. an {@code mtn_momo} callback → the SACCO's MTN account),
+     * so callbacks can be reconciled against the right destination account. Returns null when the SACCO has
+     * no active mobile-money account for that network.
+     */
+    private com.methaltech.sacco.tenant.SaccoPaymentAccount suggestCollectionAccount(
+            MobileMoneyCallback callback,
+            java.util.List<com.methaltech.sacco.tenant.SaccoPaymentAccount> tenantAccounts) {
+        String network = providerNetwork(callback.getProvider());
+        if (network == null) return null;
+        return tenantAccounts.stream()
+                .filter(com.methaltech.sacco.tenant.SaccoPaymentAccount::isActive)
+                .filter(com.methaltech.sacco.tenant.SaccoPaymentAccount::isMobileMoney)
+                .filter(account -> network.equals(providerNetwork(account.getNetwork())))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** The account a staff member persisted on the callback (may be deactivated), or null. */
+    private com.methaltech.sacco.tenant.SaccoPaymentAccount confirmedCollectionAccount(
+            MobileMoneyCallback callback,
+            java.util.List<com.methaltech.sacco.tenant.SaccoPaymentAccount> tenantAccounts) {
+        if (callback.getCollectionAccountId() == null) return null;
+        return tenantAccounts.stream()
+                .filter(account -> callback.getCollectionAccountId().equals(account.getId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** Normalises provider ids and account networks (mtn_momo, airtel_money, mpesa_daraja, mtn, airtel...) to a common network key. */
+    private static String providerNetwork(String value) {
+        if (value == null) return null;
+        String lower = value.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("mtn")) return "mtn";
+        if (lower.contains("airtel")) return "airtel";
+        if (lower.contains("mpesa") || lower.contains("m-pesa")) return "mpesa";
+        return null;
     }
 
     @GetMapping("/payment-requests")
@@ -316,6 +371,67 @@ class MobileMoneyController {
                 body.reason(),
                 saved.getId());
         return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
+    }
+
+    @PatchMapping("/callbacks/{callbackId}/collection-account")
+    ResponseEntity<?> assignCallbackCollectionAccount(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String callbackId,
+            @Valid @RequestBody AssignCallbackCollectionAccountRequest body,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId,
+            jakarta.servlet.http.HttpServletRequest servletRequest) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "accounting:post")) {
+            return authService.permissionRequired("accounting:post");
+        }
+        MobileMoneyCallback callback = callbackRepository.findById(callbackId).orElse(null);
+        if (callback == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "CALLBACK_NOT_FOUND", "Mobile-money callback was not found."));
+        }
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null && !authService.isPlatform(currentSession.user())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot update another SACCO's mobile-money callback."));
+        }
+        if (!authService.isPlatform(currentSession.user()) && !callback.getTenantId().equals(tenantId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot update another SACCO's mobile-money callback."));
+        }
+
+        String requestedAccountId = body.collectionAccountId() == null || body.collectionAccountId().isBlank()
+                ? null
+                : body.collectionAccountId().trim();
+        com.methaltech.sacco.tenant.SaccoPaymentAccount account = null;
+        if (requestedAccountId != null) {
+            account = paymentAccountRepository.findByIdAndTenantId(requestedAccountId, callback.getTenantId()).orElse(null);
+            if (account == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "PAYMENT_ACCOUNT_NOT_FOUND", "Collection account not found for this SACCO."));
+            }
+            if (!account.isActive()) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "PAYMENT_ACCOUNT_INACTIVE", "Cannot attribute reconciliation to a deactivated collection account."));
+            }
+        }
+
+        callback.assignCollectionAccount(requestedAccountId);
+        MobileMoneyCallback saved = callbackRepository.save(callback);
+        auditService.record(
+                saved.getTenantId(),
+                currentSession.user(),
+                requestedAccountId == null
+                        ? "Cleared collection account for mobile-money callback " + saved.getExternalReference()
+                        : "Attributed mobile-money callback " + saved.getExternalReference() + " to collection account " + account.getAccountNumber(),
+                "mobile_money_callback",
+                saved.getId(),
+                servletRequest.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(MobileMoneyCallbackResponse.from(saved, false, null, account)));
+    }
+
+    /** Confirm/override the SACCO collection account for a callback; null/blank clears the attribution. */
+    record AssignCallbackCollectionAccountRequest(String collectionAccountId) {
     }
 
     private ResponseEntity<?> refreshAndSaveProviderStatus(MobileMoneyPaymentRequestEntity request) {

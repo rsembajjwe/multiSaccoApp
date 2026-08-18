@@ -81,6 +81,8 @@ class FinancialTransactionController {
     private final AuthService authService;
     private final AuditService auditService;
     private final AccountingPeriodService periodService;
+    private final com.methaltech.sacco.member.MemberFundBalanceService memberFundBalanceService;
+    private final FundTypeRepository fundTypeRepository;
 
     FinancialTransactionController(
             FinancialTransactionRepository transactionRepository,
@@ -90,7 +92,9 @@ class FinancialTransactionController {
             TenantMoneyFormatter moneyFormatter,
             AuthService authService,
             AuditService auditService,
-            AccountingPeriodService periodService) {
+            AccountingPeriodService periodService,
+            com.methaltech.sacco.member.MemberFundBalanceService memberFundBalanceService,
+            FundTypeRepository fundTypeRepository) {
         this.transactionRepository = transactionRepository;
         this.memberRepository = memberRepository;
         this.branchRepository = branchRepository;
@@ -99,6 +103,15 @@ class FinancialTransactionController {
         this.authService = authService;
         this.auditService = auditService;
         this.periodService = periodService;
+        this.memberFundBalanceService = memberFundBalanceService;
+        this.fundTypeRepository = fundTypeRepository;
+    }
+
+    /** A custom contribution type ({@code <fundCode>_contribution}) whose fund is configured and active. */
+    private boolean isConfiguredFundContribution(String tenantId, String type) {
+        String fundCode = com.methaltech.sacco.member.MemberFundBalanceService.fundCodeForType(type);
+        return fundCode != null
+                && fundTypeRepository.existsByTenantIdAndCodeIgnoreCaseAndActiveTrue(tenantId, fundCode);
     }
 
     @GetMapping
@@ -206,7 +219,7 @@ class FinancialTransactionController {
         }
 
         String type = body.type().trim();
-        if (!ALLOWED_TYPES.contains(type)) {
+        if (!ALLOWED_TYPES.contains(type) && !isConfiguredFundContribution(tenantId, type)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_TRANSACTION_TYPE", "Unsupported transaction type."));
         }
@@ -456,6 +469,7 @@ class FinancialTransactionController {
             }
             member.applyPostedTransaction(transaction.getType(), transaction.getAmount());
             memberRepository.save(member);
+            memberFundBalanceService.applyPosted(transaction.getTenantId(), member.getId(), transaction.getType(), transaction.getAmount());
             transaction.post(currentSession.user().getId());
         } else {
             transaction.reject(currentSession.user().getId(), reason == null ? "" : reason.trim());
@@ -531,6 +545,7 @@ class FinancialTransactionController {
 
         member.applyReversal(original.getType(), original.getAmount());
         memberRepository.save(member);
+        memberFundBalanceService.applyReversal(original.getTenantId(), member.getId(), original.getType(), original.getAmount());
         FinancialTransaction reversal = transactionRepository.save(FinancialTransaction.reversalOf(
                 original,
                 "txn_" + UUID.randomUUID(),
@@ -604,6 +619,7 @@ class FinancialTransactionController {
             Instant postedAt) {
         if (amount.compareTo(BigDecimal.ZERO) <= 0) return;
         member.applyPostedTransaction(type, amount);
+        memberFundBalanceService.applyPosted(tenantId, member.getId(), type, amount);
         created.add(transactionRepository.save(FinancialTransaction.postedProviderTransactionAt(
                 "txn_" + UUID.randomUUID(),
                 tenantId,

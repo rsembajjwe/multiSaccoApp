@@ -245,6 +245,61 @@ async function acknowledgeVisibleNotifications(notificationIdsText) {
   }
 }
 
+async function toggleSaccoChannel(channel, enabled) {
+  if (!channel) return;
+  state.notificationMessage = "";
+  state.notificationError = "";
+  try {
+    const channels = await api(`/notification-channels/${encodeURIComponent(channel)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled: Boolean(enabled) })
+    });
+    state.notificationChannels = channels && typeof channels === "object" ? channels : state.notificationChannels;
+    state.notificationMessage = `${labelize(channel)} channel ${enabled ? "enabled" : "disabled"}.`;
+    renderShell();
+  } catch (error) {
+    state.notificationError = error.message;
+    renderShell();
+  }
+}
+
+function setMessageCategory(category) {
+  state.messageCategoryFilter = category || "all";
+  state.tableState = {};
+  renderShell();
+}
+
+async function sendSaccoMessage() {
+  const title = (document.querySelector("#broadcastTitle")?.value || "").trim();
+  const body = (document.querySelector("#broadcastBody")?.value || "").trim();
+  const tenantId = (document.querySelector("#broadcastTenant")?.value || "").trim();
+  state.notificationMessage = "";
+  state.notificationError = "";
+  if (!title || !body) {
+    state.notificationError = "A subject and message are required.";
+    renderShell();
+    return;
+  }
+  if (!window.confirm("Send this message to all members?")) return;
+  try {
+    const payload = { title, body };
+    if (tenantId) payload.tenantId = tenantId;
+    const result = await api("/notifications/messages/broadcast", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    const message = `Message queued for ${result.recipients || 0} member(s); delivery is in progress.`;
+    await refreshAll();
+    state.currentView = "notifications";
+    state.moduleTabs.notifications = "messages";
+    state.notificationMessage = message;
+    renderShell();
+  } catch (error) {
+    state.notificationError = error.message;
+    renderShell();
+  }
+}
+
 function updateNotificationFilter(event) {
   const key = event.target.dataset.notificationFilter;
   if (!key) return;
@@ -502,6 +557,76 @@ function bindEvents() {
   document.querySelectorAll("[data-payment-request-status]").forEach((button) => {
     button.addEventListener("click", () => updatePaymentRequestStatus(button.dataset.paymentRequestStatus));
   });
+  document.querySelector("#reconAttributionLineSelect")?.addEventListener("change", (event) => {
+    state.selectedReconAttributionLineId = event.target.value;
+    state.selectedReconAttributionAccountId = "";
+    state.reconAttributionMessage = "";
+    state.reconAttributionError = "";
+    renderShell();
+  });
+  document.querySelector("#reconAttributionAccountSelect")?.addEventListener("change", (event) => {
+    state.selectedReconAttributionAccountId = event.target.value;
+  });
+  document.querySelectorAll("[data-save-collection-account]").forEach((button) => {
+    button.addEventListener("click", () => saveStatementLineCollectionAccount(button.dataset.saveCollectionAccount, false));
+  });
+  document.querySelectorAll("[data-clear-collection-account]").forEach((button) => {
+    button.addEventListener("click", () => saveStatementLineCollectionAccount(button.dataset.clearCollectionAccount, true));
+  });
+  document.querySelector("#callbackAttributionSelect")?.addEventListener("change", (event) => {
+    state.selectedCallbackAttributionId = event.target.value;
+    state.selectedCallbackAttributionAccountId = "";
+    state.callbackAttributionMessage = "";
+    state.callbackAttributionError = "";
+    renderShell();
+  });
+  document.querySelector("#callbackAttributionAccountSelect")?.addEventListener("change", (event) => {
+    state.selectedCallbackAttributionAccountId = event.target.value;
+  });
+  document.querySelectorAll("[data-save-callback-account]").forEach((button) => {
+    button.addEventListener("click", () => saveCallbackCollectionAccount(button.dataset.saveCallbackAccount, false));
+  });
+  document.querySelectorAll("[data-clear-callback-account]").forEach((button) => {
+    button.addEventListener("click", () => saveCallbackCollectionAccount(button.dataset.clearCallbackAccount, true));
+  });
+  document.querySelectorAll("[data-save-funding-source]").forEach((button) => {
+    button.addEventListener("click", () => saveFundingSource(button.dataset.saveFundingSource));
+  });
+  document.querySelectorAll("[data-cancel-funding-source]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedFundingSourceId = "";
+      state.fundingSourceMessage = "";
+      state.fundingSourceError = "";
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-row-action='funding-source-edit']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedFundingSourceId = button.dataset.rowId;
+      state.fundingSourceMessage = "";
+      state.fundingSourceError = "";
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-save-fund-type]").forEach((button) => {
+    button.addEventListener("click", () => saveFundType(button.dataset.saveFundType));
+  });
+  document.querySelectorAll("[data-edit-fund-type]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedFundTypeId = button.dataset.editFundType;
+      state.fundTypeMessage = "";
+      state.fundTypeError = "";
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-cancel-fund-type]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedFundTypeId = "";
+      state.fundTypeMessage = "";
+      state.fundTypeError = "";
+      renderShell();
+    });
+  });
   document.querySelectorAll("[data-row-action='user-detail']").forEach((button) => {
     button.addEventListener("click", () => openUserDetail(button.dataset.rowId));
   });
@@ -513,6 +638,13 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-row-action='subscription-detail']").forEach((button) => {
     button.addEventListener("click", () => openSubscriptionDetail(button.dataset.rowId));
+  });
+  document.querySelector("#billingTenantSelect")?.addEventListener("change", (event) => openBillingBreakdown(event.target.value));
+  document.querySelectorAll("[data-assign-billing-item]").forEach((button) => {
+    button.addEventListener("click", () => assignBillingItem());
+  });
+  document.querySelectorAll("[data-cancel-billing-item]").forEach((button) => {
+    button.addEventListener("click", () => cancelBillingItem(button.dataset.cancelBillingItem));
   });
   document.querySelectorAll("[data-package-manage]").forEach((button) => {
     button.addEventListener("click", () => openPackageSetup(button.dataset.packageManage));
@@ -576,6 +708,15 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-notification-bulk-ack]").forEach((button) => {
     button.addEventListener("click", () => acknowledgeVisibleNotifications(button.dataset.notificationBulkAck));
+  });
+  document.querySelectorAll("[data-message-category]").forEach((button) => {
+    button.addEventListener("click", () => setMessageCategory(button.dataset.messageCategory));
+  });
+  document.querySelector("[data-send-sacco-message]")?.addEventListener("click", () => sendSaccoMessage());
+  document.querySelector("[data-assign-member-dues]")?.addEventListener("click", () => assignMemberDues());
+  document.querySelector("[data-pay-member-dues]")?.addEventListener("click", () => recordMemberDuesPayment());
+  document.querySelectorAll("[data-toggle-sacco-channel]").forEach((button) => {
+    button.addEventListener("click", () => toggleSaccoChannel(button.dataset.toggleSaccoChannel, button.dataset.channelEnabled === "true"));
   });
   document.querySelectorAll("[data-row-action='welfare-claim-detail']").forEach((button) => {
     button.addEventListener("click", () => openWelfareClaimDetail(button.dataset.rowId));
@@ -821,6 +962,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-member-notification-acknowledge]").forEach((button) => {
     button.addEventListener("click", () => acknowledgeMemberNotification(button.dataset.memberNotificationAcknowledge));
+  });
+  document.querySelectorAll("[data-toggle-member-channel]").forEach((button) => {
+    button.addEventListener("click", () => toggleMemberChannel(button.dataset.toggleMemberChannel, button.dataset.channelEnabled === "true"));
   });
   document.querySelectorAll("[data-member-draft-save]").forEach((button) => {
     button.addEventListener("click", () => saveMemberDraftFromForm(button.dataset.memberDraftSave));

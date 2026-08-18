@@ -102,6 +102,66 @@ function sumAccountingModelMoney(rows, ...keys) {
   }, 0);
 }
 
+function buildLedgerAccountBalances(journals, accounts) {
+  const chart = new Map();
+  (accounts || []).forEach((account) => {
+    const code = String(account.code == null ? "" : account.code);
+    if (code) chart.set(code, { name: String(account.name == null ? code : account.name), type: normalizeAccountingModelText(account.type) });
+  });
+  const totals = new Map();
+  (journals || [])
+    .filter((journal) => normalizeAccountingModelText(journal.status) === "posted")
+    .forEach((journal) => {
+      const lines = Array.isArray(journal.lines) ? journal.lines : [];
+      lines.forEach((line) => {
+        const code = String(line.accountCode == null ? "" : line.accountCode);
+        if (!code) return;
+        const running = totals.get(code) || { debit: 0, credit: 0 };
+        running.debit += Number(line.debit || 0);
+        running.credit += Number(line.credit || 0);
+        totals.set(code, running);
+        if (!chart.has(code)) chart.set(code, { name: String(line.accountName == null ? code : line.accountName), type: normalizeAccountingModelText(line.accountType) });
+      });
+    });
+  return [...totals.entries()]
+    .map(([code, running]) => {
+      const meta = chart.get(code) || { name: code, type: "" };
+      return { code, name: meta.name, type: meta.type, debit: running.debit, credit: running.credit, net: running.debit - running.credit };
+    })
+    .sort((a, b) => a.code.localeCompare(b.code));
+}
+
+function buildTrialBalance(journals, accounts) {
+  const rows = buildLedgerAccountBalances(journals, accounts)
+    .filter((balance) => Math.abs(balance.debit) > 0.005 || Math.abs(balance.credit) > 0.005)
+    .map((balance) => ({ code: balance.code, name: balance.name, type: balance.type, debit: balance.net > 0 ? balance.net : 0, credit: balance.net < 0 ? -balance.net : 0 }));
+  const totalDebit = rows.reduce((total, row) => total + row.debit, 0);
+  const totalCredit = rows.reduce((total, row) => total + row.credit, 0);
+  return { rows, totalDebit, totalCredit, balanced: Math.abs(totalDebit - totalCredit) < 0.01 };
+}
+
+function buildIncomeStatement(journals, accounts) {
+  const balances = buildLedgerAccountBalances(journals, accounts);
+  const income = balances.filter((b) => b.type === "income").map((b) => ({ code: b.code, name: b.name, amount: -b.net })).filter((i) => Math.abs(i.amount) > 0.005);
+  const expenses = balances.filter((b) => b.type === "expense").map((b) => ({ code: b.code, name: b.name, amount: b.net })).filter((i) => Math.abs(i.amount) > 0.005);
+  const totalIncome = income.reduce((total, i) => total + i.amount, 0);
+  const totalExpense = expenses.reduce((total, e) => total + e.amount, 0);
+  return { income, expenses, totalIncome, totalExpense, netSurplus: totalIncome - totalExpense };
+}
+
+function buildBalanceSheet(journals, accounts) {
+  const balances = buildLedgerAccountBalances(journals, accounts);
+  const assets = balances.filter((b) => b.type === "asset").map((b) => ({ code: b.code, name: b.name, amount: b.net })).filter((i) => Math.abs(i.amount) > 0.005);
+  const liabilities = balances.filter((b) => b.type === "liability").map((b) => ({ code: b.code, name: b.name, amount: -b.net })).filter((i) => Math.abs(i.amount) > 0.005);
+  const equityAccounts = balances.filter((b) => b.type === "equity").map((b) => ({ code: b.code, name: b.name, amount: -b.net })).filter((i) => Math.abs(i.amount) > 0.005);
+  const netSurplus = buildIncomeStatement(journals, accounts).netSurplus;
+  const equity = Math.abs(netSurplus) > 0.005 ? [...equityAccounts, { code: "", name: "Current period surplus", amount: netSurplus }] : equityAccounts;
+  const totalAssets = assets.reduce((total, i) => total + i.amount, 0);
+  const totalLiabilities = liabilities.reduce((total, i) => total + i.amount, 0);
+  const totalEquity = equity.reduce((total, i) => total + i.amount, 0);
+  return { assets, liabilities, equity, totalAssets, totalLiabilities, totalEquity, netSurplus, balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01 };
+}
+
 function normalizeAccountingModelText(value) {
   return String(value || "").toLowerCase();
 }

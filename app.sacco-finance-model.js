@@ -64,6 +64,19 @@ function activeFinanceMemberOptions(members) {
     }));
 }
 
+function buildFundingSourceSummary(sources) {
+  const rows = sources || [];
+  const active = rows.filter((row) => normalizeFinanceModelText(row.status) !== "closed");
+  const sum = (list) => list.reduce((total, row) => total + Number(row.amount || 0), 0);
+  return {
+    count: rows.length,
+    activeCount: active.length,
+    closedCount: rows.length - active.length,
+    total: sum(rows),
+    activeTotal: sum(active)
+  };
+}
+
 function uniqueFinanceModelCount(rows, key) {
   return new Set(rows.map((row) => row[key]).filter((value) => value !== undefined && value !== null && value !== "")).size;
 }

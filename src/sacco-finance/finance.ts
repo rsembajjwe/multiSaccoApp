@@ -1,10 +1,19 @@
 import type {
   TerekaFinancialAccount,
   TerekaFinancialProduct,
+  TerekaFundingSource,
   TerekaMemberProfile,
   TerekaRecord,
   TerekaWelfareClaim,
 } from "../types/domain";
+
+export interface TerekaFundingSourceSummary {
+  activeCount: number;
+  activeTotal: number;
+  closedCount: number;
+  count: number;
+  total: number;
+}
 
 export interface TerekaSavingsSummary {
   accountCount: number;
@@ -102,6 +111,20 @@ export function buildWelfareClaimRows(claims: TerekaWelfareClaim[]): TerekaWelfa
     actionLabel: "Review",
     actionId: claim.id,
   }));
+}
+
+export function buildFundingSourceSummary(sources: Array<TerekaFundingSource & TerekaRecord>): TerekaFundingSourceSummary {
+  const rows = sources || [];
+  const active = rows.filter((row) => normalizeFinanceText(row.status) !== "closed");
+  const sum = (list: Array<TerekaFundingSource & TerekaRecord>): number =>
+    list.reduce((total, row) => total + Number(row.amount || 0), 0);
+  return {
+    count: rows.length,
+    activeCount: active.length,
+    closedCount: rows.length - active.length,
+    total: sum(rows),
+    activeTotal: sum(active),
+  };
 }
 
 export function activeFinanceProducts(products: TerekaFinancialProduct[]): TerekaFinancialProduct[] {

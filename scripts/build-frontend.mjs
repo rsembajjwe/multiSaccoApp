@@ -4,11 +4,20 @@ import path from "node:path";
 import { transform } from "esbuild";
 
 const root = process.cwd();
-const dist = path.join(root, "dist");
+// Canonical, Rollup-free production build. Outputs the single-file bundle to dist-vite/, which is the
+// directory server.mjs (SACCO_SERVE_BUNDLE / production) and the Caddyfile serve. `build:vite`
+// (Vite/Rollup) remains as an alternative that produces the same artifact.
+const dist = path.join(root, "dist-vite");
 
 if (!dist.startsWith(root + path.sep)) {
   throw new Error(`Refusing to build outside the project workspace: ${dist}`);
 }
+
+// Cache-busting version for the bundled app script, derived from the current service worker's
+// CACHE_VERSION so the built artifact never ships a stale version string.
+const serviceWorkerSource = await readText("service-worker.js");
+const bundleVersion = (serviceWorkerSource.match(/tereka-shell-v([^"']+)/)?.[1])
+  || new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
@@ -54,7 +63,7 @@ const manifest = {
 };
 await writeFile(path.join(dist, "build-manifest.json"), JSON.stringify(manifest, null, 2) + "\n", "utf8");
 
-console.log(`Frontend build passed (${staticAssets.length + 1} asset(s), 1 bundled app script from ${scriptSources.length} source script(s)) -> dist`);
+console.log(`Frontend build passed (${staticAssets.length + 1} asset(s), 1 bundled app script v${bundleVersion} from ${scriptSources.length} source script(s)) -> dist-vite`);
 
 async function readText(file) {
   const { readFile } = await import("node:fs/promises");
@@ -90,14 +99,14 @@ async function classicBundle(scriptSources) {
 function bundledIndex(indexHtml) {
   return indexHtml
     .replace(/<script\s+[^>]*src=["']app(?:\.[^"']+)?\.js(?:\?[^"']*)?["'][^>]*><\/script>\s*/g, "")
-    .replace("</body>", '  <script src="tereka-classic-app.js?v=20260810-ui-bundle-1"></script>\n</body>');
+    .replace("</body>", `  <script src="tereka-classic-app.js?v=${bundleVersion}"></script>\n</body>`);
 }
 
 function bundledServiceWorker(serviceWorker) {
   return serviceWorker
-    .replace(/tereka-shell-v[^"]+/, "tereka-shell-v20260810-ui-bundle-1")
+    .replace(/tereka-shell-v[^"]+/, `tereka-shell-v${bundleVersion}`)
     .replace(
       /\n\s*"\/app\.i18n\.js\?v=[^"]+",\s*\n\s*"\/app\.js\?v=[^"]+",/,
-      '\n  "/tereka-classic-app.js?v=20260810-ui-bundle-1",'
+      `\n  "/tereka-classic-app.js?v=${bundleVersion}",`
     );
 }

@@ -135,6 +135,76 @@ async function updatePaymentRequestStatus(status) {
   }
 }
 
+async function saveStatementLineCollectionAccount(lineId, clear) {
+  if (!lineId) return;
+  state.reconAttributionMessage = "";
+  state.reconAttributionError = "";
+  if (!state.networkOnline) {
+    state.reconAttributionError = t("offlineActionBlocked");
+    renderShell();
+    return;
+  }
+  const accountId = clear ? "" : (state.selectedReconAttributionAccountId
+    || document.querySelector("#reconAttributionAccountSelect")?.value
+    || "");
+  if (!clear && !accountId) {
+    state.reconAttributionError = "Select a collection account first.";
+    renderShell();
+    return;
+  }
+  try {
+    const line = await api(`/statement-lines/${encodeURIComponent(lineId)}/collection-account`, {
+      method: "PATCH",
+      body: JSON.stringify({ collectionAccountId: clear ? null : accountId })
+    });
+    const message = clear
+      ? `Cleared collection account for ${line.externalReference || line.id}.`
+      : `Attributed ${line.externalReference || line.id} to ${line.collectionAccount || "the selected account"}.`;
+    state.selectedReconAttributionAccountId = "";
+    await refreshAll();
+    state.reconAttributionMessage = message;
+    renderShell();
+  } catch (error) {
+    state.reconAttributionError = error.message;
+    renderShell();
+  }
+}
+
+async function saveCallbackCollectionAccount(callbackId, clear) {
+  if (!callbackId) return;
+  state.callbackAttributionMessage = "";
+  state.callbackAttributionError = "";
+  if (!state.networkOnline) {
+    state.callbackAttributionError = t("offlineActionBlocked");
+    renderShell();
+    return;
+  }
+  const accountId = clear ? "" : (state.selectedCallbackAttributionAccountId
+    || document.querySelector("#callbackAttributionAccountSelect")?.value
+    || "");
+  if (!clear && !accountId) {
+    state.callbackAttributionError = "Select a mobile-money account first.";
+    renderShell();
+    return;
+  }
+  try {
+    const callback = await api(`/integrations/mobile-money/callbacks/${encodeURIComponent(callbackId)}/collection-account`, {
+      method: "PATCH",
+      body: JSON.stringify({ collectionAccountId: clear ? null : accountId })
+    });
+    const message = clear
+      ? `Cleared collection account for ${callback.externalReference || callback.id}.`
+      : `Attributed ${callback.externalReference || callback.id} to ${callback.collectionAccount || "the selected account"}.`;
+    state.selectedCallbackAttributionAccountId = "";
+    await refreshAll();
+    state.callbackAttributionMessage = message;
+    renderShell();
+  } catch (error) {
+    state.callbackAttributionError = error.message;
+    renderShell();
+  }
+}
+
 async function refreshPaymentRequestProviderStatus(requestId) {
   if (!requestId) return;
   state.paymentRequestStatusMessage = "";
@@ -290,6 +360,25 @@ async function acknowledgeMemberNotification(notificationId) {
     await refreshMember();
     state.currentView = "notifications";
     state.memberNotificationMessage = "Notification acknowledged.";
+    renderShell();
+  } catch (error) {
+    state.memberNotificationError = error.message;
+    renderShell();
+  }
+}
+
+async function toggleMemberChannel(channel, enabled) {
+  if (!channel) return;
+  state.memberNotificationMessage = "";
+  state.memberNotificationError = "";
+  if (blockOfflineMemberAction("memberNotificationError")) return;
+  try {
+    const prefs = await api("/member-auth/notification-preferences", {
+      method: "PUT",
+      body: JSON.stringify({ channel, enabled: Boolean(enabled) })
+    });
+    state.memberData.notificationPreferences = prefs && typeof prefs === "object" ? prefs : state.memberData.notificationPreferences;
+    state.memberNotificationMessage = `${labelize(channel)} notifications ${enabled ? "turned on" : "turned off"}.`;
     renderShell();
   } catch (error) {
     state.memberNotificationError = error.message;

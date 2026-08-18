@@ -1,6 +1,65 @@
 ﻿// SACCO finance action handlers for Tereka Online.
 // Covers financial transactions, receipts, reversals, loans, guarantors and repayments.
 
+async function saveFundType(fundTypeId) {
+  const payload = {
+    name: (document.getElementById("ftName")?.value || "").trim(),
+    code: (document.getElementById("ftCode")?.value || "").trim().toLowerCase(),
+    basis: document.getElementById("ftBasis")?.value || "welfare",
+    active: (document.getElementById("ftActive")?.value || "true") === "true",
+    description: (document.getElementById("ftDescription")?.value || "").trim()
+  };
+  state.fundTypeMessage = "";
+  state.fundTypeError = "";
+  if (!payload.name) { state.fundTypeError = "Enter a fund name."; renderShell(); return; }
+  if (!fundTypeId && !payload.code) { state.fundTypeError = "Enter a fund code."; renderShell(); return; }
+  if (!state.networkOnline) { state.fundTypeError = t("offlineActionBlocked"); renderShell(); return; }
+  try {
+    if (fundTypeId) {
+      await api(`/fund-types/${encodeURIComponent(fundTypeId)}`, { method: "PATCH", body: JSON.stringify(payload) });
+    } else {
+      await api("/fund-types", { method: "POST", body: JSON.stringify(payload) });
+    }
+    state.selectedFundTypeId = "";
+    await refreshAll();
+    state.fundTypeMessage = fundTypeId ? "Fund updated." : "Fund added.";
+  } catch (error) {
+    state.fundTypeError = error.message || "Unable to save the fund.";
+  }
+  renderShell();
+}
+
+async function saveFundingSource(sourceId) {
+  const payload = {
+    sourceType: document.getElementById("fsType")?.value || "",
+    provider: (document.getElementById("fsProvider")?.value || "").trim(),
+    amount: Number(document.getElementById("fsAmount")?.value || 0),
+    currencyCode: (document.getElementById("fsCurrency")?.value || "UGX").trim(),
+    reference: (document.getElementById("fsReference")?.value || "").trim(),
+    dateReceived: document.getElementById("fsDate")?.value || null,
+    status: document.getElementById("fsStatus")?.value || "active",
+    notes: (document.getElementById("fsNotes")?.value || "").trim()
+  };
+  state.fundingSourceMessage = "";
+  state.fundingSourceError = "";
+  if (!payload.sourceType) { state.fundingSourceError = "Select a source type."; renderShell(); return; }
+  if (!(payload.amount > 0)) { state.fundingSourceError = "Enter an amount greater than zero."; renderShell(); return; }
+  if (!state.networkOnline) { state.fundingSourceError = t("offlineActionBlocked"); renderShell(); return; }
+  try {
+    if (sourceId) {
+      await api(`/funding-sources/${encodeURIComponent(sourceId)}`, { method: "PATCH", body: JSON.stringify(payload) });
+    } else {
+      await api("/funding-sources", { method: "POST", body: JSON.stringify(payload) });
+    }
+    state.selectedFundingSourceId = "";
+    await refreshAll();
+    state.fundingSourceMessage = sourceId ? "Funding source updated." : "Funding source added.";
+  } catch (error) {
+    state.fundingSourceError = error.message || "Unable to save the funding source.";
+  }
+  renderShell();
+}
+
 async function createTransactionFromForm(event) {
   event.preventDefault();
   state.transactionFormMessage = "";

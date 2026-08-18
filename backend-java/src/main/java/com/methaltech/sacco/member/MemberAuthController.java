@@ -23,6 +23,7 @@ import com.methaltech.sacco.finance.FinancialTransaction;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
 import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.notification.Notification;
+import com.methaltech.sacco.notification.NotificationChannelPreferenceService;
 import com.methaltech.sacco.notification.NotificationRepository;
 import com.methaltech.sacco.notification.NotificationResponse;
 import com.methaltech.sacco.notification.NotificationService;
@@ -53,6 +54,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -94,6 +96,9 @@ class MemberAuthController {
     private final DemoCredentialPolicy demoCredentialPolicy;
     private final MobileMoneyProviderRouter mobileMoneyProviderRouter;
     private final SaccoPaymentAccountRepository paymentAccountRepository;
+    private final MemberFundBalanceService memberFundBalanceService;
+    private final NotificationChannelPreferenceService channelPreferenceService;
+    private final MemberSubscriptionRepository memberSubscriptionRepository;
 
     MemberAuthController(
             MemberRepository memberRepository,
@@ -118,7 +123,10 @@ class MemberAuthController {
             LoginAttemptService loginAttemptService,
             DemoCredentialPolicy demoCredentialPolicy,
             MobileMoneyProviderRouter mobileMoneyProviderRouter,
-            SaccoPaymentAccountRepository paymentAccountRepository) {
+            SaccoPaymentAccountRepository paymentAccountRepository,
+            MemberFundBalanceService memberFundBalanceService,
+            NotificationChannelPreferenceService channelPreferenceService,
+            MemberSubscriptionRepository memberSubscriptionRepository) {
         this.memberRepository = memberRepository;
         this.memberSessionRepository = memberSessionRepository;
         this.loanRepository = loanRepository;
@@ -142,6 +150,9 @@ class MemberAuthController {
         this.demoCredentialPolicy = demoCredentialPolicy;
         this.mobileMoneyProviderRouter = mobileMoneyProviderRouter;
         this.paymentAccountRepository = paymentAccountRepository;
+        this.memberFundBalanceService = memberFundBalanceService;
+        this.channelPreferenceService = channelPreferenceService;
+        this.memberSubscriptionRepository = memberSubscriptionRepository;
     }
 
     @PostMapping("/login")
@@ -450,6 +461,17 @@ class MemberAuthController {
                 .toList()));
     }
 
+    @GetMapping("/fund-balances")
+    ResponseEntity<?> listFundBalances(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        return ResponseEntity.ok(ApiResponse.of(memberFundBalanceService.balancesFor(currentSession.member().getId())
+                .stream()
+                .map(balance -> new FundBalanceResponse(balance.getFundCode(), balance.getBalance(), balance.getUpdatedAt()))
+                .toList()));
+    }
+
     @GetMapping("/notifications")
     ResponseEntity<?> listNotifications(@RequestHeader(name = "Authorization", required = false) String authorization) {
         MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
@@ -459,6 +481,50 @@ class MemberAuthController {
                 .stream()
                 .map(NotificationResponse::from)
                 .toList()));
+    }
+
+    @GetMapping("/membership")
+    ResponseEntity<?> membership(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+        return ResponseEntity.ok(ApiResponse.of(memberSubscriptionRepository
+                .findFirstByMemberIdOrderByCreatedAtDesc(currentSession.member().getId())
+                .map(MemberSubscriptionResponse::from)
+                .orElse(null)));
+    }
+
+    @GetMapping("/notification-preferences")
+    ResponseEntity<?> listNotificationPreferences(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+        Member member = currentSession.member();
+        return ResponseEntity.ok(ApiResponse.of(channelPreferenceService.memberChannels(member.getTenantId(), member.getId())));
+    }
+
+    @PutMapping("/notification-preferences")
+    ResponseEntity<?> updateNotificationPreference(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestBody ChannelPreferenceRequest body,
+            HttpServletRequest request) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+        Member member = currentSession.member();
+        String channel = body == null || body.channel() == null ? "" : body.channel().trim();
+        if (!NotificationChannelPreferenceService.GATEABLE_CHANNELS.contains(channel)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "UNKNOWN_CHANNEL", "Channel must be one of: " + NotificationChannelPreferenceService.GATEABLE_CHANNELS));
+        }
+        boolean enabled = body.enabled();
+        channelPreferenceService.setMemberChannel(member.getTenantId(), member.getId(), channel, enabled);
+        auditService.record(
+                member.getTenantId(),
+                member.getId(),
+                member.getFullName(),
+                (enabled ? "Enabled" : "Disabled") + " " + channel + " notifications",
+                "notification_channel_preference",
+                channel,
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(channelPreferenceService.memberChannels(member.getTenantId(), member.getId())));
     }
 
     @PatchMapping("/notifications/{notificationId}/acknowledge")
@@ -824,6 +890,12 @@ class MemberAuthController {
         static Balances from(Member member) {
             return new Balances(member.getSavingsBalance(), member.getSharesBalance(), member.getWelfareBalance());
         }
+    }
+
+    record ChannelPreferenceRequest(String channel, boolean enabled) {
+    }
+
+    record FundBalanceResponse(String fundCode, BigDecimal balance, Instant updatedAt) {
     }
 
     record LogoutResponse(boolean loggedOut) {

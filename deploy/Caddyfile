@@ -3,7 +3,10 @@
 }
 
 {$DOMAIN} {
-	root * /srv/app
+	# Serves the Vite-bundled single-file build. Run `npm run build:vite` on the host before deploy so
+	# /srv/app/dist-vite exists (it is git-ignored). To serve the raw source module tree instead, set
+	# root back to /srv/app.
+	root * /srv/app/dist-vite
 	encode gzip zstd
 
 	# Only health and info are public. Metrics/prometheus stay internal to the deployment network

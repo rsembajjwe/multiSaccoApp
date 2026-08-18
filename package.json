@@ -56,6 +56,7 @@
     "incident:check": "node scripts/check-incident-readiness.mjs",
     "compliance:check": "node scripts/check-compliance-readiness.mjs",
     "load:test": "node scripts/load-test.mjs",
+    "load:scale": "set LOAD_REQUESTS=20000&& set LOAD_CONCURRENCY=100&& set LOAD_P95_MS=800&& set LOAD_P99_MS=1500&& set LOAD_MIN_RPS=150&& node scripts/load-test.mjs",
     "imports:templates": "node scripts/generate-import-workbooks.mjs",
     "imports:check": "node scripts/check-import-workbooks.mjs",
     "vite:check": "node scripts/check-vite-readiness.mjs",

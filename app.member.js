@@ -16,7 +16,7 @@ function renderMemberView(view) {
         <p class="balance-breakdown">${t("savings")} ${money.format(balances.savings || 0)} · ${t("shares")} ${money.format(balances.shares || 0)} · ${t("welfare")} ${money.format(balances.welfare || 0)}</p>
       </section>
       ${moduleTabs("home", tabs, tab)}
-      ${tab === "overview" ? `${memberCommandCenterPanel()}${memberHomeUpdatePanel(dash, balances)}${memberServiceAssurancePanel()}${memberQuickActionsPanel()}` : ""}
+      ${tab === "overview" ? `${memberCommandCenterPanel()}${memberMembershipPanel()}${memberHomeUpdatePanel(dash, balances)}${memberServiceAssurancePanel()}${memberQuickActionsPanel()}` : ""}
       ${tab === "monthly" ? memberHomeMonthlyPanel(dash) : ""}
       ${tab === "loans" ? memberHomeLoansPanel() : ""}
       ${tab === "messages" ? memberHomeMessagesPanel() : ""}
@@ -85,8 +85,32 @@ function memberHomeLoansPanel() {
   `;
 }
 
+function memberMembershipPanel() {
+  const membership = state.memberData.membership;
+  if (!membership) return "";
+  const lifecycle = membership.lifecycleState || membership.status || "";
+  const pill = ["expired", "grace", "expiring", "pending_payment"].includes(lifecycle) ? "pending" : "active";
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Membership</h2>
+          <p>Your membership status and renewal date.</p>
+        </div>
+        <span class="status ${pill}">${escapeHtml(labelize(lifecycle))}</span>
+      </div>
+      <div class="source-grid compact">
+        ${mini("Plan", escapeHtml(membership.planName || "Membership"))}
+        ${mini("Status", escapeHtml(labelize(membership.status || "")))}
+        ${mini("Balance due", money.format(membership.balanceDue || 0))}
+        ${mini("Expires", escapeHtml(membership.expiry || "-"))}
+      </div>
+    </section>`;
+}
+
 function memberHomeMessagesPanel() {
-  const notifications = buildMemberAdminMessageRows(state.memberData.notifications || []);
+  const notifications = buildMemberAdminMessageRows(state.memberData.notifications || [])
+    .map((row) => ({ ...row, categoryLabel: labelize(row.category || "message") }));
   const unread = notifications.some((row) => isMemberNotificationUnread(row));
   return `
     <section class="panel compact-panel">
@@ -98,7 +122,7 @@ function memberHomeMessagesPanel() {
         <span class="status ${unread ? "pending" : "active"}">${unread ? "Unread" : "Current"}</span>
       </div>
     </section>
-    ${notifications.length ? recordTable("SACCO admin messages", notifications, ["title", "message", "channel", "status", "createdAt", "readAt"]) : emptyState("SACCO admin messages", "Messages from your SACCO admin will appear here.")}
+    ${notifications.length ? recordTable("SACCO admin messages", notifications, ["categoryLabel", "title", "message", "channel", "status", "createdAt", "readAt"]) : emptyState("SACCO admin messages", "Messages from your SACCO admin will appear here.")}
   `;
 }
 
@@ -189,6 +213,10 @@ function memberQuickActionsPanel() {
   `;
 }
 
+function memberFundLabel(code) {
+  return String(code || "").replace(/_/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 /**
  * @param {TerekaMemberDashboard} dash
  * @param {TerekaBalances} balances
@@ -197,11 +225,14 @@ function memberQuickActionsPanel() {
 function memberMoneyView(dash, balances) {
   const tabs = [["accounts", "Accounts"], ["statement", "Statement"], ["receipts", "Receipts"]];
   const tab = activeModuleTab("money", tabs);
-  const accounts = [
-    { account: "Savings", balance: balances.savings || 0 },
-    { account: "Shares", balance: balances.shares || 0 },
-    { account: "Welfare", balance: balances.welfare || 0 }
-  ];
+  const fundBalances = state.memberData.fundBalances || [];
+  const accounts = fundBalances.length
+    ? fundBalances.map((fund) => ({ account: memberFundLabel(fund.fundCode), balance: fund.balance || 0 }))
+    : [
+        { account: "Savings", balance: balances.savings || 0 },
+        { account: "Shares", balance: balances.shares || 0 },
+        { account: "Welfare", balance: balances.welfare || 0 }
+      ];
   const lines = buildMemberStatementLines(dash);
   const receipts = lines
     .filter((line) => line.reference && (Number(line.credit || 0) > 0 || Number(line.debit || 0) > 0))
@@ -417,12 +448,13 @@ function memberPaymentTrackingPanel(requestRows) {
 }
 
 function memberCollectionAccountsCard() {
-  const accounts = (state.memberData.collectionAccounts || []).filter((a) => a.active !== false);
-  if (!accounts.length) return "";
+  const active = (state.memberData.collectionAccounts || []).filter((a) => a.active !== false);
+  if (!active.length) return "";
+  const rows = buildCollectionAccountDisplayRows(active, labelize);
   return `
     <div class="notice compact collection-accounts-card">
       <strong>Pay directly to your SACCO's accounts</strong>
-      ${accounts.map((a) => `<span>${escapeHtml(a.channel === "bank" ? (a.bankName || "Bank") : (a.network || "Mobile money").toUpperCase())}: ${escapeHtml(a.accountName || "")} - <b>${escapeHtml(a.accountNumber || "")}</b>${a.branch ? " / " + escapeHtml(a.branch) : ""}${a.instructions ? " / " + escapeHtml(a.instructions) : ""}</span>`).join("")}
+      ${rows.map((r) => `<span>${escapeHtml(r.title)}: ${escapeHtml(r.detail)}${r.instructions ? " / " + escapeHtml(r.instructions) : ""}</span>`).join("")}
     </div>`;
 }
 
@@ -554,8 +586,35 @@ function memberPaymentLifecycleRows(dash) {
   });
 }
 
+function memberChannelPreferencesPanel() {
+  const prefs = state.memberData.notificationPreferences || {};
+  const labels = { sms: "SMS", email: "Email", whatsapp: "WhatsApp", push: "Mobile app push" };
+  const order = ["sms", "email", "whatsapp", "push"];
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>How you get notified</h2>
+          <p>Choose which channels you want to receive messages on. Channels your SACCO has turned off cannot be enabled here.</p>
+        </div>
+      </div>
+      ${state.memberNotificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberNotificationMessage)}</strong></div>` : ""}
+      ${state.memberNotificationError ? `<div class="notice warning"><strong>Could not update.</strong><span>${escapeHtml(state.memberNotificationError)}</span></div>` : ""}
+      <div class="collection-account-list">
+        ${order.map((channel) => {
+          const enabled = prefs[channel] !== false;
+          return `<div class="collection-account-row">
+            <div><strong>${escapeHtml(labels[channel] || labelize(channel))}</strong><span>${enabled ? "On" : "Off"}</span></div>
+            <button class="button ${enabled ? "ghost" : "primary"}" type="button" data-toggle-member-channel="${channel}" data-channel-enabled="${enabled ? "false" : "true"}">${enabled ? "Turn off" : "Turn on"}</button>
+          </div>`;
+        }).join("")}
+      </div>
+    </section>`;
+}
+
 function memberNotificationsView() {
-  const messages = buildMemberAdminMessageRows(state.memberData.notifications || []);
+  const messages = buildMemberAdminMessageRows(state.memberData.notifications || [])
+    .map((row) => ({ ...row, categoryLabel: labelize(row.category || "message") }));
   const unread = messages.filter((row) => isMemberNotificationUnread(row));
   const tabs = [["inbox", `Inbox${messages.length ? ` (${messages.length})` : ""}`], ["unread", `Unread${unread.length ? ` (${unread.length})` : ""}`], ["evidence", "Evidence"]];
   const tab = activeModuleTab("notifications", tabs);
@@ -570,7 +629,8 @@ function memberNotificationsView() {
       </div>
     </section>
     ${moduleTabs("notifications", tabs, tab)}
-    ${tab === "inbox" ? (messages.length ? recordTable("SACCO admin messages", messages, ["title", "message", "channel", "status", "createdAt", "readAt"]) : emptyState("SACCO admin messages", "Messages from your SACCO admin will appear here.")) : ""}
+    ${tab === "inbox" ? memberChannelPreferencesPanel() : ""}
+    ${tab === "inbox" ? (messages.length ? recordTable("SACCO admin messages", messages, ["categoryLabel", "title", "message", "channel", "status", "createdAt", "readAt"]) : emptyState("SACCO admin messages", "Messages from your SACCO admin will appear here.")) : ""}
     ${tab === "unread" ? (unread.length ? recordTable("Unread message queue", unread, ["title", "message", "channel", "status", "createdAt"]) : emptyState("Unread message queue", "Unread SACCO notices will appear here.")) : ""}
     ${tab === "evidence" ? recordTable("Message delivery evidence", messages.map((row) => ({
       title: row.title,

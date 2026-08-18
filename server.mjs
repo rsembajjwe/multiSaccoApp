@@ -1,11 +1,19 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { handleApi } from "./backend/api.mjs";
 import { securityHeaders } from "./backend/http.mjs";
 
-const root = fileURLToPath(new URL(".", import.meta.url));
+const repoRoot = fileURLToPath(new URL(".", import.meta.url));
+// Serve the Vite-bundled single-file build (dist-vite) when it exists in production, or when
+// SACCO_SERVE_BUNDLE=true. In development the source tree (classic module scripts) is served so edits
+// are picked up without a build step.
+const distViteRoot = normalize(join(repoRoot, "dist-vite"));
+const serveBundle = process.env.SACCO_SERVE_BUNDLE === "true"
+  || (process.env.NODE_ENV === "production" && existsSync(join(distViteRoot, "index.html")));
+const webRoot = serveBundle ? distViteRoot : normalize(repoRoot);
 const port = Number(process.env.PORT || 5173);
 const javaApiBase = process.env.JAVA_API_BASE || "";
 const nodeApiEnabled = process.env.SACCO_NODE_API_ENABLED
@@ -49,9 +57,9 @@ createServer(async (request, response) => {
     }
 
     const requestedPath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
-    const filePath = normalize(join(root, requestedPath));
+    const filePath = normalize(join(webRoot, requestedPath));
 
-    if (!filePath.startsWith(root)) {
+    if (!filePath.startsWith(webRoot)) {
       response.writeHead(403, securityHeaders({ "Content-Type": "text/plain; charset=utf-8" }));
       response.end("Forbidden");
       return;
@@ -69,6 +77,7 @@ createServer(async (request, response) => {
   }
 }).listen(port, "127.0.0.1", () => {
   console.log(`SACCO app running at http://127.0.0.1:${port}`);
+  console.log(serveBundle ? "Serving the Vite-bundled build from dist-vite." : "Serving the source module tree (development).");
   if (javaApiBase) console.log(`Proxying /api/v1 requests to ${javaApiBase}`);
   else if (nodeApiEnabled) console.log("Using legacy Node API for local development/demo only.");
   else console.log("JAVA_API_BASE is required for /api/v1 requests in production mode.");

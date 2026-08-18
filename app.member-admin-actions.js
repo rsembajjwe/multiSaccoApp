@@ -1,6 +1,58 @@
 ﻿// SACCO member administration action handlers for Tereka Online.
 // Covers member creation, profile detail loading, statements, KYC decisions and profile updates.
 
+async function assignMemberDues() {
+  const memberId = document.querySelector("#memberDuesMember")?.value || "";
+  const planName = (document.querySelector("#memberDuesPlan")?.value || "").trim();
+  const amount = Number(document.querySelector("#memberDuesAmount")?.value || 0);
+  const billingPeriod = document.querySelector("#memberDuesPeriod")?.value || "annual";
+  state.memberDuesMessage = "";
+  state.memberDuesError = "";
+  if (!memberId || !planName || !(amount > 0)) {
+    state.memberDuesError = "Member, plan name and a positive amount are required.";
+    renderShell();
+    return;
+  }
+  try {
+    await api("/member-subscriptions", {
+      method: "POST",
+      body: JSON.stringify({ memberId, planName, amount, billingPeriod })
+    });
+    await refreshAll();
+    state.currentView = "member-dues";
+    state.memberDuesMessage = "Membership assigned.";
+    renderShell();
+  } catch (error) {
+    state.memberDuesError = error.message;
+    renderShell();
+  }
+}
+
+async function recordMemberDuesPayment() {
+  const id = document.querySelector("#memberDuesPayId")?.value || "";
+  const amount = Number(document.querySelector("#memberDuesPayAmount")?.value || 0);
+  state.memberDuesMessage = "";
+  state.memberDuesError = "";
+  if (!id || !(amount > 0)) {
+    state.memberDuesError = "Select a membership and enter a positive amount.";
+    renderShell();
+    return;
+  }
+  try {
+    await api(`/member-subscriptions/${encodeURIComponent(id)}/payments`, {
+      method: "POST",
+      body: JSON.stringify({ amount })
+    });
+    await refreshAll();
+    state.currentView = "member-dues";
+    state.memberDuesMessage = "Dues payment recorded.";
+    renderShell();
+  } catch (error) {
+    state.memberDuesError = error.message;
+    renderShell();
+  }
+}
+
 async function createMemberFromForm(event) {
   event.preventDefault();
   state.memberFormMessage = "";

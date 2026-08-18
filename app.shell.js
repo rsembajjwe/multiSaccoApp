@@ -198,6 +198,39 @@ function currentModule() {
   return visibleModules().find((item) => item[0] === state.currentView) || visibleModules()[0];
 }
 
+const NAV_ICON_PATHS = {
+  dashboard: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  members: '<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16.5 15c2 .3 3.5 2 3.5 4.5"/>',
+  users: '<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16.5 15c2 .3 3.5 2 3.5 4.5"/>',
+  transactions: '<path d="M4 8h13l-3-3"/><path d="M20 16H7l3 3"/>',
+  savings: '<ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v6c0 1.7 3.1 3 7 3s7-1.3 7-3V7"/>',
+  shares: '<circle cx="12" cy="12" r="9"/><path d="M12 3v9l7 4"/>',
+  welfare: '<path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9z"/>',
+  'funding-sources': '<path d="M3 10l9-5 9 5"/><path d="M5 10v8M12 10v8M19 10v8"/><path d="M3 20h18"/>',
+  funds: '<path d="M3 10l9-5 9 5"/><path d="M5 10v8M12 10v8M19 10v8"/><path d="M3 20h18"/>',
+  loans: '<path d="M7 3h8l3 3v15H7z"/><path d="M15 3v3h3"/><path d="M10 12h5M10 16h5"/>',
+  guarantors: '<path d="M12 3l7 3v5c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  approvals: '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+  accounting: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>',
+  reconciliation: '<path d="M4 8a8 8 0 0 1 13-3M17 2v4h-4"/><path d="M20 16a8 8 0 0 1-13 3M7 22v-4h4"/>',
+  reports: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  governance: '<path d="M4 21h16M6 21V10M18 21V10M4 10l8-5 8 5"/>',
+  complaints: '<path d="M4 5h16v11H8l-4 4z"/>',
+  notifications: '<path d="M18 9a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6"/><path d="M10.5 20a2 2 0 0 0 3 0"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2"/>',
+  audit: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M8 13l2 2 4-4"/>',
+  subscriptions: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>',
+  'sacco-applications': '<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/><path d="M12 11v6M9 14h6"/>',
+  'sacco-accounts': '<path d="M3 10l9-5 9 5"/><path d="M5 10v8M12 10v8M19 10v8"/><path d="M3 20h18"/>',
+  home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/>',
+  money: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>'
+};
+
+function navIcon(view) {
+  const path = NAV_ICON_PATHS[view] || '<circle cx="12" cy="12" r="8"/>';
+  return `<svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+}
+
 function renderShell() {
   document.body.className = "";
   const module = currentModule();
@@ -224,7 +257,8 @@ function renderShell() {
         <nav class="nav-list" aria-label="${escapeHtml(portal)} navigation">
           ${modules.map((item) => `
             <button class="nav-link ${item[0] === module[0] ? "active" : ""}" type="button" data-view="${item[0]}" ${item[0] === module[0] ? `aria-current="page"` : ""}>
-              <span>${item[1]}</span><small>${item[2]}</small>
+              ${navIcon(item[0])}
+              <span class="nav-text"><span>${item[1]}</span><small>${item[2]}</small></span>
             </button>
           `).join("")}
         </nav>
@@ -491,6 +525,7 @@ function renderView(view) {
   if (view === "dashboard") return isPlatform() ? platformDashboard() : saccoDashboard();
   if (view === "sacco-applications") return saccoApplications();
   if (view === "subscriptions") return subscriptionsView();
+  if (view === "member-dues") return memberDuesView();
   if (view === "sacco-accounts") return saccoAccounts();
   if (view === "members") return membersView();
   if (view === "transactions") return transactionsView();

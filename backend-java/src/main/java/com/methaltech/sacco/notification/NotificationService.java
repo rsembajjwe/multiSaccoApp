@@ -20,6 +20,7 @@ public class NotificationService {
     private final TenantService tenantService;
     private final TenantMoneyFormatter moneyFormatter;
     private final StaffNotificationRecipientService staffNotificationRecipientService;
+    private final NotificationChannelPreferenceService channelPreferenceService;
     private final List<NotificationProvider> providers;
 
     public Notification notifyPaymentPosted(Member member, String purpose, BigDecimal amount, String resourceType, String resourceId) {
@@ -74,6 +75,40 @@ public class NotificationService {
                 loanId));
     }
 
+    /** Notifies a member that their membership dues are approaching expiry, across their enabled channels. */
+    public Notification notifyMembershipExpiring(Member member, java.time.LocalDate expiry) {
+        String title = "Membership renewal due";
+        String message = "Your membership expires on " + expiry + ". Please renew to keep your membership active.";
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                "membership_expiring",
+                title,
+                message,
+                "member_subscription",
+                null));
+        createDeliveries(notification, member, title, message);
+        return notification;
+    }
+
+    /** Escalated dunning reminder once a member's membership has lapsed (in the grace window). */
+    public Notification notifyMembershipOverdue(Member member, java.time.LocalDate expiry) {
+        String title = "Membership overdue - renew now";
+        String message = "Your membership lapsed on " + expiry + ". Renew now to keep your membership active.";
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                "membership_overdue",
+                title,
+                message,
+                "member_subscription",
+                null));
+        createDeliveries(notification, member, title, message);
+        return notification;
+    }
+
     public Notification notifyComplaintSynced(Member member, String complaintId) {
         String eventType = "complaint_synced";
         NotificationTemplate template = activeTemplate(member.getTenantId(), eventType);
@@ -116,6 +151,96 @@ public class NotificationService {
                 message,
                 "chat_thread",
                 threadId));
+    }
+
+    /**
+     * Sends a SACCO announcement/broadcast to the given members. Each member gets a stored message
+     * (event type {@code sacco_announcement}) plus fan-out deliveries across every enabled channel
+     * (in-app, SMS, WhatsApp, email, push) so the message lands both in the repository and on the
+     * member's preferred channels.
+     */
+    public List<Notification> notifySaccoBroadcast(String tenantId, List<Member> recipients, String title, String message) {
+        return recipients.stream()
+                .map(member -> {
+                    Notification notification = notificationRepository.save(new Notification(
+                            "notification_" + UUID.randomUUID(),
+                            tenantId,
+                            member.getId(),
+                            "sacco_announcement",
+                            title,
+                            message,
+                            "sacco_message",
+                            null));
+                    createDeliveries(notification, member, title, message);
+                    return notification;
+                })
+                .toList();
+    }
+
+    /**
+     * Notifies the SACCO's finance staff (payment-exception recipients: admins/treasurers) that the
+     * platform subscription is approaching expiry and should be renewed. In-app so it surfaces in the
+     * notification centre and the message repository.
+     */
+    public List<Notification> notifySubscriptionExpiring(String tenantId, java.time.LocalDate expiry) {
+        String title = "Subscription renewal due";
+        String message = "Your SACCO subscription expires on " + expiry + ". Renew to avoid service interruption.";
+        return staffNotificationRecipientService.saccoPaymentExceptionRecipients(tenantId).stream()
+                .map(recipient -> {
+                    Notification notification = notificationRepository.save(new Notification(
+                            "notification_" + UUID.randomUUID(),
+                            tenantId,
+                            null,
+                            recipient.userId(),
+                            "subscription_expiring",
+                            title,
+                            message,
+                            "subscription",
+                            tenantId));
+                    deliveryRepository.save(new NotificationDelivery(
+                            "delivery_" + UUID.randomUUID(),
+                            tenantId,
+                            notification.getId(),
+                            null,
+                            recipient.userId(),
+                            "in_app",
+                            "tereka_online",
+                            recipient.email() == null || recipient.email().isBlank() ? recipient.userId() : recipient.email(),
+                            message));
+                    return notification;
+                })
+                .toList();
+    }
+
+    /** Escalated dunning reminder once a SACCO subscription has lapsed (in the grace window before suspension). */
+    public List<Notification> notifySubscriptionOverdue(String tenantId, java.time.LocalDate expiry) {
+        String title = "Subscription overdue - renew now";
+        String message = "Your SACCO subscription lapsed on " + expiry + ". Renew now to avoid suspension of write access.";
+        return staffNotificationRecipientService.saccoPaymentExceptionRecipients(tenantId).stream()
+                .map(recipient -> {
+                    Notification notification = notificationRepository.save(new Notification(
+                            "notification_" + UUID.randomUUID(),
+                            tenantId,
+                            null,
+                            recipient.userId(),
+                            "subscription_overdue",
+                            title,
+                            message,
+                            "subscription",
+                            tenantId));
+                    deliveryRepository.save(new NotificationDelivery(
+                            "delivery_" + UUID.randomUUID(),
+                            tenantId,
+                            notification.getId(),
+                            null,
+                            recipient.userId(),
+                            "in_app",
+                            "tereka_online",
+                            recipient.email() == null || recipient.email().isBlank() ? recipient.userId() : recipient.email(),
+                            message));
+                    return notification;
+                })
+                .toList();
     }
 
     public Notification notifySaccoContact(
@@ -257,8 +382,10 @@ public class NotificationService {
     }
 
     private void createDeliveries(Notification notification, Member member, String title, String message) {
+        java.util.Set<String> allowedChannels = channelPreferenceService.allowedChannels(member.getTenantId(), member.getId());
         providers.stream()
                 .filter(provider -> provider.enabledFor(member))
+                .filter(provider -> "in_app".equals(provider.channel()) || allowedChannels.contains(provider.channel()))
                 .forEach(provider -> {
                     String deliveryMessage = "email".equals(provider.channel()) ? title + ": " + message : message;
                     NotificationSendResult result = send(provider, member, title, deliveryMessage);
@@ -291,6 +418,7 @@ public class NotificationService {
 
     private void createContactDeliveries(Notification notification, String title, String message, String phone, String email) {
         providers.stream()
+                .filter(provider -> channelPreferenceService.saccoChannelEnabled(notification.getTenantId(), provider.channel()))
                 .filter(provider -> {
                     String recipient = "email".equals(provider.channel()) ? email : "sms".equals(provider.channel()) ? phone : null;
                     return provider.enabledForRecipient(recipient);

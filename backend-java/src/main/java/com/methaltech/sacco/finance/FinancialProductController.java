@@ -26,17 +26,21 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/financial-products")
 class FinancialProductController {
 
+    // Built-in funds every SACCO always has; custom funds live in the per-SACCO fund-type registry.
     private static final Set<String> PRODUCT_TYPES = Set.of("savings", "shares", "welfare");
 
     private final FinancialProductRepository productRepository;
+    private final FundTypeRepository fundTypeRepository;
     private final AuthService authService;
     private final AuditService auditService;
 
     FinancialProductController(
             FinancialProductRepository productRepository,
+            FundTypeRepository fundTypeRepository,
             AuthService authService,
             AuditService auditService) {
         this.productRepository = productRepository;
+        this.fundTypeRepository = fundTypeRepository;
         this.authService = authService;
         this.auditService = auditService;
     }
@@ -55,10 +59,10 @@ class FinancialProductController {
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null && !authService.isPlatform(currentSession.user())) return tenantAccessDenied();
 
-        String productType = normalizeType(requestedType);
-        if (requestedType != null && productType == null) {
+        String productType = normalizeCode(requestedType);
+        if (requestedType != null && (productType == null || !isValidFundType(tenantId, productType))) {
             return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "INVALID_PRODUCT_TYPE", "Product type must be savings, shares, or welfare."));
+                    .body(ApiErrorResponse.of(400, "INVALID_PRODUCT_TYPE", "Product type must be a configured fund for this SACCO."));
         }
 
         List<FinancialProduct> products;
@@ -87,10 +91,10 @@ class FinancialProductController {
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
 
-        String productType = normalizeType(body.productType());
-        if (productType == null) {
+        String productType = normalizeCode(body.productType());
+        if (productType == null || !isValidFundType(tenantId, productType)) {
             return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "INVALID_PRODUCT_TYPE", "Product type must be savings, shares, or welfare."));
+                    .body(ApiErrorResponse.of(400, "INVALID_PRODUCT_TYPE", "Product type must be a configured fund for this SACCO (e.g. savings, shares, welfare, or a custom fund)."));
         }
 
         String code = body.code().trim().toUpperCase();
@@ -137,10 +141,21 @@ class FinancialProductController {
         return requestedTenantId.trim().equals(currentSession.user().getTenantId()) ? requestedTenantId.trim() : null;
     }
 
-    private String normalizeType(String productType) {
+    private String normalizeCode(String productType) {
         if (productType == null || productType.isBlank()) return null;
-        String normalized = productType.trim().toLowerCase();
-        return PRODUCT_TYPES.contains(normalized) ? normalized : null;
+        return productType.trim().toLowerCase();
+    }
+
+    /**
+     * A product type is valid if it is one of the three built-in funds (always available) or an active
+     * fund type in this SACCO's configurable registry. The baseline keeps Savings/Shares/Welfare working
+     * for every tenant even before any custom fund is configured.
+     */
+    private boolean isValidFundType(String tenantId, String productType) {
+        if (productType == null) return false;
+        if (PRODUCT_TYPES.contains(productType)) return true;
+        if (tenantId == null) return false;
+        return fundTypeRepository.existsByTenantIdAndCodeIgnoreCaseAndActiveTrue(tenantId, productType);
     }
 
     private BigDecimal moneyOrZero(BigDecimal amount) {

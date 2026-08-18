@@ -5,7 +5,7 @@ const API_BASE = "/api/v1";
 const STAFF_TOKEN_KEY = "tereka-staff-token";
 const MEMBER_TOKEN_KEY = "tereka-member-token";
 const HIGH_VOLUME_PAGE_SIZE = 200;
-const HIGH_VOLUME_ENDPOINTS = new Set(["members", "transactions", "loans", "notifications", "auditEvents"]);
+const HIGH_VOLUME_ENDPOINTS = new Set(["members", "transactions", "loans", "notifications", "auditEvents", "messages"]);
 const HIGH_VOLUME_TABLES = [
   {
     key: "members",

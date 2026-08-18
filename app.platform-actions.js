@@ -50,6 +50,60 @@ async function createUserFromForm(event) {
   }
 }
 
+async function openBillingBreakdown(tenantId) {
+  state.selectedBillingTenantId = tenantId || "";
+  state.billingSummary = null;
+  state.billingItems = [];
+  state.billingMessage = "";
+  state.billingBreakdownError = "";
+  if (!tenantId) { renderShell(); return; }
+  state.billingBreakdownLoading = true;
+  renderShell();
+  try {
+    state.billingSummary = await api(`/platform-billing/summary?tenantId=${encodeURIComponent(tenantId)}`);
+    state.billingItems = await api(`/platform-billing/items?tenantId=${encodeURIComponent(tenantId)}`) || [];
+  } catch (error) {
+    state.billingBreakdownError = error.message;
+  } finally {
+    state.billingBreakdownLoading = false;
+    renderShell();
+  }
+}
+
+async function assignBillingItem() {
+  const tenantId = state.selectedBillingTenantId;
+  const catalogCode = document.getElementById("billingAddonSelect")?.value || "";
+  const quantity = Math.max(1, Number(document.getElementById("billingAddonQty")?.value || 1));
+  state.billingMessage = "";
+  state.billingBreakdownError = "";
+  if (!tenantId || !catalogCode) { renderShell(); return; }
+  try {
+    await api("/platform-billing/items", { method: "POST", body: JSON.stringify({ tenantId, catalogCode, quantity }) });
+    await openBillingBreakdown(tenantId);
+    state.billingMessage = "Add-on added.";
+    renderShell();
+  } catch (error) {
+    state.billingBreakdownError = error.message;
+    renderShell();
+  }
+}
+
+async function cancelBillingItem(itemId) {
+  const tenantId = state.selectedBillingTenantId;
+  if (!tenantId || !itemId) return;
+  state.billingMessage = "";
+  state.billingBreakdownError = "";
+  try {
+    await api(`/platform-billing/items/${encodeURIComponent(itemId)}?tenantId=${encodeURIComponent(tenantId)}`, { method: "DELETE" });
+    await openBillingBreakdown(tenantId);
+    state.billingMessage = "Add-on removed.";
+    renderShell();
+  } catch (error) {
+    state.billingBreakdownError = error.message;
+    renderShell();
+  }
+}
+
 async function openUserDetail(userId) {
   state.selectedUserId = userId;
   state.selectedUserRoles = [];

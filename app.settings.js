@@ -22,6 +22,7 @@ function settingsView() {
       ${settingsReadinessPanel(model.readiness)}
     ` : ""}
     ${tab === "branches" ? branchSetupPanel() : ""}
+    ${tab === "funds" ? fundTypesSetupPanel() : ""}
     ${tab === "products" ? financialProductSetupPanel() : ""}
     ${tab === "records" ? `
       ${recordTable("Branch setup", branches.map((branch) => ({ ...branch, manager: userName(branch.managerUserId) })), ["code", "name", "manager", "address", "status", "createdAt"])}
@@ -35,6 +36,7 @@ function saccoSettingsTabs(activeTab) {
   const tabs = [
     ["overview", t("settingsOverview")],
     ["branches", t("branchSetup")],
+    ["funds", "Fund sources"],
     ["products", t("productSetup")],
     ["records", t("setupRecords")],
     ["security", t("security")]
@@ -97,6 +99,58 @@ function branchSetupPanel() {
   `;
 }
 
+function fundTypeOptions() {
+  const rows = dataRows("fundTypes").filter((fund) => fund.active !== false);
+  const list = rows.length ? rows : [{ code: "savings", name: "Savings" }, { code: "shares", name: "Shares" }, { code: "welfare", name: "Welfare" }];
+  return list.map((fund) => `<option value="${escapeHtml(fund.code)}">${escapeHtml(fund.name || labelize(fund.code))}</option>`).join("");
+}
+
+function fundTypesSetupPanel() {
+  const canManage = hasPermission("fund-types:manage");
+  const funds = dataRows("fundTypes").slice().sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+  const editing = state.selectedFundTypeId ? funds.find((fund) => fund.id === state.selectedFundTypeId) : null;
+  const value = editing || {};
+  const basisOptions = ["savings", "shares", "welfare"]
+    .map((basis) => `<option value="${basis}" ${value.basis === basis ? "selected" : ""}>${escapeHtml(labelize(basis))}</option>`)
+    .join("");
+  const rowItem = (fund) => `
+    <div class="collection-account-row">
+      <div>
+        <strong>${escapeHtml(fund.name || labelize(fund.code))}</strong>
+        <span>Code: ${escapeHtml(fund.code)} / behaves like ${escapeHtml(labelize(fund.basis || ""))}${fund.system ? " / built-in" : ""}${fund.active === false ? " / inactive" : ""}</span>
+        ${fund.description ? `<small>${escapeHtml(fund.description)}</small>` : ""}
+      </div>
+      ${canManage ? `<button class="button ghost" type="button" data-edit-fund-type="${escapeHtml(fund.id)}">Edit</button>` : ""}
+    </div>`;
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Fund sources</h2>
+          <p>Savings, Shares and Welfare are built in. Add custom funds (Burial, Education, ...) — each behaves like a base fund and gives members a separate balance.</p>
+        </div>
+        ${editing ? `<button class="button ghost" type="button" data-cancel-fund-type="1">Cancel edit</button>` : ""}
+      </div>
+      ${state.fundTypeMessage ? `<div class="notice compact"><strong>${escapeHtml(state.fundTypeMessage)}</strong></div>` : ""}
+      ${state.fundTypeError ? `<div class="notice warning"><strong>Could not save.</strong><span>${escapeHtml(state.fundTypeError)}</span></div>` : ""}
+      <div class="collection-account-list">
+        ${funds.length ? funds.map(rowItem).join("") : `<div class="notice compact"><span>No fund types yet.</span></div>`}
+      </div>
+      ${canManage ? `
+      <form id="fundTypeForm" class="form-grid">
+        <label><span>Fund name</span><input id="ftName" value="${escapeHtml(value.name || "")}" placeholder="e.g. Burial Fund"></label>
+        <label><span>Code</span><input id="ftCode" value="${escapeHtml(value.code || "")}" placeholder="burial" ${editing ? "disabled" : ""}></label>
+        <label><span>Behaves like</span><select id="ftBasis" ${editing && editing.system ? "disabled" : ""}>${basisOptions}</select></label>
+        <label><span>Active</span><select id="ftActive"><option value="true" ${value.active === false ? "" : "selected"}>Active</option><option value="false" ${value.active === false ? "selected" : ""}>Inactive</option></select></label>
+        <label class="wide"><span>Description (optional)</span><input id="ftDescription" value="${escapeHtml(value.description || "")}" placeholder="Purpose of this fund"></label>
+        <div class="form-actions inline">
+          <button class="button primary" type="button" data-save-fund-type="${escapeHtml(editing ? editing.id : "")}">${editing ? "Update fund" : "Add fund"}</button>
+        </div>
+      </form>` : `<div class="notice compact"><span>You have review-only access to fund sources.</span></div>`}
+    </section>
+  `;
+}
+
 function financialProductSetupPanel() {
   const canManage = hasPermission("transactions:create") || roleKind() === "admin";
   const tenantId = state.user?.tenantId || state.currentTenantId || "";
@@ -112,7 +166,7 @@ function financialProductSetupPanel() {
       ${state.productFormError ? `<div class="notice warning"><strong>Product setup failed.</strong><span>${escapeHtml(state.productFormError)}</span></div>` : ""}
       <form class="form-grid" data-product-form>
         <input type="hidden" data-product-field="tenantId" value="${escapeHtml(tenantId)}">
-        <label><span>Product type</span><select data-product-field="productType" ${canManage ? "" : "disabled"}><option value="savings">Savings</option><option value="shares">Shares</option><option value="welfare">Welfare</option></select></label>
+        <label><span>Fund / product type</span><select data-product-field="productType" ${canManage ? "" : "disabled"}>${fundTypeOptions()}</select></label>
         <label><span>Product code</span><input data-product-field="code" placeholder="SAV-MONTHLY" required ${canManage ? "" : "disabled"}></label>
         <label><span>Product name</span><input data-product-field="name" placeholder="Monthly savings" required ${canManage ? "" : "disabled"}></label>
         <label><span>Contribution amount</span><input data-product-field="contributionAmount" type="number" min="0" value="5000" required ${canManage ? "" : "disabled"}></label>

@@ -22,6 +22,8 @@ const saccoModules = [
   ["savings", "Savings", "Products, accounts and statements", "transactions:view", ["admin", "treasurer", "accountant", "auditor"]],
   ["shares", "Shares", "Share register and certificates", "transactions:view", ["admin", "treasurer", "secretary", "auditor"]],
   ["welfare", "Welfare", "Contributions, balances and claims", "transactions:view", ["admin", "treasurer", "secretary"]],
+  ["member-dues", "Member Dues", "Membership subscriptions and expiry", "members:view", ["admin", "chairperson", "secretary", "treasurer"]],
+  ["funding-sources", "Sources of Funds", "Capital, grants and borrowings register", "finance-source:view", ["admin", "chairperson", "treasurer", "secretary"]],
   ["loans", "Loans", "Applications and repayments", "loans:view", ["admin", "chairperson", "loans", "auditor"]],
   ["guarantors", "Guarantors", "Guarantee requests and obligations", "loans:view", ["admin", "chairperson", "loans"]],
   ["approvals", "Approvals", "Maker-checker decisions", "approvals:view", ["admin", "chairperson", "treasurer", "secretary", "loans"]],
@@ -174,6 +176,7 @@ function moduleBlueprint(view = "") {
   if (view === "savings") return savingsView();
   if (view === "shares") return sharesView();
   if (view === "welfare") return welfareView();
+  if (view === "funding-sources") return fundingSourcesView();
   if (view === "accounting") return accountingView();
   if (view === "reconciliation") return reconciliationView();
   if (view === "governance") return governanceView();

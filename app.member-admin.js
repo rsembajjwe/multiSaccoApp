@@ -1,5 +1,56 @@
 ﻿// Member administration, KYC and statement rendering extracted from app.js.
 
+function memberDuesView() {
+  const subs = dataRows("memberSubscriptions");
+  const members = dataRows("members");
+  const canManage = hasPermission("members:create");
+  const needsRenewal = subs.filter((sub) => ["expiring", "grace", "expired"].includes(sub.lifecycleState));
+  const activeSubs = subs.filter((sub) => sub.status !== "expired");
+  const lifecycleOrder = [["active", "Active"], ["expiring", "Expiring"], ["grace", "Grace"], ["pending_payment", "Pending"], ["expired", "Expired"]];
+  const duesChart = lifecycleOrder
+    .map(([key, label]) => ({ label, value: subs.filter((sub) => (sub.lifecycleState || sub.status) === key).length }))
+    .filter((entry) => entry.value > 0);
+  const rows = subs.map((sub) => ({
+    memberName: memberName(sub.memberId),
+    planName: sub.planName,
+    amount: money.format(sub.amount || 0),
+    paid: money.format(sub.paid || 0),
+    balanceDue: money.format(sub.balanceDue || 0),
+    status: labelize(sub.status || ""),
+    lifecycle: labelize(sub.lifecycleState || ""),
+    billingPeriod: labelize(sub.billingPeriod || ""),
+    expiry: sub.expiry || ""
+  }));
+  return `
+    <div class="dashboard-grid">
+      ${summary("Memberships", subs.length, "Member dues subscriptions", "Manage")}
+      ${summary("Need renewal", needsRenewal.length, "Expiring, in grace or expired", needsRenewal.length ? "Review" : "Clear")}
+    </div>
+    ${duesChart.length ? `<section class="panel"><div class="panel-heading"><div><h2>Membership lifecycle</h2><p>Members by dues status.</p></div></div><div class="chart-figure">${svgBarChart(duesChart, { title: "Memberships by lifecycle", format: (value) => String(Math.round(value)) })}</div></section>` : ""}
+    ${state.memberDuesMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberDuesMessage)}</strong></div>` : ""}
+    ${state.memberDuesError ? `<div class="notice warning"><strong>Membership action failed.</strong><span>${escapeHtml(state.memberDuesError)}</span></div>` : ""}
+    ${canManage ? `<section class="panel">
+      <div class="panel-heading"><div><h2>Assign membership</h2><p>Create a dues membership; it activates once fully paid and renews by period.</p></div></div>
+      <form id="memberDuesAssignForm" class="form-grid">
+        <label><span>Member</span><select id="memberDuesMember">${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.fullName || member.membershipNo || member.id)}</option>`).join("")}</select></label>
+        <label><span>Plan name</span><input id="memberDuesPlan" type="text" value="Annual membership" maxlength="120"></label>
+        <label><span>Amount</span><input id="memberDuesAmount" type="number" min="1" step="0.01"></label>
+        <label><span>Period</span><select id="memberDuesPeriod"><option value="annual">Annual</option><option value="monthly">Monthly</option></select></label>
+        <div class="form-actions inline"><button class="button primary" type="button" data-assign-member-dues="1">Assign membership</button></div>
+      </form>
+    </section>` : ""}
+    ${canManage && activeSubs.length ? `<section class="panel">
+      <div class="panel-heading"><div><h2>Record dues payment</h2><p>Record a cash or mobile-money dues payment; full payment renews the membership.</p></div></div>
+      <form id="memberDuesPayForm" class="form-grid">
+        <label><span>Membership</span><select id="memberDuesPayId">${activeSubs.map((sub) => `<option value="${escapeHtml(sub.id)}">${escapeHtml(memberName(sub.memberId))} - ${escapeHtml(sub.planName)} (${escapeHtml(money.format(sub.balanceDue || 0))} due)</option>`).join("")}</select></label>
+        <label><span>Amount</span><input id="memberDuesPayAmount" type="number" min="1" step="0.01"></label>
+        <div class="form-actions inline"><button class="button primary" type="button" data-pay-member-dues="1">Record payment</button></div>
+      </form>
+    </section>` : ""}
+    ${recordTable("Member memberships", rows, ["memberName", "planName", "amount", "paid", "balanceDue", "status", "lifecycle", "billingPeriod", "expiry"])}
+  `;
+}
+
 function memberRegistrationPanel() {
   const branches = dataRows("branches");
   const defaultBranch = branches[0]?.id || "";

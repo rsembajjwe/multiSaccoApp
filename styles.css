@@ -2337,3 +2337,312 @@ th {
 .collection-account-row > div { display: flex; flex-direction: column; }
 .collection-account-row small { color: var(--muted, #627d98); }
 .collection-accounts-card { display: flex; flex-direction: column; gap: 2px; }
+
+/* Reporting charts (inline SVG, dependency-free). */
+.chart { width: 100%; height: auto; max-width: 420px; }
+.chart-axis { stroke: rgba(15, 70, 56, 0.18); stroke-width: 1; }
+.chart-label { font-size: 10px; fill: var(--muted, #5b6b66); }
+.chart-value { font-size: 10px; font-weight: 600; fill: var(--ink, #12332a); }
+.chart-centre { font-size: 13px; font-weight: 700; fill: var(--ink, #12332a); }
+.chart-empty { padding: 16px; color: var(--muted, #5b6b66); font-size: 13px; }
+.chart-legend { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.chart-legend li { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.chart-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
+.chart-legend-value { font-weight: 600; }
+.chart-figure { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+
+/* ============================================================================
+   Enterprise login refresh (2026-08-17)
+   Decorative-only enhancements layered over the existing login layout. No
+   layout properties that the responsive media queries control are overridden,
+   and no inline styles are used (strict CSP-safe). Background data-URI patterns
+   are governed by img-src 'self' data:.
+   ============================================================================ */
+
+.login-page {
+  background:
+    radial-gradient(900px 520px at 12% -8%, rgba(15, 118, 110, 0.14), transparent 60%),
+    radial-gradient(820px 620px at 108% 118%, rgba(18, 61, 53, 0.12), transparent 55%),
+    linear-gradient(180deg, #f7fbf9 0%, #eaf3ef 100%);
+}
+
+.login-layout {
+  filter: drop-shadow(0 30px 60px rgba(18, 61, 53, 0.12));
+}
+
+/* Layered brand hero: deep gradient, soft glow and a faint engraved grid. */
+.login-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(155deg, #16564a 0%, #123d35 52%, #0d2f29 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--shadow);
+}
+
+.login-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Cpath d='M44 0H0v44' fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='1'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.login-hero::after {
+  content: "";
+  position: absolute;
+  top: -140px;
+  right: -120px;
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle, rgba(45, 212, 159, 0.22), transparent 70%);
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+.login-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.login-hero h1 {
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+
+.login-hero .eyebrow {
+  letter-spacing: 0.14em;
+  color: #8ff0c6;
+}
+
+/* Live "secure" status dot on the environment pill. */
+.environment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(45, 212, 159, 0.10);
+  border-color: rgba(143, 240, 198, 0.35);
+}
+
+.environment-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+  animation: tereka-pulse 2.4s ease-out infinite;
+}
+
+@keyframes tereka-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+/* Glassy, liftable portal-route cards. */
+.portal-route-card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.portal-route-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #34d399, #0f766e);
+  opacity: 0.85;
+}
+
+.portal-route-card:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(143, 240, 198, 0.4);
+}
+
+.portal-route-card strong { color: #ffffff; }
+.portal-route-card span { color: #8ff0c6; }
+
+/* Elevated auth card + refined form focus. */
+.login-card {
+  box-shadow: 0 24px 60px rgba(18, 61, 53, 0.14), 0 2px 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+.login-card input:focus,
+.login-card select:focus,
+.login-card textarea:focus {
+  outline: none;
+  border-color: var(--green-700);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.16);
+}
+
+.login-card .button.primary {
+  background: linear-gradient(180deg, #16564a, #123d35);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 18px rgba(18, 61, 53, 0.24);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.login-card .button.primary:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(18, 61, 53, 0.3);
+}
+
+/* Refined active auth tab underline. */
+.login-links button.active {
+  position: relative;
+}
+
+.login-links button.active::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: #34d399;
+}
+
+/* Subtle entrance motion (disabled for reduced-motion users). */
+@media (prefers-reduced-motion: no-preference) {
+  .login-hero { animation: tereka-rise 0.5s ease both; }
+  .login-card { animation: tereka-rise 0.5s ease 0.06s both; }
+  @keyframes tereka-rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* ============================================================================
+   Enterprise UI refresh (2026-08-17)
+   App-wide polish of the shared components — metric cards, panels, data tables,
+   status pills, buttons, tabs, notices — for a cleaner, scannable, enterprise
+   feel. Decorative/typographic only; no layout grids the media queries own are
+   overridden, no inline styles (CSP-safe).
+   ============================================================================ */
+
+/* KPI / metric cards: bold number, muted uppercase label, accent, action arrow. */
+.summary-card {
+  position: relative;
+  min-height: 72px;
+  padding: 12px 12px 10px 15px;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+.summary-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--green-700), var(--green-900));
+  opacity: 0.9;
+}
+.summary-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(18, 61, 53, 0.10);
+  border-color: #bfe0d6;
+}
+.summary-card span {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+.summary-card strong {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.summary-card button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--text-xs);
+}
+.summary-card button:not(:disabled)::after { content: "\2192"; font-weight: 800; }
+
+/* Panels: clearer header hierarchy with a divider. */
+.panel { border-radius: 10px; padding: 12px 14px; }
+.panel-heading {
+  align-items: flex-start;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.panel-heading h2 { font-size: var(--text-xl); letter-spacing: -0.01em; }
+.panel-heading p { margin: 2px 0 0; color: var(--muted); font-size: var(--text-sm); }
+
+/* Data tables: framed, breathable, hoverable enterprise grid. */
+.table-wrap { border: 1px solid var(--line); border-radius: 10px; }
+th, td { padding: 6px 10px; }
+th { letter-spacing: 0.05em; background: #f4f8f6; }
+tbody tr { transition: background 0.12s ease; }
+tbody tr:hover { background: #f6faf8; }
+tbody tr:last-child td { border-bottom: 0; }
+td.amount, th.amount { text-align: right; font-variant-numeric: tabular-nums; }
+.total-row td, .section-row td { background: #f4f8f6; }
+
+/* Status pills gain a leading dot in their own colour. */
+.status { gap: 5px; padding: 1px 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+.status::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; opacity: 0.85; }
+
+/* Buttons: consistent, tactile, accessible focus. */
+.button { border-radius: 8px; transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease; }
+.button.primary {
+  background: linear-gradient(180deg, var(--green-800), var(--green-900));
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 6px 14px rgba(18, 61, 53, 0.18);
+}
+.button.primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.18); }
+
+/* Module / management tabs as a segmented control. */
+.tabs, .management-tabs {
+  gap: 2px;
+  padding: 3px;
+  background: #eef4f1;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.tabs button, .management-tabs button {
+  border-radius: 7px;
+  border: 0;
+  background: transparent;
+  transition: background 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+}
+.tabs button.active, .management-tabs button.active {
+  background: var(--surface);
+  color: var(--green-900);
+  box-shadow: 0 2px 6px rgba(18, 61, 53, 0.12);
+}
+
+/* Notices / alerts: left accent bar for scanning. */
+.notice { border-left: 3px solid var(--green-700); border-radius: 8px; }
+.notice.warning { border-left-color: var(--amber-600); }
+.alert { border-radius: 8px; }
+.alert.error { border-left: 3px solid var(--red-600); }
+
+/* Mini-facts read as tidy key/value chips. */
+.mini-fact { border-radius: 8px; }
+.mini-fact span { text-transform: uppercase; letter-spacing: 0.05em; font-size: var(--text-xs); }
+
+/* Navigation iconography (inline SVG, CSP-safe). */
+.nav-link { display: flex; align-items: center; gap: 10px; }
+.nav-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nav-ico { width: 18px; height: 18px; flex: none; color: #8ff0c6; opacity: 0.92; }
+.nav-link.active .nav-ico, .nav-link:hover .nav-ico { color: var(--green-700); opacity: 1; }

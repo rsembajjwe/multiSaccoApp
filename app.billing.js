@@ -11,12 +11,140 @@ function subscriptionsView() {
       ${summary(t("outstandingInvoices"), money.format(subscriptionSummary.outstandingInvoices), "Unpaid balance", "Follow up")}
     </div>
     ${subscriptionStatusGuide(subscriptionSummary)}
+    ${subscriptionHealthPanel()}
     ${filterToolbar("Search by SACCO code, SACCO name, package, payment status, access status or expiry", "Record payment", "Generate invoice")}
     ${subscriptionDetailPanel(rows)}
     ${recordTable("Subscription list", tableRows, ["saccoCode", "tenantName", "packageName", "billingDescription", "billableMembers", "amount", "paid", "balanceDue", "paymentStage", "approvalStage", "operatingAccess", "expiry"])}
+    ${revenueRateCardPanel()}
+    ${billingBreakdownPanel()}
     ${packageCards()}
     ${packageSetupPanel()}
   `;
+}
+
+function subscriptionHealthPanel() {
+  const subs = dataRows("subscriptions");
+  if (!subs.length) return "";
+  const stateOf = (sub) => sub.lifecycleState || sub.status || "unknown";
+  const order = ["active", "expiring", "grace", "pending_payment", "expired"];
+  const labels = { active: "Active", expiring: "Expiring", grace: "Grace", pending_payment: "Pending", expired: "Expired" };
+  const counts = { active: 0, expiring: 0, grace: 0, pending_payment: 0, expired: 0 };
+  subs.forEach((sub) => { const key = stateOf(sub); counts[key] = (counts[key] || 0) + 1; });
+  const recurring = subs.filter((sub) => ["active", "expiring", "grace"].includes(stateOf(sub)));
+  const annualRecurring = recurring.reduce((total, sub) => total + (Number(sub.amount) || 0), 0);
+  const chartData = order.filter((key) => counts[key] > 0).map((key) => ({ label: labels[key], value: counts[key] }));
+  const expiringSoon = subs
+    .filter((sub) => ["expiring", "grace"].includes(stateOf(sub)))
+    .slice()
+    .sort((a, b) => Number(a.daysToExpiry ?? 9999) - Number(b.daysToExpiry ?? 9999))
+    .map((sub) => ({
+      tenantName: tenantName(sub.tenantId),
+      status: labelize(stateOf(sub)),
+      daysToExpiry: (sub.daysToExpiry === null || sub.daysToExpiry === undefined) ? "-" : String(sub.daysToExpiry),
+      expiry: sub.expiry || "-",
+      amount: money.format(sub.amount || 0)
+    }));
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div><h2>Subscription health</h2><p>Lifecycle mix and annual recurring revenue across SACCO subscriptions.</p></div>
+        <span class="status ${counts.expired ? "pending" : "active"}">${counts.expired} expired</span>
+      </div>
+      <div class="source-grid compact">
+        ${mini("SACCO subscriptions", subs.length)}
+        ${mini("Active", counts.active)}
+        ${mini("Expiring / grace", counts.expiring + counts.grace)}
+        ${mini("Expired", counts.expired)}
+        ${mini("Annual recurring", money.format(annualRecurring))}
+      </div>
+      <div class="chart-figure">${svgBarChart(chartData, { title: "Subscriptions by lifecycle", format: (value) => String(Math.round(value)) })}</div>
+      ${expiringSoon.length ? recordTable("Expiring soon", expiringSoon, ["tenantName", "status", "daysToExpiry", "expiry", "amount"]) : `<div class="notice compact"><span>No SACCO subscriptions are expiring within the window.</span></div>`}
+    </section>`;
+}
+
+function billingBreakdownPanel() {
+  const saccoTenants = tenantRows().filter((tenant) => tenant.id !== "tenant_platform");
+  if (!saccoTenants.length) return "";
+  const selectedId = state.selectedBillingTenantId || "";
+  const summary = state.billingSummary;
+  const items = (state.billingItems || []).filter((item) => item.status !== "cancelled");
+  const assignable = dataRows("billingCatalog").filter((rate) => rate.active !== false && ["addon_module", "support", "setup"].includes(rate.category));
+  const invoiceRows = summary
+    ? (summary.lines || []).map((line) => ({
+        description: line.description,
+        category: labelize(line.category || ""),
+        quantity: line.quantity,
+        unitPrice: money.format(line.unitPrice || 0),
+        amount: money.format(line.amount || 0),
+        billingPeriod: labelize(line.billingPeriod || "")
+      }))
+    : [];
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>SACCO billing breakdown</h2>
+          <p>Compose a SACCO's bill from its base subscription plus add-on revenue avenues.</p>
+        </div>
+      </div>
+      ${state.billingMessage ? `<div class="notice compact"><strong>${escapeHtml(state.billingMessage)}</strong></div>` : ""}
+      ${state.billingBreakdownError ? `<div class="notice warning"><strong>Billing update failed.</strong><span>${escapeHtml(state.billingBreakdownError)}</span></div>` : ""}
+      <div class="form-grid">
+        <label>
+          <span>SACCO</span>
+          <select id="billingTenantSelect">
+            <option value="">Select a SACCO</option>
+            ${saccoTenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${tenant.id === selectedId ? "selected" : ""}>${escapeHtml(tenant.name || tenant.id)}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      ${state.billingBreakdownLoading ? `<div class="notice compact"><span>Loading billing breakdown...</span></div>` : ""}
+      ${summary ? `
+        ${recordTable("Composed invoice", invoiceRows, ["description", "category", "quantity", "unitPrice", "amount", "billingPeriod"])}
+        <div class="source-grid compact">
+          ${mini("Base subscription", money.format(summary.baseSubscription || 0))}
+          ${mini("Annual recurring", money.format(summary.annualRecurringTotal || 0))}
+          ${mini("One-time", money.format(summary.oneTimeTotal || 0))}
+          ${mini("SMS usage", money.format(summary.usageTotal || 0))}
+          ${mini("Invoice total", money.format(summary.total || 0))}
+        </div>
+        <div class="collection-account-list">
+          ${items.length ? items.map((item) => `
+            <div class="collection-account-row">
+              <div><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(labelize(item.category || ""))} / ${escapeHtml(money.format(item.amount || 0))} / ${escapeHtml(labelize(item.billingPeriod || ""))}</span></div>
+              <button class="button ghost" type="button" data-cancel-billing-item="${escapeHtml(item.id)}">Remove</button>
+            </div>`).join("") : `<div class="notice compact"><span>No add-ons on this SACCO yet.</span></div>`}
+        </div>
+        ${assignable.length ? `
+        <form id="billingAddonForm" class="form-grid">
+          <label><span>Add-on</span><select id="billingAddonSelect">${assignable.map((rate) => `<option value="${escapeHtml(rate.code)}">${escapeHtml(rate.name)} - ${escapeHtml(money.format(rate.unitPrice || 0))} / ${escapeHtml(labelize(rate.billingPeriod || ""))}</option>`).join("")}</select></label>
+          <label><span>Quantity</span><input id="billingAddonQty" type="number" min="1" value="1"></label>
+          <div class="form-actions inline"><button class="button primary" type="button" data-assign-billing-item="1">Add to SACCO</button></div>
+        </form>` : ""}
+      ` : (selectedId ? "" : `<div class="notice compact"><span>Select a SACCO to see its composed bill.</span></div>`)}
+    </section>`;
+}
+
+function revenueRateCardPanel() {
+  const catalog = dataRows("billingCatalog");
+  if (!catalog.length) return "";
+  const rows = catalog.map((item) => ({
+    name: item.name,
+    category: labelize(item.category || ""),
+    unitPrice: money.format(item.unitPrice || 0),
+    billingPeriod: labelize(item.billingPeriod || ""),
+    status: item.active === false ? "Inactive" : "Active"
+  }));
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Revenue avenues (rate card)</h2>
+          <p>Add-on modules, premium support, one-time setup, staff-seat and branch overage, and metered SMS — billed to each SACCO on top of the base subscription. None touch member funds.</p>
+        </div>
+      </div>
+      ${recordTable("Billing rate card", rows, ["name", "category", "unitPrice", "billingPeriod", "status"])}
+    </section>`;
 }
 
 function subscriptionStatusGuide(subscriptionSummary) {

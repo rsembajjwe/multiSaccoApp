@@ -36,6 +36,9 @@ class StatementLine {
     @Column(name = "imported_by_user_id")
     private String importedByUserId;
 
+    @Column(name = "collection_account_id")
+    private String collectionAccountId;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -102,6 +105,16 @@ class StatementLine {
 
     String getImportedByUserId() {
         return importedByUserId;
+    }
+
+    String getCollectionAccountId() {
+        return collectionAccountId;
+    }
+
+    /** Confirm (or override) the SACCO collection account this line settled into; pass null to clear. */
+    void assignCollectionAccount(String collectionAccountId) {
+        this.collectionAccountId = collectionAccountId;
+        this.updatedAt = Instant.now();
     }
 
     Instant getCreatedAt() {

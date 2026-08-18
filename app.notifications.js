@@ -14,7 +14,7 @@
   const notificationContractMarker = "payment_request_closed";
   const paymentExceptions = paymentExceptionDeliveries(deliveries);
   const jobRuns = buildProviderJobRunRows({ jobRuns: dataRows("providerJobRuns"), labelize, formatDateTime });
-  const tabs = [["delivery-log", "Delivery log"], ["payment-exceptions", "Payment exceptions"], ["failed", "Failed"], ["unread", "Unread"], ["login-risk", "Login risk"], ["templates", "Templates"], ["job-history", "Job history"]];
+  const tabs = [["delivery-log", "Delivery log"], ["messages", "Message repository"], ["payment-exceptions", "Payment exceptions"], ["failed", "Failed"], ["unread", "Unread"], ["login-risk", "Login risk"], ["templates", "Templates"], ["job-history", "Job history"]];
   const tab = activeModuleTab("notifications", tabs);
   const deliveryTabs = ["delivery-log", "payment-exceptions", "failed", "unread", "login-risk"];
   const tabDeliveries = tab === "login-risk"
@@ -59,8 +59,89 @@
     ${deliveryTabs.includes(tab) ? notificationDeliveryFilters(deliveries) : ""}
     ${tab === "payment-exceptions" ? paymentExceptionGuide(visibleDeliveries) : ""}
     ${deliveryTabs.includes(tab) ? recordTable(`Notification delivery monitor - ${tabs.find(([id]) => id === tab)?.[1] || "Delivery log"}`, visibleDeliveries, ["tenantName", "event", "channel", "provider", "recipient", "deliveryStatus", "alertStatus", "message", "resource", "sentAt", "createdAt"]) : ""}
+    ${tab === "messages" ? messageRepositoryPanel() : ""}
     ${tab === "templates" ? `${notificationTemplatePanel()}${notificationTemplateDetailPanel(templates)}${recordTable("Notification templates", templates, ["tenantName", "eventType", "channel", "title", "status", "updatedAt"])}` : ""}
     ${tab === "job-history" ? `${providerJobHistoryPanel(jobRuns)}${recordTable("Provider job run history", jobRuns, ["jobLabel", "runStatus", "scanned", "updated", "failed", "message", "startedAtDisplay", "finishedAtDisplay"])}` : ""}
+  `;
+}
+
+const NOTIFICATION_CHANNEL_LABELS = { sms: "SMS (charged)", email: "Email", whatsapp: "WhatsApp (charged)", push: "Mobile app push" };
+
+function channelEnablementPanel() {
+  if (!hasPermission("notifications:manage")) return "";
+  const channels = state.notificationChannels || {};
+  const order = ["sms", "email", "whatsapp", "push"];
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Notification channels</h2>
+          <p>Choose which channels your SACCO sends on. Turn off a charged channel (SMS, WhatsApp) to control cost.</p>
+        </div>
+      </div>
+      <div class="collection-account-list">
+        ${order.map((channel) => {
+          const enabled = channels[channel] !== false;
+          return `<div class="collection-account-row">
+            <div><strong>${escapeHtml(NOTIFICATION_CHANNEL_LABELS[channel] || labelize(channel))}</strong><span>${enabled ? "Enabled for members" : "Disabled"}</span></div>
+            <button class="button ${enabled ? "ghost" : "primary"}" type="button" data-toggle-sacco-channel="${channel}" data-channel-enabled="${enabled ? "false" : "true"}">${enabled ? "Disable" : "Enable"}</button>
+          </div>`;
+        }).join("")}
+      </div>
+    </section>`;
+}
+
+function messageRepositoryPanel() {
+  const categories = [["all", "All"], ["transaction", "Transactions"], ["sacco_message", "SACCO messages"], ["loan", "Loans"], ["support", "Support"], ["security", "Security"], ["system", "System"]];
+  const activeCategory = state.messageCategoryFilter || "all";
+  const messages = dataRows("messages");
+  const filtered = activeCategory === "all" ? messages : messages.filter((row) => (row.category || "system") === activeCategory);
+  const rows = filtered
+    .slice()
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+    .map((row) => ({
+      category: labelize(row.category || "system"),
+      title: row.title || "",
+      body: row.body || "",
+      recipient: row.memberId ? memberName(row.memberId) : (row.userId ? userName(row.userId) : "SACCO"),
+      channel: labelize(row.channel || ""),
+      status: labelize(row.status || ""),
+      createdAt: formatDateTime(row.createdAt)
+    }));
+  const tenantSelect = isPlatform()
+    ? `<label><span>SACCO</span><select id="broadcastTenant">${tenantRows().filter((tenant) => tenant.id !== "tenant_platform").map((tenant) => `<option value="${escapeHtml(tenant.id)}">${escapeHtml(tenant.name || tenant.id)}</option>`).join("")}</select></label>`
+    : "";
+  const composer = hasPermission("notifications:manage")
+    ? `<section class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Send a SACCO message</h2>
+            <p>Broadcast to all members. Stored here and delivered over every enabled channel (in-app, SMS, WhatsApp, email, push).</p>
+          </div>
+        </div>
+        <form id="broadcastForm" class="form-grid">
+          ${tenantSelect}
+          <label><span>Subject</span><input id="broadcastTitle" type="text" maxlength="160" placeholder="e.g. Annual general meeting"></label>
+          <label class="full"><span>Message</span><textarea id="broadcastBody" rows="3" maxlength="500" placeholder="Type the announcement members will receive"></textarea></label>
+          <div class="form-actions inline"><button class="button primary" type="button" data-send-sacco-message="1">Send message</button></div>
+        </form>
+      </section>`
+    : "";
+  return `
+    ${channelEnablementPanel()}
+    ${composer}
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Message repository</h2>
+          <p>Transaction messages and SACCO announcements in one place, separate from support chat. Showing the latest ${rows.length} message(s); filters apply to those loaded.</p>
+        </div>
+      </div>
+      <div class="tabs">
+        ${categories.map(([id, label]) => `<button class="tab ${id === activeCategory ? "active" : ""}" type="button" data-message-category="${id}">${escapeHtml(label)}</button>`).join("")}
+      </div>
+    </section>
+    ${recordTable("Messages", rows, ["category", "title", "body", "recipient", "channel", "status", "createdAt"])}
   `;
 }
 

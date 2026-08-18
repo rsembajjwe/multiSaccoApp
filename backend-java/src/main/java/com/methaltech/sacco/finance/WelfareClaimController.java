@@ -40,18 +40,21 @@ class WelfareClaimController {
     private final AuthService authService;
     private final AuditService auditService;
     private final AccountingPeriodService periodService;
+    private final com.methaltech.sacco.member.MemberFundBalanceService memberFundBalanceService;
 
     WelfareClaimController(
             WelfareClaimRepository claimRepository,
             MemberRepository memberRepository,
             AuthService authService,
             AuditService auditService,
-            AccountingPeriodService periodService) {
+            AccountingPeriodService periodService,
+            com.methaltech.sacco.member.MemberFundBalanceService memberFundBalanceService) {
         this.claimRepository = claimRepository;
         this.memberRepository = memberRepository;
         this.authService = authService;
         this.auditService = auditService;
         this.periodService = periodService;
+        this.memberFundBalanceService = memberFundBalanceService;
     }
 
     @GetMapping
@@ -250,6 +253,7 @@ class WelfareClaimController {
 
         member.applyWelfareClaimPayment(claim.getAmount());
         memberRepository.save(member);
+        memberFundBalanceService.applyWelfareClaimPayment(member.getTenantId(), member.getId(), claim.getAmount());
         claim.pay(currentSession.user().getId(), channel);
         WelfareClaim saved = claimRepository.save(claim);
         auditService.record(

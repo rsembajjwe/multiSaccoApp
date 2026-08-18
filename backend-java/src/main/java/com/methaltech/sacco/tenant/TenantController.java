@@ -40,6 +40,7 @@ class TenantController {
     private final AuthService authService;
     private final AuditService auditService;
     private final NotificationService notificationService;
+    private final com.methaltech.sacco.finance.FundTypeProvisioningService fundTypeProvisioningService;
 
     TenantController(
             TenantRepository tenantRepository,
@@ -48,7 +49,8 @@ class TenantController {
             SubscriptionService subscriptionService,
             AuthService authService,
             AuditService auditService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            com.methaltech.sacco.finance.FundTypeProvisioningService fundTypeProvisioningService) {
         this.tenantRepository = tenantRepository;
         this.saccoProfileRepository = saccoProfileRepository;
         this.subscriptionRepository = subscriptionRepository;
@@ -56,6 +58,7 @@ class TenantController {
         this.authService = authService;
         this.auditService = auditService;
         this.notificationService = notificationService;
+        this.fundTypeProvisioningService = fundTypeProvisioningService;
     }
 
     @GetMapping
@@ -134,6 +137,8 @@ class TenantController {
                 savedTenant.getId(),
                 savedTenant.getPackageId(),
                 paid));
+        // Seed the three built-in fund sources so the new SACCO's fund registry is ready to use.
+        fundTypeProvisioningService.seedDefaults(savedTenant.getId(), currentSession.user().getId());
 
         auditService.record(
                 savedTenant.getId(),

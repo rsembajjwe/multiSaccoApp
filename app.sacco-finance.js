@@ -103,6 +103,69 @@ function welfareView() {
   `;
 }
 
+const FUNDING_SOURCE_TYPES = ["share_capital", "member_savings", "grant", "donation", "external_borrowing", "retained_earnings", "investment_income", "other"];
+
+function fundingSourcesView() {
+  const sources = dataRows("fundingSources");
+  const canManage = hasPermission("finance-source:manage");
+  const register = buildFundingSourceSummary(sources);
+  const editing = state.selectedFundingSourceId ? sources.find((row) => row.id === state.selectedFundingSourceId) : null;
+  const registerRows = sources.map((row) => ({
+    ...row,
+    sourceTypeLabel: labelize(row.sourceType || ""),
+    recordedAmount: money.format(row.amount || 0),
+    received: row.dateReceived ? formatDate(row.dateReceived) : "-",
+    action: canManage ? "funding-source-edit" : "none",
+    actionId: row.id,
+    actionLabel: "Edit"
+  }));
+  return `
+    <div class="dashboard-grid">
+      ${summary("Active funding", money.format(register.activeTotal), "Total capital currently in the register", "Review")}
+      ${summary("Sources on record", register.count, "All capital, grants and borrowings", "Open")}
+      ${summary("Closed entries", register.closedCount, "Repaid or retired sources", "Archive")}
+    </div>
+    ${state.fundingSourceMessage ? `<div class="notice compact"><strong>${escapeHtml(state.fundingSourceMessage)}</strong></div>` : ""}
+    ${state.fundingSourceError ? `<div class="notice warning"><strong>Could not save.</strong><span>${escapeHtml(state.fundingSourceError)}</span></div>` : ""}
+    ${canManage ? fundingSourceForm(editing) : `<div class="notice compact"><span>You have review-only access to the sources-of-funds register.</span></div>`}
+    ${recordTable("Sources of funds register", registerRows, ["sourceTypeLabel", "provider", "recordedAmount", "currencyCode", "reference", "received", "status"])}
+  `;
+}
+
+function fundingSourceForm(editing) {
+  const value = editing || {};
+  const typeOptions = FUNDING_SOURCE_TYPES
+    .map((type) => `<option value="${type}" ${value.sourceType === type ? "selected" : ""}>${escapeHtml(labelize(type))}</option>`)
+    .join("");
+  const statusOptions = ["active", "closed"]
+    .map((status) => `<option value="${status}" ${value.status === status ? "selected" : ""}>${escapeHtml(labelize(status))}</option>`)
+    .join("");
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${editing ? "Edit funding source" : "Add funding source"}</h2>
+          <p>Record where the SACCO's capital comes from.</p>
+        </div>
+        ${editing ? `<button class="button ghost" type="button" data-cancel-funding-source="1">Cancel edit</button>` : ""}
+      </div>
+      <form id="fundingSourceForm" class="form-grid">
+        <label><span>Source type</span><select id="fsType">${typeOptions}</select></label>
+        <label><span>Provider / origin</span><input id="fsProvider" value="${escapeHtml(value.provider || "")}" placeholder="e.g. Centenary Bank, member share capital"></label>
+        <label><span>Amount</span><input id="fsAmount" type="number" min="0" step="0.01" value="${escapeHtml(value.amount != null ? String(value.amount) : "")}" placeholder="0.00"></label>
+        <label><span>Currency</span><input id="fsCurrency" value="${escapeHtml(value.currencyCode || "UGX")}" placeholder="UGX"></label>
+        <label><span>Reference</span><input id="fsReference" value="${escapeHtml(value.reference || "")}" placeholder="Cheque / agreement ref"></label>
+        <label><span>Date received</span><input id="fsDate" type="date" value="${escapeHtml(value.dateReceived || "")}"></label>
+        <label><span>Status</span><select id="fsStatus">${statusOptions}</select></label>
+        <label class="wide"><span>Notes (optional)</span><input id="fsNotes" value="${escapeHtml(value.notes || "")}" placeholder="Conditions, term, purpose"></label>
+        <div class="form-actions inline">
+          <button class="button primary" type="button" data-save-funding-source="${escapeHtml(editing ? editing.id : "")}">${editing ? "Update source" : "Add source"}</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
 function financialProductPanel(type) {
   const canCreate = hasPermission("transactions:create");
   const products = productsByType(type === "shares" ? "share" : type);
@@ -111,7 +174,7 @@ function financialProductPanel(type) {
       <div class="panel-heading">
         <div>
           <h2>${financialProductTitle(type)}</h2>
-          <p>Create ${labelize(type).toLowerCase()} products for this SACCO. Product codes must be unique per SACCO.</p>
+          <p>Create ${labelize(type).toLowerCase()} products. Codes must be unique.</p>
         </div>
         <span class="status ${products.length ? "active" : "pending"}">${products.length ? "Configured" : "Setup needed"}</span>
       </div>
@@ -140,7 +203,7 @@ function financialAccountPanel(type, products) {
       <div class="panel-heading">
         <div>
           <h2>${financialAccountTitle(type)}</h2>
-          <p>Link an active member to a configured ${labelize(type).toLowerCase()} product. Duplicate member-product accounts are rejected by the backend.</p>
+          <p>Link an active member to a ${labelize(type).toLowerCase()} product.</p>
         </div>
         <span class="status ${products.length && members.length ? "active" : "pending"}">${accounts.length} account(s)</span>
       </div>

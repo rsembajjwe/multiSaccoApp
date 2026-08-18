@@ -149,7 +149,7 @@ class SubscriptionController {
                 externalReference,
                 receivedAt,
                 SYSTEM_USER_ID));
-        subscription.recordPayment(amount, LocalDate.now().plusYears(1));
+        subscription.recordPayment(amount, renewalExpiry(subscription));
         Subscription savedSubscription = subscriptionRepository.save(subscription);
         if ("active".equals(savedSubscription.getStatus()) && "pending_self_registration".equals(tenant.getStatus())) {
             tenant.updateStatus("pending_review");
@@ -216,7 +216,7 @@ class SubscriptionController {
                 externalReference,
                 receivedAt,
                 currentSession.user().getId()));
-        subscription.recordPayment(amount, LocalDate.now().plusYears(1));
+        subscription.recordPayment(amount, renewalExpiry(subscription));
         Subscription savedSubscription = subscriptionRepository.save(subscription);
         notifySubscriptionPayment(savedSubscription, payment);
         auditService.record(
@@ -230,6 +230,21 @@ class SubscriptionController {
                 SubscriptionResponse.from(savedSubscription),
                 SubscriptionPaymentResponse.from(payment),
                 false)));
+    }
+
+    /**
+     * Computes the new expiry on renewal from the package billing period (monthly vs annual). Renewing
+     * while still active stacks onto the remaining term; renewing after lapse starts from today.
+     */
+    private LocalDate renewalExpiry(Subscription subscription) {
+        String period = packageRepository.findById(subscription.getPackageId())
+                .map(SubscriptionPackage::getBillingPeriod)
+                .orElse("annual");
+        LocalDate today = LocalDate.now();
+        LocalDate base = subscription.getExpiry() != null && subscription.getExpiry().isAfter(today)
+                ? subscription.getExpiry()
+                : today;
+        return "monthly".equalsIgnoreCase(period) ? base.plusMonths(1) : base.plusYears(1);
     }
 
     private ResponseEntity<?> reserveSubscriptionReference(Subscription subscription, String externalReference) {

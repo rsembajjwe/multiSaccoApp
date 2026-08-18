@@ -190,6 +190,12 @@ export interface TerekaStatementLine {
   provider?: string;
   receiptStatus?: string;
   receiptNo?: string;
+  externalReference?: string;
+  accountCode?: string;
+  statementDate?: string;
+  /** Reconciliation: SACCO collection account this line most likely settled into (matched by account number). */
+  suggestedCollectionAccountId?: string;
+  suggestedCollectionAccount?: string;
 }
 
 export interface TerekaPaymentProvider {
@@ -391,6 +397,19 @@ export interface TerekaWelfareClaim {
   createdAt?: string;
 }
 
+export interface TerekaFundingSource {
+  id?: string;
+  tenantId?: string;
+  sourceType?: string;
+  provider?: string;
+  amount?: TerekaMoney;
+  currencyCode?: string;
+  reference?: string;
+  dateReceived?: string;
+  status?: string;
+  notes?: string;
+}
+
 export interface TerekaAccountingPeriod {
   id?: string;
   tenantId?: string;
@@ -462,11 +481,16 @@ export interface TerekaMobileMoneyCallback {
   id?: string;
   tenantId?: string;
   reference?: string;
+  externalReference?: string;
+  purpose?: string;
   status?: string;
   duplicate?: boolean;
   amount?: TerekaMoney;
   provider?: string;
   createdAt?: string;
+  /** Reconciliation: SACCO mobile-money collection account whose network matches this callback's provider. */
+  suggestedCollectionAccountId?: string;
+  suggestedCollectionAccount?: string;
 }
 
 export interface TerekaNotificationTemplate {

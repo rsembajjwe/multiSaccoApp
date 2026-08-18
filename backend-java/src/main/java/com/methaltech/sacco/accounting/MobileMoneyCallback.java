@@ -44,6 +44,9 @@ class MobileMoneyCallback {
     @Column(name = "resource_id")
     private String resourceId;
 
+    @Column(name = "collection_account_id")
+    private String collectionAccountId;
+
     @Column(name = "received_at")
     private Instant receivedAt;
 
@@ -75,5 +78,10 @@ class MobileMoneyCallback {
         this.resourceId = resourceId;
         this.receivedAt = Instant.now();
         this.createdAt = this.receivedAt;
+    }
+
+    /** Confirm (or override) the SACCO collection account this callback settled into; pass null to clear. */
+    void assignCollectionAccount(String collectionAccountId) {
+        this.collectionAccountId = collectionAccountId;
     }
 }
