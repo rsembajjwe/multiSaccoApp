@@ -1,7 +1,8 @@
 param(
   [int]$BackendPort = 18084,
   [int]$UiPort = 5174,
-  [switch]$DisableDemoLogins
+  [switch]$DisableDemoLogins,
+  [switch]$ClearFinanceData
 )
 
 $ErrorActionPreference = "Stop"
@@ -85,9 +86,11 @@ if (Test-PortOpen $BackendPort) {
   $backendOut = Join-Path $logsDir "java-backend-$BackendPort.out.log"
   $backendErr = Join-Path $logsDir "java-backend-$BackendPort.err.log"
   $demoValue = if ($DisableDemoLogins) { "false" } else { "true" }
+  $clearFinanceValue = if ($ClearFinanceData) { "true" } else { "false" }
   $backendCommand = @"
 `$env:SERVER_PORT='$BackendPort'
 `$env:SACCO_DEMO_LOGINS_ENABLED='$demoValue'
+`$env:SACCO_DEV_CLEAR_FINANCE_DATA='$clearFinanceValue'
 Set-Location '$backendDir'
 .\mvnw.cmd spring-boot:run
 "@
@@ -130,3 +133,4 @@ Write-Host "Tereka Online is connected to the Java backend."
 Write-Host "UI:      http://127.0.0.1:$UiPort/"
 Write-Host "Backend: http://127.0.0.1:$BackendPort/api/v1"
 Write-Host "Demo logins enabled: $(-not $DisableDemoLogins)"
+Write-Host "Finance data cleared on startup: $ClearFinanceData"

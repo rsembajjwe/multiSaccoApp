@@ -7,6 +7,7 @@
     "start": "node server.mjs",
     "start:java-api": "set JAVA_API_BASE=http://127.0.0.1:8080&& node server.mjs",
     "dev:connected": "powershell -ExecutionPolicy Bypass -File scripts/start-local-java-stack.ps1",
+    "dev:clean-finance": "powershell -ExecutionPolicy Bypass -File scripts/start-local-java-stack.ps1 -ClearFinanceData",
     "dev:vite": "vite --host 127.0.0.1 --port 5173",
     "build:ui": "node scripts/build-frontend.mjs",
     "build:vite": "vite build --config vite.config.mjs",
