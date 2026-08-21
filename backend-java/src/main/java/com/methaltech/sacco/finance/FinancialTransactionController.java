@@ -12,6 +12,7 @@ import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.money.Money;
+import com.methaltech.sacco.notification.NotificationService;
 import com.methaltech.sacco.tenant.TenantMoneyFormatter;
 import com.methaltech.sacco.tenant.CollectionMode;
 import com.methaltech.sacco.tenant.TenantResponse;
@@ -83,6 +84,7 @@ class FinancialTransactionController {
     private final AccountingPeriodService periodService;
     private final com.methaltech.sacco.member.MemberFundBalanceService memberFundBalanceService;
     private final FundTypeRepository fundTypeRepository;
+    private final NotificationService notificationService;
 
     FinancialTransactionController(
             FinancialTransactionRepository transactionRepository,
@@ -94,7 +96,8 @@ class FinancialTransactionController {
             AuditService auditService,
             AccountingPeriodService periodService,
             com.methaltech.sacco.member.MemberFundBalanceService memberFundBalanceService,
-            FundTypeRepository fundTypeRepository) {
+            FundTypeRepository fundTypeRepository,
+            NotificationService notificationService) {
         this.transactionRepository = transactionRepository;
         this.memberRepository = memberRepository;
         this.branchRepository = branchRepository;
@@ -105,6 +108,7 @@ class FinancialTransactionController {
         this.periodService = periodService;
         this.memberFundBalanceService = memberFundBalanceService;
         this.fundTypeRepository = fundTypeRepository;
+        this.notificationService = notificationService;
     }
 
     /** A custom contribution type ({@code <fundCode>_contribution}) whose fund is configured and active. */
@@ -480,6 +484,7 @@ class FinancialTransactionController {
             memberRepository.save(member);
             memberFundBalanceService.applyPosted(transaction.getTenantId(), member.getId(), transaction.getType(), transaction.getAmount());
             transaction.post(currentSession.user().getId());
+            notificationService.notifyPaymentPosted(member, transaction.getType(), transaction.getAmount(), "financial_transaction", transaction.getId());
         } else {
             transaction.reject(currentSession.user().getId(), reason == null ? "" : reason.trim());
         }

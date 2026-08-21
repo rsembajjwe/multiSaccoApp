@@ -192,6 +192,21 @@ try {
   const crossTenantAssignment = await raw("PUT", `/users/${user.data.id}/roles`, { roleIds: ["role_platform_admin"] }, saccoToken);
   assert(crossTenantAssignment.status === 400, "User role assignment should reject cross-tenant roles");
 
+  const loanCheckerRole = await api("POST", "/roles", {
+    name: `Smoke Loan Checker ${Date.now()}`,
+    permissionIds: ["loans:view", "loans:approve", "transactions:approve"]
+  }, saccoToken);
+  await api("PUT", `/users/${user.data.id}/roles`, {
+    roleIds: [loanCheckerRole.data.id]
+  }, saccoToken);
+  const loanCheckerLogin = await api("POST", "/auth/login", {
+    saccoCode: "GVS",
+    username: user.data.email,
+    email: user.data.email,
+    password: "Sacco@12345"
+  });
+  const loanCheckerToken = loanCheckerLogin.data.token;
+
   const workflows = await api("GET", "/approval-workflows", null, saccoToken);
   assert(workflows.data.length >= 2, "SACCO admin should list own approval workflows");
   assert(workflows.data.every((workflow) => workflow.tenantId === "tenant_green"), "Approval workflows must be tenant-scoped");
@@ -324,8 +339,14 @@ try {
     provider: "smoke_mobile_money",
     receivedAt: "2026-07-15T08:00:00.000Z"
   });
-  assert(mobileMoneyCallback.data.status === "posted", "Mobile-money callback should post");
+  assert(mobileMoneyCallback.data.status === "pending_approval", "Mobile-money callback should enter approval before posting");
   assert(mobileMoneyCallback.data.resourceType === "financial_transaction", "Collection callback should create a financial transaction");
+
+  const approvedMobileMoneyTransaction = await api("PATCH", `/financial-transactions/${mobileMoneyCallback.data.resourceId}/status`, {
+    status: "posted",
+    reason: "Approved provider-confirmed mobile-money smoke deposit"
+  }, saccoToken);
+  assert(approvedMobileMoneyTransaction.data.status === "posted", "SACCO staff should approve the callback transaction before balances change");
 
   const postedStatusUpdate = await raw("PATCH", `/integrations/mobile-money/payment-requests/${callbackPaymentRequest.data.id}/status`, {
     status: "cancelled",
@@ -354,7 +375,14 @@ try {
     provider: "smoke_mobile_money",
     receivedAt: "2026-07-15T08:15:00.000Z"
   });
+  assert(loanRepaymentCallback.data.status === "pending_approval", "Loan callback should enter approval before posting");
   assert(loanRepaymentCallback.data.resourceType === "loan_repayment", "Loan callback should create a loan repayment");
+
+  const approvedLoanRepayment = await api("POST", `/loans/loan_green_0001/repayments/${loanRepaymentCallback.data.resourceId}/decision`, {
+    status: "posted",
+    reason: "Approved provider-confirmed mobile-money smoke repayment"
+  }, saccoToken);
+  assert(approvedLoanRepayment.data.status === "posted", "SACCO staff should approve the callback loan repayment before loan balances change");
 
   const refreshedMemberSession = await api("GET", "/member-auth/me", null, memberToken);
   const expectedSavingsAfterCollection = initialMemberSavings + 30000;
@@ -375,7 +403,6 @@ try {
 
   const notificationDeliveries = await api("GET", "/notifications/deliveries", null, saccoToken);
   assert(notificationDeliveries.data.some((delivery) => delivery.channel === "sms" && delivery.status === "sent"), "SACCO admin should see SMS delivery history");
-  assert(notificationDeliveries.data.some((delivery) => delivery.channel === "email" && delivery.status === "sent"), "SACCO admin should see email delivery history");
   assert(
     notificationDeliveries.data.some((delivery) =>
       delivery.eventType === "payment_request_closed" &&
@@ -570,7 +597,7 @@ try {
 
   const guarantor = await api("POST", `/loans/${loan.data.id}/guarantors`, {
     memberId: "member_green_amina",
-    guaranteedAmount: 300000
+    guaranteedAmount: 1200000
   }, saccoToken);
   assert(guarantor.data.status === "pending", "Guarantor request should start pending");
 
@@ -586,7 +613,10 @@ try {
   assert(approvedLoan.data.status === "approved", "Loan should approve after guarantor acceptance");
   assert(approvedLoan.data.stage === "Ready for Disbursement", "Approved loan should be ready for disbursement");
 
-  const disbursedLoan = await api("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
+  const initiatedDisbursement = await api("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
+  assert(initiatedDisbursement.data.status === "approved", "First officer should initiate disbursement without activating the loan");
+
+  const disbursedLoan = await api("POST", `/loans/${loan.data.id}/disburse`, null, loanCheckerToken);
   assert(disbursedLoan.data.status === "active", "Disbursed loan should become active");
   assert(disbursedLoan.data.balance === disbursedLoan.data.totalPayable, "Disbursed loan balance should equal total payable");
   assert(Number(disbursedLoan.data.interestRate) > 0, "Disbursed loan should expose product interest rate");

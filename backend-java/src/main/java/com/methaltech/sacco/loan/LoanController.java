@@ -15,6 +15,7 @@ import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.money.Money;
+import com.methaltech.sacco.notification.NotificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -102,6 +103,7 @@ class LoanController {
     private final AuditService auditService;
     private final AccountingPeriodService periodService;
     private final TenantService tenantService;
+    private final NotificationService notificationService;
 
     LoanController(
             LoanRepository loanRepository,
@@ -114,7 +116,8 @@ class LoanController {
             AuthService authService,
             AuditService auditService,
             AccountingPeriodService periodService,
-            TenantService tenantService) {
+            TenantService tenantService,
+            NotificationService notificationService) {
         this.loanRepository = loanRepository;
         this.guarantorRepository = guarantorRepository;
         this.repaymentRepository = repaymentRepository;
@@ -126,6 +129,7 @@ class LoanController {
         this.auditService = auditService;
         this.periodService = periodService;
         this.tenantService = tenantService;
+        this.notificationService = notificationService;
     }
 
     @GetMapping
@@ -981,6 +985,13 @@ class LoanController {
             releaseSecuredHoldForRepayment(loan, repayment.getAmount());
             loanRepository.save(loan);
             repayment.approve(currentSession.user().getId());
+            memberRepository.findById(loan.getMemberId())
+                    .ifPresent(member -> notificationService.notifyPaymentPosted(
+                            member,
+                            "loan_repayment",
+                            repayment.getAmount(),
+                            "loan_repayment",
+                            repayment.getId()));
         } else {
             repayment.reject(currentSession.user().getId());
         }
