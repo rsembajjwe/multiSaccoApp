@@ -14,6 +14,17 @@ public interface MemberRepository extends JpaRepository<Member, String> {
     List<Member> findByTenantIdAndBranchIdInOrderByMembershipNoAsc(String tenantId, List<String> branchIds);
     Page<Member> findByTenantId(String tenantId, Pageable pageable);
     Page<Member> findByTenantIdAndBranchIdIn(String tenantId, List<String> branchIds, Pageable pageable);
+
+    @Query("""
+            SELECT m FROM Member m
+            WHERE m.tenantId = :tenantId
+              AND m.status = 'active'
+              AND m.guarantorListingOptOut = false
+              AND (LOWER(m.fullName) LIKE LOWER(CONCAT('%', :query, '%'))
+                   OR LOWER(m.membershipNo) LIKE LOWER(CONCAT('%', :query, '%')))
+            ORDER BY m.membershipNo ASC
+            """)
+    List<Member> searchGuarantorCandidates(@Param("tenantId") String tenantId, @Param("query") String query, Pageable pageable);
     @Query("""
             SELECT m FROM Member m
             WHERE LOWER(CONCAT(COALESCE(m.membershipNo, ''), ' ', COALESCE(m.fullName, ''), ' ', COALESCE(m.phone, ''), ' ', COALESCE(m.email, ''), ' ', COALESCE(m.kycStatus, ''), ' ', COALESCE(m.status, '')))
@@ -40,6 +51,7 @@ public interface MemberRepository extends JpaRepository<Member, String> {
             @Param("search") String search,
             Pageable pageable);
     long countByTenantId(String tenantId);
+    Optional<Member> findFirstByLinkedUserId(String linkedUserId);
     boolean existsByTenantIdAndMembershipNoIgnoreCase(String tenantId, String membershipNo);
     Optional<Member> findFirstByTenantIdAndMembershipNoIgnoreCase(String tenantId, String membershipNo);
     Optional<Member> findFirstByTenantIdAndMembershipNoIgnoreCaseOrTenantIdAndPhoneIgnoreCaseOrTenantIdAndEmailIgnoreCase(

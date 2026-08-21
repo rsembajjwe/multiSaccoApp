@@ -45,4 +45,19 @@ class RateLimitFilterIntegrationTest {
                 .andExpect(header().exists("Retry-After"))
                 .andExpect(jsonPath("$.error.code", is("RATE_LIMIT_EXCEEDED")));
     }
+
+    @Test
+    void throttlesMemberPasswordResetRequestsBeyondTheConfiguredBudget() throws Exception {
+        String memberResetBody = """
+                { "identifier": "GVS-0001", "channel": "email" }
+                """;
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(post("/api/v1/member-auth/password-reset/request").contentType("application/json").content(memberResetBody));
+        }
+
+        mockMvc.perform(post("/api/v1/member-auth/password-reset/request").contentType("application/json").content(memberResetBody))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.error.code", is("RATE_LIMIT_EXCEEDED")));
+    }
 }

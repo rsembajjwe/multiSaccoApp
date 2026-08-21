@@ -73,6 +73,13 @@ public class Member {
     @Column(name = "consent_updated_at")
     private Instant consentUpdatedAt;
 
+    @Column(name = "guarantor_listing_opt_out")
+    private boolean guarantorListingOptOut;
+
+    /** Optional link to a staff user account when this member is also SACCO staff (conflict-of-interest control). */
+    @Column(name = "linked_user_id")
+    private String linkedUserId;
+
     @Column(name = "savings_balance")
     private BigDecimal savingsBalance;
 
@@ -81,6 +88,10 @@ public class Member {
 
     @Column(name = "welfare_balance")
     private BigDecimal welfareBalance;
+
+    /** Portion of savings pledged as collateral for a savings-secured loan; not withdrawable. */
+    @Column(name = "savings_hold")
+    private BigDecimal savingsHold = BigDecimal.ZERO;
 
     @Version
     @Column(name = "lock_version")
@@ -185,6 +196,38 @@ public class Member {
         this.updatedAt = Instant.now();
     }
 
+    /** Sets a new password hash/salt (used by the member self-service password reset). */
+    public void changePassword(String passwordHash, String passwordSalt) {
+        this.passwordHash = passwordHash;
+        this.passwordSalt = passwordSalt;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isGuarantorListingOptOut() {
+        return guarantorListingOptOut;
+    }
+
+    /** When true, the member is hidden from other members' guarantor search picker. */
+    public void setGuarantorListingOptOut(boolean optOut) {
+        this.guarantorListingOptOut = optOut;
+        this.updatedAt = Instant.now();
+    }
+
+    public String getLinkedUserId() {
+        return linkedUserId;
+    }
+
+    /** Link this member to a staff user account (they are the same person). */
+    public void linkStaffUser(String userId) {
+        this.linkedUserId = userId == null || userId.isBlank() ? null : userId.trim();
+        this.updatedAt = Instant.now();
+    }
+
+    public void unlinkStaffUser() {
+        this.linkedUserId = null;
+        this.updatedAt = Instant.now();
+    }
+
     void redactPersonalDataForErasure() {
         this.fullName = "Former member " + membershipNo;
         this.phone = "";
@@ -220,8 +263,29 @@ public class Member {
         this.updatedAt = Instant.now();
     }
 
+    public BigDecimal getSavingsHold() {
+        return savingsHold == null ? BigDecimal.ZERO : savingsHold;
+    }
+
+    /** Savings the member can actually withdraw or transfer, i.e. balance minus any collateral hold. */
+    public BigDecimal getAvailableSavings() {
+        return savingsBalance.subtract(getSavingsHold()).max(BigDecimal.ZERO);
+    }
+
+    public void placeSavingsHold(BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) return;
+        this.savingsHold = getSavingsHold().add(amount);
+        this.updatedAt = Instant.now();
+    }
+
+    public void releaseSavingsHold(BigDecimal amount) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) return;
+        this.savingsHold = getSavingsHold().subtract(amount).max(BigDecimal.ZERO);
+        this.updatedAt = Instant.now();
+    }
+
     public boolean hasEnoughSavings(BigDecimal amount) {
-        return savingsBalance.compareTo(amount) >= 0;
+        return getAvailableSavings().compareTo(amount) >= 0;
     }
 
     public boolean hasEnoughWelfare(BigDecimal amount) {

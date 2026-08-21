@@ -446,6 +446,15 @@ class FinancialTransactionController {
                             "MAKER_CHECKER_REQUIRED",
                             "The maker cannot approve or reject their own financial transaction."));
         }
+        if (memberRepository.findFirstByLinkedUserId(currentSession.user().getId())
+                .map(linked -> linked.getId().equals(transaction.getMemberId()))
+                .orElse(false)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(
+                            409,
+                            "CONFLICT_OF_INTEREST",
+                            "Your staff account is linked to this member, so you cannot approve or reject your own transaction. Another officer must handle it."));
+        }
 
         if ("posted".equals(status)) {
             ResponseEntity<?> channelCheck = ensureCollectionChannelAllowed(transaction.getTenantId(), transaction.getChannel());

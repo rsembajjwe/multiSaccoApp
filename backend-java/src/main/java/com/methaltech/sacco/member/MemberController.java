@@ -307,7 +307,7 @@ class MemberController {
                     password.hash(),
                     password.salt(),
                     "pending_approval",
-                    normalizedOrDefault(row.kycStatus(), "pending_verification"),
+                    normalizedOrDefault(row.kycStatus(), "verified"),
                     importJoiningDate(row.joiningDate()))));
         }
 
@@ -404,7 +404,7 @@ class MemberController {
             Member member = memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCase(tenantId, row.membershipNo().trim()).orElseThrow();
             String recordType = normalizedOrDefault(row.recordType(), "");
             if ("kyc_status".equals(recordType)) {
-                member.updateKycStatus(normalizedOrDefault(row.kycStatus(), "pending_verification"));
+                member.updateKycStatus(normalizedOrDefault(row.kycStatus(), "verified"));
                 Member saved = memberRepository.save(member);
                 createdRecords.add(new MemberMetadataCreatedRecord("kyc_status", saved.getId(), saved.getMembershipNo(), saved.getKycStatus()));
             } else if ("document".equals(recordType)) {
@@ -490,11 +490,9 @@ class MemberController {
                     .body(ApiErrorResponse.of(400, "INVALID_MEMBER_TYPE", "Unsupported member type."));
         }
 
-        String kycStatus = normalizedOrDefault(body.kycStatus(), "pending_verification");
-        if (!ALLOWED_KYC_STATUSES.contains(kycStatus)) {
-            return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "INVALID_KYC_STATUS", "Unsupported KYC status."));
-        }
+        // Members are entered directly by SACCO staff (chairperson), so they are trusted on entry:
+        // there is no separate KYC verification step. The record is always kept verified.
+        String kycStatus = "verified";
 
         String membershipNo = membershipNo(tenantId, body.membershipNo());
         if (memberRepository.existsByTenantIdAndMembershipNoIgnoreCase(tenantId, membershipNo)) {
@@ -633,6 +631,78 @@ class MemberController {
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @PatchMapping("/{memberId}/staff-link")
+    ResponseEntity<?> linkMemberToStaffUser(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @RequestBody StaffLinkRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user()) && !authService.hasPermission(currentSession.user(), "members:approve")) {
+            return authService.permissionRequired("members:approve");
+        }
+
+        Member member = memberRepository.findById(memberId).orElse(null);
+        if (member == null || !canAccessMember(currentSession, member)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found."));
+        }
+
+        String userId = body == null || body.userId() == null ? "" : body.userId().trim();
+        if (userId.isBlank()) {
+            member.unlinkStaffUser();
+            Member saved = memberRepository.save(member);
+            auditService.record(saved.getTenantId(), currentSession.user(),
+                    "Unlinked staff user from member " + saved.getMembershipNo(),
+                    "member", saved.getId(), request.getRemoteAddr());
+            return ResponseEntity.ok(ApiResponse.of(MemberResponse.from(saved)));
+        }
+
+        var staffUser = authService.findUser(userId).orElse(null);
+        if (staffUser == null || !staffUser.getTenantId().equals(member.getTenantId())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_STAFF_USER", "Staff user does not exist in this SACCO."));
+        }
+        boolean linkedElsewhere = memberRepository.findFirstByLinkedUserId(userId)
+                .map(existing -> !existing.getId().equals(member.getId()))
+                .orElse(false);
+        if (linkedElsewhere) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "STAFF_ALREADY_LINKED", "That staff user is already linked to another member."));
+        }
+
+        member.linkStaffUser(userId);
+        Member saved = memberRepository.save(member);
+        auditService.record(saved.getTenantId(), currentSession.user(),
+                "Linked staff user " + userId + " to member " + saved.getMembershipNo(),
+                "member", saved.getId(), request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(MemberResponse.from(saved)));
+    }
+
+    record StaffLinkRequest(String userId) {
+    }
+
+    /** Minimal staff directory for the member↔staff link picker, available to anyone who can
+     *  manage members (so the picker works even without the broader users:view permission). */
+    @GetMapping("/staff-directory")
+    ResponseEntity<?> staffDirectory(
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user()) && !authService.hasPermission(currentSession.user(), "members:approve")) {
+            return authService.permissionRequired("members:approve");
+        }
+        List<StaffDirectoryEntry> staff = authService.tenantStaff(currentSession.user().getTenantId()).stream()
+                .filter(user -> "active".equals(user.getStatus()))
+                .map(user -> new StaffDirectoryEntry(user.getId(), user.getTenantId(), user.getFullName(), user.getEmail()))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.of(staff));
+    }
+
+    record StaffDirectoryEntry(String id, String tenantId, String fullName, String email) {
     }
 
     @GetMapping("/{memberId}/statement")
@@ -1253,7 +1323,7 @@ class MemberController {
             if (!ALLOWED_MEMBER_TYPES.contains(memberType)) {
                 errors.add(new MemberImportError(rowNumber, "memberType", "INVALID_MEMBER_TYPE", "Unsupported member type."));
             }
-            String kycStatus = normalizedOrDefault(row.kycStatus(), "pending_verification");
+            String kycStatus = normalizedOrDefault(row.kycStatus(), "verified");
             if (!ALLOWED_KYC_STATUSES.contains(kycStatus)) {
                 errors.add(new MemberImportError(rowNumber, "kycStatus", "INVALID_KYC_STATUS", "Unsupported KYC status."));
             }

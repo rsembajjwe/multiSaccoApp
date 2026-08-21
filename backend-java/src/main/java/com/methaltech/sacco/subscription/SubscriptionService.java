@@ -11,6 +11,8 @@ public class SubscriptionService {
 
     private static final int MINIMUM_BILLABLE_MEMBERS = 100;
     private static final BigDecimal PER_MEMBER_PRICE = BigDecimal.valueOf(5000);
+    /** Newly registered SACCOs get this many months of free access before payment is required. */
+    private static final int FREE_TRIAL_MONTHS = 1;
 
     private final MemberRepository memberRepository;
 
@@ -29,7 +31,7 @@ public class SubscriptionService {
                 "subscription_" + UUID.randomUUID(),
                 tenantId,
                 packageId == null || packageId.isBlank() ? "starter" : packageId.trim(),
-                paid ? "active" : "pending_payment",
+                paid ? "active" : "trial",
                 "INV-" + UUID.randomUUID(),
                 billing.amount(),
                 paid ? billing.amount() : BigDecimal.ZERO,
@@ -39,7 +41,7 @@ public class SubscriptionService {
                 billing.tierId(),
                 billing.tierLabel(),
                 billing.billingDescription(),
-                paid ? LocalDate.now().plusYears(1) : LocalDate.now().plusDays(14));
+                paid ? LocalDate.now().plusYears(1) : LocalDate.now().plusMonths(FREE_TRIAL_MONTHS));
     }
 
     public SubscriptionBilling calculateBilling(int memberCount) {

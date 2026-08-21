@@ -73,6 +73,24 @@ public class Loan {
     @Column(name = "rejection_reason")
     private String rejectionReason;
 
+    @Column(name = "first_approved_by_user_id")
+    private String firstApprovedByUserId;
+
+    @Column(name = "first_approved_at")
+    private Instant firstApprovedAt;
+
+    @Column(name = "resolution_reference")
+    private String resolutionReference;
+
+    @Column(name = "disbursement_initiated_by_user_id")
+    private String disbursementInitiatedByUserId;
+
+    @Column(name = "disbursement_initiated_at")
+    private Instant disbursementInitiatedAt;
+
+    @Column(name = "secured_hold_amount")
+    private BigDecimal securedHoldAmount = BigDecimal.ZERO;
+
     @Version
     @Column(name = "lock_version")
     private Long lockVersion;
@@ -165,7 +183,76 @@ public class Loan {
         this.approvedByUserId = "approved".equals(status) ? actorUserId : null;
         this.approvedAt = "approved".equals(status) ? Instant.now() : null;
         this.rejectionReason = "rejected".equals(status) ? reason : "";
+        if ("rejected".equals(status)) {
+            this.firstApprovedByUserId = null;
+            this.firstApprovedAt = null;
+        }
         this.updatedAt = Instant.now();
+    }
+
+    void recordFirstApproval(String actorUserId) {
+        this.firstApprovedByUserId = actorUserId;
+        this.firstApprovedAt = Instant.now();
+        this.status = "under_review";
+        this.stage = "Awaiting Second Approval";
+        this.updatedAt = this.firstApprovedAt;
+    }
+
+    void applyResolutionReference(String reference) {
+        this.resolutionReference = reference;
+        this.updatedAt = Instant.now();
+    }
+
+    public String getFirstApprovedByUserId() {
+        return firstApprovedByUserId;
+    }
+
+    public Instant getFirstApprovedAt() {
+        return firstApprovedAt;
+    }
+
+    public String getResolutionReference() {
+        return resolutionReference;
+    }
+
+    void initiateDisbursement(String actorUserId) {
+        this.disbursementInitiatedByUserId = actorUserId;
+        this.disbursementInitiatedAt = Instant.now();
+        this.stage = "Awaiting Disbursement Approval";
+        this.updatedAt = this.disbursementInitiatedAt;
+    }
+
+    public String getDisbursementInitiatedByUserId() {
+        return disbursementInitiatedByUserId;
+    }
+
+    public Instant getDisbursementInitiatedAt() {
+        return disbursementInitiatedAt;
+    }
+
+    public BigDecimal getSecuredHoldAmount() {
+        return securedHoldAmount == null ? BigDecimal.ZERO : securedHoldAmount;
+    }
+
+    public void setSecuredHoldAmount(BigDecimal amount) {
+        this.securedHoldAmount = amount == null ? BigDecimal.ZERO : amount.max(BigDecimal.ZERO);
+        this.updatedAt = Instant.now();
+    }
+
+    /** Reduces the recorded collateral hold by up to {@code amount}; returns how much was actually released. */
+    public BigDecimal reduceSecuredHold(BigDecimal amount) {
+        BigDecimal current = getSecuredHoldAmount();
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0 || current.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal released = amount.min(current);
+        this.securedHoldAmount = current.subtract(released);
+        this.updatedAt = Instant.now();
+        return released;
+    }
+
+    public boolean isSavingsSecured() {
+        return getSecuredHoldAmount().compareTo(BigDecimal.ZERO) > 0;
     }
 
     void disburse(String actorUserId) {
@@ -179,13 +266,27 @@ public class Loan {
         this.updatedAt = this.disbursedAt;
     }
 
-    private void applyTerms(String product, BigDecimal amount, int repaymentMonths) {
-        this.interestRate = switch (product) {
+    static BigDecimal interestRateFor(String product) {
+        return switch (product) {
             case "Emergency Loan" -> BigDecimal.valueOf(2.00);
             case "Agriculture Loan" -> BigDecimal.valueOf(1.25);
             case "School Fees Loan" -> BigDecimal.valueOf(1.00);
             default -> BigDecimal.valueOf(1.50);
         };
+    }
+
+    /** Total repayable (principal + interest/charges) for a proposed loan, before it is created. */
+    public static BigDecimal totalPayableFor(String product, BigDecimal amount, int repaymentMonths) {
+        BigDecimal months = BigDecimal.valueOf(Math.max(1, repaymentMonths));
+        BigDecimal interest = amount
+                .multiply(interestRateFor(product))
+                .multiply(months)
+                .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+        return amount.add(interest);
+    }
+
+    private void applyTerms(String product, BigDecimal amount, int repaymentMonths) {
+        this.interestRate = interestRateFor(product);
         BigDecimal months = BigDecimal.valueOf(Math.max(1, repaymentMonths));
         this.interestAmount = amount
                 .multiply(this.interestRate)

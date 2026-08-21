@@ -66,10 +66,10 @@ class SubscriptionServiceTest {
         assertEquals(paid.getAmount(), paid.getPaid());
         assertEquals(LocalDate.now().plusYears(1), paid.getExpiry());
 
-        assertEquals("pending_payment", unpaid.getStatus());
+        assertEquals("trial", unpaid.getStatus());
         assertEquals("starter", unpaid.getPackageId());
         assertEquals(BigDecimal.ZERO, unpaid.getPaid());
-        assertEquals(LocalDate.now().plusDays(14), unpaid.getExpiry());
+        assertEquals(LocalDate.now().plusMonths(1), unpaid.getExpiry());
     }
 
     @Test

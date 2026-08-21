@@ -14,6 +14,11 @@ import com.methaltech.sacco.loan.LoanRepository;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberAuthService;
 import com.methaltech.sacco.member.MemberRepository;
+import com.methaltech.sacco.member.MemberPasswordResetRequest;
+import com.methaltech.sacco.member.MemberPasswordResetRequestRepository;
+import com.methaltech.sacco.member.MemberSubscription;
+import com.methaltech.sacco.member.MemberSubscriptionRepository;
+import com.methaltech.sacco.member.MemberSubscriptionService;
 import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.notification.NotificationService;
 import com.methaltech.sacco.tenant.TenantResponse;
@@ -62,6 +67,9 @@ class MobileMoneyController {
     private final MobileMoneyProviderRouter mobileMoneyRouter;
     private final IdempotencyGuard idempotencyGuard;
     private final com.methaltech.sacco.tenant.SaccoPaymentAccountRepository paymentAccountRepository;
+    private final MemberSubscriptionRepository memberSubscriptionRepository;
+    private final MemberSubscriptionService memberSubscriptionService;
+    private final MemberPasswordResetRequestRepository passwordResetRepository;
 
     @PostMapping("/payment-requests")
     ResponseEntity<?> requestPayment(
@@ -76,9 +84,16 @@ class MobileMoneyController {
                     .body(ApiErrorResponse.of(409, "MEMBER_NOT_ACTIVE", "Only active members can initiate mobile-money payments."));
         }
         String purpose = body.purpose().trim();
-        if (!MobileMoneyPaymentRules.contributionPurpose(purpose) && !"loan_repayment".equals(purpose)) {
+        if (!MobileMoneyPaymentRules.contributionPurpose(purpose)
+                && !"loan_repayment".equals(purpose)
+                && !"membership_dues".equals(purpose)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_PURPOSE", "Unsupported mobile-money payment purpose."));
+        }
+        if ("membership_dues".equals(purpose)
+                && memberSubscriptionRepository.findFirstByMemberIdOrderByCreatedAtDesc(member.getId()).isEmpty()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "NO_MEMBERSHIP", "You do not have a membership to pay dues for. Contact your SACCO office."));
         }
         BigDecimal amount = Money.normalize(body.amount());
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -171,6 +186,12 @@ class MobileMoneyController {
         }
         if ("loan_repayment".equals(purpose)) {
             return postLoanRepayment(body, tenantId, externalReference, provider, member, amount);
+        }
+        if ("membership_dues".equals(purpose)) {
+            return postMembershipDues(body, tenantId, externalReference, provider, member, amount);
+        }
+        if ("password_reset_sms".equals(purpose)) {
+            return activatePasswordResetSms(body, tenantId, externalReference, provider, member, amount);
         }
         return ResponseEntity.badRequest()
                 .body(ApiErrorResponse.of(400, "INVALID_CALLBACK_PURPOSE", "Unsupported mobile-money payment purpose."));
@@ -495,6 +516,99 @@ class MobileMoneyController {
                 "financial_transaction",
                 transaction.getId()));
         markMatchingPaymentRequestPosted(tenantId, externalReference, "financial_transaction", transaction.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
+    }
+
+    /**
+     * Applies a confirmed mobile-money dues payment to the member's membership. Unlike member-fund
+     * contributions (which enter maker-checker before crediting a member balance), dues are the member's
+     * own obligation paid into the SACCO's collection account, so they are applied directly: a full
+     * payment activates and renews the membership. A callback record and statement line are written for
+     * reconciliation.
+     */
+    private ResponseEntity<?> postMembershipDues(
+            MobileMoneyCallbackRequest body,
+            String tenantId,
+            String externalReference,
+            String provider,
+            Member member,
+            BigDecimal amount) {
+        ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
+        if (idempotencyConflict != null) return idempotencyConflict;
+
+        MemberSubscription membership = memberSubscriptionRepository.findFirstByMemberIdOrderByCreatedAtDesc(member.getId()).orElse(null);
+        if (membership == null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "NO_MEMBERSHIP", "This member has no membership to apply dues to."));
+        }
+        MemberSubscription updated = memberSubscriptionService.recordPayment(membership, amount);
+        createStatementLine(tenantId, amount, externalReference, "Mobile-money membership dues");
+        notificationService.notifyPaymentPosted(member, "membership_dues", amount, "member_subscription", updated.getId());
+
+        MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
+                "callback_" + UUID.randomUUID(),
+                tenantId,
+                member.getId(),
+                body.purpose().trim(),
+                amount,
+                externalReference,
+                provider,
+                payload(body.providerPayload()),
+                "posted",
+                "member_subscription",
+                updated.getId()));
+        markMatchingPaymentRequestPosted(tenantId, externalReference, "member_subscription", updated.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
+    }
+
+    /**
+     * Confirms the UGX 500 SMS password-reset fee. The reset request was created in {@code pending_payment}
+     * state; once the mobile-money payment is confirmed here, it is activated and the reset code is sent by
+     * SMS. A callback record and statement line are written for reconciliation of the fee.
+     */
+    private ResponseEntity<?> activatePasswordResetSms(
+            MobileMoneyCallbackRequest body,
+            String tenantId,
+            String externalReference,
+            String provider,
+            Member member,
+            BigDecimal amount) {
+        MemberPasswordResetRequest reset = passwordResetRepository
+                .findFirstByTenantIdAndExternalReferenceAndStatus(tenantId, externalReference, "pending_payment")
+                .orElse(null);
+        if (reset == null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "RESET_REQUEST_NOT_FOUND", "No pending SMS password-reset request matches this payment."));
+        }
+        if (!reset.getMemberId().equals(member.getId())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "RESET_MEMBER_MISMATCH", "Payment member does not match the reset request."));
+        }
+        if (amount.compareTo(reset.getAmount()) < 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "RESET_FEE_UNDERPAID", "The SMS reset fee was underpaid."));
+        }
+        ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
+        if (idempotencyConflict != null) return idempotencyConflict;
+
+        reset.activate();
+        passwordResetRepository.save(reset);
+        notificationService.sendPasswordResetCode(member, reset.getToken(), "sms");
+        createStatementLine(tenantId, amount, externalReference, "Mobile-money SMS password-reset fee");
+
+        MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
+                "callback_" + UUID.randomUUID(),
+                tenantId,
+                member.getId(),
+                body.purpose().trim(),
+                amount,
+                externalReference,
+                provider,
+                payload(body.providerPayload()),
+                "posted",
+                "member_password_reset",
+                reset.getId()));
+        markMatchingPaymentRequestPosted(tenantId, externalReference, "member_password_reset", reset.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
     }
 

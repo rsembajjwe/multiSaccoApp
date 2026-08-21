@@ -60,11 +60,12 @@ public record SubscriptionResponse(
      * warning window, otherwise {@code active}.
      */
     static String lifecycleState(String status, Long daysToExpiry) {
-        if (!"active".equals(status)) {
+        boolean operating = "active".equals(status) || "trial".equals(status);
+        if (!operating) {
             return status;
         }
         if (daysToExpiry == null) {
-            return "active";
+            return status;
         }
         if (daysToExpiry < -GRACE_DAYS) {
             return "expired";
@@ -75,6 +76,6 @@ public record SubscriptionResponse(
         if (daysToExpiry <= EXPIRING_SOON_DAYS) {
             return "expiring";
         }
-        return "active";
+        return status;
     }
 }

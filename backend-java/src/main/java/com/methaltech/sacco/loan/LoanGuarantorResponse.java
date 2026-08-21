@@ -15,13 +15,24 @@ public record LoanGuarantorResponse(
         Instant createdAt,
         Instant updatedAt,
         LoanResponse loan,
-        BigDecimal capacity) {
+        BigDecimal capacity,
+        BigDecimal guaranteeCeiling,
+        BigDecimal committedGuarantees) {
 
     public static LoanGuarantorResponse from(LoanGuarantor guarantor) {
-        return from(guarantor, null, null);
+        return from(guarantor, null, null, null, null);
     }
 
     public static LoanGuarantorResponse from(LoanGuarantor guarantor, Loan loan, BigDecimal capacity) {
+        return from(guarantor, loan, capacity, null, null);
+    }
+
+    public static LoanGuarantorResponse from(
+            LoanGuarantor guarantor,
+            Loan loan,
+            BigDecimal capacity,
+            BigDecimal guaranteeCeiling,
+            BigDecimal committedGuarantees) {
         return new LoanGuarantorResponse(
                 guarantor.getId(),
                 guarantor.getTenantId(),
@@ -34,6 +45,8 @@ public record LoanGuarantorResponse(
                 guarantor.getCreatedAt(),
                 guarantor.getUpdatedAt(),
                 loan == null ? null : LoanResponse.from(loan),
-                capacity);
+                capacity,
+                guaranteeCeiling,
+                committedGuarantees);
     }
 }

@@ -39,6 +39,7 @@ class RateLimitFilter extends OncePerRequestFilter {
     private final int authCapacity;
     private final int paymentCapacity;
     private final int callbackCapacity;
+    private final int searchCapacity;
 
     RateLimitFilter(
             RateLimiter rateLimiter,
@@ -47,7 +48,8 @@ class RateLimitFilter extends OncePerRequestFilter {
             @Value("${sacco.rate-limit.window:60s}") Duration window,
             @Value("${sacco.rate-limit.auth-per-window:30}") int authCapacity,
             @Value("${sacco.rate-limit.payment-per-window:20}") int paymentCapacity,
-            @Value("${sacco.rate-limit.callback-per-window:600}") int callbackCapacity) {
+            @Value("${sacco.rate-limit.callback-per-window:600}") int callbackCapacity,
+            @Value("${sacco.rate-limit.search-per-window:40}") int searchCapacity) {
         this.rateLimiter = rateLimiter;
         this.objectMapper = objectMapper;
         this.enabled = enabled;
@@ -55,6 +57,7 @@ class RateLimitFilter extends OncePerRequestFilter {
         this.authCapacity = authCapacity;
         this.paymentCapacity = paymentCapacity;
         this.callbackCapacity = callbackCapacity;
+        this.searchCapacity = searchCapacity;
     }
 
     @Override
@@ -79,18 +82,27 @@ class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private Policy policyFor(HttpServletRequest request) {
-        if (!HttpMethod.POST.matches(request.getMethod())) {
-            return null;
-        }
         String uri = request.getRequestURI();
         if (uri == null) {
+            return null;
+        }
+        // Guarantor member search is a GET that could otherwise be used to enumerate the membership.
+        if (HttpMethod.GET.matches(request.getMethod())) {
+            if (uri.endsWith("/api/v1/member-auth/members/search")) {
+                return new Policy("member_search", searchCapacity);
+            }
+            return null;
+        }
+        if (!HttpMethod.POST.matches(request.getMethod())) {
             return null;
         }
         // NB: /auth/login and /member-auth/login are deliberately NOT rate limited here — they already
         // have precise, failure-based lockout via LoginAttemptService. Adding a coarse per-IP limit on
         // them would count successful logins and, behind a shared/proxy IP, lock out legitimate users.
         if (uri.endsWith("/api/v1/auth/mfa/verify")
-                || uri.endsWith("/api/v1/auth/password-reset/request")) {
+                || uri.endsWith("/api/v1/auth/password-reset/request")
+                || uri.endsWith("/api/v1/member-auth/password-reset/request")
+                || uri.endsWith("/api/v1/member-auth/password-reset/confirm")) {
             return new Policy("auth", authCapacity);
         }
         if (uri.endsWith("/api/v1/integrations/mobile-money/payment-requests")) {

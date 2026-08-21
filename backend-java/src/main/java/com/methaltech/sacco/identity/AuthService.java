@@ -49,6 +49,17 @@ public class AuthService {
         return "tenant_platform".equals(user.getTenantId());
     }
 
+    /** Looks up a staff user by id, e.g. to validate a member↔staff link. */
+    public java.util.Optional<User> findUser(String userId) {
+        if (userId == null || userId.isBlank()) return java.util.Optional.empty();
+        return userRepository.findById(userId);
+    }
+
+    /** Staff users for a tenant, e.g. to populate a member↔staff link picker. */
+    public java.util.List<User> tenantStaff(String tenantId) {
+        return userRepository.findByTenantIdOrderByFullNameAsc(tenantId);
+    }
+
     public boolean hasPermission(User user, String permissionId) {
         if (user == null || permissionId == null || permissionId.isBlank()) return false;
         var roleIds = userRoleRepository.findByIdUserIdAndTenantId(user.getId(), user.getTenantId()).stream()

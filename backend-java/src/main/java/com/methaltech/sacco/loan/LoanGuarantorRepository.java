@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface LoanGuarantorRepository extends JpaRepository<LoanGuarantor, String> {
     List<LoanGuarantor> findByLoanIdOrderByCreatedAtDesc(String loanId);
+    List<LoanGuarantor> findByTenantIdOrderByCreatedAtDesc(String tenantId);
     List<LoanGuarantor> findByMemberIdOrderByCreatedAtDesc(String memberId);
     List<LoanGuarantor> findByMemberIdAndStatusIn(String memberId, List<String> statuses);
     boolean existsByLoanIdAndMemberIdAndStatusNot(String loanId, String memberId, String status);

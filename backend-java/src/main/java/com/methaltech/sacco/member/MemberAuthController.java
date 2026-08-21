@@ -33,6 +33,7 @@ import com.methaltech.sacco.tenant.Tenant;
 import com.methaltech.sacco.tenant.TenantRepository;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
+import com.methaltech.sacco.finance.LoanProductCatalog;
 import com.methaltech.sacco.tenant.SaccoPaymentAccountRepository;
 import com.methaltech.sacco.tenant.SaccoPaymentAccountResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -45,15 +46,19 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -99,6 +104,8 @@ class MemberAuthController {
     private final MemberFundBalanceService memberFundBalanceService;
     private final NotificationChannelPreferenceService channelPreferenceService;
     private final MemberSubscriptionRepository memberSubscriptionRepository;
+    private final MemberPasswordResetRequestRepository passwordResetRepository;
+    private final LoanProductCatalog loanProductCatalog;
 
     MemberAuthController(
             MemberRepository memberRepository,
@@ -126,7 +133,9 @@ class MemberAuthController {
             SaccoPaymentAccountRepository paymentAccountRepository,
             MemberFundBalanceService memberFundBalanceService,
             NotificationChannelPreferenceService channelPreferenceService,
-            MemberSubscriptionRepository memberSubscriptionRepository) {
+            MemberSubscriptionRepository memberSubscriptionRepository,
+            MemberPasswordResetRequestRepository passwordResetRepository,
+            LoanProductCatalog loanProductCatalog) {
         this.memberRepository = memberRepository;
         this.memberSessionRepository = memberSessionRepository;
         this.loanRepository = loanRepository;
@@ -153,6 +162,8 @@ class MemberAuthController {
         this.memberFundBalanceService = memberFundBalanceService;
         this.channelPreferenceService = channelPreferenceService;
         this.memberSubscriptionRepository = memberSubscriptionRepository;
+        this.passwordResetRepository = passwordResetRepository;
+        this.loanProductCatalog = loanProductCatalog;
     }
 
     @PostMapping("/login")
@@ -421,7 +432,9 @@ class MemberAuthController {
                 .map(request -> LoanGuarantorResponse.from(
                         request,
                         loanRepository.findById(request.getLoanId()).orElse(null),
-                        guaranteeCapacity(member, request.getId())))
+                        guaranteeCapacity(member, request.getId()),
+                        guaranteeCeiling(member),
+                        committedGuarantees(member, request.getId())))
                 .toList();
         List<MobileStatementLineResponse> statementLines = recentStatementLines(member);
         Instant lastUpdatedAt = java.util.stream.Stream.concat(
@@ -472,6 +485,15 @@ class MemberAuthController {
                 .toList()));
     }
 
+    @GetMapping("/loan-products")
+    ResponseEntity<?> listLoanProducts(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        return ResponseEntity.ok(ApiResponse.of(
+                loanProductCatalog.activeLoanProducts(currentSession.member().getTenantId())));
+    }
+
     @GetMapping("/notifications")
     ResponseEntity<?> listNotifications(@RequestHeader(name = "Authorization", required = false) String authorization) {
         MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
@@ -481,6 +503,76 @@ class MemberAuthController {
                 .stream()
                 .map(NotificationResponse::from)
                 .toList()));
+    }
+
+    @PostMapping("/password-reset/request")
+    ResponseEntity<?> requestPasswordReset(@RequestBody MemberPasswordResetRequestBody body, HttpServletRequest request) {
+        String channel = normalizeResetChannel(body == null ? null : body.channel());
+        boolean sms = "sms".equals(channel);
+        Tenant tenant = resolveTenant(body == null ? null : body.saccoCode());
+        Member member = body == null || body.identifier() == null || body.identifier().isBlank()
+                ? null
+                : findLoginMember(tenant, body.identifier().trim()).filter(candidate -> "active".equals(candidate.getStatus())).orElse(null);
+        Instant expiresAt = Instant.now().plus(Duration.ofMinutes(30));
+        String demoToken = null;
+        String externalReference = null;
+        if (member != null) {
+            String token = tokenGenerator.createToken();
+            externalReference = sms ? "PWDRESET-" + UUID.randomUUID() : null;
+            MemberPasswordResetRequest reset = passwordResetRepository.save(new MemberPasswordResetRequest(
+                    "mprr_" + UUID.randomUUID(),
+                    member.getTenantId(),
+                    member.getId(),
+                    token,
+                    channel,
+                    sms ? "pending_payment" : "pending",
+                    sms ? new BigDecimal("500") : BigDecimal.ZERO,
+                    externalReference,
+                    expiresAt));
+            if (!sms) {
+                notificationService.sendPasswordResetCode(member, token, channel);
+            }
+            auditService.record(member.getTenantId(), member.getId(), member.getFullName(),
+                    "Requested password reset via " + channel, "member_password_reset", reset.getId(), request.getRemoteAddr());
+            demoToken = demoCredentialPolicy.demoLoginsEnabled() ? token : null;
+        }
+        // Generic response either way (do not confirm whether the identifier exists).
+        return ResponseEntity.ok(ApiResponse.of(new MemberPasswordResetResponse(
+                true, sms, sms ? 500 : 0, externalReference, demoToken, member == null ? null : expiresAt)));
+    }
+
+    @PostMapping("/password-reset/confirm")
+    ResponseEntity<?> confirmPasswordReset(@Valid @RequestBody MemberPasswordResetConfirmRequest body, HttpServletRequest request) {
+        String newPassword = body.newPassword();
+        if (newPassword == null || newPassword.length() < 8) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "WEAK_PASSWORD", "Password must be at least 8 characters."));
+        }
+        MemberPasswordResetRequest reset = passwordResetRepository
+                .findFirstByTokenAndStatusAndExpiresAtAfter(body.token().trim(), "pending", Instant.now())
+                .orElse(null);
+        if (reset == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiErrorResponse.of(400, "INVALID_RESET_TOKEN", "Reset code is invalid, unpaid, used or expired."));
+        }
+        Member member = memberRepository.findById(reset.getMemberId()).filter(candidate -> "active".equals(candidate.getStatus())).orElse(null);
+        if (member == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiErrorResponse.of(400, "INVALID_RESET_TOKEN", "Reset code is invalid or expired."));
+        }
+        PasswordHasher.PasswordHash hash = passwordHasher.hash(newPassword);
+        member.changePassword(hash.hash(), hash.salt());
+        memberRepository.save(member);
+        reset.markUsed();
+        passwordResetRepository.save(reset);
+        auditService.record(member.getTenantId(), member.getId(), member.getFullName(),
+                "Completed password reset", "member_password_reset", reset.getId(), request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(new MemberPasswordResetConfirmResponse(true)));
+    }
+
+    private String normalizeResetChannel(String channel) {
+        String value = channel == null ? "" : channel.trim().toLowerCase();
+        return ("whatsapp".equals(value) || "sms".equals(value)) ? value : "email";
     }
 
     @GetMapping("/membership")
@@ -588,6 +680,60 @@ class MemberAuthController {
                     .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_PERIOD", "Repayment period must be between 1 and 60 months."));
         }
 
+        List<GuarantorSelection> selections = body.guarantors() == null ? List.of() : body.guarantors();
+        // A loan fully secured by the member's own savings (covering principal + interest/charges)
+        // does not require guarantors.
+        BigDecimal totalPayable = Loan.totalPayableFor(product, amount, repaymentMonths);
+        boolean selfSecured = member.getAvailableSavings().compareTo(totalPayable) >= 0;
+        if (selections.size() > 3) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_GUARANTOR_COUNT", "Select at most 3 guarantors."));
+        }
+        if (selections.isEmpty() && !selfSecured) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "GUARANTOR_OR_SELF_COVER_REQUIRED",
+                            "Select 1 to 3 guarantors, or your savings must cover the loan and its interest to borrow without a guarantor."));
+        }
+        List<ResolvedGuarantor> resolvedGuarantors = new ArrayList<>();
+        Set<String> seenGuarantorIds = new HashSet<>();
+        for (GuarantorSelection selection : selections) {
+            String membershipNo = selection.membershipNo() == null ? "" : selection.membershipNo().trim();
+            if (membershipNo.isBlank()) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "INVALID_GUARANTOR", "Each guarantor requires a membership number."));
+            }
+            Member guarantor = memberRepository
+                    .findFirstByTenantIdAndMembershipNoIgnoreCase(member.getTenantId(), membershipNo)
+                    .orElse(null);
+            if (guarantor == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "INVALID_GUARANTOR", "Guarantor " + membershipNo + " is not a member of your SACCO."));
+            }
+            if (guarantor.getId().equals(member.getId())) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "BORROWER_CANNOT_GUARANTEE", "You cannot guarantee your own loan."));
+            }
+            if (!"active".equals(guarantor.getStatus())) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "GUARANTOR_NOT_ACTIVE", "Guarantor " + membershipNo + " is not an active member."));
+            }
+            if (!seenGuarantorIds.add(guarantor.getId())) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "DUPLICATE_GUARANTOR", "Guarantor " + membershipNo + " was selected more than once."));
+            }
+            BigDecimal pledge = Money.normalize(selection.pledgeAmount() == null ? BigDecimal.ZERO : selection.pledgeAmount());
+            if (pledge.compareTo(BigDecimal.ZERO) <= 0) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "INVALID_GUARANTEE_AMOUNT", "Pledge for " + membershipNo + " must be greater than zero."));
+            }
+            BigDecimal capacity = guaranteeCapacity(guarantor, null);
+            if (pledge.compareTo(capacity) > 0) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Guarantor " + membershipNo + " can only guarantee up to " + capacity + "."));
+            }
+            resolvedGuarantors.add(new ResolvedGuarantor(guarantor, pledge));
+        }
+
         Loan loan = loanRepository.save(Loan.submitted(
                 "loan_" + UUID.randomUUID(),
                 member.getTenantId(),
@@ -599,6 +745,16 @@ class MemberAuthController {
                 body.purpose() == null ? "" : body.purpose().trim(),
                 "mobile",
                 member.getId()));
+        for (ResolvedGuarantor resolved : resolvedGuarantors) {
+            guarantorRepository.save(LoanGuarantor.request(
+                    "guarantor_" + UUID.randomUUID(),
+                    member.getTenantId(),
+                    loan.getId(),
+                    resolved.guarantor().getId(),
+                    resolved.pledge(),
+                    null));
+            notificationService.notifyGuarantorRequested(resolved.guarantor(), member, resolved.pledge(), loan.getId());
+        }
         notificationService.notifyLoanApplicationSubmitted(member, product, amount, loan.getId());
         auditService.record(
                 member.getTenantId(),
@@ -609,6 +765,178 @@ class MemberAuthController {
                 loan.getId(),
                 request.getRemoteAddr());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(loanResponse(loan)));
+    }
+
+    @GetMapping("/members/search")
+    ResponseEntity<?> searchGuarantorCandidates(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "q", required = false) String query) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        String trimmed = query == null ? "" : query.trim();
+        if (trimmed.length() < 2) {
+            return ResponseEntity.ok(ApiResponse.of(List.of()));
+        }
+        // Identity fields only (name + member number) — never balances or guarantee capacity.
+        List<GuarantorCandidateResponse> candidates = memberRepository
+                .searchGuarantorCandidates(member.getTenantId(), trimmed, PageRequest.of(0, 10))
+                .stream()
+                .filter(candidate -> !candidate.getId().equals(member.getId()))
+                .map(candidate -> new GuarantorCandidateResponse(candidate.getMembershipNo(), candidate.getFullName()))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.of(candidates));
+    }
+
+    @GetMapping("/guarantor-listing")
+    ResponseEntity<?> getGuarantorListing(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+        return ResponseEntity.ok(ApiResponse.of(new GuarantorListingResponse(currentSession.member().isGuarantorListingOptOut())));
+    }
+
+    @PatchMapping("/guarantor-listing")
+    ResponseEntity<?> updateGuarantorListing(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestBody UpdateGuarantorListingRequest body,
+            HttpServletRequest request) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+        Member member = currentSession.member();
+        member.setGuarantorListingOptOut(body != null && body.optOut());
+        memberRepository.save(member);
+        auditService.record(
+                member.getTenantId(),
+                (String) null,
+                member.getFullName(),
+                member.isGuarantorListingOptOut() ? "Opted out of guarantor listing" : "Opted in to guarantor listing",
+                "member",
+                member.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(new GuarantorListingResponse(member.isGuarantorListingOptOut())));
+    }
+
+    @PostMapping("/loans/{loanId}/guarantors")
+    ResponseEntity<?> addLoanGuarantor(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId,
+            @RequestBody GuarantorSelection body,
+            HttpServletRequest request) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        Loan loan = loanRepository.findById(loanId)
+                .filter(item -> item.getMemberId().equals(member.getId()))
+                .orElse(null);
+        if (loan == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found."));
+        }
+        if (!java.util.Set.of("submitted", "under_review").contains(loan.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "LOAN_NOT_EDITABLE", "Guarantors can only be changed while the loan is under review."));
+        }
+        long activeGuarantors = guarantorRepository.findByLoanIdOrderByCreatedAtDesc(loanId).stream()
+                .filter(item -> !"rejected".equals(item.getStatus()))
+                .count();
+        if (activeGuarantors >= 3) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "GUARANTOR_LIMIT", "A loan can have at most 3 active guarantors."));
+        }
+
+        String membershipNo = body == null || body.membershipNo() == null ? "" : body.membershipNo().trim();
+        if (membershipNo.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_GUARANTOR", "A guarantor membership number is required."));
+        }
+        Member guarantor = memberRepository
+                .findFirstByTenantIdAndMembershipNoIgnoreCase(member.getTenantId(), membershipNo)
+                .orElse(null);
+        if (guarantor == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_GUARANTOR", "Guarantor " + membershipNo + " is not a member of your SACCO."));
+        }
+        if (guarantor.getId().equals(member.getId())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "BORROWER_CANNOT_GUARANTEE", "You cannot guarantee your own loan."));
+        }
+        if (!"active".equals(guarantor.getStatus())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "GUARANTOR_NOT_ACTIVE", "Guarantor " + membershipNo + " is not an active member."));
+        }
+        if (guarantorRepository.existsByLoanIdAndMemberIdAndStatusNot(loanId, guarantor.getId(), "rejected")) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "GUARANTOR_ALREADY_REQUESTED", "Guarantor " + membershipNo + " already has an active request on this loan."));
+        }
+        BigDecimal pledge = Money.normalize(body.pledgeAmount() == null ? BigDecimal.ZERO : body.pledgeAmount());
+        if (pledge.compareTo(BigDecimal.ZERO) <= 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_GUARANTEE_AMOUNT", "Pledge for " + membershipNo + " must be greater than zero."));
+        }
+        BigDecimal capacity = guaranteeCapacity(guarantor, null);
+        if (pledge.compareTo(capacity) > 0) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Guarantor " + membershipNo + " can only guarantee up to " + capacity + "."));
+        }
+
+        LoanGuarantor saved = guarantorRepository.save(LoanGuarantor.request(
+                "guarantor_" + UUID.randomUUID(),
+                member.getTenantId(),
+                loanId,
+                guarantor.getId(),
+                pledge,
+                null));
+        notificationService.notifyGuarantorRequested(guarantor, member, pledge, loanId);
+        auditService.record(
+                member.getTenantId(),
+                (String) null,
+                member.getFullName(),
+                "Added replacement guarantor " + guarantor.getMembershipNo() + " to loan",
+                "loan_guarantor",
+                saved.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of(LoanGuarantorResponse.from(saved, loan, guaranteeCapacity(guarantor, saved.getId()),
+                        guaranteeCeiling(guarantor), committedGuarantees(guarantor, saved.getId()))));
+    }
+
+    @GetMapping("/loans/{loanId}/repayments")
+    ResponseEntity<?> memberLoanRepayments(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        Loan loan = loanRepository.findById(loanId)
+                .filter(item -> item.getMemberId().equals(member.getId()))
+                .orElse(null);
+        if (loan == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found."));
+        }
+        List<MemberLoanRepaymentResponse> rows = repaymentRepository.findByLoanIdOrderByReceivedAtDesc(loanId).stream()
+                .filter(item -> "posted".equalsIgnoreCase(item.getStatus()))
+                .map(item -> new MemberLoanRepaymentResponse(
+                        item.getId(),
+                        item.getReference(),
+                        item.getAmount(),
+                        item.getChannel(),
+                        item.getNarration(),
+                        item.getReceivedAt()))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.of(rows));
+    }
+
+    record MemberLoanRepaymentResponse(
+            String id,
+            String reference,
+            BigDecimal amount,
+            String channel,
+            String narration,
+            java.time.Instant paidAt) {
     }
 
     @PostMapping("/mobile-complaints")
@@ -671,7 +999,9 @@ class MemberAuthController {
                 .map(request -> LoanGuarantorResponse.from(
                         request,
                         loanRepository.findById(request.getLoanId()).orElse(null),
-                        guaranteeCapacity(member, request.getId())))
+                        guaranteeCapacity(member, request.getId()),
+                        guaranteeCeiling(member),
+                        committedGuarantees(member, request.getId())))
                 .toList()));
     }
 
@@ -721,6 +1051,8 @@ class MemberAuthController {
         if (loan != null) {
             loan.refreshGuarantors((int) guarantorRepository.countByLoanIdAndStatus(loan.getId(), "accepted"));
             loanRepository.save(loan);
+            memberRepository.findById(loan.getMemberId())
+                    .ifPresent(applicant -> notificationService.notifyGuarantorDecision(applicant, member, status, loan.getId()));
         }
         auditService.record(
                 saved.getTenantId(),
@@ -731,17 +1063,27 @@ class MemberAuthController {
                 saved.getId(),
                 request.getRemoteAddr());
 
-        return ResponseEntity.ok(ApiResponse.of(LoanGuarantorResponse.from(saved, loan, guaranteeCapacity(member, saved.getId()))));
+        return ResponseEntity.ok(ApiResponse.of(LoanGuarantorResponse.from(saved, loan, guaranteeCapacity(member, saved.getId()),
+                guaranteeCeiling(member), committedGuarantees(member, saved.getId()))));
     }
 
-    private BigDecimal guaranteeCapacity(Member member, String excludedGuarantorId) {
-        BigDecimal committed = guarantorRepository
+    /** The most a member may pledge in total to guarantee others' loans: three times their savings. */
+    private BigDecimal guaranteeCeiling(Member member) {
+        return member.getSavingsBalance().multiply(BigDecimal.valueOf(3));
+    }
+
+    /** Pledges already tied up in the member's pending/accepted guarantees (optionally excluding one). */
+    private BigDecimal committedGuarantees(Member member, String excludedGuarantorId) {
+        return guarantorRepository
                 .findByMemberIdAndStatusIn(member.getId(), List.of("pending", "accepted"))
                 .stream()
                 .filter(item -> excludedGuarantorId == null || !item.getId().equals(excludedGuarantorId))
                 .map(LoanGuarantor::getGuaranteedAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return member.getSavingsBalance().multiply(BigDecimal.valueOf(3)).subtract(committed).max(BigDecimal.ZERO);
+    }
+
+    private BigDecimal guaranteeCapacity(Member member, String excludedGuarantorId) {
+        return guaranteeCeiling(member).subtract(committedGuarantees(member, excludedGuarantorId)).max(BigDecimal.ZERO);
     }
 
     private int dsr(BigDecimal amount, BigDecimal savingsBalance) {
@@ -886,13 +1228,35 @@ class MemberAuthController {
             Instant postedAt) {
     }
 
-    record Balances(BigDecimal savings, BigDecimal shares, BigDecimal welfare) {
+    record Balances(
+            BigDecimal savings,
+            BigDecimal shares,
+            BigDecimal welfare,
+            BigDecimal savingsHold,
+            BigDecimal availableSavings) {
         static Balances from(Member member) {
-            return new Balances(member.getSavingsBalance(), member.getSharesBalance(), member.getWelfareBalance());
+            return new Balances(
+                    member.getSavingsBalance(),
+                    member.getSharesBalance(),
+                    member.getWelfareBalance(),
+                    member.getSavingsHold(),
+                    member.getAvailableSavings());
         }
     }
 
     record ChannelPreferenceRequest(String channel, boolean enabled) {
+    }
+
+    record MemberPasswordResetRequestBody(String saccoCode, String identifier, String channel) {
+    }
+
+    record MemberPasswordResetResponse(boolean accepted, boolean paymentRequired, int amount, String externalReference, String resetToken, Instant expiresAt) {
+    }
+
+    record MemberPasswordResetConfirmRequest(@NotBlank String token, @NotBlank String newPassword) {
+    }
+
+    record MemberPasswordResetConfirmResponse(boolean reset) {
     }
 
     record FundBalanceResponse(String fundCode, BigDecimal balance, Instant updatedAt) {
@@ -924,6 +1288,22 @@ class MemberAuthController {
             @NotBlank String product,
             @NotNull BigDecimal amount,
             Integer repaymentMonths,
-            String purpose) {
+            String purpose,
+            List<GuarantorSelection> guarantors) {
+    }
+
+    record GuarantorSelection(String membershipNo, BigDecimal pledgeAmount) {
+    }
+
+    private record ResolvedGuarantor(Member guarantor, BigDecimal pledge) {
+    }
+
+    record GuarantorCandidateResponse(String membershipNo, String fullName) {
+    }
+
+    record GuarantorListingResponse(boolean optOut) {
+    }
+
+    record UpdateGuarantorListingRequest(boolean optOut) {
     }
 }

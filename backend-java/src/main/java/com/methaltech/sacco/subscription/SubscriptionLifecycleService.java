@@ -33,10 +33,13 @@ public class SubscriptionLifecycleService {
     }
 
     /** Expires active subscriptions whose expiry (plus grace) has fully lapsed. Returns the count expired. */
+    /** Operating statuses whose lapse the lifecycle acts on: fully paid ("active") and free-trial ("trial"). */
+    private static final java.util.List<String> OPERATING_STATUSES = java.util.List.of("active", "trial");
+
     @Transactional
     public int expireLapsed() {
         LocalDate cutoff = LocalDate.now().minusDays(graceDays);
-        List<Subscription> lapsed = subscriptionRepository.findByStatusAndExpiryLessThan("active", cutoff);
+        List<Subscription> lapsed = subscriptionRepository.findByStatusInAndExpiryLessThan(OPERATING_STATUSES, cutoff);
         lapsed.forEach(Subscription::markExpired);
         subscriptionRepository.saveAll(lapsed);
         return lapsed.size();
@@ -50,9 +53,9 @@ public class SubscriptionLifecycleService {
     @Transactional
     public int sendExpiryReminders() {
         LocalDate today = LocalDate.now();
-        int reminded = remind(subscriptionRepository.findByStatusAndExpiryBetween("active", today, today.plusDays(reminderWindowDays)), today, false);
+        int reminded = remind(subscriptionRepository.findByStatusInAndExpiryBetween(OPERATING_STATUSES, today, today.plusDays(reminderWindowDays)), today, false);
         if (graceDays > 0) {
-            reminded += remind(subscriptionRepository.findByStatusAndExpiryBetween("active", today.minusDays(graceDays), today.minusDays(1)), today, true);
+            reminded += remind(subscriptionRepository.findByStatusInAndExpiryBetween(OPERATING_STATUSES, today.minusDays(graceDays), today.minusDays(1)), today, true);
         }
         return reminded;
     }

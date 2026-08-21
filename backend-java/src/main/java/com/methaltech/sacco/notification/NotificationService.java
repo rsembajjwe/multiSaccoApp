@@ -59,6 +59,40 @@ public class NotificationService {
         return notification;
     }
 
+    public Notification notifyGuarantorRequested(Member guarantor, Member applicant, BigDecimal pledgeAmount, String loanId) {
+        String title = "Guarantee request";
+        String message = applicant.getFullName() + " has requested you to guarantee "
+                + formattedAmount(guarantor.getTenantId(), pledgeAmount)
+                + " on their loan. Open Loans to accept or reject.";
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                guarantor.getTenantId(),
+                guarantor.getId(),
+                "loan_guarantor_requested",
+                title,
+                message,
+                "loan_guarantor",
+                loanId));
+        createDeliveries(notification, guarantor, title, message);
+        return notification;
+    }
+
+    public Notification notifyGuarantorDecision(Member applicant, Member guarantor, String status, String loanId) {
+        String title = "Guarantor " + status;
+        String message = guarantor.getFullName() + " has " + status + " your loan guarantee request.";
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                applicant.getTenantId(),
+                applicant.getId(),
+                "loan_guarantor_decision",
+                title,
+                message,
+                "loan",
+                loanId));
+        createDeliveries(notification, applicant, title, message);
+        return notification;
+    }
+
     public Notification notifyLoanApplicationSubmitted(Member member, String product, BigDecimal amount, String loanId) {
         String eventType = "loan_application_submitted";
         NotificationTemplate template = activeTemplate(member.getTenantId(), eventType);
@@ -73,6 +107,54 @@ public class NotificationService {
                 message,
                 "loan",
                 loanId));
+    }
+
+    /**
+     * Sends a member's password reset code over a single chosen channel (email, WhatsApp or SMS) — not
+     * the usual all-channel fan-out, since a reset code must only go to the requested destination.
+     */
+    public Notification sendPasswordResetCode(Member member, String code, String channel) {
+        String title = "Password reset code";
+        String message = "Your password reset code is " + code + ". It expires in 30 minutes. If you did not request this, ignore this message.";
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                "password_reset_code",
+                title,
+                message,
+                "member_password_reset",
+                null));
+        providers.stream()
+                .filter(provider -> channel != null && channel.equals(provider.channel()))
+                .filter(provider -> provider.enabledFor(member))
+                .findFirst()
+                .ifPresent(provider -> {
+                    NotificationSendResult result = send(provider, member, title, message);
+                    createDelivery(notification, member, provider.channel(), provider.providerId(), provider.recipient(member), result, message);
+                });
+        return notification;
+    }
+
+    /** Notifies a member (across their enabled channels) that their savings were moved by a transfer. */
+    public Notification notifySavingsMovement(Member member, BigDecimal amount, boolean debit, String description) {
+        String title = debit ? "Savings transferred out" : "Savings credited";
+        String amountText = formattedAmount(member.getTenantId(), amount);
+        String message = (debit
+                ? amountText + " was transferred out of your savings."
+                : amountText + " was credited to your savings.")
+                + (description == null || description.isBlank() ? "" : " " + description);
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                "savings_transfer",
+                title,
+                message,
+                "savings_transfer",
+                null));
+        createDeliveries(notification, member, title, message);
+        return notification;
     }
 
     /** Notifies a member that their membership dues are approaching expiry, across their enabled channels. */

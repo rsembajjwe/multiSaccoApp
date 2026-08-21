@@ -61,6 +61,16 @@ public class LoanGuarantor {
         this.updatedAt = this.createdAt;
     }
 
+    public static LoanGuarantor request(
+            String id,
+            String tenantId,
+            String loanId,
+            String memberId,
+            BigDecimal guaranteedAmount,
+            String requestedByUserId) {
+        return new LoanGuarantor(id, tenantId, loanId, memberId, guaranteedAmount, requestedByUserId);
+    }
+
     public void decide(String status) {
         this.status = status;
         this.decidedAt = Instant.now();

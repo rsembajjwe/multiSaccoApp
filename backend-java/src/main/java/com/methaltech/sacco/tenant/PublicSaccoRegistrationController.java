@@ -93,7 +93,7 @@ class PublicSaccoRegistrationController {
                 tenant.getId(),
                 "public_sacco_registration_received",
                 "SACCO registration received",
-                "Your Tereka Online SACCO registration was received. Complete the mobile-money subscription payment using reference " + paymentReference + " for approval review.",
+                "Your Tereka Online SACCO registration was received. You have a 1-month free trial to explore the system. You can pay the subscription any time before the trial ends using reference " + paymentReference + ".",
                 "tenant",
                 tenant.getId(),
                 blankToDefault(body.paymentPhone()).isBlank() ? profile.getPhone() : blankToDefault(body.paymentPhone()),
@@ -105,8 +105,8 @@ class PublicSaccoRegistrationController {
                 subscription.getAmount(),
                 tenant.getCurrencyCode(),
                 blankToDefault(body.paymentPhone()).isBlank() ? blankToDefault(body.contactNumber()) : blankToDefault(body.paymentPhone()),
-                "payment_initiated",
-                "Registration received. Mobile-money payment is initiated; platform approval follows payment confirmation.")));
+                "trial_active",
+                "Registration received. Your 1-month free trial is active — start using the system now and pay the subscription any time before the trial ends.")));
     }
 
     private String generatedSaccoCode(String name) {
