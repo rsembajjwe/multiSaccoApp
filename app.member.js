@@ -5,161 +5,32 @@ function renderMemberView(view) {
   const dash = state.memberData.dashboard || {};
   const balances = state.memberData.balances || dash.balances || {};
   if (view === "home") {
-    const total = Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0);
+    const savings = Number(balances.savings || 0);
+    const savingsHold = Number(balances.savingsHold || 0);
+    const availableSavings = balances.availableSavings != null ? Number(balances.availableSavings) : Math.max(savings - savingsHold, 0);
     const recent = (dash.recentTransactions || []).slice(0, 6);
-    const tabs = [["overview", "Overview"], ["monthly", "Monthly savings"], ["loans", "Loans"], ["messages", "Messages"], ["mobile-money", "Mobile money"]];
-    const tab = activeModuleTab("home", tabs);
     return `
       <section class="panel member-balance">
-        <p class="eyebrow">${displayName()} · ${t("totalBalance")}</p>
-        <h2 class="balance-amount">${money.format(total)}</h2>
-        <p class="balance-breakdown">${t("savings")} ${money.format(balances.savings || 0)} · ${t("shares")} ${money.format(balances.shares || 0)} · ${t("welfare")} ${money.format(balances.welfare || 0)}</p>
+        <p class="eyebrow">${displayName()} · ${t("totalSavings")}</p>
+        <h2 class="balance-amount">${money.format(savings)}</h2>
+        <p class="balance-breakdown">${t("savings")} ${money.format(savings)} · ${t("shares")} ${money.format(balances.shares || 0)} · ${t("welfare")} ${money.format(balances.welfare || 0)}</p>
+        ${savingsHold > 0 ? `<p class="balance-hold">${money.format(savingsHold)} held as loan security · Available ${money.format(availableSavings)}</p>` : ""}
       </section>
-      ${moduleTabs("home", tabs, tab)}
-      ${tab === "overview" ? `${memberCommandCenterPanel()}${memberMembershipPanel()}${memberHomeUpdatePanel(dash, balances)}${memberServiceAssurancePanel()}${memberQuickActionsPanel()}` : ""}
-      ${tab === "monthly" ? memberHomeMonthlyPanel(dash) : ""}
-      ${tab === "loans" ? memberHomeLoansPanel() : ""}
-      ${tab === "messages" ? memberHomeMessagesPanel() : ""}
-      ${tab === "mobile-money" ? memberHomeMobileMoneyPanel(dash) : ""}
-      ${tab === "overview" && recent.length
+      ${memberHomeUpdatePanel(dash, balances)}
+      ${memberQuickActionsPanel()}
+      ${recent.length
         ? recordTable("Recent activity", recent, ["reference", "description", "debit", "credit", "runningBalance", "postedAt"])
-        : tab === "overview" ? emptyState("No transactions yet", "Your posted deposits and repayments will appear here.") : ""}
+        : emptyState("No transactions yet", "Your posted deposits and repayments will appear here.")}
     `;
   }
   if (view === "money") return memberMoneyView(dash, balances);
-  if (view === "accounts") return memberAccountsView(balances);
-  if (view === "statements") return memberStatementsView(dash);
-  if (view === "receipts") return memberReceiptsView(dash);
   if (view === "loans") return memberLoansView();
-  if (view === "guarantor-requests") return memberGuarantorRequestsView();
   if (view === "payments") return memberPaymentsView();
   if (view === "notifications") return memberNotificationsView();
   if (view === "complaints") return memberComplaintsView();
   if (view === "profile") return memberProfileView(balances);
   if (view === "security") return memberSecurityTabbedView();
   return moduleBlueprint(view);
-}
-
-function memberCommandCenterPanel() {
-  return `
-    <section class="panel compact-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Member command center</h2>
-          <p>Service ready: view balances, monthly savings, loans, messages, mobile-money activity and offline drafts.</p>
-        </div>
-        <span class="status active">Service ready</span>
-      </div>
-    </section>
-  `;
-}
-
-function memberHomeMonthlyPanel(dash) {
-  const rows = buildMemberMonthlyPerformanceRows(dash);
-  return `
-    <section class="panel compact-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Monthly savings workspace</h2>
-          <p>Payment channels show Treasurer cash and Mobile money deposits with full dates for each month.</p>
-        </div>
-        <span class="status active">Payment channels</span>
-      </div>
-    </section>
-    ${rows.length ? recordTable("Monthly savings and deposit performance", rows, ["date", "month", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"]) : emptyState("Monthly savings and deposit performance", "Posted deposits will appear here by month.")}
-  `;
-}
-
-function memberHomeLoansPanel() {
-  return `
-    <section class="panel compact-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Loan servicing workspace</h2>
-          <p>Review active loans, next repayment and guarantor obligations.</p>
-        </div>
-        <span class="status active">Loans</span>
-      </div>
-    </section>
-    ${recordTable("Member loan position", state.memberData.loans || [], ["applicationNo", "product", "amount", "outstandingBalance", "monthlyInstallment", "nextDueDate", "status"])}
-  `;
-}
-
-function memberMembershipPanel() {
-  const membership = state.memberData.membership;
-  if (!membership) return "";
-  const lifecycle = membership.lifecycleState || membership.status || "";
-  const pill = ["expired", "grace", "expiring", "pending_payment"].includes(lifecycle) ? "pending" : "active";
-  return `
-    <section class="panel compact-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Membership</h2>
-          <p>Your membership status and renewal date.</p>
-        </div>
-        <span class="status ${pill}">${escapeHtml(labelize(lifecycle))}</span>
-      </div>
-      <div class="source-grid compact">
-        ${mini("Plan", escapeHtml(membership.planName || "Membership"))}
-        ${mini("Status", escapeHtml(labelize(membership.status || "")))}
-        ${mini("Balance due", money.format(membership.balanceDue || 0))}
-        ${mini("Expires", escapeHtml(membership.expiry || "-"))}
-      </div>
-    </section>`;
-}
-
-function memberHomeMessagesPanel() {
-  const notifications = buildMemberAdminMessageRows(state.memberData.notifications || [])
-    .map((row) => ({ ...row, categoryLabel: labelize(row.category || "message") }));
-  const unread = notifications.some((row) => isMemberNotificationUnread(row));
-  return `
-    <section class="panel compact-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>SACCO admin message center</h2>
-          <p>Read SACCO messages and follow up through the complaint chat when needed.</p>
-        </div>
-        <span class="status ${unread ? "pending" : "active"}">${unread ? "Unread" : "Current"}</span>
-      </div>
-    </section>
-    ${notifications.length ? recordTable("SACCO admin messages", notifications, ["categoryLabel", "title", "message", "channel", "status", "createdAt", "readAt"]) : emptyState("SACCO admin messages", "Messages from your SACCO admin will appear here.")}
-  `;
-}
-
-function memberHomeMobileMoneyPanel(dash) {
-  const rows = buildMemberMobileMoneyRows(dash);
-  return `
-    <section class="panel compact-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Mobile money deposit workspace</h2>
-          <p>View mobile money deposit activity posted to your SACCO member account.</p>
-        </div>
-        <span class="status active">Mobile money</span>
-      </div>
-    </section>
-    ${rows.length ? recordTable("Mobile money deposit activity", rows, ["postedAt", "reference", "description", "credit", "paymentStatus", "receiptStatus", "status"]) : emptyState("Mobile money deposit activity", "Mobile money deposits will appear here after provider confirmation.")}
-  `;
-}
-
-function memberServiceAssurancePanel() {
-  return `
-    <section class="panel compact-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Member service assurance</h2>
-          <p>Receipts, support chats, security checks and offline drafts help members keep evidence of every request.</p>
-        </div>
-        <span class="status active">Member protected</span>
-      </div>
-      <div class="mini-grid">
-        ${mini("Receipts", "Available after posting")}
-        ${mini("Support", "Chat with SACCO admin")}
-        ${mini("Security", "Session and SACCO code protected")}
-        ${mini("Offline continuity", "Drafts can be saved and synced")}
-      </div>
-    </section>
-  `;
 }
 
 function memberHomeUpdatePanel(dash, balances) {
@@ -173,7 +44,7 @@ function memberHomeUpdatePanel(dash, balances) {
         <span class="status active">Updated</span>
       </div>
       <div class="mini-grid">
-        ${mini("Total balance", money.format(Number(balances.savings || 0) + Number(balances.shares || 0) + Number(balances.welfare || 0)))}
+        ${mini("Total savings", money.format(Number(balances.savings || 0)))}
         ${mini("Loans", (state.memberData.loans || dash.loans || []).length)}
         ${mini("Notifications", (state.memberData.notifications || dash.notifications || []).length)}
         ${mini("Guarantee requests", (state.memberData.pendingGuarantors || dash.pendingGuarantorRequests || []).length)}
@@ -226,14 +97,20 @@ function memberMoneyView(dash, balances) {
   const tabs = [["accounts", "Accounts"], ["statement", "Statement"], ["receipts", "Receipts"]];
   const tab = activeModuleTab("money", tabs);
   const fundBalances = state.memberData.fundBalances || [];
-  const accounts = fundBalances.length
-    ? fundBalances.map((fund) => ({ account: memberFundLabel(fund.fundCode), balance: fund.balance || 0 }))
+  const accounts = (fundBalances.length
+    ? fundBalances.map((fund) => ({ fundCode: fund.fundCode, account: memberFundLabel(fund.fundCode), balance: fund.balance || 0 }))
     : [
-        { account: "Savings", balance: balances.savings || 0 },
-        { account: "Shares", balance: balances.shares || 0 },
-        { account: "Welfare", balance: balances.welfare || 0 }
-      ];
-  const lines = buildMemberStatementLines(dash);
+        { fundCode: "savings", account: "Savings", balance: balances.savings || 0 },
+        { fundCode: "shares", account: "Shares", balance: balances.shares || 0 },
+        { fundCode: "welfare", account: "Welfare", balance: balances.welfare || 0 }
+      ]).map((row) => ({ ...row, action: "member-fund-detail", actionId: row.fundCode, actionLabel: "View" }));
+  const lines = buildMemberStatementLines(dash).map((line, index) => ({
+    ...line,
+    action: "member-statement-line",
+    actionId: String(index),
+    actionLabel: "View"
+  }));
+  state.memberStatementLines = lines;
   const receipts = lines
     .filter((line) => line.reference && (Number(line.credit || 0) > 0 || Number(line.debit || 0) > 0))
     .map((line) => ({
@@ -244,73 +121,199 @@ function memberMoneyView(dash, balances) {
     .sort((a, b) => new Date(b.postedAt || b.createdAt || 0).getTime() - new Date(a.postedAt || a.createdAt || 0).getTime());
   return `
     ${moduleTabs("money", tabs, tab)}
-    ${tab === "accounts" ? recordTable("Account balances", accounts, ["account", "balance"]) : ""}
-    ${tab === "statement" ? `${filterToolbar("Filter by reference, channel, narration or date", "Download PDF", "Download Excel")}${lines.length ? recordTable("Statement", lines, ["reference", "description", "debit", "credit", "runningBalance", "postedAt"]) : emptyState("No statement activity", "Your posted transactions will appear here.")}` : ""}
+    ${tab === "accounts" ? `${memberFundDetailPanel(lines)}${recordTable("Account balances", accounts, ["account", "balance"])}` : ""}
+    ${tab === "statement" ? memberStatementSection(lines) : ""}
     ${tab === "receipts" ? (receipts.length ? recordTable("Receipts", receipts, ["receiptNo", "reference", "description", "amount", "postedAt"]) : emptyState("No receipts yet", "Receipts appear here once your transactions post.")) : ""}
   `;
 }
 
-function memberAccountsView(balances) {
-  const accounts = [
-    { account: "Savings", balance: balances.savings || 0, status: "Verified" },
-    { account: "Shares", balance: balances.shares || 0, status: "Verified" },
-    { account: "Welfare", balance: balances.welfare || 0, status: "Verified" }
+function memberMonthKey(dateValue) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function memberMonthLabel(monthKey) {
+  if (!monthKey) return "-";
+  const [year, month] = monthKey.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  if (Number.isNaN(date.getTime())) return monthKey;
+  return date.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
+
+function memberDepositMethod(line) {
+  return labelize(line.channel || line.paymentRoute || line.paymentMethod || "-");
+}
+
+function memberStatementSection(lines) {
+  const enriched = lines.map((line) => ({
+    ...line,
+    monthKey: memberMonthKey(line.postedAt || line.createdAt),
+    month: memberMonthLabel(memberMonthKey(line.postedAt || line.createdAt)),
+    method: memberDepositMethod(line),
+    source: memberFundLabel(memberFundCodeForType(line.type))
+  }));
+  const months = [...new Set(enriched.map((line) => line.monthKey).filter(Boolean))].sort().reverse();
+  const methods = [...new Set(enriched.map((line) => line.method).filter((value) => value && value !== "-"))].sort();
+  const sources = [...new Set(enriched.map((line) => line.source).filter((value) => value && value !== "-"))].sort();
+  const selectedMonth = state.memberStatementMonth || "all";
+  const selectedMethod = state.memberStatementMethod || "all";
+  const selectedSource = state.memberStatementSource || "all";
+  const sortOrder = state.memberStatementSort || "newest";
+  const filtered = enriched.filter((line) =>
+    (selectedMonth === "all" || line.monthKey === selectedMonth)
+    && (selectedMethod === "all" || line.method === selectedMethod)
+    && (selectedSource === "all" || line.source === selectedSource));
+  // Running balance is tracked per fund source, each starting from zero, so every fund's
+  // column reconciles independently regardless of the active sort or filter.
+  const chronological = filtered.slice().sort((a, b) =>
+    new Date(a.postedAt || a.createdAt || 0).getTime() - new Date(b.postedAt || b.createdAt || 0).getTime());
+  const sourceBalances = {};
+  chronological.forEach((line) => {
+    const key = normal(line.source);
+    const signed = Number(line.credit || 0) - Number(line.debit || 0);
+    sourceBalances[key] = (sourceBalances[key] || 0) + signed;
+    line.runningBalance = sourceBalances[key];
+  });
+  let shown = chronological;
+  if (sortOrder !== "oldest") {
+    shown = chronological.slice().reverse();
+  }
+  state.memberStatementView = shown;
+  return `
+    ${memberStatementToolbar(lines.length, months, methods, sources, selectedMonth, selectedMethod, selectedSource, sortOrder)}
+    ${memberStatementDetailPanel()}
+    ${shown.length
+      ? recordTable("Statement", shown, ["postedAt", "source", "method", "reference", "description", "debit", "credit", "runningBalance"])
+      : emptyState("No statement activity", lines.length ? "No transactions match the selected filters." : "Your posted transactions will appear here.")}
+  `;
+}
+
+function memberStatementToolbar(count, months, methods, sources, selectedMonth, selectedMethod, selectedSource, sortOrder) {
+  const disabled = count ? "" : "disabled";
+  const monthOptions = [`<option value="all" ${selectedMonth === "all" ? "selected" : ""}>All months</option>`]
+    .concat((months || []).map((key) => `<option value="${escapeHtml(key)}" ${selectedMonth === key ? "selected" : ""}>${escapeHtml(memberMonthLabel(key))}</option>`))
+    .join("");
+  const methodOptions = [`<option value="all" ${selectedMethod === "all" ? "selected" : ""}>All methods</option>`]
+    .concat((methods || []).map((method) => `<option value="${escapeHtml(method)}" ${selectedMethod === method ? "selected" : ""}>${escapeHtml(method)}</option>`))
+    .join("");
+  const sourceOptions = [`<option value="all" ${selectedSource === "all" ? "selected" : ""}>All sources</option>`]
+    .concat((sources || []).map((source) => `<option value="${escapeHtml(source)}" ${selectedSource === source ? "selected" : ""}>${escapeHtml(source)}</option>`))
+    .join("");
+  return `
+    <section class="filter-toolbar filter-toolbar-flex">
+      <label><span>Search</span><input value="${escapeHtml(state.search)}" data-search-input placeholder="Filter by reference, channel, narration or date"></label>
+      <label><span>Fund source</span><select data-member-statement-source>${sourceOptions}</select></label>
+      <label><span>Month</span><select data-member-statement-month>${monthOptions}</select></label>
+      <label><span>Method</span><select data-member-statement-method>${methodOptions}</select></label>
+      <label><span>Sort</span><select data-member-statement-sort><option value="newest" ${sortOrder === "newest" ? "selected" : ""}>Newest first</option><option value="oldest" ${sortOrder === "oldest" ? "selected" : ""}>Oldest first</option></select></label>
+      <div class="filter-toolbar-actions">
+        <button class="button primary" type="button" data-action="member-statement-pdf" ${disabled}>Download PDF</button>
+        <button class="button secondary" type="button" data-action="member-statement-excel" ${disabled}>Download Excel</button>
+      </div>
+    </section>
+  `;
+}
+
+function memberFundCodeForType(type) {
+  const value = normal(type).replace(/[\s-]+/g, "_");
+  if (value === "withdrawal") return "savings";
+  if (value.startsWith("saving")) return "savings";
+  if (value.startsWith("share")) return "shares";
+  if (value.startsWith("welfare")) return "welfare";
+  return value.replace(/_(deposit|contribution|purchase|payment)$/, "");
+}
+
+function memberLoanHistoryPanel() {
+  const loanId = state.memberLoanHistoryLoanId;
+  if (!loanId) return "";
+  const loans = state.memberData.loans || [];
+  const loan = loans.find((item) => item.id === loanId);
+  const title = loan ? `${loan.product || loan.applicationNo || "Loan"} repayments` : "Loan repayments";
+  const rows = (state.memberLoanHistory || []).map((row) => ({
+    paidAt: (row.paidAt || "").slice(0, 10),
+    reference: row.reference || "-",
+    amount: row.amount,
+    channel: labelize(row.channel || "-"),
+    narration: row.narration || ""
+  }));
+  const total = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const loaded = state.memberLoanHistory != null;
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(title)}</h2>
+          <p>Posted repayments received on this loan. Total repaid: ${money.format(total)}.</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-loan-history">Close</button>
+      </div>
+      ${state.memberLoanHistoryError ? `<div class="notice warning"><span>${escapeHtml(state.memberLoanHistoryError)}</span></div>` : ""}
+      ${!loaded && !state.memberLoanHistoryError ? `<div class="notice compact"><span>Loading repayments...</span></div>` : ""}
+      ${loaded ? (rows.length ? recordTable("Repayments", rows, ["paidAt", "reference", "amount", "channel", "narration"]) : emptyState("No repayments yet", "Repayments posted to this loan will appear here.")) : ""}
+    </section>
+  `;
+}
+
+function memberFundDetailPanel(lines) {
+  const fundCode = state.memberSelectedFund;
+  if (!fundCode) return "";
+  const rows = (lines || [])
+    .filter((line) => memberFundCodeForType(line.type) === normal(fundCode))
+    .sort((a, b) => new Date(a.postedAt || a.createdAt || 0).getTime() - new Date(b.postedAt || b.createdAt || 0).getTime());
+  // Per-fund cumulative balance (from zero) so the column reconciles within this single fund.
+  let cumulative = 0;
+  const display = rows.map((line) => {
+    cumulative += Number(line.credit || 0) - Number(line.debit || 0);
+    return { ...line, fundBalance: cumulative };
+  });
+  const total = cumulative;
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${escapeHtml(memberFundLabel(fundCode))} transactions</h2>
+          <p>Posted transactions that make up your ${escapeHtml(memberFundLabel(fundCode))} balance. Net movement: ${money.format(total)}.</p>
+        </div>
+        <button class="button ghost" type="button" data-action="close-fund-detail">Close</button>
+      </div>
+      ${display.length
+        ? recordTable(`${memberFundLabel(fundCode)} activity`, display, ["postedAt", "reference", "description", "debit", "credit", "fundBalance"])
+        : emptyState("No transactions", "No posted transactions are attributed to this fund yet.")}
+    </section>
+  `;
+}
+
+function memberStatementDetailPanel() {
+  const line = state.memberStatementDetail;
+  if (!line) return "";
+  const amount = Number(line.credit || 0) || Number(line.debit || 0);
+  const direction = Number(line.credit || 0) > 0 ? "Credit" : Number(line.debit || 0) > 0 ? "Debit" : "-";
+  const rows = [
+    ["Reference", line.reference || "-"],
+    ["Description", line.description || "-"],
+    ["Direction", direction],
+    ["Amount", money.format(amount)],
+    ["Debit", Number(line.debit || 0) ? money.format(line.debit) : "-"],
+    ["Credit", Number(line.credit || 0) ? money.format(line.credit) : "-"],
+    ["Running balance", line.runningBalance != null ? money.format(line.runningBalance) : "-"],
+    ["Payment channel", labelize(line.channel || line.paymentRoute || line.paymentMethod || "-")],
+    ["Status", labelize(line.paymentStatus || line.status || "posted")],
+    ["Posted", line.postedAt || line.createdAt || "-"]
   ];
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
         <div>
-          <h2>Member account overview</h2>
-          <p>Member account balances and verification status from the SACCO ledger.</p>
+          <h2>Transaction details</h2>
+          <p>Reference ${escapeHtml(String(line.reference || "-"))}</p>
         </div>
-        <span class="status active">Verified</span>
+        <button class="button ghost" type="button" data-action="close-statement-detail">Close</button>
+      </div>
+      <div class="source-grid compact">
+        ${rows.map(([label, value]) => mini(label, escapeHtml(String(value)))).join("")}
       </div>
     </section>
-    ${recordTable("Member account balances", accounts, ["account", "balance", "status"])}
-  `;
-}
-
-function memberStatementsView(dash) {
-  const lines = buildMemberStatementLines(dash);
-  const monthly = buildMemberMonthlyPerformanceRows(dash);
-  const tabs = [["overview", "Overview"], ["activity", "Activity"], ["monthly", "Monthly"], ["exports", "Exports"]];
-  const tab = activeModuleTab("statements", tabs);
-  return `
-    <section class="panel compact-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Member statement readiness</h2>
-          <p>Full-date display, monthly savings evidence and export controls for member statements.</p>
-        </div>
-        <span class="status active">Full-date display</span>
-      </div>
-    </section>
-    ${moduleTabs("statements", tabs, tab)}
-    ${tab === "overview" ? recordTable("Recent statement lines", lines.slice(0, 8), ["reference", "description", "debit", "credit", "runningBalance", "postedAt"]) : ""}
-    ${tab === "activity" ? recordTable("Member statement", lines, ["reference", "description", "debit", "credit", "runningBalance", "postedAt"]) : ""}
-    ${tab === "monthly" ? `${recordTable("Statement monthly evidence", monthly, ["date", "month", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"])}` : ""}
-    ${tab === "exports" ? `<section class="panel compact-panel"><div class="panel-heading"><div><h2>Statement export controls</h2><p>Download or print statement evidence for SACCO office verification.</p></div></div><div class="form-actions inline"><button class="button secondary" type="button">Download PDF</button><button class="button secondary" type="button">Download Excel</button></div></section>` : ""}
-  `;
-}
-
-function memberReceiptsView(dash) {
-  const receipts = buildMemberStatementLines(dash)
-    .filter((line) => line.reference && (Number(line.credit || 0) > 0 || Number(line.debit || 0) > 0))
-    .map((line) => ({
-      receiptNo: `RCT-${line.reference}`,
-      reference: line.reference,
-      paymentRoute: paymentRouteLabelFor(line),
-      receiptStatus: "Receipt status",
-      amount: Number(line.credit || 0) || Number(line.debit || 0),
-      postedAt: line.postedAt
-    }));
-  const tabs = [["list", "Receipts"], ["evidence", "Evidence"], ["exports", "Exports"]];
-  const tab = activeModuleTab("receipts", tabs);
-  return `
-    ${moduleTabs("receipts", tabs, tab)}
-    ${tab === "list" ? recordTable("Member receipts", receipts, ["receiptNo", "reference", "paymentRoute", "receiptStatus", "amount", "postedAt"]) : ""}
-    ${tab === "evidence" ? `<section class="panel compact-panel"><div class="panel-heading"><div><h2>Receipt evidence controls</h2><p>Payment route and receipt status are preserved for each posted member transaction.</p></div></div>${recordTable("Receipt evidence", receipts, ["receiptNo", "paymentRoute", "receiptStatus", "amount", "postedAt"])}</section>` : ""}
-    ${tab === "exports" ? `<section class="panel compact-panel"><div class="panel-heading"><div><h2>Receipt export and print</h2><p>Print or export receipt evidence for SACCO counter service.</p></div></div><div class="form-actions inline"><button class="button secondary" type="button">Print receipt</button><button class="button secondary" type="button">Export receipts</button></div></section>` : ""}
   `;
 }
 
@@ -327,32 +330,58 @@ function memberLoansView() {
   const tab = activeModuleTab("loans", tabs);
   return `
     ${moduleTabs("loans", tabs, tab)}
-    ${tab === "loans" ? `${memberLoanApplicationPanel()}${loans.length ? recordTable("Member loans", loans, ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"]) : emptyState("Member loans", "Apply for a loan using the form above.")}` : ""}
-    ${tab === "guarantor" ? `${state.memberGuarantorMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorMessage)}</strong></div>` : ""}${state.memberGuarantorError ? `<div class="notice warning"><strong>Guarantor decision failed.</strong><span>${escapeHtml(state.memberGuarantorError)}</span></div>` : ""}${requests.length ? recordTable("Guarantor requests", requests, ["borrower", "product", "requestedAmount", "guaranteedAmount", "capacity", "status"]) : emptyState("No guarantor requests", "Requests to guarantee other members' loans appear here.")}` : ""}
+    ${tab === "loans" ? `${memberLoanApplicationPanel()}${memberReplaceGuarantorPanel()}${memberLoanHistoryPanel()}${loans.length ? recordTable("Member loans", loans.map((loan) => ({ ...loan, action: "member-loan-history", actionId: loan.id })), ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"]) : emptyState("Member loans", "Apply for a loan using the form above.")}` : ""}
+    ${tab === "guarantor" ? `${state.memberGuarantorMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorMessage)}</strong></div>` : ""}${state.memberGuarantorError ? `<div class="notice warning"><strong>Guarantor decision failed.</strong><span>${escapeHtml(state.memberGuarantorError)}</span></div>` : ""}${requests.length ? recordTable("Guarantor requests", requests, ["borrower", "product", "requestedAmount", "guaranteedAmount", "guaranteeCeiling", "committedGuarantees", "capacity", "status"]) : emptyState("No guarantor requests", "Requests to guarantee other members' loans appear here.")}` : ""}
   `;
 }
 
-function memberGuarantorRequestsView() {
-  const requests = buildMemberGuarantorRows(state.memberData.pendingGuarantors || []);
-  const pending = requests.filter((row) => normal(row.status) === "pending");
+function memberReplaceGuarantorPanel() {
+  const loans = (state.memberData.loans || [])
+    .filter((loan) => ["submitted", "under_review", "pending_approval"].includes(normal(loan.status)));
+  if (!loans.length) return "";
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
         <div>
-          <h2>Member guarantor decision center</h2>
-          <p>Review requests before accepting responsibility for another member's loan.</p>
+          <h2>Add or replace a guarantor</h2>
+          <p>If a guarantor rejects, add another SACCO member here while the loan is still under review (up to 3 active guarantors).</p>
         </div>
-        <span class="status ${pending.length ? "pending" : "active"}">Pending requests</span>
       </div>
+      ${state.memberGuarantorAddMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorAddMessage)}</strong></div>` : ""}
+      ${state.memberGuarantorAddError ? `<div class="notice warning"><strong>Could not add guarantor.</strong><span>${escapeHtml(state.memberGuarantorAddError)}</span></div>` : ""}
+      <form id="memberAddGuarantorForm" class="form-grid">
+        <label><span>Loan</span><select id="memberAddGuarantorLoanId">${loans.map((loan) => `<option value="${escapeHtml(loan.id)}">${escapeHtml(`${loan.applicationNo || loan.id} · ${loan.product || ""} · ${money.format(loan.amount || loan.requestedAmount || 0)}`)}</option>`).join("")}</select></label>
+        ${memberGuarantorPicker("replacement", true)}
+        <label><span>Guarantor member no.</span><input id="memberAddGuarantorNo" placeholder="e.g. GVS-0003"></label>
+        <label><span>Pledge</span><input id="memberAddGuarantorAmount" type="number" min="0" step="1" placeholder="0"></label>
+        <div class="form-actions inline"><button class="button secondary" type="submit">Add guarantor</button></div>
+      </form>
     </section>
-    ${state.memberGuarantorMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorMessage)}</strong></div>` : ""}
-    ${state.memberGuarantorError ? `<div class="notice warning"><strong>Guarantor decision failed.</strong><span>${escapeHtml(state.memberGuarantorError)}</span></div>` : ""}
-    ${requests.length ? recordTable("Member guarantor requests", requests, ["borrower", "product", "requestedAmount", "guaranteedAmount", "capacity", "status"]) : emptyState("Member guarantor requests", "Pending requests will appear here.")}
+  `;
+}
+
+function memberGuarantorPicker(target, enabled) {
+  return `
+    <div class="wide guarantor-picker">
+      <label><span>Find a guarantor by name or member number</span></label>
+      <div class="search-row">
+        <input id="guarantorSearch_${escapeHtml(target)}" placeholder="Type a name or member number..." ${enabled ? "" : "disabled"}>
+        <button class="button secondary" type="button" data-guarantor-search="${escapeHtml(target)}" ${enabled ? "" : "disabled"}>Search</button>
+      </div>
+      <div id="guarantorResults_${escapeHtml(target)}" class="guarantor-results"></div>
+    </div>
   `;
 }
 
 function memberLoanApplicationPanel() {
   const memberActive = normal(state.member?.status) === "active";
+  const catalogProducts = (state.memberData.loanProducts || [])
+    .map((product) => String(product.name || product.label || product.code || "").trim())
+    .filter(Boolean);
+  const loanProducts = catalogProducts.length ? catalogProducts : ["Development Loan", "Emergency Loan"];
+  const productOptions = loanProducts
+    .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
+    .join("");
   return `
     <section class="panel">
       <div class="panel-heading">
@@ -365,10 +394,18 @@ function memberLoanApplicationPanel() {
       ${state.memberLoanMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberLoanMessage)}</strong></div>` : ""}
       ${state.memberLoanError ? `<div class="notice warning"><strong>Loan application failed.</strong><span>${escapeHtml(state.memberLoanError)}</span></div>` : ""}
       <form id="memberLoanForm" class="form-grid">
-        <label><span>Loan product</span><select id="memberLoanProduct" ${memberActive ? "" : "disabled"}>${loanProductOptions().map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("")}</select></label>
+        <label><span>Loan product</span><select id="memberLoanProduct" ${memberActive ? "" : "disabled"}>${productOptions}</select></label>
         <label><span>Amount</span><input id="memberLoanAmount" type="number" min="1" step="1" value="100000" ${memberActive ? "" : "disabled"}></label>
         <label><span>Repayment months</span><input id="memberLoanMonths" type="number" min="1" max="60" value="12" ${memberActive ? "" : "disabled"}></label>
         <label class="wide"><span>Purpose</span><textarea id="memberLoanPurpose" placeholder="Business, school fees, farming input, emergency..." ${memberActive ? "" : "disabled"}></textarea></label>
+        <div class="wide">
+          <p class="field-note">Select up to 3 fellow SACCO members to guarantee this loan and the amount each pledges. They will be notified to accept or reject. If your savings already cover the loan plus its interest, you can submit without a guarantor.</p>
+        </div>
+        ${memberGuarantorPicker("loan", memberActive)}
+        ${[1, 2, 3].map((index) => `
+          <label><span>Guarantor ${index} member no. (optional)</span><input id="memberLoanGuarantor${index}No" placeholder="e.g. GVS-0002" ${memberActive ? "" : "disabled"}></label>
+          <label><span>Guarantor ${index} pledge</span><input id="memberLoanGuarantor${index}Amount" type="number" min="0" step="1" placeholder="0" ${memberActive ? "" : "disabled"}></label>
+        `).join("")}
         <div class="form-actions inline">${memberActive ? `<button class="button primary" type="submit">Submit loan application</button>` : `<span class="status pending">Contact SACCO office</span>`}</div>
       </form>
     </section>
@@ -506,7 +543,7 @@ function memberPaymentFormPanel(payableLoans) {
             ${providers.map((provider, index) => memberPaymentProviderTile(provider, index === 0)).join("")}
           </div>
         </label>
-        <label><span>Paying for</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings</option><option value="share_purchase">Shares</option><option value="welfare_contribution">Welfare</option>${payableLoans.length ? `<option value="loan_repayment">Loan repayment</option>` : ""}</select></label>
+        <label><span>Paying for</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings</option><option value="share_purchase">Shares</option><option value="welfare_contribution">Welfare</option>${payableLoans.length ? `<option value="loan_repayment">Loan repayment</option>` : ""}${state.memberData.membership ? `<option value="membership_dues">Membership dues</option>` : ""}</select></label>
         <label><span>Amount (UGX)</span><input id="memberPaymentAmount" type="number" min="1" step="1" value="5000"></label>
         <label><span>Mobile money number</span><input id="memberPaymentPhone" value="${escapeHtml(state.member?.phone || "")}" placeholder="07XX XXX XXX"></label>
         <label><span>Payment reference</span><input id="memberPaymentReference" value="${escapeHtml(`MM-${Date.now()}`)}"></label>
@@ -529,7 +566,7 @@ function memberBankCollectionPanel(payableLoans) {
       </div>
       <form id="memberPaymentForm" class="form-grid">
         <input id="memberPaymentRoute" type="hidden" value="bank_collection">
-        <label><span>Paying for</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings</option><option value="share_purchase">Shares</option><option value="welfare_contribution">Welfare</option>${payableLoans.length ? `<option value="loan_repayment">Loan repayment</option>` : ""}</select></label>
+        <label><span>Paying for</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings</option><option value="share_purchase">Shares</option><option value="welfare_contribution">Welfare</option>${payableLoans.length ? `<option value="loan_repayment">Loan repayment</option>` : ""}${state.memberData.membership ? `<option value="membership_dues">Membership dues</option>` : ""}</select></label>
         <label><span>Amount (${escapeHtml(currentRegion().currency)})</span><input id="memberPaymentAmount" type="number" min="1" step="1" value="5000"></label>
         <label><span>Bank reference</span><input id="memberBankReference" value="${escapeHtml(reference)}"></label>
         <label><span>Mobile money number</span><input id="memberPaymentPhone" value="${escapeHtml(state.member?.phone || "")}" placeholder="Optional contact number"></label>
@@ -609,12 +646,30 @@ function memberChannelPreferencesPanel() {
           </div>`;
         }).join("")}
       </div>
+      ${memberGuarantorListingPanel()}
     </section>`;
+}
+
+function memberGuarantorListingPanel() {
+  const optOut = !!(state.memberData.guarantorListing && state.memberData.guarantorListing.optOut);
+  return `
+    <div class="collection-account-list guarantor-listing-privacy">
+      <div class="collection-account-row">
+        <div><strong>Guarantor listing</strong><span>${optOut ? "Hidden — you won't appear in other members' guarantor search." : "Visible — other members can find you (name and member number only) to request a guarantee."}</span></div>
+        <button class="button ${optOut ? "primary" : "ghost"}" type="button" data-toggle-guarantor-listing="${optOut ? "false" : "true"}">${optOut ? "Make me findable" : "Hide me"}</button>
+      </div>
+    </div>`;
 }
 
 function memberNotificationsView() {
   const messages = buildMemberAdminMessageRows(state.memberData.notifications || [])
-    .map((row) => ({ ...row, categoryLabel: labelize(row.category || "message") }));
+    .map((row) => ({
+      ...row,
+      categoryLabel: labelize(row.category || "message"),
+      action: isMemberNotificationUnread(row) ? "member-notification-acknowledge" : "none",
+      actionLabel: "Acknowledge",
+      actionId: row.id
+    }));
   const unread = messages.filter((row) => isMemberNotificationUnread(row));
   const tabs = [["inbox", `Inbox${messages.length ? ` (${messages.length})` : ""}`], ["unread", `Unread${unread.length ? ` (${unread.length})` : ""}`], ["evidence", "Evidence"]];
   const tab = activeModuleTab("notifications", tabs);
@@ -653,36 +708,26 @@ function paymentRequestStatusNotice() {
 }
 
 function memberComplaintsView() {
-  const notifications = buildMemberAdminMessageRows(state.memberData.notifications || []).map((notification) => ({
-    ...notification,
-    action: isMemberNotificationUnread(notification) ? "member-notification-acknowledge" : "none",
-    actionLabel: "Acknowledge",
-    actionId: notification.id
-  }));
   const unreadChats = (state.memberData.chatThreads || []).filter((thread) => thread.unreadCount > 0).length;
-  const unreadMsgs = notifications.filter((row) => isMemberNotificationUnread(row)).length;
   const complaintDrafts = buildMemberDraftRows(state.memberData.drafts || [], "complaint", labelize);
-  const tabs = [["submit", "Submit"], ["tracking", "Tracking"], ["drafts", `Drafts${complaintDrafts.length ? ` (${complaintDrafts.length})` : ""}`], ["evidence", "Evidence"], ["chat", `Chat${unreadChats ? ` (${unreadChats})` : ""}`], ["notifications", `Notifications${unreadMsgs ? ` (${unreadMsgs})` : ""}`]];
+  const tabs = [["submit", "Submit"], ["tracking", "Tracking"], ["drafts", `Drafts${complaintDrafts.length ? ` (${complaintDrafts.length})` : ""}`], ["evidence", "Evidence"], ["chat", `Chat${unreadChats ? ` (${unreadChats})` : ""}`]];
   const tab = activeModuleTab("complaints", tabs);
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
         <div>
           <h2>Member complaint center</h2>
-          <p>Chat with your SACCO admin, track replies and read SACCO messages.</p>
+          <p>Chat with your SACCO admin and track replies. SACCO notices live under Messages.</p>
         </div>
-        <span class="status ${unreadChats || unreadMsgs ? "pending" : "active"}">${unreadChats || unreadMsgs ? "Unread activity" : "Current"}</span>
+        <span class="status ${unreadChats ? "pending" : "active"}">${unreadChats ? "Unread activity" : "Current"}</span>
       </div>
     </section>
     ${moduleTabs("complaints", tabs, tab)}
-    ${state.memberNotificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberNotificationMessage)}</strong></div>` : ""}
-    ${state.memberNotificationError ? `<div class="notice warning"><strong>Notification update failed.</strong><span>${escapeHtml(state.memberNotificationError)}</span></div>` : ""}
     ${tab === "submit" ? memberComplaintSubmissionPanel() : ""}
     ${tab === "tracking" ? memberComplaintTrackingPanel() : ""}
     ${tab === "drafts" ? `<section class="panel compact-panel"><div class="panel-heading"><div><h2>Complaint draft workspace</h2><p>Review saved complaint drafts before syncing.</p></div></div></section>${memberDraftPanel("Complaint offline drafts", complaintDrafts)}` : ""}
     ${tab === "evidence" ? memberComplaintEvidencePanel() : ""}
     ${tab === "chat" ? memberChatWorkspace() : ""}
-    ${tab === "notifications" ? (notifications.length ? recordTable("Notifications", notifications, ["title", "message", "channel", "status", "createdAt", "readAt"]) : emptyState("No messages", "SACCO notices and alerts will appear here.")) : ""}
   `;
 }
 
@@ -789,12 +834,11 @@ function memberDraftPanel(title, drafts) {
 
 function memberProfileView(_balances = {}) {
   const member = state.member || {};
-  const tabs = [["overview", "Overview"], ["kyc", "KYC"], ["contacts", "Contacts"], ["balances", "Balances"], ["privacy", "Privacy"], ["security", "Security"]];
+  const tabs = [["overview", "Overview"], ["contacts", "Contacts"], ["balances", "Balances"], ["privacy", "Privacy"], ["security", "Security"]];
   const tab = activeModuleTab("profile", tabs);
   return `
     ${moduleTabs("profile", tabs, tab)}
     ${tab === "overview" ? memberProfileOverviewPanel(member) : ""}
-    ${tab === "kyc" ? memberProfileKycPanel(member) : ""}
     ${tab === "contacts" ? memberProfileContactsPanel(member) : ""}
     ${tab === "balances" ? memberProfileBalancesPanel(_balances) : ""}
     ${tab === "privacy" ? memberPrivacyPreferencesPanel(member) : ""}
@@ -807,10 +851,9 @@ function memberProfileOverviewPanel(member) {
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Member profile and KYC</h2>
-          <p>Personal details shown here come from the member session and SACCO KYC record.</p>
+          <h2>Member profile</h2>
+          <p>Personal details shown here come from your SACCO member record.</p>
         </div>
-        <span class="status ${normal(member.kycStatus) === "approved" ? "active" : "pending"}">${labelize(member.kycStatus || "pending")}</span>
       </div>
       <div class="source-grid">
         ${mini("Full name", member.fullName)}
@@ -820,33 +863,6 @@ function memberProfileOverviewPanel(member) {
         ${mini("National ID", member.nationalId)}
         ${mini("Joining date", member.joiningDate)}
       </div>
-    </section>
-  `;
-}
-
-function memberProfileKycPanel(member) {
-  return `
-    <section class="panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Member KYC readiness</h2>
-          <p>KYC status controls whether the member can transact, borrow and receive SACCO services.</p>
-        </div>
-        <span class="status ${normal(member.kycStatus) === "approved" ? "active" : "pending"}">${labelize(member.kycStatus || "pending")}</span>
-      </div>
-      <div class="source-grid">
-        ${mini("KYC status", labelize(member.kycStatus || "pending"))}
-        ${mini("Member status", labelize(member.status || "pending"))}
-        ${mini("National ID", member.nationalId || "Missing")}
-        ${mini("Member type", labelize(member.memberType || "member"))}
-        ${mini("Review owner", "SACCO admin")}
-        ${mini("Support path", "Complaints")}
-      </div>
-      <ul class="activity-list">
-        <li><strong>Identity confirmation</strong><span>Full name, membership number, phone and national ID must match SACCO KYC records.</span><em>Required</em></li>
-        <li><strong>Service access</strong><span>Approved KYC improves access to payments, loan applications and guarantor requests.</span><em>Controlled</em></li>
-        <li><strong>Correction path</strong><span>Members should contact the SACCO office or submit a complaint to correct profile details.</span><em>Traceable</em></li>
-      </ul>
     </section>
   `;
 }

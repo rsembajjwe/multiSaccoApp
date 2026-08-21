@@ -110,7 +110,7 @@ async function platformAdminUat(page) {
 async function saccoStaffUat(page) {
   const staff = uatData?.created?.staffUser;
   await staffLogin(page, staff?.email || "admin@greenvalley.local", staff?.password || "Sacco@12345", "SACCO staff");
-  await assertScreen(page, "members", "Members", ["Member Overview", "Register Member", "Member List", "KYC Detail", "Contacts & Documents", "Statement", "Member management focus"]);
+  await assertScreen(page, "members", "Members", ["Member Overview", "Register Member", "Member List", "Member detail", "Contacts & Documents", "Statement", "Member management focus"]);
   await assertSaccoMemberAdminTabs(page);
   await assertScreen(page, "transactions", "Transactions", ["Transaction control focus", "Deposits and reversals", "New transaction screen", "Receipting queue", "Receipt register"]);
   await assertScreen(page, "savings", "Savings", ["Savings operations control", "SACCO monthly performance control", "Treasurer cash collections", "Mobile money collections"]);
@@ -133,12 +133,11 @@ async function memberPortalUat(page) {
 
   for (const marker of [
     "Balances and requests update",
-    "Total balance",
+    "Total savings",
     "Loans",
     "Notifications",
     "Guarantee requests",
     "Offline drafts",
-    "Monthly savings",
     "Pay by mobile money",
     "Read SACCO messages",
     member?.membershipNo || "GVS-0001"
@@ -183,15 +182,14 @@ async function assertSaccoMemberAdminTabs(page) {
 }
 
 async function assertMemberPortalTabs(page) {
-  await navigateTo(page, "home");
-  await page.locator("[data-module-tab-view='home'][data-module-tab='monthly']").click();
-  await expectText(page, "Monthly savings workspace", "member monthly savings tab");
-  await expectText(page, "Treasurer cash", "member monthly treasurer cash visibility");
-  await expectText(page, "Mobile money", "member monthly mobile money visibility");
-  await page.locator("[data-module-tab-view='home'][data-module-tab='messages']").click();
-  await expectText(page, "SACCO admin message center", "member SACCO message center tab");
-  await page.locator("[data-module-tab-view='home'][data-module-tab='mobile-money']").click();
-  await expectText(page, "Mobile money deposit workspace", "member mobile-money deposit tab");
+  await navigateTo(page, "money");
+  await expectText(page, "Account balances", "member money accounts tab");
+  await page.locator("[data-module-tab-view='money'][data-module-tab='statement']").click();
+  await expectText(page, "Statement", "member money statement tab");
+  await page.locator("[data-module-tab-view='money'][data-module-tab='receipts']").click();
+  await expectText(page, "Receipts", "member money receipts tab");
+  await navigateTo(page, "notifications");
+  await expectText(page, "SACCO admin messages", "member SACCO message center");
   await navigateTo(page, "payments");
   await expectText(page, "Member payment center", "member payment center");
   await page.locator("[data-module-tab-view='payments'][data-module-tab='tracking']").click();

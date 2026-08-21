@@ -15,7 +15,7 @@
       ${summary("Loan portfolio", money.format(consolidated.loanPortfolio || 0), "Credit exposure", "Open")}
       ${summary("Compliance exceptions", exceptions, "Reconciliation and journal checks", "Investigate")}
       ${summary("Privacy requests", dataProtection.privacyRequests || 0, "Member data rights", "Review")}
-      ${summary("KYC disposals", dataProtection.kycDocumentsDisposed || 0, "Document retention actions", "Trace")}
+      ${summary("Document disposals", dataProtection.kycDocumentsDisposed || 0, "Document retention actions", "Trace")}
     </div>
     ${moduleTabs("reports", tabs, tab)}
     ${tab === "overview" ? reportEvidenceControlPanel(consolidated, exceptions) : ""}
@@ -74,7 +74,7 @@ function platformSuperAdminReportsView(rows, exceptions) {
       ${summary(t("failedPayments"), platformSummary.failedPayments, "Provider exceptions", t("review"))}
       ${summary(t("complianceExceptions"), exceptions, "Reconciliation and journal checks", "Investigate")}
       ${summary("Privacy requests", dataProtection.privacyRequests || 0, "Across SACCOs", "Review")}
-      ${summary("KYC disposals", dataProtection.kycDocumentsDisposed || 0, "File-store evidence", "Trace")}
+      ${summary("Document disposals", dataProtection.kycDocumentsDisposed || 0, "File-store evidence", "Trace")}
     </div>
     ${platformSuperAdminReportingControlPanel(platformSummary, subscriptions)}
     ${filterToolbar("Search Super Admin reports by SACCO, billing status, administrator, compliance status or export type", "Export report", "Schedule report")}
@@ -161,8 +161,8 @@ function reportReadinessPanel(consolidated) {
         ${mini("Open complaints", consolidated.openComplaints || 0)}
         ${mini("Open resolutions", consolidated.openResolutions || 0)}
         ${mini("Privacy requests", dataProtection.privacyRequests || 0)}
-        ${mini("KYC review due", dataProtection.kycDocumentsReviewDue || 0)}
-        ${mini("KYC disposals", dataProtection.kycDocumentsDisposed || 0)}
+        ${mini("Documents review due", dataProtection.kycDocumentsReviewDue || 0)}
+        ${mini("Document disposals", dataProtection.kycDocumentsDisposed || 0)}
         ${mini("Storage actions", dataProtection.kycStorageActions || 0)}
         ${mini("Data protection", dataProtection.evidenceStatus || "review")}
         ${mini("Compliance status", consolidated.complianceStatus || "review")}

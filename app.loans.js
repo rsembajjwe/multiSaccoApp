@@ -33,7 +33,12 @@ function loansView() {
 }
 
 function guarantorsView() {
-  const requests = dataRows("guarantorRequests").map((request) => ({ ...request, memberName: memberName(request.memberId) }));
+  const requests = dataRows("guarantorRequests").map((request) => ({
+    ...request,
+    memberName: memberName(request.memberId),
+    product: request.loan?.product || request.product || "Loan",
+    requestedAmount: request.loan?.amount || request.loan?.requestedAmount || request.requestedAmount || 0
+  }));
   const loans = buildLoanRows({
     loans: dataRows("loans"),
     memberName,
@@ -60,8 +65,8 @@ function guarantorsView() {
       ["Approval readiness", `${accepted.length} guarantee record(s) can support loan approval decisions.`, accepted.length ? "Ready" : "Waiting"],
       ["Capacity", "Review each guarantor exposure before approval.", "Assess"]
     ]) : ""}
-    ${tab === "overview" ? recordTable("Guarantor requests", rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "capacity", "guarantorReadiness", "status"]) : ""}
-    ${tab === "requests" ? recordTable("Guarantor requests", rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "capacity", "guarantorReadiness", "status"]) : ""}
+    ${tab === "overview" ? recordTable("Guarantor requests", rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "guaranteeCeiling", "committedGuarantees", "capacity", "guarantorReadiness", "status"]) : ""}
+    ${tab === "requests" ? recordTable("Guarantor requests", rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "guaranteeCeiling", "committedGuarantees", "capacity", "guarantorReadiness", "status"]) : ""}
   `;
 }
 
@@ -92,6 +97,75 @@ function loanApplicationPanel() {
   `;
 }
 
+function loanAppraisalPanel(canApprove, loan) {
+  const appraisals = (state.selectedLoanAppraisals || []).map((row) => ({
+    recommendation: labelize(row.recommendation || ""),
+    recommendedAmount: row.recommendedAmount != null ? money.format(row.recommendedAmount) : "-",
+    recommendedTermMonths: row.recommendedTermMonths != null ? `${row.recommendedTermMonths} mo` : "-",
+    notes: row.notes || "-",
+    createdAt: row.createdAt || "-"
+  }));
+  const latest = (state.selectedLoanAppraisals || [])[0];
+  const inReview = ["submitted", "under_review", "pending_approval"].includes(normal(loan.status));
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Credit appraisal</h2>
+          <p>Loans officer assessment recorded for the loan committee before a decision.</p>
+        </div>
+        <span class="status ${latest ? (normal(latest.recommendation) === "recommended" ? "active" : "pending") : "pending"}">${latest ? labelize(latest.recommendation) : "Not appraised"}</span>
+      </div>
+      ${appraisals.length ? recordTable("Appraisal history", appraisals, ["recommendation", "recommendedAmount", "recommendedTermMonths", "notes", "createdAt"]) : emptyState("Appraisal history", "No appraisal has been recorded for this loan yet.")}
+      ${canApprove && inReview ? `
+        <form id="loanAppraisalForm" class="form-grid">
+          <input type="hidden" id="appraisalLoanId" value="${escapeHtml(loan.id)}">
+          <label><span>Recommendation</span><select id="appraisalRecommendation"><option value="recommended">Recommended</option><option value="declined">Declined</option></select></label>
+          <label><span>Recommended amount</span><input id="appraisalAmount" type="number" min="0" step="1" placeholder="${escapeHtml(String(loan.amount || loan.requestedAmount || 0))}"></label>
+          <label><span>Recommended term (months)</span><input id="appraisalTerm" type="number" min="1" max="60" placeholder="${escapeHtml(String(loan.repaymentMonths || 12))}"></label>
+          <label class="wide"><span>Assessment notes</span><textarea id="appraisalNotes" placeholder="Affordability, character, repayment source, risks..."></textarea></label>
+          <div class="form-actions inline"><button class="button secondary" type="submit">Record appraisal</button></div>
+        </form>
+      ` : ""}
+    </section>
+  `;
+}
+
+function loanCoverPanel() {
+  const cover = state.selectedLoanCover;
+  if (!cover) return "";
+  const ratioPct = Math.round(Number(cover.coverRatio || 0) * 100);
+  const guarantorRows = (cover.guarantors || []).map((row) => ({
+    membershipNo: row.membershipNo,
+    fullName: row.fullName,
+    savings: money.format(row.savings || 0),
+    availableCapacity: money.format(row.availableCapacity || 0),
+    pledgeAmount: money.format(row.pledgeAmount || 0),
+    status: labelize(row.status || "")
+  }));
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Committee cover dashboard</h2>
+          <p>Applicant credit and guarantor cover measured against the loan request.</p>
+        </div>
+        <span class="status ${cover.covered ? "active" : "pending"}">${cover.covered ? "Fully covered" : "Short of cover"}</span>
+      </div>
+      <div class="dashboard-grid">
+        ${summary("Loan request", money.format(cover.amount || 0), "Amount applied for", "Assess")}
+        ${summary("Applicant self-cover", money.format(cover.applicant?.savings || 0), `${escapeHtml(cover.applicant?.membershipNo || "-")} savings`, "Credit")}
+        ${summary("Accepted pledges", money.format(cover.acceptedPledges || 0), "Guarantors who accepted", "Guarantors")}
+        ${summary("Total cover", money.format(cover.totalCover || 0), "Self-cover + accepted pledges", "Total")}
+        ${summary("Cover ratio", `${ratioPct}%`, cover.covered ? "Meets the 100% minimum" : `Short by ${money.format(cover.shortfall || 0)}`, cover.covered ? "Met" : "Short")}
+      </div>
+      ${guarantorRows.length
+        ? recordTable("Guarantor cover", guarantorRows, ["membershipNo", "fullName", "savings", "availableCapacity", "pledgeAmount", "status"])
+        : emptyState("Guarantor cover", "No guarantors have been selected for this loan yet.")}
+    </section>
+  `;
+}
+
 function loanDetailPanel(rows) {
   const loan = rows.find((item) => item.id === state.selectedLoanId) || rows[0];
   if (!loan) return "";
@@ -100,7 +174,9 @@ function loanDetailPanel(rows) {
   const borrowerId = loan.memberId;
   const guarantorOptions = activeLoanMemberOptions(dataRows("members"), borrowerId);
   const acceptedGuarantors = state.selectedLoanGuarantors.filter((request) => normal(request.status) === "accepted");
-  const canApproveLoan = canApprove && ["submitted", "pending_approval"].includes(normal(loan.status)) && acceptedGuarantors.length > 0;
+  const totalPayable = Number(loan.totalPayable || loan.amount || loan.requestedAmount || 0);
+  const selfSecured = state.selectedLoanCover && Number(state.selectedLoanCover.applicant?.savings || 0) >= totalPayable && totalPayable > 0;
+  const canApproveLoan = canApprove && ["submitted", "pending_approval", "under_review"].includes(normal(loan.status)) && (acceptedGuarantors.length > 0 || selfSecured);
   const canRejectLoan = canApprove && ["submitted", "pending_approval"].includes(normal(loan.status));
   const canDisburseLoan = canApprove && normal(loan.status) === "approved";
   const canRepayLoan = canApprove && normal(loan.status) === "active";
@@ -146,10 +222,12 @@ function loanDetailPanel(rows) {
         ${mini("61-90 days", money.format(loan.arrears61To90Amount || 0))}
         ${mini("90+ days", money.format(loan.arrearsOver90Amount || 0))}
       </div>
+      ${loanCoverPanel()}
+      ${loanAppraisalPanel(canApprove, loan)}
       ${loanControlPanel("Loan decision checklist", "Check guarantor consent, approval, disbursement and repayment conditions before action.", [
-        ["Guarantor consent", acceptedGuarantors.length ? `${acceptedGuarantors.length} guarantor(s) accepted the request.` : "At least one accepted guarantor is required before approval.", acceptedGuarantors.length ? "Ready" : "Pending"],
+        ["Guarantor consent", acceptedGuarantors.length ? `${acceptedGuarantors.length} guarantor(s) accepted the request.` : selfSecured ? "Fully secured by the borrower's savings — no guarantor required." : "At least one accepted guarantor is required before approval.", acceptedGuarantors.length || selfSecured ? "Ready" : "Pending"],
         ["Approval", canApproveLoan ? "Loan can be approved after appraisal checks." : "Approval is locked until status and guarantor rules are satisfied.", canApproveLoan ? "Available" : "Locked"],
-        ["Disbursement", canDisburseLoan ? "Approved loan can be disbursed into active servicing." : "Disbursement is available only after approval.", canDisburseLoan ? "Ready" : "Waiting"],
+        ["Disbursement", canDisburseLoan ? "Approved loan can be disbursed; one officer initiates and a second, different officer confirms before funds move." : "Disbursement is available only after approval.", canDisburseLoan ? "Ready" : "Waiting"],
         ["Repayment schedule", scheduleRows.length ? `${scheduleRows.length} installment(s) generated with interest and due dates.` : "A repayment schedule is generated automatically at disbursement.", scheduleRows.length ? "Ready" : "Waiting"],
         ["Repayment", canRepayLoan ? "Active loan can receive repayments; overpayments are rejected by the backend." : "Repayment starts after disbursement.", canRepayLoan ? "Active" : "Waiting"]
       ])}
@@ -163,7 +241,9 @@ function loanDetailPanel(rows) {
         </form>
         <form id="loanDecisionForm" class="form-grid single">
           <h3>Decision and servicing</h3>
+          <p class="field-note">Approval routing is automatic by amount: small loans need one approver, mid-value loans need a second, different approver, and high-value loans need a committee/board resolution reference below.</p>
           <label><span>Decision reason</span><input id="loanDecisionReason" placeholder="Decision note or rejection reason" ${canApprove ? "" : "disabled"}></label>
+          <label><span>Committee resolution reference</span><input id="loanResolutionReference" placeholder="Minute/resolution no. (high-value loans)" ${canApprove ? "" : "disabled"}></label>
           <div class="form-actions">
             ${canApprove ? `
               <button class="button secondary" type="button" data-loan-action="approve" ${canApproveLoan ? "" : "disabled"}>Approve loan</button>

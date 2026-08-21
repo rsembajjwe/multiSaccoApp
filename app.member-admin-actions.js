@@ -129,6 +129,28 @@ async function exportStaffMemberStatementCsv(memberId) {
   renderShell();
 }
 
+async function saveMemberStaffLink(event) {
+  if (event) event.preventDefault();
+  state.memberStaffLinkError = "";
+  state.memberStaffLinkMessage = "";
+  const memberId = value("memberStaffLinkMemberId");
+  const userId = (value("memberStaffLinkUserId") || "").trim();
+  if (!memberId) return;
+  try {
+    const member = await api(`/members/${encodeURIComponent(memberId)}/staff-link`, {
+      method: "PATCH",
+      body: JSON.stringify({ userId })
+    });
+    state.selectedMember = member;
+    state.selectedMemberId = member.id;
+    state.memberStaffLinkMessage = userId ? "Staff account linked." : "Staff link removed.";
+    renderShell();
+  } catch (error) {
+    state.memberStaffLinkError = error.message;
+    renderShell();
+  }
+}
+
 async function saveMemberDecision(memberId, memberStatus, kycStatus) {
   state.selectedMemberMessage = "";
   state.selectedMemberError = "";
@@ -205,10 +227,10 @@ async function updateMemberDocumentRetention(documentId, retentionStatus) {
   const reason = window.prompt(
     `Reason for marking this document ${labelize(retentionStatus)}:`,
     retentionStatus === "disposed"
-      ? "External KYC file deleted or access removed after retention review."
+      ? "External member document deleted or access removed after retention review."
       : retentionStatus === "retained"
-        ? "Retained for active KYC/legal audit evidence."
-        : "KYC evidence requires retention review."
+        ? "Retained for active legal/audit evidence."
+        : "Member documents require retention review."
   );
   if (reason === null) return;
   const dueDate = retentionStatus === "review_due"

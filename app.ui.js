@@ -75,6 +75,9 @@ function rowAction(row) {
       </div>
     `;
   }
+  if (row.action === "member-loan-history" && row.actionId) {
+    return `<button class="table-action" type="button" data-member-loan-history="${escapeHtml(row.actionId)}">History</button>`;
+  }
   if (row.action === "notification-acknowledge" && row.actionId) {
     return `<button class="table-action" type="button" data-row-action="notification-acknowledge" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Acknowledge")}</button>`;
   }

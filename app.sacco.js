@@ -265,10 +265,10 @@ function saccoSecretaryDashboard() {
   const governance = dataRows("governanceMeetings");
   const secretary = buildSaccoSecretaryDashboardModel({ complaints: openComplaints(), governanceMeetings: governance, members });
   return `
-    ${saccoRoleFocusPanel("SACCO Secretary", "Secretary office focus", "Member records, KYC follow-up, complaints and governance documentation.")}
+    ${saccoRoleFocusPanel("SACCO Secretary", "Secretary office focus", "Member records, Onboarding follow-up, complaints and governance documentation.")}
     <div class="dashboard-grid">
       ${summaryLink("Total members", secretary.totalMembers, "Member register", "Open", "members")}
-      ${summaryLink("Members to verify", secretary.membersToVerify, "KYC and onboarding", "Verify", "approvals")}
+      ${summaryLink("Members to activate", secretary.membersToVerify, "Member onboarding", "Activate", "approvals")}
       ${summaryLink("Open complaints", secretary.openComplaints, "Member support queue", "Open", "complaints")}
       ${summaryLink("Governance records", secretary.governanceRecords, "Meetings and minutes", "Open", "governance")}
     </div>

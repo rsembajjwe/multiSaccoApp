@@ -481,8 +481,8 @@ assert.match(publicRegistrationHtml, /id="publicTenantParish"/);
 assert.match(publicRegistrationHtml, /id="publicTenantVillage"/);
 assert.match(publicRegistrationHtml, /id="publicTenantContactNumber"/);
 assert.match(publicRegistrationHtml, /id="publicTenantMemberRange"/);
-assert.match(publicRegistrationHtml, /id="publicTenantPaymentPhone"/);
-assert.match(publicRegistrationHtml, /Mobile-money payment is initiated/);
+assert.doesNotMatch(publicRegistrationHtml, /id="publicTenantPaymentPhone"/);
+assert.match(publicRegistrationHtml, /free trial starts on submission/);
 
 sandbox.applyStaffSession({
   token: "staff-admin-token",
@@ -542,18 +542,20 @@ sandbox.state.selectedMemberNextOfKin = [{ fullName: "John Naki", relationship: 
 sandbox.state.selectedMemberBeneficiaries = [{ fullName: "Mary Naki", relationship: "Daughter", phone: "+256700000010", allocationPercent: 100 }];
 sandbox.state.selectedMemberDocuments = [{ id: "doc_1", documentType: "National ID", storageKey: "kyc/member_green_amina/id.pdf", verificationStatus: "verified", retentionStatus: "active" }];
 const memberKycHtml = sandbox.memberDetailPanel("kyc");
-assert.match(memberKycHtml, /Member detail and KYC approval/);
+assert.match(memberKycHtml, /Member detail/);
 assert.match(memberKycHtml, /This is a SACCO member profile, not a staff login/);
 assert.match(memberKycHtml, /id="memberProfileForm"/);
 assert.match(memberKycHtml, /Save member profile/);
-assert.match(memberKycHtml, /Save KYC decision/);
+assert.match(memberKycHtml, /Save member status/);
+assert.doesNotMatch(memberKycHtml, /Save KYC decision/);
+assert.match(memberKycHtml, /Staff account link/);
 assert.match(memberKycHtml, /Approve member/);
 assert.match(memberKycHtml, /Suspend member/);
 
 const memberContactsHtml = sandbox.memberDetailPanel("contacts");
 assert.match(memberContactsHtml, /Member contacts and documents/);
-assert.match(memberContactsHtml, /KYC document retention/);
-assert.match(memberContactsHtml, /Member KYC documents/);
+assert.match(memberContactsHtml, /Document retention/);
+assert.match(memberContactsHtml, /Member documents/);
 assert.match(memberContactsHtml, /Member contacts and next of kin/);
 assert.match(memberContactsHtml, /Member beneficiaries/);
 
@@ -1157,7 +1159,7 @@ sandbox.state.user = null;
 sandbox.state.roleNames = [];
 sandbox.state.permissionIds = [];
 const memberModules = sandbox.visibleModules().map(([id]) => id);
-assert.equal(JSON.stringify(memberModules), JSON.stringify(["home", "money", "accounts", "statements", "receipts", "loans", "guarantor-requests", "payments", "notifications", "complaints", "profile", "security"]));
+assert.equal(JSON.stringify(memberModules), JSON.stringify(["home", "money", "loans", "payments", "notifications", "complaints", "profile", "security"]));
 assert.equal(sandbox.canAccessView("users"), false);
 
 sandbox.state.memberData.dashboard = { tenant: { mobileMoneyCollectionAvailable: false, bankCollectionAvailable: false } };

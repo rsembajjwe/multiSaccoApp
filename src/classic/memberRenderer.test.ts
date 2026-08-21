@@ -30,11 +30,10 @@ describe("classic member portal renderer", () => {
     context = await createClassicContext();
   });
 
-  it("renders the enterprise member home workspace with tabbed quick actions", () => {
+  it("renders the member home overview with quick actions", () => {
     renderIntoDom(context, context.renderMemberView("home"));
 
-    expect(text()).toContain("Member command center");
-    expect(text()).toContain("Monthly savings");
+    expect(text()).not.toContain("Member command center");
     expect(text()).toContain("Pay by mobile money");
     expect(text()).toContain("Read SACCO messages");
     expect(context.document.querySelectorAll("[data-member-shortcut-view]").length).toBeGreaterThanOrEqual(5);
@@ -83,16 +82,14 @@ describe("classic member portal renderer", () => {
     expect(text()).toContain("Complaint evidence controls");
   });
 
-  it("renders standalone statement, receipt, profile and security evidence screens", () => {
-    context.state.moduleTabs.statements = "monthly";
-    renderIntoDom(context, context.renderMemberView("statements"));
-    expect(text()).toContain("Member statement readiness");
-    expect(text()).toContain("Statement monthly evidence");
-    expect(text()).toContain("Treasurer Cash");
+  it("renders the consolidated Money hub plus profile and security evidence screens", () => {
+    context.state.moduleTabs.money = "statement";
+    renderIntoDom(context, context.renderMemberView("money"));
+    expect(text()).toContain("Statement");
 
-    context.state.moduleTabs.receipts = "evidence";
-    renderIntoDom(context, context.renderMemberView("receipts"));
-    expect(text()).toContain("Receipt evidence controls");
+    context.state.moduleTabs.money = "receipts";
+    renderIntoDom(context, context.renderMemberView("money"));
+    expect(text()).toContain("Receipts");
 
     context.state.moduleTabs.profile = "contacts";
     renderIntoDom(context, context.renderMemberView("profile"));

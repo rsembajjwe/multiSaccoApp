@@ -26,9 +26,9 @@ function subscriptionHealthPanel() {
   const subs = dataRows("subscriptions");
   if (!subs.length) return "";
   const stateOf = (sub) => sub.lifecycleState || sub.status || "unknown";
-  const order = ["active", "expiring", "grace", "pending_payment", "expired"];
-  const labels = { active: "Active", expiring: "Expiring", grace: "Grace", pending_payment: "Pending", expired: "Expired" };
-  const counts = { active: 0, expiring: 0, grace: 0, pending_payment: 0, expired: 0 };
+  const order = ["active", "trial", "expiring", "grace", "pending_payment", "expired"];
+  const labels = { active: "Active", trial: "Trial", expiring: "Expiring", grace: "Grace", pending_payment: "Pending", expired: "Expired" };
+  const counts = { active: 0, trial: 0, expiring: 0, grace: 0, pending_payment: 0, expired: 0 };
   subs.forEach((sub) => { const key = stateOf(sub); counts[key] = (counts[key] || 0) + 1; });
   const recurring = subs.filter((sub) => ["active", "expiring", "grace"].includes(stateOf(sub)));
   const annualRecurring = recurring.reduce((total, sub) => total + (Number(sub.amount) || 0), 0);
@@ -53,6 +53,7 @@ function subscriptionHealthPanel() {
       <div class="source-grid compact">
         ${mini("SACCO subscriptions", subs.length)}
         ${mini("Active", counts.active)}
+        ${mini("On free trial", counts.trial)}
         ${mini("Expiring / grace", counts.expiring + counts.grace)}
         ${mini("Expired", counts.expired)}
         ${mini("Annual recurring", money.format(annualRecurring))}

@@ -122,12 +122,8 @@ function localizeModule(item) {
     },
     member: {
       home: "navHome",
-      accounts: "navMyAccounts",
       loans: "navLoans",
-      "guarantor-requests": "navGuarantorRequests",
       payments: "navPayments",
-      statements: "navStatements",
-      receipts: "navReceipts",
       notifications: "navNotifications",
       complaints: "navComplaints",
       profile: "navProfile",
@@ -169,12 +165,8 @@ function localizeModule(item) {
     },
     member: {
       home: "navHomeDesc",
-      accounts: "navMyAccountsDesc",
       loans: "navMemberLoansDesc",
-      "guarantor-requests": "navGuarantorRequestsDesc",
       payments: "navPaymentsDesc",
-      statements: "navStatementsDesc",
-      receipts: "navReceiptsDesc",
       notifications: "navMemberNotificationsDesc",
       complaints: "navMemberComplaintsDesc",
       profile: "navProfileDesc",
@@ -290,6 +282,10 @@ function renderShell() {
               ${helpMenu}
             </div>
             <div class="account-control">
+              <div class="account-identity">
+                <strong>${escapeHtml(displayName())}</strong>
+                <span>${escapeHtml(roleLabel())}</span>
+              </div>
               <button class="profile-chip" type="button" title="Account" aria-label="Account menu for ${escapeHtml(displayName())}" data-action="toggle-account-menu" aria-expanded="${state.accountMenuOpen ? "true" : "false"}">${initials(displayName())}</button>
               ${accountMenu}
             </div>
@@ -303,7 +299,7 @@ function renderShell() {
           </div>
           <div class="page-actions">
             ${state.auth === "member" ? `<button class="button secondary" data-action="refresh-member" type="button" ${state.networkOnline ? "" : "disabled"} title="${state.networkOnline ? "" : t("refreshUnavailableOffline")}">${t("refresh")}</button>` : `<button class="button secondary" data-action="refresh" type="button" ${state.networkOnline ? "" : "disabled"} title="${state.networkOnline ? "" : t("refreshUnavailableOffline")}">${t("refresh")}</button>`}
-            <button class="button ghost" type="button">${t("exportSummary")}</button>
+            <button class="button ghost" type="button" data-action="export-summary">${t("exportSummary")}</button>
           </div>
         </section>
         <section class="content-area">
@@ -313,7 +309,112 @@ function renderShell() {
         <footer class="footer">Tereka Online</footer>
       </main>
     </div>
+    ${printableSummarySection(module, portal)}
   `);
+}
+
+function printableSummarySection(module, portal) {
+  const generatedAt = formatDateTime(new Date().toISOString());
+  const sacco = escapeHtml(contextName());
+  if (state.auth === "member" && state.statementPrint) {
+    const lines = state.memberStatementView || state.memberStatementLines || [];
+    return `
+    <section class="print-summary" role="document" aria-hidden="true">
+      <header class="print-head">
+        <div class="print-brand"><strong>Tereka Online</strong><span>${sacco}</span></div>
+        <div class="print-title"><h1>Member Statement</h1><span>Generated ${escapeHtml(generatedAt)}</span></div>
+      </header>
+      <section class="print-identity">
+        <div><small>Member</small><strong>${escapeHtml(displayName())}</strong></div>
+        <div><small>Member number</small><strong>${escapeHtml(state.member?.membershipNo || "-")}</strong></div>
+        <div><small>Status</small><strong>${escapeHtml(labelize(state.member?.status || "-"))}</strong></div>
+      </section>
+      <section class="print-block">
+        <h2>Statement of account</h2>
+        ${lines.length ? `<table class="print-table print-ledger">
+          <thead><tr><th>Date</th><th>Source</th><th>Reference</th><th>Description</th><th>Method</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+          <tbody>${lines.map((line) => `<tr>
+            <td>${escapeHtml(String(line.postedAt || "-"))}</td>
+            <td>${escapeHtml(String(line.source || "-"))}</td>
+            <td>${escapeHtml(String(line.reference || "-"))}</td>
+            <td>${escapeHtml(String(line.description || "-"))}</td>
+            <td>${escapeHtml(String(line.method || labelize(line.channel || line.paymentRoute || "-")))}</td>
+            <td class="num">${Number(line.debit || 0) ? money.format(line.debit) : "-"}</td>
+            <td class="num">${Number(line.credit || 0) ? money.format(line.credit) : "-"}</td>
+            <td class="num">${line.runningBalance != null ? money.format(line.runningBalance) : "-"}</td>
+          </tr>`).join("")}</tbody>
+        </table>` : "<p>No statement activity.</p>"}
+      </section>
+      <footer class="print-foot"><span>Tereka Online · ${sacco}</span><span>Confidential member statement</span></footer>
+    </section>`;
+  }
+  if (state.auth === "member") {
+    const balances = state.memberData.balances || {};
+    const savings = Number(balances.savings || 0);
+    const shares = Number(balances.shares || 0);
+    const welfare = Number(balances.welfare || 0);
+    const loanBalance = (state.memberData.loans || [])
+      .reduce((sum, loan) => sum + Number(loan.outstandingBalance || 0), 0);
+    const recent = (state.memberData.dashboard?.recentTransactions || []).slice(0, 12);
+    return `
+    <section class="print-summary" role="document" aria-hidden="true">
+      <header class="print-head">
+        <div class="print-brand"><strong>Tereka Online</strong><span>${sacco}</span></div>
+        <div class="print-title"><h1>Member Account Summary</h1><span>Generated ${escapeHtml(generatedAt)}</span></div>
+      </header>
+      <section class="print-identity">
+        <div><small>Member</small><strong>${escapeHtml(displayName())}</strong></div>
+        <div><small>Member number</small><strong>${escapeHtml(state.member?.membershipNo || "-")}</strong></div>
+        <div><small>Status</small><strong>${escapeHtml(labelize(state.member?.status || "-"))}</strong></div>
+      </section>
+      <section class="print-block">
+        <h2>Balances</h2>
+        <table class="print-table">
+          <tbody>
+            <tr class="print-total"><th>Total savings</th><td class="num">${money.format(savings)}</td></tr>
+            <tr><th>Shares</th><td class="num">${money.format(shares)}</td></tr>
+            <tr><th>Welfare</th><td class="num">${money.format(welfare)}</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="print-block">
+        <h2>Loan balance</h2>
+        <table class="print-table">
+          <tbody>
+            <tr class="print-total"><th>Outstanding loan balance</th><td class="num">${money.format(loanBalance)}</td></tr>
+          </tbody>
+        </table>
+      </section>
+      ${recent.length ? `<section class="print-block">
+        <h2>Recent activity</h2>
+        <table class="print-table print-ledger">
+          <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+          <tbody>${recent.map((row) => `<tr>
+            <td>${escapeHtml(String(row.postedAt || "-"))}</td>
+            <td>${escapeHtml(String(row.reference || "-"))}</td>
+            <td>${escapeHtml(String(row.description || "-"))}</td>
+            <td class="num">${Number(row.debit || 0) ? money.format(row.debit) : "-"}</td>
+            <td class="num">${Number(row.credit || 0) ? money.format(row.credit) : "-"}</td>
+            <td class="num">${row.runningBalance != null ? money.format(row.runningBalance) : "-"}</td>
+          </tr>`).join("")}</tbody>
+        </table>
+      </section>` : ""}
+      <footer class="print-foot"><span>Tereka Online · ${sacco}</span><span>Confidential member statement</span></footer>
+    </section>`;
+  }
+  return `
+    <section class="print-summary" role="document" aria-hidden="true">
+      <header class="print-head">
+        <div class="print-brand"><strong>Tereka Online</strong><span>${sacco}</span></div>
+        <div class="print-title"><h1>${escapeHtml(module[1])} Summary</h1><span>Generated ${escapeHtml(generatedAt)}</span></div>
+      </header>
+      <section class="print-identity">
+        <div><small>Portal</small><strong>${escapeHtml(portal)}</strong></div>
+        <div><small>Prepared by</small><strong>${escapeHtml(displayName())}</strong></div>
+        <div><small>Context</small><strong>${sacco}</strong></div>
+      </section>
+      <footer class="print-foot"><span>Tereka Online · ${sacco}</span><span>Confidential</span></footer>
+    </section>`;
 }
 
 function quickSearchPanel(results) {
@@ -526,6 +627,7 @@ function renderView(view) {
   if (view === "sacco-applications") return saccoApplications();
   if (view === "subscriptions") return subscriptionsView();
   if (view === "member-dues") return memberDuesView();
+  if (view === "savings-transfers") return savingsTransfersView();
   if (view === "sacco-accounts") return saccoAccounts();
   if (view === "members") return membersView();
   if (view === "transactions") return transactionsView();

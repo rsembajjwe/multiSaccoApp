@@ -487,6 +487,8 @@ function bindEvents() {
   });
   document.querySelector("#passwordResetRequestForm")?.addEventListener("submit", requestPasswordResetFromForm);
   document.querySelector("#passwordResetConfirmForm")?.addEventListener("submit", confirmPasswordResetFromForm);
+  document.querySelector("#memberPasswordResetRequestForm")?.addEventListener("submit", requestMemberPasswordResetFromForm);
+  document.querySelector("#memberPasswordResetConfirmForm")?.addEventListener("submit", confirmMemberPasswordResetFromForm);
   document.querySelector("#mfaVerifyForm")?.addEventListener("submit", verifyMfaFromForm);
   document.querySelector("[data-action='cancel-mfa']")?.addEventListener("click", () => {
     clearMfaState();
@@ -670,6 +672,46 @@ function bindEvents() {
   document.querySelectorAll("[data-staff-statement-print]").forEach((button) => {
     button.addEventListener("click", () => window.print());
   });
+  document.querySelectorAll("[data-row-action='member-statement-line']").forEach((button) => {
+    button.addEventListener("click", () => openMemberStatementDetail(button.dataset.rowId));
+  });
+  document.querySelectorAll("[data-row-action='member-fund-detail']").forEach((button) => {
+    button.addEventListener("click", () => openMemberFundDetail(button.dataset.rowId));
+  });
+  document.querySelectorAll("[data-member-loan-history]").forEach((button) => {
+    button.addEventListener("click", () => openMemberLoanHistory(button.dataset.memberLoanHistory));
+  });
+  document.querySelectorAll("[data-action='close-loan-history']").forEach((element) => {
+    element.addEventListener("click", closeMemberLoanHistory);
+  });
+  document.querySelectorAll("[data-action='close-fund-detail']").forEach((element) => {
+    element.addEventListener("click", closeMemberFundDetail);
+  });
+  document.querySelectorAll("[data-action='close-statement-detail']").forEach((element) => {
+    element.addEventListener("click", closeMemberStatementDetail);
+  });
+  document.querySelector("[data-member-statement-month]")?.addEventListener("change", (event) => {
+    state.memberStatementMonth = event.target.value;
+    renderShell();
+  });
+  document.querySelector("[data-member-statement-method]")?.addEventListener("change", (event) => {
+    state.memberStatementMethod = event.target.value;
+    renderShell();
+  });
+  document.querySelector("[data-member-statement-source]")?.addEventListener("change", (event) => {
+    state.memberStatementSource = event.target.value;
+    renderShell();
+  });
+  document.querySelector("[data-member-statement-sort]")?.addEventListener("change", (event) => {
+    state.memberStatementSort = event.target.value;
+    renderShell();
+  });
+  document.querySelectorAll("[data-action='member-statement-pdf']").forEach((button) => {
+    button.addEventListener("click", exportMemberStatementPdf);
+  });
+  document.querySelectorAll("[data-action='member-statement-excel']").forEach((button) => {
+    button.addEventListener("click", exportMemberStatementExcel);
+  });
   document.querySelectorAll("[data-row-action='transaction-detail']").forEach((button) => {
     button.addEventListener("click", () => openTransactionDetail(button.dataset.rowId));
   });
@@ -715,6 +757,14 @@ function bindEvents() {
   document.querySelector("[data-send-sacco-message]")?.addEventListener("click", () => sendSaccoMessage());
   document.querySelector("[data-assign-member-dues]")?.addEventListener("click", () => assignMemberDues());
   document.querySelector("[data-pay-member-dues]")?.addEventListener("click", () => recordMemberDuesPayment());
+  document.querySelector("[data-create-savings-transfer]")?.addEventListener("click", () => createSavingsTransfer());
+  document.querySelector("[data-create-group-deduction]")?.addEventListener("click", () => createGroupDeduction());
+  document.querySelectorAll("[data-decide-savings-transfer]").forEach((button) => {
+    button.addEventListener("click", () => decideSavingsTransfer(button.dataset.decideSavingsTransfer, button.dataset.decision));
+  });
+  document.querySelectorAll("[data-reverse-savings-transfer]").forEach((button) => {
+    button.addEventListener("click", () => reverseSavingsTransfer(button.dataset.reverseSavingsTransfer));
+  });
   document.querySelectorAll("[data-toggle-sacco-channel]").forEach((button) => {
     button.addEventListener("click", () => toggleSaccoChannel(button.dataset.toggleSaccoChannel, button.dataset.channelEnabled === "true"));
   });
@@ -873,6 +923,7 @@ function bindEvents() {
   document.querySelector("#transactionForm")?.addEventListener("submit", createTransactionFromForm);
   document.querySelector("#loanApplicationForm")?.addEventListener("submit", createLoanFromForm);
   document.querySelector("#loanGuarantorForm")?.addEventListener("submit", addLoanGuarantor);
+  document.querySelector("#loanAppraisalForm")?.addEventListener("submit", recordLoanAppraisal);
   document.querySelector("#loanRepaymentForm")?.addEventListener("submit", recordLoanRepayment);
   document.querySelector("#complaintForm")?.addEventListener("submit", createComplaintFromForm);
   document.querySelector("#complaintStatusForm")?.addEventListener("submit", (event) => {
@@ -886,6 +937,10 @@ function bindEvents() {
   document.querySelectorAll("[data-product-form]").forEach((form) => form.addEventListener("submit", createFinancialProduct));
   document.querySelectorAll("[data-account-form]").forEach((form) => form.addEventListener("submit", openFinancialAccount));
   document.querySelector("#memberLoanForm")?.addEventListener("submit", submitMemberLoan);
+  document.querySelector("#memberAddGuarantorForm")?.addEventListener("submit", addMemberLoanGuarantor);
+  document.querySelectorAll("[data-guarantor-search]").forEach((button) => {
+    button.addEventListener("click", () => searchMemberGuarantors(button.dataset.guarantorSearch));
+  });
   document.querySelector("#memberPaymentForm")?.addEventListener("submit", postMemberPayment);
   document.querySelector("#memberComplaintForm")?.addEventListener("submit", submitMemberComplaint);
   document.querySelector("#memberPrivacyConsentForm")?.addEventListener("submit", saveMemberPrivacyConsents);
@@ -900,6 +955,7 @@ function bindEvents() {
     runMemberDecision("custom");
   });
   document.querySelector("#memberProfileForm")?.addEventListener("submit", saveMemberProfile);
+  document.querySelector("#memberStaffLinkForm")?.addEventListener("submit", saveMemberStaffLink);
   document.querySelector("#tenantStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     saveTenantStatus(value("selectedTenantStatus"));
@@ -966,6 +1022,9 @@ function bindEvents() {
   document.querySelectorAll("[data-toggle-member-channel]").forEach((button) => {
     button.addEventListener("click", () => toggleMemberChannel(button.dataset.toggleMemberChannel, button.dataset.channelEnabled === "true"));
   });
+  document.querySelectorAll("[data-toggle-guarantor-listing]").forEach((button) => {
+    button.addEventListener("click", () => toggleGuarantorListing(button.dataset.toggleGuarantorListing === "true"));
+  });
   document.querySelectorAll("[data-member-draft-save]").forEach((button) => {
     button.addEventListener("click", () => saveMemberDraftFromForm(button.dataset.memberDraftSave));
   });
@@ -980,6 +1039,7 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
+  document.querySelectorAll("[data-action='export-summary']").forEach((button) => button.addEventListener("click", exportSummaryPdf));
   document.querySelectorAll("[data-action='toggle-session-menu']").forEach((button) => button.addEventListener("click", () => {
     state.sessionMenuOpen = !state.sessionMenuOpen;
     state.helpMenuOpen = false;

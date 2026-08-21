@@ -17,12 +17,13 @@ const platformModules = [
 
 const saccoModules = [
   ["dashboard", "Dashboard", "Role-specific SACCO operating view", "dashboard:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "teller", "auditor"]],
-  ["members", "Members", "KYC, profiles, statements", "members:view", ["admin", "chairperson", "secretary", "loans", "auditor"]],
+  ["members", "Members", "Profiles and statements", "members:view", ["admin", "chairperson", "secretary", "loans", "auditor"]],
   ["transactions", "Transactions", "Deposits and reversals", "transactions:view", ["admin", "treasurer", "accountant", "teller", "auditor"]],
   ["savings", "Savings", "Products, accounts and statements", "transactions:view", ["admin", "treasurer", "accountant", "auditor"]],
   ["shares", "Shares", "Share register and certificates", "transactions:view", ["admin", "treasurer", "secretary", "auditor"]],
   ["welfare", "Welfare", "Contributions, balances and claims", "transactions:view", ["admin", "treasurer", "secretary"]],
   ["member-dues", "Member Dues", "Membership subscriptions and expiry", "members:view", ["admin", "chairperson", "secretary", "treasurer"]],
+  ["savings-transfers", "Savings Transfers", "Transfers and group deductions", "savings-transfer:view", ["admin", "chairperson", "treasurer"]],
   ["funding-sources", "Sources of Funds", "Capital, grants and borrowings register", "finance-source:view", ["admin", "chairperson", "treasurer", "secretary"]],
   ["loans", "Loans", "Applications and repayments", "loans:view", ["admin", "chairperson", "loans", "auditor"]],
   ["guarantors", "Guarantors", "Guarantee requests and obligations", "loans:view", ["admin", "chairperson", "loans"]],
@@ -39,16 +40,12 @@ const saccoModules = [
 
 const memberModules = [
   ["home", "Home", "Balances and quick actions"],
-  ["money", "Money", "Accounts, statement and receipts"],
-  ["accounts", "Accounts", "Balances and verification"],
-  ["statements", "Statements", "Activity and monthly evidence"],
-  ["receipts", "Receipts", "Payment receipt evidence"],
+  ["money", "Finances", "Balances, statement and receipts"],
   ["loans", "Loans", "Loans and guarantor requests"],
-  ["guarantor-requests", "Guarantors", "Guarantee requests"],
   ["payments", "Payments", "Deposit and repay"],
   ["notifications", "Messages", "SACCO notices and alerts"],
-  ["complaints", "Support", "Messages and notifications"],
-  ["profile", "Profile", "Your details and KYC"],
+  ["complaints", "Support", "Chat and complaint tracking"],
+  ["profile", "Profile", "Your details"],
   ["security", "Security", "Login and recovery controls"]
 ];
 
@@ -94,8 +91,8 @@ function membersView() {
     ${tab === "overview" ? memberManagementOverviewPanel(memberSummary, pendingKyc) : ""}
     ${tab === "register" ? memberRegistrationPanel() : ""}
     ${tab === "list" ? `
-      ${filterToolbar("Search by member number, name, phone, branch, KYC or status", "Register member", "Download statement")}
-      ${recordTable("Member list", rows, ["membershipNo", "fullName", "phone", "email", "totalBalance", "kycReadiness", "kycStatus", "status"])}
+      ${filterToolbar("Search by member number, name, phone, branch or status", "Register member", "Download statement")}
+      ${recordTable("Member list", rows, ["membershipNo", "fullName", "phone", "email", "totalBalance", "status"])}
     ` : ""}
     ${tab === "kyc" ? memberDetailPanel("kyc") : ""}
     ${tab === "contacts" ? memberDetailPanel("contacts") : ""}
@@ -127,15 +124,15 @@ function memberManagementOverviewPanel(memberSummary, pendingKyc) {
           <h2>Member management focus</h2>
           <p>Manage SACCO members here. Staff users remain under Users and Roles.</p>
         </div>
-        <span class="status ${pendingKyc.length ? "pending" : "active"}">${pendingKyc.length ? "KYC follow-up" : "Current"}</span>
+        <span class="status ${pendingKyc.length ? "pending" : "active"}">${pendingKyc.length ? "Onboarding follow-up" : "Current"}</span>
       </div>
       <div class="source-grid">
         ${mini("Member and staff separation", "Members only")}
-        ${mini("KYC workflow", `${pendingKyc.length} pending`)}
+        ${mini("Onboarding workflow", `${pendingKyc.length} pending`)}
         ${mini("Portal access", `${memberSummary.portalReady} ready`)}
         ${mini("Balances and statements", money.format(memberSummary.totalBalances))}
       </div>
-      ${pendingKyc.length ? recordTable("KYC follow-up", pendingKyc, ["membershipNo", "fullName", "phone", "kycReadiness", "kycStatus", "status"]) : emptyState("No KYC follow-up", "Member KYC records are current.")}
+      ${pendingKyc.length ? recordTable("Onboarding follow-up", pendingKyc, ["membershipNo", "fullName", "phone", "status"]) : emptyState("No Onboarding follow-up", "Member onboarding records are current.")}
     </section>
   `;
 }

@@ -275,9 +275,9 @@ assert.match(supportHtml, /Your receipt is posted and visible in your statement/
 assert.match(supportHtml, /data-thread-id="thread_member_1"/);
 assert.match(supportHtml, /Send message/);
 
-sandbox.state.moduleTabs.complaints = "notifications";
-const notificationsHtml = sandbox.renderMemberView("complaints");
-assert.match(notificationsHtml, /Notifications \(1\)/);
+sandbox.state.moduleTabs.notifications = "inbox";
+const notificationsHtml = sandbox.renderMemberView("notifications");
+assert.match(notificationsHtml, /Member message inbox/);
 assert.match(notificationsHtml, /Meeting reminder/);
 assert.match(notificationsHtml, /Acknowledge/);
 assert.match(notificationsHtml, /10 Aug 2026/);

@@ -70,7 +70,7 @@ async function assertSaccoAdminFlow(page) {
   await assertNavigation(page, ["Dashboard", "Members", "Transactions", "Savings", "Shares", "Welfare", "Loans", "Guarantors", "Approvals", "Accounting", "Reconciliation", "Reports", "Governance", "Complaints", "Users and Roles", "Settings", "Audit Logs"]);
   await expectNoText(page, "Operations", "SACCO operations menu hidden");
   await assertScreen(page, "dashboard", ["Total members", "SACCO monthly performance control", "Treasurer cash collections", "Mobile money collections"]);
-  await assertScreen(page, "members", ["Member Overview", "Register Member", "Member List", "KYC Detail", "Statement"]);
+  await assertScreen(page, "members", ["Member Overview", "Register Member", "Member List", "Member detail", "Statement"]);
   await assertScreen(page, "transactions", ["Transaction control focus", "New transaction screen", "Receipting queue"]);
   await assertScreen(page, "complaints", ["SACCO member complaints", "Member complaint list", "Chat"]);
   await logout(page);
@@ -84,7 +84,7 @@ async function assertMemberPortalFlow(page) {
   await memberLogin(page, "GVS", "GVS-0001", "Member@12345");
   await expectText(page, "Member portal", "member shell");
   await assertNavigation(page, ["Home", "Accounts", "Loans", "Guarantor Requests", "Payments", "Statements", "Receipts", "Notifications", "Complaints", "Profile", "Security"]);
-  await assertScreen(page, "home", ["Total balance", "Monthly savings", "Pay by mobile money", "Read SACCO messages"]);
+  await assertScreen(page, "home", ["Total savings", "Pay by mobile money", "Read SACCO messages"]);
   await assertScreen(page, "payments", ["Member payment center", "Mobile money", "Treasurer cash"]);
   await assertScreen(page, "notifications", ["Member message inbox", "SACCO admin messages"]);
   await assertScreen(page, "complaints", ["Member complaint center", "Member complaint submission", "My complaints"]);

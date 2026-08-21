@@ -1,11 +1,122 @@
 ﻿// Member self-service action handlers for Tereka Online.
 // Covers member loan requests, mobile-money payments, offline drafts, guarantor decisions and notifications.
 
+function openMemberStatementDetail(index) {
+  const lines = state.memberStatementLines || [];
+  const line = lines[Number(index)];
+  if (!line) return;
+  state.memberStatementDetail = line;
+  renderShell();
+}
+
+function closeMemberStatementDetail() {
+  state.memberStatementDetail = null;
+  renderShell();
+}
+
+async function openMemberLoanHistory(loanId) {
+  if (!loanId) return;
+  state.memberLoanHistoryLoanId = loanId;
+  state.memberLoanHistory = null;
+  state.memberLoanHistoryError = "";
+  renderShell();
+  try {
+    const rows = await api(`/member-auth/loans/${encodeURIComponent(loanId)}/repayments`);
+    state.memberLoanHistory = rows || [];
+    renderShell();
+  } catch (error) {
+    state.memberLoanHistoryError = error.message;
+    state.memberLoanHistory = [];
+    renderShell();
+  }
+}
+
+function closeMemberLoanHistory() {
+  state.memberLoanHistoryLoanId = null;
+  state.memberLoanHistory = null;
+  state.memberLoanHistoryError = "";
+  renderShell();
+}
+
+function openMemberFundDetail(fundCode) {
+  if (!fundCode) return;
+  state.memberSelectedFund = fundCode;
+  renderShell();
+}
+
+function closeMemberFundDetail() {
+  state.memberSelectedFund = null;
+  renderShell();
+}
+
+function downloadClientFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
+function memberStatementFilename(extension) {
+  const membershipNo = state.member?.membershipNo || "member";
+  const stamp = new Date().toISOString().slice(0, 10);
+  return `statement-${membershipNo}-${stamp}.${extension}`;
+}
+
+function exportMemberStatementExcel() {
+  const lines = state.memberStatementView || state.memberStatementLines || [];
+  /** @type {Array<[string, (line: any) => string]>} */
+  const columns = [
+    ["Posted", (line) => line.postedAt || line.createdAt || ""],
+    ["Month", (line) => line.month || ""],
+    ["Source", (line) => line.source || ""],
+    ["Reference", (line) => line.reference || ""],
+    ["Description", (line) => line.description || ""],
+    ["Method", (line) => line.method || labelize(line.channel || line.paymentRoute || line.paymentMethod || "")],
+    ["Debit", (line) => (Number(line.debit || 0) ? Number(line.debit).toFixed(2) : "")],
+    ["Credit", (line) => (Number(line.credit || 0) ? Number(line.credit).toFixed(2) : "")],
+    ["Running balance", (line) => (line.runningBalance != null ? Number(line.runningBalance).toFixed(2) : "")],
+    ["Status", (line) => labelize(line.paymentStatus || line.status || "posted")]
+  ];
+  const cell = (value) => `<td>${escapeHtml(String(value ?? ""))}</td>`;
+  const header = `<tr>${columns.map(([label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr>`;
+  const body = lines.map((line) => `<tr>${columns.map(([, accessor]) => cell(accessor(line))).join("")}</tr>`).join("");
+  const sacco = escapeHtml(contextName());
+  const html = `﻿<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body>`
+    + `<table><tr><th colspan="${columns.length}">Tereka Online - ${sacco} - Member Statement</th></tr>${header}${body}</table></body></html>`;
+  downloadClientFile(memberStatementFilename("xls"), html, "application/vnd.ms-excel");
+}
+
+function exportMemberStatementPdf() {
+  state.statementPrint = true;
+  renderShell();
+  const restore = () => {
+    state.statementPrint = false;
+    window.removeEventListener("afterprint", restore);
+    renderShell();
+  };
+  window.addEventListener("afterprint", restore);
+  const previousTitle = document.title;
+  document.title = `Tereka Online - Member Statement`;
+  window.print();
+  document.title = previousTitle;
+  setTimeout(restore, 2000);
+}
+
 async function submitMemberLoan(event) {
   event.preventDefault();
   state.memberLoanMessage = "";
   state.memberLoanError = "";
   if (blockOfflineMemberAction("memberLoanError")) return;
+  const guarantors = [1, 2, 3]
+    .map((index) => ({
+      membershipNo: (value(`memberLoanGuarantor${index}No`) || "").trim(),
+      pledgeAmount: Number(value(`memberLoanGuarantor${index}Amount`) || 0)
+    }))
+    .filter((row) => row.membershipNo);
   try {
     const loan = await api("/member-auth/mobile-loans", {
       method: "POST",
@@ -13,7 +124,8 @@ async function submitMemberLoan(event) {
         product: value("memberLoanProduct"),
         amount: Number(value("memberLoanAmount")),
         repaymentMonths: Number(value("memberLoanMonths")),
-        purpose: value("memberLoanPurpose")
+        purpose: value("memberLoanPurpose"),
+        guarantors
       })
     });
     state.memberLoanMessage = `Submitted loan application ${loan.applicationNo || loan.id}.`;
@@ -23,6 +135,113 @@ async function submitMemberLoan(event) {
   } catch (error) {
     state.memberLoanMessage = "Submitted loan application for SACCO review.";
     state.memberLoanError = `The SACCO backend did not post it immediately: ${error.message}`;
+    renderShell();
+  }
+}
+
+async function toggleGuarantorListing(optOut) {
+  state.memberNotificationMessage = "";
+  state.memberNotificationError = "";
+  try {
+    const result = await api("/member-auth/guarantor-listing", {
+      method: "PATCH",
+      body: JSON.stringify({ optOut })
+    });
+    state.memberData.guarantorListing = result || { optOut };
+    state.memberNotificationMessage = optOut
+      ? "You are now hidden from the guarantor search."
+      : "You are now findable in the guarantor search (name and member number only).";
+    renderShell();
+  } catch (error) {
+    state.memberNotificationError = error.message;
+    renderShell();
+  }
+}
+
+async function searchMemberGuarantors(target) {
+  const input = document.getElementById(`guarantorSearch_${target}`);
+  const container = document.getElementById(`guarantorResults_${target}`);
+  if (!container) return;
+  const query = (input?.value || "").trim();
+  if (query.length < 2) {
+    container.innerHTML = `<div class="notice compact"><span>Type at least 2 characters to search.</span></div>`;
+    return;
+  }
+  container.innerHTML = `<div class="notice compact"><span>Searching...</span></div>`;
+  try {
+    const results = await api(`/member-auth/members/search?q=${encodeURIComponent(query)}`);
+    if (!results || !results.length) {
+      container.innerHTML = `<div class="notice compact"><span>No matching members found.</span></div>`;
+      return;
+    }
+    container.innerHTML = results
+      .map((row) => `<button type="button" class="guarantor-result" data-pick-guarantor="${escapeHtml(row.membershipNo)}" data-pick-target="${escapeHtml(target)}"><strong>${escapeHtml(row.fullName || "Member")}</strong><span>${escapeHtml(row.membershipNo)}</span></button>`)
+      .join("");
+    container.querySelectorAll("[data-pick-guarantor]").forEach((button) => {
+      button.addEventListener("click", () => pickMemberGuarantor(button.dataset.pickGuarantor, button.dataset.pickTarget));
+    });
+  } catch (error) {
+    container.innerHTML = `<div class="notice warning"><span>${escapeHtml(error.message)}</span></div>`;
+  }
+}
+
+function pickMemberGuarantor(membershipNo, target) {
+  if (target === "replacement") {
+    const field = document.getElementById("memberAddGuarantorNo");
+    if (field) {
+      field.value = membershipNo;
+      const pledge = document.getElementById("memberAddGuarantorAmount");
+      if (pledge) pledge.focus();
+    }
+  } else {
+    let placed = false;
+    for (const index of [1, 2, 3]) {
+      const field = document.getElementById(`memberLoanGuarantor${index}No`);
+      if (field && !field.value.trim()) {
+        field.value = membershipNo;
+        const pledge = document.getElementById(`memberLoanGuarantor${index}Amount`);
+        if (pledge) pledge.focus();
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      const container = document.getElementById("guarantorResults_loan");
+      if (container) container.innerHTML = `<div class="notice compact"><span>All 3 guarantor slots are filled. Clear one to add another.</span></div>`;
+      return;
+    }
+  }
+  const results = document.getElementById(`guarantorResults_${target}`);
+  if (results) results.innerHTML = "";
+  const search = document.getElementById(`guarantorSearch_${target}`);
+  if (search) search.value = "";
+}
+
+async function addMemberLoanGuarantor(event) {
+  event.preventDefault();
+  state.memberGuarantorAddMessage = "";
+  state.memberGuarantorAddError = "";
+  if (blockOfflineMemberAction("memberGuarantorAddError")) return;
+  const loanId = value("memberAddGuarantorLoanId");
+  if (!loanId) {
+    state.memberGuarantorAddError = "Select the loan to add a guarantor to.";
+    renderShell();
+    return;
+  }
+  try {
+    await api(`/member-auth/loans/${encodeURIComponent(loanId)}/guarantors`, {
+      method: "POST",
+      body: JSON.stringify({
+        membershipNo: (value("memberAddGuarantorNo") || "").trim(),
+        pledgeAmount: Number(value("memberAddGuarantorAmount") || 0)
+      })
+    });
+    const message = "Guarantor request sent. They will be notified to accept or reject.";
+    await refreshMember();
+    state.memberGuarantorAddMessage = message;
+    renderShell();
+  } catch (error) {
+    state.memberGuarantorAddError = error.message;
     renderShell();
   }
 }

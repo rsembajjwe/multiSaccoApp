@@ -88,7 +88,7 @@ try {
   await expectNoVisibleText(page, "SACCO role access", "SACCO role access panel hidden");
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Recent transactions", "Loan work queue", "SACCO monthly performance control", "Treasurer cash collections", "Mobile money collections"]);
   await assertSaccoMonthlyPerformanceDrilldown(page);
-  await assertScreen(page, "members", ["Member Overview", "Register Member", "Member List", "KYC Detail", "Contacts & Documents", "Statement", "Member management focus"]);
+  await assertScreen(page, "members", ["Member Overview", "Register Member", "Member List", "Member detail", "Contacts & Documents", "Statement", "Member management focus"]);
   await assertMemberRegistrationAndKyc(page);
   await assertQuickSearchResult(page, "GVS-0001", "Member detail and KYC approval", "SACCO member quick search");
   await assertModuleTabs(page, "transactions", [
@@ -177,15 +177,11 @@ try {
     await navigateTo(page, "home");
     for (const marker of [
       "Balances and requests update",
-      "Total balance",
+      "Total savings",
       "Loans",
       "Notifications",
       "Guarantee requests",
       "Offline drafts",
-      "Member service assurance",
-      "Service ready",
-      "Member command center",
-      "Monthly savings",
       "Member quick actions",
       "Pay by mobile money",
       "Read SACCO messages",
@@ -193,33 +189,13 @@ try {
     ]) {
       await expectText(page, marker, `member portal marker ${marker}`);
     }
-    await page.locator("[data-module-tab-view='home'][data-module-tab='monthly']").click();
-    await expectText(page, "Monthly savings workspace", "member monthly workspace readiness");
-    await expectText(page, "Payment channels", "member monthly payment channel readiness");
-    await expectText(page, "Monthly savings and deposit performance", "member home monthly savings tab");
-    await expectText(page, "Treasurer cash", "member home treasurer cash monthly column");
-    await expectText(page, "Mobile money", "member home mobile money monthly column");
-    await expectText(page, "2026", "member home full date year");
-    await page.locator("[data-module-tab-view='home'][data-module-tab='loans']").click();
-    await expectText(page, "Loan servicing workspace", "member loans workspace readiness");
-    await expectText(page, "Member loan position", "member home loans tab");
-    await page.locator("[data-module-tab-view='home'][data-module-tab='messages']").click();
-    await expectText(page, "SACCO admin message center", "member messages workspace readiness");
-    await expectText(page, "SACCO admin messages", "member home messages tab");
-    await page.locator("[data-module-tab-view='home'][data-module-tab='mobile-money']").click();
-    await expectText(page, "Mobile money deposit workspace", "member mobile money workspace readiness");
-    await expectText(page, "Mobile money deposit activity", "member home mobile money tab");
-    await page.locator("[data-module-tab-view='home'][data-module-tab='overview']").click();
     await assertMemberQuickActions(page);
-    await assertScreen(page, "accounts", ["Member account overview", "Member account balances", "Verified"]);
+    await assertMemberMoneyHub(page);
     await assertScreen(page, "loans", ["Mobile loan application", "Submit loan application", "Member loans"]);
     await assertMemberLoanSubmission(page);
-    await assertScreen(page, "guarantor-requests", ["Member guarantor decision center", "Member guarantor requests", "Pending requests"]);
     await assertMemberGuarantorDecision(page);
     await assertScreen(page, "payments", ["Member payment center", "Ready to post", "Post payment"]);
     await assertMemberPaymentPosting(page);
-    await assertMemberStatementEvidence(page);
-    await assertMemberReceiptEvidence(page);
     await assertMemberNotificationCenter(page);
     await assertScreen(page, "complaints", ["Member complaint center", "Member complaint submission", "My complaints"]);
     await assertMemberComplaintSubmission(page);
@@ -756,7 +732,7 @@ async function assertMemberRegistrationAndKyc(page) {
   await expectText(page, "Save KYC decision", "member KYC save action");
   await page.locator("[data-member-tab='contacts']").click();
   await expectText(page, "Member contacts and documents", "member contacts tab");
-  await expectText(page, "Member KYC documents", "member KYC documents tab");
+  await expectText(page, "Member documents", "member KYC documents tab");
   await page.locator("[data-member-tab='statement']").click();
   await expectText(page, "Member balance statement", "member balance statement tab");
   await expectText(page, "Statement control summary", "member statement control summary");
@@ -883,31 +859,14 @@ async function assertMemberQuickActions(page) {
   console.log("PASS member quick actions");
 }
 
-async function assertMemberStatementEvidence(page) {
-  await navigateTo(page, "statements");
-  await expectText(page, "Member statement readiness", "member statement readiness panel");
-  await expectText(page, "Full-date display", "member statement full date evidence");
-  await page.locator("[data-module-tab-view='statements'][data-module-tab='activity']").click();
-  await expectText(page, "Member statement", "member statement activity tab");
-  await page.locator("[data-module-tab-view='statements'][data-module-tab='monthly']").click();
-  await expectText(page, "Statement monthly evidence", "member statement monthly evidence");
-  await expectText(page, "Treasurer cash", "member statement treasurer cash evidence");
-  await expectText(page, "Mobile money", "member statement mobile money evidence");
-  await page.locator("[data-module-tab-view='statements'][data-module-tab='exports']").click();
-  await expectText(page, "Statement export controls", "member statement export controls");
-  console.log("PASS member statement evidence");
-}
-
-async function assertMemberReceiptEvidence(page) {
-  await navigateTo(page, "receipts");
-  await expectText(page, "Member receipts", "member receipts table");
-  await expectText(page, "Payment route", "member receipts route column");
-  await expectText(page, "Receipt status", "member receipts status column");
-  await page.locator("[data-module-tab-view='receipts'][data-module-tab='evidence']").click();
-  await expectText(page, "Receipt evidence controls", "member receipt evidence controls");
-  await page.locator("[data-module-tab-view='receipts'][data-module-tab='exports']").click();
-  await expectText(page, "Receipt export and print", "member receipt export controls");
-  console.log("PASS member receipt evidence");
+async function assertMemberMoneyHub(page) {
+  await navigateTo(page, "money");
+  await expectText(page, "Account balances", "member money accounts tab");
+  await page.locator("[data-module-tab-view='money'][data-module-tab='statement']").click();
+  await expectText(page, "Statement", "member money statement tab");
+  await page.locator("[data-module-tab-view='money'][data-module-tab='receipts']").click();
+  await expectText(page, "Receipts", "member money receipts tab");
+  console.log("PASS member money hub");
 }
 
 async function assertMemberNotificationCenter(page) {
@@ -949,7 +908,8 @@ async function assertMemberSecurityTabs(page) {
 }
 
 async function assertMemberGuarantorDecision(page) {
-  await navigateTo(page, "guarantor-requests");
+  await navigateTo(page, "loans");
+  await page.locator("[data-module-tab-view='loans'][data-module-tab='guarantor']").click();
   const acceptButton = page.locator("[data-member-guarantor-action='accepted']").first();
   if (!(await acceptButton.count())) {
     console.log("SKIP member guarantor action: no pending guarantor request in current seed data");

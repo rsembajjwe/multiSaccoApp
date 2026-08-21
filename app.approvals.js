@@ -21,7 +21,7 @@ function approvalsView() {
       ${canApproveTx || queueSummary.transactionsToApprove ? summary("Transactions to approve", queueSummary.transactionsToApprove, "Finance maker-checker", "Decide") : ""}
       ${canApproveTx || queueSummary.repaymentsToApprove ? summary("Loan repayments to approve", queueSummary.repaymentsToApprove, "Mobile-money collections", "Decide") : ""}
       ${canApproveLoans || (!isPlatform() && queueSummary.loansToApprove) ? summary("Loans to approve", queueSummary.loansToApprove, "Credit workflow", "Decide") : ""}
-      ${canApproveMembers || (!isPlatform() && queueSummary.membersToVerify) ? summary("Members to verify", queueSummary.membersToVerify, "KYC and onboarding", "Review") : ""}
+      ${canApproveMembers || (!isPlatform() && queueSummary.membersToVerify) ? summary("Members to activate", queueSummary.membersToVerify, "Member onboarding", "Review") : ""}
     </div>
     ${state.selectedTransactionMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedTransactionMessage)}</strong></div>` : ""}
     ${state.selectedTransactionError ? `<div class="notice warning"><strong>Approval action failed.</strong><span>${escapeHtml(state.selectedTransactionError)}</span></div>` : ""}
@@ -132,14 +132,14 @@ async function decideApprovalLoan(id, action) {
 
 function memberApprovalPanel(rows, canApprove) {
   if (!rows.length) {
-    return emptyState("No members to verify", "New member registrations appear here for KYC verification and activation.");
+    return emptyState("No members to activate", "New member registrations appear here for review and activation.");
   }
   return `
     <section class="panel">
       <div class="panel-heading">
         <div>
-          <h2>Members awaiting verification</h2>
-          <p>Approve to verify KYC and activate the member, or reject the registration.</p>
+          <h2>Members awaiting activation</h2>
+          <p>Approve to review and activate the member, or reject the registration.</p>
         </div>
         <span class="status pending">${rows.length}</span>
       </div>

@@ -36,23 +36,16 @@ function renderLogin() {
             <span class="environment-pill">${t("securePortal")}</span>
           </div>
         </div>
-        <p class="hero-copy">${t("loginHeroCopy")}</p>
-        <div class="portal-route-grid">
-          ${portalRouteCard(t("platformAdmin"), "PLATFORM", t("platformAdminCopy"))}
-          ${portalRouteCard(t("saccoStaff"), t("saccoCode"), t("saccoStaffCopy"))}
-          ${portalRouteCard(t("member"), t("membershipNo"), t("memberCopy"))}
-        </div>
-        <div class="trust-list">
-          <span>${t("trustAccess")}</span>
-          <span>${t("trustApprovals")}</span>
-          <span>${t("trustPayments")}</span>
-          <span>${t("trustLowBandwidth")}</span>
-        </div>
         <div class="login-links">
           ${authTabButton("login", t("login"))}
           ${authTabButton("register", t("registerSacco"))}
           ${authTabButton("forgot", t("forgotPassword"))}
           ${authTabButton("support", t("support"))}
+        </div>
+        <div class="login-contacts">
+          <span class="login-contacts-label">${t("platformContacts")}</span>
+          <a href="tel:+256779494225">+256 779 494225</a>
+          <a href="tel:+256700940858">+256 700 940858</a>
         </div>
       </section>
       <section class="login-card">
@@ -69,11 +62,6 @@ function renderLogin() {
             <button class="button secondary" type="button" data-action="fill-demo">${t("fillDemo")}</button>
           </div>
         </section>` : ""}
-        <section class="login-assurance">
-          <div><strong>${t("protectedSession")}</strong><span>${t("protectedSessionCopy")}</span></div>
-          <div><strong>${t("correctPortal")}</strong><span>${t("correctPortalCopy")}</span></div>
-          <div><strong>${t("productionReady")}</strong><span>${t("productionReadyCopy")}</span></div>
-        </section>
         <div class="login-footer-links">
           <button type="button">${t("privacyPolicy")}</button>
           <button type="button">${t("terms")}</button>
@@ -86,16 +74,6 @@ function renderLogin() {
 
 function authTabButton(tab, label) {
   return `<button class="${state.authTab === tab ? "active" : ""}" type="button" data-auth-tab="${tab}">${label}</button>`;
-}
-
-function portalRouteCard(title, code, copy) {
-  return `
-    <article class="portal-route-card">
-      <strong>${escapeHtml(title)}</strong>
-      <span>${escapeHtml(code)}</span>
-      <p>${escapeHtml(copy)}</p>
-    </article>
-  `;
 }
 
 function authPanelContent() {
@@ -134,17 +112,11 @@ function loginPanel() {
     <div class="form-heading">
       <p class="eyebrow">${t("secureAccess")}</p>
       <h2>${t("loginTitle")}</h2>
-      <p>${t("loginCopy")}</p>
     </div>
     ${state.lastError ? `<div class="alert error" role="alert" aria-live="assertive">${escapeHtml(state.lastError)}</div>` : ""}
-    <div class="login-context-strip">
-      <div><span>${t("platformCode")}</span><strong>PLATFORM</strong></div>
-      <div><span>${t("saccoCode")}</span><strong>${t("saccoCodeExample")}</strong></div>
-      <div><span>${t("memberLogin")}</span><strong>${t("memberLoginCopy")}</strong></div>
-    </div>
     <form id="loginForm" class="form-grid single">
-      ${field(t("code"), "code", "text", t("codePlaceholder"), t("codeHelp"))}
-      ${field(t("usernameLabel"), "username", "text", t("usernameLabel"), t("usernameHelp"))}
+      ${field(t("code"), "code", "text", t("codePlaceholder"), "")}
+      ${field(t("usernameLabel"), "username", "text", t("usernameLabel"), "")}
       <label>
         <span>${t("password")}</span>
         <div class="password-row">
@@ -179,7 +151,6 @@ function publicSaccoRegistrationPanel() {
       <label><span>${t("village")}</span><input id="publicTenantVillage" required></label>
       <label><span>${t("contactNumber")}</span><input id="publicTenantContactNumber" required placeholder="+256..."></label>
       <label><span>${t("memberRange")}</span><select id="publicTenantMemberRange">${memberRangeOptions().map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("")}</select></label>
-      <label class="wide"><span>${t("mobileMoneyNumber")}</span><input id="publicTenantPaymentPhone" required placeholder="+256..."></label>
       <div class="mini-fact wide">
         <span>${t("paymentStep")}</span>
         <strong>${t("paymentStepCopy")}</strong>
@@ -194,7 +165,7 @@ function passwordRecoveryPanel() {
     <div class="form-heading">
       <p class="eyebrow">Account recovery</p>
       <h2>Password recovery</h2>
-      <p>Platform and SACCO staff can request a reset by email. SACCO members should contact their SACCO administrator for member-password reset.</p>
+      <p>Platform and SACCO staff can request a reset by email. SACCO members can reset below using their membership number, phone or email.</p>
     </div>
     <section class="support-checklist">
       <div><strong>1</strong><span>Enter the staff email registered on Tereka Online.</span></div>
@@ -220,6 +191,35 @@ function passwordRecoveryPanel() {
       <form id="passwordResetConfirmForm" class="form-grid single">
         <label><span>Reset token</span><input id="passwordResetToken" required value="${escapeHtml(state.passwordResetToken)}"></label>
         <label><span>New password</span><input id="passwordResetNewPassword" type="password" required minlength="10" placeholder="At least 10 characters"></label>
+        <button class="button secondary" type="submit">Set new password</button>
+      </form>
+    ` : ""}
+    <div class="form-heading">
+      <p class="eyebrow">Members</p>
+      <h2>Member password reset</h2>
+      <p>Email and WhatsApp codes are free. An SMS code costs UGX 500 paid by mobile money before it is sent.</p>
+    </div>
+    ${state.memberResetMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberResetMessage)}</strong>${state.memberResetExpiresAt ? `<span>Expires ${escapeHtml(formatDateTime(state.memberResetExpiresAt))}</span>` : ""}</div>` : ""}
+    ${state.memberResetError ? `<div class="notice warning" role="alert" aria-live="assertive"><strong>Member reset request failed.</strong><span>${escapeHtml(state.memberResetError)}</span></div>` : ""}
+    <form id="memberPasswordResetRequestForm" class="form-grid single">
+      <label><span>SACCO code (optional)</span><input id="memberResetSacco" type="text" placeholder="e.g. GRN"></label>
+      <label><span>Membership number, phone or email</span><input id="memberResetIdentifier" type="text" required placeholder="GVS-0001 / +256... / name@email"></label>
+      <label><span>Send code by</span><select id="memberResetChannel"><option value="email">Email (free)</option><option value="whatsapp">WhatsApp (free)</option><option value="sms">SMS (UGX 500)</option></select></label>
+      <button class="button primary" type="submit">Request reset code</button>
+    </form>
+    ${state.memberResetToken ? `
+      <section class="demo-panel">
+        <div>
+          <strong>Development reset code</strong>
+          <span>${state.memberResetPaymentRequired ? "Shown for testing; in production the SMS code is sent only after the UGX 500 payment is confirmed." : "This code is shown only when demo logins are enabled."}</span>
+        </div>
+        <code class="token-box">${escapeHtml(state.memberResetToken)}</code>
+      </section>
+      ${state.memberResetConfirmMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberResetConfirmMessage)}</strong></div>` : ""}
+      ${state.memberResetConfirmError ? `<div class="notice warning" role="alert" aria-live="assertive"><strong>Password reset failed.</strong><span>${escapeHtml(state.memberResetConfirmError)}</span></div>` : ""}
+      <form id="memberPasswordResetConfirmForm" class="form-grid single">
+        <label><span>Reset code</span><input id="memberResetToken" required value="${escapeHtml(state.memberResetToken)}"></label>
+        <label><span>New password</span><input id="memberResetNewPassword" type="password" required minlength="8" placeholder="At least 8 characters"></label>
         <button class="button secondary" type="submit">Set new password</button>
       </form>
     ` : ""}

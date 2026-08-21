@@ -243,6 +243,70 @@ function clearPasswordResetState() {
   state.passwordResetExpiresAt = "";
   state.passwordResetConfirmMessage = "";
   state.passwordResetConfirmError = "";
+  state.memberResetMessage = "";
+  state.memberResetError = "";
+  state.memberResetToken = "";
+  state.memberResetExpiresAt = "";
+  state.memberResetPaymentRequired = false;
+  state.memberResetReference = "";
+  state.memberResetAmount = 0;
+  state.memberResetConfirmMessage = "";
+  state.memberResetConfirmError = "";
+}
+
+async function requestMemberPasswordResetFromForm(event) {
+  event.preventDefault();
+  state.memberResetMessage = "";
+  state.memberResetError = "";
+  state.memberResetToken = "";
+  state.memberResetPaymentRequired = false;
+  state.memberResetReference = "";
+  state.memberResetConfirmMessage = "";
+  state.memberResetConfirmError = "";
+  try {
+    const response = await api("/member-auth/password-reset/request", {
+      method: "POST",
+      body: JSON.stringify({
+        saccoCode: value("memberResetSacco"),
+        identifier: value("memberResetIdentifier"),
+        channel: value("memberResetChannel")
+      })
+    }, "");
+    state.memberResetPaymentRequired = Boolean(response.paymentRequired);
+    state.memberResetReference = response.externalReference || "";
+    state.memberResetAmount = response.amount || 0;
+    state.memberResetToken = response.resetToken || "";
+    state.memberResetExpiresAt = response.expiresAt || "";
+    state.memberResetMessage = response.paymentRequired
+      ? `To receive your code by SMS, pay UGX ${response.amount} via mobile money using reference ${response.externalReference}. The code activates once payment is confirmed.`
+      : "If the account exists, a reset code has been sent to your chosen channel.";
+    renderLogin();
+  } catch (error) {
+    state.memberResetError = error.message;
+    renderLogin();
+  }
+}
+
+async function confirmMemberPasswordResetFromForm(event) {
+  event.preventDefault();
+  state.memberResetConfirmMessage = "";
+  state.memberResetConfirmError = "";
+  try {
+    await api("/member-auth/password-reset/confirm", {
+      method: "POST",
+      body: JSON.stringify({
+        token: value("memberResetToken"),
+        newPassword: value("memberResetNewPassword")
+      })
+    }, "");
+    state.memberResetConfirmMessage = "Password reset complete. You can now log in with your new password.";
+    state.memberResetToken = "";
+    state.memberResetPaymentRequired = false;
+    renderLogin();
+  } catch (error) {
+    state.memberResetConfirmError = error.message;
+    renderLogin();
+  }
 }
 
 function applyStaffSession(session) {
@@ -306,6 +370,9 @@ async function refreshAll() {
   if (hasPermission("finance-source:view")) endpoints.push(["fundingSources", "/funding-sources"]);
   if (hasPermission("fund-types:view")) endpoints.push(["fundTypes", "/fund-types"]);
   if (!isPlatform() && hasPermission("members:view")) endpoints.push(["memberSubscriptions", "/member-subscriptions"]);
+  if (!isPlatform() && hasPermission("members:approve")) endpoints.push(["staffDirectory", "/members/staff-directory"]);
+  if (hasPermission("loans:view")) endpoints.push(["guarantorRequests", "/loans/guarantor-requests"]);
+  if (hasPermission("savings-transfer:view")) endpoints.push(["savingsTransfers", "/savings-transfers"]);
   if (isPlatform() && hasPermission("roles:create")) endpoints.push(["notificationIntegrationConfig", "/platform-integrations/notification-config"]);
   if (isPlatform() && hasPermission("roles:create")) endpoints.push(["mobileMoneyIntegrationConfig", "/platform-integrations/mobile-money-config"]);
   if (canAccessView("notifications")) endpoints.push(["notificationProviderStatus", "/notifications/provider-status"]);
@@ -358,12 +425,27 @@ async function refreshMember() {
   state.memberData.privacyRequests = await optionalApi("/member-auth/privacy-requests", []);
   state.memberData.collectionAccounts = await optionalApi("/member-auth/collection-accounts", []);
   state.memberData.fundBalances = await optionalApi("/member-auth/fund-balances", []);
+  state.memberData.loanProducts = await optionalApi("/member-auth/loan-products", []);
   state.memberData.notificationPreferences = await optionalApi("/member-auth/notification-preferences", {});
+  state.memberData.guarantorListing = await optionalApi("/member-auth/guarantor-listing", { optOut: false });
   state.memberData.membership = await optionalApi("/member-auth/membership", null);
   state.memberData.drafts = loadMemberDrafts();
   state.lastSync = new Date().toISOString();
   state.loading = false;
   renderShell();
+}
+
+function exportSummaryPdf() {
+  const previousTitle = document.title;
+  const label = state.auth === "member" ? "Member Account Summary" : `${currentModule()[1]} Summary`;
+  document.title = `Tereka Online - ${label}`;
+  const restore = () => {
+    document.title = previousTitle;
+    window.removeEventListener("afterprint", restore);
+  };
+  window.addEventListener("afterprint", restore);
+  window.print();
+  setTimeout(restore, 2000);
 }
 
 function blockOfflineMemberAction(errorKey) {

@@ -59,7 +59,7 @@ function memberRegistrationPanel() {
       <div class="panel-heading">
         <div>
           <h2>Member registration</h2>
-          <p>Create a member profile, login credential and KYC starting state.</p>
+          <p>Create a member profile and login credential. Members entered by SACCO staff are active on registration.</p>
         </div>
       </div>
       ${state.memberFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberFormMessage)}</strong></div>` : ""}
@@ -74,7 +74,6 @@ function memberRegistrationPanel() {
         <label><span>Email</span><input id="newMemberEmail" type="email" placeholder="member@example.com"></label>
         <label><span>National ID</span><input id="newMemberNationalId" placeholder="CM..."></label>
         <label><span>Temporary password</span><input id="newMemberPassword" type="password" value="Member@12345"></label>
-        <label><span>KYC status</span><select id="newMemberKycStatus">${kycStatusOptions().map((status) => `<option value="${escapeHtml(status.value)}" ${status.value === "pending_verification" ? "selected" : ""}>${escapeHtml(status.label)}</option>`).join("")}</select></label>
         <label><span>Joining date</span><input id="newMemberJoiningDate" type="date" value="${new Date().toISOString().slice(0, 10)}"></label>
         <div class="form-actions inline"><button class="button primary" type="submit">Create member</button></div>
       </form>
@@ -86,7 +85,7 @@ function memberDetailPanel(mode = "kyc") {
   const member = state.selectedMember || dataRows("members").find((item) => item.id === state.selectedMemberId);
   if (!member) {
     return emptyState(
-      mode === "statement" ? "No member selected for statement" : mode === "contacts" ? "No member selected for contacts" : "No member selected for KYC",
+      mode === "statement" ? "No member selected for statement" : mode === "contacts" ? "No member selected for contacts" : "No member selected",
       "Open a member from the Member List tab to review this section."
     );
   }
@@ -102,7 +101,7 @@ function memberDetailPanel(mode = "kyc") {
     statementLines,
     statementSummary
   });
-  const title = mode === "contacts" ? "Member contacts and documents" : mode === "statement" ? "Member balance statement" : "Member detail and KYC approval";
+  const title = mode === "contacts" ? "Member contacts and documents" : mode === "statement" ? "Member balance statement" : "Member detail";
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
@@ -117,14 +116,12 @@ function memberDetailPanel(mode = "kyc") {
       <div class="dashboard-grid">
         ${summary("Total balance", money.format(detailSummary.totalBalance), "Savings, shares and welfare", "View")}
         ${summary("Statement lines", detailSummary.statementLines, "Posted statement activity", "Review")}
-        ${summary("Documents", detailSummary.documents, "KYC evidence files", "Verify")}
+        ${summary("Documents", detailSummary.documents, "Member ID documents", "Review")}
         ${summary("Contacts", detailSummary.contacts, "Next-of-kin records", "Review")}
         ${summary("Beneficiaries", detailSummary.beneficiaries, "Allocation records", "Review")}
       </div>
       <div class="source-grid">
         ${mini("Status", member.status)}
-        ${mini("KYC", member.kycStatus)}
-        ${mini("KYC readiness", memberKycReadinessFor(member))}
         ${mini("Savings", money.format(member.savingsBalance || 0))}
         ${mini("Shares", money.format(member.sharesBalance || 0))}
         ${mini("Welfare", money.format(member.welfareBalance || 0))}
@@ -148,24 +145,23 @@ function memberDetailPanel(mode = "kyc") {
             ${canEditProfile ? `<button class="button primary" type="submit">Save member profile</button>` : `<span class="status pending">Profile view only</span>`}
           </div>
         </form>
-        ${memberKycChecklist(member)}
         <form id="memberStatusForm" class="form-grid single">
           <input type="hidden" id="selectedMemberId" value="${escapeHtml(member.id)}">
           <label><span>Member status</span><select id="selectedMemberStatus" ${canManage ? "" : "disabled"}>${memberStatusOptions().map((status) => `<option value="${status.value}" ${status.value === member.status ? "selected" : ""}>${status.label}</option>`).join("")}</select></label>
-          <label><span>KYC decision</span><select id="selectedMemberKycStatus" ${canManage ? "" : "disabled"}>${kycStatusOptions().map((status) => `<option value="${status.value}" ${status.value === member.kycStatus ? "selected" : ""}>${status.label}</option>`).join("")}</select></label>
           <div class="form-actions">
             ${canManage ? `
-              <button class="button primary" type="submit">Save KYC decision</button>
+              <button class="button primary" type="submit">Save member status</button>
               <button class="button secondary" type="button" data-member-decision="approve">Approve member</button>
               <button class="button secondary" type="button" data-member-decision="changes">Request changes</button>
               <button class="button ghost" type="button" data-member-decision="suspend">Suspend member</button>
             ` : `<span class="status pending">View only</span>`}
           </div>
         </form>
+        ${memberStaffLinkPanel(member, canManage)}
       ` : ""}
       ${mode === "contacts" ? `<div class="grid two">
         ${memberDocumentRetentionPanel(member)}
-        ${recordTable("Member KYC documents", buildMemberDocumentRows(state.selectedMemberDocuments || [], labelize, formatDateTime), ["documentType", "storageKey", "verificationStatus", "retentionStatus", "retentionStorageAction", "retentionReviewDueAt", "retentionReviewedAt"])}
+        ${recordTable("Member documents", buildMemberDocumentRows(state.selectedMemberDocuments || [], labelize, formatDateTime), ["documentType", "storageKey", "verificationStatus", "retentionStatus", "retentionStorageAction", "retentionReviewDueAt", "retentionReviewedAt"])}
         ${recordTable("Member contacts and next of kin", state.selectedMemberNextOfKin, ["fullName", "relationship", "phone", "address", "primaryContact"])}
         ${recordTable("Member beneficiaries", state.selectedMemberBeneficiaries, ["fullName", "relationship", "phone", "allocationPercent"])}
       </div>` : ""}
@@ -187,8 +183,8 @@ function memberDocumentRetentionPanel(member) {
     <section class="panel compact-panel">
       <div class="panel-heading">
         <div>
-          <h2>KYC document retention</h2>
-          <p>Control expired KYC evidence without deleting audit history for ${escapeHtml(member.membershipNo || "member")}.</p>
+          <h2>Document retention</h2>
+          <p>Control expired member documents without deleting audit history for ${escapeHtml(member.membershipNo || "member")}.</p>
         </div>
         <span class="status ${retention.reviewDue || retention.disposalPending ? "pending" : "active"}">${retention.reviewDue || retention.disposalPending ? "Review needed" : "Current"}</span>
       </div>
@@ -275,21 +271,36 @@ function staffStatementExportPanel(member, lines) {
   `;
 }
 
-function memberKycChecklist(member) {
-  const rows = buildMemberKycChecklistRows(member, labelize);
-  const needsReview = rows.some((row) => ["missing", "review", "pending", "incomplete"].includes(normal(row.status)));
+function memberStaffLinkPanel(member, canManage) {
+  const staffSource = dataRows("users").length ? dataRows("users") : dataRows("staffDirectory");
+  const tenantUsers = staffSource.filter((user) => user.tenantId === member.tenantId);
+  const linked = member.linkedUserId || "";
+  const linkedUser = tenantUsers.find((user) => user.id === linked);
+  const picker = tenantUsers.length
+    ? `<select id="memberStaffLinkUserId" ${canManage ? "" : "disabled"}>
+        <option value="">Not linked</option>
+        ${tenantUsers.map((user) => `<option value="${escapeHtml(user.id)}" ${user.id === linked ? "selected" : ""}>${escapeHtml(user.fullName || user.email || user.id)}${user.email ? ` (${escapeHtml(user.email)})` : ""}</option>`).join("")}
+      </select>`
+    : `<input id="memberStaffLinkUserId" placeholder="Staff user ID (leave blank to unlink)" value="${escapeHtml(linked)}" ${canManage ? "" : "readonly"}>`;
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
         <div>
-          <h2>Member KYC checklist</h2>
-          <p>Verify identity, contact details, profile status and evidence before approving member access.</p>
+          <h2>Staff account link</h2>
+          <p>Link this member to their staff login if they are also SACCO staff. A linked staff member cannot approve, disburse or decide their own loans or transactions.</p>
         </div>
-        <span class="status ${needsReview ? "pending" : "active"}">${needsReview ? "Review" : "Ready"}</span>
+        ${linked ? `<span class="status active">Linked</span>` : `<span class="status pending">Not linked</span>`}
       </div>
-      <div class="mini-grid">
-        ${rows.map((row) => mini(row.area, `${row.detail}${row.status ? ` (${row.status})` : ""}`)).join("")}
-      </div>
+      ${state.memberStaffLinkError ? `<div class="notice warning"><span>${escapeHtml(state.memberStaffLinkError)}</span></div>` : ""}
+      ${state.memberStaffLinkMessage ? `<div class="notice compact"><span>${escapeHtml(state.memberStaffLinkMessage)}</span></div>` : ""}
+      <form id="memberStaffLinkForm" class="form-grid single">
+        <input type="hidden" id="memberStaffLinkMemberId" value="${escapeHtml(member.id)}">
+        <label><span>Staff user</span>${picker}</label>
+        <div class="form-actions inline">
+          ${canManage ? `<button class="button primary" type="submit">Save staff link</button>` : `<span class="status pending">View only</span>`}
+        </div>
+      </form>
+      ${linked ? `<p class="hint">Currently linked to ${escapeHtml(linkedUser ? (linkedUser.fullName || linkedUser.email || linked) : linked)}.</p>` : ""}
     </section>
   `;
 }

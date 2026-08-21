@@ -437,7 +437,7 @@ async function submitPublicSaccoRegistration(event) {
     }, "");
     const tenant = result.tenant || {};
     const paymentAmount = result.paymentAmount ? `${result.currencyCode || region.currency} ${Number(result.paymentAmount).toLocaleString()}` : "";
-    state.publicRegistrationMessage = `Registration received for ${tenant.name || value("publicTenantName")}. SACCO code ${tenant.abbreviation || saccoCode} created. Mobile-money payment prompt initiated to ${result.paymentPhone || value("publicTenantPaymentPhone") || value("publicTenantContactNumber")} with reference ${result.paymentReference}${paymentAmount ? ` for ${paymentAmount}` : ""}. Platform approval follows payment confirmation.`;
+    state.publicRegistrationMessage = `Registration received for ${tenant.name || value("publicTenantName")}. SACCO code ${tenant.abbreviation || saccoCode} created. You have a 1-month free trial — start using the system now and pay the subscription${paymentAmount ? ` (${paymentAmount})` : ""} any time before the trial ends using reference ${result.paymentReference}.`;
     renderLogin();
   } catch (error) {
     state.publicRegistrationError = friendlyUserError(error, false);

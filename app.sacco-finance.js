@@ -1,5 +1,86 @@
 ﻿// SACCO savings, shares and welfare rendering extracted from app.js.
 
+function savingsTransfersView() {
+  const transfers = dataRows("savingsTransfers");
+  const members = dataRows("members");
+  const fundTypes = dataRows("fundTypes");
+  const loans = dataRows("loans");
+  const canCreate = hasPermission("savings-transfer:create");
+  const canApprove = hasPermission("savings-transfer:approve");
+  const memberOptions = members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.fullName || member.membershipNo || member.id)}</option>`).join("");
+  const fundCodes = ["shares", "welfare"].concat(fundTypes.map((fund) => fund.code).filter((code) => code && !["savings", "shares", "welfare"].includes(code)));
+  const fundOptions = fundCodes.map((code) => `<option value="${escapeHtml(code)}">${escapeHtml(labelize(code))}</option>`).join("");
+  const loanOptions = loans.map((loan) => `<option value="${escapeHtml(loan.id)}">${escapeHtml(memberName(loan.memberId))} - ${escapeHtml(loan.product || "loan")}</option>`).join("");
+  const pending = transfers.filter((transfer) => transfer.status === "pending" || transfer.status === "awaiting_second_approval");
+  const rows = transfers.map((transfer) => ({
+    reference: transfer.reference,
+    member: memberName(transfer.sourceMemberId),
+    amount: money.format(transfer.amount || 0),
+    destination: labelize(transfer.destinationType || "")
+      + (transfer.destinationFundCode ? ` (${labelize(transfer.destinationFundCode)})` : "")
+      + (transfer.destinationMemberId ? ` (${memberName(transfer.destinationMemberId)})` : ""),
+    status: labelize(transfer.status || ""),
+    kind: transfer.batchId ? "Group" : "Single",
+    createdAt: formatDateTime(transfer.createdAt)
+  }));
+  return `
+    <div class="dashboard-grid">
+      ${summary("Transfers", transfers.length, "Savings transfers and deductions", "Manage")}
+      ${summary("Pending approval", pending.length, "Awaiting a checker", pending.length ? "Review" : "Clear")}
+    </div>
+    ${state.savingsTransferMessage ? `<div class="notice compact"><strong>${escapeHtml(state.savingsTransferMessage)}</strong></div>` : ""}
+    ${state.savingsTransferError ? `<div class="notice warning"><strong>Transfer action failed.</strong><span>${escapeHtml(state.savingsTransferError)}</span></div>` : ""}
+    ${canCreate ? `
+    <section class="panel">
+      <div class="panel-heading"><div><h2>New savings transfer</h2><p>Initiate a movement out of a member's savings. A board/chairperson approver posts it (maker-checker).</p></div></div>
+      <form id="savingsTransferForm" class="form-grid">
+        <label><span>From member</span><select id="stSource">${memberOptions}</select></label>
+        <label><span>Amount</span><input id="stAmount" type="number" min="1" step="0.01"></label>
+        <label><span>Destination</span><select id="stDestType"><option value="own_fund">Member's other fund</option><option value="loan_repayment">Loan repayment</option><option value="sacco_income">SACCO income / fee</option><option value="another_member">Another member</option></select></label>
+        <label><span>To fund (own fund)</span><select id="stFund">${fundOptions}</select></label>
+        <label><span>To loan (loan repayment)</span><select id="stLoan"><option value="">-</option>${loanOptions}</select></label>
+        <label><span>To member (another member)</span><select id="stDestMember"><option value="">-</option>${memberOptions}</select></label>
+        <label><span>Member authorization ref</span><input id="stAuth" type="text" maxlength="240" placeholder="Required for fees / another member / large amounts"></label>
+        <label class="full"><span>Reason</span><input id="stReason" type="text" maxlength="240"></label>
+        <div class="form-actions inline"><button class="button primary" type="button" data-create-savings-transfer="1">Create transfer</button></div>
+      </form>
+    </section>
+    <section class="panel">
+      <div class="panel-heading"><div><h2>Group deduction</h2><p>Deduct the same amount from savings for a selected list of members. Requires a board/AGM resolution.</p></div></div>
+      <form id="groupDeductionForm" class="form-grid">
+        <label class="full"><span>Members (multi-select)</span><select id="gdMembers" multiple size="5">${memberOptions}</select></label>
+        <label><span>Amount</span><input id="gdAmount" type="number" min="1" step="0.01"></label>
+        <label><span>Destination</span><select id="gdDestType"><option value="sacco_income">SACCO income / fee</option><option value="own_fund">Member's other fund</option></select></label>
+        <label><span>To fund (own fund)</span><select id="gdFund">${fundOptions}</select></label>
+        <label><span>Board/AGM resolution ref</span><input id="gdResolution" type="text" maxlength="240" placeholder="Required"></label>
+        <label class="full"><span>Reason</span><input id="gdReason" type="text" maxlength="240"></label>
+        <div class="form-actions inline"><button class="button primary" type="button" data-create-group-deduction="1">Create group deduction</button></div>
+      </form>
+    </section>` : ""}
+    ${recordTable("Savings transfers", rows, ["reference", "member", "amount", "destination", "status", "kind", "createdAt"])}
+    ${canApprove && transfers.some((transfer) => transfer.status === "posted") ? `
+    <section class="panel compact-panel">
+      <div class="panel-heading"><div><h2>Reverse a posted transfer</h2><p>Reversal mirrors the original movement (money is not deleted).</p></div></div>
+      <div class="collection-account-list">
+        ${transfers.filter((transfer) => transfer.status === "posted").slice(0, 20).map((transfer) => `<div class="collection-account-row">
+          <div><strong>${escapeHtml(transfer.reference)}</strong><span>${escapeHtml(memberName(transfer.sourceMemberId))} / ${escapeHtml(money.format(transfer.amount || 0))} / ${escapeHtml(labelize(transfer.destinationType || ""))}</span></div>
+          <button class="button ghost" type="button" data-reverse-savings-transfer="${escapeHtml(transfer.id)}">Reverse</button>
+        </div>`).join("")}
+      </div>
+    </section>` : ""}
+    ${canApprove && pending.length ? `
+    <section class="panel compact-panel">
+      <div class="panel-heading"><div><h2>Pending approvals</h2><p>Approve or reject. The creator cannot approve their own transfer.</p></div></div>
+      <div class="collection-account-list">
+        ${pending.map((transfer) => `<div class="collection-account-row">
+          <div><strong>${escapeHtml(transfer.reference)}</strong><span>${escapeHtml(memberName(transfer.sourceMemberId))} / ${escapeHtml(money.format(transfer.amount || 0))} / ${escapeHtml(labelize(transfer.destinationType || ""))}${transfer.status === "awaiting_second_approval" ? " / awaiting 2nd approval" : ""}</span></div>
+          <div><button class="button primary" type="button" data-decide-savings-transfer="${escapeHtml(transfer.id)}" data-decision="posted">${transfer.status === "awaiting_second_approval" ? "Give final approval" : "Approve"}</button> <button class="button ghost" type="button" data-decide-savings-transfer="${escapeHtml(transfer.id)}" data-decision="rejected">Reject</button></div>
+        </div>`).join("")}
+      </div>
+    </section>` : ""}
+  `;
+}
+
 function savingsView() {
   const products = productsByType("savings");
   const accounts = accountsByType("savings");

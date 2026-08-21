@@ -5,6 +5,7 @@ function recordTable(title, rows, columns) {
   const tableKey = tableStateKey(title);
   const tableState = state.tableState[tableKey] || { search: "", page: 1, pageSize: 10 };
   const allRows = rows || [];
+  const hasRowActions = allRows.some((row) => row && row.action);
   const serverTable = highVolumeTableConfig(tableKey);
   const backendPage = pageEnvelope(allRows) || (serverTable ? state.pageMeta[serverTable.key] : null);
   const backendTotal = Number(backendPage?.totalElements || 0);
@@ -62,8 +63,8 @@ function recordTable(title, rows, columns) {
       ${filtered.length ? `
         <div class="table-wrap">
           <table>
-            <thead><tr>${headerCells}<th>${t("actions")}</th></tr></thead>
-            <tbody>${pagedRows.map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}<td>${rowAction(row)}</td></tr>`).join("")}</tbody>
+            <thead><tr>${headerCells}${hasRowActions ? `<th>${t("actions")}</th>` : ""}</tr></thead>
+            <tbody>${pagedRows.map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}${hasRowActions ? `<td>${rowAction(row)}</td>` : ""}</tr>`).join("")}</tbody>
           </table>
         </div>
         <div class="pagination">

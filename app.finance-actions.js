@@ -1,6 +1,112 @@
 ﻿// SACCO finance action handlers for Tereka Online.
 // Covers financial transactions, receipts, reversals, loans, guarantors and repayments.
 
+function stValue(id) {
+  const el = document.querySelector(id);
+  return el ? el.value : "";
+}
+
+async function createSavingsTransfer() {
+  const destinationType = stValue("#stDestType");
+  const payload = {
+    sourceMemberId: stValue("#stSource"),
+    amount: Number(stValue("#stAmount") || 0),
+    destinationType,
+    destinationFundCode: destinationType === "own_fund" ? stValue("#stFund") : "",
+    destinationMemberId: destinationType === "another_member" ? stValue("#stDestMember") : "",
+    loanId: destinationType === "loan_repayment" ? stValue("#stLoan") : "",
+    authorizationReference: stValue("#stAuth"),
+    reason: stValue("#stReason")
+  };
+  state.savingsTransferMessage = "";
+  state.savingsTransferError = "";
+  if (!payload.sourceMemberId || !(payload.amount > 0)) {
+    state.savingsTransferError = "A member and a positive amount are required.";
+    renderShell();
+    return;
+  }
+  try {
+    await api("/savings-transfers", { method: "POST", body: JSON.stringify(payload) });
+    await refreshAll();
+    state.currentView = "savings-transfers";
+    state.savingsTransferMessage = "Transfer created and awaiting approval by a different user.";
+    renderShell();
+  } catch (error) {
+    state.savingsTransferError = error.message;
+    renderShell();
+  }
+}
+
+async function createGroupDeduction() {
+  const select = document.querySelector("#gdMembers");
+  const memberIds = select ? Array.from(select.selectedOptions).map((option) => option.value) : [];
+  const destinationType = stValue("#gdDestType");
+  state.savingsTransferMessage = "";
+  state.savingsTransferError = "";
+  if (!memberIds.length || !(Number(stValue("#gdAmount")) > 0)) {
+    state.savingsTransferError = "Select at least one member and a positive amount.";
+    renderShell();
+    return;
+  }
+  try {
+    const result = await api("/savings-transfers/group-deduction", {
+      method: "POST",
+      body: JSON.stringify({
+        memberIds,
+        amount: Number(stValue("#gdAmount")),
+        destinationType,
+        destinationFundCode: destinationType === "own_fund" ? stValue("#gdFund") : "",
+        resolutionReference: stValue("#gdResolution"),
+        reason: stValue("#gdReason")
+      })
+    });
+    await refreshAll();
+    state.currentView = "savings-transfers";
+    state.savingsTransferMessage = `Group deduction created for ${result.created || memberIds.length} member(s); awaiting approval.`;
+    renderShell();
+  } catch (error) {
+    state.savingsTransferError = error.message;
+    renderShell();
+  }
+}
+
+async function decideSavingsTransfer(id, decision) {
+  if (!id) return;
+  if (decision === "posted" && !window.confirm("Approve and post this transfer? This moves money and cannot be undone (reverse if needed).")) return;
+  state.savingsTransferMessage = "";
+  state.savingsTransferError = "";
+  try {
+    await api(`/savings-transfers/${encodeURIComponent(id)}/decision`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: decision })
+    });
+    await refreshAll();
+    state.currentView = "savings-transfers";
+    state.savingsTransferMessage = decision === "posted" ? "Transfer approved and posted." : "Transfer rejected.";
+    renderShell();
+  } catch (error) {
+    state.savingsTransferError = error.message;
+    renderShell();
+  }
+}
+
+async function reverseSavingsTransfer(id) {
+  if (!id) return;
+  if (!window.confirm("Reverse this posted transfer? It mirrors the original movement back.")) return;
+  state.savingsTransferMessage = "";
+  state.savingsTransferError = "";
+  try {
+    await api(`/savings-transfers/${encodeURIComponent(id)}/reverse`, { method: "POST", body: JSON.stringify({}) });
+    await refreshAll();
+    state.currentView = "savings-transfers";
+    state.savingsTransferMessage = "Transfer reversed.";
+    renderShell();
+  } catch (error) {
+    state.savingsTransferError = error.message;
+    renderShell();
+  }
+}
+
 async function saveFundType(fundTypeId) {
   const payload = {
     name: (document.getElementById("ftName")?.value || "").trim(),
@@ -163,22 +269,56 @@ async function openLoanDetail(loanId, shouldRender = true) {
   state.selectedLoanGuarantors = [];
   state.selectedLoanRepayments = [];
   state.selectedLoanSchedule = [];
+  state.selectedLoanCover = null;
+  state.selectedLoanAppraisals = [];
   state.selectedLoanMessage = "";
   state.selectedLoanError = "";
   if (shouldRender) renderShell();
   try {
-    const [guarantors, repayments, schedule] = await Promise.all([
+    const [guarantors, repayments, schedule, cover, appraisals] = await Promise.all([
       optionalApi(`/loans/${encodeURIComponent(loanId)}/guarantors`, []),
       optionalApi(`/loans/${encodeURIComponent(loanId)}/repayments`, []),
-      optionalApi(`/loans/${encodeURIComponent(loanId)}/schedule`, [])
+      optionalApi(`/loans/${encodeURIComponent(loanId)}/schedule`, []),
+      optionalApi(`/loans/${encodeURIComponent(loanId)}/cover`, null),
+      optionalApi(`/loans/${encodeURIComponent(loanId)}/appraisals`, [])
     ]);
     state.selectedLoanGuarantors = guarantors || [];
     state.selectedLoanRepayments = repayments || [];
     state.selectedLoanSchedule = schedule || [];
+    state.selectedLoanCover = cover || null;
+    state.selectedLoanAppraisals = appraisals || [];
   } catch (error) {
     state.selectedLoanError = error.message;
   }
   renderShell();
+}
+
+async function recordLoanAppraisal(event) {
+  event.preventDefault();
+  const loanId = value("appraisalLoanId") || state.selectedLoanId;
+  if (!loanId) return;
+  state.selectedLoanMessage = "";
+  state.selectedLoanError = "";
+  try {
+    await api(`/loans/${encodeURIComponent(loanId)}/appraisals`, {
+      method: "POST",
+      body: JSON.stringify({
+        recommendation: value("appraisalRecommendation"),
+        recommendedAmount: value("appraisalAmount") ? Number(value("appraisalAmount")) : null,
+        recommendedTermMonths: value("appraisalTerm") ? Number(value("appraisalTerm")) : null,
+        notes: value("appraisalNotes") || ""
+      })
+    });
+    const message = "Credit appraisal recorded for the committee.";
+    await refreshAll();
+    state.selectedLoanId = loanId;
+    await openLoanDetail(loanId, false);
+    state.selectedLoanMessage = message;
+    renderShell();
+  } catch (error) {
+    state.selectedLoanError = error.message;
+    renderShell();
+  }
 }
 
 async function addLoanGuarantor(event) {
@@ -215,14 +355,22 @@ async function runLoanAction(action) {
   try {
     if (action === "disburse") {
       const loan = await api(`/loans/${encodeURIComponent(loanId)}/disburse`, { method: "POST" });
-      state.selectedLoanMessage = `Loan ${loan.applicationNo || loan.id} disbursed.`;
+      state.selectedLoanMessage = normal(loan.stage) === "awaiting disbursement approval"
+        ? `Disbursement initiated for loan ${loan.applicationNo || loan.id}. A second, different officer must confirm before funds move.`
+        : `Loan ${loan.applicationNo || loan.id} disbursed.`;
     } else {
       const status = action === "approve" ? "approved" : "rejected";
       const loan = await api(`/loans/${encodeURIComponent(loanId)}/status`, {
         method: "PATCH",
-        body: JSON.stringify({ status, reason: value("loanDecisionReason") || "Reviewed in Tereka Online" })
+        body: JSON.stringify({
+          status,
+          reason: value("loanDecisionReason") || "Reviewed in Tereka Online",
+          resolutionReference: value("loanResolutionReference") || ""
+        })
       });
-      state.selectedLoanMessage = `Loan ${loan.applicationNo || loan.id} ${status}.`;
+      state.selectedLoanMessage = normal(loan.stage) === "awaiting second approval"
+        ? `First approval recorded for loan ${loan.applicationNo || loan.id}. A second, different approver must confirm.`
+        : `Loan ${loan.applicationNo || loan.id} ${status}.`;
     }
     const message = state.selectedLoanMessage;
     await refreshAll();
