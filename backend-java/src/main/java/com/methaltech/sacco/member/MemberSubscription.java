@@ -12,8 +12,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * A member's membership dues subscription: amount, payment status and expiry, renewed by the billing
- * period. Managed by SACCO staff and distinct from the platform's per-SACCO subscription.
+ * A member's membership dues subscription: amount, payment status and optional expiry. One-time dues do
+ * not expire; recurring dues renew by billing period. Managed by SACCO staff and distinct from the
+ * platform's per-SACCO subscription.
  */
 @Entity
 @Table(name = "member_subscriptions")
@@ -77,6 +78,10 @@ public class MemberSubscription {
         this.updatedAt = this.createdAt;
     }
 
+    boolean isFullyPaid() {
+        return this.paid != null && this.amount != null && this.paid.compareTo(this.amount) >= 0;
+    }
+
     /** Applies a dues payment; once fully paid the membership becomes active and expiry is extended. */
     void recordPayment(BigDecimal paymentAmount, LocalDate activeExpiry) {
         this.paid = this.paid.add(paymentAmount).min(this.amount);
@@ -90,6 +95,12 @@ public class MemberSubscription {
 
     void markExpired() {
         this.status = "expired";
+        this.updatedAt = Instant.now();
+    }
+
+    void resetForRenewal() {
+        this.paid = BigDecimal.ZERO;
+        this.status = "pending_payment";
         this.updatedAt = Instant.now();
     }
 

@@ -15,6 +15,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -29,6 +30,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -36,6 +38,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -50,6 +53,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RestController
 @RequestMapping("/api/v1/members")
 class MemberController {
+
+    private static final long MAX_MEMBER_DOCUMENT_BYTES = 1_048_576L;
+    private static final Set<String> ALLOWED_DOCUMENT_CONTENT_TYPES = Set.of(
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "application/pdf");
 
     private static final List<String> MEMBER_IMPORT_HEADERS = List.of(
             "membershipNo",
@@ -99,6 +109,7 @@ class MemberController {
             "national_id",
             "photo",
             "signature",
+            "signed_registration_form",
             "bylaws",
             "registration_certificate",
             "other");
@@ -114,6 +125,7 @@ class MemberController {
     private final MemberNextOfKinRepository memberNextOfKinRepository;
     private final MemberBeneficiaryRepository memberBeneficiaryRepository;
     private final MemberPrivacyRequestRepository privacyRequestRepository;
+    private final MemberFundBalanceRepository memberFundBalanceRepository;
     private final FinancialTransactionRepository financialTransactionRepository;
     private final BranchLookup branchLookup;
     private final TenantService tenantService;
@@ -121,6 +133,7 @@ class MemberController {
     private final AuditService auditService;
     private final PasswordHasher passwordHasher;
     private final DocumentStorageService documentStorageService;
+    private final MemberSubscriptionService memberSubscriptionService;
 
     MemberController(
             MemberRepository memberRepository,
@@ -128,18 +141,21 @@ class MemberController {
             MemberNextOfKinRepository memberNextOfKinRepository,
             MemberBeneficiaryRepository memberBeneficiaryRepository,
             MemberPrivacyRequestRepository privacyRequestRepository,
+            MemberFundBalanceRepository memberFundBalanceRepository,
             FinancialTransactionRepository financialTransactionRepository,
             BranchLookup branchLookup,
             TenantService tenantService,
             AuthService authService,
             AuditService auditService,
             PasswordHasher passwordHasher,
-            DocumentStorageService documentStorageService) {
+            DocumentStorageService documentStorageService,
+            MemberSubscriptionService memberSubscriptionService) {
         this.memberRepository = memberRepository;
         this.memberDocumentRepository = memberDocumentRepository;
         this.memberNextOfKinRepository = memberNextOfKinRepository;
         this.memberBeneficiaryRepository = memberBeneficiaryRepository;
         this.privacyRequestRepository = privacyRequestRepository;
+        this.memberFundBalanceRepository = memberFundBalanceRepository;
         this.financialTransactionRepository = financialTransactionRepository;
         this.branchLookup = branchLookup;
         this.tenantService = tenantService;
@@ -147,6 +163,7 @@ class MemberController {
         this.auditService = auditService;
         this.passwordHasher = passwordHasher;
         this.documentStorageService = documentStorageService;
+        this.memberSubscriptionService = memberSubscriptionService;
     }
 
     @GetMapping
@@ -206,6 +223,27 @@ class MemberController {
         }
 
         return ResponseEntity.ok(ApiResponse.of(members.stream().map(MemberResponse::fromSummary).toList()));
+    }
+
+    @GetMapping("/fund-balances")
+    ResponseEntity<?> listMemberFundBalances(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+
+        List<String> branchScope = branchScope(currentSession, tenantId);
+        Set<String> visibleMemberIds = branchScope.isEmpty()
+                ? memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId).stream().map(Member::getId).collect(Collectors.toSet())
+                : memberRepository.findByTenantIdAndBranchIdInOrderByMembershipNoAsc(tenantId, branchScope).stream().map(Member::getId).collect(Collectors.toSet());
+        List<MemberFundBalanceExportResponse> balances = memberFundBalanceRepository.findByTenantIdOrderByMemberIdAscFundCodeAsc(tenantId).stream()
+                .filter(balance -> visibleMemberIds.contains(balance.getMemberId()))
+                .map(MemberFundBalanceExportResponse::from)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.of(balances));
     }
 
     @GetMapping("/import-template")
@@ -517,6 +555,7 @@ class MemberController {
                 "pending_approval",
                 kycStatus,
                 body.joiningDate() == null ? LocalDate.now() : body.joiningDate()));
+        memberSubscriptionService.ensureMandatorySubscription(member);
 
         auditService.record(
                 tenantId,
@@ -933,6 +972,113 @@ class MemberController {
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @PostMapping(path = "/{memberId}/documents/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    ResponseEntity<?> uploadMemberDocument(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @RequestParam String documentType,
+            @RequestParam(defaultValue = "pending_verification") String verificationStatus,
+            @RequestParam("file") MultipartFile file,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        String normalizedDocumentType = normalizedOrDefault(documentType, "");
+        if (!ALLOWED_DOCUMENT_TYPES.contains(normalizedDocumentType)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_DOCUMENT_TYPE", "Unsupported member document type."));
+        }
+        String normalizedStatus = normalizedOrDefault(verificationStatus, "pending_verification");
+        if (!ALLOWED_KYC_STATUSES.contains(normalizedStatus)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_DOCUMENT_STATUS", "Unsupported member document status."));
+        }
+        ResponseEntity<?> validation = validateUploadedMemberDocument(file);
+        if (validation != null) return validation;
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
+                    try {
+                        String storageKey = documentStorageService.store(
+                                member.getTenantId(),
+                                member.getId(),
+                                normalizedDocumentType,
+                                file.getOriginalFilename(),
+                                file.getContentType(),
+                                file.getBytes());
+                        MemberDocument document = memberDocumentRepository.save(new MemberDocument(
+                                "member_document_" + UUID.randomUUID(),
+                                member.getTenantId(),
+                                member.getId(),
+                                normalizedDocumentType,
+                                storageKey,
+                                normalizedStatus,
+                                currentSession.user().getId()));
+                        auditService.record(
+                                member.getTenantId(),
+                                currentSession.user(),
+                                "Uploaded soft-copy " + document.getDocumentType() + " for member " + member.getMembershipNo(),
+                                "member_document",
+                                document.getId(),
+                                request.getRemoteAddr());
+                        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MemberDocumentResponse.from(document)));
+                    } catch (IOException | DocumentStorageException ex) {
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                                .body(ApiErrorResponse.of(400, "DOCUMENT_UPLOAD_FAILED", ex.getMessage()));
+                    }
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @GetMapping("/{memberId}/documents/{documentId}/content")
+    ResponseEntity<?> downloadMemberDocument(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @PathVariable String documentId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
+                    return memberDocumentRepository.findByIdAndTenantIdAndMemberId(documentId, member.getTenantId(), member.getId())
+                            .<ResponseEntity<?>>map(document -> {
+                                try {
+                                    DocumentStorageObject stored = documentStorageService.read(document.getStorageKey());
+                                    return ResponseEntity.ok()
+                                            .contentType(MediaType.parseMediaType(stored.contentType()))
+                                            .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + stored.filename().replace("\"", "") + "\"")
+                                            .body(stored.content());
+                                } catch (DocumentStorageException ex) {
+                                    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                            .body(ApiErrorResponse.of(404, "DOCUMENT_FILE_NOT_FOUND", ex.getMessage()));
+                                }
+                            })
+                            .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                    .body(ApiErrorResponse.of(404, "DOCUMENT_NOT_FOUND", "Member document not found.")));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    private ResponseEntity<?> validateUploadedMemberDocument(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "DOCUMENT_FILE_REQUIRED", "Select a soft-copy file to upload."));
+        }
+        if (file.getSize() > MAX_MEMBER_DOCUMENT_BYTES) {
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                    .body(ApiErrorResponse.of(413, "DOCUMENT_FILE_TOO_LARGE", "Member documents must be 1 MB or smaller."));
+        }
+        String contentType = file.getContentType() == null ? "" : file.getContentType().toLowerCase(Locale.ROOT);
+        if (!ALLOWED_DOCUMENT_CONTENT_TYPES.contains(contentType)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "DOCUMENT_FILE_TYPE_NOT_ALLOWED", "Upload JPG, PNG, WEBP or PDF files only."));
+        }
+        return null;
     }
 
     @PatchMapping("/{memberId}/documents/{documentId}/retention")
@@ -1779,6 +1925,20 @@ class MemberController {
             String id,
             String membershipNo,
             String status) {
+    }
+
+    record MemberFundBalanceExportResponse(
+            String memberId,
+            String fundCode,
+            BigDecimal balance,
+            Instant updatedAt) {
+        static MemberFundBalanceExportResponse from(MemberFundBalance balance) {
+            return new MemberFundBalanceExportResponse(
+                    balance.getMemberId(),
+                    balance.getFundCode(),
+                    balance.getBalance(),
+                    balance.getUpdatedAt());
+        }
     }
 
     record MemberMetadataImportResult(

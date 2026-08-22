@@ -32,6 +32,9 @@ class GovernanceMeeting {
     @Column(name = "chair_user_id")
     private String chairUserId;
 
+    @Column(name = "chair_member_id")
+    private String chairMemberId;
+
     private String status;
     private String minutes;
 
@@ -51,6 +54,7 @@ class GovernanceMeeting {
             String meetingType,
             Instant scheduledAt,
             String chairUserId,
+            String chairMemberId,
             String status,
             String minutes,
             String createdByUserId) {
@@ -60,11 +64,28 @@ class GovernanceMeeting {
         this.meetingType = meetingType;
         this.scheduledAt = scheduledAt;
         this.chairUserId = chairUserId;
+        this.chairMemberId = chairMemberId;
         this.status = status;
         this.minutes = minutes;
         this.createdByUserId = createdByUserId;
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
+    }
+
+    void update(
+            String title,
+            String meetingType,
+            Instant scheduledAt,
+            String chairMemberId,
+            String status,
+            String minutes) {
+        this.title = title;
+        this.meetingType = meetingType;
+        this.scheduledAt = scheduledAt;
+        this.chairMemberId = chairMemberId;
+        this.status = status;
+        this.minutes = minutes;
+        touch();
     }
 
     void touch() {

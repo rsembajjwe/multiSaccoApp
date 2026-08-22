@@ -5416,6 +5416,7 @@ class SaccoBackendApplicationTests {
 								  "title": "%s",
 								  "meetingType": "board",
 								  "scheduledAt": "2026-08-20T09:00:00Z",
+								  "chairMemberId": "member_green_amina",
 								  "minutes": "Review risk dashboard and controls."
 								}
 								""".formatted(title)))
@@ -5423,9 +5424,29 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
 				.andExpect(jsonPath("$.data.title", is(title)))
 				.andExpect(jsonPath("$.data.meetingType", is("board")))
+				.andExpect(jsonPath("$.data.chairMemberId", is("member_green_amina")))
 				.andExpect(jsonPath("$.data.openResolutions", is(0)))
 				.andReturn();
 		String meetingId = objectMapper.readTree(createdMeeting.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		mockMvc.perform(patch("/api/v1/governance-meetings/" + meetingId)
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "title": "%s Updated",
+								  "meetingType": "board",
+								  "scheduledAt": "2026-08-21T09:00:00Z",
+								  "chairMemberId": "member_green_amina",
+								  "status": "completed",
+								  "minutes": "<p>Updated board minutes and decisions.</p>"
+								}
+								""".formatted(title)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.title", is(title + " Updated")))
+				.andExpect(jsonPath("$.data.status", is("completed")))
+				.andExpect(jsonPath("$.data.chairMemberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.minutes", containsString("Updated board minutes")));
 
 		mockMvc.perform(post("/api/v1/governance-meetings/" + meetingId + "/resolutions")
 						.header("Authorization", "Bearer " + token)
@@ -5434,6 +5455,8 @@ class SaccoBackendApplicationTests {
 								{
 								  "title": "Strengthen arrears review",
 								  "decision": "Management to submit weekly arrears movement reports.",
+								  "ownerName": "Credit Committee Secretary",
+								  "ownerTitle": "Secretary",
 								  "dueDate": "2026-08-31",
 								  "status": "open"
 								}
@@ -5441,6 +5464,8 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
 				.andExpect(jsonPath("$.data.meetingId", is(meetingId)))
+				.andExpect(jsonPath("$.data.ownerName", is("Credit Committee Secretary")))
+				.andExpect(jsonPath("$.data.ownerTitle", is("Secretary")))
 				.andExpect(jsonPath("$.data.status", is("open")));
 
 		mockMvc.perform(get("/api/v1/regulatory-report")

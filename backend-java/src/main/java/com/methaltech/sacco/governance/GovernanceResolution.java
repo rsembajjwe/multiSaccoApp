@@ -31,6 +31,15 @@ class GovernanceResolution {
     @Column(name = "owner_user_id")
     private String ownerUserId;
 
+    @Column(name = "owner_member_id")
+    private String ownerMemberId;
+
+    @Column(name = "owner_name")
+    private String ownerName;
+
+    @Column(name = "owner_title")
+    private String ownerTitle;
+
     @Column(name = "due_date")
     private LocalDate dueDate;
 
@@ -52,6 +61,9 @@ class GovernanceResolution {
             String title,
             String decision,
             String ownerUserId,
+            String ownerMemberId,
+            String ownerName,
+            String ownerTitle,
             LocalDate dueDate,
             String status,
             String createdByUserId) {
@@ -61,6 +73,9 @@ class GovernanceResolution {
         this.title = title;
         this.decision = decision;
         this.ownerUserId = ownerUserId;
+        this.ownerMemberId = ownerMemberId;
+        this.ownerName = ownerName;
+        this.ownerTitle = ownerTitle;
         this.dueDate = dueDate;
         this.status = status;
         this.createdByUserId = createdByUserId;

@@ -56,6 +56,33 @@ function openComplaintDetail(complaintId) {
   renderShell();
 }
 
+function openComplaintChat(complaintId) {
+  const complaint = dataRows("complaints").find((row) => row.id === complaintId) || {};
+  const thread = resolveComplaintChatThread(complaintId, complaint);
+  state.currentView = "complaints";
+  state.selectedComplaintId = thread?.id || complaintId;
+  state.moduleTabs.complaints = isPlatform()
+    ? "chat"
+    : thread?.type === "PLATFORM_SUPPORT" || (!thread && !complaint.memberId)
+      ? "platform-chat"
+      : "member-chat";
+  state.selectedComplaintMessage = "";
+  state.selectedComplaintError = "";
+  state.chatError = thread ? "" : "No chat thread is linked to this complaint yet.";
+  renderShell();
+  if (thread?.id) loadChatMessages(thread.id);
+}
+
+function resolveComplaintChatThread(complaintId, complaint = {}) {
+  const threads = dataRows("chatThreads") || [];
+  const normalizedId = String(complaintId || "");
+  return threads.find((thread) => thread.id === normalizedId)
+    || threads.find((thread) => thread.complaintId === normalizedId)
+    || threads.find((thread) => thread.id === `chat_${normalizedId}`)
+    || threads.find((thread) => complaint.memberId && thread.memberId === complaint.memberId && normal(thread.subject) === normal(complaint.subject))
+    || null;
+}
+
 async function saveComplaintStatus(status = null) {
   const complaintId = value("selectedComplaintId") || state.selectedComplaintId;
   if (!complaintId) return;
@@ -652,7 +679,10 @@ function bindEvents() {
     button.addEventListener("click", () => openPackageSetup(button.dataset.packageManage));
   });
   document.querySelectorAll("[data-row-action='member-detail']").forEach((button) => {
-    button.addEventListener("click", () => openMemberDetail(button.dataset.rowId));
+    button.addEventListener("click", () => {
+      state.currentView = "members";
+      openMemberDetail(button.dataset.rowId);
+    });
   });
   document.querySelectorAll("[data-row-action='monthly-performance-detail']").forEach((button) => {
     button.addEventListener("click", () => {
@@ -668,6 +698,36 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-staff-statement-export='csv']").forEach((button) => {
     button.addEventListener("click", () => exportStaffMemberStatementCsv(button.dataset.memberId));
+  });
+  document.querySelectorAll("[data-staff-statement-export='excel']").forEach((button) => {
+    button.addEventListener("click", () => exportStaffMemberStatementExcel(button.dataset.memberId));
+  });
+  document.querySelectorAll("[data-staff-statement-export='pdf']").forEach((button) => {
+    button.addEventListener("click", () => exportStaffMemberStatementPdf(button.dataset.memberId));
+  });
+  document.querySelectorAll("[data-action='open-member-register']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.currentView = "members";
+      state.memberTab = "register";
+      state.memberListMessage = "";
+      state.memberListError = "";
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-action='download-selected-member-statement']").forEach((button) => {
+    button.addEventListener("click", downloadSelectedMemberStatement);
+  });
+  document.querySelectorAll("[data-action='download-selected-member-statement-pdf']").forEach((button) => {
+    button.addEventListener("click", downloadSelectedMemberStatementPdf);
+  });
+  document.querySelectorAll("[data-action='download-selected-member-statement-excel']").forEach((button) => {
+    button.addEventListener("click", downloadSelectedMemberStatementExcel);
+  });
+  document.querySelectorAll("[data-action='export-member-list-excel']").forEach((button) => {
+    button.addEventListener("click", exportMemberListExcel);
+  });
+  document.querySelectorAll("[data-action='export-member-list-pdf']").forEach((button) => {
+    button.addEventListener("click", exportMemberListPdf);
   });
   document.querySelectorAll("[data-staff-statement-print]").forEach((button) => {
     button.addEventListener("click", () => window.print());
@@ -721,6 +781,9 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='complaint-detail']").forEach((button) => {
     button.addEventListener("click", () => openComplaintDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='complaint-chat']").forEach((button) => {
+    button.addEventListener("click", () => openComplaintChat(button.dataset.rowId));
+  });
   document.querySelectorAll("[data-chat-complaint-id]").forEach((button) => {
     button.addEventListener("click", () => selectChatThread(button.dataset.chatComplaintId));
   });
@@ -734,6 +797,7 @@ function bindEvents() {
     event.preventDefault();
     sendChatMessage(event.currentTarget.dataset.threadId);
   });
+  document.querySelector("#chatRoutingForm")?.addEventListener("submit", routeChatThread);
   document.querySelector("#memberNewChatForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     startMemberChatThread();
@@ -755,8 +819,61 @@ function bindEvents() {
     button.addEventListener("click", () => setMessageCategory(button.dataset.messageCategory));
   });
   document.querySelector("[data-send-sacco-message]")?.addEventListener("click", () => sendSaccoMessage());
-  document.querySelector("[data-assign-member-dues]")?.addEventListener("click", () => assignMemberDues());
+  document.querySelector("[data-save-membership-calendar]")?.addEventListener("click", () => saveMembershipCalendar());
+  document.querySelector("[data-save-sacco-logo]")?.addEventListener("click", () => saveSaccoLogoSettings(false));
+  document.querySelector("[data-clear-sacco-logo]")?.addEventListener("click", () => saveSaccoLogoSettings(true));
+  document.querySelector("[data-member-dues-filter]")?.addEventListener("change", (event) => {
+    state.memberDuesFilter = event.target.value;
+    renderShell();
+  });
+  document.querySelector("[data-member-subscription-year]")?.addEventListener("change", (event) => {
+    setSaccoCycleSelection(event.target.value);
+    state.memberDuesDetailsId = "";
+    state.memberDuesCashDialogId = "";
+    state.subscriptionPaymentDialogId = "";
+    renderShell();
+  });
+  document.querySelector("[data-member-subscription-month]")?.addEventListener("change", (event) => {
+    setSaccoCycleSelection(undefined, event.target.value);
+    state.memberDuesDetailsId = "";
+    state.memberDuesCashDialogId = "";
+    state.subscriptionPaymentDialogId = "";
+    renderShell();
+  });
   document.querySelector("[data-pay-member-dues]")?.addEventListener("click", () => recordMemberDuesPayment());
+  document.querySelector("[data-member-dues-select]")?.addEventListener("change", (event) => {
+    state.selectedMemberDuesId = event.target.value;
+    renderShell();
+  });
+  document.querySelectorAll("[data-member-dues-pay]").forEach((button) => {
+    button.addEventListener("click", () => selectMemberDuesPayment(button.dataset.memberDuesPay));
+  });
+  document.querySelectorAll("[data-member-dues-cash]").forEach((button) => {
+    button.addEventListener("click", () => openMemberDuesCashDialog(button.dataset.memberDuesCash));
+  });
+  document.querySelectorAll("[data-member-dues-details]").forEach((button) => {
+    button.addEventListener("click", () => openMemberDuesDetailsDialog(button.dataset.memberDuesDetails));
+  });
+  document.querySelector("#memberDuesCashForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    recordMemberDuesPayment();
+  });
+  document.querySelectorAll("[data-action='close-member-dues-cash-dialog']").forEach((button) => {
+    button.addEventListener("click", closeMemberDuesCashDialog);
+  });
+  document.querySelectorAll("[data-action='close-member-dues-details-dialog']").forEach((button) => {
+    button.addEventListener("click", closeMemberDuesDetailsDialog);
+  });
+  document.querySelectorAll("[data-member-dues-mobile-money]").forEach((button) => {
+    button.addEventListener("click", () => openSubscriptionPaymentDialog(button.dataset.memberDuesMobileMoney));
+  });
+  document.querySelectorAll("[data-member-dues-participation]").forEach((button) => {
+    button.addEventListener("click", () => setMemberDuesParticipation(button.dataset.memberDuesParticipation, button.dataset.participationStatus));
+  });
+  document.querySelector("#subscriptionPaymentForm")?.addEventListener("submit", initiateMemberDuesMobileMoney);
+  document.querySelectorAll("[data-action='close-subscription-payment-dialog']").forEach((button) => {
+    button.addEventListener("click", closeSubscriptionPaymentDialog);
+  });
   document.querySelector("[data-create-savings-transfer]")?.addEventListener("click", () => createSavingsTransfer());
   document.querySelector("[data-create-group-deduction]")?.addEventListener("click", () => createGroupDeduction());
   document.querySelectorAll("[data-decide-savings-transfer]").forEach((button) => {
@@ -907,7 +1024,33 @@ function bindEvents() {
       }
     });
   });
+  document.querySelectorAll("[data-rich-editor]").forEach((editor) => {
+    syncRichTextEditorValue(editor.dataset.richEditor);
+    editor.addEventListener("input", () => syncRichTextEditorValue(editor.dataset.richEditor));
+    editor.addEventListener("keydown", (event) => {
+      if (event.key !== "Tab") return;
+      event.preventDefault();
+      const keyboardEvent = /** @type {KeyboardEvent} */ (event);
+      runRichTextEditorCommand(editor.dataset.richEditor, keyboardEvent.shiftKey ? "outdent" : "indent");
+    });
+    editor.addEventListener("paste", (event) => {
+      event.preventDefault();
+      const pasteEvent = /** @type {ClipboardEvent} */ (event);
+      const text = pasteEvent.clipboardData?.getData("text/plain") || "";
+      document.execCommand("insertText", false, richTextAllowedPasteText(editor, text));
+      syncRichTextEditorValue(editor.dataset.richEditor);
+    });
+  });
+  document.querySelectorAll("[data-rich-editor-command]").forEach((button) => {
+    const eventName = ["SELECT", "INPUT"].includes(button.tagName) ? "change" : "click";
+    button.addEventListener(eventName, () => runRichTextEditorCommand(button.dataset.richEditorTarget, button.dataset.richEditorCommand, button.value));
+  });
+  document.querySelectorAll("[data-governance-chair-search]").forEach((input) => {
+    input.addEventListener("input", syncGovernanceChairpersonMemberSelection);
+    input.addEventListener("change", syncGovernanceChairpersonMemberSelection);
+  });
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
+  document.querySelector("#memberDocumentForm")?.addEventListener("submit", createMemberDocumentFromForm);
   document.querySelector("#platformSaccoForm")?.addEventListener("submit", createPlatformSacco);
   document.querySelector("#newTenantName")?.addEventListener("input", updateGeneratedSaccoCode);
   document.querySelector("#newTenantCountry")?.addEventListener("change", () => syncCountryCurrency("newTenantCountry", "newTenantCurrencyCode"));
@@ -941,6 +1084,8 @@ function bindEvents() {
   document.querySelectorAll("[data-guarantor-search]").forEach((button) => {
     button.addEventListener("click", () => searchMemberGuarantors(button.dataset.guarantorSearch));
   });
+  document.querySelector("[data-member-payment-purpose]")?.addEventListener("change", syncMemberPaymentPurposeContext);
+  syncMemberPaymentPurposeContext();
   document.querySelector("#memberPaymentForm")?.addEventListener("submit", postMemberPayment);
   document.querySelector("#memberComplaintForm")?.addEventListener("submit", submitMemberComplaint);
   document.querySelector("#memberPrivacyConsentForm")?.addEventListener("submit", saveMemberPrivacyConsents);
@@ -949,7 +1094,65 @@ function bindEvents() {
   document.querySelector("#expenseForm")?.addEventListener("submit", postExpense);
   document.querySelector("#assetForm")?.addEventListener("submit", registerAsset);
   document.querySelector("#governanceMeetingForm")?.addEventListener("submit", createGovernanceMeeting);
+  document.querySelector("#governanceMeetingUpdateForm")?.addEventListener("submit", updateGovernanceMeeting);
   document.querySelector("#governanceResolutionForm")?.addEventListener("submit", createGovernanceResolution);
+  document.querySelector("[data-action='export-governance-meeting-pdf']")?.addEventListener("click", exportGovernanceMeetingPdf);
+  document.querySelector("[data-governance-cycle-year]")?.addEventListener("change", (event) => {
+    setSaccoCycleSelection(event.target.value);
+    state.selectedMeetingId = "";
+    renderShell();
+  });
+  document.querySelector("[data-governance-cycle-month]")?.addEventListener("change", (event) => {
+    setSaccoCycleSelection(undefined, event.target.value);
+    state.selectedMeetingId = "";
+    renderShell();
+  });
+  document.querySelector("[data-report-cycle-year]")?.addEventListener("change", (event) => {
+    setSaccoCycleSelection(event.target.value);
+    renderShell();
+  });
+  document.querySelector("[data-report-cycle-month]")?.addEventListener("change", (event) => {
+    setSaccoCycleSelection(undefined, event.target.value);
+    renderShell();
+  });
+  document.querySelector("[data-sacco-cycle-year]")?.addEventListener("change", (event) => {
+    setSaccoCycleSelection(event.target.value);
+    state.selectedMeetingId = "";
+    state.memberDuesDetailsId = "";
+    state.memberDuesCashDialogId = "";
+    state.subscriptionPaymentDialogId = "";
+    renderShell();
+  });
+  document.querySelector("[data-sacco-cycle-month]")?.addEventListener("change", (event) => {
+    setSaccoCycleSelection(undefined, event.target.value);
+    state.selectedMeetingId = "";
+    state.memberDuesDetailsId = "";
+    state.memberDuesCashDialogId = "";
+    state.subscriptionPaymentDialogId = "";
+    renderShell();
+  });
+  document.querySelector("[data-report-member-form-select]")?.addEventListener("change", (event) => {
+    state.reportMemberFormMemberId = event.target.value;
+    state.reportExportMessage = "";
+    state.reportExportError = "";
+    renderShell();
+  });
+  document.querySelector("[data-action='export-secretary-report-pdf']")?.addEventListener("click", exportSecretaryReportPdf);
+  document.querySelector("[data-action='open-member-registration-report']")?.addEventListener("click", () => {
+    state.moduleTabs.reports = "member-form";
+    state.reportExportMessage = "";
+    state.reportExportError = "";
+    renderShell();
+  });
+  document.querySelector("[data-action='export-member-registration-form-pdf']")?.addEventListener("click", exportMemberRegistrationFormPdf);
+  document.querySelector("[data-action='export-member-registration-forms-pdf']")?.addEventListener("click", exportMemberRegistrationFormsPdf);
+  document.querySelector("[data-action='open-selected-member-documents']")?.addEventListener("click", (event) => {
+    const memberId = event.currentTarget.dataset.memberId || value("reportMemberFormMemberId") || state.reportMemberFormMemberId || state.selectedMemberId || state.selectedMember?.id;
+    if (memberId) {
+      state.currentView = "members";
+      openMemberDetail(memberId, "contacts");
+    }
+  });
   document.querySelector("#memberStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     runMemberDecision("custom");
@@ -1015,6 +1218,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-document-retention-action]").forEach((button) => {
     button.addEventListener("click", () => updateMemberDocumentRetention(button.dataset.rowId, button.dataset.documentRetentionAction));
+  });
+  document.querySelectorAll("[data-document-view]").forEach((button) => {
+    button.addEventListener("click", () => viewMemberDocument(button.dataset.documentView));
   });
   document.querySelectorAll("[data-member-notification-acknowledge]").forEach((button) => {
     button.addEventListener("click", () => acknowledgeMemberNotification(button.dataset.memberNotificationAcknowledge));
@@ -1179,3 +1385,107 @@ function handleGlobalDismissClick(event) {
   renderShell();
 }
 
+function runRichTextEditorCommand(targetId, command, commandValue = null) {
+  if (!targetId || !command) return;
+  const editor = document.querySelector(`[data-rich-editor="${CSS.escape(targetId)}"]`);
+  if (!editor || editor.getAttribute("contenteditable") !== "true") return;
+  /** @type {HTMLElement} */ (editor).focus();
+  if (command === "clear") {
+    editor.innerHTML = "";
+    syncRichTextEditorValue(targetId);
+    return;
+  }
+  const value = richTextCommandValue(command, commandValue);
+  document.execCommand(command, false, value);
+  syncRichTextEditorValue(targetId);
+}
+
+function richTextCommandValue(command, commandValue) {
+  const value = String(commandValue || "");
+  if (command === "formatBlock") return value || "P";
+  if (command === "fontName") return value || "Arial";
+  if (command === "fontSize") return value || "3";
+  if (command === "foreColor") return value || "#17231f";
+  if (command === "hiliteColor") return value || "#fff4bf";
+  return null;
+}
+
+function syncRichTextEditorValue(targetId) {
+  if (!targetId) return "";
+  const editor = document.querySelector(`[data-rich-editor="${CSS.escape(targetId)}"]`);
+  const input = document.getElementById(targetId);
+  if (!editor || !input) return "";
+  enforceRichTextCharacterLimit(editor);
+  const html = normalizeRichTextHtml(editor.innerHTML);
+  input.value = html;
+  updateRichTextCounter(targetId, richTextPlainText(editor).length, richTextMaxLength(editor));
+  return html;
+}
+
+function richTextAllowedPasteText(editor, text) {
+  const maxLength = richTextMaxLength(editor);
+  if (!maxLength) return text;
+  const remaining = Math.max(0, maxLength - richTextPlainText(editor).length);
+  return String(text || "").slice(0, remaining);
+}
+
+function enforceRichTextCharacterLimit(editor) {
+  const maxLength = richTextMaxLength(editor);
+  if (!maxLength) return;
+  const text = richTextPlainText(editor);
+  if (text.length <= maxLength) return;
+  editor.textContent = text.slice(0, maxLength);
+}
+
+function richTextMaxLength(editor) {
+  return Number(editor?.dataset?.richEditorMaxlength || 0);
+}
+
+function richTextPlainText(editor) {
+  return String(editor?.textContent || "").trim();
+}
+
+function updateRichTextCounter(targetId, count, maxLength) {
+  const counter = document.querySelector(`[data-rich-editor-counter="${CSS.escape(targetId)}"]`);
+  if (!counter || !maxLength) return;
+  const remaining = Math.max(0, maxLength - count);
+  counter.textContent = remaining
+    ? `${remaining.toLocaleString()} characters remaining`
+    : `Maximum ${maxLength.toLocaleString()} characters reached`;
+  counter.classList.toggle("limit-reached", count >= maxLength);
+}
+
+function normalizeRichTextHtml(html) {
+  const container = document.createElement("div");
+  container.innerHTML = String(html || "");
+  container.querySelectorAll("script,style,iframe,object,embed,link,meta").forEach((node) => node.remove());
+  container.querySelectorAll("*").forEach((node) => {
+    [...node.attributes].forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      if (name.startsWith("on") || ["style", "class", "id"].includes(name)) node.removeAttribute(attribute.name);
+    });
+  });
+  return container.innerHTML.trim();
+}
+
+function syncGovernanceChairpersonMemberSelection(event) {
+  const input = event?.currentTarget || document.getElementById("newMeetingChairSearch");
+  const hiddenId = input?.dataset?.governanceChairHidden || "newMeetingChairUserId";
+  const selectedId = resolveGovernanceChairpersonMemberId(false, input?.id || "newMeetingChairSearch", hiddenId);
+  const hidden = document.getElementById(hiddenId);
+  if (hidden) hidden.value = selectedId;
+}
+
+function resolveGovernanceChairpersonMemberId(requireExact = true, searchInputId = "newMeetingChairSearch", hiddenInputId = "newMeetingChairUserId") {
+  const search = String(document.getElementById(searchInputId)?.value || "").trim();
+  const hidden = document.getElementById(hiddenInputId);
+  const members = typeof governanceChairpersonMemberOptions === "function"
+    ? governanceChairpersonMemberOptions(dataRows("members"))
+    : [];
+  const normalizedSearch = search.toLowerCase();
+  const selected = members.find((member) => member.label.toLowerCase() === normalizedSearch)
+    || (!requireExact ? members.find((member) => member.searchText.includes(normalizedSearch)) : null);
+  const selectedId = selected?.id || "";
+  if (hidden) hidden.value = selectedId;
+  return selectedId;
+}

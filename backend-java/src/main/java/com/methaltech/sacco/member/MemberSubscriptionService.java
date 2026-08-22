@@ -1,6 +1,7 @@
 package com.methaltech.sacco.member;
 
 import com.methaltech.sacco.notification.NotificationService;
+import com.methaltech.sacco.tenant.SaccoMembershipPolicyService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -21,6 +22,8 @@ public class MemberSubscriptionService {
     private final MemberSubscriptionRepository repository;
     private final MemberRepository memberRepository;
     private final NotificationService notificationService;
+    private final SaccoMembershipPolicyService membershipPolicyService;
+    private final BigDecimal defaultAmount;
     private final int graceDays;
     private final int reminderWindowDays;
 
@@ -28,34 +31,67 @@ public class MemberSubscriptionService {
             MemberSubscriptionRepository repository,
             MemberRepository memberRepository,
             NotificationService notificationService,
+            SaccoMembershipPolicyService membershipPolicyService,
+            @Value("${sacco.member-subscription.default-amount:5000}") BigDecimal defaultAmount,
             @Value("${sacco.member-subscription.grace-days:7}") int graceDays,
             @Value("${sacco.member-subscription.reminder-window-days:14}") int reminderWindowDays) {
         this.repository = repository;
         this.memberRepository = memberRepository;
         this.notificationService = notificationService;
+        this.membershipPolicyService = membershipPolicyService;
+        this.defaultAmount = defaultAmount == null || defaultAmount.signum() <= 0 ? BigDecimal.valueOf(5000) : defaultAmount;
         this.graceDays = Math.max(0, graceDays);
         this.reminderWindowDays = Math.max(1, reminderWindowDays);
     }
 
     public MemberSubscription assign(String tenantId, String memberId, String planName, BigDecimal amount, String billingPeriod) {
-        String period = normalizePeriod(billingPeriod);
+        SaccoMembershipPolicyService.MembershipDuesPolicy policy = membershipPolicyService.policyForTenant(tenantId);
+        String period = policy.billingPeriod();
+        BigDecimal subscriptionAmount = amount == null || amount.signum() <= 0 ? policy.amount() : amount;
         LocalDate today = LocalDate.now();
         return repository.save(new MemberSubscription(
                 "membersub_" + UUID.randomUUID(),
                 tenantId,
                 memberId,
                 planName,
-                amount,
+                subscriptionAmount,
                 period,
                 today,
-                nextExpiry(today, period)));
+                membershipPolicyService.nextExpiry(tenantId, today, period)));
+    }
+
+    @Transactional
+    public MemberSubscription ensureMandatorySubscription(Member member) {
+        return repository.findFirstByMemberIdOrderByCreatedAtDesc(member.getId())
+                .orElseGet(() -> assign(member.getTenantId(), member.getId(), "Member subscription", membershipPolicyService.policyForTenant(member.getTenantId()).amount(), null));
+    }
+
+    @Transactional
+    public int ensureMandatorySubscriptions(String tenantId) {
+        List<Member> members = memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId).stream()
+                .filter(member -> !"exited".equals(member.getStatus()))
+                .toList();
+        int created = 0;
+        for (Member member : members) {
+            if (repository.findFirstByMemberIdOrderByCreatedAtDesc(member.getId()).isEmpty()) {
+                ensureMandatorySubscription(member);
+                created++;
+            }
+        }
+        return created;
     }
 
     @Transactional
     public MemberSubscription recordPayment(MemberSubscription subscription, BigDecimal amount) {
+        if (!"expired".equals(subscription.getStatus()) && subscription.isFullyPaid()) {
+            throw new IllegalStateException("Member subscription is already fully paid for the current cycle. Do not record a duplicate payment.");
+        }
+        if ("expired".equals(subscription.getStatus())) {
+            subscription.resetForRenewal();
+        }
         LocalDate today = LocalDate.now();
         LocalDate base = subscription.getExpiry() != null && subscription.getExpiry().isAfter(today) ? subscription.getExpiry() : today;
-        subscription.recordPayment(amount, nextExpiry(base, subscription.getBillingPeriod()));
+        subscription.recordPayment(amount, membershipPolicyService.nextExpiry(subscription.getTenantId(), base, subscription.getBillingPeriod()));
         return repository.save(subscription);
     }
 
@@ -104,11 +140,4 @@ public class MemberSubscriptionService {
         return reminded;
     }
 
-    private LocalDate nextExpiry(LocalDate base, String billingPeriod) {
-        return "monthly".equalsIgnoreCase(billingPeriod) ? base.plusMonths(1) : base.plusYears(1);
-    }
-
-    private String normalizePeriod(String billingPeriod) {
-        return "monthly".equalsIgnoreCase(billingPeriod) ? "monthly" : "annual";
-    }
 }

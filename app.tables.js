@@ -3,6 +3,7 @@
 
 function recordTable(title, rows, columns) {
   const tableKey = tableStateKey(title);
+  const translatedTitle = tableTitleLabel(title);
   const tableState = state.tableState[tableKey] || { search: "", page: 1, pageSize: 10 };
   const allRows = rows || [];
   const hasRowActions = allRows.some((row) => row && row.action);
@@ -34,15 +35,15 @@ function recordTable(title, rows, columns) {
   const countLabel = searching
     ? `${filtered.length} ${t("of")} ${allRows.length} ${t("shown")}`
     : backendLoaded
-      ? `${allRows.length} ${t("of")} ${backendTotal} records loaded`
+      ? `${allRows.length} ${t("of")} ${backendTotal} ${t("recordsLoaded")}`
       : `${filtered.length} ${t("records")}`;
   const rangeLabel = filtered.length
-    ? `${t("showingRange")} ${start + 1}-${Math.min(start + pageSize, filtered.length)} ${t("of")} ${filtered.length}${backendLoaded && !searching ? " loaded" : ""}`
+    ? `${t("showingRange")} ${start + 1}-${Math.min(start + pageSize, filtered.length)} ${t("of")} ${filtered.length}${backendLoaded && !searching ? ` ${t("loaded")}` : ""}`
     : t("noRowsToShow");
   return `
     <section class="panel">
       <div class="panel-heading">
-        <h2>${title}</h2>
+        <h2>${escapeHtml(translatedTitle)}</h2>
         <div class="table-count">
           <span>${countLabel}</span>
           ${searching ? `<button class="table-action" type="button" data-action="clear-search">${t("clearSearch")}</button>` : ""}
@@ -51,10 +52,10 @@ function recordTable(title, rows, columns) {
       <div class="table-tools">
         <label>
           <span>${t("search") || "Search"}</span>
-          <input value="${escapeHtml(tableSearch)}" data-table-search="${escapeHtml(tableKey)}" placeholder="Search ${escapeHtml(title.toLowerCase())}" autocomplete="off" spellcheck="false">
+          <input value="${escapeHtml(tableSearch)}" data-table-search="${escapeHtml(tableKey)}" placeholder="${escapeHtml(`${t("search")} ${translatedTitle.toLowerCase()}`)}" autocomplete="off" spellcheck="false">
         </label>
         <label>
-          <span>Rows</span>
+          <span>${t("rowsPerPage")}</span>
           <select data-table-page-size="${escapeHtml(tableKey)}">
             ${[10, 25, 50, 100].map((size) => `<option value="${size}" ${pageSize === size ? "selected" : ""}>${size}</option>`).join("")}
           </select>
@@ -77,10 +78,10 @@ function recordTable(title, rows, columns) {
         </div>
         ${backendPage && serverTable ? `
           <div class="pagination server-pagination">
-            <span>Loaded page ${backendPageNumber + 1} of ${backendTotalPages}</span>
+            <span>${t("loadedPage")} ${backendPageNumber + 1} ${t("of")} ${backendTotalPages}</span>
             <div>
-              <button class="table-action" type="button" data-server-table-page="${escapeHtml(tableKey)}" data-page="${backendPageNumber - 1}" ${canLoadPreviousServerPage ? "" : "disabled"}>Load previous</button>
-              <button class="table-action" type="button" data-server-table-page="${escapeHtml(tableKey)}" data-page="${backendPageNumber + 1}" ${canLoadNextServerPage ? "" : "disabled"}>Load next</button>
+              <button class="table-action" type="button" data-server-table-page="${escapeHtml(tableKey)}" data-page="${backendPageNumber - 1}" ${canLoadPreviousServerPage ? "" : "disabled"}>${t("loadPrevious")}</button>
+              <button class="table-action" type="button" data-server-table-page="${escapeHtml(tableKey)}" data-page="${backendPageNumber + 1}" ${canLoadNextServerPage ? "" : "disabled"}>${t("loadNext")}</button>
             </div>
           </div>
         ` : ""}
@@ -90,11 +91,33 @@ function recordTable(title, rows, columns) {
 }
 
 function tableHeaderCell(tableKey, serverTable, tableState, column) {
-  const label = labelize(column);
+  const label = tableColumnLabel(column);
   const sortColumn = serverSortColumn(serverTable, column);
   if (!sortColumn) return `<th>${label}</th>`;
   const active = tableState.sort === sortColumn;
   const direction = active && tableState.direction === "asc" ? "asc" : "desc";
   const marker = active ? (direction === "asc" ? " asc" : " desc") : "";
   return `<th><button class="table-sort" type="button" data-server-table-sort="${escapeHtml(tableKey)}" data-sort="${escapeHtml(sortColumn)}" data-direction="${direction === "asc" ? "desc" : "asc"}">${escapeHtml(label)}${marker}</button></th>`;
+}
+
+function tableTitleLabel(title) {
+  const key = `tableTitle${translationKeySuffix(title)}`;
+  return translateOr(key, title);
+}
+
+function tableColumnLabel(column) {
+  const fallback = labelize(column);
+  const key = `column${translationKeySuffix(column)}`;
+  return translateOr(key, fallback);
+}
+
+function translationKeySuffix(value) {
+  return String(value || "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
 }

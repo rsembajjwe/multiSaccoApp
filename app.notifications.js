@@ -1,6 +1,7 @@
 ﻿function notificationsView() {
+  const cycle = isPlatform() ? null : currentSaccoCycleContext();
   const deliveries = buildNotificationDeliveryRows({
-    deliveries: dataRows("notifications"),
+    deliveries: isPlatform() ? dataRows("notifications") : filterNotificationsBySaccoCycle(dataRows("notifications"), cycle),
     tenantName,
     memberName,
     userName,
@@ -13,7 +14,7 @@
   const failedDeliveries = failedNotificationDeliveries(deliveries);
   const notificationContractMarker = "payment_request_closed";
   const paymentExceptions = paymentExceptionDeliveries(deliveries);
-  const jobRuns = buildProviderJobRunRows({ jobRuns: dataRows("providerJobRuns"), labelize, formatDateTime });
+  const jobRuns = buildProviderJobRunRows({ jobRuns: isPlatform() ? dataRows("providerJobRuns") : rowsInSaccoCycle(dataRows("providerJobRuns"), cycle, ["startedAt", "finishedAt", "createdAt"]), labelize, formatDateTime });
   const tabs = [["delivery-log", "Delivery log"], ["messages", "Message repository"], ["payment-exceptions", "Payment exceptions"], ["failed", "Failed"], ["unread", "Unread"], ["login-risk", "Login risk"], ["templates", "Templates"], ["job-history", "Job history"]];
   const tab = activeModuleTab("notifications", tabs);
   const deliveryTabs = ["delivery-log", "payment-exceptions", "failed", "unread", "login-risk"];
@@ -31,6 +32,7 @@
   const templates = buildNotificationTemplateRows({ templates: dataRows("notificationTemplates"), tenantName });
   const notificationSummary = buildNotificationSummary(deliveries, templates);
   return `
+    ${saccoCyclePanel(cycle, { title: "Notification cycle" })}
     <div class="dashboard-grid">
       ${summary(t("deliveries"), notificationSummary.deliveryCount, "SMS, email and in-app events", "Monitor")}
       ${summary("Payment exceptions", notificationSummary.paymentExceptions, "Manually closed mobile-money requests", notificationSummary.paymentExceptions ? "Review" : "Clear")}
@@ -58,7 +60,7 @@
     </section>` : ""}
     ${deliveryTabs.includes(tab) ? notificationDeliveryFilters(deliveries) : ""}
     ${tab === "payment-exceptions" ? paymentExceptionGuide(visibleDeliveries) : ""}
-    ${deliveryTabs.includes(tab) ? recordTable(`Notification delivery monitor - ${tabs.find(([id]) => id === tab)?.[1] || "Delivery log"}`, visibleDeliveries, ["tenantName", "event", "channel", "provider", "recipient", "deliveryStatus", "alertStatus", "message", "resource", "sentAt", "createdAt"]) : ""}
+    ${deliveryTabs.includes(tab) ? recordTable(`Notification delivery monitor - ${tabs.find(([id]) => id === tab)?.[1] || "Delivery log"}${cycle ? ` - ${cycle.label}` : ""}`, visibleDeliveries, ["tenantName", "event", "channel", "provider", "recipient", "deliveryStatus", "alertStatus", "message", "resource", "sentAt", "createdAt"]) : ""}
     ${tab === "messages" ? messageRepositoryPanel() : ""}
     ${tab === "templates" ? `${notificationTemplatePanel()}${notificationTemplateDetailPanel(templates)}${recordTable("Notification templates", templates, ["tenantName", "eventType", "channel", "title", "status", "updatedAt"])}` : ""}
     ${tab === "job-history" ? `${providerJobHistoryPanel(jobRuns)}${recordTable("Provider job run history", jobRuns, ["jobLabel", "runStatus", "scanned", "updated", "failed", "message", "startedAtDisplay", "finishedAtDisplay"])}` : ""}
@@ -94,7 +96,8 @@ function channelEnablementPanel() {
 function messageRepositoryPanel() {
   const categories = [["all", "All"], ["transaction", "Transactions"], ["sacco_message", "SACCO messages"], ["loan", "Loans"], ["support", "Support"], ["security", "Security"], ["system", "System"]];
   const activeCategory = state.messageCategoryFilter || "all";
-  const messages = dataRows("messages");
+  const cycle = isPlatform() ? null : currentSaccoCycleContext();
+  const messages = isPlatform() ? dataRows("messages") : filterNotificationsBySaccoCycle(dataRows("messages"), cycle);
   const filtered = activeCategory === "all" ? messages : messages.filter((row) => (row.category || "system") === activeCategory);
   const rows = filtered
     .slice()
@@ -141,7 +144,7 @@ function messageRepositoryPanel() {
         ${categories.map(([id, label]) => `<button class="tab ${id === activeCategory ? "active" : ""}" type="button" data-message-category="${id}">${escapeHtml(label)}</button>`).join("")}
       </div>
     </section>
-    ${recordTable("Messages", rows, ["category", "title", "body", "recipient", "channel", "status", "createdAt"])}
+    ${recordTable(`Messages${cycle ? ` - ${cycle.label}` : ""}`, rows, ["category", "title", "body", "recipient", "channel", "status", "createdAt"])}
   `;
 }
 
@@ -387,4 +390,3 @@ function notificationTemplateDetailPanel(rows) {
     </section>
   `;
 }
-

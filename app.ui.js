@@ -62,47 +62,85 @@ function rowAction(row) {
   if (row.action === "member-draft" && row.actionId) {
     return `
       <div class="table-actions">
-        <button class="table-action" type="button" data-member-draft-sync="${escapeHtml(row.actionId)}">Sync</button>
-        <button class="table-action danger" type="button" data-member-draft-discard="${escapeHtml(row.actionId)}">Discard</button>
+        <button class="table-action" type="button" data-member-draft-sync="${escapeHtml(row.actionId)}">${t("sync")}</button>
+        <button class="table-action danger" type="button" data-member-draft-discard="${escapeHtml(row.actionId)}">${t("discard")}</button>
       </div>
     `;
   }
   if (row.action === "member-guarantor" && row.actionId) {
     return `
       <div class="table-actions">
-        <button class="table-action" type="button" data-member-guarantor-action="accepted" data-row-id="${escapeHtml(row.actionId)}">Accept</button>
-        <button class="table-action danger" type="button" data-member-guarantor-action="rejected" data-row-id="${escapeHtml(row.actionId)}">Reject</button>
+        <button class="table-action" type="button" data-member-guarantor-action="accepted" data-row-id="${escapeHtml(row.actionId)}">${t("accept")}</button>
+        <button class="table-action danger" type="button" data-member-guarantor-action="rejected" data-row-id="${escapeHtml(row.actionId)}">${t("reject")}</button>
       </div>
     `;
   }
   if (row.action === "member-loan-history" && row.actionId) {
-    return `<button class="table-action" type="button" data-member-loan-history="${escapeHtml(row.actionId)}">History</button>`;
+    return `<button class="table-action" type="button" data-member-loan-history="${escapeHtml(row.actionId)}">${t("history")}</button>`;
   }
   if (row.action === "notification-acknowledge" && row.actionId) {
-    return `<button class="table-action" type="button" data-row-action="notification-acknowledge" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Acknowledge")}</button>`;
+    return `<button class="table-action" type="button" data-row-action="notification-acknowledge" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || t("acknowledge"))}</button>`;
   }
   if (row.action === "notification-retry" && row.actionId) {
-    return `<button class="table-action" type="button" data-row-action="notification-retry" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Retry")}</button>`;
+    return `<button class="table-action" type="button" data-row-action="notification-retry" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || t("retry"))}</button>`;
   }
   if (row.action === "member-notification-acknowledge" && row.actionId) {
-    return `<button class="table-action" type="button" data-member-notification-acknowledge="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Acknowledge")}</button>`;
+    return `<button class="table-action" type="button" data-member-notification-acknowledge="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || t("acknowledge"))}</button>`;
   }
   if (row.action === "payment-provider-status" && row.actionId) {
-    return `<button class="table-action" type="button" data-payment-provider-status="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "Check status")}</button>`;
+    return `<button class="table-action" type="button" data-payment-provider-status="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || t("checkStatus"))}</button>`;
   }
   if (row.action === "document-retention" && row.actionId) {
     return `
       <div class="table-actions">
-        <button class="table-action" type="button" data-document-retention-action="review_due" data-row-id="${escapeHtml(row.actionId)}">Review</button>
-        <button class="table-action" type="button" data-document-retention-action="retained" data-row-id="${escapeHtml(row.actionId)}">Retain</button>
-        <button class="table-action danger" type="button" data-document-retention-action="disposed" data-row-id="${escapeHtml(row.actionId)}">Dispose</button>
+        <button class="table-action" type="button" data-document-view="${escapeHtml(row.actionId)}">${t("view")}</button>
+        <button class="table-action" type="button" data-document-retention-action="review_due" data-row-id="${escapeHtml(row.actionId)}">${t("review")}</button>
+        <button class="table-action" type="button" data-document-retention-action="retained" data-row-id="${escapeHtml(row.actionId)}">${t("retain")}</button>
+        <button class="table-action danger" type="button" data-document-retention-action="disposed" data-row-id="${escapeHtml(row.actionId)}">${t("dispose")}</button>
       </div>
     `;
   }
-  if (row.action && row.actionId) {
-    return `<button class="table-action" type="button" data-row-action="${escapeHtml(row.action)}" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "View")}</button>`;
+  if (row.action === "member-dues-pay" && row.actionId) {
+    return `<button class="table-action" type="button" data-member-dues-pay="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || t("collect"))}</button>`;
   }
-  return `<button class="table-action" type="button">View</button>`;
+  if (row.action === "member-dues-cycle" && row.actionId) {
+    const buttons = [];
+    if (row.canViewDetails && row.subscriptionId) {
+      buttons.push(`<button class="table-action" type="button" data-member-dues-details="${escapeHtml(row.subscriptionId)}">View payment details</button>`);
+    }
+    if (row.canReceivePayment) {
+      buttons.push(`<button class="table-action" type="button" data-member-dues-cash="${escapeHtml(row.actionId)}">Cash payment</button>`);
+      buttons.push(`<button class="table-action" type="button" data-member-dues-mobile-money="${escapeHtml(row.actionId)}">Initiate payment</button>`);
+    }
+    if (row.canRequestExemption) {
+      buttons.push(`<button class="table-action" type="button" data-member-dues-participation="${escapeHtml(row.memberId)}" data-participation-status="exemption_requested">Request exemption</button>`);
+    }
+    if (row.canMarkNotRenewing) {
+      buttons.push(`<button class="table-action" type="button" data-member-dues-participation="${escapeHtml(row.memberId)}" data-participation-status="not_renewing">Mark not renewing</button>`);
+    }
+    if (row.canReactivate) {
+      buttons.push(`<button class="table-action" type="button" data-member-dues-participation="${escapeHtml(row.memberId)}" data-participation-status="clear">Reactivate cycle</button>`);
+    }
+    return buttons.length ? `<div class="table-actions">${buttons.join("")}</div>` : `<span class="status pending">No action</span>`;
+  }
+  if (row.action === "member-dues-mobile-money" && row.actionId) {
+    return `
+      <div class="table-actions">
+        <button class="table-action" type="button" data-member-dues-cash="${escapeHtml(row.actionId)}">Cash payment</button>
+        <button class="table-action" type="button" data-member-dues-mobile-money="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || t("requestMomo"))}</button>
+      </div>
+    `;
+  }
+  if (row.action === "member-dues-details" && row.actionId) {
+    return `<button class="table-action" type="button" data-member-dues-details="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "View payment details")}</button>`;
+  }
+  if (row.action === "none") {
+    return `<span class="muted">-</span>`;
+  }
+  if (row.action && row.actionId) {
+    return `<button class="table-action" type="button" data-row-action="${escapeHtml(row.action)}" data-row-id="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || t("view"))}</button>`;
+  }
+  return `<button class="table-action" type="button">${t("view")}</button>`;
 }
 
 function filterToolbar(placeholder, primary, secondary) {

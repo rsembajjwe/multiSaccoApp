@@ -59,15 +59,17 @@ function assetCapturePanel() {
 }
 
 function accountingView() {
+  const cycle = currentSaccoCycleContext();
   const accounts = dataRows("chartOfAccounts");
   const periods = dataRows("accountingPeriods");
-  const journals = dataRows("journalEntries");
-  const expenses = dataRows("expenses");
-  const assets = dataRows("assets");
+  const journals = filterJournalsBySaccoCycle(dataRows("journalEntries"), cycle);
+  const expenses = filterExpensesBySaccoCycle(dataRows("expenses"), cycle);
+  const assets = filterAssetsBySaccoCycle(dataRows("assets"), cycle);
   const accounting = buildAccountingSummary({ accounts, periods, journals, expenses, assets });
   const tabs = [["overview", "Overview"], ["capture", t("expenseAssetCapture")], ["setup", t("chartPeriods")], ["journals", t("recentJournalEntries")], ["statements", "Financial statements"], ["registers", t("expenseAssetRegisters")]];
   const tab = activeModuleTab("accounting", tabs);
   return `
+    ${saccoCyclePanel(cycle, { title: "Accounting cycle" })}
     <div class="dashboard-grid">
       ${summary(t("chartAccounts"), accounting.accountCount, "Ledger structure", t("open"))}
       ${summary(t("accountingPeriods"), accounting.periodCount, "Financial years", "View")}
@@ -90,18 +92,19 @@ function accountingView() {
       ${recordTable("Chart of accounts", accounts, ["code", "name", "type", "normalBalance"])}
       ${recordTable("Accounting periods", periods, ["name", "startDate", "endDate", "status"])}
     </div>` : ""}
-    ${tab === "journals" ? recordTable("Recent journal entries", journals, ["reference", "description", "amount", "status", "postedAt"]) : ""}
+    ${tab === "journals" ? recordTable(`Recent journal entries - ${cycle.label}`, journals, ["reference", "description", "amount", "status", "postedAt"]) : ""}
     ${tab === "statements" ? financialStatementsPanels(journals, accounts) : ""}
     ${tab === "registers" ? `<div class="grid two">
-      ${recordTable("Expenses", expenses, ["supplierId", "accountCode", "amount", "channel", "reference", "status"])}
-      ${recordTable("Assets", assets, ["name", "category", "cost", "netBookValue", "location", "status"])}
+      ${recordTable(`Expenses - ${cycle.label}`, expenses, ["supplierId", "accountCode", "amount", "channel", "reference", "status"])}
+      ${recordTable(`Assets - ${cycle.label}`, assets, ["name", "category", "cost", "netBookValue", "location", "status"])}
     </div>` : ""}
   `;
 }
 
 function reconciliationView() {
-  const callbacks = dataRows("mobileMoneyCallbacks");
-  const paymentRequests = dataRows("mobileMoneyPaymentRequests");
+  const cycle = currentSaccoCycleContext();
+  const callbacks = filterCallbacksBySaccoCycle(dataRows("mobileMoneyCallbacks"), cycle);
+  const paymentRequests = filterPaymentRequestsBySaccoCycle(dataRows("mobileMoneyPaymentRequests"), cycle);
   const review = buildReconciliationReviewModel({
     callbacks,
     paymentRequests,
@@ -112,6 +115,7 @@ function reconciliationView() {
   const tabs = [["overview", t("reconciliationControl")], ["matches", t("bankMobileMoneyMatching")], ["exceptions", t("exceptions")], ["requests", "Payment requests"], ["callbacks", t("providerCallbacks")]];
   const tab = activeModuleTab("reconciliation", tabs);
   return `
+    ${saccoCyclePanel(cycle, { title: "Reconciliation cycle" })}
     <div class="dashboard-grid">
       ${summary(t("providerCallbacks"), callbacks.length, "Mobile money events", t("open"))}
       ${summary(t("matchedRecords"), summaryData.matched ?? matches.length, money.format(summaryData.matchedAmount || 0), t("review"))}
@@ -144,11 +148,11 @@ function reconciliationView() {
       </div>` : ""}
     ${tab === "requests" ? `
       ${paymentRequestOperationsPanel(paymentRequests)}
-      ${recordTable("Mobile-money payment request review queue", paymentRequestRows, ["externalReference", "provider", "purpose", "amount", "currencyCode", "payerPhone", "reviewStatus", "statusMessage", "requestedAt", "completedAt"])}
+      ${recordTable(`Mobile-money payment request review queue - ${cycle.label}`, paymentRequestRows, ["externalReference", "provider", "purpose", "amount", "currencyCode", "payerPhone", "reviewStatus", "statusMessage", "requestedAt", "completedAt"])}
     ` : ""}
     ${tab === "callbacks" ? `
       ${callbackAttributionPanel(callbacks)}
-      ${recordTable("Provider callbacks", callbacks, ["externalReference", "provider", "purpose", "amount", "suggestedCollectionAccount", "collectionAccount", "resourceType", "status", "receivedAt"])}
+      ${recordTable(`Provider callbacks - ${cycle.label}`, callbacks, ["externalReference", "provider", "purpose", "amount", "suggestedCollectionAccount", "collectionAccount", "resourceType", "status", "receivedAt"])}
     ` : ""}
   `;
 }

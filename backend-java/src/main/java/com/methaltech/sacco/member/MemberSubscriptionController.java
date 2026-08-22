@@ -19,9 +19,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Staff management of member membership dues: list the SACCO's memberships, assign a membership to a
- * member, and record dues payments. Tenant-scoped and audited. Members view their own membership through
- * the member portal.
+ * Staff management of member subscriptions: list mandatory SACCO member subscriptions and record
+ * subscription payments. Tenant-scoped and audited. Members view their own subscription through the
+ * member portal.
  */
 @RestController
 @RequestMapping("/api/v1/member-subscriptions")
@@ -48,6 +48,7 @@ class MemberSubscriptionController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "TENANT_REQUIRED", "Select a SACCO to view member memberships."));
         }
+        memberSubscriptionService.ensureMandatorySubscriptions(tenantId);
         return ResponseEntity.ok(ApiResponse.of(repository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
                 .map(MemberSubscriptionResponse::from)
                 .toList()));
@@ -110,9 +111,15 @@ class MemberSubscriptionController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "PAYMENT_AMOUNT_INVALID", "A positive payment amount is required."));
         }
-        MemberSubscription saved = memberSubscriptionService.recordPayment(subscription, amount);
+        MemberSubscription saved;
+        try {
+            saved = memberSubscriptionService.recordPayment(subscription, amount);
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "MEMBERSHIP_ALREADY_PAID", ex.getMessage()));
+        }
         auditService.record(subscription.getTenantId(), session.user(),
-                "Recorded membership dues payment of " + amount + " for membership " + subscription.getId(),
+                "Recorded member subscription payment of " + amount + " for subscription " + subscription.getId(),
                 "member_subscription", subscription.getId(), request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(MemberSubscriptionResponse.from(saved)));
     }

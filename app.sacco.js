@@ -10,17 +10,19 @@ function saccoDashboard() {
   if (role === "teller") return saccoTellerDashboard();
   if (role === "auditor") return saccoAuditorDashboard();
   if (role === "loans") return saccoLoansOfficerDashboard();
-  const members = dataRows("members");
-  const transactions = dataRows("transactions");
-  const loans = dataRows("loans");
+  const cycle = currentSaccoCycleContext();
+  const members = filterMembersBySaccoCycle(dataRows("members"), cycle);
+  const transactions = filterTransactionsBySaccoCycle(dataRows("transactions"), cycle);
+  const loans = filterLoansBySaccoCycle(dataRows("loans"), cycle);
   const monthlyPerformance = buildSaccoMonthlyPerformanceRows({
-    callbacks: dataRows("mobileMoneyCallbacks"),
+    callbacks: filterCallbacksBySaccoCycle(dataRows("mobileMoneyCallbacks"), cycle),
     memberName,
     transactions
   });
   const dashboard = buildSaccoAdminDashboardSummary({ loans, members, transactions });
   return `
     ${saccoRoleContractMarkers()}
+    ${saccoCyclePanel(cycle)}
     <div class="dashboard-grid">
       ${summaryLink("Total members", dashboard.totalMembers, "Membership register", "Open", "members")}
       ${summaryLink("Total savings", money.format(dashboard.totalSavings), "Verified member balances", "Statements", "savings")}
@@ -123,8 +125,9 @@ function incomeExpenditureChartPanel(journals, accounts) {
 }
 
 function saccoAccountantDashboard() {
-  const journalEntries = dataRows("journalEntries");
-  const expenses = dataRows("expenses");
+  const cycle = currentSaccoCycleContext();
+  const journalEntries = filterJournalsBySaccoCycle(dataRows("journalEntries"), cycle);
+  const expenses = filterExpensesBySaccoCycle(dataRows("expenses"), cycle);
   const reconciliation = state.data.reconciliation || {};
   const dashboard = buildSaccoAccountantDashboardSummary({
     chartOfAccounts: dataRows("chartOfAccounts"),
@@ -133,6 +136,7 @@ function saccoAccountantDashboard() {
     reconciliation
   });
   return `
+    ${saccoCyclePanel(cycle)}
     <div class="dashboard-grid">
       ${summaryLink("Journal entries", dashboard.journalEntries, "Posted ledger activity", "Open", "accounting")}
       ${summaryLink("Expenses posted", money.format(dashboard.expensesPosted), "Operating spend", "Capture", "accounting")}
@@ -148,9 +152,11 @@ function saccoAccountantDashboard() {
 }
 
 function saccoTellerDashboard() {
-  const transactions = dataRows("transactions");
-  const dashboard = buildSaccoTellerDashboardModel({ currentUserId: state.user?.id, members: dataRows("members"), transactions });
+  const cycle = currentSaccoCycleContext();
+  const transactions = filterTransactionsBySaccoCycle(dataRows("transactions"), cycle);
+  const dashboard = buildSaccoTellerDashboardModel({ currentUserId: state.user?.id, members: filterMembersBySaccoCycle(dataRows("members"), cycle), transactions });
   return `
+    ${saccoCyclePanel(cycle)}
     <div class="dashboard-grid">
       ${summaryLink("Record a transaction", "Open", "Capture deposit or repayment", "Capture", "transactions")}
       ${summaryLink("My captures", dashboard.myCaptureCount, "Submitted this session", "Review", "transactions")}
@@ -164,9 +170,11 @@ function saccoTellerDashboard() {
 }
 
 function saccoLoansOfficerDashboard() {
-  const loans = dataRows("loans");
+  const cycle = currentSaccoCycleContext();
+  const loans = filterLoansBySaccoCycle(dataRows("loans"), cycle);
   const dashboard = buildSaccoLoansOfficerDashboardModel(loans);
   return `
+    ${saccoCyclePanel(cycle)}
     <div class="dashboard-grid">
       ${summaryLink("Loan applications", dashboard.loanApplications, "Capture and appraise", "Open", "loans")}
       ${summaryLink("Awaiting approval", dashboard.awaitingApproval, "Prepared for chairperson", "Track", "loans")}
@@ -179,10 +187,12 @@ function saccoLoansOfficerDashboard() {
 }
 
 function saccoAuditorDashboard() {
-  const auditEvents = dataRows("auditEvents");
-  const transactions = dataRows("transactions");
+  const cycle = currentSaccoCycleContext();
+  const auditEvents = rowsInSaccoCycle(dataRows("auditEvents"), cycle, ["createdAt"]);
+  const transactions = filterTransactionsBySaccoCycle(dataRows("transactions"), cycle);
   const dashboard = buildSaccoAuditorDashboardModel({ auditEvents, chartOfAccounts: dataRows("chartOfAccounts"), transactions });
   return `
+    ${saccoCyclePanel(cycle)}
     <div class="dashboard-grid">
       ${summaryLink("Audit events", dashboard.auditEvents, "Sensitive activity trail", "Open", "audit")}
       ${summaryLink("Reversals", dashboard.reversalCount, "Corrections with reason", "Review", "transactions")}
@@ -197,10 +207,13 @@ function saccoAuditorDashboard() {
 }
 
 function saccoChairpersonDashboard() {
-  const loans = dataRows("loans");
-  const transactions = dataRows("transactions");
-  const dashboard = buildSaccoChairpersonDashboardModel({ governanceMeetings: dataRows("governanceMeetings"), loans, transactions });
+  const cycle = currentSaccoCycleContext();
+  const loans = filterLoansBySaccoCycle(dataRows("loans"), cycle);
+  const transactions = filterTransactionsBySaccoCycle(dataRows("transactions"), cycle);
+  const governanceMeetings = filterGovernanceMeetingsByCycle(dataRows("governanceMeetings"), cycle);
+  const dashboard = buildSaccoChairpersonDashboardModel({ governanceMeetings, loans, transactions });
   return `
+    ${saccoCyclePanel(cycle)}
     ${saccoRoleFocusPanel("SACCO Chairperson", "Chairperson decision focus", "Board-level approval, loan exposure and governance decisions.")}
     <div class="dashboard-grid">
       ${summaryLink("Loans awaiting approval", dashboard.loansAwaitingApproval, "Chairperson approval queue", "Decide", "approvals")}
@@ -217,8 +230,9 @@ function saccoChairpersonDashboard() {
 }
 
 function saccoTreasurerDashboard() {
-  const transactions = dataRows("transactions");
-  const callbacks = dataRows("mobileMoneyCallbacks");
+  const cycle = currentSaccoCycleContext();
+  const transactions = filterTransactionsBySaccoCycle(dataRows("transactions"), cycle);
+  const callbacks = filterCallbacksBySaccoCycle(dataRows("mobileMoneyCallbacks"), cycle);
   const monthlyPerformance = buildSaccoMonthlyPerformanceRows({
     callbacks,
     memberName,
@@ -226,11 +240,12 @@ function saccoTreasurerDashboard() {
   });
   const treasurer = buildSaccoTreasurerDashboardModel({
     callbacks,
-    members: dataRows("members"),
-    pendingTransactions: pendingTransactions(),
+    members: filterMembersBySaccoCycle(dataRows("members"), cycle),
+    pendingTransactions: filterApprovalsBySaccoCycle(pendingTransactions(), cycle),
     transactions
   });
   return `
+    ${saccoCyclePanel(cycle)}
     ${saccoRoleFocusPanel("SACCO Treasurer", "Treasurer daily control", "Daily collections, approvals, receipts and reconciliation watch.")}
     <div class="dashboard-grid">
       ${summaryLink("Total savings", money.format(treasurer.totalSavings), "Member deposits", "Statements", "savings")}
@@ -254,17 +269,20 @@ function saccoTreasurerDashboard() {
     </section>
     <div class="grid two">
       ${recordTable("Member monthly performance", monthlyPerformance, ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
-      ${recordTable("Finance approval queue", pendingTransactions(), ["reference", "memberName", "type", "amount", "channel", "status"])}
+      ${recordTable("Finance approval queue", filterApprovalsBySaccoCycle(pendingTransactions(), cycle), ["reference", "memberName", "type", "amount", "channel", "status"])}
       ${recordTable("Reconciliation watch", [...treasurer.failedCallbacks, ...callbacks].slice(0, 12), ["externalReference", "provider", "purpose", "amount", "status", "receivedAt"])}
     </div>
   `;
 }
 
 function saccoSecretaryDashboard() {
-  const members = dataRows("members");
-  const governance = dataRows("governanceMeetings");
-  const secretary = buildSaccoSecretaryDashboardModel({ complaints: openComplaints(), governanceMeetings: governance, members });
+  const cycle = currentSaccoCycleContext();
+  const members = filterMembersBySaccoCycle(dataRows("members"), cycle);
+  const governance = filterGovernanceMeetingsByCycle(dataRows("governanceMeetings"), cycle);
+  const complaints = filterComplaintsBySaccoCycle(openComplaints(), cycle);
+  const secretary = buildSaccoSecretaryDashboardModel({ complaints, governanceMeetings: governance, members });
   return `
+    ${saccoCyclePanel(cycle)}
     ${saccoRoleFocusPanel("SACCO Secretary", "Secretary office focus", "Member records, Onboarding follow-up, complaints and governance documentation.")}
     <div class="dashboard-grid">
       ${summaryLink("Total members", secretary.totalMembers, "Member register", "Open", "members")}
@@ -274,7 +292,7 @@ function saccoSecretaryDashboard() {
     </div>
     <div class="grid two">
       ${recordTable("Member follow-up list", (secretary.pendingKyc.length ? secretary.pendingKyc : members).map((row) => ({ ...row, action: "member-detail", actionLabel: "Open", actionId: row.id })), ["membershipNo", "fullName", "phone", "kycStatus", "status"])}
-      ${recordTable("Governance and complaint follow-up", [...openComplaints(), ...governance], ["id", "memberName", "category", "subject", "scheduledAt", "priority", "status"])}
+      ${recordTable("Governance and complaint follow-up", [...complaints, ...governance], ["id", "memberName", "category", "subject", "scheduledAt", "priority", "status"])}
     </div>
   `;
 }

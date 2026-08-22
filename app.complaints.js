@@ -1,10 +1,15 @@
 ﻿function complaintsView() {
-  const rows = buildChatThreadRows({ threads: dataRows("chatThreads") || [], tenantName, memberName });
+  const cycle = isPlatform() ? null : currentSaccoCycleContext();
+  const sourceRows = isPlatform()
+    ? dataRows("chatThreads") || []
+    : filterComplaintsBySaccoCycle(dataRows("chatThreads") || [], cycle);
+  const rows = buildChatThreadRows({ threads: sourceRows, tenantName, memberName });
   const complaintSummary = buildComplaintSummary(rows);
   if (isPlatform()) {
     const tabs = [["chat", "SACCO admin chat"], ["list", "Complaint list"]];
     const tab = activeModuleTab("complaints", tabs);
     return `
+      ${complaintFlowStrip("platform")}
       <div class="dashboard-grid">
         ${summary(t("complaintsFromSaccoAdmins"), complaintSummary.open, "Open platform support cases", t("review"))}
         ${summary(t("urgentComplaints"), complaintSummary.urgent, "Needs same-day action", "Escalate")}
@@ -24,7 +29,7 @@
       ${tab === "chat" ? complaintChatWorkspace("SACCO admin - Platform Super Admin chat", "WhatsApp-style support threads from SACCO administrators to the platform owner.", rows.filter((row) => row.type === "PLATFORM_SUPPORT"), "platform-super") : ""}
       ${tab === "list" ? `
         ${filterToolbar("Search threads by SACCO, subject or status", "Export", "Assign")}
-        ${recordTable(t("complaintsFromSaccoAdmins"), rows.filter((row) => row.type === "PLATFORM_SUPPORT"), ["tenantName", "subject", "status", "lastMessagePreview", "updatedAt"])}
+        ${recordTable(t("complaintsFromSaccoAdmins"), complaintTableRows(rows.filter((row) => row.type === "PLATFORM_SUPPORT")), ["tenantName", "subject", "priority", "status", "routedTo", "latestActivity", "updatedAt"])}
       ` : ""}
     `;
   }
@@ -33,6 +38,8 @@
   const tabs = [["member-chat", "Member chat"], ["platform-chat", "Platform Super Admin chat"], ["capture-member", "New member message"], ["capture-platform", "Message platform"], ["list", "All messages"]];
   const tab = activeModuleTab("complaints", tabs);
   return `
+    ${saccoCyclePanel(cycle)}
+    ${complaintFlowStrip("sacco")}
     <div class="dashboard-grid">
       ${summary("Member chats", memberRows.length, "SACCO admin and member support", "Open")}
       ${summary("Platform chats", platformRows.length, "SACCO admin and platform support", "Open")}
@@ -46,44 +53,92 @@
     ${tab === "capture-platform" ? complaintCapturePanel("platform-escalation") : ""}
     ${tab === "list" ? `
       ${filterToolbar("Search messages by member, subject or status", "New message", "Assign officer")}
-      ${recordTable("Support threads", rows, ["memberName", "type", "subject", "status", "lastMessagePreview", "updatedAt"])}
+      ${recordTable(`Support threads - ${cycle.label}`, complaintTableRows(rows), ["memberName", "type", "subject", "priority", "status", "routedTo", "latestActivity", "updatedAt"])}
     ` : ""}
   `;
+}
+
+function complaintTableRows(rows) {
+  return (rows || []).map((row) => {
+    const route = complaintRouteAssignment(row.id);
+    return {
+      ...row,
+      priority: complaintPriorityBadge(row.priority || complaintPriorityFromText(row.lastMessagePreview || row.subject || "")),
+      status: complaintStatusBadge(row.status || "open"),
+      routedTo: route ? `<span class="complaint-chip route">${escapeHtml(route.assignedTo)}</span>` : `<span class="complaint-chip neutral">Secretary</span>`,
+      latestActivity: complaintLatestActivity(row.lastMessagePreview || row.subject || ""),
+      updatedAt: row.updatedAt
+    };
+  });
+}
+
+function complaintPriorityFromText(text) {
+  const value = String(text || "").toLowerCase();
+  if (value.includes("urgent") || value.includes("high")) return "high";
+  if (value.includes("low")) return "low";
+  return "medium";
+}
+
+function complaintPriorityBadge(priority) {
+  const value = String(priority || "medium").toLowerCase();
+  const tone = value.includes("high") || value.includes("urgent") ? "high" : value.includes("low") ? "low" : "medium";
+  return `<span class="complaint-chip priority-${tone}">${escapeHtml(labelize(value))}</span>`;
+}
+
+function complaintStatusBadge(status) {
+  const value = String(status || "open").toLowerCase();
+  const tone = value.includes("resolved") || value.includes("closed") ? "resolved" : value.includes("progress") ? "progress" : "open";
+  return `<span class="complaint-chip status-${tone}">${escapeHtml(labelize(status || "open"))}</span>`;
+}
+
+function complaintLatestActivity(text) {
+  const cleaned = String(text || "")
+    .replace(/Category:\s*.+/gi, "")
+    .replace(/Priority:\s*.+/gi, "")
+    .replace(/Primary response:\s*.+/gi, "")
+    .replace(/C:\s*.+?\|\s*P:\s*.+?\|\s*R:\s*.+/gi, "")
+    .replace(/Routing update/gi, "Routed")
+    .replace(/Assigned to:\s*/gi, "To ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || "No message yet";
 }
 
 function complaintChatWorkspace(title, copy, rows, mode) {
   const visibleRows = filterChatThreadRows(rows, state.chatFilters[mode] || "");
   if (!rows.length) {
-    return emptyState(title, mode === "sacco-platform"
-      ? "Start a platform message when the SACCO needs help from the Platform Super Admin."
-      : "No chat threads are available yet.");
+    return `
+      <section class="panel complaint-empty-panel">
+        <div>
+          <h2>${escapeHtml(title)}</h2>
+          <p>${escapeHtml(mode === "sacco-platform"
+            ? "Start a platform message when the SACCO needs help from the Platform Super Admin."
+            : copy || "No chat threads are available yet.")}</p>
+        </div>
+        <span class="status active">No open chats</span>
+      </section>
+    `;
   }
   const selected = visibleRows.find((row) => row.id === state.selectedComplaintId) || visibleRows[0];
   return `
-    <section class="chat-workspace panel">
+    <section class="chat-workspace panel" aria-label="${escapeHtml(title)}" aria-description="${escapeHtml(copy)}">
       <div class="chat-sidebar">
         <div class="chat-sidebar-header">
-          <strong>${escapeHtml(title)}</strong>
+          <div>
+            <strong>${escapeHtml(complaintChatTitle(mode))}</strong>
+            <small>${escapeHtml(complaintChatDirection(mode))}</small>
+          </div>
           <span>${visibleRows.length} of ${rows.length}</span>
         </div>
         <div class="chat-search-row">
-          <input data-chat-search="${escapeHtml(mode)}" value="${escapeHtml(state.chatFilters[mode] || "")}" placeholder="Search chats">
+          <input data-chat-search="${escapeHtml(mode)}" value="${escapeHtml(state.chatFilters[mode] || "")}" placeholder="${escapeHtml(complaintChatSearchPlaceholder(mode))}">
         </div>
         ${visibleRows.length ? `<div class="chat-thread-list">
           ${visibleRows.map((row) => complaintChatThreadButton(row, selected.id === row.id, mode)).join("")}
         </div>` : `<div class="empty-state compact"><strong>No matching chats</strong><span>Clear the search to show all conversations.</span></div>`}
       </div>
       <div class="chat-main">
-        ${selected ? `
-          <div class="chat-main-header">
-            <div>
-              <h2>${escapeHtml(selected.subject || title)}</h2>
-              <p>${escapeHtml(copy)}</p>
-            </div>
-            <span class="status ${selected.unreadCount ? "pending" : "active"}">${selected.unreadCount ? `${selected.unreadCount} new` : labelize(selected.status || "open")}</span>
-          </div>
-          ${chatConversationPanel(selected, mode)}
-        ` : emptyState("No matching chats", "Clear the search to select a conversation.")}
+        ${selected ? chatConversationPanel(selected, mode) : emptyState("No matching chats", "Clear the search to select a conversation.")}
       </div>
     </section>
   `;
@@ -112,6 +167,47 @@ function complaintChatParticipant(row, mode) {
   return chatParticipantLabel({ row, mode, tenantName, memberName, contextName });
 }
 
+function complaintFlowStrip(mode) {
+  const platform = mode === "platform";
+  return `
+    <section class="complaint-flow-strip">
+      <div>
+        <span>${platform ? "Platform complaint desk" : "SACCO complaint desk"}</span>
+        <strong>${platform ? "SACCO admins contact the Platform Super Admin here." : "Members contact the SACCO here. SACCO admins escalate system issues to the platform."}</strong>
+      </div>
+      <div class="complaint-flow-steps">
+        ${complaintFlowStep(platform ? "SACCO Admin" : "Member", "Starts chat")}
+        ${complaintFlowStep(platform ? "Platform Super Admin" : "SACCO Admin / Secretary", "Replies and routes")}
+        ${complaintFlowStep("Status", "Open, in progress, resolved")}
+      </div>
+    </section>
+  `;
+}
+
+function complaintFlowStep(label, detail) {
+  return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(detail)}</strong></div>`;
+}
+
+function complaintChatTitle(mode) {
+  if (mode === "platform-super") return "SACCO admin complaints";
+  if (mode === "sacco-platform") return "Platform support chats";
+  if (mode === "member-support") return "My SACCO support";
+  return "Member complaint chats";
+}
+
+function complaintChatDirection(mode) {
+  if (mode === "platform-super") return "SACCO Admin -> Platform Super Admin";
+  if (mode === "sacco-platform") return "SACCO Admin -> Platform Super Admin";
+  if (mode === "member-support") return "Member -> SACCO Admin";
+  return "Member -> SACCO Admin / Secretary";
+}
+
+function complaintChatSearchPlaceholder(mode) {
+  if (mode === "platform-super") return "Search by SACCO, subject or latest message";
+  if (mode === "sacco-platform") return "Search platform support chats";
+  return "Search member, subject or latest message";
+}
+
 /**
  * @param {TerekaComplaintThread | undefined} selected
  * @param {string} mode
@@ -129,44 +225,163 @@ function chatConversationPanel(selected, mode) {
       ? "SACCO admin - member chat"
       : "SACCO admin - Platform Super Admin chat";
   const participant = complaintChatParticipant(selected, mode);
+  const route = complaintRouteAssignment(selected.id);
+  const canReply = complaintCanReply(selected, mode, route);
+  const routedReply = !memberView && !!route && canReply && !canManage;
+  const canCompose = canManage || routedReply;
   const windowHtml = messages === undefined
     ? `<div class="chat-window"><div class="empty-state compact"><strong>Loading messages...</strong></div></div>`
     : (messages.length
         ? `<div class="chat-window">${messages.map((message) => chatBubble(
             message.senderType === viewerOutbound ? "sent" : "received",
             message.senderName || labelize(message.senderType),
-            message.body,
+            complaintMessageDisplayBody(message.body),
             message.createdAt)).join("")}</div>`
         : `<div class="chat-window"><div class="empty-state compact"><strong>No messages yet</strong><span>Start the conversation below.</span></div></div>`);
   return `
     <section class="panel detail-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>${escapeHtml(heading)}</h2>
-          <p>${escapeHtml(selected.subject || selected.id)} - ${escapeHtml(participant)}</p>
-        </div>
-        <span class="status ${selected.unreadCount ? "pending" : "active"}">${selected.unreadCount ? `${selected.unreadCount} new` : labelize(selected.status || "open")}</span>
-      </div>
       ${state.chatError ? `<div class="notice warning"><strong>Chat error.</strong><span>${escapeHtml(state.chatError)}</span></div>` : ""}
-      <div class="source-grid">
-        ${mini("SACCO", selected.tenantName || selected.tenantId)}
-        ${memberView ? mini("Support desk", "SACCO admin office") : (mode === "sacco-member" ? mini("Member", selected.memberName || "Member") : mini("Platform contact", "Platform Super Admin"))}
-        ${mini("Status", labelize(selected.status || "open"))}
-        ${mini("Last activity", selected.updatedAt ? formatDateTime(selected.updatedAt) : "-")}
-      </div>
       <section class="panel compact-panel chat-panel">
         ${windowHtml}
       </section>
-      ${canManage ? `
+      ${route ? complaintRouteBanner(route) : ""}
+      ${mode === "sacco-member" && canManage && complaintCanRoute(mode) ? complaintRoutingPanel(selected, route) : ""}
+      ${canCompose && canReply ? `
         <form id="chatComposerForm" class="form-grid single" data-thread-id="${escapeHtml(selected.id)}">
-          <label><span>Message</span><textarea id="chatComposerInput" class="chat-reply-input" placeholder="Type a message..." ${state.chatSending ? "disabled" : ""}></textarea></label>
+          <label><span>${escapeHtml(routedReply ? `Reply as ${route.assignedTo}` : complaintComposerLabel(mode))}</span><textarea id="chatComposerInput" class="chat-reply-input" placeholder="${escapeHtml(complaintComposerPlaceholder(mode))}" ${state.chatSending ? "disabled" : ""}></textarea></label>
           <div class="form-actions chat-composer-actions">
             <button class="button primary" type="submit" ${state.chatSending ? "disabled" : ""}>${state.chatSending ? "Sending..." : "Send message"}</button>
           </div>
         </form>
-      ` : `<div class="chat-composer-actions"><span class="status pending">View only</span></div>`}
+      ` : ""}
     </section>
   `;
+}
+
+function complaintMessageDisplayBody(body) {
+  let text = String(body || "");
+  const category = text.match(/^\s*Category:\s*(.+)\s*$/im)?.[1];
+  const priority = text.match(/^\s*Priority:\s*(.+)\s*$/im)?.[1];
+  const response = text.match(/^\s*Primary response:\s*(.+)\s*$/im)?.[1];
+  if (category || priority || response) {
+    text = text
+      .replace(/^\s*Category:\s*.+\s*$/gim, "")
+      .replace(/^\s*Priority:\s*.+\s*$/gim, "")
+      .replace(/^\s*Primary response:\s*.+\s*$/gim, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    text = `${text}\n\nC: ${category || "-"} | P: ${priority || "-"} | R: ${response || "-"}`.trim();
+  }
+  return text;
+}
+
+function complaintRoutingPanel(selected, route = null) {
+  const options = complaintRoutingOptions();
+  return `
+    <section class="complaint-routing-inline">
+      <div>
+        <strong>Route this complaint</strong>
+        <span>${route ? `Currently routed to ${route.assignedTo}.` : "The Secretary is the primary responder until a route is posted."} Routing is posted into the same chat so the full case history remains visible.</span>
+      </div>
+      <form id="chatRoutingForm" class="complaint-routing-form" data-thread-id="${escapeHtml(selected.id)}">
+        <label><span>Route to</span><select id="chatRoutingTarget">${options.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join("")}</select></label>
+        <label><span>Routing note</span><input id="chatRoutingReason" placeholder="Reason or next action"></label>
+        <button class="button secondary" type="submit" ${state.chatSending ? "disabled" : ""}>Post routing update</button>
+      </form>
+    </section>
+  `;
+}
+
+function complaintRouteBanner(route) {
+  return `
+    <section class="complaint-route-banner">
+      <strong>Routed to ${escapeHtml(route.assignedTo)}</strong>
+      <span>${escapeHtml(route.note || "The routed officer is responsible for the next reply. Other users can follow the thread history.")}</span>
+    </section>
+  `;
+}
+
+function complaintRouteAssignment(threadId) {
+  const messages = state.chatMessages?.[threadId] || [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const body = String(messages[index]?.body || "");
+    if (!body.toLowerCase().includes("routing update")) continue;
+    const assignedTo = (body.match(/Assigned to:\s*(.+)/i)?.[1] || "").split(/\r?\n/)[0].trim();
+    const note = (body.match(/Note:\s*(.+)/i)?.[1] || "").split(/\r?\n/)[0].trim();
+    if (assignedTo) return { assignedTo, note, message: messages[index] };
+  }
+  return null;
+}
+
+function complaintCanReply(selected, mode, route) {
+  if (state.auth === "member" || mode === "member-support") return true;
+  if (isPlatform() || mode === "platform-super" || mode === "sacco-platform") return true;
+  if (!route) return true;
+  if (!hasPermission("complaints:manage") && hasPermission("complaints:view")) return true;
+  return complaintRouteMatchesCurrentRole(route.assignedTo);
+}
+
+function complaintCanRoute(mode) {
+  return mode === "sacco-member" && ["secretary", "admin"].includes(roleKind());
+}
+
+function complaintRouteMatchesCurrentRole(assignedTo) {
+  const target = complaintNormalizeRoleText(assignedTo);
+  const roles = complaintNormalizeRoleText([
+    ...(state.roleNames || []),
+    state.user?.role,
+    state.user?.roleName,
+    state.user?.title,
+    state.user?.fullName,
+    state.user?.name,
+    state.user?.username,
+    state.user?.email
+  ].filter(Boolean).join(" "));
+  const kind = roleKind();
+  if (target.includes("secretary")) return kind === "secretary" || roles.includes("secretary");
+  if (target.includes("treasurer")) return kind === "treasurer" || roles.includes("treasurer");
+  if (target.includes("chairperson") || target.includes("chairman") || target.includes("chair")) return kind === "chairperson" || roles.includes("chairperson") || roles.includes("chairman") || roles.includes("chair");
+  if (target.includes("administrator") || target.includes("admin")) return kind === "admin" || roles.includes("administrator");
+  if (target.includes("loan")) return kind === "loans" || roles.includes("loan");
+  if (target.includes("welfare")) return roles.includes("welfare") || kind === "admin";
+  if (target.includes("governance")) return kind === "secretary" || kind === "chairperson" || roles.includes("governance");
+  if (target.includes("platform")) return isPlatform() || kind === "admin";
+  return roles.includes(target);
+}
+
+function complaintNormalizeRoleText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function complaintRoutingOptions() {
+  return [
+    "Secretary",
+    "Treasurer",
+    "Chairperson / Chairman",
+    "SACCO Administrator",
+    "Loans Officer",
+    "Welfare Officer",
+    "Governance Committee",
+    "Platform Support"
+  ];
+}
+
+function complaintComposerLabel(mode) {
+  if (mode === "platform-super") return "Reply to SACCO admin";
+  if (mode === "sacco-platform") return "Message to Platform Super Admin";
+  if (mode === "member-support") return "Message to SACCO admin";
+  return "Reply to member";
+}
+
+function complaintComposerPlaceholder(mode) {
+  if (mode === "platform-super") return "Type the platform response, next step or support instruction...";
+  if (mode === "sacco-platform") return "Describe the system, billing or support issue clearly...";
+  if (mode === "member-support") return "Type your message to the SACCO office...";
+  return "Type the SACCO response or next follow-up for the member...";
 }
 
 function chatApiBase() {
@@ -246,6 +461,38 @@ async function sendChatMessage(threadId) {
     await refreshChatThreads();
   } catch (error) {
     state.chatError = error.message || "Unable to send message.";
+  }
+  state.chatSending = false;
+  renderShell();
+}
+
+async function routeChatThread(event) {
+  if (event?.preventDefault) event.preventDefault();
+  const threadId = event?.currentTarget?.dataset?.threadId || "";
+  const target = value("chatRoutingTarget") || "Secretary";
+  const reason = value("chatRoutingReason").trim();
+  if (!threadId || state.chatSending) return;
+  const note = [
+    "Routing update",
+    `Assigned to: ${target}`,
+    `Action by: ${typeof roleLabel === "function" ? roleLabel() : "SACCO staff"}`,
+    reason ? `Note: ${reason}` : "Note: Please review and respond in this same complaint chat.",
+    "The Secretary remains the primary response person until the complaint is closed."
+  ].join("\n");
+  state.chatSending = true;
+  state.chatError = "";
+  renderShell();
+  try {
+    const message = await api(`/chat/threads/${encodeURIComponent(threadId)}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ body: note })
+    });
+    const list = state.chatMessages[threadId] || [];
+    list.push(message);
+    state.chatMessages[threadId] = list;
+    await refreshChatThreads();
+  } catch (error) {
+    state.chatError = error.message || "Unable to route complaint.";
   }
   state.chatSending = false;
   renderShell();
@@ -498,4 +745,3 @@ function complaintDetailPanel(rows, mode = "sacco-member") {
     </section>
   `;
 }
-

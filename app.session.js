@@ -366,9 +366,11 @@ async function refreshAll() {
   ];
   if (isPlatform()) endpoints.push(["platformSecurityPolicy", "/platform-security-policy"]);
   if (isPlatform() && hasPermission("subscriptions:view")) endpoints.push(["billingCatalog", "/platform-billing/catalog"]);
+  if (!isPlatform() && state.user?.tenantId) endpoints.push(["saccoProfile", `/tenants/${encodeURIComponent(state.user.tenantId)}/profile`]);
   if (!isPlatform()) endpoints.push(["saccoPaymentAccounts", "/sacco-payment-accounts"]);
   if (hasPermission("finance-source:view")) endpoints.push(["fundingSources", "/funding-sources"]);
   if (hasPermission("fund-types:view")) endpoints.push(["fundTypes", "/fund-types"]);
+  if (!isPlatform() && hasPermission("members:view")) endpoints.push(["memberFundBalances", "/members/fund-balances"]);
   if (!isPlatform() && hasPermission("members:view")) endpoints.push(["memberSubscriptions", "/member-subscriptions"]);
   if (!isPlatform() && hasPermission("members:approve")) endpoints.push(["staffDirectory", "/members/staff-directory"]);
   if (hasPermission("loans:view")) endpoints.push(["guarantorRequests", "/loans/guarantor-requests"]);
@@ -380,7 +382,7 @@ async function refreshAll() {
   if (canAccessView("notifications")) endpoints.push(["providerJobRuns", "/notifications/provider-job-runs"]);
   if (canAccessView("notifications")) endpoints.push(["messages", "/notifications/messages"]);
   if (canAccessView("notifications")) endpoints.push(["notificationChannels", "/notification-channels"]);
-  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy", "notificationIntegrationConfig", "mobileMoneyIntegrationConfig", "providerOperationalEvidence", "notificationChannels"]);
+  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy", "notificationIntegrationConfig", "mobileMoneyIntegrationConfig", "providerOperationalEvidence", "notificationChannels", "saccoProfile"]);
   const results = await Promise.all(endpoints.map(async ([key, path]) => {
     const resolvedPath = pagedEndpointPath(key, path);
     return [key, await optionalApi(resolvedPath, objectKeys.has(key) ? null : [])];
@@ -436,9 +438,13 @@ async function refreshMember() {
 }
 
 function exportSummaryPdf() {
+  if (state.currentView === "member-dues" && typeof exportMemberSubscriptionsSummaryPdf === "function") {
+    exportMemberSubscriptionsSummaryPdf();
+    return;
+  }
   const previousTitle = document.title;
   const label = state.auth === "member" ? "Member Account Summary" : `${currentModule()[1]} Summary`;
-  document.title = `Tereka Online - ${label}`;
+  document.title = `${contextName()} - ${label} - Powered by Tereka Online`;
   const restore = () => {
     document.title = previousTitle;
     window.removeEventListener("afterprint", restore);
@@ -521,7 +527,7 @@ async function logout() {
     platformPolicyError: "",
     memberFormMessage: "",
     memberFormError: "",
-    memberTab: "overview",
+    memberTab: "list",
     selectedMemberId: "",
     selectedMember: null,
     selectedMemberStatement: null,
@@ -633,4 +639,3 @@ async function updateCurrentUserMfa(enabled) {
     renderShell();
   }
 }
-

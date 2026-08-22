@@ -48,6 +48,80 @@ function buildMemberDirectorySummary(rows) {
   };
 }
 
+function memberRegisterFundDefinitions() {
+  const base = [
+    { code: "savings", name: "Savings", key: "savingsBalance" },
+    { code: "shares", name: "Shares", key: "sharesBalance" },
+    { code: "welfare", name: "Welfare", key: "welfareBalance" }
+  ];
+  const seen = new Set(base.map((fund) => fund.code));
+  const configured = dataRows("fundTypes")
+    .filter((fund) => fund.active !== false)
+    .slice()
+    .sort((a, b) => Number(a.displayOrder || 0) - Number(b.displayOrder || 0) || String(a.name || a.code || "").localeCompare(String(b.name || b.code || "")))
+    .map((fund) => ({ code: String(fund.code || "").trim().toLowerCase(), name: fund.name || fund.code || "" }))
+    .filter((fund) => fund.code && !seen.has(fund.code))
+    .map((fund) => {
+      seen.add(fund.code);
+      return { ...fund, key: `${camelFundKey(fund.code)}Balance` };
+    });
+  return base.concat(configured);
+}
+
+function buildMemberRegisterRows(members) {
+  const funds = memberRegisterFundDefinitions();
+  const balances = memberFundBalanceIndex(dataRows("memberFundBalances"));
+  return (members || []).map((member) => {
+    const row = { ...member };
+    funds.forEach((fund) => {
+      const memberBalances = balances.get(member.id) || {};
+      row[fund.key] = memberBalances[fund.code] ?? baseMemberFundBalance(member, fund.code);
+    });
+    delete row.totalBalance;
+    return row;
+  });
+}
+
+function memberRegisterFundColumns() {
+  return memberRegisterFundDefinitions().map((fund) => fund.key);
+}
+
+function memberRegisterFundTotals(rows) {
+  return memberRegisterFundDefinitions().map((fund) => ({
+    ...fund,
+    total: (rows || []).reduce((sum, row) => sum + Number(row[fund.key] || 0), 0)
+  }));
+}
+
+function memberFundBalanceIndex(balances) {
+  const index = new Map();
+  (balances || []).forEach((balance) => {
+    const memberId = balance.memberId || "";
+    const fundCode = String(balance.fundCode || "").trim().toLowerCase();
+    if (!memberId || !fundCode) return;
+    const current = index.get(memberId) || {};
+    current[fundCode] = Number(balance.balance || 0);
+    index.set(memberId, current);
+  });
+  return index;
+}
+
+function baseMemberFundBalance(member, fundCode) {
+  if (fundCode === "savings") return Number(member.savingsBalance || 0);
+  if (fundCode === "shares") return Number(member.sharesBalance || 0);
+  if (fundCode === "welfare") return Number(member.welfareBalance || 0);
+  return 0;
+}
+
+function camelFundKey(code) {
+  return String(code || "fund")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .trim()
+    .split(/\s+/)
+    .map((part, index) => index ? part.slice(0, 1).toUpperCase() + part.slice(1).toLowerCase() : part.toLowerCase())
+    .join("") || "fund";
+}
+
 function pendingMemberKycRows(members) {
   return members.filter((member) => normalizeNavigationModelText(member.kycStatus).includes("pending") || normalizeNavigationModelText(member.status).includes("pending"));
 }

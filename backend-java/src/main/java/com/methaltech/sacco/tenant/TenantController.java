@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -65,8 +66,9 @@ class TenantController {
     ResponseEntity<?> listTenants(@RequestHeader(name = "Authorization", required = false) String authorization) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
-        if (!authService.hasPermission(currentSession.user(), "tenants:view")) {
-            return authService.permissionRequired("tenants:view");
+        if (!authService.hasPermission(currentSession.user(), "tenants:view")
+                && !authService.hasPermission(currentSession.user(), "sacco-profile:manage")) {
+            return authService.permissionRequired("sacco-profile:manage");
         }
 
         List<Tenant> tenants = authService.isPlatform(currentSession.user())
@@ -322,8 +324,9 @@ class TenantController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
-        if (!authService.hasPermission(currentSession.user(), "tenants:manage")) {
-            return authService.permissionRequired("tenants:manage");
+        if (!authService.hasPermission(currentSession.user(), "tenants:manage")
+                && !authService.hasPermission(currentSession.user(), "sacco-profile:manage")) {
+            return authService.permissionRequired("sacco-profile:manage");
         }
         if (!canAccessTenant(currentSession, tenantId)) return tenantAccessDenied("Cannot update another tenant profile.");
 
@@ -354,6 +357,11 @@ class TenantController {
                 updateOptional(body.email(), profile.getEmail()),
                 updateOptional(body.phone(), profile.getPhone()),
                 updateOptional(body.website(), profile.getWebsite()));
+        profile.updateMembershipCalendar(
+                normalizeMembershipPeriod(firstNonBlank(body.membershipDuesPeriod(), profile.getMembershipDuesPeriod())),
+                normalizeCalendarMonth(body.membershipCalendarStartMonth(), profile.getMembershipCalendarStartMonth()),
+                normalizeCalendarDay(body.membershipCalendarStartDay(), profile.getMembershipCalendarStartDay()),
+                normalizePositiveAmount(body.membershipSubscriptionAmount(), profile.getMembershipSubscriptionAmount()));
         SaccoProfile savedProfile = saccoProfileRepository.save(profile);
         auditService.record(
                 tenantId,
@@ -394,6 +402,26 @@ class TenantController {
 
     private String updateOptional(String requestedValue, String currentValue) {
         return requestedValue == null ? currentValue : requestedValue.trim();
+    }
+
+    private String normalizeMembershipPeriod(String period) {
+        if ("once".equalsIgnoreCase(period) || "one_time".equalsIgnoreCase(period)) return "once";
+        return "monthly".equalsIgnoreCase(period) ? "monthly" : "annual";
+    }
+
+    private Integer normalizeCalendarMonth(Integer requestedValue, Integer currentValue) {
+        int value = requestedValue == null ? (currentValue == null ? 1 : currentValue) : requestedValue;
+        return Math.min(12, Math.max(1, value));
+    }
+
+    private Integer normalizeCalendarDay(Integer requestedValue, Integer currentValue) {
+        int value = requestedValue == null ? (currentValue == null ? 1 : currentValue) : requestedValue;
+        return Math.min(31, Math.max(1, value));
+    }
+
+    private BigDecimal normalizePositiveAmount(BigDecimal requestedValue, BigDecimal currentValue) {
+        BigDecimal value = requestedValue == null ? (currentValue == null ? BigDecimal.valueOf(5000) : currentValue) : requestedValue;
+        return value.signum() <= 0 ? BigDecimal.valueOf(5000) : value;
     }
 
     private String address(String district, String parish, String village, String memberRange) {
@@ -438,6 +466,10 @@ class TenantController {
             String address,
             @Email String email,
             String phone,
-            String website) {
+            String website,
+            String membershipDuesPeriod,
+            Integer membershipCalendarStartMonth,
+            Integer membershipCalendarStartDay,
+            BigDecimal membershipSubscriptionAmount) {
     }
 }

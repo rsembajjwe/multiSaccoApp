@@ -4,36 +4,96 @@
 function renderMemberView(view) {
   const dash = state.memberData.dashboard || {};
   const balances = state.memberData.balances || dash.balances || {};
+  const cycle = typeof currentSaccoCycleContext === "function" ? currentSaccoCycleContext() : null;
   if (view === "home") {
-    const savings = Number(balances.savings || 0);
+    const cycleModel = memberPortalCycleModel(dash, balances, cycle);
+    const savings = Number(cycleModel.balances.savings || 0);
     const savingsHold = Number(balances.savingsHold || 0);
     const availableSavings = balances.availableSavings != null ? Number(balances.availableSavings) : Math.max(savings - savingsHold, 0);
-    const recent = (dash.recentTransactions || []).slice(0, 6);
+    const recent = cycleModel.lines.slice(0, 6);
     return `
       <section class="panel member-balance">
-        <p class="eyebrow">${displayName()} · ${t("totalSavings")}</p>
+        <p class="eyebrow">${displayName()} · ${cycle ? `Savings for ${cycle.label}` : t("totalSavings")}</p>
         <h2 class="balance-amount">${money.format(savings)}</h2>
-        <p class="balance-breakdown">${t("savings")} ${money.format(savings)} · ${t("shares")} ${money.format(balances.shares || 0)} · ${t("welfare")} ${money.format(balances.welfare || 0)}</p>
+        <p class="balance-breakdown">${t("savings")} ${money.format(savings)} · ${t("shares")} ${money.format(cycleModel.balances.shares || 0)} · ${t("welfare")} ${money.format(cycleModel.balances.welfare || 0)}</p>
         ${savingsHold > 0 ? `<p class="balance-hold">${money.format(savingsHold)} held as loan security · Available ${money.format(availableSavings)}</p>` : ""}
       </section>
-      ${memberHomeUpdatePanel(dash, balances)}
+      ${memberHomeUpdatePanel(dash, cycleModel.balances, cycle)}
       ${memberQuickActionsPanel()}
       ${recent.length
-        ? recordTable("Recent activity", recent, ["reference", "description", "debit", "credit", "runningBalance", "postedAt"])
-        : emptyState("No transactions yet", "Your posted deposits and repayments will appear here.")}
+        ? recordTable(`Recent activity - ${cycle?.label || "current"}`, recent.map((line) => ({ ...line, fundBalance: line.runningBalance })), ["reference", "description", "source", "debit", "credit", "fundBalance", "postedAt"])
+        : emptyState("No transactions in this cycle", "Your posted deposits and repayments for the selected cycle will appear here.")}
     `;
   }
-  if (view === "money") return memberMoneyView(dash, balances);
-  if (view === "loans") return memberLoansView();
-  if (view === "payments") return memberPaymentsView();
-  if (view === "notifications") return memberNotificationsView();
-  if (view === "complaints") return memberComplaintsView();
-  if (view === "profile") return memberProfileView(balances);
-  if (view === "security") return memberSecurityTabbedView();
+  if (view === "money") {
+    const cycleModel = memberPortalCycleModel(dash, balances, cycle);
+    return memberMoneyView(dash, cycleModel.balances, cycleModel.lines, cycle);
+  }
+  if (view === "loans") return memberLoansView(cycle);
+  if (view === "payments") return memberPaymentsView(cycle);
+  if (view === "notifications") return memberNotificationsView(cycle);
+  if (view === "complaints") return memberComplaintsView(cycle);
+  if (view === "profile") {
+    const cycleModel = memberPortalCycleModel(dash, balances, cycle);
+    return memberProfileView(cycleModel.balances, cycle);
+  }
+  if (view === "security") return memberSecurityTabbedView(cycle);
   return moduleBlueprint(view);
 }
 
-function memberHomeUpdatePanel(dash, balances) {
+function memberPortalCycleModel(dash, balances, cycle) {
+  const lines = memberLinesWithFundRunningBalances(memberLinesInSelectedCycle(buildMemberStatementLines(dash), cycle))
+    .sort((a, b) => new Date(b.postedAt || b.createdAt || 0).getTime() - new Date(a.postedAt || a.createdAt || 0).getTime());
+  if (!cycle || cycle.period === "once") return { balances, lines };
+  const cycleBalances = lines.reduce((totals, line) => {
+    const fund = memberFundCodeForType(line.type);
+    const signed = Number(line.credit || 0) - Number(line.debit || 0);
+    if (fund === "shares") totals.shares += signed;
+    else if (fund === "welfare") totals.welfare += signed;
+    else if (fund === "savings") totals.savings += signed;
+    return totals;
+  }, { savings: 0, shares: 0, welfare: 0 });
+  return { balances: cycleBalances, lines };
+}
+
+function memberLinesInSelectedCycle(lines, cycle) {
+  if (!cycle || cycle.period === "once" || typeof governanceDateFallsInCycle !== "function") return lines || [];
+  return (lines || []).filter((line) => {
+    const value = line.postedAt || line.createdAt || line.date;
+    return value ? governanceDateFallsInCycle(value, cycle) : true;
+  });
+}
+
+function memberRowsInSelectedCycle(rows, cycle, dateKeys = ["createdAt", "updatedAt"]) {
+  if (!cycle || cycle.period === "once" || typeof governanceDateFallsInCycle !== "function") return rows || [];
+  return (rows || []).filter((row) => {
+    const values = dateKeys.map((key) => row?.[key]).filter(Boolean);
+    if (!values.length) return true;
+    return values.some((value) => governanceDateFallsInCycle(value, cycle));
+  });
+}
+
+function memberSelfServiceCycleControls(cycle) {
+  if (!cycle) return "";
+  const periodLabel = typeof membershipPeriodLabel === "function" ? membershipPeriodLabel(cycle.period) : labelize(cycle.period);
+  const selectedYear = Number(cycle.year);
+  const selectedMonth = Number(cycle.month);
+  return `
+    <div class="member-cycle-inline">
+      <strong>Account cycle</strong>
+      <span>${escapeHtml(periodLabel)}</span>
+      ${cycle.period !== "once" ? `<label><span>Year</span><select data-sacco-cycle-year>${governanceCycleYearOptions().map((year) => `<option value="${year}" ${year === selectedYear ? "selected" : ""}>${year}</option>`).join("")}</select></label>` : ""}
+      ${cycle.period === "monthly" ? `<label><span>Month</span><select data-sacco-cycle-month>${governanceCycleMonthOptions(currentRegion().locale).map(([value, label]) => `<option value="${value}" ${value === selectedMonth ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}</select></label>` : ""}
+      <em>${escapeHtml(cycle.label)}</em>
+    </div>
+  `;
+}
+
+function memberHomeUpdatePanel(dash, balances, cycle = null) {
+  const loans = memberRowsInSelectedCycle(state.memberData.loans || dash.loans || [], cycle, ["submittedAt", "approvedAt", "disbursedAt", "nextDueDate", "createdAt", "updatedAt"]);
+  const notifications = memberRowsInSelectedCycle(state.memberData.notifications || dash.notifications || [], cycle, ["sentAt", "createdAt", "updatedAt", "readAt"]);
+  const guarantors = memberRowsInSelectedCycle(state.memberData.pendingGuarantors || dash.pendingGuarantorRequests || [], cycle, ["requestedAt", "createdAt", "updatedAt"]);
+  const drafts = memberRowsInSelectedCycle(state.memberData.drafts || [], cycle, ["updatedAt", "createdAt"]);
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
@@ -41,14 +101,14 @@ function memberHomeUpdatePanel(dash, balances) {
           <h2>Balances and requests update</h2>
           <p>Your balances, loans, notifications and guarantee requests are refreshed from the SACCO system.</p>
         </div>
-        <span class="status active">Updated</span>
+        ${memberSelfServiceCycleControls(cycle)}
       </div>
-      <div class="mini-grid">
+      <div class="member-dashboard-metrics">
         ${mini("Total savings", money.format(Number(balances.savings || 0)))}
-        ${mini("Loans", (state.memberData.loans || dash.loans || []).length)}
-        ${mini("Notifications", (state.memberData.notifications || dash.notifications || []).length)}
-        ${mini("Guarantee requests", (state.memberData.pendingGuarantors || dash.pendingGuarantorRequests || []).length)}
-        ${mini("Offline drafts", (state.memberData.drafts || []).length)}
+        ${mini("Loans", loans.length)}
+        ${mini("Notifications", notifications.length)}
+        ${mini("Guarantee requests", guarantors.length)}
+        ${mini("Offline drafts", drafts.length)}
       </div>
     </section>
   `;
@@ -93,18 +153,19 @@ function memberFundLabel(code) {
  * @param {TerekaBalances} balances
  * @returns {string}
  */
-function memberMoneyView(dash, balances) {
+function memberMoneyView(dash, balances, cycleLines = null, cycle = null) {
   const tabs = [["accounts", "Accounts"], ["statement", "Statement"], ["receipts", "Receipts"]];
   const tab = activeModuleTab("money", tabs);
   const fundBalances = state.memberData.fundBalances || [];
-  const accounts = (fundBalances.length
+  const shouldUseFullFundBalances = (!cycle || cycle.period === "once") && fundBalances.length;
+  const accounts = (shouldUseFullFundBalances
     ? fundBalances.map((fund) => ({ fundCode: fund.fundCode, account: memberFundLabel(fund.fundCode), balance: fund.balance || 0 }))
     : [
         { fundCode: "savings", account: "Savings", balance: balances.savings || 0 },
         { fundCode: "shares", account: "Shares", balance: balances.shares || 0 },
         { fundCode: "welfare", account: "Welfare", balance: balances.welfare || 0 }
       ]).map((row) => ({ ...row, action: "member-fund-detail", actionId: row.fundCode, actionLabel: "View" }));
-  const lines = buildMemberStatementLines(dash).map((line, index) => ({
+  const lines = memberLinesWithFundRunningBalances(cycleLines || memberLinesInSelectedCycle(buildMemberStatementLines(dash), cycle)).map((line, index) => ({
     ...line,
     action: "member-statement-line",
     actionId: String(index),
@@ -121,7 +182,7 @@ function memberMoneyView(dash, balances) {
     .sort((a, b) => new Date(b.postedAt || b.createdAt || 0).getTime() - new Date(a.postedAt || a.createdAt || 0).getTime());
   return `
     ${moduleTabs("money", tabs, tab)}
-    ${tab === "accounts" ? `${memberFundDetailPanel(lines)}${recordTable("Account balances", accounts, ["account", "balance"])}` : ""}
+    ${tab === "accounts" ? `${memberFundDetailPanel(lines)}${recordTable(`Account balances - ${cycle?.label || "current"}`, accounts, ["account", "balance"])}` : ""}
     ${tab === "statement" ? memberStatementSection(lines) : ""}
     ${tab === "receipts" ? (receipts.length ? recordTable("Receipts", receipts, ["receiptNo", "reference", "description", "amount", "postedAt"]) : emptyState("No receipts yet", "Receipts appear here once your transactions post.")) : ""}
   `;
@@ -145,8 +206,24 @@ function memberDepositMethod(line) {
   return labelize(line.channel || line.paymentRoute || line.paymentMethod || "-");
 }
 
+function memberLinesWithFundRunningBalances(lines) {
+  const chronological = (lines || [])
+    .map((line) => ({
+      ...line,
+      source: line.source || memberFundLabel(memberFundCodeForType(line.type))
+    }))
+    .sort((a, b) => new Date(a.postedAt || a.createdAt || 0).getTime() - new Date(b.postedAt || b.createdAt || 0).getTime());
+  const sourceBalances = {};
+  return chronological.map((line) => {
+    const key = memberFundCodeForType(line.type || line.source);
+    const signed = Number(line.credit || 0) - Number(line.debit || 0);
+    sourceBalances[key] = (sourceBalances[key] || 0) + signed;
+    return { ...line, runningBalance: sourceBalances[key] };
+  });
+}
+
 function memberStatementSection(lines) {
-  const enriched = lines.map((line) => ({
+  const enriched = memberLinesWithFundRunningBalances(lines).map((line) => ({
     ...line,
     monthKey: memberMonthKey(line.postedAt || line.createdAt),
     month: memberMonthLabel(memberMonthKey(line.postedAt || line.createdAt)),
@@ -164,27 +241,18 @@ function memberStatementSection(lines) {
     (selectedMonth === "all" || line.monthKey === selectedMonth)
     && (selectedMethod === "all" || line.method === selectedMethod)
     && (selectedSource === "all" || line.source === selectedSource));
-  // Running balance is tracked per fund source, each starting from zero, so every fund's
-  // column reconciles independently regardless of the active sort or filter.
-  const chronological = filtered.slice().sort((a, b) =>
-    new Date(a.postedAt || a.createdAt || 0).getTime() - new Date(b.postedAt || b.createdAt || 0).getTime());
-  const sourceBalances = {};
-  chronological.forEach((line) => {
-    const key = normal(line.source);
-    const signed = Number(line.credit || 0) - Number(line.debit || 0);
-    sourceBalances[key] = (sourceBalances[key] || 0) + signed;
-    line.runningBalance = sourceBalances[key];
-  });
+  const chronological = memberLinesWithFundRunningBalances(filtered);
   let shown = chronological;
   if (sortOrder !== "oldest") {
     shown = chronological.slice().reverse();
   }
   state.memberStatementView = shown;
+  const displayRows = shown.map((line) => ({ ...line, fundBalance: line.runningBalance }));
   return `
     ${memberStatementToolbar(lines.length, months, methods, sources, selectedMonth, selectedMethod, selectedSource, sortOrder)}
     ${memberStatementDetailPanel()}
     ${shown.length
-      ? recordTable("Statement", shown, ["postedAt", "source", "method", "reference", "description", "debit", "credit", "runningBalance"])
+      ? recordTable("Statement", displayRows, ["postedAt", "source", "method", "reference", "description", "debit", "credit", "fundBalance"])
       : emptyState("No statement activity", lines.length ? "No transactions match the selected filters." : "Your posted transactions will appear here.")}
   `;
 }
@@ -238,16 +306,29 @@ function memberLoanHistoryPanel() {
     narration: row.narration || ""
   }));
   const total = rows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const postedTotal = rows.length ? total : Number(loan?.repaymentTotal || 0);
+  const totalPayable = memberLoanTotalPayable(loan);
+  const calculatedOutstanding = Math.max(totalPayable - postedTotal, 0);
+  const recordedOutstanding = memberLoanOutstandingBalance(loan);
   const loaded = state.memberLoanHistory != null;
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
         <div>
           <h2>${escapeHtml(title)}</h2>
-          <p>Posted repayments received on this loan. Total repaid: ${money.format(total)}.</p>
+          <p>Posted repayments received on this loan. Outstanding is reconciled from total payable minus approved repayments.</p>
         </div>
         <button class="button ghost" type="button" data-action="close-loan-history">Close</button>
       </div>
+      ${loan ? `<div class="member-dashboard-metrics">
+        ${mini("Principal", money.format(loan.amount || loan.requestedAmount || 0))}
+        ${mini("Interest / charges", money.format(loan.interestAmount || 0))}
+        ${mini("Total payable", money.format(totalPayable))}
+        ${mini("Posted repayments", money.format(postedTotal))}
+        ${mini("Outstanding", money.format(recordedOutstanding))}
+        ${Math.abs(recordedOutstanding - calculatedOutstanding) > 0.01 ? mini("Expected outstanding", money.format(calculatedOutstanding)) : ""}
+      </div>` : ""}
+      ${loan && Math.abs(recordedOutstanding - calculatedOutstanding) > 0.01 ? `<div class="notice warning"><strong>Loan balance needs reconciliation.</strong><span>The saved outstanding balance differs from total payable minus posted payment history.</span></div>` : ""}
       ${state.memberLoanHistoryError ? `<div class="notice warning"><span>${escapeHtml(state.memberLoanHistoryError)}</span></div>` : ""}
       ${!loaded && !state.memberLoanHistoryError ? `<div class="notice compact"><span>Loading repayments...</span></div>` : ""}
       ${loaded ? (rows.length ? recordTable("Repayments", rows, ["paidAt", "reference", "amount", "channel", "narration"]) : emptyState("No repayments yet", "Repayments posted to this loan will appear here.")) : ""}
@@ -296,7 +377,7 @@ function memberStatementDetailPanel() {
     ["Amount", money.format(amount)],
     ["Debit", Number(line.debit || 0) ? money.format(line.debit) : "-"],
     ["Credit", Number(line.credit || 0) ? money.format(line.credit) : "-"],
-    ["Running balance", line.runningBalance != null ? money.format(line.runningBalance) : "-"],
+    ["Fund balance", line.runningBalance != null ? money.format(line.runningBalance) : "-"],
     ["Payment channel", labelize(line.channel || line.paymentRoute || line.paymentMethod || "-")],
     ["Status", labelize(line.paymentStatus || line.status || "posted")],
     ["Posted", line.postedAt || line.createdAt || "-"]
@@ -322,17 +403,41 @@ function memberTabReadinessPanel() {
   return "";
 }
 
-function memberLoansView() {
-  const loans = state.memberData.loans || [];
-  const requests = buildMemberGuarantorRows(state.memberData.pendingGuarantors || []);
+function memberLoansView(cycle = null) {
+  const loans = memberRowsInSelectedCycle(state.memberData.loans || [], cycle, ["submittedAt", "approvedAt", "disbursedAt", "nextDueDate", "createdAt", "updatedAt"]);
+  const loanRows = loans.map((loan) => ({
+    ...loan,
+    principalAmount: loan.amount || loan.requestedAmount || 0,
+    totalPayableAmount: memberLoanTotalPayable(loan),
+    postedRepaymentAmount: loan.repaymentTotal || 0,
+    outstandingBalance: memberLoanOutstandingBalance(loan),
+    action: "member-loan-history",
+    actionId: loan.id
+  }));
+  const requests = buildMemberGuarantorRows(memberRowsInSelectedCycle(state.memberData.pendingGuarantors || [], cycle, ["requestedAt", "createdAt", "updatedAt"]));
   const pending = requests.filter((row) => normal(row.status) === "pending");
   const tabs = [["loans", "My loans"], ["guarantor", `Guarantor requests${pending.length ? ` (${pending.length})` : ""}`]];
   const tab = activeModuleTab("loans", tabs);
   return `
     ${moduleTabs("loans", tabs, tab)}
-    ${tab === "loans" ? `${memberLoanApplicationPanel()}${memberReplaceGuarantorPanel()}${memberLoanHistoryPanel()}${loans.length ? recordTable("Member loans", loans.map((loan) => ({ ...loan, action: "member-loan-history", actionId: loan.id })), ["product", "requestedAmount", "outstandingBalance", "nextDueDate", "status"]) : emptyState("Member loans", "Apply for a loan using the form above.")}` : ""}
-    ${tab === "guarantor" ? `${state.memberGuarantorMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorMessage)}</strong></div>` : ""}${state.memberGuarantorError ? `<div class="notice warning"><strong>Guarantor decision failed.</strong><span>${escapeHtml(state.memberGuarantorError)}</span></div>` : ""}${requests.length ? recordTable("Guarantor requests", requests, ["borrower", "product", "requestedAmount", "guaranteedAmount", "guaranteeCeiling", "committedGuarantees", "capacity", "status"]) : emptyState("No guarantor requests", "Requests to guarantee other members' loans appear here.")}` : ""}
+    ${tab === "loans" ? `${memberLoanApplicationPanel()}${memberReplaceGuarantorPanel()}${memberLoanHistoryPanel()}${loanRows.length ? recordTable(`Member loans - ${cycle?.label || "current"}`, loanRows, ["product", "principalAmount", "totalPayableAmount", "postedRepaymentAmount", "outstandingBalance", "nextDueDate", "status"]) : emptyState("Member loans", "Apply for a loan using the form above.")}` : ""}
+    ${tab === "guarantor" ? `${state.memberGuarantorMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorMessage)}</strong></div>` : ""}${state.memberGuarantorError ? `<div class="notice warning"><strong>Guarantor decision failed.</strong><span>${escapeHtml(state.memberGuarantorError)}</span></div>` : ""}${requests.length ? recordTable(`Guarantor requests - ${cycle?.label || "current"}`, requests, ["borrower", "product", "requestedAmount", "guaranteedAmount", "guaranteeCeiling", "committedGuarantees", "capacity", "status"]) : emptyState("No guarantor requests", "Requests to guarantee other members' loans appear here.")}` : ""}
   `;
+}
+
+function memberLoanTotalPayable(loan) {
+  if (!loan) return 0;
+  const explicit = Number(loan.totalPayable);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  return Number(loan.amount || loan.requestedAmount || 0) + Number(loan.interestAmount || 0);
+}
+
+function memberLoanOutstandingBalance(loan) {
+  if (!loan) return 0;
+  const recorded = loan.outstandingBalance ?? loan.balance;
+  const value = Number(recorded);
+  if (Number.isFinite(value)) return value;
+  return Math.max(memberLoanTotalPayable(loan) - Number(loan.repaymentTotal || 0), 0);
 }
 
 function memberReplaceGuarantorPanel() {
@@ -412,11 +517,11 @@ function memberLoanApplicationPanel() {
   `;
 }
 
-function memberPaymentsView() {
-  const loans = state.memberData.loans || [];
+function memberPaymentsView(cycle = null) {
+  const loans = memberRowsInSelectedCycle(state.memberData.loans || [], cycle, ["submittedAt", "approvedAt", "disbursedAt", "nextDueDate", "createdAt", "updatedAt"]);
   const payableLoans = loans.filter((loan) => ["active", "disbursed"].includes(normal(loan.status)));
-  const requestRows = buildMemberPaymentRequestRows(state.memberData.paymentRequests || []);
-  const paymentDrafts = buildMemberDraftRows(state.memberData.drafts || [], "payment", labelize);
+  const requestRows = buildMemberPaymentRequestRows(memberRowsInSelectedCycle(state.memberData.paymentRequests || [], cycle, ["requestedAt", "completedAt", "createdAt", "updatedAt"]));
+  const paymentDrafts = buildMemberDraftRows(memberRowsInSelectedCycle(state.memberData.drafts || [], cycle, ["updatedAt", "createdAt"]), "payment", labelize);
   const tabs = [["mobile-money", "Mobile money"], ["tracking", "Tracking"], ["drafts", `Drafts${paymentDrafts.length ? ` (${paymentDrafts.length})` : ""}`], ["history", "Payment history"]];
   const tab = activeModuleTab("payments", tabs);
   return `
@@ -432,9 +537,9 @@ function memberPaymentsView() {
     </section>
     ${moduleTabs("payments", tabs, tab)}
     ${tab === "mobile-money" ? `${memberPaymentOverviewPanel(requestRows, paymentDrafts)}${memberPaymentFormPanel(payableLoans)}` : ""}
-    ${tab === "tracking" ? memberPaymentTrackingPanel(requestRows) : ""}
+    ${tab === "tracking" ? memberPaymentTrackingPanel(requestRows, cycle) : ""}
     ${tab === "drafts" ? `<section class="panel compact-panel"><div class="panel-heading"><div><h2>Payment draft workspace</h2><p>Review, sync or discard saved payment drafts.</p></div></div></section>${memberDraftPanel("Payment offline drafts", paymentDrafts)}` : ""}
-    ${tab === "history" ? (requestRows.length ? recordTable("Payment history", requestRows, ["provider", "purpose", "amount", "payerPhone", "status", "requestedAt"]) : emptyState("No payment requests yet", "Mobile-money and bank payment requests will appear here.")) : ""}
+    ${tab === "history" ? (requestRows.length ? recordTable(`Payment history - ${cycle?.label || "current"}`, requestRows, ["provider", "purpose", "amount", "payerPhone", "status", "requestedAt"]) : emptyState("No payment requests yet", "Mobile-money and bank payment requests will appear here.")) : ""}
   `;
 }
 
@@ -464,10 +569,10 @@ function memberPaymentOverviewPanel(requestRows, paymentDrafts) {
   `;
 }
 
-function memberPaymentTrackingPanel(requestRows) {
+function memberPaymentTrackingPanel(requestRows, cycle = null) {
   const dash = state.memberData.dashboard || {};
-  const lifecycleRows = memberPaymentLifecycleRows(dash);
-  const monthlyRows = buildMemberMonthlyPerformanceRows(dash);
+  const lifecycleRows = memberRowsInSelectedCycle(memberPaymentLifecycleRows(dash), cycle, ["date"]);
+  const monthlyRows = memberRowsInSelectedCycle(buildMemberMonthlyPerformanceRows(dash), cycle, ["date"]);
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
@@ -478,9 +583,9 @@ function memberPaymentTrackingPanel(requestRows) {
         <span class="status active">Provider requests</span>
       </div>
     </section>
-    ${requestRows.length ? recordTable("Mobile-money request tracking", requestRows, ["externalReference", "provider", "purpose", "amount", "payerPhone", "status", "requestedAt"]) : emptyState("Mobile-money request tracking", "Provider requests will appear here after initiation.")}
-    ${lifecycleRows.length ? recordTable("Payment lifecycle", lifecycleRows, ["date", "reference", "description", "paymentRoute", "amount", "paymentStatus", "receiptStatus"]) : emptyState("Payment lifecycle", "Treasurer cash, Mobile money and bank payment status will appear here.")}
-    ${monthlyRows.length ? recordTable("Monthly savings and deposit performance", monthlyRows, ["date", "month", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"]) : emptyState("Monthly savings and deposit performance", "Monthly performance appears after posting.")}
+    ${requestRows.length ? recordTable(`Mobile-money request tracking - ${cycle?.label || "current"}`, requestRows, ["externalReference", "provider", "purpose", "amount", "payerPhone", "status", "requestedAt"]) : emptyState("Mobile-money request tracking", "Provider requests will appear here after initiation.")}
+    ${lifecycleRows.length ? recordTable(`Payment lifecycle - ${cycle?.label || "current"}`, lifecycleRows, ["date", "reference", "description", "paymentRoute", "amount", "paymentStatus", "receiptStatus"]) : emptyState("Payment lifecycle", "Treasurer cash, Mobile money and bank payment status will appear here.")}
+    ${monthlyRows.length ? recordTable(`Monthly savings and deposit performance - ${cycle?.label || "current"}`, monthlyRows, ["date", "month", "treasurerCash", "mobileMoney", "totalDeposits", "closingBalance"]) : emptyState("Monthly savings and deposit performance", "Monthly performance appears after posting.")}
   `;
 }
 
@@ -543,11 +648,10 @@ function memberPaymentFormPanel(payableLoans) {
             ${providers.map((provider, index) => memberPaymentProviderTile(provider, index === 0)).join("")}
           </div>
         </label>
-        <label><span>Paying for</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings</option><option value="share_purchase">Shares</option><option value="welfare_contribution">Welfare</option>${payableLoans.length ? `<option value="loan_repayment">Loan repayment</option>` : ""}${state.memberData.membership ? `<option value="membership_dues">Membership dues</option>` : ""}</select></label>
+        ${memberPaymentPurposeControl(payableLoans)}
         <label><span>Amount (UGX)</span><input id="memberPaymentAmount" type="number" min="1" step="1" value="5000"></label>
         <label><span>Mobile money number</span><input id="memberPaymentPhone" value="${escapeHtml(state.member?.phone || "")}" placeholder="07XX XXX XXX"></label>
         <label><span>Payment reference</span><input id="memberPaymentReference" value="${escapeHtml(`MM-${Date.now()}`)}"></label>
-        ${payableLoans.length ? `<label class="wide"><span>Loan (only if repaying)</span><select id="memberPaymentLoanId"><option value="">Not a loan repayment</option>${payableLoans.map((loan) => `<option value="${escapeHtml(loan.id)}">${escapeHtml(loan.product || loan.applicationNo || loan.id)} - ${money.format(loan.outstandingBalance || loan.balance || 0)}</option>`).join("")}</select></label>` : ""}
         <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="payment">Save draft</button><button class="button primary" type="submit">Post payment</button></div>
       </form>
     </section>
@@ -566,15 +670,41 @@ function memberBankCollectionPanel(payableLoans) {
       </div>
       <form id="memberPaymentForm" class="form-grid">
         <input id="memberPaymentRoute" type="hidden" value="bank_collection">
-        <label><span>Paying for</span><select id="memberPaymentPurpose"><option value="savings_deposit">Savings</option><option value="share_purchase">Shares</option><option value="welfare_contribution">Welfare</option>${payableLoans.length ? `<option value="loan_repayment">Loan repayment</option>` : ""}${state.memberData.membership ? `<option value="membership_dues">Membership dues</option>` : ""}</select></label>
+        ${memberPaymentPurposeControl(payableLoans)}
         <label><span>Amount (${escapeHtml(currentRegion().currency)})</span><input id="memberPaymentAmount" type="number" min="1" step="1" value="5000"></label>
         <label><span>Bank reference</span><input id="memberBankReference" value="${escapeHtml(reference)}"></label>
         <label><span>Mobile money number</span><input id="memberPaymentPhone" value="${escapeHtml(state.member?.phone || "")}" placeholder="Optional contact number"></label>
-        ${payableLoans.length ? `<label class="wide"><span>Loan (only if repaying)</span><select id="memberPaymentLoanId"><option value="">Not a loan repayment</option>${payableLoans.map((loan) => `<option value="${escapeHtml(loan.id)}">${escapeHtml(loan.product || loan.applicationNo || loan.id)} - ${money.format(loan.outstandingBalance || loan.balance || 0)}</option>`).join("")}</select></label>` : ""}
         <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="payment">Save bank draft</button><button class="button primary" type="submit">Prepare bank reference</button></div>
       </form>
     </section>
   `;
+}
+
+function memberPaymentPurposeControl(payableLoans) {
+  const baseOptions = [
+    ["savings_deposit", "Savings deposit"],
+    ["share_purchase", "Share purchase"],
+    ["welfare_contribution", "Welfare contribution"]
+  ];
+  if (state.memberData.membership) baseOptions.push(["membership_dues", "Membership subscription"]);
+  const loanOptions = (payableLoans || []).map((loan) => {
+    const outstanding = memberLoanOutstandingBalance(loan);
+    const label = `${loan.product || loan.applicationNo || "Loan"} - outstanding ${money.format(outstanding)}`;
+    return [memberLoanPaymentPurposeValue(loan.id), label, outstanding];
+  });
+  return `
+    <label class="wide"><span>Paying for</span>
+      <select id="memberPaymentPurpose" data-member-payment-purpose>
+        ${baseOptions.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}
+        ${loanOptions.length ? `<optgroup label="Loan repayments">${loanOptions.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("")}</optgroup>` : ""}
+      </select>
+    </label>
+    ${loanOptions.length ? `<div class="notice compact wide member-loan-payment-context" data-member-loan-payment-context hidden>${loanOptions.map(([value, label, outstanding]) => `<span data-loan-payment-context="${escapeHtml(value)}" data-loan-outstanding="${escapeHtml(String(outstanding))}"><strong>${escapeHtml(label)}</strong> Enter any amount up to ${escapeHtml(money.format(outstanding))}. Partial and full repayments are allowed.</span>`).join("")}</div>` : ""}
+  `;
+}
+
+function memberLoanPaymentPurposeValue(loanId) {
+  return `loan_repayment::${loanId || ""}`;
 }
 
 function memberAvailablePaymentProviders() {
@@ -583,17 +713,18 @@ function memberAvailablePaymentProviders() {
     !!tenant.mobileMoneyCollectionAvailable,
     state.memberData.dashboard?.paymentProviders,
     labelize
-  ).filter((provider) => normal(provider.network || provider.providerId || "") !== "mpesa");
-  if (tenant.mobileMoneyCollectionAvailable) {
-    const hasMtn = providers.some((provider) => normal(`${provider.network || ""} ${provider.providerId || ""} ${provider.label || ""}`).includes("mtn"));
-    const hasAirtel = providers.some((provider) => normal(`${provider.network || ""} ${provider.providerId || ""} ${provider.label || ""}`).includes("airtel"));
-    return [
-      ...(!hasMtn ? [{ network: "mtn", providerId: "mtn", label: "MTN MoMo", available: true }] : []),
-      ...(!hasAirtel ? [{ network: "airtel", providerId: "airtel", label: "Airtel Money", available: true }] : []),
-      ...providers
-    ];
-  }
-  return providers;
+  );
+  if (!tenant.mobileMoneyCollectionAvailable) return [];
+  const selected = new Map([
+    ["mtn", { network: "mtn", providerId: "mtn", label: "MTN MoMo", available: true }],
+    ["airtel", { network: "airtel", providerId: "airtel", label: "Airtel Money", available: true }]
+  ]);
+  providers.forEach((provider) => {
+    const text = normal(`${provider.network || ""} ${provider.providerId || ""} ${provider.label || ""}`);
+    const key = text.includes("mtn") ? "mtn" : text.includes("airtel") ? "airtel" : "";
+    if (key) selected.set(key, { ...selected.get(key), ...provider, network: key });
+  });
+  return ["mtn", "airtel"].map((key) => selected.get(key));
 }
 
 function memberPaymentProviderTile(provider, checked) {
@@ -637,11 +768,11 @@ function memberChannelPreferencesPanel() {
       </div>
       ${state.memberNotificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberNotificationMessage)}</strong></div>` : ""}
       ${state.memberNotificationError ? `<div class="notice warning"><strong>Could not update.</strong><span>${escapeHtml(state.memberNotificationError)}</span></div>` : ""}
-      <div class="collection-account-list">
+      <div class="member-preference-list">
         ${order.map((channel) => {
           const enabled = prefs[channel] !== false;
-          return `<div class="collection-account-row">
-            <div><strong>${escapeHtml(labels[channel] || labelize(channel))}</strong><span>${enabled ? "On" : "Off"}</span></div>
+          return `<div class="member-preference-row">
+            <div><strong>${escapeHtml(labels[channel] || labelize(channel))}</strong><span class="status ${enabled ? "active" : "pending"}">${enabled ? "On" : "Off"}</span></div>
             <button class="button ${enabled ? "ghost" : "primary"}" type="button" data-toggle-member-channel="${channel}" data-channel-enabled="${enabled ? "false" : "true"}">${enabled ? "Turn off" : "Turn on"}</button>
           </div>`;
         }).join("")}
@@ -653,16 +784,16 @@ function memberChannelPreferencesPanel() {
 function memberGuarantorListingPanel() {
   const optOut = !!(state.memberData.guarantorListing && state.memberData.guarantorListing.optOut);
   return `
-    <div class="collection-account-list guarantor-listing-privacy">
-      <div class="collection-account-row">
+    <div class="member-preference-list guarantor-listing-privacy">
+      <div class="member-preference-row">
         <div><strong>Guarantor listing</strong><span>${optOut ? "Hidden — you won't appear in other members' guarantor search." : "Visible — other members can find you (name and member number only) to request a guarantee."}</span></div>
         <button class="button ${optOut ? "primary" : "ghost"}" type="button" data-toggle-guarantor-listing="${optOut ? "false" : "true"}">${optOut ? "Make me findable" : "Hide me"}</button>
       </div>
     </div>`;
 }
 
-function memberNotificationsView() {
-  const messages = buildMemberAdminMessageRows(state.memberData.notifications || [])
+function memberNotificationsView(cycle = null) {
+  const messages = buildMemberAdminMessageRows(memberRowsInSelectedCycle(state.memberData.notifications || [], cycle, ["sentAt", "createdAt", "updatedAt", "readAt"]))
     .map((row) => ({
       ...row,
       categoryLabel: labelize(row.category || "message"),
@@ -685,9 +816,9 @@ function memberNotificationsView() {
     </section>
     ${moduleTabs("notifications", tabs, tab)}
     ${tab === "inbox" ? memberChannelPreferencesPanel() : ""}
-    ${tab === "inbox" ? (messages.length ? recordTable("SACCO admin messages", messages, ["categoryLabel", "title", "message", "channel", "status", "createdAt", "readAt"]) : emptyState("SACCO admin messages", "Messages from your SACCO admin will appear here.")) : ""}
-    ${tab === "unread" ? (unread.length ? recordTable("Unread message queue", unread, ["title", "message", "channel", "status", "createdAt"]) : emptyState("Unread message queue", "Unread SACCO notices will appear here.")) : ""}
-    ${tab === "evidence" ? recordTable("Message delivery evidence", messages.map((row) => ({
+    ${tab === "inbox" ? (messages.length ? recordTable(`SACCO admin messages - ${cycle?.label || "current"}`, messages, ["categoryLabel", "title", "message", "channel", "status", "createdAt", "readAt"]) : emptyState("SACCO admin messages", "Messages from your SACCO admin will appear here.")) : ""}
+    ${tab === "unread" ? (unread.length ? recordTable(`Unread message queue - ${cycle?.label || "current"}`, unread, ["title", "message", "channel", "status", "createdAt"]) : emptyState("Unread message queue", "Unread SACCO notices will appear here.")) : ""}
+    ${tab === "evidence" ? recordTable(`Message delivery evidence - ${cycle?.label || "current"}`, messages.map((row) => ({
       title: row.title,
       channel: row.channel,
       status: row.status,
@@ -707,9 +838,10 @@ function paymentRequestStatusNotice() {
   `;
 }
 
-function memberComplaintsView() {
-  const unreadChats = (state.memberData.chatThreads || []).filter((thread) => thread.unreadCount > 0).length;
-  const complaintDrafts = buildMemberDraftRows(state.memberData.drafts || [], "complaint", labelize);
+function memberComplaintsView(cycle = null) {
+  const chatThreads = memberRowsInSelectedCycle(state.memberData.chatThreads || [], cycle, ["createdAt", "updatedAt", "lastMessageAt"]);
+  const unreadChats = chatThreads.filter((thread) => thread.unreadCount > 0).length;
+  const complaintDrafts = buildMemberDraftRows(memberRowsInSelectedCycle(state.memberData.drafts || [], cycle, ["updatedAt", "createdAt"]), "complaint", labelize);
   const tabs = [["submit", "Submit"], ["tracking", "Tracking"], ["drafts", `Drafts${complaintDrafts.length ? ` (${complaintDrafts.length})` : ""}`], ["evidence", "Evidence"], ["chat", `Chat${unreadChats ? ` (${unreadChats})` : ""}`]];
   const tab = activeModuleTab("complaints", tabs);
   return `
@@ -717,30 +849,30 @@ function memberComplaintsView() {
       <div class="panel-heading">
         <div>
           <h2>Member complaint center</h2>
-          <p>Chat with your SACCO admin and track replies. SACCO notices live under Messages.</p>
+          <p>Chat with your SACCO Secretary and track replies, routing updates and closure notes from beginning to end.</p>
         </div>
         <span class="status ${unreadChats ? "pending" : "active"}">${unreadChats ? "Unread activity" : "Current"}</span>
       </div>
     </section>
     ${moduleTabs("complaints", tabs, tab)}
-    ${tab === "submit" ? memberComplaintSubmissionPanel() : ""}
-    ${tab === "tracking" ? memberComplaintTrackingPanel() : ""}
+    ${tab === "submit" ? memberComplaintSubmissionPanel(cycle) : ""}
+    ${tab === "tracking" ? memberComplaintTrackingPanel(cycle) : ""}
     ${tab === "drafts" ? `<section class="panel compact-panel"><div class="panel-heading"><div><h2>Complaint draft workspace</h2><p>Review saved complaint drafts before syncing.</p></div></div></section>${memberDraftPanel("Complaint offline drafts", complaintDrafts)}` : ""}
-    ${tab === "evidence" ? memberComplaintEvidencePanel() : ""}
+    ${tab === "evidence" ? memberComplaintEvidencePanel(cycle) : ""}
     ${tab === "chat" ? memberChatWorkspace() : ""}
   `;
 }
 
-function memberComplaintSubmissionPanel() {
-  const cases = state.memberData.chatThreads || [];
+function memberComplaintSubmissionPanel(cycle = null) {
+  const cases = memberRowsInSelectedCycle(state.memberData.chatThreads || [], cycle, ["createdAt", "updatedAt", "lastMessageAt"]);
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
         <div>
           <h2>Member complaint submission</h2>
-          <p>Start a complaint or question for your SACCO administrator, then continue the conversation in the chat tab.</p>
+          <p>Start a complaint chat. The Secretary is the primary response person and any routing to Treasurer, Chairperson or another officer appears in the same thread.</p>
         </div>
-        <span class="status active">SACCO admin desk</span>
+        <span class="status active">Secretary desk</span>
       </div>
       ${state.memberComplaintMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberComplaintMessage)}</strong></div>` : ""}
       ${state.memberComplaintError ? `<div class="notice warning"><strong>Complaint submission failed.</strong><span>${escapeHtml(state.memberComplaintError)}</span></div>` : ""}
@@ -752,12 +884,12 @@ function memberComplaintSubmissionPanel() {
         <div class="form-actions inline"><button class="button secondary" type="button" data-member-draft-save="complaint">Save draft</button><button class="button primary" type="submit">Submit complaint</button></div>
       </form>
     </section>
-    ${recordTable("My complaints", cases, ["subject", "status", "priority", "lastMessagePreview", "updatedAt"])}
+    ${recordTable(`My complaints - ${cycle?.label || "current"}`, cases, ["subject", "status", "priority", "lastMessagePreview", "updatedAt"])}
   `;
 }
 
-function memberComplaintTrackingPanel() {
-  const rows = state.memberData.chatThreads || [];
+function memberComplaintTrackingPanel(cycle = null) {
+  const rows = memberRowsInSelectedCycle(state.memberData.chatThreads || [], cycle, ["createdAt", "updatedAt", "lastMessageAt"]);
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
@@ -768,12 +900,12 @@ function memberComplaintTrackingPanel() {
         <span class="status ${rows.some((row) => normal(row.status) !== "resolved") ? "pending" : "active"}">My complaints</span>
       </div>
     </section>
-    ${rows.length ? recordTable("My complaints", rows, ["subject", "status", "priority", "lastMessagePreview", "updatedAt"]) : emptyState("My complaints", "Submitted complaints will appear here.")}
+    ${rows.length ? recordTable(`My complaints - ${cycle?.label || "current"}`, rows, ["subject", "status", "priority", "lastMessagePreview", "updatedAt"]) : emptyState("My complaints", "Submitted complaints will appear here.")}
   `;
 }
 
-function memberComplaintEvidencePanel() {
-  const rows = (state.memberData.chatThreads || []).map((row) => ({
+function memberComplaintEvidencePanel(cycle = null) {
+  const rows = memberRowsInSelectedCycle(state.memberData.chatThreads || [], cycle, ["createdAt", "updatedAt", "lastMessageAt"]).map((row) => ({
     subject: row.subject,
     status: row.status,
     openedAt: row.createdAt || row.updatedAt,
@@ -790,7 +922,7 @@ function memberComplaintEvidencePanel() {
         <span class="status active">Evidence ready</span>
       </div>
     </section>
-    ${rows.length ? recordTable("Complaint evidence", rows, ["subject", "status", "openedAt", "lastReply", "evidence"]) : emptyState("Complaint evidence", "Complaint evidence appears after submission.")}
+    ${rows.length ? recordTable(`Complaint evidence - ${cycle?.label || "current"}`, rows, ["subject", "status", "openedAt", "lastReply", "evidence"]) : emptyState("Complaint evidence", "Complaint evidence appears after submission.")}
   `;
 }
 
@@ -832,7 +964,7 @@ function memberDraftPanel(title, drafts) {
   `;
 }
 
-function memberProfileView(_balances = {}) {
+function memberProfileView(_balances = {}, cycle = null) {
   const member = state.member || {};
   const tabs = [["overview", "Overview"], ["contacts", "Contacts"], ["balances", "Balances"], ["privacy", "Privacy"], ["security", "Security"]];
   const tab = activeModuleTab("profile", tabs);
@@ -840,9 +972,9 @@ function memberProfileView(_balances = {}) {
     ${moduleTabs("profile", tabs, tab)}
     ${tab === "overview" ? memberProfileOverviewPanel(member) : ""}
     ${tab === "contacts" ? memberProfileContactsPanel(member) : ""}
-    ${tab === "balances" ? memberProfileBalancesPanel(_balances) : ""}
-    ${tab === "privacy" ? memberPrivacyPreferencesPanel(member) : ""}
-    ${tab === "security" ? memberSecurityView() : ""}
+    ${tab === "balances" ? memberProfileBalancesPanel(_balances, cycle) : ""}
+    ${tab === "privacy" ? memberPrivacyPreferencesPanel(member, cycle) : ""}
+    ${tab === "security" ? memberSecurityView(cycle) : ""}
   `;
 }
 
@@ -887,7 +1019,7 @@ function memberProfileContactsPanel(member) {
   `;
 }
 
-function memberProfileBalancesPanel(balances) {
+function memberProfileBalancesPanel(balances, cycle = null) {
   const rows = [
     { account: "Savings", balance: balances.savings || 0 },
     { account: "Shares", balance: balances.shares || 0 },
@@ -899,19 +1031,19 @@ function memberProfileBalancesPanel(balances) {
       <div class="panel-heading">
         <div>
           <h2>Member balance identity</h2>
-          <p>Balances belong to the signed-in member and SACCO code.</p>
+          <p>Balances belong to the signed-in member, SACCO code and selected account cycle.</p>
         </div>
-        <span class="status active">Verified</span>
+        <span class="status active">${escapeHtml(cycle?.label || "Verified")}</span>
       </div>
     </section>
-    ${recordTable("Balance summary", rows, ["account", "balance"])}
+    ${recordTable(`Balance summary - ${cycle?.label || "current"}`, rows, ["account", "balance"])}
   `;
 }
 
-function memberPrivacyPreferencesPanel(member) {
+function memberPrivacyPreferencesPanel(member, cycle = null) {
   const consent = member.consentPreferences || {};
   const checked = (value) => value ? "checked" : "";
-  const privacyRequests = (state.memberData.privacyRequests || []).map((request) => ({
+  const privacyRequests = memberRowsInSelectedCycle(state.memberData.privacyRequests || [], cycle, ["createdAt", "handledAt", "updatedAt"]).map((request) => ({
     ...request,
     requestType: labelize(request.requestType || ""),
     status: labelize(request.status || ""),
@@ -962,24 +1094,24 @@ function memberPrivacyPreferencesPanel(member) {
         <label class="wide"><span>Reason</span><textarea id="memberPrivacyRequestReason" placeholder="Tell the SACCO what you need reviewed or corrected."></textarea></label>
         <div class="form-actions inline"><button class="button primary" type="submit">Submit request</button></div>
       </form>
-      ${privacyRequests.length ? recordTable("My data protection requests", privacyRequests, ["requestType", "status", "reason", "resolutionNote", "createdAt", "handledAt"]) : emptyState("No data protection requests", "Submitted requests will appear here with their status.")}
+      ${privacyRequests.length ? recordTable(`My data protection requests - ${cycle?.label || "current"}`, privacyRequests, ["requestType", "status", "reason", "resolutionNote", "createdAt", "handledAt"]) : emptyState("No data protection requests", "Submitted requests will appear here with their status.")}
     </section>
   `;
 }
 
-function memberSecurityTabbedView() {
+function memberSecurityTabbedView(cycle = null) {
   const tabs = [["session", "Session"], ["login", "Login"], ["recovery", "Recovery"], ["safety", "Safety"]];
   const tab = activeModuleTab("security", tabs);
   return `
     ${moduleTabs("security", tabs, tab)}
-    ${tab === "session" ? memberSecurityView() : ""}
+    ${tab === "session" ? memberSecurityView(cycle) : ""}
     ${tab === "login" ? `<section class="panel compact-panel"><div class="panel-heading"><div><h2>Member login requirements</h2><p>SACCO code plus username, email, phone or membership number and password are required.</p></div><span class="status active">Protected</span></div></section>` : ""}
     ${tab === "recovery" ? `<section class="panel compact-panel"><div class="panel-heading"><div><h2>Member recovery controls</h2><p>Password recovery is verified through SACCO-admin identity checks and registered contact channels.</p></div><span class="status active">Controlled</span></div></section>` : ""}
     ${tab === "safety" ? `<section class="panel compact-panel"><div class="panel-heading"><div><h2>Member safety actions</h2><p>Sign out, report suspicious activity and request profile review through the SACCO office.</p></div><span class="status pending">Security actions</span></div><div class="form-actions inline"><button class="button secondary" type="button" data-action="logout">Sign out</button><button class="button secondary" type="button" data-member-shortcut-view="complaints" data-member-shortcut-tab="submit">Report issue</button></div></section>` : ""}
   `;
 }
 
-function memberSecurityView() {
+function memberSecurityView(cycle = null) {
   const expiresAt = state.memberData.sessionExpiresAt || state.memberData.dashboard?.sessionExpiresAt || "Current browser session";
   return `
     <section class="panel">
@@ -992,6 +1124,7 @@ function memberSecurityView() {
       </div>
       <div class="source-grid">
         ${mini("SACCO code", contextCode())}
+        ${mini("Account cycle", cycle?.label || "Current")}
         ${mini("Username", state.member?.membershipNo || state.member?.email || state.member?.phone)}
         ${mini("Session expiry", expiresAt)}
         ${mini("Last sync", state.lastSync ? formatDateTime(state.lastSync) : "Pending")}

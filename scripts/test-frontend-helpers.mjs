@@ -44,7 +44,7 @@ const sandbox = {
     selectedUserRoles: [],
     selectedUserSessions: [],
     selectedUserPasswordResets: [],
-    memberTab: "overview",
+    memberTab: "list",
     selectedMemberId: "",
     selectedMember: null,
     selectedMemberStatement: null,
@@ -524,7 +524,8 @@ assert.match(memberRegisterHtml, /Create member/);
 
 sandbox.state.memberTab = "list";
 const memberListHtml = sandbox.membersView();
-assert.match(memberListHtml, /Member list/);
+assert.match(memberListHtml, /Member account base/);
+assert.match(memberListHtml, /Select member account cycle/);
 assert.match(memberListHtml, /GVS-0001/);
 assert.match(memberListHtml, /Amina Naki/);
 assert.match(memberListHtml, /Open profile/);

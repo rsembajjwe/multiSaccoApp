@@ -5,6 +5,8 @@ import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.branch.BranchRepository;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
+import com.methaltech.sacco.member.Member;
+import com.methaltech.sacco.member.MemberRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -17,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,6 +40,7 @@ class GovernanceController {
     private final GovernanceMeetingRepository meetingRepository;
     private final GovernanceResolutionRepository resolutionRepository;
     private final BranchRepository branchRepository;
+    private final MemberRepository memberRepository;
     private final AuthService authService;
     private final AuditService auditService;
 
@@ -75,22 +79,18 @@ class GovernanceController {
         if (tenantId == null) return tenantAccessDenied();
         if (branchScoped(currentSession, tenantId)) return branchAccessDenied();
 
-        String meetingType = body.meetingType() == null || body.meetingType().isBlank() ? "management" : body.meetingType().trim();
-        if (!MEETING_TYPES.contains(meetingType)) {
-            return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "INVALID_MEETING_TYPE", "Unsupported meeting type."));
-        }
-        String status = body.status() == null || body.status().isBlank() ? "scheduled" : body.status().trim();
-        if (!MEETING_STATUSES.contains(status)) status = "scheduled";
+        MeetingSetup setup = validateMeetingSetup(tenantId, body.meetingType(), body.status(), body.chairMemberId());
+        if (setup.error() != null) return setup.error();
 
         GovernanceMeeting meeting = meetingRepository.save(new GovernanceMeeting(
                 "meeting_" + UUID.randomUUID(),
                 tenantId,
                 body.title().trim(),
-                meetingType,
+                setup.meetingType(),
                 body.scheduledAt() == null ? Instant.now() : body.scheduledAt(),
-                body.chairUserId() == null || body.chairUserId().isBlank() ? currentSession.user().getId() : body.chairUserId().trim(),
-                status,
+                currentSession.user().getId(),
+                setup.chairMemberId(),
+                setup.status(),
                 body.minutes() == null ? "" : body.minutes().trim(),
                 currentSession.user().getId()));
         auditService.record(
@@ -101,6 +101,49 @@ class GovernanceController {
                 meeting.getId(),
                 request.getRemoteAddr());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(meetingResponse(meeting)));
+    }
+
+    @PatchMapping("/{meetingId}")
+    ResponseEntity<?> updateMeeting(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String meetingId,
+            @Valid @RequestBody CreateGovernanceMeetingRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "governance:manage")) {
+            return authService.permissionRequired("governance:manage");
+        }
+
+        return meetingRepository.findById(meetingId)
+                .<ResponseEntity<?>>map(meeting -> {
+                    if (!canAccess(currentSession, meeting.getTenantId())) return tenantAccessDenied();
+                    if (branchScoped(currentSession, meeting.getTenantId())) return branchAccessDenied();
+                    MeetingSetup setup = validateMeetingSetup(
+                            meeting.getTenantId(),
+                            body.meetingType(),
+                            body.status(),
+                            body.chairMemberId());
+                    if (setup.error() != null) return setup.error();
+                    meeting.update(
+                            body.title().trim(),
+                            setup.meetingType(),
+                            body.scheduledAt() == null ? meeting.getScheduledAt() : body.scheduledAt(),
+                            setup.chairMemberId(),
+                            setup.status(),
+                            body.minutes() == null ? "" : body.minutes().trim());
+                    GovernanceMeeting saved = meetingRepository.save(meeting);
+                    auditService.record(
+                            meeting.getTenantId(),
+                            currentSession.user(),
+                            "Updated governance meeting " + saved.getTitle(),
+                            "governance_meeting",
+                            saved.getId(),
+                            request.getRemoteAddr());
+                    return ResponseEntity.ok(ApiResponse.of(meetingResponse(saved)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEETING_NOT_FOUND", "Governance meeting not found.")));
     }
 
     @PostMapping("/{meetingId}/resolutions")
@@ -124,13 +167,22 @@ class GovernanceController {
                         return ResponseEntity.badRequest()
                                 .body(ApiErrorResponse.of(400, "INVALID_RESOLUTION_STATUS", "Unsupported resolution status."));
                     }
+                    String ownerName = body.ownerName() == null ? "" : body.ownerName().trim();
+                    if (ownerName.isBlank()) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "RESOLUTION_OWNER_REQUIRED", "Enter the responsible person for this resolution."));
+                    }
+                    String ownerTitle = body.ownerTitle() == null || body.ownerTitle().isBlank() ? "Responsible person" : body.ownerTitle().trim();
                     GovernanceResolution resolution = resolutionRepository.save(new GovernanceResolution(
                             "resolution_" + UUID.randomUUID(),
                             meeting.getTenantId(),
                             meeting.getId(),
                             body.title().trim(),
                             body.decision() == null ? "" : body.decision().trim(),
-                            body.ownerUserId() == null || body.ownerUserId().isBlank() ? currentSession.user().getId() : body.ownerUserId().trim(),
+                            currentSession.user().getId(),
+                            null,
+                            ownerName,
+                            ownerTitle,
                             body.dueDate(),
                             status,
                             currentSession.user().getId()));
@@ -185,20 +237,57 @@ class GovernanceController {
                 .body(ApiErrorResponse.of(403, "BRANCH_ACCESS_DENIED", "Cannot access SACCO-wide governance records from a branch-scoped account."));
     }
 
+    private MeetingSetup validateMeetingSetup(String tenantId, String requestedMeetingType, String requestedStatus, String requestedChairMemberId) {
+        String meetingType = requestedMeetingType == null || requestedMeetingType.isBlank()
+                ? "management"
+                : requestedMeetingType.trim();
+        if (!MEETING_TYPES.contains(meetingType)) {
+            return MeetingSetup.error(ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_MEETING_TYPE", "Unsupported meeting type.")));
+        }
+        String status = requestedStatus == null || requestedStatus.isBlank() ? "scheduled" : requestedStatus.trim();
+        if (!MEETING_STATUSES.contains(status)) status = "scheduled";
+        String chairMemberId = requestedChairMemberId == null ? "" : requestedChairMemberId.trim();
+        if (chairMemberId.isBlank()) {
+            return MeetingSetup.error(ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "CHAIR_MEMBER_REQUIRED", "Select a SACCO member as meeting chairperson.")));
+        }
+        Member chairMember = memberRepository.findById(chairMemberId).orElse(null);
+        if (chairMember == null || !tenantId.equals(chairMember.getTenantId())) {
+            return MeetingSetup.error(ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "INVALID_CHAIR_MEMBER", "The selected chairperson must be a member of this SACCO.")));
+        }
+        return new MeetingSetup(meetingType, status, chairMemberId, null);
+    }
+
     record CreateGovernanceMeetingRequest(
             String tenantId,
             @NotBlank String title,
             String meetingType,
             Instant scheduledAt,
             String chairUserId,
+            String chairMemberId,
             String status,
             String minutes) {
+    }
+
+    record MeetingSetup(
+            String meetingType,
+            String status,
+            String chairMemberId,
+            ResponseEntity<ApiErrorResponse> error) {
+        static MeetingSetup error(ResponseEntity<ApiErrorResponse> error) {
+            return new MeetingSetup(null, null, null, error);
+        }
     }
 
     record CreateGovernanceResolutionRequest(
             @NotBlank String title,
             String decision,
             String ownerUserId,
+            String ownerMemberId,
+            String ownerName,
+            String ownerTitle,
             LocalDate dueDate,
             String status) {
     }

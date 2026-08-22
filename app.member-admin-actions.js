@@ -1,26 +1,31 @@
 ﻿// SACCO member administration action handlers for Tereka Online.
 // Covers member creation, profile detail loading, statements, KYC decisions and profile updates.
 
-async function assignMemberDues() {
-  const memberId = document.querySelector("#memberDuesMember")?.value || "";
-  const planName = (document.querySelector("#memberDuesPlan")?.value || "").trim();
-  const amount = Number(document.querySelector("#memberDuesAmount")?.value || 0);
-  const billingPeriod = document.querySelector("#memberDuesPeriod")?.value || "annual";
+async function recordMemberDuesPayment() {
+  const selectedId = document.querySelector("#memberDuesCashId")?.value || document.querySelector("#memberDuesPayId")?.value || "";
+  const memberId = document.querySelector("#memberDuesCashMemberId")?.value || "";
+  const amount = Number(document.querySelector("#memberDuesCashAmount")?.value || document.querySelector("#memberDuesPayAmount")?.value || 0);
+  const method = document.querySelector("#memberDuesCashMethod")?.value || document.querySelector("#memberDuesPayMethod")?.value || "cash";
+  const reference = (document.querySelector("#memberDuesCashReference")?.value || document.querySelector("#memberDuesPayReference")?.value || "").trim();
   state.memberDuesMessage = "";
   state.memberDuesError = "";
-  if (!memberId || !planName || !(amount > 0)) {
-    state.memberDuesError = "Member, plan name and a positive amount are required.";
+  if ((!selectedId && !memberId) || !(amount > 0)) {
+    state.memberDuesError = "Select a member subscription and enter a positive amount.";
     renderShell();
     return;
   }
   try {
-    await api("/member-subscriptions", {
+    const subscriptionId = selectedId || await createMandatoryMemberSubscription(memberId, amount);
+    await api(`/member-subscriptions/${encodeURIComponent(subscriptionId)}/payments`, {
       method: "POST",
-      body: JSON.stringify({ memberId, planName, amount, billingPeriod })
+      body: JSON.stringify({ amount, method, reference })
     });
     await refreshAll();
+    clearMemberDuesParticipation(memberId || dataRows("memberSubscriptions").find((item) => item.id === subscriptionId)?.memberId);
     state.currentView = "member-dues";
-    state.memberDuesMessage = "Membership assigned.";
+    state.selectedMemberDuesId = subscriptionId;
+    state.memberDuesCashDialogId = "";
+    state.memberDuesMessage = `Cash subscription payment recorded${reference ? ` with reference ${reference}` : ""}.`;
     renderShell();
   } catch (error) {
     state.memberDuesError = error.message;
@@ -28,27 +33,148 @@ async function assignMemberDues() {
   }
 }
 
-async function recordMemberDuesPayment() {
-  const id = document.querySelector("#memberDuesPayId")?.value || "";
-  const amount = Number(document.querySelector("#memberDuesPayAmount")?.value || 0);
+function setMemberDuesParticipation(memberId, status) {
+  const member = dataRows("members").find((item) => item.id === memberId);
   state.memberDuesMessage = "";
   state.memberDuesError = "";
-  if (!id || !(amount > 0)) {
-    state.memberDuesError = "Select a membership and enter a positive amount.";
+  if (!member) {
+    state.memberDuesError = "Member could not be found for this subscription cycle.";
     renderShell();
     return;
   }
+  if (!state.memberCycleParticipation) state.memberCycleParticipation = {};
+  const key = memberDuesCycleParticipationKey(member.id);
+  if (status === "clear") {
+    delete state.memberCycleParticipation[key];
+    state.memberDuesMessage = `${member.fullName || member.membershipNo || "Member"} is active again for this subscription cycle.`;
+  } else {
+    state.memberCycleParticipation[key] = status;
+    state.memberDuesMessage = `${member.fullName || member.membershipNo || "Member"} marked as ${memberDuesParticipationLabel(status).toLowerCase()} for this subscription cycle.`;
+  }
+  renderShell();
+}
+
+function clearMemberDuesParticipation(memberId) {
+  if (!memberId || !state.memberCycleParticipation) return;
+  delete state.memberCycleParticipation[memberDuesCycleParticipationKey(memberId)];
+}
+
+async function createMandatoryMemberSubscription(memberId, amount) {
+  const profile = state.data.saccoProfile || {};
+  const created = await api("/member-subscriptions", {
+    method: "POST",
+    body: JSON.stringify({
+      tenantId: state.user?.tenantId || state.tenant?.id || "",
+      memberId,
+      planName: "Member subscription",
+      amount: Number(profile.membershipSubscriptionAmount || amount || 5000),
+      billingPeriod: normalizeMembershipPeriod(profile.membershipDuesPeriod || "annual")
+    })
+  });
+  return created.id;
+}
+
+function selectMemberDuesPayment(subscriptionId) {
+  state.currentView = "member-dues";
+  state.selectedMemberDuesId = subscriptionId;
+  state.memberDuesMessage = "";
+  state.memberDuesError = "";
+  renderShell();
+}
+
+function openMemberDuesCashDialog(subscriptionId) {
+  state.memberDuesCashDialogId = subscriptionId;
+  state.memberDuesError = "";
+  renderShell();
+}
+
+function closeMemberDuesCashDialog() {
+  state.memberDuesCashDialogId = "";
+  state.memberDuesError = "";
+  renderShell();
+}
+
+function openMemberDuesDetailsDialog(subscriptionId) {
+  state.memberDuesDetailsId = subscriptionId;
+  state.memberDuesError = "";
+  renderShell();
+}
+
+function closeMemberDuesDetailsDialog() {
+  state.memberDuesDetailsId = "";
+  state.memberDuesError = "";
+  renderShell();
+}
+
+function openSubscriptionPaymentDialog(subscriptionId) {
+  state.subscriptionPaymentDialogId = subscriptionId;
+  state.subscriptionPaymentDialogError = "";
+  state.memberDuesError = "";
+  renderShell();
+}
+
+function closeSubscriptionPaymentDialog() {
+  state.subscriptionPaymentDialogId = "";
+  state.subscriptionPaymentDialogError = "";
+  renderShell();
+}
+
+async function initiateMemberDuesMobileMoney(event) {
+  if (event?.preventDefault) event.preventDefault();
+  const subscriptionId = value("subscriptionPaymentId");
+  const memberId = value("subscriptionPaymentMemberId");
+  const subscription = dataRows("memberSubscriptions").find((item) => item.id === subscriptionId);
+  const member = subscription ? dataRows("members").find((item) => item.id === subscription.memberId) : dataRows("members").find((item) => item.id === memberId);
+  if (!member) {
+    state.subscriptionPaymentDialogError = "Member could not be found.";
+    renderShell();
+    return;
+  }
+  const provider = value("subscriptionPaymentProvider") || "default";
+  const trimmedPhone = value("subscriptionPaymentPhone").trim();
+  if (!trimmedPhone) {
+    state.subscriptionPaymentDialogError = "A mobile-money number is required.";
+    renderShell();
+    return;
+  }
+  const amount = Number(value("subscriptionPaymentAmount") || 0);
+  if (!(amount > 0)) {
+    state.subscriptionPaymentDialogError = "Enter a positive subscription amount.";
+    renderShell();
+    return;
+  }
+  state.memberDuesMessage = "";
+  state.memberDuesError = "";
+  state.subscriptionPaymentDialogError = "";
   try {
-    await api(`/member-subscriptions/${encodeURIComponent(id)}/payments`, {
+    const request = await api("/integrations/mobile-money/payment-requests/staff", {
       method: "POST",
-      body: JSON.stringify({ amount })
+      body: JSON.stringify({
+        memberId: member.id,
+        subscriptionId,
+        purpose: "membership_dues",
+        amount,
+        payerPhone: trimmedPhone,
+        externalReference: `DUES-${member.membershipNo || member.id}-${Date.now()}`,
+        provider,
+        providerPayload: {
+          source: "staff_member_dues",
+          provider,
+          initiatedBy: state.user?.email || state.user?.id || "",
+          membershipNo: member.membershipNo || ""
+        }
+      })
     });
     await refreshAll();
+    if (!state.memberCycleParticipation) state.memberCycleParticipation = {};
+    state.memberCycleParticipation[memberDuesCycleParticipationKey(member.id)] = "pending_payment";
     state.currentView = "member-dues";
-    state.memberDuesMessage = "Dues payment recorded.";
+    state.memberDuesFilter = "unpaid";
+    state.subscriptionPaymentDialogId = "";
+    state.memberDuesMessage = `Mobile-money subscription prompt sent to ${trimmedPhone} via ${provider}: ${request.externalReference || request.providerReference || request.id}. ${request.checkoutPrompt || ""}`.trim();
     renderShell();
   } catch (error) {
-    state.memberDuesError = error.message;
+    state.subscriptionPaymentDialogError = error.message || "Could not initiate mobile-money subscription payment.";
     renderShell();
   }
 }
@@ -127,6 +253,766 @@ async function exportStaffMemberStatementCsv(memberId) {
     state.selectedMemberError = error.message;
   }
   renderShell();
+}
+
+async function exportMemberListExcel() {
+  state.memberListMessage = "";
+  state.memberListError = "";
+  try {
+    const register = await fullMemberExportRows();
+    downloadClientFile(memberListExportFilename("xls"), memberListExcelHtml(register), "application/vnd.ms-excel;charset=utf-8");
+    state.memberListMessage = `Excel export started for ${register.rows.length} member(s).`;
+  } catch (error) {
+    state.memberListError = error.message || "Could not export member list.";
+  }
+  renderShell();
+}
+
+async function exportMemberListPdf() {
+  state.memberListMessage = "";
+  state.memberListError = "";
+  try {
+    const register = await fullMemberExportRows();
+    downloadPdfTable({
+      filename: memberListExportFilename("pdf"),
+      title: contextName(),
+      subtitle: `Member Register | Powered by Tereka Online | Generated ${formatDateTime(new Date().toISOString())}`,
+      columns: memberListPdfColumns(register.funds),
+      rows: register.rows.concat([memberListTotalRow(register.rows, register.funds)])
+    });
+    state.memberListMessage = `PDF export downloaded for ${register.rows.length} member(s).`;
+  } catch (error) {
+    state.memberListError = error.message || "Could not export member list.";
+  }
+  renderShell();
+}
+
+async function exportMemberSubscriptionsSummaryPdf() {
+  state.memberDuesMessage = "";
+  state.memberDuesError = "";
+  try {
+    const [membersResponse, subscriptionsResponse] = await Promise.all([
+      optionalApi("/members", dataRows("members")),
+      optionalApi("/member-subscriptions", dataRows("memberSubscriptions"))
+    ]);
+    const members = Array.isArray(membersResponse) ? membersResponse : dataRows("members");
+    const subscriptions = Array.isArray(subscriptionsResponse) ? subscriptionsResponse : dataRows("memberSubscriptions");
+    const report = buildMemberSubscriptionExportRows(members, subscriptions);
+    downloadPdfTable({
+      filename: memberSubscriptionExportFilename("pdf"),
+      title: contextName(),
+      subtitle: `Member Subscription Status | ${report.cycleTypeLabel} | ${report.cycleLabel} | Powered by Tereka Online | Generated ${formatDateTime(new Date().toISOString())}`,
+      columns: memberSubscriptionPdfColumns(),
+      rows: report.rows.concat([memberSubscriptionTotalRow(report.rows)]),
+      note: `This report follows the SACCO subscription cycle set by the chairperson: ${report.cycleTypeLabel}. Old records from other cycle types are excluded.`
+    });
+    state.memberDuesMessage = `PDF subscription summary downloaded for ${report.rows.length} member(s) in ${report.cycleLabel}.`;
+  } catch (error) {
+    state.memberDuesError = error.message || "Could not export member subscription summary.";
+  }
+  renderShell();
+}
+
+function exportStaffMemberStatementExcel(memberId) {
+  const member = state.selectedMember || dataRows("members").find((item) => item.id === memberId) || {};
+  const lines = state.selectedMemberStatement?.lines || [];
+  downloadClientFile(staffStatementExportFilename(member, "xls"), staffStatementExcelHtml(member, lines), "application/vnd.ms-excel;charset=utf-8");
+  state.selectedMemberMessage = "Excel statement download started.";
+  renderShell();
+}
+
+function exportStaffMemberStatementPdf(memberId) {
+  const member = state.selectedMember || dataRows("members").find((item) => item.id === memberId) || {};
+  const lines = state.selectedMemberStatement?.lines || [];
+  const rows = staffStatementExportRows(lines);
+  downloadPdfTable({
+    filename: staffStatementExportFilename(member, "pdf"),
+    title: contextName(),
+    subtitle: `Member Transaction Statement | ${member.membershipNo || ""} ${member.fullName || ""} | Powered by Tereka Online | Generated ${formatDateTime(new Date().toISOString())}`,
+    columns: staffStatementExportColumns(),
+    rows: rows.concat([staffStatementTotalRow(rows)]),
+    note: "Each transaction keeps its fund source and balances separate."
+  });
+  state.selectedMemberMessage = "PDF statement download started.";
+  renderShell();
+}
+
+async function fullMemberExportRows() {
+  const [rows, balances] = await Promise.all([
+    api("/members"),
+    optionalApi("/members/fund-balances", dataRows("memberFundBalances"))
+  ]);
+  const members = Array.isArray(rows) ? rows : dataRows("members");
+  const fundRows = Array.isArray(balances) ? balances : dataRows("memberFundBalances");
+  return buildMemberExportRows(members, fundRows);
+}
+
+function buildMemberExportRows(members, fundBalances = dataRows("memberFundBalances")) {
+  const funds = memberRegisterFundDefinitions();
+  const balanceIndex = memberFundBalanceIndex(fundBalances);
+  const rows = (members || []).map((member, index) => {
+    const row = {
+      no: index + 1,
+      membershipNo: member.membershipNo || "",
+      fullName: member.fullName || "",
+      phone: member.phone || "",
+      email: member.email || "",
+      branchId: member.branchId || "",
+      memberType: labelize(member.memberType || ""),
+      joiningDate: member.joiningDate || "",
+      kycStatus: labelize(member.kycStatus || ""),
+      status: labelize(member.status || "")
+    };
+    funds.forEach((fund) => {
+      row[fund.key] = balanceIndex.get(member.id)?.[fund.code] ?? baseMemberFundBalance(member, fund.code);
+    });
+    return row;
+  });
+  return { funds, rows };
+}
+
+function memberListExportFilename(extension) {
+  return `member-register-${safeExportName(contextName())}-${new Date().toISOString().slice(0, 10)}.${extension}`;
+}
+
+function staffStatementExportFilename(member, extension) {
+  const membershipNo = member.membershipNo || member.id || "member";
+  return `member-transactions-${safeExportName(membershipNo)}-${new Date().toISOString().slice(0, 10)}.${extension}`;
+}
+
+function memberSubscriptionExportFilename(extension) {
+  const period = memberSubscriptionSelectedPeriod();
+  const cycle = safeExportName(currentMembershipCycleLabel(period));
+  return `member-subscriptions-${safeExportName(contextName())}-${period}-${cycle}-${new Date().toISOString().slice(0, 10)}.${extension}`;
+}
+
+function buildMemberSubscriptionExportRows(members, subscriptions) {
+  const period = memberSubscriptionSelectedPeriod();
+  const cycleLabel = currentMembershipCycleLabel(period);
+  const cycleTypeLabel = membershipPeriodLabel(period);
+  const amount = Number(state.data.saccoProfile?.membershipSubscriptionAmount || 5000);
+  const cycleClosed = memberSubscriptionCycleClosed(period);
+  const latestByMember = latestSubscriptionByMemberForPeriod(subscriptions, period);
+  const memberRows = period === "once"
+    ? (members || []).filter((member) => String(member.status || "").toLowerCase() === "active")
+    : (members || []);
+  const rows = memberRows.map((member, index) => {
+    const subscription = latestByMember.get(member.id);
+    const status = memberSubscriptionPaymentStatus(subscription);
+    const due = subscription ? Number(subscription.amount || amount) : amount;
+    const paid = subscription ? Number(subscription.paid || 0) : 0;
+    const balance = status === "Paid" ? 0 : Math.max(0, Number(subscription?.balanceDue ?? (due - paid)));
+    return {
+      no: index + 1,
+      membershipNo: member.membershipNo || "",
+      fullName: member.fullName || "",
+      phone: member.phone || "",
+      cycleType: cycleTypeLabel,
+      cycle: cycleLabel,
+      amountDue: due,
+      amountPaid: paid,
+      balanceDue: balance,
+      paymentStatus: status,
+      expiry: subscription?.expiry ? formatDate(subscription.expiry) : (period === "once" ? "No expiry" : "-")
+    };
+  }).filter((row) => period === "once" || !cycleClosed || row.paymentStatus === "Paid")
+    .map((row, index) => ({ ...row, no: index + 1 }));
+  return { period, cycleLabel, cycleTypeLabel, rows };
+}
+
+function latestSubscriptionByMemberForPeriod(subscriptions, period) {
+  return (subscriptions || []).reduce((index, subscription) => {
+    if (normalizeMembershipPeriod(subscription.billingPeriod || "") !== period) return index;
+    if (!subscriptionMatchesSelectedCycle(subscription, period)) return index;
+    const current = index.get(subscription.memberId);
+    if (!current || String(subscription.createdAt || subscription.startDate || "") > String(current.createdAt || current.startDate || "")) {
+      index.set(subscription.memberId, subscription);
+    }
+    return index;
+  }, new Map());
+}
+
+function memberSubscriptionPaymentStatus(subscription) {
+  if (!subscription) return "Unpaid";
+  const lifecycle = String(subscription.lifecycleState || subscription.status || "").toLowerCase();
+  const balance = Number(subscription.balanceDue ?? (Number(subscription.amount || 0) - Number(subscription.paid || 0)));
+  if (balance <= 0 && !["expired", "grace"].includes(lifecycle)) return "Paid";
+  return "Unpaid";
+}
+
+function currentMembershipCycleLabel(period) {
+  if (period === "once") return "Lifetime";
+  const year = memberSubscriptionSelectedYear();
+  if (period === "monthly") {
+    const month = memberSubscriptionSelectedMonth();
+    return new Date(year, month - 1, 1).toLocaleDateString(currentRegion().locale, { month: "long", year: "numeric" });
+  }
+  return String(year);
+}
+
+function subscriptionMatchesSelectedCycle(subscription, period) {
+  if (period === "once") return true;
+  const start = parseSubscriptionCycleDate(subscription.startDate || subscription.createdAt);
+  if (!start) return false;
+  if (start.getFullYear() !== memberSubscriptionSelectedYear()) return false;
+  return period !== "monthly" || start.getMonth() + 1 === memberSubscriptionSelectedMonth();
+}
+
+function parseSubscriptionCycleDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function memberSubscriptionPdfColumns() {
+  return [
+    ["No", "no"],
+    ["Membership", "membershipNo"],
+    ["Member name", "fullName"],
+    ["Phone", "phone"],
+    ["Cycle type", "cycleType"],
+    ["Cycle", "cycle"],
+    ["Amount", "amountDue", "money"],
+    ["Paid", "amountPaid", "money"],
+    ["Balance", "balanceDue", "money"],
+    ["Payment status", "paymentStatus"],
+    ["Expiry", "expiry"]
+  ];
+}
+
+function memberSubscriptionTotalRow(rows) {
+  return {
+    no: "",
+    membershipNo: "TOTAL",
+    fullName: `${rows.length} member(s)`,
+    phone: "",
+    cycleType: "",
+    cycle: "",
+    amountDue: sumExportValues(rows, "amountDue"),
+    amountPaid: sumExportValues(rows, "amountPaid"),
+    balanceDue: sumExportValues(rows, "balanceDue"),
+    paymentStatus: `${rows.filter((row) => row.paymentStatus === "Paid").length} paid / ${rows.filter((row) => row.paymentStatus !== "Paid").length} unpaid`,
+    expiry: ""
+  };
+}
+
+function memberListExcelHtml(register) {
+  const columns = [
+    ["#", "no"],
+    ["Membership no", "membershipNo"],
+    ["Full name", "fullName"],
+    ["Phone", "phone"],
+    ["Email", "email"],
+    ["Branch", "branchId"],
+    ["Member type", "memberType"],
+    ["Joining date", "joiningDate"],
+    ["KYC", "kycStatus"],
+    ["Status", "status"],
+    ...register.funds.map((fund) => [`${fund.name} balance`, fund.key, "money"])
+  ];
+  const totalRow = memberListTotalRow(register.rows, register.funds);
+  return excelDocument({
+    title: contextName(),
+    subtitle: `Member Register | Powered by Tereka Online | Generated ${formatDateTime(new Date().toISOString())}`,
+    columns,
+    rows: register.rows.concat([totalRow]),
+    summaryRows: [["Members", register.rows.length], ...register.funds.map((fund) => [`${fund.name} total`, exportMoney(totalRow[fund.key])])]
+  });
+}
+
+function memberListPdfColumns(funds) {
+  return [
+    ["No", "no"],
+    ["Membership", "membershipNo"],
+    ["Name", "fullName"],
+    ["Phone", "phone"],
+    ["Status", "status"],
+    ...funds.map((fund) => [fund.name, fund.key, "money"])
+  ];
+}
+
+function memberListTotalRow(rows, funds) {
+  const total = {
+    no: "",
+    membershipNo: "TOTAL",
+    fullName: `${rows.length} member(s)`,
+    phone: "",
+    email: "",
+    branchId: "",
+    memberType: "",
+    joiningDate: "",
+    kycStatus: "",
+    status: ""
+  };
+  funds.forEach((fund) => {
+    total[fund.key] = sumExportValues(rows, fund.key);
+  });
+  return total;
+}
+
+function staffStatementExcelHtml(member, lines) {
+  const rows = staffStatementExportRows(lines);
+  const columns = staffStatementExportColumns();
+  const totalRow = staffStatementTotalRow(rows);
+  return excelDocument({
+    title: contextName(),
+    subtitle: `Member Transaction Statement | ${member.membershipNo || ""} ${member.fullName || ""} | Powered by Tereka Online | Generated ${formatDateTime(new Date().toISOString())}`,
+    columns,
+    rows: rows.concat([totalRow]),
+    summaryRows: [
+      ["Statement rows", rows.length],
+      ["Credits", exportMoney(sumExportValues(rows, "credit"))],
+      ["Debits", exportMoney(sumExportValues(rows, "debit"))],
+      ["Savings closing", exportMoney(lastExportValue(rows, "savingsBalance"))],
+      ["Shares closing", exportMoney(lastExportValue(rows, "sharesBalance"))],
+      ["Welfare closing", exportMoney(lastExportValue(rows, "welfareBalance"))]
+    ]
+  });
+}
+
+function staffStatementPdfHtml(member, lines) {
+  const rows = staffStatementExportRows(lines);
+  return printableExportDocument({
+    title: contextName(),
+    subtitle: `Member Transaction Statement | ${member.membershipNo || ""} ${member.fullName || ""} | Powered by Tereka Online | Generated ${formatDateTime(new Date().toISOString())}`,
+    badge: `${rows.length} transaction(s)`,
+    columns: staffStatementExportColumns(),
+    rows,
+    summaryRows: [
+      ["Credits", exportMoney(sumExportValues(rows, "credit"))],
+      ["Debits", exportMoney(sumExportValues(rows, "debit"))],
+      ["Savings closing", exportMoney(lastExportValue(rows, "savingsBalance"))],
+      ["Shares closing", exportMoney(lastExportValue(rows, "sharesBalance"))],
+      ["Welfare closing", exportMoney(lastExportValue(rows, "welfareBalance"))]
+    ],
+    note: "Each transaction keeps its fund source and balance columns separate. Savings, Shares and Welfare are not combined."
+  });
+}
+
+function staffStatementTotalRow(rows) {
+  return {
+    postedAt: "",
+    reference: "TOTAL",
+    fundSource: "",
+    type: "",
+    channel: "",
+    debit: sumExportValues(rows, "debit"),
+    credit: sumExportValues(rows, "credit"),
+    savingsBalance: lastExportValue(rows, "savingsBalance"),
+    sharesBalance: lastExportValue(rows, "sharesBalance"),
+    welfareBalance: lastExportValue(rows, "welfareBalance"),
+    status: ""
+  };
+}
+
+function staffStatementExportColumns() {
+  return [
+    ["Posted date", "postedAt"],
+    ["Reference", "reference"],
+    ["Fund source", "fundSource"],
+    ["Type", "type"],
+    ["Channel", "channel"],
+    ["Debit", "debit", "money"],
+    ["Credit", "credit", "money"],
+    ["Savings balance", "savingsBalance", "money"],
+    ["Shares balance", "sharesBalance", "money"],
+    ["Welfare balance", "welfareBalance", "money"],
+    ["Status", "status"]
+  ];
+}
+
+function staffStatementExportRows(lines) {
+  return (lines || []).map((line) => {
+    const amount = Number(line.amount || 0);
+    return {
+      postedAt: line.postedAt || line.createdAt || "",
+      reference: line.receiptNo || line.reference || "",
+      fundSource: memberFundLabel(memberFundCodeForType(line.type || line.fundSource || "")),
+      type: labelize(line.type || ""),
+      channel: labelize(line.channel || line.method || line.paymentMethod || ""),
+      debit: statementDebit(line) || (amount < 0 ? Math.abs(amount) : 0),
+      credit: statementCredit(line) || (amount > 0 ? amount : 0),
+      savingsBalance: Number(line.savingsBalance || 0),
+      sharesBalance: Number(line.sharesBalance || 0),
+      welfareBalance: Number(line.welfareBalance || 0),
+      status: labelize(line.status || "posted")
+    };
+  });
+}
+
+function excelDocument({ title, subtitle, columns, rows, summaryRows }) {
+  return `﻿<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+    <head><meta charset="utf-8"><style>
+      table{border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px}
+      th{background:#0f4a3d;color:#fff;font-weight:700;border:1px solid #d7e4df;padding:8px}
+      td{border:1px solid #d7e4df;padding:7px}
+      .title{background:#dff7ec;color:#08241f;font-size:16px;text-align:left;white-space:normal;mso-wrap-text:yes}
+      .subtitle{background:#f5faf8;color:#41524d;text-align:left;white-space:normal;mso-wrap-text:yes}
+      .money{text-align:right;mso-number-format:"#,##0.00"}
+      .summary td{font-weight:700;background:#f5faf8}
+      .total td{font-weight:800;background:#dff7ec;color:#08241f}
+    </style></head>
+    <body><table>
+      <tr><th class="title" colspan="${columns.length}">${escapeHtml(title)}</th></tr>
+      <tr><th class="subtitle" colspan="${columns.length}">${escapeHtml(subtitle)}</th></tr>
+      ${summaryRows.map(([label, value]) => `<tr class="summary"><td>${escapeHtml(label)}</td><td colspan="${columns.length - 1}">${escapeHtml(String(value))}</td></tr>`).join("")}
+      <tr>${columns.map(([label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr>
+      ${rows.map((row) => `<tr class="${isExportTotalRow(row) ? "total" : ""}">${columns.map(([, key, type]) => exportTableCell(row[key], type)).join("")}</tr>`).join("")}
+    </table></body></html>`;
+}
+
+function printableExportDocument({ title, subtitle, badge, columns, rows, summaryRows, note }) {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title><style>
+    @page{size:A4 landscape;margin:12mm}
+    body{font-family:Arial,sans-serif;color:#10231f;margin:0;background:#fff;font-size:11px}
+    header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0f766e;padding-bottom:10px;margin-bottom:12px}
+    h1{font-size:18px;margin:0 0 4px;max-width:680px;line-height:1.2}
+    .brand{font-weight:700;color:#0f4a3d;text-transform:uppercase;letter-spacing:.04em}
+    .sub{color:#53645f;max-width:680px;line-height:1.35}
+    .badge{border:1px solid #0f766e;border-radius:6px;padding:7px 10px;font-weight:700;color:#0f4a3d}
+    .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0 12px}
+    .summary div{border:1px solid #d7e4df;border-radius:6px;padding:8px;background:#f7fbfa}
+    .summary span{display:block;color:#53645f;font-size:10px;text-transform:uppercase}
+    .summary strong{font-size:13px}
+    table{width:100%;border-collapse:collapse}
+    th{background:#0f4a3d;color:#fff;text-align:left;font-size:10px;padding:7px;border:1px solid #0f4a3d}
+    td{padding:6px;border:1px solid #d7e4df;vertical-align:top}
+    td.money{text-align:right;white-space:nowrap}
+    tr:nth-child(even) td{background:#f8fbfa}
+    footer{margin-top:12px;border-top:1px solid #d7e4df;padding-top:8px;color:#53645f;display:flex;justify-content:space-between}
+  </style></head><body>
+    <header><div><div class="brand">Powered by Tereka Online</div><h1>${escapeHtml(title)}</h1><div class="sub">${escapeHtml(subtitle)}</div></div><div class="badge">${escapeHtml(badge)}</div></header>
+    <section class="summary">${summaryRows.map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join("")}</section>
+    <table><thead><tr>${columns.map(([label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr></thead><tbody>
+      ${rows.map((row) => `<tr>${columns.map(([, key, type]) => exportTableCell(row[key], type)).join("")}</tr>`).join("")}
+    </tbody></table>
+    <footer><span>${escapeHtml(note || "Confidential SACCO report")}</span><span>Powered by Tereka Online</span></footer>
+  </body></html>`;
+}
+
+function exportTableCell(value, type) {
+  const display = type === "money" ? exportMoney(Number(value || 0)) : String(value ?? "");
+  return `<td class="${type === "money" ? "money" : ""}">${escapeHtml(display)}</td>`;
+}
+
+function isExportTotalRow(row) {
+  return String(row?.membershipNo || row?.reference || "").toUpperCase() === "TOTAL";
+}
+
+function downloadPdfTable({ filename, title, subtitle, columns, rows, note = "" }) {
+  const pdf = createSimpleTablePdf({ title, subtitle, columns, rows, note });
+  downloadClientFile(filename, pdf, "application/pdf");
+}
+
+function createSimpleTablePdf({ title, subtitle, columns, rows, note = "" }) {
+  const pageWidth = 842;
+  const pageHeight = 595;
+  const margin = 28;
+  const tableWidth = pageWidth - margin * 2;
+  const headerHeight = 20;
+  const rowHeight = columns.length > 10 ? 15 : 17;
+  const fontSize = columns.length > 10 ? 6 : 7;
+  const rowsPerPage = Math.max(16, Math.floor((pageHeight - 142) / rowHeight));
+  const widths = pdfColumnWidths(columns, tableWidth);
+  const pages = [];
+  for (let index = 0; index < rows.length; index += rowsPerPage) {
+    pages.push(rows.slice(index, index + rowsPerPage));
+  }
+  const pageStreams = pages.map((pageRows, pageIndex) => {
+    let stream = "";
+    const titleSize = pdfHeaderTitleSize(title);
+    const titleBandY = 548;
+    const titleBandHeight = 24;
+    const titleY = titleBandY + (titleBandHeight - titleSize) / 2 + 1;
+    stream += `0.06 0.29 0.24 rg 28 ${titleBandY} 786 ${titleBandHeight} re f\n`;
+    stream += pdfText(margin + 8, titleY, title, titleSize, true, tableWidth - 16, [1, 1, 1], "center");
+    stream += pdfText(margin + 8, 535, subtitle, 8, false, tableWidth - 180, [0.08, 0.18, 0.15]);
+    stream += pdfText(pageWidth - 160, 535, `Page ${pageIndex + 1} of ${pages.length}`, 8, false, 130, [0.08, 0.18, 0.15]);
+    let y = 505;
+    stream += "0.06 0.29 0.24 rg ";
+    stream += `${margin} ${y - 4} ${tableWidth} ${headerHeight} re f\n`;
+    let x = margin;
+    columns.forEach(([label], columnIndex) => {
+      stream += pdfText(x + 3, y + 3, label, fontSize, true, widths[columnIndex] - 6, [1, 1, 1]);
+      x += widths[columnIndex];
+    });
+    y -= rowHeight;
+    pageRows.forEach((row, rowIndex) => {
+      const isTotal = String(row.membershipNo || row.reference || "").toUpperCase() === "TOTAL";
+      if (isTotal) stream += `0.88 0.97 0.93 rg ${margin} ${y - 4} ${tableWidth} ${rowHeight} re f\n`;
+      else if (rowIndex % 2) stream += `0.97 0.99 0.98 rg ${margin} ${y - 4} ${tableWidth} ${rowHeight} re f\n`;
+      x = margin;
+      columns.forEach(([, key, type], columnIndex) => {
+        const value = type === "money" ? exportMoney(Number(row[key] || 0)) : String(row[key] ?? "");
+        stream += pdfText(x + 3, y + 1, value, fontSize, isTotal, widths[columnIndex] - 6, [0.06, 0.13, 0.11]);
+        x += widths[columnIndex];
+      });
+      stream += `0.82 0.89 0.86 RG ${margin} ${y - 4} ${tableWidth} ${rowHeight} re S\n`;
+      y -= rowHeight;
+    });
+    if (note) {
+      stream += pdfText(margin, 30, note, 7, false, tableWidth, [0.26, 0.34, 0.31]);
+    }
+    return stream;
+  });
+  return buildPdfDocument(pageStreams, pageWidth, pageHeight);
+}
+
+function pdfColumnWidths(columns, tableWidth) {
+  const weightFor = ([, key, type]) => {
+    if (type === "money") return 1.05;
+    if (["fullName", "name"].includes(key)) return 1.8;
+    if (["membershipNo", "reference"].includes(key)) return 1.25;
+    if (["phone", "postedAt"].includes(key)) return 1.35;
+    return 1;
+  };
+  const weights = columns.map(weightFor);
+  const total = weights.reduce((sum, weight) => sum + weight, 0) || 1;
+  return weights.map((weight) => tableWidth * weight / total);
+}
+
+function pdfHeaderTitleSize(title) {
+  const length = pdfSafeText(title).length;
+  if (length > 95) return 8.5;
+  if (length > 70) return 10;
+  if (length > 50) return 11.5;
+  return 13;
+}
+
+function pdfText(x, y, value, size, bold = false, maxWidth = 120, color = [0.06, 0.13, 0.11], align = "left") {
+  const clean = pdfSafeText(value);
+  const maxChars = Math.max(4, Math.floor(maxWidth / (size * 0.48)));
+  const display = clean.length > maxChars ? `${clean.slice(0, Math.max(1, maxChars - 1))}.` : clean;
+  const estimatedWidth = display.length * size * 0.48;
+  const alignedX = align === "center"
+    ? x + Math.max(0, (maxWidth - estimatedWidth) / 2)
+    : align === "right"
+      ? x + Math.max(0, maxWidth - estimatedWidth)
+      : x;
+  return `${color.map((item) => Number(item).toFixed(3)).join(" ")} rg BT /${bold ? "F2" : "F1"} ${size} Tf ${alignedX.toFixed(2)} ${y.toFixed(2)} Td (${pdfEscape(display)}) Tj ET\n`;
+}
+
+function pdfSafeText(value) {
+  return String(value ?? "").replace(/[^\x20-\x7E]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function pdfEscape(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
+function buildPdfDocument(pageStreams, pageWidth, pageHeight) {
+  const objects = [];
+  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+  objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
+  const pageIds = [];
+  pageStreams.forEach((stream) => {
+    const contentId = objects.length;
+    objects[contentId] = `<< /Length ${stream.length} >>\nstream\n${stream}endstream`;
+    const pageId = objects.length;
+    objects[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`;
+    pageIds.push(pageId);
+  });
+  objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (let id = 1; id < objects.length; id += 1) {
+    offsets[id] = pdf.length;
+    pdf += `${id} 0 obj\n${objects[id]}\nendobj\n`;
+  }
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objects.length; id += 1) {
+    pdf += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return pdf;
+}
+
+function exportMoney(value) {
+  return money.format(Number(value || 0));
+}
+
+function sumExportValues(rows, key) {
+  return (rows || []).reduce((total, row) => total + Number(row[key] || 0), 0);
+}
+
+function lastExportValue(rows, key) {
+  if (!rows || !rows.length) return 0;
+  return Number(rows[rows.length - 1][key] || 0);
+}
+
+function safeExportName(value) {
+  return String(value || "sacco").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "sacco";
+}
+
+async function createMemberDocumentFromForm(event) {
+  if (event) event.preventDefault();
+  const memberId = value("memberDocumentMemberId") || state.selectedMemberId;
+  const storageKey = value("memberDocumentStorageKey");
+  const fileInput = document.getElementById("memberDocumentFile");
+  const file = fileInput instanceof HTMLInputElement ? fileInput.files?.[0] || null : null;
+  state.selectedMemberMessage = "";
+  state.selectedMemberError = "";
+  if (!memberId || (!file && !storageKey)) {
+    state.selectedMemberError = "Select a member and upload a soft-copy file, or enter a secure document URL/reference.";
+    renderShell();
+    return;
+  }
+  if (file && file.size > 1024 * 1024) {
+    state.selectedMemberError = "Member document files must be 1 MB or smaller.";
+    renderShell();
+    return;
+  }
+  if (file && !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) {
+    state.selectedMemberError = "Upload JPG, PNG, WEBP or PDF files only.";
+    renderShell();
+    return;
+  }
+  try {
+    let document;
+    if (file) {
+      const form = new FormData();
+      form.append("documentType", value("memberDocumentType") || "other");
+      form.append("verificationStatus", value("memberDocumentVerificationStatus") || "pending_verification");
+      form.append("file", file);
+      document = await api(`/members/${encodeURIComponent(memberId)}/documents/upload`, {
+        method: "POST",
+        body: form
+      });
+    } else {
+      document = await api(`/members/${encodeURIComponent(memberId)}/documents`, {
+        method: "POST",
+        body: JSON.stringify({
+          documentType: value("memberDocumentType") || "other",
+          storageKey,
+          verificationStatus: value("memberDocumentVerificationStatus") || "pending_verification"
+        })
+      });
+    }
+    state.selectedMemberDocuments = [document, ...(state.selectedMemberDocuments || [])];
+    state.selectedMemberMessage = `${file ? "Uploaded" : "Attached"} ${labelize(document.documentType)} document.`;
+    await openMemberDetail(memberId, "contacts");
+    state.selectedMemberMessage = `${file ? "Uploaded" : "Attached"} ${labelize(document.documentType)} document.`;
+  } catch (error) {
+    state.selectedMemberError = error.message || "Could not upload member document.";
+  }
+  renderShell();
+}
+
+async function viewMemberDocument(documentId) {
+  const document = (state.selectedMemberDocuments || []).find((item) => item.id === documentId);
+  if (!document) {
+    window.alert("Document record not found. Refresh the member profile and try again.");
+    return;
+  }
+  const storageKey = String(document.storageKey || "").trim();
+  if (/^https?:\/\//i.test(storageKey)) {
+    window.open(storageKey, "_blank", "noopener");
+    return;
+  }
+  if (document.memberId && document.id) {
+    try {
+      const blob = await fetchMemberDocumentBlob(document.memberId, document.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      window.alert(error.message || "Could not open member document.");
+    }
+    return;
+  }
+  window.alert(`Document location:\n${storageKey || "No storage location recorded."}`);
+}
+
+async function fetchMemberDocumentBlob(memberId, documentId) {
+  const response = await fetch(`${API_BASE}/members/${encodeURIComponent(memberId)}/documents/${encodeURIComponent(documentId)}/content`, {
+    headers: {
+      ...(state.token ? { Authorization: `Bearer ${state.token}` } : {})
+    }
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error?.message || payload.message || `Document download failed: ${response.status}`);
+  }
+  return response.blob();
+}
+
+async function downloadSelectedMemberStatement() {
+  state.memberListMessage = "";
+  state.memberListError = "";
+  const memberId = state.selectedMemberId || state.selectedMember?.id;
+  if (!memberId) {
+    state.memberListError = "Open a member from the list first, then click Download statement.";
+    state.memberTab = "list";
+    renderShell();
+    return;
+  }
+  const member = state.selectedMember || dataRows("members").find((item) => item.id === memberId) || {};
+  try {
+    await exportStaffMemberStatementCsv(memberId);
+    state.memberTab = "list";
+    state.memberListMessage = `Statement download started for ${member.membershipNo || member.fullName || "selected member"}.`;
+  } catch (error) {
+    state.memberListError = error.message || "Could not download member statement.";
+  }
+  renderShell();
+}
+
+async function downloadSelectedMemberStatementPdf() {
+  state.memberListMessage = "";
+  state.memberListError = "";
+  const memberId = state.selectedMemberId || state.selectedMember?.id;
+  if (!memberId) {
+    state.memberListError = "Open a member from the list first, then download the selected member statement.";
+    state.memberTab = "list";
+    renderShell();
+    return;
+  }
+  try {
+    const { member } = await ensureSelectedMemberStatement(memberId);
+    exportStaffMemberStatementPdf(memberId);
+    state.memberTab = "list";
+    state.memberListMessage = `PDF statement downloaded for ${member.membershipNo || member.fullName || "selected member"}.`;
+  } catch (error) {
+    state.memberListError = error.message || "Could not download member statement PDF.";
+  }
+  renderShell();
+}
+
+async function downloadSelectedMemberStatementExcel() {
+  state.memberListMessage = "";
+  state.memberListError = "";
+  const memberId = state.selectedMemberId || state.selectedMember?.id;
+  if (!memberId) {
+    state.memberListError = "Open a member from the list first, then download the selected member statement.";
+    state.memberTab = "list";
+    renderShell();
+    return;
+  }
+  try {
+    const { member } = await ensureSelectedMemberStatement(memberId);
+    exportStaffMemberStatementExcel(memberId);
+    state.memberTab = "list";
+    state.memberListMessage = `Excel statement downloaded for ${member.membershipNo || member.fullName || "selected member"}.`;
+  } catch (error) {
+    state.memberListError = error.message || "Could not download member statement Excel.";
+  }
+  renderShell();
+}
+
+async function ensureSelectedMemberStatement(memberId) {
+  const currentMemberMatches = state.selectedMember?.id === memberId;
+  const statementReady = currentMemberMatches && Array.isArray(state.selectedMemberStatement?.lines);
+  if (statementReady) return { member: state.selectedMember, statement: state.selectedMemberStatement };
+  const member = currentMemberMatches
+    ? state.selectedMember
+    : await api(`/members/${encodeURIComponent(memberId)}`);
+  const statement = await optionalApi(`/members/${encodeURIComponent(memberId)}/statement`, { lines: [] });
+  state.selectedMemberId = memberId;
+  state.selectedMember = member;
+  state.selectedMemberStatement = statement || { lines: [] };
+  return { member, statement: state.selectedMemberStatement };
 }
 
 async function saveMemberStaffLink(event) {
@@ -273,4 +1159,3 @@ function runMemberDecision(action) {
   }
   saveMemberDecision(memberId, value("selectedMemberStatus"), value("selectedMemberKycStatus"));
 }
-

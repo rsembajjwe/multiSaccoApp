@@ -1,14 +1,16 @@
 ﻿// Approval queue rendering and decision handlers extracted from app.js.
 
 function approvalsView() {
+  const cycle = isPlatform() ? null : currentSaccoCycleContext();
   const queue = buildApprovalQueueModel({
     isPlatform: isPlatform(),
-    loans: dataRows("loans"),
+    loans: isPlatform() ? dataRows("loans") : filterLoansBySaccoCycle(dataRows("loans"), cycle),
     memberName,
-    members: dataRows("members"),
-    pendingRepayments: dataRows("pendingLoanRepayments"),
-    transactions: transactionRows()
+    members: isPlatform() ? dataRows("members") : filterMembersBySaccoCycle(dataRows("members"), cycle),
+    pendingRepayments: isPlatform() ? dataRows("pendingLoanRepayments") : filterApprovalsBySaccoCycle(dataRows("pendingLoanRepayments"), cycle),
+    transactions: isPlatform() ? transactionRows() : filterApprovalsBySaccoCycle(transactionRows(), cycle)
   });
+  if (!isPlatform() && roleKind() === "secretary") return secretaryApprovalsView(queue);
   const queueSummary = buildApprovalQueueSummary(queue);
   const canApproveTx = hasPermission("transactions:approve");
   const canApproveLoans = !isPlatform() && hasPermission("loans:approve");
@@ -17,6 +19,7 @@ function approvalsView() {
   const tabs = [["overview", "Overview"], ["queue", "Approval queue"]];
   const tab = activeModuleTab("approvals", tabs);
   return `
+    ${saccoCyclePanel(cycle)}
     <div class="dashboard-grid">
       ${canApproveTx || queueSummary.transactionsToApprove ? summary("Transactions to approve", queueSummary.transactionsToApprove, "Finance maker-checker", "Decide") : ""}
       ${canApproveTx || queueSummary.repaymentsToApprove ? summary("Loan repayments to approve", queueSummary.repaymentsToApprove, "Mobile-money collections", "Decide") : ""}
@@ -40,6 +43,244 @@ function approvalsView() {
       ${canApproveMembers ? memberApprovalPanel(queue.members, true) : ""}
       ${viewOnly ? recordTable("Approval queue", queue.viewOnlyQueue, ["reference", "applicationNo", "membershipNo", "memberName", "type", "amount", "status"]) : ""}
     ` : ""}
+  `;
+}
+
+function secretaryApprovalsView(queue) {
+  const cycle = currentSaccoCycleContext();
+  const model = buildSecretaryApprovalWorkspaceModel(queue, cycle);
+  const tabs = [
+    ["overview", "Overview"],
+    ["membership", "Membership and KYC"],
+    ["governance", "Governance records"],
+    ["complaints", "Complaint routing"],
+    ["profile", "Profile requests"]
+  ];
+  const tab = activeModuleTab("approvals", tabs);
+  return `
+    ${saccoCyclePanel(cycle)}
+    <div class="dashboard-grid">
+      ${summary("Members awaiting activation", model.membership.length, "KYC and admission records", "Review")}
+      ${summary("Governance follow-up", model.governance.length, "Meetings, minutes and resolutions", "Prepare")}
+      ${summary("Open member complaints", model.complaints.length, "Route and follow up", "Open")}
+      ${summary("Profile requests", model.profileRequests.length, "Member data change requests", "Review")}
+    </div>
+    ${state.selectedMemberMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedMemberMessage)}</strong></div>` : ""}
+    ${state.selectedMemberError ? `<div class="notice warning"><strong>Member decision failed.</strong><span>${escapeHtml(state.selectedMemberError)}</span></div>` : ""}
+    ${moduleTabs("approvals", tabs, tab)}
+    ${tab === "overview" ? secretaryApprovalOverviewPanel(model) : ""}
+    ${tab === "membership" ? secretaryMembershipApprovalPanel(model.membership) : ""}
+    ${tab === "governance" ? secretaryGovernanceApprovalPanel(model.governance) : ""}
+    ${tab === "complaints" ? secretaryComplaintRoutingPanel(model.complaints) : ""}
+    ${tab === "profile" ? secretaryProfileRequestPanel(model.profileRequests) : ""}
+  `;
+}
+
+function buildSecretaryApprovalWorkspaceModel(queue, cycle = currentSaccoCycleContext()) {
+  const openStatuses = ["pending", "submitted", "open", "in_progress", "draft", "review"];
+  const activeMembers = filterMembersBySaccoCycle(dataRows("members"), cycle).filter((row) => normal(row.status) === "active");
+  const profileRequests = dataRows("privacyRequests")
+    .filter((row) => governanceDateFallsInCycle(row.createdAt || row.updatedAt, cycle))
+    .filter((row) => openStatuses.some((status) => normal(row.status).includes(status)))
+    .map((row) => ({
+      ...row,
+      memberName: row.memberName || memberName(row.memberId),
+      action: "member-detail",
+      actionLabel: "Open member",
+      actionId: row.memberId || row.id
+    }));
+  const governance = buildGovernanceMeetingRows({ meetings: filterGovernanceMeetingsByCycle(dataRows("governanceMeetings"), cycle), memberName, userName })
+    .filter((row) => !["closed", "completed", "cancelled"].includes(normal(row.status)))
+    .map((row) => ({
+      ...row,
+      action: "governance-meeting-detail",
+      actionLabel: "Open record",
+      actionId: row.id
+    }));
+  const complaints = filterComplaintsBySaccoCycle(dataRows("complaints"), cycle)
+    .filter((row) => row.memberId && !["closed", "resolved", "cancelled"].includes(normal(row.status)))
+    .map((row) => ({
+      ...row,
+      memberName: row.memberName || memberName(row.memberId),
+      action: "complaint-chat",
+      actionLabel: "Open chat",
+      actionId: row.id
+    }));
+  return {
+    activeMembers,
+    complaints,
+    governance,
+    membership: queue.members,
+    profileRequests,
+    restrictedQueues: {
+      loans: queue.loans.length,
+      repayments: queue.pendingRepayments.length,
+      transactions: queue.pendingTransactions.length
+    }
+  };
+}
+
+function secretaryApprovalOverviewPanel(model) {
+  const restrictedTotal = model.restrictedQueues.loans + model.restrictedQueues.repayments + model.restrictedQueues.transactions;
+  return `
+    <section class="secretary-approval-layout">
+      <div class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Secretary decision scope</h2>
+            <p>The Secretary handles records and member administration. Money movement and credit decisions are routed to Treasurer, Chairperson or Finance roles.</p>
+          </div>
+          <span class="status ${restrictedTotal ? "pending" : "active"}">${restrictedTotal ? "Protected" : "Clear"}</span>
+        </div>
+        <div class="secretary-scope-grid">
+          ${secretaryScopeCard("Allowed", "Member registration and KYC readiness", "Activate or reject pending member files after record checks.", "active")}
+          ${secretaryScopeCard("Allowed", "Governance documentation", "Prepare meeting records, resolutions and follow-up evidence.", "active")}
+          ${secretaryScopeCard("Allowed", "Complaint routing", "Open member complaint chats and coordinate administrative closure.", "active")}
+          ${secretaryScopeCard("Blocked", "Financial approvals", "Transactions, repayments, loans, reversals and journals are hidden from this desk.", "danger")}
+        </div>
+      </div>
+      <div class="panel secretary-approval-sidebar">
+        <div class="panel-heading">
+          <div>
+            <h2>Protected queues</h2>
+            <p>These are intentionally not actionable for Secretary.</p>
+          </div>
+        </div>
+        <div class="mini-grid">
+          ${mini("Transactions", model.restrictedQueues.transactions)}
+          ${mini("Loan repayments", model.restrictedQueues.repayments)}
+          ${mini("Loans", model.restrictedQueues.loans)}
+        </div>
+      </div>
+    </section>
+    ${secretaryMembershipApprovalPanel(model.membership)}
+  `;
+}
+
+function secretaryScopeCard(label, title, copy, tone) {
+  return `
+    <article class="secretary-scope-card ${escapeHtml(tone)}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(title)}</strong>
+      <p>${escapeHtml(copy)}</p>
+    </article>
+  `;
+}
+
+function secretaryMembershipApprovalPanel(rows) {
+  if (!rows.length) {
+    return emptyState("No member files awaiting activation", "Pending member registrations will appear here after capture or self-registration.");
+  }
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Membership and KYC activation</h2>
+          <p>Confirm the member record, contact details and KYC status before activating membership.</p>
+        </div>
+        <span class="status pending">${rows.length}</span>
+      </div>
+      <div class="approval-list secretary-approval-list">
+        ${rows.map((row) => `
+          <div class="approval-item secretary-approval-item">
+            <div class="approval-item-main">
+              <strong>${escapeHtml(row.memberName || row.fullName || "Member")}</strong>
+              <span>${escapeHtml(row.membershipNo || row.id)}${row.phone ? " / " + escapeHtml(row.phone) : ""}</span>
+              <small>KYC ${escapeHtml(labelize(row.kycStatus || "pending"))} / Status ${escapeHtml(labelize(row.status || "pending"))}</small>
+            </div>
+            <div class="approval-item-actions">
+              <button class="button primary" type="button" data-approve-member="${escapeHtml(row.id)}">Activate member</button>
+              <button class="button ghost" type="button" data-reject-member="${escapeHtml(row.id)}">Reject</button>
+              <button class="button secondary" type="button" data-row-action="member-detail" data-row-id="${escapeHtml(row.id)}">Open file</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function secretaryGovernanceApprovalPanel(rows) {
+  if (!rows.length) {
+    return emptyState("No governance records awaiting follow-up", "Meeting records, minutes and resolutions that need Secretary attention will appear here.");
+  }
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Governance record follow-up</h2>
+          <p>Prepare minutes, resolutions and action evidence. Final governance decisions remain with the relevant committee or Chairperson.</p>
+        </div>
+        <span class="status pending">${rows.length}</span>
+      </div>
+      ${recordTable("Governance records", rows, ["title", "meetingType", "scheduledAt", "status", "createdByName"])}
+    </section>
+  `;
+}
+
+function secretaryComplaintRoutingPanel(rows) {
+  if (!rows.length) {
+    return `
+      <section class="panel complaint-routing-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Member complaint routing</h2>
+            <p>Member complaint chats that need administrative follow-up will appear here.</p>
+          </div>
+          <span class="status active">Clear</span>
+        </div>
+        <div class="complaint-routing-guide">
+          ${secretaryComplaintRoutingStep("1", "Member writes to SACCO", "Complaints start in the member portal or SACCO office capture.")}
+          ${secretaryComplaintRoutingStep("2", "Secretary routes", "Open chat, confirm ownership and keep the member informed.")}
+          ${secretaryComplaintRoutingStep("3", "Escalate if needed", "Financial decisions go to Treasurer or Chairperson. Platform issues go to SACCO admin.")}
+        </div>
+      </section>
+    `;
+  }
+  return `
+    <section class="panel complaint-routing-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member complaint routing</h2>
+          <p>Open the chat, confirm the member issue, route the follow-up and keep the member informed. Platform complaints are handled separately by SACCO admins.</p>
+        </div>
+        <span class="status pending">${rows.length}</span>
+      </div>
+      <div class="complaint-routing-guide">
+        ${secretaryComplaintRoutingStep("Check", "Read the chat first", "Understand the member request before changing status.")}
+        ${secretaryComplaintRoutingStep("Route", "Send to the right officer", "Treasurer handles money proof; Chairperson handles policy decisions.")}
+        ${secretaryComplaintRoutingStep("Close", "Reply before resolving", "A member should see the final answer in chat.")}
+      </div>
+      ${recordTable("Member complaints", complaintTableRows(rows), ["memberName", "subject", "priority", "status", "routedTo", "latestActivity", "updatedAt"])}
+    </section>
+  `;
+}
+
+function secretaryComplaintRoutingStep(label, title, copy) {
+  return `
+    <div>
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(title)}</strong>
+      <p>${escapeHtml(copy)}</p>
+    </div>
+  `;
+}
+
+function secretaryProfileRequestPanel(rows) {
+  if (!rows.length) {
+    return emptyState("No profile requests awaiting review", "Member data correction or privacy requests will appear here for administrative follow-up.");
+  }
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Profile and data requests</h2>
+          <p>Review member profile updates, privacy requests and supporting records before action.</p>
+        </div>
+        <span class="status pending">${rows.length}</span>
+      </div>
+      ${recordTable("Profile requests", rows, ["memberName", "requestType", "status", "submittedAt", "resolvedAt"])}
+    </section>
   `;
 }
 
@@ -308,4 +549,3 @@ async function decideApprovalRepayment(id, loanId, action) {
   state.approvalDeciding = false;
   renderShell();
 }
-

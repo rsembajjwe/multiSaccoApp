@@ -1,10 +1,10 @@
-const CACHE_VERSION = "tereka-shell-v20260820-guarantor-staff-76";
+const CACHE_VERSION = "tereka-shell-v20260822-routed-complaint-reply-3";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/styles.css?v=20260819-ui-11",
-  "/app.i18n.js?v=20260819-trial-copy-3",
-  "/app.js?v=20260728-collection-accts-9",
+  "/styles.css?v=complaint-reply-clean-20260822",
+  "/app.i18n.js?v=member-subscriptions-20260821",
+  "/app.js?v=20260807-bootstrap-1",
   "/favicon.svg?v=20260719-tereka-2",
   "/manifest.webmanifest?v=20260722-pwa-1"
 ];

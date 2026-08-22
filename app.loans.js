@@ -1,8 +1,9 @@
 ﻿// Loan and guarantor workflow rendering extracted from app.js.
 
 function loansView() {
+  const cycle = currentSaccoCycleContext();
   const loans = buildLoanRows({
-    loans: dataRows("loans"),
+    loans: filterLoansBySaccoCycle(dataRows("loans"), cycle),
     memberName,
     labelize,
     formatMoney: (value) => money.format(value)
@@ -11,6 +12,7 @@ function loansView() {
   const tabs = [["overview", "Overview"], ["application", t("loanApplicationForm")], ["list", t("loanApplicationList")], ["detail", t("loanDetailGuarantors")]];
   const tab = activeModuleTab("loans", tabs);
   return `
+    ${saccoCyclePanel(cycle, { title: "Loan cycle" })}
     <div class="dashboard-grid">
       ${summary(t("activeLoans"), portfolio.active, "Disbursed portfolio", t("open"))}
       ${summary(t("outstandingPrincipal"), money.format(portfolio.outstandingPrincipal), "Portfolio balance", t("review"))}
@@ -28,19 +30,20 @@ function loansView() {
     ]) : ""}
     ${tab === "application" ? loanApplicationPanel() : ""}
     ${tab === "detail" ? (loanDetailPanel(loans) || emptyState("Loan detail and guarantors", "Select a loan application from the list to review guarantors, decisions and repayments.")) : ""}
-    ${tab === "list" ? recordTable("Loan application list", loans, ["applicationNo", "memberName", "product", "requestedAmount", "outstandingBalance", "monthlyInstallment", "nextDueDate", "arrearsAmount", "arrears1To30Amount", "arrears31To60Amount", "arrears61To90Amount", "arrearsOver90Amount", "oldestArrearsDays", "scheduleStatus", "guarantorReadiness", "approvalReadiness", "servicingStatus", "status"]) : ""}
+    ${tab === "list" ? recordTable(`Loan application list - ${cycle.label}`, loans, ["applicationNo", "memberName", "product", "requestedAmount", "outstandingBalance", "monthlyInstallment", "nextDueDate", "arrearsAmount", "arrears1To30Amount", "arrears31To60Amount", "arrears61To90Amount", "arrearsOver90Amount", "oldestArrearsDays", "scheduleStatus", "guarantorReadiness", "approvalReadiness", "servicingStatus", "status"]) : ""}
   `;
 }
 
 function guarantorsView() {
-  const requests = dataRows("guarantorRequests").map((request) => ({
+  const cycle = currentSaccoCycleContext();
+  const requests = filterApprovalsBySaccoCycle(dataRows("guarantorRequests"), cycle).map((request) => ({
     ...request,
     memberName: memberName(request.memberId),
     product: request.loan?.product || request.product || "Loan",
     requestedAmount: request.loan?.amount || request.loan?.requestedAmount || request.requestedAmount || 0
   }));
   const loans = buildLoanRows({
-    loans: dataRows("loans"),
+    loans: filterLoansBySaccoCycle(dataRows("loans"), cycle),
     memberName,
     labelize,
     formatMoney: (value) => money.format(value)
@@ -51,6 +54,7 @@ function guarantorsView() {
   const tabs = [["overview", "Overview"], ["requests", "Guarantor requests"]];
   const tab = activeModuleTab("guarantors", tabs);
   return `
+    ${saccoCyclePanel(cycle, { title: "Guarantor cycle" })}
     <div class="dashboard-grid">
       ${summary("Guarantor requests", rows.length, "From loan workflow", "Open")}
       ${summary("Pending decisions", pending.length, "Awaiting member response", "Review")}
@@ -65,8 +69,8 @@ function guarantorsView() {
       ["Approval readiness", `${accepted.length} guarantee record(s) can support loan approval decisions.`, accepted.length ? "Ready" : "Waiting"],
       ["Capacity", "Review each guarantor exposure before approval.", "Assess"]
     ]) : ""}
-    ${tab === "overview" ? recordTable("Guarantor requests", rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "guaranteeCeiling", "committedGuarantees", "capacity", "guarantorReadiness", "status"]) : ""}
-    ${tab === "requests" ? recordTable("Guarantor requests", rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "guaranteeCeiling", "committedGuarantees", "capacity", "guarantorReadiness", "status"]) : ""}
+    ${tab === "overview" ? recordTable(`Guarantor requests - ${cycle.label}`, rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "guaranteeCeiling", "committedGuarantees", "capacity", "guarantorReadiness", "status"]) : ""}
+    ${tab === "requests" ? recordTable(`Guarantor requests - ${cycle.label}`, rows, ["memberName", "product", "requestedAmount", "guaranteedAmount", "guaranteeCeiling", "committedGuarantees", "capacity", "guarantorReadiness", "status"]) : ""}
   `;
 }
 
@@ -287,4 +291,3 @@ function loanControlPanel(title, copy, rows) {
     </section>
   `;
 }
-

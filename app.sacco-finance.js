@@ -1,8 +1,9 @@
 ﻿// SACCO savings, shares and welfare rendering extracted from app.js.
 
 function savingsTransfersView() {
-  const transfers = dataRows("savingsTransfers");
-  const members = dataRows("members");
+  const cycle = currentSaccoCycleContext();
+  const transfers = rowsInSaccoCycle(dataRows("savingsTransfers"), cycle, ["createdAt", "approvedAt", "postedAt"]);
+  const members = filterMembersBySaccoCycle(dataRows("members"), cycle);
   const fundTypes = dataRows("fundTypes");
   const loans = dataRows("loans");
   const canCreate = hasPermission("savings-transfer:create");
@@ -24,6 +25,7 @@ function savingsTransfersView() {
     createdAt: formatDateTime(transfer.createdAt)
   }));
   return `
+    ${saccoCyclePanel(cycle, { title: "Savings transfer cycle" })}
     <div class="dashboard-grid">
       ${summary("Transfers", transfers.length, "Savings transfers and deductions", "Manage")}
       ${summary("Pending approval", pending.length, "Awaiting a checker", pending.length ? "Review" : "Clear")}
@@ -57,7 +59,7 @@ function savingsTransfersView() {
         <div class="form-actions inline"><button class="button primary" type="button" data-create-group-deduction="1">Create group deduction</button></div>
       </form>
     </section>` : ""}
-    ${recordTable("Savings transfers", rows, ["reference", "member", "amount", "destination", "status", "kind", "createdAt"])}
+    ${recordTable(`Savings transfers - ${cycle.label}`, rows, ["reference", "member", "amount", "destination", "status", "kind", "createdAt"])}
     ${canApprove && transfers.some((transfer) => transfer.status === "posted") ? `
     <section class="panel compact-panel">
       <div class="panel-heading"><div><h2>Reverse a posted transfer</h2><p>Reversal mirrors the original movement (money is not deleted).</p></div></div>
@@ -82,18 +84,20 @@ function savingsTransfersView() {
 }
 
 function savingsView() {
+  const cycle = currentSaccoCycleContext();
   const products = productsByType("savings");
-  const accounts = accountsByType("savings");
-  const members = dataRows("members");
+  const accounts = filterFinancialAccountsBySaccoCycle(accountsByType("savings"), cycle);
+  const members = filterMembersBySaccoCycle(dataRows("members"), cycle);
   const finance = buildSavingsSummary({ products, accounts, members });
   const monthlyPerformance = buildSaccoMonthlyPerformanceRows({
-    transactions: transactionRows(),
-    callbacks: dataRows("mobileMoneyCallbacks"),
+    transactions: transactionRows(cycle),
+    callbacks: filterCallbacksBySaccoCycle(dataRows("mobileMoneyCallbacks"), cycle),
     memberName,
   });
   const tabs = [["overview", "Overview"], ["monthly", t("monthlyPerformance")], ["products", t("savingsProductSetup")], ["accounts", t("openSavingsAccount")], ["lists", t("savingsRecords")]];
   const tab = activeModuleTab("savings", tabs);
   return `
+    ${saccoCyclePanel(cycle, { title: "Savings cycle" })}
     <div class="dashboard-grid">
       ${summary(t("savingsProducts"), finance.productCount, "Configured products", "Manage")}
       ${summary(t("savingsAccounts"), finance.accountCount, "Member accounts", t("open"))}
@@ -110,25 +114,27 @@ function savingsView() {
     ${tab === "monthly" ? `
       ${paymentRoutePanel()}
       ${saccoMonthlyPerformancePanel(monthlyPerformance)}
-      ${recordTable("Member monthly performance", monthlyPerformance, ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
+      ${recordTable(`Member monthly performance - ${cycle.label}`, monthlyPerformance, ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
     ` : ""}
     ${tab === "products" ? financialProductPanel("savings") : ""}
     ${tab === "accounts" ? financialAccountPanel("savings", products) : ""}
     ${tab === "lists" ? `
       ${recordTable("Savings product list", products, ["name", "code", "contributionAmount", "minimumBalance", "interestRate", "status"])}
-      ${recordTable("Savings accounts", accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
+      ${recordTable(`Savings accounts - ${cycle.label}`, accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
     ` : ""}
   `;
 }
 
 function sharesView() {
+  const cycle = currentSaccoCycleContext();
   const products = productsByType("share");
-  const accounts = accountsByType("share");
-  const members = dataRows("members");
+  const accounts = filterFinancialAccountsBySaccoCycle(accountsByType("share"), cycle);
+  const members = filterMembersBySaccoCycle(dataRows("members"), cycle);
   const finance = buildSharesSummary({ products, accounts, members });
   const tabs = [["overview", "Overview"], ["products", t("sharesProductSetup")], ["accounts", t("openSharesAccount")], ["register", t("shareRegister")]];
   const tab = activeModuleTab("shares", tabs);
   return `
+    ${saccoCyclePanel(cycle, { title: "Shares cycle" })}
     <div class="dashboard-grid">
       ${summary(t("shareProducts"), finance.productCount, "Share capital products", "Manage")}
       ${summary(t("shareAccounts"), finance.accountCount, "Member share ledgers", t("open"))}
@@ -146,19 +152,21 @@ function sharesView() {
     ${tab === "accounts" ? financialAccountPanel("shares", products) : ""}
     ${tab === "register" ? `
       ${recordTable("Share product list", products, ["name", "code", "contributionAmount", "minimumBalance", "status"])}
-      ${recordTable("Share register", accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
+      ${recordTable(`Share register - ${cycle.label}`, accounts, ["membershipNo", "memberName", "productName", "accountNo", "status", "openedAt"])}
     ` : ""}
   `;
 }
 
 function welfareView() {
+  const cycle = currentSaccoCycleContext();
   const products = productsByType("welfare");
-  const claims = dataRows("welfareClaims");
-  const accounts = accountsByType("welfare");
+  const claims = filterWelfareClaimsBySaccoCycle(dataRows("welfareClaims"), cycle);
+  const accounts = filterFinancialAccountsBySaccoCycle(accountsByType("welfare"), cycle);
   const finance = buildWelfareSummary({ products, claims, accounts });
   const tabs = [["overview", "Overview"], ["products", t("welfareProductSetup")], ["claims", t("welfareClaims")], ["detail", t("welfareClaimDecision")]];
   const tab = activeModuleTab("welfare", tabs);
   return `
+    ${saccoCyclePanel(cycle, { title: "Welfare cycle" })}
     <div class="dashboard-grid">
       ${summary(t("welfareProducts"), finance.productCount, "Contribution rules", "Manage")}
       ${summary(t("welfareAccounts"), finance.accountCount, "Member welfare ledgers", t("open"))}
@@ -178,7 +186,7 @@ function welfareView() {
     ${tab === "claims" ? `
       ${welfareClaimPanel()}
       ${recordTable("Welfare product list", products, ["name", "code", "contributionAmount", "status"])}
-      ${recordTable("Welfare claims", buildWelfareClaimRows(claims), ["membershipNo", "memberName", "claimType", "amount", "channel", "reference", "status", "submittedAt"])}
+      ${recordTable(`Welfare claims - ${cycle.label}`, buildWelfareClaimRows(claims), ["membershipNo", "memberName", "claimType", "amount", "channel", "reference", "status", "submittedAt"])}
     ` : ""}
     ${tab === "detail" ? (welfareClaimDetailPanel(claims) || emptyState("Welfare claim decision", "Select a welfare claim from the list to approve, reject or pay.")) : ""}
   `;
@@ -187,7 +195,8 @@ function welfareView() {
 const FUNDING_SOURCE_TYPES = ["share_capital", "member_savings", "grant", "donation", "external_borrowing", "retained_earnings", "investment_income", "other"];
 
 function fundingSourcesView() {
-  const sources = dataRows("fundingSources");
+  const cycle = currentSaccoCycleContext();
+  const sources = filterFundingSourcesBySaccoCycle(dataRows("fundingSources"), cycle);
   const canManage = hasPermission("finance-source:manage");
   const register = buildFundingSourceSummary(sources);
   const editing = state.selectedFundingSourceId ? sources.find((row) => row.id === state.selectedFundingSourceId) : null;
@@ -201,6 +210,7 @@ function fundingSourcesView() {
     actionLabel: "Edit"
   }));
   return `
+    ${saccoCyclePanel(cycle, { title: "Sources of funds cycle" })}
     <div class="dashboard-grid">
       ${summary("Active funding", money.format(register.activeTotal), "Total capital currently in the register", "Review")}
       ${summary("Sources on record", register.count, "All capital, grants and borrowings", "Open")}
@@ -209,7 +219,7 @@ function fundingSourcesView() {
     ${state.fundingSourceMessage ? `<div class="notice compact"><strong>${escapeHtml(state.fundingSourceMessage)}</strong></div>` : ""}
     ${state.fundingSourceError ? `<div class="notice warning"><strong>Could not save.</strong><span>${escapeHtml(state.fundingSourceError)}</span></div>` : ""}
     ${canManage ? fundingSourceForm(editing) : `<div class="notice compact"><span>You have review-only access to the sources-of-funds register.</span></div>`}
-    ${recordTable("Sources of funds register", registerRows, ["sourceTypeLabel", "provider", "recordedAmount", "currencyCode", "reference", "received", "status"])}
+    ${recordTable(`Sources of funds register - ${cycle.label}`, registerRows, ["sourceTypeLabel", "provider", "recordedAmount", "currencyCode", "reference", "received", "status"])}
   `;
 }
 

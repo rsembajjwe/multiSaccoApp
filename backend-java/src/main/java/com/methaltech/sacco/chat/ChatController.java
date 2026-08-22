@@ -115,8 +115,9 @@ class ChatController {
             HttpServletRequest request) {
         AuthService.CurrentSession session = authService.currentSession(authorization);
         if (session == null) return authService.authRequired();
-        if (!authService.hasPermission(session.user(), "complaints:manage")) {
-            return authService.permissionRequired("complaints:manage");
+        if (!authService.hasPermission(session.user(), "complaints:manage")
+                && !authService.hasPermission(session.user(), "complaints:view")) {
+            return authService.permissionRequired("complaints:view");
         }
 
         return chatService.findThread(threadId)

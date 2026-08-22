@@ -60,6 +60,7 @@ var TerekaFormatters = Object.freeze({
   formatTableValue(row, column, region) {
     const value = row[column] ?? row[this.snakeColumn(column)] ?? row[this.camelFallbackColumn(column)] ?? "";
     const normalizedColumn = column.toLowerCase();
+    if (typeof value === "string" && value.startsWith("<span class=\"complaint-chip")) return value;
     const moneyColumns = ["debit", "credit", "savings", "shares", "welfare", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "loanPortfolio", "loansAtRisk", "expenseTotal", "assetCost", "assetNetBookValue", "monthlyInstallment", "principalDue", "interestDue", "totalDue", "paidAmount", "balanceDue", "capacity", "guaranteeCeiling", "committedGuarantees"];
     if (normalizedColumn.includes("amount") || normalizedColumn.includes("balance") || moneyColumns.includes(column)) return this.formatMoneyValue(Number(value || 0), region);
     if (normalizedColumn.includes("status") || normalizedColumn.includes("severity")) return `<span class="status ${this.statusClassValue(value)}">${this.escapeHtmlValue(String(value || "Pending"))}</span>`;
@@ -98,8 +99,8 @@ var TerekaFormatters = Object.freeze({
   },
   statusClassValue(value) {
     const text = this.normalizeValue(value);
+    if (["failed", "rejected", "suspended", "expired", "overdue", "arrears", "unpaid"].some((item) => text.includes(item))) return "danger";
     if (["active", "approved", "paid", "healthy", "resolved", "completed", "posted"].some((item) => text.includes(item))) return "active";
-    if (["failed", "rejected", "suspended", "expired", "overdue", "arrears"].some((item) => text.includes(item))) return "danger";
     return "pending";
   },
   escapeHtmlValue(value) {

@@ -21,6 +21,8 @@ function settingsView() {
       ${saccoSettingsControlPanel(branches, products, accounts, model.missingProducts)}
       ${settingsReadinessPanel(model.readiness)}
     ` : ""}
+    ${tab === "membership" ? membershipCalendarSettingsPanel() : ""}
+    ${tab === "branding" ? saccoLogoSettingsPanel() : ""}
     ${tab === "branches" ? branchSetupPanel() : ""}
     ${tab === "funds" ? fundTypesSetupPanel() : ""}
     ${tab === "products" ? financialProductSetupPanel() : ""}
@@ -35,6 +37,8 @@ function settingsView() {
 function saccoSettingsTabs(activeTab) {
   const tabs = [
     ["overview", t("settingsOverview")],
+    ["membership", "Membership calendar"],
+    ["branding", "SACCO logo"],
     ["branches", t("branchSetup")],
     ["funds", "Fund sources"],
     ["products", t("productSetup")],
@@ -46,6 +50,187 @@ function saccoSettingsTabs(activeTab) {
       ${tabs.map(([id, label]) => `<button class="${activeTab === id ? "active" : ""}" type="button" data-sacco-settings-tab="${id}">${label}</button>`).join("")}
     </div>
   `;
+}
+
+function saccoLogoSettingsPanel() {
+  const canManage = hasPermission("sacco-profile:manage") || hasPermission("tenants:manage") || ["admin", "chairperson"].includes(roleKind());
+  const logo = currentSaccoLogoUrl();
+  const isEmbedded = /^data:image\//i.test(logo);
+  const preview = logo
+    ? `<div class="document-preview"><img src="${escapeHtml(logo)}" alt="SACCO logo preview"></div>`
+    : `<div class="document-preview empty">No SACCO logo added</div>`;
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>SACCO logo</h2>
+          <p>Add the official SACCO logo used on member registration forms and printed records.</p>
+        </div>
+        <span class="status ${logo ? "active" : "pending"}">${logo ? "Logo ready" : "Missing logo"}</span>
+      </div>
+      ${state.saccoLogoMessage ? `<div class="notice compact"><strong>${escapeHtml(state.saccoLogoMessage)}</strong></div>` : ""}
+      ${state.saccoLogoError ? `<div class="notice warning"><strong>Logo not saved.</strong><span>${escapeHtml(state.saccoLogoError)}</span></div>` : ""}
+      <div class="detail-layout">
+        <div>
+          ${preview}
+          <p class="helper-text">Use a clear square PNG or JPEG. The saved logo appears on member registration PDF forms.</p>
+          <div class="mini-grid">
+            ${mini("Step 1", "Choose logo")}
+            ${mini("Step 2", "Save SACCO logo")}
+            ${mini("Step 3", "Export member form")}
+          </div>
+        </div>
+        <form id="saccoLogoForm" class="form-grid">
+          <label class="wide"><span>Upload SACCO logo</span><input id="saccoLogoFile" type="file" accept="image/png,image/jpeg,image/webp" ${canManage ? "" : "disabled"}></label>
+          <label class="wide"><span>Or paste logo URL</span><input id="saccoLogoUrl" type="url" value="${escapeHtml(isEmbedded ? "" : logo)}" placeholder="https://example.com/sacco-logo.png" ${canManage ? "" : "readonly"}></label>
+          <div class="form-actions inline">
+            <button class="button primary" type="button" data-save-sacco-logo="1" ${canManage ? "" : "disabled"}>Save SACCO logo</button>
+            <button class="button secondary" type="button" data-clear-sacco-logo="1" ${canManage && logo ? "" : "disabled"}>Remove logo</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  `;
+}
+
+function saccoLogoStorageKey() {
+  return `tereka-sacco-logo:${state.user?.tenantId || state.tenant?.id || "current"}`;
+}
+
+function currentSaccoLogoUrl() {
+  try {
+    return localStorage.getItem(saccoLogoStorageKey()) || "";
+  } catch {
+    return "";
+  }
+}
+
+async function saveSaccoLogoSettings(clear = false) {
+  state.saccoLogoMessage = "";
+  state.saccoLogoError = "";
+  try {
+    if (clear) {
+      localStorage.removeItem(saccoLogoStorageKey());
+      state.saccoLogoMessage = "SACCO logo removed.";
+      renderShell();
+      return;
+    }
+    const logoInput = document.getElementById("saccoLogoFile");
+    const file = logoInput instanceof HTMLInputElement ? logoInput.files?.[0] : null;
+    const url = value("saccoLogoUrl").trim();
+    if (file) {
+      if (!String(file.type || "").startsWith("image/")) throw new Error("Choose a PNG or JPEG logo image.");
+      if (file.size > 350 * 1024) throw new Error("Logo must be 350 KB or smaller.");
+      localStorage.setItem(saccoLogoStorageKey(), await blobToDataUrl(file));
+    } else if (url) {
+      localStorage.setItem(saccoLogoStorageKey(), url);
+    } else {
+      throw new Error("Upload a logo or paste a logo URL.");
+    }
+    state.saccoLogoMessage = "SACCO logo saved for printed forms.";
+  } catch (error) {
+    state.saccoLogoError = error.message || "Could not save SACCO logo.";
+  }
+  renderShell();
+}
+
+function membershipCalendarSettingsPanel() {
+  const profile = state.data.saccoProfile || {};
+  const canManage = hasPermission("sacco-profile:manage") || hasPermission("tenants:manage") || ["admin", "chairperson"].includes(roleKind());
+  const period = normalizeMembershipPeriod(profile.membershipDuesPeriod || "annual");
+  const month = Number(profile.membershipCalendarStartMonth || 1);
+  const day = Number(profile.membershipCalendarStartDay || 1);
+  const amount = Number(profile.membershipSubscriptionAmount || 5000);
+  const periodLabel = membershipPeriodLabel(period);
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Membership calendar</h2>
+          <p>The Chairperson sets how this SACCO charges membership fees. New member dues follow this policy automatically.</p>
+        </div>
+        <span class="status ${canManage ? "active" : "pending"}">${canManage ? "Chairperson control" : "View only"}</span>
+      </div>
+      ${state.saccoProfileMessage ? `<div class="notice compact"><strong>${escapeHtml(state.saccoProfileMessage)}</strong></div>` : ""}
+      ${state.saccoProfileError ? `<div class="notice warning"><strong>Could not save calendar.</strong><span>${escapeHtml(state.saccoProfileError)}</span></div>` : ""}
+      <div class="source-grid">
+        ${mini("Current dues period", periodLabel)}
+        ${mini("Subscription amount", money.format(amount))}
+        ${mini("Annual calendar start", period === "annual" ? `${monthName(month)} ${day}` : "Not used")}
+        ${mini("Policy owner", "Chairperson / SACCO Admin")}
+        ${mini("Member subscription rule", membershipPolicyDescription(period, month, day))}
+      </div>
+      <form id="membershipCalendarForm" class="form-grid">
+        <label>
+          <span>Membership fee period</span>
+          <select id="membershipDuesPeriod" ${canManage ? "" : "disabled"}>
+            <option value="once" ${period === "once" ? "selected" : ""}>Once - pay once for life</option>
+            <option value="monthly" ${period === "monthly" ? "selected" : ""}>Monthly - once every month</option>
+            <option value="annual" ${period === "annual" ? "selected" : ""}>Annually - based on SACCO calendar</option>
+          </select>
+        </label>
+        <label><span>Calendar start month</span><select id="membershipCalendarStartMonth" ${canManage ? "" : "disabled"}>${monthOptions(month)}</select></label>
+        <label><span>Calendar start day</span><input id="membershipCalendarStartDay" type="number" min="1" max="31" value="${escapeHtml(String(day))}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Subscription amount</span><input id="membershipSubscriptionAmount" type="number" min="1" step="0.01" value="${escapeHtml(String(amount))}" ${canManage ? "" : "readonly"}></label>
+        <div class="form-actions inline"><button class="button primary" type="button" data-save-membership-calendar="1" ${canManage ? "" : "disabled"}>Save membership calendar</button></div>
+      </form>
+      <p class="helper-text">Existing dues records keep their current period. New assignments use this SACCO calendar, and fully paid records cannot be paid twice in the same active period.</p>
+    </section>
+  `;
+}
+
+function normalizeMembershipPeriod(period) {
+  if (String(period || "").toLowerCase() === "once") return "once";
+  if (String(period || "").toLowerCase() === "monthly") return "monthly";
+  return "annual";
+}
+
+function membershipPeriodLabel(period) {
+  if (period === "once") return "Once - lifetime membership";
+  if (period === "monthly") return "Monthly";
+  return "Annual SACCO calendar";
+}
+
+function membershipPolicyDescription(period, month, day) {
+  if (period === "once") return "A member pays once and remains paid up for life.";
+  if (period === "monthly") return "A member pays once every month.";
+  return `A member pays once per SACCO year from ${monthName(month)} ${day}.`;
+}
+
+function monthName(month) {
+  const names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  return names[Math.min(11, Math.max(0, Number(month || 1) - 1))];
+}
+
+function monthOptions(selectedMonth) {
+  return Array.from({ length: 12 }, (_, index) => {
+    const value = index + 1;
+    return `<option value="${value}" ${Number(selectedMonth) === value ? "selected" : ""}>${monthName(value)}</option>`;
+  }).join("");
+}
+
+async function saveMembershipCalendar() {
+  const tenantId = state.user?.tenantId;
+  if (!tenantId) return;
+  state.saccoProfileMessage = "";
+  state.saccoProfileError = "";
+  try {
+    await api(`/tenants/${encodeURIComponent(tenantId)}/profile`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        membershipDuesPeriod: document.getElementById("membershipDuesPeriod")?.value || "annual",
+        membershipCalendarStartMonth: Number(document.getElementById("membershipCalendarStartMonth")?.value || 1),
+        membershipCalendarStartDay: Number(document.getElementById("membershipCalendarStartDay")?.value || 1),
+        membershipSubscriptionAmount: Number(document.getElementById("membershipSubscriptionAmount")?.value || 5000)
+      })
+    });
+    await refreshAll();
+    state.saccoSettingsTab = "membership";
+    state.saccoProfileMessage = "Membership calendar saved. New member dues will follow this SACCO policy.";
+  } catch (error) {
+    state.saccoProfileError = error.message || "Unable to save membership calendar.";
+  }
+  renderShell();
 }
 
 function saccoSettingsControlPanel(branches, products, accounts, missingProducts) {
@@ -589,4 +774,3 @@ async function removeCollectionAccount(accountId) {
   }
   renderShell();
 }
-

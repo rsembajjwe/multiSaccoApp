@@ -1,11 +1,13 @@
 ﻿function transactionsView() {
-  const rows = transactionRows();
+  const cycle = currentSaccoCycleContext();
+  const rows = transactionRows(cycle);
   const overview = buildTransactionOverviewSummary(rows);
   const receiptingQueue = buildTransactionReceiptingQueue(rows);
   const receiptRegister = buildTransactionReceiptRegister(rows);
   const tabs = [["overview", "Overview"], ["capture", t("newTransactionScreen")], ["receipting", "Receipting queue"], ["receipts", "Receipt register"], ["list", t("transactionList")], ["detail", t("transactionDetail")]];
   const tab = activeModuleTab("transactions", tabs);
   return `
+    ${saccoCyclePanel(cycle, { title: "Transaction cycle" })}
     <div class="dashboard-grid">
       ${summary(t("transactions"), overview.totalRows, "Deposits, withdrawals and corrections", t("review"))}
       ${summary(t("pendingApproval"), overview.pendingApproval, "Maker-checker queue", "Approve")}
@@ -19,7 +21,7 @@
     ${tab === "detail" ? (transactionDetailPanel(rows) || emptyState("Transaction detail and reversal", "Select a transaction from the list to review receipt, approval and reversal actions.")) : ""}
     ${tab === "list" ? `
       ${filterToolbar("Search by reference, member, channel, status, amount or user", "New transaction", "Print receipt")}
-      ${recordTable("Transaction list", rows, ["reference", "postedAt", "memberName", "type", "paymentRoute", "amount", "paymentStatus", "receiptStatus", "reversalStatus", "status"])}
+      ${recordTable(`Transaction list - ${cycle.label}`, rows, ["reference", "postedAt", "memberName", "type", "paymentRoute", "amount", "paymentStatus", "receiptStatus", "reversalStatus", "status"])}
     ` : ""}
   `;
 }
@@ -146,9 +148,9 @@ function transactionFormPanel() {
 }
 
 
-function transactionRows() {
+function transactionRows(cycle = null) {
   return buildTransactionRows({
-    transactions: dataRows("transactions"),
+    transactions: cycle ? filterTransactionsBySaccoCycle(dataRows("transactions"), cycle) : dataRows("transactions"),
     memberName
   });
 }
@@ -246,4 +248,3 @@ function transactionReceiptPreview(receipt) {
     </section>
   `;
 }
-

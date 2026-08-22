@@ -86,7 +86,7 @@ function exportMemberStatementExcel() {
   const body = lines.map((line) => `<tr>${columns.map(([, accessor]) => cell(accessor(line))).join("")}</tr>`).join("");
   const sacco = escapeHtml(contextName());
   const html = `﻿<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body>`
-    + `<table><tr><th colspan="${columns.length}">Tereka Online - ${sacco} - Member Statement</th></tr>${header}${body}</table></body></html>`;
+    + `<table><tr><th colspan="${columns.length}">${sacco}</th></tr><tr><th colspan="${columns.length}">Member Statement | Powered by Tereka Online</th></tr>${header}${body}</table></body></html>`;
   downloadClientFile(memberStatementFilename("xls"), html, "application/vnd.ms-excel");
 }
 
@@ -100,7 +100,7 @@ function exportMemberStatementPdf() {
   };
   window.addEventListener("afterprint", restore);
   const previousTitle = document.title;
-  document.title = `Tereka Online - Member Statement`;
+  document.title = `${contextName()} - Member Statement`;
   window.print();
   document.title = previousTitle;
   setTimeout(restore, 2000);
@@ -285,7 +285,10 @@ async function postMemberPayment(event) {
 }
 
 function memberPaymentPayload() {
-  const purpose = value("memberPaymentPurpose");
+  const rawPurpose = value("memberPaymentPurpose");
+  const isLoanRepayment = rawPurpose.startsWith("loan_repayment::");
+  const purpose = isLoanRepayment ? "loan_repayment" : rawPurpose;
+  const loanId = isLoanRepayment ? rawPurpose.split("::")[1] || "" : "";
   const route = value("memberPaymentRoute") || "mobile_money";
   const provider = route === "mobile_money"
     ? value("memberPaymentProvider") || document.querySelector('input[name="mmProvider"]:checked')?.value || "default"
@@ -294,7 +297,7 @@ function memberPaymentPayload() {
     tenantId: state.member?.tenantId,
     memberId: state.member?.id,
     memberIdentifier: state.member?.membershipNo,
-    loanId: purpose === "loan_repayment" ? value("memberPaymentLoanId") : "",
+    loanId,
     purpose,
     amount: Number(value("memberPaymentAmount")),
     payerPhone: value("memberPaymentPhone"),
@@ -306,6 +309,28 @@ function memberPaymentPayload() {
       member: state.member?.membershipNo
     }
   };
+}
+
+function syncMemberPaymentPurposeContext() {
+  const selected = value("memberPaymentPurpose");
+  const context = document.querySelector("[data-member-loan-payment-context]");
+  const amount = /** @type {HTMLInputElement | null} */ (document.getElementById("memberPaymentAmount"));
+  if (amount) amount.removeAttribute("max");
+  if (!context) return;
+  let visible = false;
+  context.querySelectorAll("[data-loan-payment-context]").forEach((row) => {
+    const active = row.dataset.loanPaymentContext === selected;
+    row.toggleAttribute("hidden", !active);
+    if (active && amount) {
+      const outstanding = Number(row.dataset.loanOutstanding || 0);
+      if (outstanding > 0) {
+        amount.setAttribute("max", String(outstanding));
+        if (Number(amount.value || 0) > outstanding) amount.value = String(Math.floor(outstanding));
+      }
+    }
+    visible = visible || active;
+  });
+  context.toggleAttribute("hidden", !visible);
 }
 
 function memberComplaintPayload() {
@@ -451,9 +476,17 @@ async function refreshPaymentRequestProviderStatus(requestId) {
 }
 
 async function submitMemberComplaintPayload(payload) {
-  return api("/member-auth/mobile-complaints", {
+  const message = [
+    payload.description,
+    "",
+    `C: ${labelize(payload.category || "service")} | P: ${labelize(payload.priority || "medium")} | R: Secretary`
+  ].filter((line) => line !== null && line !== undefined).join("\n");
+  return api("/member-auth/chat/threads", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      subject: payload.subject,
+      message
+    })
   });
 }
 
@@ -469,15 +502,15 @@ async function submitMemberComplaint(event) {
       ...complaint,
       subject: complaint.subject || payload.subject,
       priority: complaint.priority || payload.priority,
-      status: complaint.status || "submitted",
+      status: complaint.status || "open",
       lastMessagePreview: complaint.lastMessagePreview || payload.description,
       updatedAt: complaint.updatedAt || new Date().toISOString()
     };
     state.memberData.chatThreads = [visibleComplaint, ...(state.memberData.chatThreads || []).filter((row) => row.id !== visibleComplaint.id)];
-    state.memberComplaintMessage = `Submitted complaint ${complaint.id || payload.subject}.`;
+    state.memberComplaintMessage = `Started complaint chat ${complaint.subject || payload.subject}. The Secretary is the primary response person.`;
     await refreshMember();
     state.memberData.chatThreads = [visibleComplaint, ...(state.memberData.chatThreads || []).filter((row) => row.id !== visibleComplaint.id)];
-    state.memberComplaintMessage = `Submitted complaint ${complaint.id || payload.subject}.`;
+    state.memberComplaintMessage = `Started complaint chat ${complaint.subject || payload.subject}. The Secretary is the primary response person.`;
     renderShell();
   } catch (error) {
     const complaint = {
@@ -659,4 +692,3 @@ async function submitMemberPrivacyRequest(event) {
   }
   render();
 }
-

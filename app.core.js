@@ -41,6 +41,7 @@ const COUNTRY_REGIONS = Object.freeze({
 
 const localeMetadata = Object.freeze({
   "en-UG": { label: "English", direction: "ltr", fallback: "en-UG" },
+  "lg-UG": { label: "Luganda", direction: "ltr", fallback: "en-UG" },
   "fr-FR": { label: "Francais", direction: "ltr", fallback: "fr-FR" },
   "sw-TZ": { label: "Kiswahili", direction: "ltr", fallback: "en-UG" },
   "pt-MZ": { label: "Portugues", direction: "ltr", fallback: "en-UG" },
@@ -56,6 +57,7 @@ const money = {
 
 const supportedLocales = [
   { code: "en-UG", label: localeMetadata["en-UG"].label },
+  { code: "lg-UG", label: localeMetadata["lg-UG"].label },
   { code: "fr-FR", label: localeMetadata["fr-FR"].label },
   { code: "sw-TZ", label: localeMetadata["sw-TZ"].label },
   { code: "pt-MZ", label: localeMetadata["pt-MZ"].label },
@@ -71,6 +73,7 @@ function emptyData() {
     subscriptions: [],
     subscriptionPackages: [],
     members: [],
+    memberFundBalances: [],
     transactions: [],
     loans: [],
     operations: null,
@@ -87,6 +90,7 @@ function emptyData() {
     suppliers: [],
     expenses: [],
     assets: [],
+    saccoProfile: null,
     saccoPaymentAccounts: [],
     governanceMeetings: [],
     statementLines: [],
@@ -499,6 +503,17 @@ function t(key) {
     || key;
 }
 
+function translateOr(key, fallback) {
+  const locale = state.locale || DEFAULT_REGION.locale;
+  const localeInfo = localeMetadata[locale] || localeMetadata[DEFAULT_REGION.locale];
+  const languageFallback = Object.keys(messages).find((messageLocale) => messageLocale.split("-")[0] === locale.split("-")[0]);
+  return messages[locale]?.[key]
+    || messages[localeInfo.fallback]?.[key]
+    || messages[languageFallback]?.[key]
+    || messages[DEFAULT_REGION.locale]?.[key]
+    || fallback;
+}
+
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   window.addEventListener("load", () => {
@@ -523,4 +538,3 @@ function statusClass(value) {
 function escapeHtml(value) {
   return TerekaFormatters.escapeHtmlValue(value);
 }
-

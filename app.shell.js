@@ -63,7 +63,7 @@ function roleKind() {
     if (roles.includes("operations")) return "operations";
     return "super";
   }
-  if (roles.includes("chairperson")) return "chairperson";
+  if (roles.includes("chairperson") || roles.includes("chairman")) return "chairperson";
   if (roles.includes("treasurer")) return "treasurer";
   if (roles.includes("secretary")) return "secretary";
   if (roles.includes("loan")) return "loans";
@@ -321,7 +321,7 @@ function printableSummarySection(module, portal) {
     return `
     <section class="print-summary" role="document" aria-hidden="true">
       <header class="print-head">
-        <div class="print-brand"><strong>Tereka Online</strong><span>${sacco}</span></div>
+        <div class="print-brand"><strong>${sacco}</strong><span>Powered by Tereka Online</span></div>
         <div class="print-title"><h1>Member Statement</h1><span>Generated ${escapeHtml(generatedAt)}</span></div>
       </header>
       <section class="print-identity">
@@ -345,7 +345,7 @@ function printableSummarySection(module, portal) {
           </tr>`).join("")}</tbody>
         </table>` : "<p>No statement activity.</p>"}
       </section>
-      <footer class="print-foot"><span>Tereka Online · ${sacco}</span><span>Confidential member statement</span></footer>
+      <footer class="print-foot"><span>${sacco}</span><span>Powered by Tereka Online · Confidential member statement</span></footer>
     </section>`;
   }
   if (state.auth === "member") {
@@ -359,7 +359,7 @@ function printableSummarySection(module, portal) {
     return `
     <section class="print-summary" role="document" aria-hidden="true">
       <header class="print-head">
-        <div class="print-brand"><strong>Tereka Online</strong><span>${sacco}</span></div>
+        <div class="print-brand"><strong>${sacco}</strong><span>Powered by Tereka Online</span></div>
         <div class="print-title"><h1>Member Account Summary</h1><span>Generated ${escapeHtml(generatedAt)}</span></div>
       </header>
       <section class="print-identity">
@@ -399,13 +399,13 @@ function printableSummarySection(module, portal) {
           </tr>`).join("")}</tbody>
         </table>
       </section>` : ""}
-      <footer class="print-foot"><span>Tereka Online · ${sacco}</span><span>Confidential member statement</span></footer>
+      <footer class="print-foot"><span>${sacco}</span><span>Powered by Tereka Online · Confidential member statement</span></footer>
     </section>`;
   }
   return `
     <section class="print-summary" role="document" aria-hidden="true">
       <header class="print-head">
-        <div class="print-brand"><strong>Tereka Online</strong><span>${sacco}</span></div>
+        <div class="print-brand"><strong>${sacco}</strong><span>Powered by Tereka Online</span></div>
         <div class="print-title"><h1>${escapeHtml(module[1])} Summary</h1><span>Generated ${escapeHtml(generatedAt)}</span></div>
       </header>
       <section class="print-identity">
@@ -413,7 +413,7 @@ function printableSummarySection(module, portal) {
         <div><small>Prepared by</small><strong>${escapeHtml(displayName())}</strong></div>
         <div><small>Context</small><strong>${sacco}</strong></div>
       </section>
-      <footer class="print-foot"><span>Tereka Online · ${sacco}</span><span>Confidential</span></footer>
+      <footer class="print-foot"><span>${sacco}</span><span>Powered by Tereka Online · Confidential</span></footer>
     </section>`;
 }
 
@@ -766,4 +766,3 @@ function sessionStatusClass() {
   if (minutes <= 15) return "pending";
   return "active";
 }
-

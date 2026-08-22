@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -37,6 +38,18 @@ class SaccoProfile {
     private String phone;
     private String website;
 
+    @Column(name = "membership_dues_period")
+    private String membershipDuesPeriod;
+
+    @Column(name = "membership_calendar_start_month")
+    private Integer membershipCalendarStartMonth;
+
+    @Column(name = "membership_calendar_start_day")
+    private Integer membershipCalendarStartDay;
+
+    @Column(name = "membership_subscription_amount")
+    private BigDecimal membershipSubscriptionAmount;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -64,6 +77,10 @@ class SaccoProfile {
         this.email = email;
         this.phone = phone;
         this.website = website;
+        this.membershipDuesPeriod = "annual";
+        this.membershipCalendarStartMonth = 1;
+        this.membershipCalendarStartDay = 1;
+        this.membershipSubscriptionAmount = BigDecimal.valueOf(5000);
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
@@ -85,6 +102,14 @@ class SaccoProfile {
         this.email = email;
         this.phone = phone;
         this.website = website;
+        this.updatedAt = Instant.now();
+    }
+
+    void updateMembershipCalendar(String period, Integer startMonth, Integer startDay, BigDecimal amount) {
+        this.membershipDuesPeriod = period;
+        this.membershipCalendarStartMonth = startMonth;
+        this.membershipCalendarStartDay = startDay;
+        this.membershipSubscriptionAmount = amount == null || amount.signum() <= 0 ? BigDecimal.valueOf(5000) : amount;
         this.updatedAt = Instant.now();
     }
 }

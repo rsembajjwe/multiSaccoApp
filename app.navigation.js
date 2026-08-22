@@ -22,9 +22,9 @@ const saccoModules = [
   ["savings", "Savings", "Products, accounts and statements", "transactions:view", ["admin", "treasurer", "accountant", "auditor"]],
   ["shares", "Shares", "Share register and certificates", "transactions:view", ["admin", "treasurer", "secretary", "auditor"]],
   ["welfare", "Welfare", "Contributions, balances and claims", "transactions:view", ["admin", "treasurer", "secretary"]],
-  ["member-dues", "Member Dues", "Membership subscriptions and expiry", "members:view", ["admin", "chairperson", "secretary", "treasurer"]],
+  ["member-dues", "Member Subscriptions", "Mandatory membership payments and expiry", "members:view", ["admin", "chairperson", "secretary", "treasurer"]],
   ["savings-transfers", "Savings Transfers", "Transfers and group deductions", "savings-transfer:view", ["admin", "chairperson", "treasurer"]],
-  ["funding-sources", "Sources of Funds", "Capital, grants and borrowings register", "finance-source:view", ["admin", "chairperson", "treasurer", "secretary"]],
+  ["funding-sources", "Sources of Funds", "Capital, grants and borrowings register", "finance-source:view", ["admin", "chairperson", "treasurer"]],
   ["loans", "Loans", "Applications and repayments", "loans:view", ["admin", "chairperson", "loans", "auditor"]],
   ["guarantors", "Guarantors", "Guarantee requests and obligations", "loans:view", ["admin", "chairperson", "loans"]],
   ["approvals", "Approvals", "Maker-checker decisions", "approvals:view", ["admin", "chairperson", "treasurer", "secretary", "loans"]],
@@ -34,7 +34,7 @@ const saccoModules = [
   ["governance", "Governance", "Meetings, minutes and resolutions", "governance:view", ["admin", "chairperson", "secretary"]],
   ["complaints", "Complaints", "Member cases and support", "complaints:view", ["admin", "secretary", "chairperson"]],
   ["users", "Users and Roles", "SACCO staff access", "roles:view", ["admin"]],
-  ["settings", "Settings", "Products, branches and controls", "roles:create", ["admin"]],
+  ["settings", "Settings", "Products, branches and controls", "sacco-profile:manage", ["admin", "chairperson"]],
   ["audit", "Audit Logs", "Read-only sensitive activity", "reports:view", ["admin", "auditor"]]
 ];
 
@@ -73,26 +73,32 @@ function saccoAccounts() {
 }
 
 function membersView() {
-  const members = dataRows("members");
+  const cycle = currentSaccoCycleContext();
+  const members = filterMembersBySaccoCycle(dataRows("members"), cycle);
   const rows = buildMemberDirectoryRows({ kycReadiness: memberKycReadinessFor, members });
+  const registerRows = buildMemberRegisterRows(rows);
+  const fundColumns = memberRegisterFundColumns();
   const memberSummary = buildMemberDirectorySummary(rows);
   const pendingKyc = pendingMemberKycRows(rows);
-  const availableTabs = ["overview", "list", "register", "kyc", "contacts", "statement"];
-  const tab = availableTabs.includes(state.memberTab) ? state.memberTab : "overview";
+  const availableTabs = ["list", "register", "kyc", "contacts", "statement"];
+  const tab = availableTabs.includes(state.memberTab) ? state.memberTab : "list";
   return `
+    ${memberAccountCyclePanel(cycle)}
     <div class="dashboard-grid">
       ${summary(t("registeredMembers"), memberSummary.registeredMembers, "Member register only, not staff users", t("review"))}
       ${summary(t("activeMembers"), memberSummary.activeMembers, "Can transact and use portal", "Monitor")}
       ${summary(t("pendingKyc"), memberSummary.pendingKyc, "Needs document or approval follow-up", t("review"))}
-      ${summary("Total balances", money.format(memberSummary.totalBalances), t("savingsSharesWelfare"), "Statements")}
+      ${summary("Fund sources", fundColumns.length, "Each SACCO fund is tracked separately", "Separate")}
       ${summary(t("portalReady"), memberSummary.portalReady, "Can use member login", "Audit")}
     </div>
     ${memberTabs(tab)}
-    ${tab === "overview" ? memberManagementOverviewPanel(memberSummary, pendingKyc) : ""}
     ${tab === "register" ? memberRegistrationPanel() : ""}
     ${tab === "list" ? `
-      ${filterToolbar("Search by member number, name, phone, branch or status", "Register member", "Download statement")}
-      ${recordTable("Member list", rows, ["membershipNo", "fullName", "phone", "email", "totalBalance", "status"])}
+      ${memberListToolbar()}
+      ${state.memberListMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberListMessage)}</strong></div>` : ""}
+      ${state.memberListError ? `<div class="notice warning"><strong>Member list action failed.</strong><span>${escapeHtml(state.memberListError)}</span></div>` : ""}
+      ${recordTable(`Member account base - ${cycle.label}`, registerRows, ["membershipNo", "fullName", "phone", "email", ...fundColumns, "status"])}
+      ${memberRegisterTotalsPanel(registerRows)}
     ` : ""}
     ${tab === "kyc" ? memberDetailPanel("kyc") : ""}
     ${tab === "contacts" ? memberDetailPanel("contacts") : ""}
@@ -100,9 +106,82 @@ function membersView() {
   `;
 }
 
+function memberAccountCyclePanel(cycle) {
+  if (!cycle) return "";
+  const periodLabel = typeof membershipPeriodLabel === "function" ? membershipPeriodLabel(cycle.period) : labelize(cycle.period);
+  const selectedYear = Number(cycle.year);
+  const selectedMonth = Number(cycle.month);
+  return `
+    <section class="panel compact-panel member-cycle-selector">
+      <div class="panel-heading">
+        <div>
+          <h2>Select member account cycle</h2>
+          <p>This controls which members appear in the member account base, exports and registration forms.</p>
+        </div>
+        <span class="status active">${escapeHtml(cycle.label)}</span>
+      </div>
+      <div class="form-grid compact-grid">
+        <label><span>Cycle type</span><input value="${escapeHtml(periodLabel)}" readonly></label>
+        ${cycle.period !== "once" ? `<label><span>Select year</span><select data-sacco-cycle-year>${governanceCycleYearOptions().map((year) => `<option value="${year}" ${year === selectedYear ? "selected" : ""}>${year}</option>`).join("")}</select></label>` : ""}
+        ${cycle.period === "monthly" ? `<label><span>Select month</span><select data-sacco-cycle-month>${governanceCycleMonthOptions(currentRegion().locale).map(([value, label]) => `<option value="${value}" ${value === selectedMonth ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}</select></label>` : ""}
+        <label><span>Members shown for</span><input value="${escapeHtml(cycle.label)}" readonly></label>
+      </div>
+    </section>
+  `;
+}
+
+function memberRegisterTotalsPanel(rows) {
+  const totals = memberRegisterFundTotals(rows);
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Member fund totals</h2>
+          <p>Totals are separated by fund source. They are not combined into one member balance.</p>
+        </div>
+        <span class="status active">${rows.length} member(s)</span>
+      </div>
+      <div class="source-grid">
+        ${totals.map((fund) => mini(fund.name, money.format(fund.total))).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function memberListToolbar() {
+  const selected = state.selectedMember || dataRows("members").find((member) => member.id === state.selectedMemberId);
+  const selectedLabel = selected ? `${selected.membershipNo || ""} ${selected.fullName || ""}`.trim() : "Open a member first";
+  const selectedDisabled = selected ? "" : "disabled";
+  return `
+    <section class="filter-toolbar member-export-toolbar">
+      <div class="member-export-fields">
+        <label><span>Search members</span><input value="${escapeHtml(state.search)}" data-search-input placeholder="Search by member number, name, phone, branch or status"></label>
+        <label><span>Selected member for statement</span><input value="${escapeHtml(selectedLabel)}" readonly></label>
+      </div>
+      <div class="member-export-actions">
+        <div class="export-action-group primary-group">
+          <span>Member actions</span>
+          <button class="button primary" type="button" data-action="open-member-register">Register member</button>
+        </div>
+        <div class="export-action-group">
+          <span>Selected member statement</span>
+          <button class="button secondary" type="button" data-action="download-selected-member-statement-pdf" ${selectedDisabled}>Statement PDF</button>
+          <button class="button secondary" type="button" data-action="download-selected-member-statement-excel" ${selectedDisabled}>Statement Excel</button>
+          <button class="button ghost" type="button" data-action="download-selected-member-statement" ${selectedDisabled}>Statement CSV</button>
+        </div>
+        <div class="export-action-group">
+          <span>All members register</span>
+          <button class="button secondary" type="button" data-action="export-member-list-excel">All members Excel</button>
+          <button class="button ghost" type="button" data-action="export-member-list-pdf">All members PDF</button>
+          <button class="button ghost" type="button" data-action="export-member-registration-forms-pdf">Registration forms PDF</button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function memberTabs(activeTab) {
   const tabs = [
-    ["overview", "Member Overview"],
     ["list", t("memberList")],
     ["register", t("registerMember")],
     ["kyc", t("kycDetail")],
@@ -184,4 +263,3 @@ function moduleBlueprint(view = "") {
   const item = labels[view] || ["Module", ["Search", "Filters", "Tables", "Actions"]];
   return tabsCard(item[0], item[1]);
 }
-

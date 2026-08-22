@@ -118,6 +118,7 @@ export function sumValues(rows: TerekaRecord[], ...keys: string[]): number {
 export function formatTableValue(row: TerekaRecord, column: string, region: TerekaRegion): string {
   const value = row[column] ?? row[snakeColumn(column)] ?? row[camelFallbackColumn(column)] ?? "";
   const normalizedColumn = column.toLowerCase();
+  if (typeof value === "string" && value.startsWith("<span class=\"complaint-chip")) return value;
   if (normalizedColumn.includes("amount") || normalizedColumn.includes("balance") || moneyColumns.has(column)) {
     return formatMoneyValue(Number(value || 0), region);
   }
@@ -155,11 +156,11 @@ export function camelFallbackColumn(column: string): string {
 
 export function statusClassValue(value: unknown): "active" | "danger" | "pending" {
   const text = normalizeValue(value);
+  if (["failed", "rejected", "suspended", "expired", "overdue", "arrears", "unpaid"].some((item) => text.includes(item))) {
+    return "danger";
+  }
   if (["active", "approved", "paid", "healthy", "resolved", "completed", "posted"].some((item) => text.includes(item))) {
     return "active";
-  }
-  if (["failed", "rejected", "suspended", "expired", "overdue", "arrears"].some((item) => text.includes(item))) {
-    return "danger";
   }
   return "pending";
 }

@@ -89,10 +89,7 @@ async function proxyJavaApi(request, response, url) {
     const body = ["GET", "HEAD"].includes(request.method || "GET")
       ? undefined
       : await readRequestBody(request);
-    const headers = { ...request.headers };
-    delete headers.host;
-    delete headers.connection;
-    delete headers["content-length"];
+    const headers = forwardedApiHeaders(request.headers);
 
     const upstream = await fetch(target, {
       method: request.method,
@@ -117,6 +114,15 @@ async function proxyJavaApi(request, response, url) {
       }
     }, null, 2));
   }
+}
+
+function forwardedApiHeaders(sourceHeaders) {
+  const headers = {};
+  for (const key of ["authorization", "content-type", "accept", "x-correlation-id"]) {
+    const value = sourceHeaders[key];
+    if (value) headers[key] = value;
+  }
+  return headers;
 }
 
 function cacheControlFor(url, filePath) {

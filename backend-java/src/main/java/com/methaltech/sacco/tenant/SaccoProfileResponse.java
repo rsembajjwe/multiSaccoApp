@@ -1,6 +1,7 @@
 package com.methaltech.sacco.tenant;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 
 record SaccoProfileResponse(
         String id,
@@ -13,6 +14,10 @@ record SaccoProfileResponse(
         String email,
         String phone,
         String website,
+        String membershipDuesPeriod,
+        Integer membershipCalendarStartMonth,
+        Integer membershipCalendarStartDay,
+        BigDecimal membershipSubscriptionAmount,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -28,6 +33,10 @@ record SaccoProfileResponse(
                 profile.getEmail(),
                 profile.getPhone(),
                 profile.getWebsite(),
+                profile.getMembershipDuesPeriod(),
+                profile.getMembershipCalendarStartMonth(),
+                profile.getMembershipCalendarStartDay(),
+                profile.getMembershipSubscriptionAmount(),
                 profile.getCreatedAt(),
                 profile.getUpdatedAt());
     }
