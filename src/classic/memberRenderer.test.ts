@@ -82,7 +82,7 @@ describe("classic member portal renderer", () => {
     expect(text()).toContain("Complaint evidence controls");
   });
 
-  it("renders the consolidated Money hub plus profile and security evidence screens", () => {
+  it("renders the consolidated Money hub plus profile screens", () => {
     context.state.moduleTabs.money = "statement";
     renderIntoDom(context, context.renderMemberView("money"));
     expect(text()).toContain("Statement");
@@ -94,11 +94,6 @@ describe("classic member portal renderer", () => {
     context.state.moduleTabs.profile = "contacts";
     renderIntoDom(context, context.renderMemberView("profile"));
     expect(text()).toContain("Member contact controls");
-
-    context.state.moduleTabs.security = "safety";
-    renderIntoDom(context, context.renderMemberView("security"));
-    expect(text()).toContain("Member safety actions");
-    expect(text()).toContain("Security actions");
   });
 
   function text(): string {

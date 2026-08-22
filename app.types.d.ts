@@ -427,8 +427,10 @@ interface TerekaSaccoChairpersonDashboardModel {
 interface TerekaSaccoTreasurerDashboardModel {
   collections: number;
   failedCallbacks: Array<TerekaMobileMoneyCallback & Record<string, any>>;
+  mobileMoney: number;
   mobileMoneyExceptions: number;
   pendingApprovals: number;
+  treasurerCash: number;
   totalSavings: number;
 }
 

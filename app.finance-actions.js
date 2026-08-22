@@ -183,7 +183,9 @@ async function createTransactionFromForm(event) {
         narration: value("newTransactionNarration")
       })
     });
-    state.transactionFormMessage = `Submitted transaction ${transaction.reference} for approval.`;
+    state.transactionFormMessage = normal(transaction.status) === "posted"
+      ? `Cash transaction ${transaction.reference} posted. Receipt is ready.`
+      : `Submitted transaction ${transaction.reference} for verification.`;
     await refreshAll();
   } catch (error) {
     state.transactionFormError = error.message;
@@ -396,7 +398,6 @@ async function recordLoanRepayment(event) {
       body: JSON.stringify({
         amount: Number(value("loanRepaymentAmount")),
         channel: value("loanRepaymentChannel"),
-        reference: value("loanRepaymentReference") || `LR-${Date.now()}`,
         narration: value("loanRepaymentNarration") || "Loan repayment"
       })
     });
@@ -412,4 +413,3 @@ async function recordLoanRepayment(event) {
     renderShell();
   }
 }
-

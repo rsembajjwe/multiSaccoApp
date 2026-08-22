@@ -357,8 +357,9 @@ sandbox.applyStaffSession({
 const treasurerModules = sandbox.visibleModules().map(([id]) => id);
 assert.equal(sandbox.isPlatform(), false);
 assert.equal(sandbox.roleKind(), "treasurer");
-assert.ok(treasurerModules.includes("transactions"));
-assert.ok(treasurerModules.includes("reconciliation"));
+assert.ok(treasurerModules.includes("finance"));
+assert.ok(!treasurerModules.includes("transactions"));
+assert.ok(!treasurerModules.includes("reconciliation"));
 assert.ok(!treasurerModules.includes("members"));
 assert.ok(!treasurerModules.includes("users"));
 assert.equal(sandbox.sessionTimeLabel(), "Session active");
@@ -1160,7 +1161,7 @@ sandbox.state.user = null;
 sandbox.state.roleNames = [];
 sandbox.state.permissionIds = [];
 const memberModules = sandbox.visibleModules().map(([id]) => id);
-assert.equal(JSON.stringify(memberModules), JSON.stringify(["home", "money", "loans", "payments", "notifications", "complaints", "profile", "security"]));
+assert.equal(JSON.stringify(memberModules), JSON.stringify(["home", "money", "loans", "payments", "notifications", "complaints", "profile"]));
 assert.equal(sandbox.canAccessView("users"), false);
 
 sandbox.state.memberData.dashboard = { tenant: { mobileMoneyCollectionAvailable: false, bankCollectionAvailable: false } };

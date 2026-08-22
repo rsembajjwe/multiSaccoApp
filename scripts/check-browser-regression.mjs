@@ -771,7 +771,7 @@ async function assertTransactionWorkflow(page) {
   await page.locator("#newTransactionAmount").fill("15000");
   await page.locator("#newTransactionNarration").fill("Browser regression Treasurer cash savings deposit");
   await page.locator("#transactionForm button[type='submit']").click();
-  await expectText(page, "Submitted transaction", "transaction submitted");
+  await expectText(page, "Cash transaction", "cash transaction posted");
   await page.locator("[data-module-tab-view='transactions'][data-module-tab='list']").click();
   await page.locator("[data-row-action='transaction-detail']").first().click();
   await expectText(page, "Transaction detail and reversal", "transaction detail panel");

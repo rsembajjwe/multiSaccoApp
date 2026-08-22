@@ -64,8 +64,10 @@ export interface TerekaSaccoChairpersonDashboardModel {
 export interface TerekaSaccoTreasurerDashboardModel {
   collections: number;
   failedCallbacks: Array<TerekaMobileMoneyCallback & TerekaRecord>;
+  mobileMoney: number;
   mobileMoneyExceptions: number;
   pendingApprovals: number;
+  treasurerCash: number;
   totalSavings: number;
 }
 
@@ -179,11 +181,15 @@ export function buildSaccoTreasurerDashboardModel(input: {
   transactions: Array<TerekaFinancialTransaction & TerekaRecord>;
 }): TerekaSaccoTreasurerDashboardModel {
   const failedCallbacks = input.callbacks.filter((row) => ["failed", "exception", "pending"].some((word) => normalizeSaccoText(row.status).includes(word)));
+  const treasurerCashRows = input.transactions.filter((row) => normalizeSaccoText(`${row.channel || ""} ${row.paymentRoute || ""} ${row.provider || ""}`).includes("cash"));
+  const mobileMoneyRows = input.transactions.filter((row) => normalizeSaccoText(`${row.channel || ""} ${row.paymentRoute || ""} ${row.provider || ""}`).includes("mobile"));
   return {
     collections: sumSaccoValues(input.transactions.filter((row) => Number(row.credit || 0) > 0), "credit", "amount"),
     failedCallbacks,
+    mobileMoney: sumSaccoValues(mobileMoneyRows, "credit", "amount"),
     mobileMoneyExceptions: failedCallbacks.length,
     pendingApprovals: input.pendingTransactions.length,
+    treasurerCash: sumSaccoValues(treasurerCashRows, "credit", "amount"),
     totalSavings: sumSaccoValues(input.members, "savingsBalance", "savings"),
   };
 }

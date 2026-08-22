@@ -96,7 +96,7 @@ function roleModuleScopeFor(roleName, platformOnly) {
     return "Platform administration";
   }
   if (name.includes("administrator") || name.includes("admin")) return "All SACCO modules";
-  if (name.includes("treasurer")) return "Transactions, savings, shares, welfare, approvals, accounting, reconciliation, reports";
+  if (name.includes("treasurer")) return "Cash collections, receipts, member payments, approvals, reconciliation and reports";
   if (name.includes("secretary")) return "Members, shares, welfare, approvals, reports, governance, complaints";
   if (name.includes("chair")) return "Loans, guarantors, approvals, reports, governance";
   if (name.includes("accountant")) return "Transactions, accounting, reconciliation, reports";

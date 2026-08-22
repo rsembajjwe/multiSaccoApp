@@ -74,11 +74,15 @@ function buildSaccoChairpersonDashboardModel(input) {
 
 function buildSaccoTreasurerDashboardModel(input) {
   const failedCallbacks = input.callbacks.filter((row) => ["failed", "exception", "pending"].some((word) => normalizeSaccoModelText(row.status).includes(word)));
+  const treasurerCashRows = input.transactions.filter((row) => normalizeSaccoModelText(`${row.channel || ""} ${row.paymentRoute || ""} ${row.provider || ""}`).includes("cash"));
+  const mobileMoneyRows = input.transactions.filter((row) => normalizeSaccoModelText(`${row.channel || ""} ${row.paymentRoute || ""} ${row.provider || ""}`).includes("mobile"));
   return {
     collections: sumSaccoModelValues(input.transactions.filter((row) => Number(row.credit || 0) > 0), "credit", "amount"),
     failedCallbacks,
+    mobileMoney: sumSaccoModelValues(mobileMoneyRows, "credit", "amount"),
     mobileMoneyExceptions: failedCallbacks.length,
     pendingApprovals: input.pendingTransactions.length,
+    treasurerCash: sumSaccoModelValues(treasurerCashRows, "credit", "amount"),
     totalSavings: sumSaccoModelValues(input.members, "savingsBalance", "savings")
   };
 }

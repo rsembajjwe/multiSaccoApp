@@ -1206,14 +1206,14 @@ class SaccoBackendApplicationTests {
 								  "branchId": "branch_green_main",
 								  "memberId": "member_green_amina",
 								  "type": "savings_deposit",
-								  "channel": "cash",
+								  "channel": "bank",
 								  "amount": 25000,
 								  "narration": "Treasurer role boundary deposit"
 								}
 								"""))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.type", is("savings_deposit")))
-				.andExpect(jsonPath("$.data.channel", is("cash")));
+				.andExpect(jsonPath("$.data.channel", is("bank")));
 
 		mockMvc.perform(post("/api/v1/financial-transactions")
 						.header("Authorization", "Bearer " + secretaryToken)
@@ -1936,28 +1936,14 @@ class SaccoBackendApplicationTests {
 		try {
 			// Amina savings 900,000; hold 850,000 leaves only 50,000 available.
 			jdbcTemplate.update("UPDATE members SET savings_hold = 850000 WHERE id = 'member_green_amina'");
-			MvcResult tx = mockMvc.perform(post("/api/v1/financial-transactions")
+			mockMvc.perform(post("/api/v1/financial-transactions")
 							.header("Authorization", "Bearer " + admin)
 							.contentType("application/json")
 							.content("""
 									{ "memberId": "member_green_amina", "type": "withdrawal", "channel": "cash", "amount": 100000, "narration": "Hold test" }
 									"""))
-					.andExpect(status().isCreated())
-					.andReturn();
-			String txId = objectMapper.readTree(tx.getResponse().getContentAsString()).path("data").path("id").asString();
-
-			// Posting the 100,000 withdrawal is blocked: it exceeds available (held) savings.
-			mockMvc.perform(patch("/api/v1/financial-transactions/" + txId + "/status")
-							.header("Authorization", "Bearer " + treasurer)
-							.contentType("application/json").content("{ \"status\": \"posted\" }"))
 					.andExpect(status().isConflict())
 					.andExpect(jsonPath("$.error.code", is("INSUFFICIENT_SAVINGS")));
-
-			// Clean up the pending withdrawal so it does not linger.
-			mockMvc.perform(patch("/api/v1/financial-transactions/" + txId + "/status")
-							.header("Authorization", "Bearer " + treasurer)
-							.contentType("application/json").content("{ \"status\": \"rejected\", \"reason\": \"test cleanup\" }"))
-					.andExpect(status().isOk());
 		} finally {
 			jdbcTemplate.update("UPDATE members SET savings_hold = 0 WHERE id = 'member_green_amina'");
 		}
@@ -1992,7 +1978,7 @@ class SaccoBackendApplicationTests {
 							.header("Authorization", "Bearer " + admin)
 							.contentType("application/json")
 							.content("""
-									{ "memberId": "%s", "type": "savings_deposit", "channel": "cash", "amount": 100000, "narration": "COI test" }
+									{ "memberId": "%s", "type": "savings_deposit", "channel": "bank", "amount": 100000, "narration": "COI test" }
 									""".formatted(memberId)))
 					.andExpect(status().isCreated())
 					.andReturn();
@@ -4309,7 +4295,7 @@ class SaccoBackendApplicationTests {
 								{
 								  "memberId": "%s",
 								  "type": "savings_deposit",
-								  "channel": "cash",
+								  "channel": "bank",
 								  "amount": 125000,
 								  "narration": "Opening savings"
 								}
@@ -4498,6 +4484,60 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code", is("INVALID_TRANSACTION_TYPE")));
 
+		java.math.BigDecimal totalLoanBalanceBeforeRepayment = jdbcTemplate.queryForObject(
+				"""
+				select coalesce(sum(balance), 0)
+				from loans
+				where tenant_id = 'tenant_green'
+				  and member_id = 'member_green_amina'
+				  and balance > 0
+				  and lower(status) not in ('closed', 'rejected', 'cancelled', 'written_off')
+				""",
+				java.math.BigDecimal.class);
+		java.math.BigDecimal loanGreenBalanceBeforeRepayment = jdbcTemplate.queryForObject(
+				"select balance from loans where id = 'loan_green_0001'",
+				java.math.BigDecimal.class);
+		java.math.BigDecimal loanGreenRepaymentTotalBefore = jdbcTemplate.queryForObject(
+				"select coalesce(sum(amount), 0) from loan_repayments where loan_id = 'loan_green_0001' and status = 'posted'",
+				java.math.BigDecimal.class);
+		java.math.BigDecimal overpaymentAmount = totalLoanBalanceBeforeRepayment.add(java.math.BigDecimal.ONE);
+
+		mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "type": "loan_repayment",
+								  "channel": "cash",
+								  "amount": %s,
+								  "narration": "Overpayment guard"
+								}
+								""".formatted(overpaymentAmount.toPlainString())))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.error.code", is("LOAN_REPAYMENT_EXCEEDS_BALANCE")));
+
+		mockMvc.perform(post("/api/v1/financial-transactions")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{
+								  "memberId": "member_green_amina",
+								  "type": "loan_repayment",
+								  "channel": "cash",
+								  "amount": 50000,
+								  "narration": "Partial cash repayment"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status", is("posted")));
+		org.assertj.core.api.Assertions.assertThat(jdbcTemplate.queryForObject(
+				"select balance from loans where id = 'loan_green_0001'",
+				java.math.BigDecimal.class)).isEqualByComparingTo(loanGreenBalanceBeforeRepayment.subtract(new java.math.BigDecimal("50000.00")));
+		org.assertj.core.api.Assertions.assertThat(jdbcTemplate.queryForObject(
+				"select coalesce(sum(amount), 0) from loan_repayments where loan_id = 'loan_green_0001' and status = 'posted'",
+				java.math.BigDecimal.class)).isEqualByComparingTo(loanGreenRepaymentTotalBefore.add(new java.math.BigDecimal("50000.00")));
+
 		mockMvc.perform(post("/api/v1/financial-transactions")
 						.header("Authorization", "Bearer " + token)
 						.contentType("application/json")
@@ -4601,55 +4641,64 @@ class SaccoBackendApplicationTests {
 		String checkerToken = loginAndReturnToken();
 		String currentPeriodId = ensureCurrentAccountingPeriod("tenant_green");
 
-		MvcResult transaction = mockMvc.perform(post("/api/v1/financial-transactions")
-						.header("Authorization", "Bearer " + makerToken)
-						.contentType("application/json")
-						.content("""
-								{
-								  "memberId": "member_green_amina",
-								  "type": "savings_deposit",
-								  "channel": "cash",
-								  "amount": 20000,
-								  "narration": "Closed period test"
-								}
-								"""))
-				.andExpect(status().isCreated())
-				.andReturn();
-		String transactionId = objectMapper.readTree(transaction.getResponse().getContentAsString()).path("data").path("id").asString();
+		try {
+			MvcResult transaction = mockMvc.perform(post("/api/v1/financial-transactions")
+							.header("Authorization", "Bearer " + makerToken)
+							.contentType("application/json")
+							.content("""
+									{
+									  "memberId": "member_green_amina",
+									  "type": "savings_deposit",
+									  "channel": "bank",
+									  "amount": 20000,
+									  "narration": "Closed period test"
+									}
+									"""))
+					.andExpect(status().isCreated())
+					.andReturn();
+			String transactionId = objectMapper.readTree(transaction.getResponse().getContentAsString()).path("data").path("id").asString();
 
-		mockMvc.perform(patch("/api/v1/accounting-periods/" + currentPeriodId + "/status")
-						.header("Authorization", "Bearer " + makerToken)
-						.contentType("application/json")
-						.content("""
-								{ "status": "closed" }
-								"""))
-				.andExpect(status().isOk());
+			mockMvc.perform(patch("/api/v1/accounting-periods/" + currentPeriodId + "/status")
+							.header("Authorization", "Bearer " + makerToken)
+							.contentType("application/json")
+							.content("""
+									{ "status": "closed" }
+									"""))
+					.andExpect(status().isOk());
 
-		mockMvc.perform(patch("/api/v1/financial-transactions/" + transactionId + "/status")
-						.header("Authorization", "Bearer " + checkerToken)
-						.contentType("application/json")
-						.content("""
-								{ "status": "posted" }
-								"""))
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.error.code", is("ACCOUNTING_PERIOD_CLOSED")));
+			mockMvc.perform(patch("/api/v1/financial-transactions/" + transactionId + "/status")
+							.header("Authorization", "Bearer " + checkerToken)
+							.contentType("application/json")
+							.content("""
+									{ "status": "posted" }
+									"""))
+					.andExpect(status().isConflict())
+					.andExpect(jsonPath("$.error.code", is("ACCOUNTING_PERIOD_CLOSED")));
 
-		mockMvc.perform(patch("/api/v1/accounting-periods/" + currentPeriodId + "/status")
-						.header("Authorization", "Bearer " + makerToken)
-						.contentType("application/json")
-						.content("""
-								{ "status": "open" }
-								"""))
-				.andExpect(status().isOk());
+			mockMvc.perform(patch("/api/v1/accounting-periods/" + currentPeriodId + "/status")
+							.header("Authorization", "Bearer " + makerToken)
+							.contentType("application/json")
+							.content("""
+									{ "status": "open" }
+									"""))
+					.andExpect(status().isOk());
 
-		mockMvc.perform(patch("/api/v1/financial-transactions/" + transactionId + "/status")
-						.header("Authorization", "Bearer " + checkerToken)
-						.contentType("application/json")
-						.content("""
-								{ "status": "posted" }
-								"""))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.status", is("posted")));
+			mockMvc.perform(patch("/api/v1/financial-transactions/" + transactionId + "/status")
+							.header("Authorization", "Bearer " + checkerToken)
+							.contentType("application/json")
+							.content("""
+									{ "status": "posted" }
+									"""))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.status", is("posted")));
+		} finally {
+			mockMvc.perform(patch("/api/v1/accounting-periods/" + currentPeriodId + "/status")
+							.header("Authorization", "Bearer " + makerToken)
+							.contentType("application/json")
+							.content("""
+									{ "status": "open" }
+									"""));
+		}
 	}
 
 	@Test
@@ -6427,7 +6476,7 @@ class SaccoBackendApplicationTests {
 					.andReturn();
 			createdFundId = objectMapper.readTree(fund.getResponse().getContentAsString()).path("data").path("id").asText();
 
-			// 2) A burial contribution is captured for a member (maker = admin) ...
+			// 2) A burial cash contribution is captured and posted immediately.
 			var created = mockMvc.perform(post("/api/v1/financial-transactions")
 							.header("Authorization", "Bearer " + adminToken)
 							.contentType("application/json")
@@ -6443,17 +6492,9 @@ class SaccoBackendApplicationTests {
 									"""))
 					.andExpect(status().isCreated())
 					.andExpect(jsonPath("$.data.type", is("burial_contribution")))
-					.andExpect(jsonPath("$.data.status", is("pending_approval")))
+					.andExpect(jsonPath("$.data.status", is("posted")))
 					.andReturn();
 			txnId = objectMapper.readTree(created.getResponse().getContentAsString()).path("data").path("id").asText();
-
-			// ... and posted by a different approver (checker = treasurer).
-			mockMvc.perform(patch("/api/v1/financial-transactions/" + txnId + "/status")
-							.header("Authorization", "Bearer " + treasurerToken)
-							.contentType("application/json")
-							.content("{ \"status\": \"posted\" }"))
-					.andExpect(status().isOk())
-					.andExpect(jsonPath("$.data.status", is("posted")));
 
 			// 3) The per-fund ledger now holds the member's burial balance.
 			java.math.BigDecimal burial = jdbcTemplate.queryForObject(
@@ -8723,12 +8764,6 @@ class SaccoBackendApplicationTests {
 		String transactionId = objectMapper.readTree(createdTransaction.getResponse().getContentAsString()).path("data").path("id").asString();
 		String reference = objectMapper.readTree(createdTransaction.getResponse().getContentAsString()).path("data").path("reference").asString();
 
-		mockMvc.perform(patch("/api/v1/financial-transactions/" + transactionId + "/status")
-						.header("Authorization", "Bearer " + saccoToken)
-						.contentType("application/json")
-						.content("{ \"status\": \"posted\" }"))
-				.andExpect(status().isOk());
-
 		mockMvc.perform(get("/api/v1/journal-entries")
 						.header("Authorization", "Bearer " + branchManagerToken))
 				.andExpect(status().isOk())
@@ -8753,13 +8788,13 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(get("/api/v1/audit-events")
 						.header("Authorization", "Bearer " + branchManagerToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[*].action", hasItem("Submitted financial transaction " + reference)))
+				.andExpect(jsonPath("$.data[*].action", hasItem("Posted cash financial transaction " + reference)))
 				.andExpect(jsonPath("$.data[*].actorName", not(hasItem("Green Valley Administrator"))));
 
 		mockMvc.perform(get("/api/v1/audit-events?page=0&size=10")
 						.header("Authorization", "Bearer " + branchManagerToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[*].action", hasItem("Submitted financial transaction " + reference)))
+				.andExpect(jsonPath("$.data[*].action", hasItem("Posted cash financial transaction " + reference)))
 				.andExpect(jsonPath("$.data[*].actorName", not(hasItem("Green Valley Administrator"))));
 
 		String ownComplaintSubject = "Branch complaint " + suffix;

@@ -1386,7 +1386,9 @@ class LoanController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_CHANNEL", "Unsupported repayment channel."));
         }
-        String reference = body.reference().trim();
+        String reference = body.reference() == null || body.reference().isBlank()
+                ? repaymentReferenceForTenant(loan.getTenantId())
+                : body.reference().trim();
         if (repaymentRepository.existsByTenantIdAndReferenceIgnoreCase(loan.getTenantId(), reference)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "DUPLICATE_REPAYMENT_REFERENCE", "Repayment reference already exists for this SACCO."));
@@ -1753,6 +1755,15 @@ class LoanController {
         return guaranteeCeiling(member).subtract(committedGuarantees(member, excludedGuarantorId)).max(BigDecimal.ZERO);
     }
 
+    private String repaymentReferenceForTenant(String tenantId) {
+        String abbreviation = tenantService.findById(tenantId)
+                .map(TenantResponse::abbreviation)
+                .filter(value -> value != null && !value.isBlank())
+                .orElse("SACCO");
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase(Locale.ROOT);
+        return abbreviation + "-LR-" + suffix;
+    }
+
     private LoanResponse loanResponse(Loan loan) {
         BigDecimal repaymentTotal = repaymentRepository.totalAmountByLoanId(loan.getId());
         ScheduleSummary summary = scheduleSummary(loan, repaymentTotal);
@@ -1870,7 +1881,7 @@ class LoanController {
     record CreateRepaymentRequest(
             @NotNull BigDecimal amount,
             String channel,
-            @NotBlank String reference,
+            String reference,
             String narration) {
     }
 

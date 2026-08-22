@@ -531,6 +531,7 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-summary-view]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (button.dataset.summaryTab) state.moduleTabs[button.dataset.summaryView] = button.dataset.summaryTab;
       openView(button.dataset.summaryView);
       renderShell();
     });
@@ -687,6 +688,32 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='monthly-performance-detail']").forEach((button) => {
     button.addEventListener("click", () => {
       state.selectedMonthlyPerformanceId = button.dataset.rowId;
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-row-action='finance-month-detail']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedFinanceMonth = button.dataset.rowId;
+      state.selectedFinanceMemberId = "";
+      state.selectedFinanceMetric = button.dataset.financeMetric || "transactionCount";
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-row-action='finance-member-detail']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedFinanceMonth = "";
+      state.selectedFinanceMemberId = button.dataset.rowId;
+      state.selectedFinanceMetric = button.dataset.financeMetric || "";
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-finance-member-column]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const column = input.dataset.financeMemberColumn;
+      const hidden = new Set(state.financeMemberHiddenColumns || []);
+      if (input.checked) hidden.delete(column);
+      else hidden.add(column);
+      state.financeMemberHiddenColumns = [...hidden];
       renderShell();
     });
   });
@@ -951,6 +978,12 @@ function bindEvents() {
     state.selectedMonthlyPerformanceId = "";
     renderShell();
   });
+  document.querySelector("[data-action='close-finance-month-detail']")?.addEventListener("click", () => {
+    state.selectedFinanceMonth = "";
+    state.selectedFinanceMemberId = "";
+    state.selectedFinanceMetric = "";
+    renderShell();
+  });
   document.querySelector("[data-action='close-transaction-detail']")?.addEventListener("click", () => {
     state.selectedTransactionId = "";
     state.selectedTransactionReceipt = null;
@@ -1064,6 +1097,10 @@ function bindEvents() {
   document.querySelector("#publicTenantCountry")?.addEventListener("change", () => syncCountryCurrency("publicTenantCountry", "publicTenantCurrencyCode"));
   syncCountryCurrency("publicTenantCountry", "publicTenantCurrencyCode");
   document.querySelector("#transactionForm")?.addEventListener("submit", createTransactionFromForm);
+  document.querySelector("#newTransactionMemberId")?.addEventListener("change", syncTransactionLoanBalance);
+  document.querySelector("#newTransactionType")?.addEventListener("change", syncTransactionLoanBalance);
+  document.querySelector("#newTransactionAmount")?.addEventListener("input", syncTransactionLoanBalance);
+  syncTransactionLoanBalance();
   document.querySelector("#loanApplicationForm")?.addEventListener("submit", createLoanFromForm);
   document.querySelector("#loanGuarantorForm")?.addEventListener("submit", addLoanGuarantor);
   document.querySelector("#loanAppraisalForm")?.addEventListener("submit", recordLoanAppraisal);
@@ -1246,6 +1283,11 @@ function bindEvents() {
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
   document.querySelectorAll("[data-action='export-summary']").forEach((button) => button.addEventListener("click", exportSummaryPdf));
+  document.querySelectorAll("[data-action='toggle-finance-chart-zoom']").forEach((button) => button.addEventListener("click", () => {
+    state.financeSavingsChartZoomed = !state.financeSavingsChartZoomed;
+    renderShell();
+  }));
+  document.querySelectorAll("[data-action='export-finance-deposits-chart-pdf']").forEach((button) => button.addEventListener("click", exportFinanceDepositsChartPdf));
   document.querySelectorAll("[data-action='toggle-session-menu']").forEach((button) => button.addEventListener("click", () => {
     state.sessionMenuOpen = !state.sessionMenuOpen;
     state.helpMenuOpen = false;

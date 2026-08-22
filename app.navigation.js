@@ -17,20 +17,22 @@ const platformModules = [
 
 const saccoModules = [
   ["dashboard", "Dashboard", "Role-specific SACCO operating view", "dashboard:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "teller", "auditor"]],
-  ["members", "Members", "Profiles and statements", "members:view", ["admin", "chairperson", "secretary", "loans", "auditor"]],
-  ["transactions", "Transactions", "Deposits and reversals", "transactions:view", ["admin", "treasurer", "accountant", "teller", "auditor"]],
-  ["savings", "Savings", "Products, accounts and statements", "transactions:view", ["admin", "treasurer", "accountant", "auditor"]],
-  ["shares", "Shares", "Share register and certificates", "transactions:view", ["admin", "treasurer", "secretary", "auditor"]],
-  ["welfare", "Welfare", "Contributions, balances and claims", "transactions:view", ["admin", "treasurer", "secretary"]],
-  ["member-dues", "Member Subscriptions", "Mandatory membership payments and expiry", "members:view", ["admin", "chairperson", "secretary", "treasurer"]],
-  ["savings-transfers", "Savings Transfers", "Transfers and group deductions", "savings-transfer:view", ["admin", "chairperson", "treasurer"]],
-  ["funding-sources", "Sources of Funds", "Capital, grants and borrowings register", "finance-source:view", ["admin", "chairperson", "treasurer"]],
-  ["loans", "Loans", "Applications and repayments", "loans:view", ["admin", "chairperson", "loans", "auditor"]],
-  ["guarantors", "Guarantors", "Guarantee requests and obligations", "loans:view", ["admin", "chairperson", "loans"]],
-  ["approvals", "Approvals", "Maker-checker decisions", "approvals:view", ["admin", "chairperson", "treasurer", "secretary", "loans"]],
-  ["accounting", "Accounting", "Trial balance, journals and reports", "transactions:view", ["admin", "treasurer", "accountant"]],
+  ["finance", "Finance", "Treasurer receipts, approvals and reconciliation", "transactions:view", ["treasurer"]],
+  ["loans", "Loans", "Applications and repayments", "transactions:view", ["admin", "chairperson", "treasurer", "loans", "auditor"]],
+  ["expenses", "Expenses", "Operating expense capture and register", "transactions:view", ["treasurer", "admin", "accountant"]],
+  ["member-dues", "Member Subscriptions", "Mandatory membership payments and expiry", "transactions:view", ["admin", "chairperson", "treasurer", "secretary"]],
+  ["savings-transfers", "Transfers", "Savings transfers and deductions", "transactions:view", ["admin", "chairperson", "treasurer"]],
+  ["approvals", "Approvals", "Maker-checker decisions", "transactions:view", ["admin", "chairperson", "treasurer", "secretary", "loans"]],
   ["reconciliation", "Reconciliation", "Bank and mobile money", "transactions:view", ["admin", "treasurer", "accountant"]],
   ["reports", "Reports", "Operational and financial reporting", "reports:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "auditor"]],
+  ["members", "Members", "Profiles and statements", "members:view", ["admin", "chairperson", "secretary", "loans", "auditor"]],
+  ["transactions", "Transactions", "Deposits and reversals", "transactions:view", ["admin", "accountant", "teller", "auditor"]],
+  ["savings", "Savings", "Products, accounts and statements", "transactions:view", ["admin", "accountant", "auditor"]],
+  ["shares", "Shares", "Share register and certificates", "transactions:view", ["admin", "secretary", "auditor"]],
+  ["welfare", "Welfare", "Contributions, balances and claims", "transactions:view", ["admin", "secretary"]],
+  ["funding-sources", "Sources of Funds", "Capital, grants and borrowings register", "finance-source:view", ["admin", "chairperson"]],
+  ["guarantors", "Guarantors", "Guarantee requests and obligations", "loans:view", ["admin", "chairperson", "loans"]],
+  ["accounting", "Accounting", "Trial balance, journals and reports", "transactions:view", ["admin", "accountant"]],
   ["governance", "Governance", "Meetings, minutes and resolutions", "governance:view", ["admin", "chairperson", "secretary"]],
   ["complaints", "Complaints", "Member cases and support", "complaints:view", ["admin", "secretary", "chairperson"]],
   ["users", "Users and Roles", "SACCO staff access", "roles:view", ["admin"]],
@@ -45,8 +47,7 @@ const memberModules = [
   ["payments", "Payments", "Deposit and repay"],
   ["notifications", "Messages", "SACCO notices and alerts"],
   ["complaints", "Support", "Chat and complaint tracking"],
-  ["profile", "Profile", "Your details"],
-  ["security", "Security", "Login and recovery controls"]
+  ["profile", "Profile", "Your details"]
 ];
 
 function saccoAccounts() {

@@ -729,12 +729,23 @@ try {
     narration: "Smoke test savings deposit"
   }, saccoToken);
   assert(transaction.data.id, "Financial transaction should be created");
-  assert(transaction.data.status === "pending_approval", "New financial transaction should require approval");
+  assert(transaction.data.status === "posted", "New cash financial transaction should post immediately");
+  assert(transaction.data.checkerUserId, "Posted cash transaction should record the receiving staff user as checker");
 
-  const makerDecision = await raw("PATCH", `/financial-transactions/${transaction.data.id}/status`, { status: "posted" }, saccoToken);
-  assert(makerDecision.status === 409, "Maker should not approve their own financial transaction");
+  const bankTransaction = await api("POST", "/financial-transactions", {
+    memberId: member.data.id,
+    branchId: branch.data.id,
+    type: "savings_deposit",
+    channel: "bank",
+    amount: 25000,
+    narration: "Smoke test bank deposit"
+  }, saccoToken);
+  assert(bankTransaction.data.status === "pending_approval", "New bank financial transaction should require approval");
 
-  const rejectedTransaction = await api("PATCH", `/financial-transactions/${transaction.data.id}/status`, {
+  const makerDecision = await raw("PATCH", `/financial-transactions/${bankTransaction.data.id}/status`, { status: "posted" }, saccoToken);
+  assert(makerDecision.status === 409, "Maker should not approve their own non-cash financial transaction");
+
+  const rejectedTransaction = await api("PATCH", `/financial-transactions/${bankTransaction.data.id}/status`, {
     status: "rejected",
     reason: "Smoke test rejection"
   }, platformToken);

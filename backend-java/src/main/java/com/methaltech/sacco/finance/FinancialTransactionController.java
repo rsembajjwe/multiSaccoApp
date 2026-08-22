@@ -9,6 +9,10 @@ import com.methaltech.sacco.branch.Branch;
 import com.methaltech.sacco.branch.BranchRepository;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
+import com.methaltech.sacco.loan.Loan;
+import com.methaltech.sacco.loan.LoanRepository;
+import com.methaltech.sacco.loan.LoanRepayment;
+import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.money.Money;
@@ -82,6 +86,8 @@ class FinancialTransactionController {
     private final AuthService authService;
     private final AuditService auditService;
     private final AccountingPeriodService periodService;
+    private final LoanRepository loanRepository;
+    private final LoanRepaymentRepository loanRepaymentRepository;
     private final com.methaltech.sacco.member.MemberFundBalanceService memberFundBalanceService;
     private final FundTypeRepository fundTypeRepository;
     private final NotificationService notificationService;
@@ -95,6 +101,8 @@ class FinancialTransactionController {
             AuthService authService,
             AuditService auditService,
             AccountingPeriodService periodService,
+            LoanRepository loanRepository,
+            LoanRepaymentRepository loanRepaymentRepository,
             com.methaltech.sacco.member.MemberFundBalanceService memberFundBalanceService,
             FundTypeRepository fundTypeRepository,
             NotificationService notificationService) {
@@ -106,6 +114,8 @@ class FinancialTransactionController {
         this.authService = authService;
         this.auditService = auditService;
         this.periodService = periodService;
+        this.loanRepository = loanRepository;
+        this.loanRepaymentRepository = loanRepaymentRepository;
         this.memberFundBalanceService = memberFundBalanceService;
         this.fundTypeRepository = fundTypeRepository;
         this.notificationService = notificationService;
@@ -186,6 +196,7 @@ class FinancialTransactionController {
     }
 
     @PostMapping
+    @Transactional
     ResponseEntity<?> createTransaction(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @Valid @RequestBody CreateTransactionRequest body,
@@ -241,7 +252,7 @@ class FinancialTransactionController {
         }
 
         String reference = referenceForTenant(tenantId);
-        FinancialTransaction transaction = transactionRepository.save(new FinancialTransaction(
+        FinancialTransaction transaction = new FinancialTransaction(
                 "txn_" + UUID.randomUUID(),
                 tenantId,
                 branchId,
@@ -251,12 +262,19 @@ class FinancialTransactionController {
                 amount,
                 reference,
                 body.narration() == null ? "" : body.narration().trim(),
-                currentSession.user().getId()));
+                currentSession.user().getId());
+
+        boolean cashTransaction = "cash".equals(channel);
+        if (cashTransaction) {
+            ResponseEntity<?> postingCheck = postTransaction(transaction, member, currentSession);
+            if (postingCheck != null) return postingCheck;
+        }
+        transaction = transactionRepository.save(transaction);
 
         auditService.record(
                 tenantId,
                 currentSession.user(),
-                "Submitted financial transaction " + reference,
+                (cashTransaction ? "Posted cash financial transaction " : "Submitted financial transaction ") + reference,
                 "financial_transaction",
                 transaction.getId(),
                 request.getRemoteAddr());
@@ -461,30 +479,13 @@ class FinancialTransactionController {
         }
 
         if ("posted".equals(status)) {
-            ResponseEntity<?> channelCheck = ensureCollectionChannelAllowed(transaction.getTenantId(), transaction.getChannel());
-            if (channelCheck != null) return channelCheck;
-            Instant postingDate = Instant.now();
-            if (periodService.isClosed(transaction.getTenantId(), postingDate)) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(ApiErrorResponse.of(
-                                409,
-                                "ACCOUNTING_PERIOD_CLOSED",
-                                "Accounting period " + periodService.periodKey(postingDate) + " is closed."));
-            }
             Member member = memberRepository.findById(transaction.getMemberId()).orElse(null);
             if (member == null) {
                 return ResponseEntity.badRequest()
                         .body(ApiErrorResponse.of(400, "INVALID_MEMBER", "Member does not exist for this tenant."));
             }
-            if ("withdrawal".equals(transaction.getType()) && !member.hasEnoughSavings(transaction.getAmount())) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(ApiErrorResponse.of(409, "INSUFFICIENT_SAVINGS", "Savings balance is too low for this withdrawal."));
-            }
-            member.applyPostedTransaction(transaction.getType(), transaction.getAmount());
-            memberRepository.save(member);
-            memberFundBalanceService.applyPosted(transaction.getTenantId(), member.getId(), transaction.getType(), transaction.getAmount());
-            transaction.post(currentSession.user().getId());
-            notificationService.notifyPaymentPosted(member, transaction.getType(), transaction.getAmount(), "financial_transaction", transaction.getId());
+            ResponseEntity<?> postingCheck = postTransaction(transaction, member, currentSession);
+            if (postingCheck != null) return postingCheck;
         } else {
             transaction.reject(currentSession.user().getId(), reason == null ? "" : reason.trim());
         }
@@ -498,6 +499,117 @@ class FinancialTransactionController {
                 saved.getId(),
                 request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(FinancialTransactionResponse.from(saved)));
+    }
+
+    private ResponseEntity<?> postTransaction(
+            FinancialTransaction transaction,
+            Member member,
+            AuthService.CurrentSession currentSession) {
+        ResponseEntity<?> channelCheck = ensureCollectionChannelAllowed(transaction.getTenantId(), transaction.getChannel());
+        if (channelCheck != null) return channelCheck;
+        Instant postingDate = Instant.now();
+        if (periodService.isClosed(transaction.getTenantId(), postingDate)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(
+                            409,
+                            "ACCOUNTING_PERIOD_CLOSED",
+                            "Accounting period " + periodService.periodKey(postingDate) + " is closed."));
+        }
+        if ("withdrawal".equals(transaction.getType()) && !member.hasEnoughSavings(transaction.getAmount())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "INSUFFICIENT_SAVINGS", "Savings balance is too low for this withdrawal."));
+        }
+        if ("loan_repayment".equals(transaction.getType())) {
+            BigDecimal loanBalance = repayableLoanBalance(transaction.getTenantId(), member.getId());
+            if (loanBalance.compareTo(BigDecimal.ZERO) <= 0) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "NO_REPAYABLE_LOAN", "This member has no active loan balance to repay."));
+            }
+            if (transaction.getAmount().compareTo(loanBalance) > 0) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(
+                                409,
+                                "LOAN_REPAYMENT_EXCEEDS_BALANCE",
+                                "Loan repayment cannot exceed the outstanding loan balance of " + formatMoney(transaction.getTenantId(), loanBalance) + "."));
+            }
+            applyLoanRepayment(transaction, member.getId(), currentSession.user().getId());
+        }
+        member.applyPostedTransaction(transaction.getType(), transaction.getAmount());
+        memberRepository.save(member);
+        memberFundBalanceService.applyPosted(transaction.getTenantId(), member.getId(), transaction.getType(), transaction.getAmount());
+        transaction.post(currentSession.user().getId());
+        notificationService.notifyPaymentPosted(member, transaction.getType(), transaction.getAmount(), "financial_transaction", transaction.getId());
+        return null;
+    }
+
+    private BigDecimal repayableLoanBalance(String tenantId, String memberId) {
+        return repayableLoans(tenantId, memberId).stream()
+                .map(Loan::getBalance)
+                .map(balance -> balance == null ? BigDecimal.ZERO : balance)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private List<Loan> repayableLoans(String tenantId, String memberId) {
+        return loanRepository.findByTenantIdAndMemberIdOrderByCreatedAtAsc(tenantId, memberId).stream()
+                .filter(loan -> !closedLoanStatus(loan))
+                .filter(loan -> loan.getBalance() != null && loan.getBalance().compareTo(BigDecimal.ZERO) > 0)
+                .toList();
+    }
+
+    private boolean closedLoanStatus(Loan loan) {
+        String status = loan.getStatus() == null ? "" : loan.getStatus().toLowerCase(Locale.ROOT);
+        String stage = loan.getStage() == null ? "" : loan.getStage().toLowerCase(Locale.ROOT);
+        return List.of("closed", "rejected", "cancelled", "written_off").stream()
+                .anyMatch(value -> status.contains(value) || stage.contains(value));
+    }
+
+    private void applyLoanRepayment(FinancialTransaction transaction, String memberId, String userId) {
+        BigDecimal remaining = transaction.getAmount();
+        List<Loan> loans = new ArrayList<>(repayableLoans(transaction.getTenantId(), memberId));
+        List<LoanRepayment> repayments = new ArrayList<>();
+        int appliedLoans = 0;
+        for (Loan loan : loans) {
+            if (remaining.compareTo(BigDecimal.ZERO) <= 0) break;
+            BigDecimal applied = remaining.min(loan.getBalance());
+            loan.recordRepayment(applied);
+            appliedLoans++;
+            repayments.add(LoanRepayment.imported(
+                    "repayment_" + UUID.randomUUID(),
+                    transaction.getTenantId(),
+                    loan.getId(),
+                    memberId,
+                    applied,
+                    transaction.getChannel(),
+                    loanRepaymentReference(transaction.getReference(), appliedLoans, remaining.subtract(applied).compareTo(BigDecimal.ZERO) > 0),
+                    loanRepaymentNarration(transaction.getNarration()),
+                    userId,
+                    Instant.now()));
+            remaining = remaining.subtract(applied);
+        }
+        loanRepository.saveAll(loans);
+        loanRepaymentRepository.saveAll(repayments);
+    }
+
+    private String loanRepaymentReference(String transactionReference, int index, boolean splitContinues) {
+        String suffix = index == 1 && !splitContinues ? "-LR" : "-LR-" + index;
+        return referenceWithSuffix(transactionReference, suffix);
+    }
+
+    private String loanRepaymentNarration(String transactionNarration) {
+        String narration = transactionNarration == null || transactionNarration.isBlank()
+                ? "Treasurer cash loan repayment"
+                : transactionNarration.trim();
+        return narration.length() <= 240 ? narration : narration.substring(0, 240);
+    }
+
+    private String referenceWithSuffix(String reference, String suffix) {
+        String base = reference == null || reference.isBlank() ? "TXN" : reference.trim();
+        int maxBaseLength = Math.max(1, 96 - suffix.length());
+        return (base.length() > maxBaseLength ? base.substring(0, maxBaseLength) : base) + suffix;
+    }
+
+    private String formatMoney(String tenantId, BigDecimal amount) {
+        return moneyFormatter.format(tenantService.findById(tenantId).orElse(null), amount);
     }
 
     /**
@@ -560,6 +672,9 @@ class FinancialTransactionController {
         member.applyReversal(original.getType(), original.getAmount());
         memberRepository.save(member);
         memberFundBalanceService.applyReversal(original.getTenantId(), member.getId(), original.getType(), original.getAmount());
+        if ("loan_repayment".equals(original.getType())) {
+            reverseLoanRepayment(original, currentSession.user().getId());
+        }
         FinancialTransaction reversal = transactionRepository.save(FinancialTransaction.reversalOf(
                 original,
                 "txn_" + UUID.randomUUID(),
@@ -574,6 +689,35 @@ class FinancialTransactionController {
                 reversal.getId(),
                 request.getRemoteAddr());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(FinancialTransactionResponse.from(reversal)));
+    }
+
+    private void reverseLoanRepayment(FinancialTransaction original, String userId) {
+        String repaymentReferencePrefix = referenceWithSuffix(original.getReference(), "-LR");
+        List<LoanRepayment> repayments = loanRepaymentRepository
+                .findByTenantIdAndReferenceStartingWithIgnoreCaseOrderByReceivedAtAsc(original.getTenantId(), repaymentReferencePrefix);
+        if (repayments.isEmpty()) return;
+
+        List<Loan> updatedLoans = new ArrayList<>();
+        List<LoanRepayment> reversalRepayments = new ArrayList<>();
+        for (LoanRepayment repayment : repayments) {
+            Loan loan = loanRepository.findById(repayment.getLoanId()).orElse(null);
+            if (loan == null) continue;
+            loan.recordRepayment(repayment.getAmount().negate());
+            updatedLoans.add(loan);
+            reversalRepayments.add(LoanRepayment.imported(
+                    "repayment_" + UUID.randomUUID(),
+                    original.getTenantId(),
+                    loan.getId(),
+                    repayment.getMemberId(),
+                    repayment.getAmount().negate(),
+                    original.getChannel(),
+                    referenceWithSuffix(repayment.getReference(), "-REV"),
+                    loanRepaymentNarration("Reversal of " + original.getReference()),
+                    userId,
+                    Instant.now()));
+        }
+        loanRepository.saveAll(updatedLoans);
+        loanRepaymentRepository.saveAll(reversalRepayments);
     }
 
     private ResponseEntity<?> receiptResponse(FinancialTransaction transaction, AuthService.CurrentSession currentSession) {

@@ -195,6 +195,7 @@ const NAV_ICON_PATHS = {
   members: '<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16.5 15c2 .3 3.5 2 3.5 4.5"/>',
   users: '<circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16.5 15c2 .3 3.5 2 3.5 4.5"/>',
   transactions: '<path d="M4 8h13l-3-3"/><path d="M20 16H7l3 3"/>',
+  finance: '<path d="M4 8h13l-3-3"/><path d="M20 16H7l3 3"/><circle cx="12" cy="12" r="3"/>',
   savings: '<ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v6c0 1.7 3.1 3 7 3s7-1.3 7-3V7"/>',
   shares: '<circle cx="12" cy="12" r="9"/><path d="M12 3v9l7 4"/>',
   welfare: '<path d="M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9z"/>',
@@ -533,7 +534,7 @@ function sessionSecurityMenu() {
       ${isPlatform() ? `<p class="session-policy">Lockout after ${escapeHtml(policy.lockoutFailedAttempts ?? 5)} failed login attempts for ${escapeHtml(policy.lockoutMinutes ?? 15)} minute(s).</p>` : ""}
       <div class="session-menu-actions">
         <button class="button secondary" type="button" data-action="extend-session">Extend session</button>
-        ${state.auth === "staff" ? `<button class="button ghost" type="button" data-action="open-security-settings">Security settings</button>` : `<button class="button ghost" type="button" data-action="open-member-security">Member security</button>`}
+        ${state.auth === "staff" ? `<button class="button ghost" type="button" data-action="open-security-settings">Security settings</button>` : ""}
       </div>
     </div>
   `;
@@ -548,9 +549,7 @@ function helpSupportMenu() {
     : isPlatform()
       ? ["open-help-complaints", "Open SACCO admin complaints"]
       : ["open-help-complaints", "Open member complaints"];
-  const secondaryAction = state.auth === "member"
-    ? ["open-help-security", "Security help"]
-    : ["open-help-notifications", "Notification help"];
+  const secondaryAction = ["open-help-notifications", "Notification help"];
   return `
     <div class="help-menu">
       <div class="session-menu-heading">
@@ -603,7 +602,7 @@ function accountProfileMenu() {
       </div>
       <div class="session-menu-actions">
         <button class="button secondary" type="button" data-action="${primaryAction[0]}">${primaryAction[1]}</button>
-        <button class="button ghost" type="button" data-action="${state.auth === "member" ? "open-member-security" : "open-security-settings"}">Security</button>
+        ${state.auth === "staff" ? `<button class="button ghost" type="button" data-action="open-security-settings">Security</button>` : ""}
         <button class="button ghost danger-text" type="button" data-action="logout">Logout</button>
       </div>
     </div>
@@ -624,6 +623,8 @@ function closeTopbarMenus({ clearSearch = false } = {}) {
 function renderView(view) {
   if (state.auth === "member") return renderMemberView(view);
   if (view === "dashboard") return isPlatform() ? platformDashboard() : saccoDashboard();
+  if (view === "finance") return treasurerFinanceView();
+  if (view === "expenses") return treasurerExpensesView();
   if (view === "sacco-applications") return saccoApplications();
   if (view === "subscriptions") return subscriptionsView();
   if (view === "member-dues") return memberDuesView();
@@ -633,13 +634,14 @@ function renderView(view) {
   if (view === "transactions") return transactionsView();
   if (view === "loans") return loansView();
   if (view === "approvals") return approvalsView();
+  if (view === "reconciliation") return reconciliationView();
   if (view === "operations") return operationsView();
   if (view === "reports") return reportsView();
   if (view === "complaints") return complaintsView();
   if (view === "notifications") return notificationsView();
   if (view === "users") return usersView();
   if (view === "audit") return auditView();
-  if (["savings", "shares", "welfare", "guarantors", "accounting", "reconciliation", "governance", "settings"].includes(view)) return moduleBlueprint(view);
+  if (["savings", "shares", "welfare", "guarantors", "accounting", "governance", "settings"].includes(view)) return moduleBlueprint(view);
   return emptyState("Module coming next", "This module has a document-driven shell and will be connected to deeper backend workflows next.");
 }
 

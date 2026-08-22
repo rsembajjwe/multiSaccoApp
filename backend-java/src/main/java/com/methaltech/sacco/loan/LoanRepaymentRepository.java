@@ -16,6 +16,8 @@ public interface LoanRepaymentRepository extends JpaRepository<LoanRepayment, St
 
     List<LoanRepayment> findByLoanIdIn(List<String> loanIds);
 
+    List<LoanRepayment> findByTenantIdAndReferenceStartingWithIgnoreCaseOrderByReceivedAtAsc(String tenantId, String referencePrefix);
+
     boolean existsByTenantIdAndReferenceIgnoreCase(String tenantId, String reference);
 
     int countByLoanId(String loanId);

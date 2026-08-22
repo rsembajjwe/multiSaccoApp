@@ -37,7 +37,6 @@ function renderMemberView(view) {
     const cycleModel = memberPortalCycleModel(dash, balances, cycle);
     return memberProfileView(cycleModel.balances, cycle);
   }
-  if (view === "security") return memberSecurityTabbedView(cycle);
   return moduleBlueprint(view);
 }
 
@@ -118,7 +117,7 @@ function memberQuickActionsPanel() {
   const actions = [
     [t("payByMobileMoney"), t("payByMobileMoneyCopy"), "payments", "mobile-money"],
     [t("viewStatement"), t("viewStatementCopy"), "money", "statement"],
-    ["Loans", "Apply for or repay a loan", "loans", "loans"],
+    ["Loans", "Apply for a loan or review your loan account", "loans", "request"],
     ["Read SACCO messages", "Open notices from your SACCO admin", "notifications", "inbox"],
     ["Submit complaint", "Start or continue a support chat", "complaints", "submit"]
   ];
@@ -416,11 +415,12 @@ function memberLoansView(cycle = null) {
   }));
   const requests = buildMemberGuarantorRows(memberRowsInSelectedCycle(state.memberData.pendingGuarantors || [], cycle, ["requestedAt", "createdAt", "updatedAt"]));
   const pending = requests.filter((row) => normal(row.status) === "pending");
-  const tabs = [["loans", "My loans"], ["guarantor", `Guarantor requests${pending.length ? ` (${pending.length})` : ""}`]];
+  const tabs = [["request", "Request for a loan"], ["member-loans", "Member loans"], ["guarantor", `Guarantor requests${pending.length ? ` (${pending.length})` : ""}`]];
   const tab = activeModuleTab("loans", tabs);
   return `
     ${moduleTabs("loans", tabs, tab)}
-    ${tab === "loans" ? `${memberLoanApplicationPanel()}${memberReplaceGuarantorPanel()}${memberLoanHistoryPanel()}${loanRows.length ? recordTable(`Member loans - ${cycle?.label || "current"}`, loanRows, ["product", "principalAmount", "totalPayableAmount", "postedRepaymentAmount", "outstandingBalance", "nextDueDate", "status"]) : emptyState("Member loans", "Apply for a loan using the form above.")}` : ""}
+    ${tab === "request" ? `${memberLoanApplicationPanel()}${memberReplaceGuarantorPanel()}` : ""}
+    ${tab === "member-loans" ? `${memberLoanHistoryPanel()}${loanRows.length ? recordTable(`Member loans - ${cycle?.label || "current"}`, loanRows, ["product", "principalAmount", "totalPayableAmount", "postedRepaymentAmount", "outstandingBalance", "nextDueDate", "status"]) : emptyState("Member loans", "Submitted and active loans will appear here after SACCO review.")}` : ""}
     ${tab === "guarantor" ? `${state.memberGuarantorMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorMessage)}</strong></div>` : ""}${state.memberGuarantorError ? `<div class="notice warning"><strong>Guarantor decision failed.</strong><span>${escapeHtml(state.memberGuarantorError)}</span></div>` : ""}${requests.length ? recordTable(`Guarantor requests - ${cycle?.label || "current"}`, requests, ["borrower", "product", "requestedAmount", "guaranteedAmount", "guaranteeCeiling", "committedGuarantees", "capacity", "status"]) : emptyState("No guarantor requests", "Requests to guarantee other members' loans appear here.")}` : ""}
   `;
 }
@@ -966,15 +966,13 @@ function memberDraftPanel(title, drafts) {
 
 function memberProfileView(_balances = {}, cycle = null) {
   const member = state.member || {};
-  const tabs = [["overview", "Overview"], ["contacts", "Contacts"], ["balances", "Balances"], ["privacy", "Privacy"], ["security", "Security"]];
+  const tabs = [["overview", "Overview"], ["contacts", "Contacts"], ["privacy", "Privacy"]];
   const tab = activeModuleTab("profile", tabs);
   return `
     ${moduleTabs("profile", tabs, tab)}
     ${tab === "overview" ? memberProfileOverviewPanel(member) : ""}
     ${tab === "contacts" ? memberProfileContactsPanel(member) : ""}
-    ${tab === "balances" ? memberProfileBalancesPanel(_balances, cycle) : ""}
     ${tab === "privacy" ? memberPrivacyPreferencesPanel(member, cycle) : ""}
-    ${tab === "security" ? memberSecurityView(cycle) : ""}
   `;
 }
 

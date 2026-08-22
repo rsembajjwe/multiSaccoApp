@@ -578,8 +578,7 @@ async function recordSubscriptionPayment(amountOverride = null) {
       method: "POST",
       body: JSON.stringify({
         amount,
-        channel: value("subscriptionPaymentChannel") || "manual",
-        externalReference: value("subscriptionPaymentReference") || `PAY-${Date.now()}`
+        channel: value("subscriptionPaymentChannel") || "manual"
       })
     });
     state.selectedSubscriptionMessage = `${result.idempotent ? "Existing payment found" : "Payment recorded"}: ${money.format(result.payment?.amount || amount)}.`;
@@ -620,4 +619,3 @@ async function runSubscriptionAction(action) {
     renderShell();
   }
 }
-

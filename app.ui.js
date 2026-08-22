@@ -39,9 +39,10 @@ function summary(label, value, detail, action) {
   return `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small>${detail}</small><button type="button">${action}</button></article>`;
 }
 
-function summaryLink(label, value, detail, action, view) {
+function summaryLink(label, value, detail, action, view, tab = "") {
   const allowed = canAccessView(view);
-  return `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small>${detail}</small><button type="button" ${allowed ? `data-summary-view="${escapeHtml(view)}"` : "disabled"}>${allowed ? action : t("dashboardOnly")}</button></article>`;
+  const tabAttribute = allowed && tab ? ` data-summary-tab="${escapeHtml(tab)}"` : "";
+  return `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small>${detail}</small><button type="button" ${allowed ? `data-summary-view="${escapeHtml(view)}"${tabAttribute}` : "disabled"}>${allowed ? action : t("dashboardOnly")}</button></article>`;
 }
 
 function mini(label, value) {
