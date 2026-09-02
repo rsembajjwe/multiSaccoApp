@@ -572,8 +572,8 @@ function memberChatWorkspace() {
       <div class="chat-main">
         <div class="chat-main-header">
           <div>
-            <h2>${escapeHtml(selected.subject || "Support chat")}</h2>
-            <p>Messages with your SACCO admin office.</p>
+            <h2>Support chat with SACCO admin</h2>
+            <p>${escapeHtml(selected.subject || "Messages with your SACCO admin office.")}</p>
           </div>
           <span class="status ${selected.unreadCount ? "pending" : "active"}">${selected.unreadCount ? `${selected.unreadCount} new` : labelize(selected.status || "open")}</span>
         </div>

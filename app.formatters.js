@@ -63,7 +63,7 @@ var TerekaFormatters = Object.freeze({
     if (typeof value === "string" && value.startsWith("<span class=\"complaint-chip")) return value;
     const moneyColumns = ["debit", "credit", "payment", "loanReceived", "savings", "shares", "welfare", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "loanPortfolio", "loansAtRisk", "expenseTotal", "assetCost", "assetNetBookValue", "monthlyInstallment", "principalDue", "interestDue", "totalDue", "totalPayable", "paidAmount", "paidToDate", "balanceDue", "capacity", "guaranteeCeiling", "committedGuarantees"];
     if (normalizedColumn.includes("amount") || normalizedColumn.includes("balance") || moneyColumns.includes(column)) return this.formatMoneyValue(Number(value || 0), region);
-    if (normalizedColumn.includes("status") || normalizedColumn.includes("severity")) return `<span class="status ${this.statusClassValue(value)}">${this.escapeHtmlValue(String(value || "Pending"))}</span>`;
+    if (normalizedColumn.includes("status") || normalizedColumn.includes("severity")) return `<span class="status ${this.statusClassValue(value)}">${this.escapeHtmlValue(this.labelizeValue(value || "Pending"))}</span>`;
     if (this.isDateColumnValue(column)) return this.escapeHtmlValue(this.formatTableDateValue(value, column, region));
     return this.escapeHtmlValue(String(value || "-"));
   },

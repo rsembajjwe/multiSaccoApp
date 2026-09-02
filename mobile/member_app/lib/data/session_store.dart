@@ -8,11 +8,20 @@ class SessionStore {
 
   final FlutterSecureStorage _storage;
   static const _tokenKey = 'member_token';
+  static const _memberIdKey = 'member_id';
 
   Future<String?> readToken() => _storage.read(key: _tokenKey);
   Future<void> writeToken(String token) =>
       _storage.write(key: _tokenKey, value: token);
-  Future<void> clear() => _storage.delete(key: _tokenKey);
+
+  Future<String?> readMemberId() => _storage.read(key: _memberIdKey);
+  Future<void> writeMemberId(String id) =>
+      _storage.write(key: _memberIdKey, value: id);
+
+  Future<void> clear() async {
+    await _storage.delete(key: _tokenKey);
+    await _storage.delete(key: _memberIdKey);
+  }
 
   static const _lockKey = 'biometric_lock';
 

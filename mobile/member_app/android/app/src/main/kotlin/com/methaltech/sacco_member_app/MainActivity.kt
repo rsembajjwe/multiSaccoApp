@@ -1,4 +1,4 @@
-package com.example.sacco_member_app
+package com.methaltech.sacco_member_app
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

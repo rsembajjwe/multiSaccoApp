@@ -135,7 +135,8 @@ async function getFreePort() {
 }
 
 async function waitForServer(port, getOutput) {
-  const deadline = Date.now() + 5000;
+  const timeoutMs = Number(process.env.SACCO_PROXY_CHECK_TIMEOUT_MS || 15000);
+  const deadline = Date.now() + timeoutMs;
   let lastError;
 
   while (Date.now() < deadline) {

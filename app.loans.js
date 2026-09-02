@@ -9,7 +9,7 @@ function loansView() {
     formatMoney: (value) => money.format(value)
   });
   const portfolio = buildLoanPortfolioSummary(loans);
-  const tabs = [["overview", "Overview"], ["application", t("loanApplicationForm")]];
+  const tabs = [["overview", "Overview"], ["application", t("loanApplicationForm")], ["detail", "Loan detail"]];
   const tab = activeModuleTab("loans", tabs);
   if (tab === "application") {
     return `
@@ -18,6 +18,15 @@ function loansView() {
         <button class="button ghost" type="button" data-summary-view="loans" data-summary-tab="overview">Back to loan overview</button>
       </div>
       ${loanApplicationPanel()}
+    `;
+  }
+  if (tab === "detail") {
+    return `
+      ${saccoCyclePanel(cycle, { title: "Loan cycle" })}
+      <div class="page-actions">
+        <button class="button ghost" type="button" data-summary-view="loans" data-summary-tab="overview">Back to loan overview</button>
+      </div>
+      ${loanDetailPanel(loans)}
     `;
   }
   const visibleLoans = filteredLoanOverviewRows(financeLoanDisplayRows(loans));
@@ -47,13 +56,22 @@ function loansView() {
       loanType: loan.product,
       amount: Number(loan.amount || loan.requestedAmount || 0),
       appliedOn: loan.createdAt || loan.submittedAt || loan.updatedAt,
+      loanStatus: loanListStatusLabel(loan),
       action: "loan-detail",
-      actionLabel: "Open",
+      actionLabel: loan.actionLabel || "Open",
       actionId: loan.id,
       rowClass: selectedLoan?.id === loan.id ? "selected-table-row" : ""
-    })), ["loanNo", "member", "loanType", "amount", "appliedOn", "status"])}
+    })), ["loanNo", "member", "loanType", "amount", "appliedOn", "loanStatus"])}
     ${selectedLoan ? loanOverviewDetailWorkspace(selectedLoan) : emptyState("Loan details", "Select a loan application to review details and actions.")}
   `;
+}
+
+function loanListStatusLabel(loan) {
+  const statusText = normal(`${loan.status || ""} ${loan.stage || ""} ${loan.scheduleStatus || ""}`);
+  if (["arrears", "overdue", "default"].some((word) => statusText.includes(word))) return "Arrears";
+  if (["submitted", "pending_approval", "under_review"].some((word) => statusText.includes(word))) return loan.approvalReadiness || "Awaiting approval";
+  if (normal(loan.status) === "approved") return loan.approvalReadiness || "Ready for disbursement";
+  return labelize(loan.status || "Review");
 }
 
 function filteredLoanOverviewRows(loans) {
@@ -132,6 +150,10 @@ function loanOverviewDetailWorkspace(loan) {
           ${loanDetailRow("Guarantors", loan.guarantors || 0)}
           ${loanDetailRow("Amount Payable", money.format(loan.totalPayable || loan.amount || 0))}
           ${loanDetailRow("Outstanding", money.format(loan.outstandingBalance || loan.balance || 0))}
+          ${loanDetailRow("Arrears aging", loanArrearsAgingLabel(loan))}
+          ${loanDetailRow("1-30 days", money.format(loan.arrears1To30Amount || 0))}
+          ${loanDetailRow("90+ days", money.format(loan.arrearsOver90Amount || 0))}
+          ${loanDetailRow("Oldest arrears days", `${loan.oldestArrearsDays || 0}`)}
           ${loanDetailRow("Application Date", formatDate(loan.createdAt || loan.submittedAt || loan.updatedAt))}
         </div>
       </section>
@@ -146,7 +168,7 @@ function loanOverviewDetailWorkspace(loan) {
         ${paperApprovalFields(canApprove, loan)}
         <label><span>Decision note</span><input id="loanDecisionReason" placeholder="Short note from the signed paper approval" ${canApprove ? "" : "disabled"}></label>
         <div class="loan-action-stack">
-          <button class="button primary" type="button" data-loan-action="approve" ${canApproveLoan ? "" : "disabled"}>Record paper approval</button>
+          <button class="button primary" type="button" data-loan-action="approve" ${canApproveLoan ? "" : "disabled"}>Approve loan</button>
           <button class="button ghost danger" type="button" data-loan-action="reject" ${canRejectLoan ? "" : "disabled"}>Decline Loan</button>
           <button class="button secondary" type="button" data-row-action="member-detail" data-row-id="${escapeHtml(loan.memberId || "")}">View Member Profile</button>
           <button class="button secondary" type="button" data-loan-action="disburse" ${canDisburseLoan ? "" : "disabled"}>Disburse Loan</button>
@@ -162,6 +184,15 @@ function loanOverviewDetailWorkspace(loan) {
 
 function loanDetailRow(label, value) {
   return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value || "-"))}</strong></div>`;
+}
+
+function loanArrearsAgingLabel(loan) {
+  const oldestDays = Number(loan.oldestArrearsDays || 0);
+  if (oldestDays > 90 || Number(loan.arrearsOver90Amount || 0) > 0) return "90+ days";
+  if (oldestDays > 60 || Number(loan.arrears61To90Amount || 0) > 0) return "61-90 days";
+  if (oldestDays > 30 || Number(loan.arrears31To60Amount || 0) > 0) return "31-60 days";
+  if (oldestDays > 0 || Number(loan.arrears1To30Amount || 0) > 0) return "1-30 days";
+  return "Current";
 }
 
 function loanApplicationSourceLabel(loan) {
@@ -237,6 +268,7 @@ function guarantorsView() {
       ${summary("Guarantor requests", rows.length, "From loan workflow", "Open")}
       ${summary("Pending decisions", pending.length, "Awaiting member response", "Review")}
       ${summary("Accepted guarantees", accepted.length, "Can support approval", "Approve")}
+      ${summary("Member exposure", uniqueCount(rows, "memberId"), "Members guaranteeing loans", "Capacity")}
       ${summary("Loan files with guarantors", loans.length, "Credit workflow", "View")}
       ${summary("Released guarantees", "Auto", "Cleared when loan closes", "Tracked")}
     </div>
@@ -247,8 +279,8 @@ function guarantorsView() {
       ["Approval readiness", `${accepted.length} guarantee record(s) can support loan approval decisions.`, accepted.length ? "Ready" : "Waiting"],
       ["Loan clearance", "When a guaranteed loan is fully repaid, the guarantor record is released automatically.", "Tracked"]
     ]) : ""}
-    ${tab === "overview" ? recordTable(`Guarantor requests - ${cycle.label}`, rows, ["memberName", "product", "requestedAmount", "guarantorReadiness", "status"]) : ""}
-    ${tab === "requests" ? recordTable(`Guarantor requests - ${cycle.label}`, rows, ["memberName", "product", "requestedAmount", "guarantorReadiness", "status"]) : ""}
+    ${tab === "overview" ? recordTable(`Guarantor requests - ${cycle.label}`, rows, ["memberName", "product", "requestedAmount", "capacity", "guarantorReadiness", "status"]) : ""}
+    ${tab === "requests" ? recordTable(`Guarantor requests - ${cycle.label}`, rows, ["memberName", "product", "requestedAmount", "capacity", "guarantorReadiness", "status"]) : ""}
   `;
 }
 
@@ -447,7 +479,7 @@ function loanDetailPanel(rows) {
           <label><span>Decision note</span><input id="loanDecisionReason" placeholder="Short note from the signed paper approval" ${canApprove ? "" : "disabled"}></label>
           <div class="form-actions">
             ${canApprove ? `
-              <button class="button secondary" type="button" data-loan-action="approve" ${canApproveLoan ? "" : "disabled"}>Record paper approval</button>
+              <button class="button secondary" type="button" data-loan-action="approve" ${canApproveLoan ? "" : "disabled"}>Approve loan</button>
               <button class="button ghost" type="button" data-loan-action="reject" ${canRejectLoan ? "" : "disabled"}>Reject loan</button>
               <button class="button primary" type="button" data-loan-action="disburse" ${canDisburseLoan ? "" : "disabled"}>Disburse loan</button>
             ` : `<span class="status pending">View only</span>`}

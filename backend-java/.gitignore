@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Firebase service-account key (secret — never commit)
+src/main/resources/firebase-service-account.json
+*firebase-adminsdk*.json

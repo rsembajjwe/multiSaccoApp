@@ -29,6 +29,8 @@ reports/type-evidence/*
 !reports/type-evidence/.gitkeep
 reports/release-evidence/*
 !reports/release-evidence/.gitkeep
+reports/tools/*
+!reports/tools/.gitkeep
 .env
 .env.*
 *.log

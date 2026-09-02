@@ -5,11 +5,13 @@ num _num(dynamic v) => v is num ? v : num.tryParse('${v ?? 0}') ?? 0;
 class MemberSession {
   const MemberSession({
     required this.token,
+    required this.memberId,
     required this.memberName,
     this.expiresAt,
   });
 
   final String token;
+  final String memberId;
   final String memberName;
   final DateTime? expiresAt;
 }

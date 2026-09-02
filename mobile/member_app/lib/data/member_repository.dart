@@ -1,14 +1,16 @@
 import '../api_contract.dart';
 import '../domain/models.dart';
 import 'api_client.dart';
+import 'push_service.dart';
 import 'session_store.dart';
 
 /// The one place that knows how member API payloads map to domain entities.
 class MemberRepository {
-  MemberRepository(this._api, this._session);
+  MemberRepository(this._api, this._session, this._push);
 
   final ApiClient _api;
   final SessionStore _session;
+  final PushService _push;
 
   Future<MemberSession> login({
     required String saccoCode,
@@ -26,8 +28,14 @@ class MemberRepository {
     }
     await _session.writeToken(token);
     final member = data['member'] as Map<String, dynamic>?;
+    final memberId = '${member?['id'] ?? ''}';
+    if (memberId.isNotEmpty) {
+      await _session.writeMemberId(memberId);
+      await _push.subscribeMember(memberId);
+    }
     return MemberSession(
       token: token,
+      memberId: memberId,
       memberName: (member?['fullName'] ?? '') as String,
       expiresAt: data['expiresAt'] != null
           ? DateTime.tryParse('${data['expiresAt']}')
@@ -43,6 +51,8 @@ class MemberRepository {
   Future<bool> hasSession() async => (await _session.readToken()) != null;
 
   Future<void> logout() async {
+    final memberId = await _session.readMemberId();
+    if (memberId != null) await _push.unsubscribeMember(memberId);
     try {
       await _api.post(ApiPaths.logout, const {});
     } catch (_) {

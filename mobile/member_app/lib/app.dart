@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'core/auth_events.dart';
 import 'core/theme.dart';
@@ -51,6 +52,22 @@ class _SaccoMemberAppState extends ConsumerState<SaccoMemberApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initPush();
+  }
+
+  Future<void> _initPush() async {
+    try {
+      final push = ref.read(pushServiceProvider);
+      await push.requestPermission();
+      final id = await ref.read(sessionStoreProvider).readMemberId();
+      if (id != null && id.isNotEmpty) await push.subscribeMember(id);
+      FirebaseMessaging.onMessage.listen((_) {
+        ref.invalidate(notificationsProvider);
+        ref.invalidate(dashboardProvider);
+      });
+    } catch (_) {
+      // Push not configured — app works without it.
+    }
   }
 
   @override

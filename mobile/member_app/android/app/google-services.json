@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "398126744432",
+    "project_id": "sacco-platform-f988c",
+    "storage_bucket": "sacco-platform-f988c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:398126744432:android:7b3fc66456e50d039dc5b5",
+        "android_client_info": {
+          "package_name": "com.methaltech.sacco_member_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUuwHHmQsauLzkvTQyaXXEyMhs_wbfBlc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

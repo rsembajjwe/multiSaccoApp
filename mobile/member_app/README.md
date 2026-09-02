@@ -1,54 +1,122 @@
 # SACCO Member App (Android + iOS)
 
-Flutter member app for the SACCO platform. **Phase 0 foundation** — a working
-vertical slice (login → secure token storage → dashboard) that establishes the
-architecture. See `docs/mobile-development-plan.md` for the full roadmap.
+Flutter member-facing app for the SACCO platform. Members sign in, view their
+savings/shares/welfare/loan balances, see transaction history, repay loans and
+pay subscription dues by mobile money, deposit to funds, raise complaints,
+manage their profile, and receive in-app notices.
 
 ## Stack
-Flutter · Riverpod (state) · Dio (HTTP) · go_router (navigation) ·
-flutter_secure_storage (Keychain/Keystore) · intl (formatting).
+Flutter · Riverpod (state) · Dio (HTTP + auth interceptor) · go_router
+(navigation + auth redirect) · flutter_secure_storage (Keychain/Keystore) ·
+local_auth (biometric unlock) · image_picker (profile photo) · intl.
 
-## Layout
+## Architecture
 ```
 lib/
-  core/            config (env base URLs)
-  api_contract.dart endpoint paths (to be replaced by a generated OpenAPI client)
-  data/            api_client (Dio + auth interceptor), session_store, member_repository
-  domain/          entities (MemberSession, DashboardSummary)
-  features/        auth/ (login), dashboard/
-  providers.dart   Riverpod wiring
-  app.dart         router + theme
-  main.dart        bootstrap
+  main.dart          bootstrap (ProviderScope)
+  app.dart           MaterialApp.router + theme + session-expiry redirect + auto-lock
+  providers.dart     Riverpod wiring (repositories + async data providers)
+  api_contract.dart  member-auth endpoint paths
+  core/
+    config.dart      environment base URLs (local/staging/prod)
+    theme.dart       enterprise Material 3 theme (light + dark)
+    auth_events.dart session-expired + app-locked notifiers
+    widgets/         Shimmer/ListSkeleton/DashboardSkeleton, ErrorRetry
+  data/              api_client (Dio), session_store, and repositories:
+                     member, loan, payment, notification, profile
+  domain/models.dart defensive fromJson entities
+  features/
+    auth/            login, forgot-password, biometric lock
+    dashboard/       balances, quick actions, recent activity
+    transactions/    full + category-filtered statement
+    loans/           list + loan detail (repayment history, pay)
+    payments/        mobile-money pay sheet + status polling
+    subscription/    membership status + pay dues
+    complaints/      submit + history
+    messages/        in-app notices (unread badge, mark read)
+    profile/         photo upload, contact editing, notification channels
+    shell/           bottom-nav shell (Home · Loans · Pay · Inbox · Complaints · Profile)
 ```
+
+Data flows: screen → Riverpod provider → repository → `ApiClient` (Dio). The
+client injects the bearer token, unwraps the `{data:…}` envelope, maps errors to
+readable messages, and on 401 clears the session and signals a redirect to login.
+
+## Features
+- **Auth**: SACCO-code + identifier + password login; opaque bearer token in the
+  OS keystore; optional **biometric unlock** with auto-lock on resume; forgot
+  password (SMS/email code → reset).
+- **Dashboard**: total balance header, tappable Savings/Shares/Welfare/Loans
+  cards (→ category-filtered history), other-funds list, recent activity, and
+  quick actions (Deposit · Pay loan · Statement).
+- **Transactions**: full statement (`/statement`) with per-category filtering.
+- **Loans**: list → detail with repayment history and a mobile-money repayment.
+- **Payments**: deposits (savings/shares/welfare), loan repayment, subscription
+  dues — each with a **status sheet that polls until confirmed/failed**.
+- **Subscription**: status + pay dues. **Complaints**: submit + track.
+- **Profile**: profile photo upload, edit phone/WhatsApp/email, notification
+  channels, subscription link, sign out.
+- **Inbox**: notices with unread badge on the tab and mark-all-read.
 
 ## Run
-Backend must be reachable. The default `local` env points the Android emulator
-at the host dev server (`http://10.0.2.2:5173/api/v1`).
+The backend must be running and reachable. Local dev uses H2 in-memory + Flyway
+(no Postgres needed) on port **18084**.
 
-```bash
+```powershell
+# 1) backend (separate window; sets SERVER_PORT=18084)
+cd ..\..            # repo root
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local-java-stack.ps1
+#   verify: http://localhost:18084/api/v1/health  -> JSON
+
+# 2) app on an Android emulator (reaches host via 10.0.2.2)
+cd mobile\member_app
 flutter pub get
-flutter run                                   # Android emulator (local)
-flutter run --dart-define=SACCO_LOCAL_URL=http://localhost:5173/api/v1   # iOS simulator
-flutter run --dart-define=SACCO_ENV=staging   # staging.tereka.online
+flutter run
 ```
 
-Seed demo login (dev/demo profile): SACCO `GVS`, identifier `GVS-0001`,
-password `Member@12345`.
+Environments (via `--dart-define`): `SACCO_ENV=local` (default → `10.0.2.2:18084`),
+`staging`, `prod` (`https://tereka.online`). iOS simulator uses localhost:
+`--dart-define=SACCO_LOCAL_URL=http://localhost:18084/api/v1`.
+
+Demo login (dev/demo profile only): SACCO **GREE**, identifier **GREE-0001**,
+password **Member@12345**.
+
+### Android notes
+- Cleartext to the dev backend is allowed via
+  `android/app/src/main/res/xml/network_security_config.xml` (dev hosts only).
+- `MainActivity` extends `FlutterFragmentActivity` (required by local_auth).
+- `build.gradle.kts` excludes a duplicate `androidx.annotation` LICENSE file.
+
+## App icon & splash
+Assets live in `assets/icon/`. Regenerate native icons/splash after changing them:
+```bash
+dart run flutter_launcher_icons
+dart run flutter_native_splash:create
+```
 
 ## Test
 ```bash
 flutter analyze
-flutter test
+flutter test        # model parsing, login widget, theme
 ```
 
-## Next (Phase 1+)
-- Replace `api_contract.dart` with a client generated from `openapi.yaml` in CI.
-- Add: statements, loan apply/repay, mobile-money payments, notifications/push,
-  support chat, profile & settings, biometric unlock, TLS certificate pinning.
-- iOS signing (Fastlane match) + a macOS CI build job.
+## Backend endpoints used (member-auth)
+`/login` · `/logout` · `/me` · `/mobile-dashboard` · `/statement` ·
+`/fund-balances` · `/loans/{id}/repayments` · `/mobile-loans` ·
+`/loan-products` · `/notifications` (+ `/{id}/acknowledge`) · `/complaints`
+(+ `/mobile-complaints`) · `/membership` · `/profile-photo` (GET/POST) ·
+`PATCH /profile` (phone/WhatsApp/email) · `/password-reset/request|confirm`,
+plus `/integrations/mobile-money/payment-requests`.
 
-> Phase 0 code was scaffolded but **not compiled here** (no Flutter SDK in the
-> authoring environment). Run `flutter pub get && flutter analyze && flutter test`
-> first; expect minor fixes (e.g. the exact `mobile-dashboard` JSON shape in
-> `DashboardSummary.fromJson`, which is defensively parsed but should be pinned
-> to the real payload).
+## Push notifications (planned — needs Firebase)
+Design is topic-based: each member subscribes to FCM topic `member_<id>`; the
+backend `PushNotificationProvider` sends to that topic. To enable:
+1. Create a Firebase project; add an Android app (`com.example.sacco_member_app`);
+   place `google-services.json` in `android/app/`.
+2. Generate a service-account key (Project settings → Service accounts) for the
+   backend to send via the Firebase Admin SDK.
+3. (iOS) add `GoogleService-Info.plist` + enable APNs.
+
+Then: add `firebase_core`/`firebase_messaging`, request notification permission,
+subscribe to `member_<id>` at login, handle foreground/background messages
+(refresh the inbox + badge), and swap the backend push stub for a real FCM send.

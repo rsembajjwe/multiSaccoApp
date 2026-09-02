@@ -9,6 +9,7 @@ import 'data/member_repository.dart';
 import 'data/notification_repository.dart';
 import 'data/profile_repository.dart';
 import 'data/payment_repository.dart';
+import 'data/push_service.dart';
 import 'data/session_store.dart';
 import 'domain/models.dart';
 
@@ -17,10 +18,13 @@ final sessionStoreProvider = Provider<SessionStore>((ref) => SessionStore());
 final apiClientProvider =
     Provider<ApiClient>((ref) => ApiClient(ref.watch(sessionStoreProvider)));
 
+final pushServiceProvider = Provider<PushService>((ref) => PushService());
+
 final memberRepositoryProvider = Provider<MemberRepository>(
   (ref) => MemberRepository(
     ref.watch(apiClientProvider),
     ref.watch(sessionStoreProvider),
+    ref.watch(pushServiceProvider),
   ),
 );
 

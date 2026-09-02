@@ -676,6 +676,9 @@ function memberDocumentRetentionPanel(member) {
         ${mini("Disposal pending", retention.disposalPending)}
         ${mini("Disposed markers", retention.disposed)}
       </div>
+      ${documents.length
+        ? recordTable("Document retention actions", buildMemberDocumentRows(documents, labelize, formatDateTime), ["documentType", "retentionStatus", "retentionStorageAction", "retentionReviewDueAt", "retentionReviewedAt"], { hideSearch: true })
+        : ""}
       <p>Use Dispose only after the external file has been removed or legally placed beyond access in the document store.</p>
     </section>
   `;

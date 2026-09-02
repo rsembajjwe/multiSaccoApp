@@ -138,6 +138,7 @@ for (const file of [
   "app.tables.js",
   "app.auth.js",
   "app.member-admin.js",
+  "app.member-admin-actions.js",
   "app.member.js",
   "app.shell.js",
   "app.navigation.js",

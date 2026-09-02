@@ -91,6 +91,7 @@ if (Test-PortOpen $BackendPort) {
 `$env:SERVER_PORT='$BackendPort'
 `$env:SACCO_DEMO_LOGINS_ENABLED='$demoValue'
 `$env:SACCO_DEV_CLEAR_FINANCE_DATA='$clearFinanceValue'
+`$env:SACCO_PUSH_PROVIDER='fcm'
 Set-Location '$backendDir'
 .\mvnw.cmd spring-boot:run
 "@

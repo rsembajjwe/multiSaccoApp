@@ -719,7 +719,9 @@ function memberAvailablePaymentProviders() {
     ["mtn", { network: "mtn", providerId: "mtn", label: "MTN MoMo", available: true }],
     ["airtel", { network: "airtel", providerId: "airtel", label: "Airtel Money", available: true }]
   ]);
-  providers.forEach((provider) => {
+  providers
+    .filter((provider) => normal(provider.network || provider.providerId || "") !== "mpesa")
+    .forEach((provider) => {
     const text = normal(`${provider.network || ""} ${provider.providerId || ""} ${provider.label || ""}`);
     const key = text.includes("mtn") ? "mtn" : text.includes("airtel") ? "airtel" : "";
     if (key) selected.set(key, { ...selected.get(key), ...provider, network: key });

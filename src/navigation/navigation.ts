@@ -154,10 +154,16 @@ export function buildQuickSearchModel(input: {
   query?: string;
 }): TerekaQuickSearchModel {
   const query = String(input.query || "").trim();
+  const directMatches = query.length < 2
+    ? []
+    : input.index.filter((result) => quickSearchText(result).includes(normalizeNavigationText(query)));
+  const saccoCodes = directMatches
+    .filter((result) => normalizeNavigationText(result.group).includes("sacco"))
+    .flatMap(saccoSearchCodes);
   const results = query.length < 2
     ? []
     : input.index
-      .filter((result) => normalizeNavigationText(`${result.group || ""} ${result.title || ""} ${result.meta || ""}`).includes(normalizeNavigationText(query)))
+      .filter((result) => directMatches.includes(result) || resultMatchesSaccoCode(result, saccoCodes))
       .slice(0, input.limit || 8);
   const activeId = input.activeId && results.some((result) => result.id === input.activeId) ? input.activeId : "";
   return {
@@ -165,6 +171,23 @@ export function buildQuickSearchModel(input: {
     results,
     groups: groupQuickSearchResults(results),
   };
+}
+
+function quickSearchText(result: TerekaQuickSearchResult): string {
+  return normalizeNavigationText(`${result.id || ""} ${result.recordId || ""} ${result.group || ""} ${result.title || ""} ${result.meta || ""}`);
+}
+
+function saccoSearchCodes(result: TerekaQuickSearchResult): string[] {
+  return String(`${result.meta || ""} ${result.recordId || ""}`)
+    .split(/[^a-zA-Z0-9]+/)
+    .map((part) => normalizeNavigationText(part))
+    .filter((part) => part.length >= 2);
+}
+
+function resultMatchesSaccoCode(result: TerekaQuickSearchResult, saccoCodes: string[]): boolean {
+  if (!saccoCodes.length || !normalizeNavigationText(result.group).includes("member")) return false;
+  const text = quickSearchText(result);
+  return saccoCodes.some((code) => text.includes(code));
 }
 
 export function groupQuickSearchResults(results: TerekaQuickSearchResult[]): TerekaQuickSearchModel["groups"] {

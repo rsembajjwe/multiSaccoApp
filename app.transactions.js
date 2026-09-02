@@ -261,7 +261,7 @@ function transactionFormPanel(options = {}) {
         <div id="newTransactionLoanBalance" class="loan-balance-panel wide" aria-live="polite">${transactionLoanBalanceHtml(selectedMemberId, "savings_deposit")}</div>
         <label><span>Amount</span><input id="newTransactionAmount" type="number" min="1" step="1" required value="10000" ${canCreate ? "" : "disabled"}></label>
         <label><span>Payment note</span><input id="newTransactionNarration" placeholder="Cash receipt note or mobile money reference" ${canCreate ? "" : "disabled"}></label>
-        <div class="form-actions inline">${canCreate ? `<button class="button primary" type="submit">${paymentOnly ? "Initiate / post transaction" : "Post / submit transaction"}</button>` : `<span class="status pending">View only</span>`}</div>
+        <div class="form-actions inline">${canCreate ? `<button class="button primary" type="submit">${paymentOnly ? "Initiate / post transaction" : "Submit transaction"}</button>` : `<span class="status pending">View only</span>`}</div>
       </form>
     </section>
   `;
@@ -347,7 +347,8 @@ function syncTransactionLoanBalance() {
 }
 
 
-function transactionRows(cycle = null) {
+function transactionRows() {
+  const cycle = arguments.length ? arguments[0] : null;
   return buildTransactionRows({
     transactions: cycle ? filterTransactionsBySaccoCycle(dataRows("transactions"), cycle) : dataRows("transactions"),
     memberName
