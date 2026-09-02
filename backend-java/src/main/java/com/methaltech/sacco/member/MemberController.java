@@ -110,6 +110,7 @@ class MemberController {
             "photo",
             "signature",
             "signed_registration_form",
+            "loan_application_form",
             "bylaws",
             "registration_certificate",
             "other");

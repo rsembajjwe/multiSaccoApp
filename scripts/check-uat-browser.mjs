@@ -125,8 +125,8 @@ async function saccoStaffUat(page) {
 
 async function memberPortalUat(page) {
   const member = uatData?.created?.member;
-  await page.locator("#code").fill("GVS");
-  await page.locator("#username").fill(member?.membershipNo || "GVS-0001");
+  await page.locator("#code").fill("GREE");
+  await page.locator("#username").fill(member?.membershipNo || "GREE-0001");
   await page.locator("#password").fill(member?.password || "Member@12345");
   await page.locator("#loginButton").click();
   await waitForSettledUi(page);
@@ -140,7 +140,7 @@ async function memberPortalUat(page) {
     "Offline drafts",
     "Pay by mobile money",
     "Read SACCO messages",
-    member?.membershipNo || "GVS-0001"
+    member?.membershipNo || "GREE-0001"
   ]) {
     await expectText(page, marker, `member portal marker ${marker}`);
   }
@@ -200,7 +200,7 @@ async function assertMemberPortalTabs(page) {
 }
 
 async function staffLogin(page, email, password, label) {
-  await page.locator("#code").fill(email.includes("platform") ? "PLATFORM" : "GVS");
+  await page.locator("#code").fill(email.includes("platform") ? "PLATFORM" : "GREE");
   await page.locator("#username").fill(email);
   await page.locator("#password").fill(password);
   await page.locator("#loginButton").click();

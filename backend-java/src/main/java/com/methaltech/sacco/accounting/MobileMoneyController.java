@@ -21,6 +21,12 @@ import com.methaltech.sacco.member.MemberSubscriptionRepository;
 import com.methaltech.sacco.member.MemberSubscriptionService;
 import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.notification.NotificationService;
+import com.methaltech.sacco.subscription.Subscription;
+import com.methaltech.sacco.subscription.SubscriptionAccessService;
+import com.methaltech.sacco.subscription.SubscriptionPayment;
+import com.methaltech.sacco.subscription.SubscriptionPaymentRepository;
+import com.methaltech.sacco.subscription.SubscriptionRepository;
+import com.methaltech.sacco.subscription.SubscriptionService;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
 import jakarta.validation.Valid;
@@ -70,6 +76,10 @@ class MobileMoneyController {
     private final MemberSubscriptionRepository memberSubscriptionRepository;
     private final MemberSubscriptionService memberSubscriptionService;
     private final MemberPasswordResetRequestRepository passwordResetRepository;
+    private final SubscriptionAccessService subscriptionAccessService;
+    private final SubscriptionRepository subscriptionRepository;
+    private final SubscriptionPaymentRepository subscriptionPaymentRepository;
+    private final SubscriptionService subscriptionService;
 
     @PostMapping("/payment-requests")
     ResponseEntity<?> requestPayment(
@@ -86,7 +96,9 @@ class MobileMoneyController {
         String purpose = body.purpose().trim();
         if (!MobileMoneyPaymentRules.contributionPurpose(purpose)
                 && !"loan_repayment".equals(purpose)
-                && !"membership_dues".equals(purpose)) {
+                && !"membership_dues".equals(purpose)
+                && !"platform_fee".equals(purpose)
+                && !"personal_app_fee".equals(purpose)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_PURPOSE", "Unsupported mobile-money payment purpose."));
         }
@@ -108,6 +120,10 @@ class MobileMoneyController {
         if ("loan_repayment".equals(purpose)) {
             ResponseEntity<?> loanValidation = validateLoanRepaymentRequest(body.loanId(), member, amount);
             if (loanValidation != null) return loanValidation;
+        }
+        if (requiresMemberDepositAccess(purpose)) {
+            ResponseEntity<?> accessCheck = memberDepositAccessCheck(member);
+            if (accessCheck != null) return accessCheck;
         }
         TenantResponse tenant = tenantService.findById(member.getTenantId()).orElse(null);
         if (tenant == null || !tenant.mobileMoneyCollectionAvailable()) {
@@ -279,6 +295,10 @@ class MobileMoneyController {
         }
 
         String purpose = body.purpose().trim();
+        if (requiresMemberDepositAccess(purpose)) {
+            ResponseEntity<?> accessCheck = memberDepositAccessCheck(member);
+            if (accessCheck != null) return accessCheck;
+        }
         String provider = mobileMoneyRouter.resolve(body.provider()).normalizeProvider(body.provider());
         if (MobileMoneyPaymentRules.contributionPurpose(purpose)) {
             return postContribution(body, tenantId, externalReference, provider, member, amount);
@@ -289,11 +309,28 @@ class MobileMoneyController {
         if ("membership_dues".equals(purpose)) {
             return postMembershipDues(body, tenantId, externalReference, provider, member, amount);
         }
+        if ("platform_fee".equals(purpose)) {
+            return postMemberPlatformFee(body, tenantId, externalReference, provider, member, amount);
+        }
+        if ("personal_app_fee".equals(purpose)) {
+            return postPersonalAppFee(body, tenantId, externalReference, provider, member, amount);
+        }
         if ("password_reset_sms".equals(purpose)) {
             return activatePasswordResetSms(body, tenantId, externalReference, provider, member, amount);
         }
         return ResponseEntity.badRequest()
                 .body(ApiErrorResponse.of(400, "INVALID_CALLBACK_PURPOSE", "Unsupported mobile-money payment purpose."));
+    }
+
+    private boolean requiresMemberDepositAccess(String purpose) {
+        return MobileMoneyPaymentRules.contributionPurpose(purpose) || "loan_repayment".equals(purpose);
+    }
+
+    private ResponseEntity<?> memberDepositAccessCheck(Member member) {
+        SubscriptionAccessService.MemberDepositAccess access = subscriptionAccessService.memberDepositAccess(member);
+        if (access.allowed()) return null;
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(403, access.code(), access.message()));
     }
 
     @GetMapping("/callbacks")
@@ -657,6 +694,92 @@ class MobileMoneyController {
                 "member_subscription",
                 updated.getId()));
         markMatchingPaymentRequestPosted(tenantId, externalReference, "member_subscription", updated.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
+    }
+
+    private ResponseEntity<?> postMemberPlatformFee(
+            MobileMoneyCallbackRequest body,
+            String tenantId,
+            String externalReference,
+            String provider,
+            Member member,
+            BigDecimal amount) {
+        ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
+        if (idempotencyConflict != null) return idempotencyConflict;
+
+        Subscription subscription = subscriptionRepository.findFirstByTenantIdOrderByCreatedAtDesc(tenantId).orElse(null);
+        if (subscription == null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "NO_SACCO_SUBSCRIPTION", "This SACCO has no platform subscription to apply payment to."));
+        }
+        subscriptionService.refreshBilling(subscription);
+        if (subscription.getUnitPrice() == null || subscription.getUnitPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "MEMBER_PLATFORM_FEE_NOT_ALLOWED",
+                            "Member-by-member platform fee payment is only available for the 20-250 member tier."));
+        }
+        if (amount.compareTo(subscription.getUnitPrice()) < 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "PLATFORM_FEE_UNDERPAID",
+                            "The member platform fee must cover at least one member slot."));
+        }
+
+        SubscriptionPayment payment = subscriptionPaymentRepository.save(new SubscriptionPayment(
+                "subscription_payment_" + UUID.randomUUID(),
+                subscription.getId(),
+                tenantId,
+                amount,
+                "mobile_money:member_platform_fee:" + provider,
+                externalReference,
+                java.time.Instant.now(),
+                SYSTEM_USER_ID));
+        subscription.recordPayment(amount, java.time.LocalDate.now().plusYears(1));
+        Subscription savedSubscription = subscriptionRepository.save(subscription);
+        createStatementLine(tenantId, amount, externalReference, "Mobile-money member-paid platform fee");
+        notificationService.notifyPaymentPosted(member, "platform_fee", amount, "subscription", savedSubscription.getId());
+
+        MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
+                "callback_" + UUID.randomUUID(),
+                tenantId,
+                member.getId(),
+                body.purpose().trim(),
+                amount,
+                externalReference,
+                provider,
+                payload(body.providerPayload()),
+                "posted",
+                "subscription",
+                payment.getId()));
+        markMatchingPaymentRequestPosted(tenantId, externalReference, "subscription", payment.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
+    }
+
+    private ResponseEntity<?> postPersonalAppFee(
+            MobileMoneyCallbackRequest body,
+            String tenantId,
+            String externalReference,
+            String provider,
+            Member member,
+            BigDecimal amount) {
+        ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
+        if (idempotencyConflict != null) return idempotencyConflict;
+
+        createStatementLine(tenantId, amount, externalReference, "Mobile-money personal app access fee");
+        notificationService.notifyPaymentPosted(member, "personal_app_fee", amount, "member", member.getId());
+
+        MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
+                "callback_" + UUID.randomUUID(),
+                tenantId,
+                member.getId(),
+                body.purpose().trim(),
+                amount,
+                externalReference,
+                provider,
+                payload(body.providerPayload()),
+                "posted",
+                "personal_app_fee",
+                member.getId()));
+        markMatchingPaymentRequestPosted(tenantId, externalReference, "personal_app_fee", member.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
     }
 

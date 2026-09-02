@@ -162,7 +162,7 @@ npm.cmd run backup:db
 Restore a backup:
 
 ```powershell
-npm.cmd run restore:db -- -BackupPath .\backups\sacco_app-YYYYMMDD-HHMMSS.dump -ConfirmRestore
+npm.cmd run restore:db -- -BackupPath .\backups\sacco_app-YYYYMMDD-HHMASAS.dump -ConfirmRestore
 ```
 
 The restore path requires explicit confirmation because it replaces the target database state.

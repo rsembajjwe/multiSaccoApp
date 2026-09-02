@@ -32,7 +32,7 @@ class PlatformSupportChatFlowTest {
 
     @Test
     void saccoAdminAndPlatformAdminExchangeMessagesAndMemberIsExcluded() throws Exception {
-        String saccoToken = staffLogin("GVS", "admin@greenvalley.local", "Sacco@12345");
+        String saccoToken = staffLogin("GREE", "admin@greenvalley.local", "Sacco@12345");
         String platformToken = staffLogin("PLATFORM", "admin@platform.local", "Admin@12345");
 
         MvcResult created = mockMvc.perform(post("/api/v1/chat/threads")
@@ -60,7 +60,7 @@ class PlatformSupportChatFlowTest {
                         .header("Authorization", "Bearer " + platformToken)
                         .contentType("application/json")
                         .content("""
-                                { "body": "You are on the per-member tier, minimum 100 members." }
+                                { "body": "You are on the per-member tier, minimum 20 members." }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.senderType", is("PLATFORM")));
@@ -70,7 +70,7 @@ class PlatformSupportChatFlowTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[1].senderType", is("PLATFORM")));
 
-        String memberToken = memberLogin("GVS-0001", "Member@12345");
+        String memberToken = memberLogin("GREE-0001", "Member@12345");
         mockMvc.perform(get("/api/v1/member-auth/chat/threads/" + threadId + "/messages")
                         .header("Authorization", "Bearer " + memberToken))
                 .andExpect(status().isNotFound());

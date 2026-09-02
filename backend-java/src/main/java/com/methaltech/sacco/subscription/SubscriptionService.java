@@ -9,7 +9,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class SubscriptionService {
 
-    private static final int MINIMUM_BILLABLE_MEMBERS = 100;
+    private static final int MINIMUM_BILLABLE_MEMBERS = 20;
+    public static final int MINIMUM_ACTIVE_MEMBER_COVERAGE = 20;
     private static final BigDecimal PER_MEMBER_PRICE = BigDecimal.valueOf(5000);
     /** Newly registered SACCOs get this many months of free access before payment is required. */
     private static final int FREE_TRIAL_MONTHS = 1;
@@ -52,17 +53,26 @@ public class SubscriptionService {
                     billableMembers,
                     PER_MEMBER_PRICE,
                     "per_member",
-                    "100-250 members",
-                    "UGX 5,000 per member annually, minimum 100 members",
+                    "20-250 members",
+                    "UGX 5,000 per member annually, minimum 20 members",
                     PER_MEMBER_PRICE.multiply(BigDecimal.valueOf(billableMembers)));
         }
         if (memberCount <= 500) {
             return fixedBilling(memberCount, 500, "starter_fixed", "251-500 members", BigDecimal.valueOf(1200000));
         }
-        if (memberCount <= 2500) {
-            return fixedBilling(memberCount, 2500, "growth_fixed", "501-2,500 members", BigDecimal.valueOf(3600000));
+        if (memberCount <= 1000) {
+            return fixedBilling(memberCount, 1000, "growth_fixed", "501-1,000 members", BigDecimal.valueOf(2500000));
         }
-        return fixedBilling(memberCount, 10000, "enterprise_fixed", "2,501-10,000 members", BigDecimal.valueOf(9000000));
+        if (memberCount <= 2500) {
+            return fixedBilling(memberCount, 2500, "scale_fixed", "1,001-2,500 members", BigDecimal.valueOf(5000000));
+        }
+        if (memberCount <= 5000) {
+            return fixedBilling(memberCount, 5000, "enterprise_fixed", "2,501-5,000 members", BigDecimal.valueOf(8000000));
+        }
+        if (memberCount <= 10000) {
+            return fixedBilling(memberCount, 10000, "enterprise_plus_fixed", "5,001-10,000 members", BigDecimal.valueOf(12000000));
+        }
+        return fixedBilling(memberCount, memberCount, "custom_enterprise", "Above 10,000 members", BigDecimal.ZERO);
     }
 
     private SubscriptionBilling fixedBilling(

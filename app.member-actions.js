@@ -113,8 +113,7 @@ async function submitMemberLoan(event) {
   if (blockOfflineMemberAction("memberLoanError")) return;
   const guarantors = [1, 2, 3]
     .map((index) => ({
-      membershipNo: (value(`memberLoanGuarantor${index}No`) || "").trim(),
-      pledgeAmount: Number(value(`memberLoanGuarantor${index}Amount`) || 0)
+      membershipNo: (value(`memberLoanGuarantor${index}No`) || "").trim()
     }))
     .filter((row) => row.membershipNo);
   try {
@@ -190,8 +189,7 @@ function pickMemberGuarantor(membershipNo, target) {
     const field = document.getElementById("memberAddGuarantorNo");
     if (field) {
       field.value = membershipNo;
-      const pledge = document.getElementById("memberAddGuarantorAmount");
-      if (pledge) pledge.focus();
+      field.focus();
     }
   } else {
     let placed = false;
@@ -199,8 +197,7 @@ function pickMemberGuarantor(membershipNo, target) {
       const field = document.getElementById(`memberLoanGuarantor${index}No`);
       if (field && !field.value.trim()) {
         field.value = membershipNo;
-        const pledge = document.getElementById(`memberLoanGuarantor${index}Amount`);
-        if (pledge) pledge.focus();
+        field.focus();
         placed = true;
         break;
       }
@@ -232,8 +229,7 @@ async function addMemberLoanGuarantor(event) {
     await api(`/member-auth/loans/${encodeURIComponent(loanId)}/guarantors`, {
       method: "POST",
       body: JSON.stringify({
-        membershipNo: (value("memberAddGuarantorNo") || "").trim(),
-        pledgeAmount: Number(value("memberAddGuarantorAmount") || 0)
+        membershipNo: (value("memberAddGuarantorNo") || "").trim()
       })
     });
     const message = "Guarantor request sent. They will be notified to accept or reject.";
@@ -591,9 +587,13 @@ async function decideMemberGuarantor(guarantorId, status) {
       method: "PATCH",
       body: JSON.stringify({ status })
     });
-    state.memberGuarantorMessage = `Guarantor request ${request.status}.`;
+    state.memberGuarantorMessage = normal(request.status) === "accepted"
+      ? "Guarantor request accepted. Please sign the physical loan form at the SACCO office."
+      : `Guarantor request ${request.status}.`;
     await refreshMember();
-    state.memberGuarantorMessage = `Guarantor request ${request.status}.`;
+    state.memberGuarantorMessage = normal(request.status) === "accepted"
+      ? "Guarantor request accepted. Please sign the physical loan form at the SACCO office."
+      : `Guarantor request ${request.status}.`;
     renderShell();
   } catch (error) {
     state.memberGuarantorError = error.message;

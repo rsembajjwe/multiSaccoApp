@@ -73,7 +73,7 @@ class MemberPrivacyEvidenceUnitTest {
                 "tenant_green",
                 "member_green_amina",
                 "national_id",
-                "tenant_green/members/GVS-0001/national-id.pdf",
+                "tenant_green/members/GREE-0001/national-id.pdf",
                 "expired",
                 "user_green_admin");
 
@@ -107,7 +107,7 @@ class MemberPrivacyEvidenceUnitTest {
     @Test
     void evidenceStatusIsReadyWhenRequestsAreClosedAndDisposedDocumentsHaveStorageActions() {
         when(memberRepository.findByTenantIdOrderByMembershipNoAsc("tenant_green"))
-                .thenReturn(List.of(consentedMember("member_1", "GVS-0001"), consentedMember("member_2", "GVS-0002")));
+                .thenReturn(List.of(consentedMember("member_1", "GREE-0001"), consentedMember("member_2", "GREE-0002")));
         when(privacyRequestRepository.findByTenantIdOrderByCreatedAtDesc("tenant_green"))
                 .thenReturn(List.of(
                         transitionedRequest("privacy_1", "subject_access", "completed"),
@@ -141,7 +141,7 @@ class MemberPrivacyEvidenceUnitTest {
     @Test
     void evidenceStatusRequiresReviewForOpenRequestsReviewDueDocumentsOrMissingStorageAction() {
         when(memberRepository.findByTenantIdOrderByMembershipNoAsc("tenant_green"))
-                .thenReturn(List.of(consentedMember("member_1", "GVS-0001")));
+                .thenReturn(List.of(consentedMember("member_1", "GREE-0001")));
         when(privacyRequestRepository.findByTenantIdOrderByCreatedAtDesc("tenant_green"))
                 .thenReturn(List.of(new MemberPrivacyRequest(
                         "privacy_open",

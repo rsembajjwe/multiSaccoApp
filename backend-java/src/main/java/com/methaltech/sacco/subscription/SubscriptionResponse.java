@@ -15,6 +15,8 @@ public record SubscriptionResponse(
         BigDecimal paid,
         int memberCount,
         int billableMembers,
+        int paidMemberCapacity,
+        int inactiveMemberOverflow,
         BigDecimal unitPrice,
         String tierId,
         String tierLabel,
@@ -26,9 +28,9 @@ public record SubscriptionResponse(
         Instant updatedAt) {
 
     /** Days a subscription may be past expiry before enforcement (display hint; server config is authoritative). */
-    private static final int GRACE_DAYS = 7;
+    private static final int GRACE_DAYS = 0;
     /** Days before expiry from which the UI shows a renewal warning. */
-    private static final int EXPIRING_SOON_DAYS = 14;
+    private static final int EXPIRING_SOON_DAYS = 30;
 
     public static SubscriptionResponse from(Subscription subscription) {
         LocalDate expiry = subscription.getExpiry();
@@ -43,6 +45,8 @@ public record SubscriptionResponse(
                 subscription.getPaid(),
                 subscription.getMemberCount(),
                 subscription.getBillableMembers(),
+                paidMemberCapacity(subscription),
+                Math.max(0, subscription.getMemberCount() - paidMemberCapacity(subscription)),
                 subscription.getUnitPrice(),
                 subscription.getTierId(),
                 subscription.getTierLabel(),
@@ -52,6 +56,11 @@ public record SubscriptionResponse(
                 daysToExpiry,
                 subscription.getCreatedAt(),
                 subscription.getUpdatedAt());
+    }
+
+    private static int paidMemberCapacity(Subscription subscription) {
+        if ("trial".equals(subscription.getStatus())) return 0;
+        return subscription.paidMemberCapacity();
     }
 
     /**

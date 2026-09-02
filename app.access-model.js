@@ -48,12 +48,14 @@ function filterRolesForScope(roles, platformOnly, tenantId) {
 function buildRoleCoverageRows(input) {
   return input.roles.map((role) => {
     const assignedUsers = input.users.filter((user) => accessUserHasRole(user, role)).length;
+    const functionRows = roleFunctionRowsFor(role.name, input.platformOnly);
     return {
       roleName: role.name,
       scope: input.platformOnly ? "Platform administration" : "SACCO staff",
       assignedUsers,
       accessPurpose: rolePurposeFor(role.name, input.platformOnly),
       moduleScope: roleModuleScopeFor(role.name, input.platformOnly),
+      functionCount: functionRows.length,
       status: String(role.status || "active")
     };
   });
@@ -171,6 +173,214 @@ function buildSaccoStaffGuideRows(roles) {
       configured: configured ? "Available" : "Template"
     };
   });
+}
+
+function roleFunctionCatalog(platformOnly) {
+  return platformOnly ? platformRoleFunctionCatalog() : saccoRoleFunctionCatalog();
+}
+
+function roleFunctionRowsFor(roleName, platformOnly) {
+  const normalizedRole = normalizeAccessModelText(roleName);
+  const catalog = roleFunctionCatalog(platformOnly);
+  const key = Object.keys(catalog).find((candidate) => {
+    const normalizedCandidate = normalizeAccessModelText(candidate);
+    return normalizedRole === normalizedCandidate
+      || normalizedRole.includes(normalizedCandidate)
+      || normalizedCandidate.includes(normalizedRole.replace("sacco ", ""));
+  });
+  return key ? catalog[key] : [];
+}
+
+function buildRoleFunctionMatrixRows(roles, platformOnly) {
+  return roles.map((role) => {
+    const functions = roleFunctionRowsFor(role.name, platformOnly);
+    return {
+      roleName: role.name,
+      accessPurpose: rolePurposeFor(role.name, platformOnly),
+      functionCount: functions.length,
+      functions: functions.map((item) => item.functionName).join(", "),
+      descriptions: functions.map((item) => `${item.functionName}: ${item.description}`).join(" | "),
+      status: functions.length ? "Mapped" : "Review required"
+    };
+  });
+}
+
+function platformRoleFunctionCatalog() {
+  return {
+    "Platform Super Admin": [
+      roleFunction("Dashboard", "View overall platform performance, alerts, SACCO activity and role-scoped metrics."),
+      roleFunction("SACCO Registration", "Review SACCO self-registration applications, payment status and approval readiness."),
+      roleFunction("SACCO Accounts", "Monitor SACCO account health, activation state, subscription status and expiry risk."),
+      roleFunction("Subscriptions", "View and manage SACCO subscription packages, billing, renewals and payment records."),
+      roleFunction("Transactions", "Record and monitor transactions between the platform and SACCOs."),
+      roleFunction("Reports", "View platform-wide operational, financial and regulatory reports."),
+      roleFunction("Complaints", "View, reply to and resolve SACCO support tickets and escalations."),
+      roleFunction("Notifications", "View, create and manage notification templates and delivery records."),
+      roleFunction("Users and Roles", "Create users, assign roles and manage platform or SACCO access permissions."),
+      roleFunction("Audit Logs", "Review sensitive platform activity and access history."),
+      roleFunction("System Settings", "Manage protected platform configuration and integration controls.")
+    ],
+    "Platform Administrator": [
+      roleFunction("SACCO Registration", "Create and review SACCO onboarding records."),
+      roleFunction("Users and Roles", "View and create staff users and custom roles."),
+      roleFunction("Reports", "View platform reporting."),
+      roleFunction("Transactions", "Create, view and approve platform financial transactions."),
+      roleFunction("Accounting", "View and post accounting-affecting records."),
+      roleFunction("Loans and Approvals", "View, create and decide platform-level loan and approval records."),
+      roleFunction("Operations", "View operational health and exception indicators."),
+      roleFunction("Notifications", "View and manage notification templates."),
+      roleFunction("Governance", "View and manage governance records."),
+      roleFunction("Complaints", "View and manage complaint queues."),
+      roleFunction("Subscriptions", "View and manage SACCO subscriptions.")
+    ],
+    "Platform Operations Officer": [
+      roleFunction("Dashboard", "Monitor platform operations, alerts and SACCO activity."),
+      roleFunction("SACCO Registration", "Track SACCO onboarding and registration pipeline."),
+      roleFunction("Complaints", "View SACCO support complaints and escalations."),
+      roleFunction("Notifications", "View notification delivery status and operational messages."),
+      roleFunction("Operations", "Monitor system health, exceptions and release-gate status."),
+      roleFunction("Reports", "View operational reports."),
+      roleFunction("Transactions View", "Review transaction activity without payment-management authority."),
+      roleFunction("Loans View", "View SACCO loan activity for operational oversight."),
+      roleFunction("Approvals View", "View approval workflows and pending decisions.")
+    ],
+    "Platform Billing Officer": [
+      roleFunction("Dashboard", "View billing-focused platform metrics and account status summaries."),
+      roleFunction("SACCO Registration", "View SACCO registration records for billing and payment follow-up."),
+      roleFunction("SACCO Accounts", "Check SACCO subscription health, expiry, package and payment status."),
+      roleFunction("Subscriptions", "Manage subscription payments, packages, invoices and access billing status."),
+      roleFunction("Reports", "View billing and operational reports."),
+      roleFunction("Operations", "View operational status related to billing and access risks.")
+    ],
+    "Platform Compliance Officer": [
+      roleFunction("Dashboard", "View compliance-focused platform metrics."),
+      roleFunction("SACCO Registration", "Review SACCO registration and onboarding status."),
+      roleFunction("SACCO Accounts", "Monitor SACCO account health and compliance risk."),
+      roleFunction("Transactions View", "Review platform and SACCO transaction records."),
+      roleFunction("Accounting View", "View accounting records and reports for oversight."),
+      roleFunction("Loans View", "Review loan files for compliance monitoring."),
+      roleFunction("Approvals View", "Review approval workflows and decisions."),
+      roleFunction("Governance View", "View governance meetings and resolutions."),
+      roleFunction("Reports", "Access compliance and regulatory reports."),
+      roleFunction("Audit Logs", "Review read-only platform audit activity."),
+      roleFunction("Operations", "View operational health and exception indicators.")
+    ],
+    "Platform Support Officer": [
+      roleFunction("Dashboard", "View support-related platform status and metrics."),
+      roleFunction("SACCO Registration", "View SACCO registration records when assisting SACCO admins."),
+      roleFunction("Complaints", "View, reply to and manage SACCO support tickets."),
+      roleFunction("Notifications View", "View notification deliveries relevant to support."),
+      roleFunction("Members View", "View member-related context when resolving SACCO support issues."),
+      roleFunction("Reports", "View support and operational reports."),
+      roleFunction("Operations", "View operational health and support exception counts.")
+    ]
+  };
+}
+
+function saccoRoleFunctionCatalog() {
+  return {
+    "SACCO Administrator": [
+      roleFunction("Dashboard", "View full SACCO operating metrics and alerts."),
+      roleFunction("Members", "Register members, view profiles, manage KYC and approve member status."),
+      roleFunction("Payments", "Capture member deposits and loan repayments."),
+      roleFunction("Loans", "Submit, view and manage loan applications."),
+      roleFunction("Loan Approval", "Record or manage loan approval decisions."),
+      roleFunction("Expenses", "Capture and review SACCO operating expenses."),
+      roleFunction("Member Subscriptions", "Manage mandatory member dues and subscription expiry."),
+      roleFunction("Transfers", "Create, manage and approve savings transfers or deductions."),
+      roleFunction("Approvals", "View and decide maker-checker approval workflows."),
+      roleFunction("Reconciliation", "Review bank and mobile money reconciliation records."),
+      roleFunction("Reports", "View operational, financial and regulatory reports."),
+      roleFunction("Transactions", "Create, view and approve SACCO financial transactions."),
+      roleFunction("Settings", "Manage SACCO profile, products, branches and calendar policy."),
+      roleFunction("Audit Logs", "Review sensitive SACCO activity.")
+    ],
+    "Chairperson": [
+      roleFunction("Dashboard", "View leadership-level SACCO performance and alerts."),
+      roleFunction("Loans", "Review loan files and loan status."),
+      roleFunction("Loan Approval", "Record paper approval references and loan approver details."),
+      roleFunction("Subscriptions", "View SACCO platform, SMS and USSD subscription status."),
+      roleFunction("Reports", "View operational and financial reports."),
+      roleFunction("Members", "View member profiles and balances."),
+      roleFunction("Transactions", "View transaction records for oversight."),
+      roleFunction("Governance", "View governance meetings and resolutions."),
+      roleFunction("Complaints", "View member complaints and escalations."),
+      roleFunction("Alerts", "View leadership notifications."),
+      roleFunction("Documents", "View signed forms and member or loan files."),
+      roleFunction("Settings", "Manage SACCO profile and membership calendar policy.")
+    ],
+    "Treasurer": [
+      roleFunction("Dashboard", "View finance-focused SACCO metrics."),
+      roleFunction("Finance", "Manage receipts, cash control, approvals and reconciliation."),
+      roleFunction("Payments", "Capture member deposits and loan repayments."),
+      roleFunction("Loans View", "View loans for repayment and balance context."),
+      roleFunction("Expenses", "Capture and review operating expenses."),
+      roleFunction("Member Subscriptions", "Track and manage member dues."),
+      roleFunction("Transfers", "Create and manage savings transfers or deductions."),
+      roleFunction("Approvals", "View finance approval queues."),
+      roleFunction("Reconciliation", "Reconcile bank and mobile money collections."),
+      roleFunction("Reports", "View financial and operational reports."),
+      roleFunction("Transactions", "Create, view and approve financial transactions."),
+      roleFunction("Accounting", "View and post accounting-affecting records.")
+    ],
+    "Secretary": [
+      roleFunction("Dashboard", "View membership and governance-focused SACCO metrics."),
+      roleFunction("Members", "Register members, view profiles and manage member status approval."),
+      roleFunction("Member Subscriptions", "Track mandatory member dues and expiry."),
+      roleFunction("Approvals", "View approval workflows relevant to secretary duties."),
+      roleFunction("Reports", "View membership, governance and operational reports."),
+      roleFunction("Shares", "View share register records."),
+      roleFunction("Welfare", "View and manage welfare contribution and claim records."),
+      roleFunction("Governance", "Create and manage meetings, minutes and resolutions."),
+      roleFunction("Complaints", "Capture, view and resolve member complaints.")
+    ],
+    "Loans Officer": [
+      roleFunction("Dashboard", "View loan-focused SACCO metrics."),
+      roleFunction("Loans", "Submit and view loan applications."),
+      roleFunction("Loan Approval", "View loan approval queue and approval status."),
+      roleFunction("Members", "View member profiles for loan assessment."),
+      roleFunction("Guarantors", "View guarantee requests and obligations."),
+      roleFunction("Approvals", "View approval workflow status."),
+      roleFunction("Reports", "View loan and operational reports."),
+      roleFunction("Complaints", "View complaint records related to loan support.")
+    ],
+    "Accountant": [
+      roleFunction("Dashboard", "View accounting and finance metrics."),
+      roleFunction("Payments", "Capture member deposits and repayments."),
+      roleFunction("Expenses", "Capture and review SACCO operating expenses."),
+      roleFunction("Reconciliation", "Review bank and mobile money reconciliation."),
+      roleFunction("Reports", "View accounting and operational reports."),
+      roleFunction("Transactions", "Create and view financial transactions."),
+      roleFunction("Savings", "View savings products, accounts and statements."),
+      roleFunction("Accounting", "View and post accounting-affecting records."),
+      roleFunction("Fund Types", "View configurable SACCO fund types."),
+      roleFunction("Operations", "View operational health indicators.")
+    ],
+    "Teller / Cashier": [
+      roleFunction("Dashboard", "View cashier-focused operating metrics."),
+      roleFunction("Payments", "Capture member deposits and loan repayments."),
+      roleFunction("Transactions", "Submit and view transaction or receipt records."),
+      roleFunction("Members", "View member profiles needed for transaction capture.")
+    ],
+    "Auditor": [
+      roleFunction("Dashboard", "View audit-focused SACCO metrics."),
+      roleFunction("Members", "View member profiles and balances."),
+      roleFunction("Transactions", "View financial transaction records."),
+      roleFunction("Loans", "View loan files."),
+      roleFunction("Accounting", "View accounting records and reports."),
+      roleFunction("Reconciliation", "Review reconciliation evidence."),
+      roleFunction("Reports", "View operational, financial and regulatory reports."),
+      roleFunction("Savings", "View savings records."),
+      roleFunction("Shares", "View share records."),
+      roleFunction("Approvals", "View approval workflows and decisions."),
+      roleFunction("Audit Logs", "Review sensitive activity history."),
+      roleFunction("Operations", "View operational health indicators.")
+    ]
+  };
+}
+
+function roleFunction(functionName, description) {
+  return { functionName, description };
 }
 
 function buildPermissionMatrixRows(modules, permissions = []) {

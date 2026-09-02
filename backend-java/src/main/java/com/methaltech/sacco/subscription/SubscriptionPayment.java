@@ -40,7 +40,7 @@ public class SubscriptionPayment {
     @Column(name = "created_at")
     private Instant createdAt;
 
-    SubscriptionPayment(
+    public SubscriptionPayment(
             String id,
             String subscriptionId,
             String tenantId,

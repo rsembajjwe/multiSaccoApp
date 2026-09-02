@@ -17,6 +17,7 @@ import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -50,6 +51,7 @@ class NotificationController {
     private final MobileMoneyReconciliationJob mobileMoneyReconciliationJob;
     private final AuthService authService;
     private final AuditService auditService;
+    private final AfroSmsCreditService afroSmsCreditService;
 
     @GetMapping("/deliveries")
     ResponseEntity<?> listDeliveries(
@@ -123,9 +125,7 @@ class NotificationController {
         if (!authService.hasPermission(currentSession.user(), "notifications:view")) {
             return authService.permissionRequired("notifications:view");
         }
-        return ResponseEntity.ok(ApiResponse.of(notificationProviders.stream()
-                .map(NotificationProvider::status)
-                .toList()));
+        return ResponseEntity.ok(ApiResponse.of(notificationProviderStatuses()));
     }
 
     @GetMapping("/provider-evidence")
@@ -147,9 +147,7 @@ class NotificationController {
         List<NotificationDelivery> deliveries = platformAll
                 ? deliveryRepository.findAllByOrderByTenantIdAscCreatedAtDesc()
                 : deliveryRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
-        List<NotificationProviderStatusResponse> providerStatuses = notificationProviders.stream()
-                .map(NotificationProvider::status)
-                .toList();
+        List<NotificationProviderStatusResponse> providerStatuses = notificationProviderStatuses();
         int failedDeliveries = countDeliveriesByStatus(deliveries, "failed");
         int sentDeliveries = countDeliveriesByStatus(deliveries, "sent");
         int readyProviders = countProviderStatuses(providerStatuses, "ready");
@@ -170,6 +168,20 @@ class NotificationController {
                 mobileMoney,
                 evidenceStatus,
                 Instant.now())));
+    }
+
+    private List<NotificationProviderStatusResponse> notificationProviderStatuses() {
+        List<NotificationProviderStatusResponse> statuses = new ArrayList<>(notificationProviders.stream()
+                .map(NotificationProvider::status)
+                .toList());
+        boolean hasAfroSmsCredit = statuses.stream()
+                .anyMatch(status -> "sms".equalsIgnoreCase(status.channel())
+                        && "afrosms".equalsIgnoreCase(status.provider())
+                        && status.balance() != null);
+        if (!hasAfroSmsCredit) {
+            statuses.add(afroSmsCreditService.platformCreditStatus());
+        }
+        return statuses;
     }
 
     @GetMapping("/provider-job-runs")

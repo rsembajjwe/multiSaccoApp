@@ -116,7 +116,16 @@ export interface TerekaSubscription {
   tierLabel?: string;
   amount?: TerekaMoney;
   paid?: TerekaMoney;
+  memberCount?: TerekaMoney;
+  billableMembers?: TerekaMoney;
+  paidMemberCapacity?: TerekaMoney;
+  inactiveMemberOverflow?: TerekaMoney;
+  unitPrice?: TerekaMoney;
+  tierId?: string;
+  billingDescription?: string;
   status?: string;
+  lifecycleState?: string;
+  daysToExpiry?: TerekaMoney;
   expiry?: string;
 }
 
@@ -160,6 +169,14 @@ export interface TerekaLoan {
   memberName?: string;
   membershipNo?: string;
   memberId?: string;
+  paperApprovedByChairperson?: boolean;
+  paperApprovedBySecretary?: boolean;
+  paperApprovedByTreasurer?: boolean;
+  paperApprovedByCommittee?: boolean;
+  paperApprovalReference?: string;
+  paperApprovalApprovers?: string;
+  paperApprovalRecordedByUserId?: string;
+  paperApprovalRecordedAt?: string;
 }
 
 export interface TerekaBalances {

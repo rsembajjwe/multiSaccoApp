@@ -61,7 +61,7 @@ var TerekaFormatters = Object.freeze({
     const value = row[column] ?? row[this.snakeColumn(column)] ?? row[this.camelFallbackColumn(column)] ?? "";
     const normalizedColumn = column.toLowerCase();
     if (typeof value === "string" && value.startsWith("<span class=\"complaint-chip")) return value;
-    const moneyColumns = ["debit", "credit", "savings", "shares", "welfare", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "loanPortfolio", "loansAtRisk", "expenseTotal", "assetCost", "assetNetBookValue", "monthlyInstallment", "principalDue", "interestDue", "totalDue", "paidAmount", "balanceDue", "capacity", "guaranteeCeiling", "committedGuarantees"];
+    const moneyColumns = ["debit", "credit", "payment", "loanReceived", "savings", "shares", "welfare", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits", "loanPortfolio", "loansAtRisk", "expenseTotal", "assetCost", "assetNetBookValue", "monthlyInstallment", "principalDue", "interestDue", "totalDue", "totalPayable", "paidAmount", "paidToDate", "balanceDue", "capacity", "guaranteeCeiling", "committedGuarantees"];
     if (normalizedColumn.includes("amount") || normalizedColumn.includes("balance") || moneyColumns.includes(column)) return this.formatMoneyValue(Number(value || 0), region);
     if (normalizedColumn.includes("status") || normalizedColumn.includes("severity")) return `<span class="status ${this.statusClassValue(value)}">${this.escapeHtmlValue(String(value || "Pending"))}</span>`;
     if (this.isDateColumnValue(column)) return this.escapeHtmlValue(this.formatTableDateValue(value, column, region));
@@ -69,7 +69,7 @@ var TerekaFormatters = Object.freeze({
   },
   isDateColumnValue(column) {
     const text = column.toLowerCase();
-    return text === "date" || text.endsWith("date") || text.endsWith("at") || ["createdat", "updatedat", "postedat", "sentat", "readat", "expiresat", "usedat"].includes(text);
+    return text === "date" || text.endsWith("date") || text.endsWith("at") || ["appliedon", "createdat", "updatedat", "postedat", "sentat", "readat", "expiresat", "usedat"].includes(text);
   },
   formatTableDateValue(value, column, region) {
     if (!value) return "-";
@@ -86,7 +86,6 @@ var TerekaFormatters = Object.freeze({
       packageName: "package",
       expiryDate: "expiry",
       postedAt: "date",
-      applicationNo: "id",
       requestedAmount: "amount",
       fullName: "name",
       membershipNo: "no",

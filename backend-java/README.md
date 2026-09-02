@@ -74,8 +74,8 @@ Development/demo seed logins:
 
 - Platform admin: `admin@platform.local` / `Admin@12345`
 - SACCO admin: `admin@greenvalley.local` / `Sacco@12345`
-- Member portal: `GVS-0001` / `Member@12345`
+- Member portal: `GREE-0001` / `Member@12345`
 
 These seeded staff and member logins are blocked outside development/demo mode when `SACCO_DEMO_LOGINS_ENABLED=false`, which is the production profile default.
 
-Staff login accepts `saccoCode`, `username`, and `password`. Use `PLATFORM` for platform administration and SACCO abbreviations such as `GVS` for tenant users. The legacy `email` plus `password` request remains accepted for test automation.
+Staff login accepts `saccoCode`, `username`, and `password`. Use `PLATFORM` for platform administration and SACCO abbreviations such as `GREE` for tenant users. The legacy `email` plus `password` request remains accepted for test automation.

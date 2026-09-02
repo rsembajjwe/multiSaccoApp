@@ -48,6 +48,7 @@
     ${notificationTemplateReadinessPanel(templates)}
     ${providerOperationalEvidencePanel(deliveries)}
     ${notificationProviderStatusPanel()}
+    ${platformSmsCreditUsagePanel(deliveries)}
     ${moduleTabs("notifications", tabs, tab)}
     ${deliveryTabs.includes(tab) ? `<section class="panel compact-panel">
       <div class="panel-heading">
@@ -305,6 +306,97 @@ function notificationProviderStatusPanel() {
       ${rows.some((row) => normal(row.status) !== "ready") ? `<div class="notice warning"><strong>Provider issue detected.</strong><span>${escapeHtml(rows.filter((row) => normal(row.status) !== "ready").map((row) => row.message).join(" "))}</span></div>` : ""}
     </section>
   `;
+}
+
+function platformSmsCreditUsagePanel(deliveries) {
+  if (!isPlatform()) return "";
+  const rows = buildPlatformSmsCreditRows(deliveries);
+  const smsDeliveries = deliveries.filter((row) => normal(row.channel) === "sms");
+  const platformCredits = platformSmsCreditBalance();
+  const smsProvider = platformSmsProviderStatus();
+  const allocatedCredits = rows.reduce((sum, row) => sum + Number(row.allocatedCredits || 0), 0);
+  const remainingCredits = rows.reduce((sum, row) => sum + Number(row.currentSmsCredit || 0), 0);
+  const failedSms = smsDeliveries.filter((row) => normal(row.status) !== "sent").length;
+  const creditMismatch = platformCredits !== null && remainingCredits > platformCredits;
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Platform SMS credit control</h2>
+          <p>AfroSMS platform balance, SACCO usage and current SACCO SMS credit.</p>
+        </div>
+        <button class="button secondary" type="button" data-action="check-notification-provider-status">Refresh SMS credit</button>
+      </div>
+      <div class="mini-grid">
+        ${mini("AfroSMS account credit", platformCredits === null ? "Not visible" : `${formatWholeNumber(platformCredits)} SMS`)}
+        ${mini("SMS provider", smsProvider ? `${labelize(smsProvider.provider)} - ${labelize(smsProvider.status)}` : "Not loaded")}
+        ${mini("Allocated to SACCOs", `${formatWholeNumber(allocatedCredits)} SMS`)}
+        ${mini("Current SACCO credit", `${formatWholeNumber(remainingCredits)} SMS`)}
+        ${mini("SMS used", `${formatWholeNumber(rows.reduce((sum, row) => sum + Number(row.smsUsed || 0), 0))} message(s)`)}
+        ${mini("Failed SMS", failedSms ? `${failedSms} needs follow-up` : "Clear")}
+      </div>
+      ${platformCredits === null ? `<div class="notice warning"><strong>Platform SMS credit not visible.</strong><span>${escapeHtml(smsProvider?.message || "Provider status has not loaded. Refresh SMS credit after configuring AfroSMS.")}</span></div>` : ""}
+      ${creditMismatch ? `<div class="notice warning"><strong>SMS credit warning.</strong><span>Total SACCO SMS credits (${formatWholeNumber(remainingCredits)} SMS) are more than the platform AfroSMS credit (${formatWholeNumber(platformCredits)} SMS). Reduce SACCO allocations or top up the platform account before sending more SMS.</span></div>` : ""}
+    </section>
+    ${recordTable("SMS usage per SACCO", rows, ["sacco", "package", "allocatedCredits", "smsUsed", "sentSms", "failedSms", "currentSmsCredit", "lastSmsAt"])}
+  `;
+}
+
+function buildPlatformSmsCreditRows(deliveries) {
+  const smsDeliveries = deliveries.filter((row) => normal(row.channel) === "sms");
+  return tenantRows().map((tenant) => {
+    const subscription = subscriptionForTenant(tenant.id) || {};
+    const tenantDeliveries = smsDeliveries.filter((row) => row.tenantId === tenant.id);
+    const sent = tenantDeliveries.filter((row) => normal(row.status) === "sent").length;
+    const failed = tenantDeliveries.filter((row) => normal(row.status) !== "sent").length;
+    const recordedUsed = numberOrNull(subscription.smsCreditsUsed);
+    const used = recordedUsed === null ? tenantDeliveries.length : Math.max(recordedUsed, tenantDeliveries.length);
+    const allocated = numberOrNull(subscription.smsCreditsAllocated) ?? numberOrNull(subscription.smsCreditAllocation) ?? 0;
+    const current = numberOrNull(subscription.smsCreditBalance) ?? Math.max(0, allocated - used);
+    const latest = tenantDeliveries
+      .map((row) => row.sentAt || row.createdAt)
+      .filter(Boolean)
+      .sort()
+      .pop();
+    return {
+      sacco: tenant.name || tenant.id,
+      package: labelize(subscription.packageId || tenant.packageId || "not_set"),
+      allocatedCredits: allocated,
+      smsUsed: used,
+      sentSms: sent,
+      failedSms: failed,
+      currentSmsCredit: current,
+      lastSmsAt: latest ? formatDateTime(latest) : "No SMS yet"
+    };
+  });
+}
+
+function platformSmsCreditBalance() {
+  const smsProvider = platformSmsProviderStatus();
+  const providerBalance = numberOrNull(smsProvider?.balance);
+  if (providerBalance !== null) return providerBalance;
+  const evidenceRows = state.providerOperationalEvidence?.notificationProviderStatus || [];
+  const evidenceSmsProvider = Array.isArray(evidenceRows)
+    ? evidenceRows.find((row) => normal(row.channel) === "sms" || normal(row.provider).includes("afrosms"))
+    : null;
+  return numberOrNull(evidenceSmsProvider?.balance);
+}
+
+function platformSmsProviderStatus() {
+  const rows = state.notificationProviderStatus || [];
+  return rows.find((row) => normal(row.provider).includes("afrosms") && numberOrNull(row.balance) !== null)
+    || rows.find((row) => normal(row.channel) === "sms" && numberOrNull(row.balance) !== null)
+    || rows.find((row) => normal(row.channel) === "sms" || normal(row.provider).includes("afrosms"));
+}
+
+function numberOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(String(value).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function formatWholeNumber(value) {
+  return new Intl.NumberFormat(currentRegion().locale, { maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 
 function notificationDeliveryFilters(deliveries) {

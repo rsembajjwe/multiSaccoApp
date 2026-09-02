@@ -46,13 +46,13 @@ function Wait-ForJsonHealth($Url, $Label) {
 
 function Test-UiLogin($UiPort) {
   $staffBody = @{
-    saccoCode = "GVS"
+    saccoCode = "GREE"
     username = "treasurer@greenvalley.local"
     password = "Treasurer@12345"
   } | ConvertTo-Json
   $memberBody = @{
-    saccoCode = "GVS"
-    identifier = "GVS-0001"
+    saccoCode = "GREE"
+    identifier = "GREE-0001"
     password = "Member@12345"
   } | ConvertTo-Json
 
@@ -72,7 +72,7 @@ function Test-UiLogin($UiPort) {
     -ContentType "application/json" `
     -Body $memberBody `
     -TimeoutSec 15
-  if ($member.data.member.membershipNo -ne "GVS-0001") {
+  if ($member.data.member.membershipNo -ne "GREE-0001") {
     throw "Connected UI member login smoke test returned the wrong account."
   }
 }

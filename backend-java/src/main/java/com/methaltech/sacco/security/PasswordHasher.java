@@ -2,6 +2,9 @@ package com.methaltech.sacco.security;
 
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.security.spec.InvalidKeySpecException;
 import java.util.HexFormat;
 import javax.crypto.SecretKeyFactory;
@@ -23,7 +26,14 @@ public class PasswordHasher {
     }
 
     public boolean matches(String password, String salt, String expectedHash) {
-        return hash(password, salt).equalsIgnoreCase(expectedHash);
+        if (expectedHash == null) {
+            return false;
+        }
+        // Constant-time comparison to avoid leaking hash bytes via timing. hash() emits
+        // lowercase hex, so the stored value is lowercased to preserve case-insensitive matching.
+        byte[] actual = hash(password, salt).getBytes(StandardCharsets.UTF_8);
+        byte[] expected = expectedHash.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(actual, expected);
     }
 
     private String hash(String password, String salt) {

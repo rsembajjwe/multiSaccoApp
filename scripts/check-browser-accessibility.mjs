@@ -46,7 +46,7 @@ try {
   await assertViewAccessibility(page, "users", "Platform users and roles");
   await logout(page);
 
-  await staffLogin(page, "GVS", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
+  await staffLogin(page, "GREE", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
   await assertPageAccessibility(page, "SACCO admin dashboard");
   await assertAuthenticatedShellAccessibility(page, "SACCO shell");
   await assertViewAccessibility(page, "members", "SACCO member management");
@@ -217,8 +217,8 @@ async function memberLogin(page) {
   await page.goto(uiBaseUrl, { waitUntil: "domcontentloaded" });
   await clearSession(page);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.locator("#code").fill("GVS");
-  await page.locator("#username").fill("GVS-0001");
+  await page.locator("#code").fill("GREE");
+  await page.locator("#username").fill("GREE-0001");
   await page.locator("#password").fill("Member@12345");
   await page.locator("#loginButton").click();
   await page.locator(".app-shell").waitFor({ state: "attached" });
@@ -231,7 +231,7 @@ async function canMemberLogin() {
     const response = await fetch(`${uiBaseUrl}/api/v1/member-auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ saccoCode: "GVS", identifier: "GVS-0001", password: "Member@12345" })
+      body: JSON.stringify({ saccoCode: "GREE", identifier: "GREE-0001", password: "Member@12345" })
     });
     return response.ok;
   } catch {

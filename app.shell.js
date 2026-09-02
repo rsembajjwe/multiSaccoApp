@@ -81,12 +81,31 @@ function visibleModules() {
   if (state.auth === "member") return memberModules.map(localizeModule);
   const kind = roleKind();
   const source = isPlatform() ? platformModules : saccoModules;
-  return source.filter((item) => item[4].includes(kind) && hasPermission(item[3])).map(localizeModule);
+  const modules = source.filter((item) => item[4].includes(kind) && hasPermission(item[3]));
+  if (!isPlatform() && kind === "chairperson") {
+    const order = ["dashboard", "members", "loans", "loan-approvals", "savings", "shares", "subscriptions", "reports", "governance", "notifications", "complaints", "documents", "settings"];
+    modules.sort((a, b) => order.indexOf(String(a[0])) - order.indexOf(String(b[0])));
+  }
+  return modules.map(localizeModule);
 }
 
 function localizeModule(item) {
   const [id, label, description, permission, roles] = item;
   const scope = state.auth === "member" ? "member" : isPlatform() ? "platform" : "sacco";
+  const chairpersonLabels = {
+    "loan-approvals": "Loan Approval",
+    governance: "Meetings & Approvals",
+    complaints: "Messages",
+    notifications: "Alerts",
+    documents: "Documents"
+  };
+  const chairpersonDescriptions = {
+    "loan-approvals": "Paper approval records and decisions",
+    governance: "Board meetings and paper approval records",
+    complaints: "Member and SACCO office chats",
+    notifications: "Important loan and governance alerts",
+    documents: "Signed forms and member files"
+  };
   const titleKeys = {
     platform: {
       dashboard: "navDashboard",
@@ -109,13 +128,17 @@ function localizeModule(item) {
       shares: "navShares",
       welfare: "navWelfare",
       loans: "navLoans",
+      "loan-approvals": "Loan Approval",
       guarantors: "navGuarantors",
       approvals: "navApprovals",
       accounting: "navAccounting",
       reconciliation: "navReconciliation",
       reports: "navReports",
+      subscriptions: "navSubscriptions",
       governance: "navGovernance",
       complaints: "navComplaints",
+      notifications: "navNotifications",
+      documents: "Documents",
       users: "navUsersRoles",
       settings: "navSettings",
       audit: "navAuditLogs"
@@ -152,13 +175,17 @@ function localizeModule(item) {
       shares: "navSharesDesc",
       welfare: "navWelfareDesc",
       loans: "navLoansDesc",
+      "loan-approvals": "Paper approval records and decisions",
       guarantors: "navGuarantorsDesc",
       approvals: "navApprovalsDesc",
       accounting: "navAccountingDesc",
       reconciliation: "navReconciliationDesc",
       reports: "navSaccoReportsDesc",
+      subscriptions: "SACCO, SMS and USSD subscriptions",
       governance: "navGovernanceDesc",
       complaints: "navSaccoComplaintsDesc",
+      notifications: "navNotificationsDesc",
+      documents: "Signed forms and member files",
       users: "navSaccoUsersDesc",
       settings: "navSettingsDesc",
       audit: "navSaccoAuditDesc"
@@ -173,10 +200,11 @@ function localizeModule(item) {
       security: "navSecurityDesc"
     }
   };
+  const isChairpersonModule = scope === "sacco" && roleKind() === "chairperson";
   return [
     id,
-    titleKeys[scope]?.[id] ? t(titleKeys[scope][id]) : label,
-    descriptionKeys[scope]?.[id] ? t(descriptionKeys[scope][id]) : description,
+    isChairpersonModule && chairpersonLabels[id] ? chairpersonLabels[id] : titleKeys[scope]?.[id] ? t(titleKeys[scope][id]) : label,
+    isChairpersonModule && chairpersonDescriptions[id] ? chairpersonDescriptions[id] : descriptionKeys[scope]?.[id] ? t(descriptionKeys[scope][id]) : description,
     permission,
     roles
   ];
@@ -202,6 +230,7 @@ const NAV_ICON_PATHS = {
   'funding-sources': '<path d="M3 10l9-5 9 5"/><path d="M5 10v8M12 10v8M19 10v8"/><path d="M3 20h18"/>',
   funds: '<path d="M3 10l9-5 9 5"/><path d="M5 10v8M12 10v8M19 10v8"/><path d="M3 20h18"/>',
   loans: '<path d="M7 3h8l3 3v15H7z"/><path d="M15 3v3h3"/><path d="M10 12h5M10 16h5"/>',
+  'loan-approvals': '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/><path d="M7 19l10-14"/>',
   guarantors: '<path d="M12 3l7 3v5c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
   approvals: '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
   accounting: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>',
@@ -210,6 +239,7 @@ const NAV_ICON_PATHS = {
   governance: '<path d="M4 21h16M6 21V10M18 21V10M4 10l8-5 8 5"/>',
   complaints: '<path d="M4 5h16v11H8l-4 4z"/>',
   notifications: '<path d="M18 9a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6"/><path d="M10.5 20a2 2 0 0 0 3 0"/>',
+  documents: '<rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2 2M16.4 16.4l2 2M18.4 5.6l-2 2M7.6 16.4l-2 2"/>',
   audit: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M8 13l2 2 4-4"/>',
   subscriptions: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>',
@@ -234,12 +264,13 @@ function renderShell() {
   const sessionMenu = sessionSecurityMenu();
   const helpMenu = helpSupportMenu();
   const accountMenu = accountProfileMenu();
+  const menuLogo = !isPlatform() && typeof currentSaccoLogoUrl === "function" ? currentSaccoLogoUrl() : "";
   setHtml(`
     <a class="skip-link" href="#main-content">Skip to main content</a>
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-top">
-          <div class="logo-lockup compact">${logo()}<div><strong>Tereka Online</strong><span>${portal}</span></div></div>
+          <div class="logo-lockup compact">${logo("", menuLogo)}<div><strong>Tereka Online</strong><span>${portal}</span></div></div>
           <button class="icon-button menu-button" type="button" data-action="toggle-sidebar" aria-label="Toggle sidebar"><span class="menu-bars" aria-hidden="true"></span></button>
         </div>
         <div class="context-card">
@@ -626,13 +657,15 @@ function renderView(view) {
   if (view === "finance") return treasurerFinanceView();
   if (view === "expenses") return treasurerExpensesView();
   if (view === "sacco-applications") return saccoApplications();
-  if (view === "subscriptions") return subscriptionsView();
+  if (view === "subscriptions") return isPlatform() ? subscriptionsView() : saccoSubscriptionsView();
   if (view === "member-dues") return memberDuesView();
   if (view === "savings-transfers") return savingsTransfersView();
   if (view === "sacco-accounts") return saccoAccounts();
   if (view === "members") return membersView();
+  if (view === "payments") return paymentsView();
   if (view === "transactions") return transactionsView();
   if (view === "loans") return loansView();
+  if (view === "loan-approvals") return loanApprovalsView();
   if (view === "approvals") return approvalsView();
   if (view === "reconciliation") return reconciliationView();
   if (view === "operations") return operationsView();
@@ -641,7 +674,7 @@ function renderView(view) {
   if (view === "notifications") return notificationsView();
   if (view === "users") return usersView();
   if (view === "audit") return auditView();
-  if (["savings", "shares", "welfare", "guarantors", "accounting", "governance", "settings"].includes(view)) return moduleBlueprint(view);
+  if (["savings", "shares", "welfare", "guarantors", "accounting", "governance", "settings", "documents"].includes(view)) return moduleBlueprint(view);
   return emptyState("Module coming next", "This module has a document-driven shell and will be connected to deeper backend workflows next.");
 }
 

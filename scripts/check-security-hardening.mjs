@@ -89,7 +89,7 @@ await check("password reset does not enumerate unknown users", async () => {
 
 await check("SACCO staff cannot cross tenant boundaries", async () => {
   const login = await api("POST", "/auth/login", {
-    saccoCode: "GVS",
+    saccoCode: "GREE",
     username: "admin@greenvalley.local",
     password: "Sacco@12345"
   });
@@ -101,7 +101,7 @@ await check("SACCO staff cannot cross tenant boundaries", async () => {
 
 await check("member sessions are isolated from staff APIs", async () => {
   const login = await api("POST", "/member-auth/login", {
-    identifier: "GVS-0001",
+    identifier: "GREE-0001",
     password: "Member@12345"
   });
   memberToken = login.data.token;
@@ -119,7 +119,7 @@ await check("repeated failed staff logins are rate limited", async () => {
   let limited = null;
   for (let index = 0; index < 8; index += 1) {
     const response = await raw("POST", "/auth/login", {
-      saccoCode: "LFS",
+      saccoCode: "LAKE",
       username: `security-check-${Date.now()}-${index}@example.local`,
       password: "wrong-password"
     });

@@ -2,6 +2,8 @@ package com.methaltech.sacco.member;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.api.PageParams;
+import com.methaltech.sacco.api.PagedResponse;
 import com.methaltech.sacco.accounting.MobileMoneyProviderRouter;
 import com.methaltech.sacco.complaint.Complaint;
 import com.methaltech.sacco.complaint.ComplaintRepository;
@@ -54,6 +56,9 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -106,6 +111,8 @@ class MemberAuthController {
     private final MemberSubscriptionRepository memberSubscriptionRepository;
     private final MemberPasswordResetRequestRepository passwordResetRepository;
     private final LoanProductCatalog loanProductCatalog;
+    private final DocumentStorageService documentStorageService;
+    private final MemberDocumentRepository memberDocumentRepository;
 
     MemberAuthController(
             MemberRepository memberRepository,
@@ -135,7 +142,9 @@ class MemberAuthController {
             NotificationChannelPreferenceService channelPreferenceService,
             MemberSubscriptionRepository memberSubscriptionRepository,
             MemberPasswordResetRequestRepository passwordResetRepository,
-            LoanProductCatalog loanProductCatalog) {
+            LoanProductCatalog loanProductCatalog,
+            DocumentStorageService documentStorageService,
+            MemberDocumentRepository memberDocumentRepository) {
         this.memberRepository = memberRepository;
         this.memberSessionRepository = memberSessionRepository;
         this.loanRepository = loanRepository;
@@ -164,6 +173,8 @@ class MemberAuthController {
         this.memberSubscriptionRepository = memberSubscriptionRepository;
         this.passwordResetRepository = passwordResetRepository;
         this.loanProductCatalog = loanProductCatalog;
+        this.documentStorageService = documentStorageService;
+        this.memberDocumentRepository = memberDocumentRepository;
     }
 
     @PostMapping("/login")
@@ -485,6 +496,33 @@ class MemberAuthController {
                 .toList()));
     }
 
+    @GetMapping("/statement")
+    ResponseEntity<?> statement(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        List<MobileStatementLineResponse> lines = allStatementLines(currentSession.member());
+        java.util.Collections.reverse(lines);
+
+        if (PageParams.requested(page, size)) {
+            int resolvedPage = (page == null || page < 0) ? 0 : page;
+            int resolvedSize = (size == null)
+                    ? PageParams.DEFAULT_SIZE
+                    : Math.min(Math.max(size, 1), PageParams.MAX_SIZE);
+            int total = lines.size();
+            int totalPages = total == 0 ? 0 : (int) Math.ceil(total / (double) resolvedSize);
+            int from = Math.min(resolvedPage * resolvedSize, total);
+            int to = Math.min(from + resolvedSize, total);
+            List<MobileStatementLineResponse> pageSlice =
+                    new java.util.ArrayList<>(lines.subList(from, to));
+            return ResponseEntity.ok(PagedResponse.of(pageSlice, resolvedPage, resolvedSize, total, totalPages));
+        }
+        return ResponseEntity.ok(ApiResponse.of(lines));
+    }
+
     @GetMapping("/loan-products")
     ResponseEntity<?> listLoanProducts(@RequestHeader(name = "Authorization", required = false) String authorization) {
         MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
@@ -583,6 +621,102 @@ class MemberAuthController {
                 .findFirstByMemberIdOrderByCreatedAtDesc(currentSession.member().getId())
                 .map(MemberSubscriptionResponse::from)
                 .orElse(null)));
+    }
+
+    @PostMapping(path = "/profile-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    ResponseEntity<?> uploadProfilePhoto(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam("file") MultipartFile file) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "NO_FILE", "Choose an image to upload."));
+        }
+        if (file.getSize() > 1_048_576L) {
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                    .body(ApiErrorResponse.of(413, "PHOTO_TOO_LARGE", "Profile photo must be 1 MB or smaller."));
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.toLowerCase(java.util.Locale.ROOT).startsWith("image/")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_IMAGE", "Profile photo must be an image."));
+        }
+        Member member = currentSession.member();
+        try {
+            String storageKey = documentStorageService.store(
+                    member.getTenantId(),
+                    member.getId(),
+                    "photo",
+                    file.getOriginalFilename(),
+                    contentType,
+                    file.getBytes());
+            MemberDocument document = memberDocumentRepository.save(new MemberDocument(
+                    "member_document_" + UUID.randomUUID(),
+                    member.getTenantId(),
+                    member.getId(),
+                    "photo",
+                    storageKey,
+                    "pending_verification",
+                    member.getId()));
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.of(MemberDocumentResponse.from(document)));
+        } catch (IOException | DocumentStorageException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiErrorResponse.of(400, "PHOTO_UPLOAD_FAILED", ex.getMessage()));
+        }
+    }
+
+    @GetMapping("/profile-photo")
+    ResponseEntity<?> getProfilePhoto(
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        MemberDocument photo = memberDocumentRepository.findByMemberIdOrderByCreatedAtDesc(member.getId())
+                .stream()
+                .filter(d -> "photo".equalsIgnoreCase(d.getDocumentType()))
+                .findFirst()
+                .orElse(null);
+        if (photo == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "NO_PHOTO", "No profile photo on file."));
+        }
+        try {
+            DocumentStorageObject stored = documentStorageService.read(photo.getStorageKey());
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(stored.contentType()))
+                    .body(stored.content());
+        } catch (DocumentStorageException ex) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "PHOTO_FILE_NOT_FOUND", ex.getMessage()));
+        }
+    }
+
+    @PatchMapping("/profile")
+    ResponseEntity<?> updateContactDetails(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestBody UpdateContactRequest body) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+
+        Member member = currentSession.member();
+        String phone = body == null || body.phone() == null ? member.getPhone() : body.phone().trim();
+        String whatsapp = body == null || body.whatsapp() == null ? member.getWhatsapp() : body.whatsapp().trim();
+        String email = body == null || body.email() == null ? member.getEmail() : body.email().trim();
+
+        if (email != null && !email.isBlank() && !email.contains("@")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_EMAIL", "Enter a valid email address."));
+        }
+        member.updateContact(
+                phone == null || phone.isBlank() ? null : phone,
+                whatsapp == null || whatsapp.isBlank() ? null : whatsapp,
+                email == null || email.isBlank() ? null : email);
+        Member saved = memberRepository.save(member);
+        return ResponseEntity.ok(ApiResponse.of(MemberResponse.from(saved)));
     }
 
     @GetMapping("/notification-preferences")
@@ -721,15 +855,15 @@ class MemberAuthController {
                 return ResponseEntity.badRequest()
                         .body(ApiErrorResponse.of(400, "DUPLICATE_GUARANTOR", "Guarantor " + membershipNo + " was selected more than once."));
             }
-            BigDecimal pledge = Money.normalize(selection.pledgeAmount() == null ? BigDecimal.ZERO : selection.pledgeAmount());
+            BigDecimal pledge = selection.pledgeAmount() == null ? amount : Money.normalize(selection.pledgeAmount());
             if (pledge.compareTo(BigDecimal.ZERO) <= 0) {
                 return ResponseEntity.badRequest()
-                        .body(ApiErrorResponse.of(400, "INVALID_GUARANTEE_AMOUNT", "Pledge for " + membershipNo + " must be greater than zero."));
+                        .body(ApiErrorResponse.of(400, "INVALID_GUARANTEE_AMOUNT", "Guaranteed amount must be greater than zero."));
             }
             BigDecimal capacity = guaranteeCapacity(guarantor, null);
             if (pledge.compareTo(capacity) > 0) {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Guarantor " + membershipNo + " can only guarantee up to " + capacity + "."));
+                        .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Guarantor capacity is too low for this pledge."));
             }
             resolvedGuarantors.add(new ResolvedGuarantor(guarantor, pledge));
         }
@@ -753,7 +887,7 @@ class MemberAuthController {
                     resolved.guarantor().getId(),
                     resolved.pledge(),
                     null));
-            notificationService.notifyGuarantorRequested(resolved.guarantor(), member, resolved.pledge(), loan.getId());
+            notificationService.notifyGuarantorRequested(resolved.guarantor(), member, loan.getId());
         }
         notificationService.notifyLoanApplicationSubmitted(member, product, amount, loan.getId());
         auditService.record(
@@ -870,15 +1004,15 @@ class MemberAuthController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "GUARANTOR_ALREADY_REQUESTED", "Guarantor " + membershipNo + " already has an active request on this loan."));
         }
-        BigDecimal pledge = Money.normalize(body.pledgeAmount() == null ? BigDecimal.ZERO : body.pledgeAmount());
+        BigDecimal pledge = body.pledgeAmount() == null ? loan.getAmount() : Money.normalize(body.pledgeAmount());
         if (pledge.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "INVALID_GUARANTEE_AMOUNT", "Pledge for " + membershipNo + " must be greater than zero."));
+                    .body(ApiErrorResponse.of(400, "INVALID_GUARANTEE_AMOUNT", "Guaranteed amount must be greater than zero."));
         }
         BigDecimal capacity = guaranteeCapacity(guarantor, null);
         if (pledge.compareTo(capacity) > 0) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Guarantor " + membershipNo + " can only guarantee up to " + capacity + "."));
+                    .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Guarantor capacity is too low for this pledge."));
         }
 
         LoanGuarantor saved = guarantorRepository.save(LoanGuarantor.request(
@@ -888,7 +1022,7 @@ class MemberAuthController {
                 guarantor.getId(),
                 pledge,
                 null));
-        notificationService.notifyGuarantorRequested(guarantor, member, pledge, loanId);
+        notificationService.notifyGuarantorRequested(guarantor, member, loanId);
         auditService.record(
                 member.getTenantId(),
                 (String) null,
@@ -1040,11 +1174,6 @@ class MemberAuthController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "GUARANTOR_ALREADY_DECIDED", "Only pending guarantor requests can be decided."));
         }
-        if ("accepted".equals(status) && guarantor.getGuaranteedAmount().compareTo(guaranteeCapacity(member, guarantor.getId())) > 0) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Guarantee exceeds your available guarantee capacity."));
-        }
-
         guarantor.decide(status);
         LoanGuarantor saved = guarantorRepository.save(guarantor);
         Loan loan = loanRepository.findById(saved.getLoanId()).orElse(null);
@@ -1143,7 +1272,7 @@ class MemberAuthController {
         return new ScheduleSummary(schedules.size(), paidInstallments, arrearsInstallments, Money.normalize(arrearsAmount), nextDueDate, status);
     }
 
-    private List<MobileStatementLineResponse> recentStatementLines(Member member) {
+    private List<MobileStatementLineResponse> allStatementLines(Member member) {
         BigDecimal runningBalance = BigDecimal.ZERO;
         List<MobileStatementLineResponse> lines = new java.util.ArrayList<>();
         for (FinancialTransaction transaction : transactionRepository.findByMemberIdAndStatusOrderByPostedAtAscCreatedAtAsc(member.getId(), "posted")) {
@@ -1163,8 +1292,13 @@ class MemberAuthController {
                     transaction.getNarration(),
                     transaction.getPostedAt() == null ? transaction.getCreatedAt() : transaction.getPostedAt()));
         }
+        return lines;
+    }
+
+    private List<MobileStatementLineResponse> recentStatementLines(Member member) {
+        List<MobileStatementLineResponse> lines = allStatementLines(member);
         int from = Math.max(lines.size() - 20, 0);
-        return lines.subList(from, lines.size());
+        return new java.util.ArrayList<>(lines.subList(from, lines.size()));
     }
 
     record LoginRequest(String saccoCode, @NotBlank String identifier, @NotBlank String password) {
@@ -1275,6 +1409,9 @@ class MemberAuthController {
             BigDecimal arrearsAmount,
             LocalDate nextDueDate,
             String status) {
+    }
+
+    record UpdateContactRequest(String phone, String whatsapp, String email) {
     }
 
     record MobileComplaintRequest(

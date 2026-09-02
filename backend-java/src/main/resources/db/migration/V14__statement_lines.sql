@@ -32,7 +32,7 @@ INSERT INTO statement_lines (
         '1020',
         'mobile_money',
         250000,
-        'GVS-TX-0001',
+        'GREE-TX-0001',
         'Mobile money savings collection',
         DATE '2026-07-14',
         'user_green_admin'
@@ -43,7 +43,7 @@ INSERT INTO statement_lines (
         '1020',
         'mobile_money',
         850000,
-        'LRP-GVS-0001',
+        'LRP-GREE-0001',
         'Mobile money loan repayment',
         DATE '2026-07-14',
         'user_green_admin'

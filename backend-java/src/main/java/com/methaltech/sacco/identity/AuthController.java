@@ -128,9 +128,9 @@ class AuthController {
                     .body(ApiErrorResponse.of(401, "AUTH_INVALID", "Invalid email or password."));
         }
         if (!authService.isPlatform(user) && !saccoCanOperate(requestedTenant)) {
-            recordLoginAudit(auditTenantId(requestedTenant), "Blocked staff login because SACCO is not active or subscription is unpaid", identifier, servletRequest);
+            recordLoginAudit(auditTenantId(requestedTenant), "Blocked staff login because SACCO access is not active, trial, or renewable", identifier, servletRequest);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(ApiErrorResponse.of(403, "SACCO_ACCESS_INACTIVE", "This SACCO cannot operate until platform approval and subscription payment are active."));
+                    .body(ApiErrorResponse.of(403, "SACCO_ACCESS_INACTIVE", "This SACCO cannot operate until platform approval or trial access is active."));
         }
 
         loginAttemptService.clear(rateLimitKey);
@@ -300,9 +300,14 @@ class AuthController {
     }
 
     private boolean saccoCanOperate(Tenant tenant) {
-        return tenant != null
-                && "active".equals(tenant.getStatus())
-                && subscriptionRepository.existsByTenantIdAndStatus(tenant.getId(), "active");
+        if (tenant == null || "terminated".equals(tenant.getStatus())) return false;
+        String subscriptionStatus = subscriptionRepository.findFirstByTenantIdOrderByCreatedAtDesc(tenant.getId())
+                .map(subscription -> subscription.getStatus() == null ? "" : subscription.getStatus())
+                .orElse("");
+        if ("active".equals(tenant.getStatus())) {
+            return "active".equals(subscriptionStatus) || "trial".equals(subscriptionStatus);
+        }
+        return "suspended".equals(tenant.getStatus()) && "expired".equals(subscriptionStatus);
     }
 
     private UserAccessResponse accessFor(User user) {

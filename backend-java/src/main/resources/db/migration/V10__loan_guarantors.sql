@@ -21,13 +21,15 @@ INSERT INTO loan_guarantors (
     member_id,
     guaranteed_amount,
     status,
-    requested_by_user_id
+    requested_by_user_id,
+    decided_at
 ) VALUES (
     'guarantor_green_0001',
     'tenant_green',
     'loan_green_0002',
     'member_green_amina',
     400000,
-    'pending',
-    'user_green_admin'
+    'accepted',
+    'user_green_admin',
+    TIMESTAMP WITH TIME ZONE '2026-01-06 09:00:00+00'
 );

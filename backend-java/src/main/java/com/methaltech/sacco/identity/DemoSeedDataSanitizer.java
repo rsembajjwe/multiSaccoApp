@@ -47,8 +47,8 @@ class DemoSeedDataSanitizer implements ApplicationRunner {
                   AND (
                     password_salt = 'member_seed_salt_2026'
                     OR email LIKE '%@example.local'
-                    OR membership_no LIKE 'GVS-000_'
-                    OR membership_no LIKE 'LFS-000_'
+                    OR membership_no LIKE 'GREE-000_'
+                    OR membership_no LIKE 'LAKE-000_'
                   )
                 """);
         int totalUpdates = staffUpdates + memberUpdates;

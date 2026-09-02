@@ -418,7 +418,7 @@ function paymentRequestOperationsPanel(requests) {
         </label>
         <label>
           <span>Status note</span>
-          <input id="paymentRequestReason" value="${escapeHtml(state.paymentRequestStatusReason)}" placeholder="Reason for status update">
+          <input id="paymentRequestReason" value="${escapeHtml(state.paymentRequestStatusReason)}" placeholder="Reason for status update" ${canManage ? "" : "disabled"}>
         </label>
       </div>
       ${selected ? `<div class="source-grid compact">

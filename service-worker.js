@@ -1,4 +1,4 @@
-const CACHE_VERSION = "tereka-shell-v20260822-routed-complaint-reply-3";
+const CACHE_VERSION = "tereka-shell-v20260825-real-expiring-subscriptions-1";
 const APP_SHELL = [
   "/",
   "/index.html",

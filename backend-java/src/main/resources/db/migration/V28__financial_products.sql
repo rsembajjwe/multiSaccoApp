@@ -32,7 +32,7 @@ INSERT INTO financial_products (
     created_at,
     updated_at
 ) VALUES
-    ('product_green_savings_ordinary', 'tenant_green', 'savings', 'GVS-SAV-ORD', 'Ordinary Savings', 0.00, 10000.00, 2.5000, 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 08:00:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 08:00:00+00'),
-    ('product_green_shares_standard', 'tenant_green', 'shares', 'GVS-SHR-STD', 'Member Shares', 50000.00, 0.00, 0.0000, 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 08:05:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 08:05:00+00'),
-    ('product_green_welfare_family', 'tenant_green', 'welfare', 'GVS-WEL-FAM', 'Family Welfare Fund', 10000.00, 0.00, 0.0000, 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 08:10:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 08:10:00+00'),
-    ('product_lake_savings_ordinary', 'tenant_lake', 'savings', 'LFS-SAV-ORD', 'Ordinary Savings', 0.00, 5000.00, 2.0000, 'active', 'user_platform_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 08:00:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 08:00:00+00');
+    ('product_green_savings_ordinary', 'tenant_green', 'savings', 'GREE-SAV-ORD', 'Ordinary Savings', 0.00, 10000.00, 2.5000, 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 08:00:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 08:00:00+00'),
+    ('product_green_shares_standard', 'tenant_green', 'shares', 'GREE-SHR-STD', 'Member Shares', 50000.00, 0.00, 0.0000, 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 08:05:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 08:05:00+00'),
+    ('product_green_welfare_family', 'tenant_green', 'welfare', 'GREE-WEL-FAM', 'Family Welfare Fund', 10000.00, 0.00, 0.0000, 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 08:10:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 08:10:00+00'),
+    ('product_lake_savings_ordinary', 'tenant_lake', 'savings', 'LAKE-SAV-ORD', 'Ordinary Savings', 0.00, 5000.00, 2.0000, 'active', 'user_platform_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 08:00:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 08:00:00+00');

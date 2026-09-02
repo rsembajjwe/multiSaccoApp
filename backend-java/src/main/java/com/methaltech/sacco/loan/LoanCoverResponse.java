@@ -4,13 +4,14 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Committee cover view for a loan: the applicant's own credit (self-cover) plus each
- * selected guarantor's savings, remaining guarantee capacity, pledge and response status,
- * with totals and the cover ratio against the requested amount.
+ * Committee guarantor review for a loan: the applicant's own savings plus each
+ * selected guarantor's savings, remaining guarantee capacity and response status.
+ * Guarantors confirm responsibility for the loan; they do not enter a cash pledge amount.
  */
 public record LoanCoverResponse(
         String loanId,
         BigDecimal amount,
+        BigDecimal totalPayable,
         ApplicantCover applicant,
         List<GuarantorCover> guarantors,
         BigDecimal acceptedPledges,

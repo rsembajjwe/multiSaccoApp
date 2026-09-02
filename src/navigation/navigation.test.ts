@@ -24,14 +24,14 @@ describe("navigation model", () => {
       paymentStage: (tenant, subscription) => subscription ? "Paid" : "No payment",
       subscriptionForTenant: (tenantId) => subscriptions.find((subscription) => subscription.tenantId === tenantId),
       tenants: [
-        { id: "tenant-active", name: "Green Valley", abbreviation: "GVS", status: "active", memberCount: 100 },
+        { id: "tenant-active", name: "Green Valley", abbreviation: "GREE", status: "active", memberCount: 100 },
         { id: "tenant-risk", name: "Lake Farmers", code: "LF", status: "active", memberCount: 250 },
         { id: "tenant-suspended", name: "Town SACCO", status: "suspended", memberCount: { estimate: 50 } },
       ],
     });
 
     expect(rows[0]).toMatchObject({
-      saccoCode: "GVS",
+      saccoCode: "GREE",
       accountHealth: "Healthy",
       packageName: "Starter",
       paymentStage: "Paid",
@@ -52,9 +52,9 @@ describe("navigation model", () => {
 
   it("builds searchable grouped quick-search results with active selection safety", () => {
     const index = [
-      buildQuickSearchResult("SACCOs", "gvs", "sacco-applications", "Green Valley SACCO", "GVS / Wakiso"),
-      buildQuickSearchResult("Members", "m-1", "members", "Amina Nakutende", "GVS-0001"),
-      buildQuickSearchResult("Members", "m-2", "members", "Brian Kato", "GVS-0002"),
+      buildQuickSearchResult("SACCOs", "gvs", "sacco-applications", "Green Valley SACCO", "GREE / Wakiso"),
+      buildQuickSearchResult("Members", "m-1", "members", "Amina Nakutende", "GREE-0001"),
+      buildQuickSearchResult("Members", "m-2", "members", "Brian Kato", "GREE-0002"),
     ];
 
     const model = buildQuickSearchModel({ activeId: "members:m-1", index, query: "gvs", limit: 10 });

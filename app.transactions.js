@@ -1,4 +1,5 @@
 ﻿function transactionsView() {
+  if (isPlatform()) return platformTransactionsView();
   const cycle = currentSaccoCycleContext();
   const rows = transactionRows(cycle);
   const overview = buildTransactionOverviewSummary(rows);
@@ -24,6 +25,130 @@
       ${recordTable(`Transaction list - ${cycle.label}`, rows, ["reference", "postedAt", "memberName", "type", "paymentRoute", "amount", "paymentStatus", "receiptStatus", "reversalStatus", "status"])}
     ` : ""}
   `;
+}
+
+function paymentsView() {
+  return transactionFormPanel({ paymentOnly: true });
+}
+
+function platformTransactionsView() {
+  const rows = platformSubscriptionTransactionRows();
+  const tabs = [["capture", t("newTransactionScreen")], ["list", t("transactionList")], ["detail", t("transactionDetail")]];
+  const tab = activeModuleTab("transactions", tabs);
+  const paidTotal = rows.reduce((total, row) => total + Number(row.paid || 0), 0);
+  const dueTotal = rows.reduce((total, row) => total + Number(row.balanceDue || 0), 0);
+  return `
+    <div class="dashboard-grid">
+      ${summary("Platform-SACCO transactions", rows.length, "Subscription and platform payments", t("review"))}
+      ${summary("Outstanding", money.format(dueTotal), "Due from SACCOs", "Follow up")}
+      ${summary("Confirmed", money.format(paidTotal), "Received from SACCOs", t("receipts"))}
+    </div>
+    ${moduleTabs("transactions", tabs, tab)}
+    ${tab === "capture" ? platformTransactionFormPanel(rows) : ""}
+    ${tab === "detail" ? (platformTransactionDetailPanel(rows) || emptyState("Platform-SACCO transaction detail", "Select a SACCO transaction from the list to review or record payment.")) : ""}
+    ${tab === "list" ? `
+      ${filterToolbar("Search by SACCO, code, invoice, package, status or amount", "New platform-SACCO transaction", "Export")}
+      ${recordTable("Platform-SACCO transaction list", rows, ["saccoCode", "tenantName", "invoice", "packageName", "billingDescription", "amount", "paid", "balanceDue", "paymentStage", "operatingAccess", "expiry"])}
+    ` : ""}
+  `;
+}
+
+function platformSubscriptionTransactionRows() {
+  return buildSubscriptionRows({ subscriptions: dataRows("subscriptions"), tenants: tenantRows() })
+    .map((row) => ({
+      ...row,
+      action: "platform-transaction-detail",
+      actionLabel: Number(row.balanceDue || 0) > 0 ? "Record payment" : "Review",
+      actionId: row.id
+    }));
+}
+
+function platformTransactionFormPanel(rows) {
+  const canManage = hasPermission("subscriptions:manage") || roleKind() === "super" || roleKind() === "billing";
+  const selected = platformSelectedSubscription(rows);
+  if (!selected) {
+    return emptyState("No SACCO subscriptions", "Create or approve a SACCO subscription before recording platform-SACCO transactions.");
+  }
+  const due = Math.max(0, Number(selected.amount || 0) - Number(selected.paid || 0));
+  const searchValue = platformTransactionSearchLabel(selected);
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Record platform-SACCO transaction</h2>
+          <p>Capture subscription, renewal or service payments between the platform and a SACCO. These are not SACCO member transactions.</p>
+        </div>
+      </div>
+      ${state.selectedSubscriptionMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedSubscriptionMessage)}</strong></div>` : ""}
+      ${state.selectedSubscriptionError ? `<div class="notice warning"><strong>Transaction failed.</strong><span>${escapeHtml(state.selectedSubscriptionError)}</span></div>` : ""}
+      <form id="subscriptionPaymentForm" class="form-grid">
+        <label>
+          <span>Search SACCO</span>
+          <input id="platformTransactionSaccoSearch" list="platformTransactionSaccoOptions" value="${escapeHtml(searchValue)}" placeholder="Type SACCO name, 4-letter code or invoice" autocomplete="off" ${canManage ? "" : "disabled"}>
+          <datalist id="platformTransactionSaccoOptions">
+            ${platformTransactionSearchOptions(rows).map((option) => `<option value="${escapeHtml(option.label)}"></option>`).join("")}
+          </datalist>
+          <small>Search by SACCO name, code or invoice, then select the matching SACCO before recording payment.</small>
+        </label>
+        <input type="hidden" id="platformTransactionSubscriptionId" value="${escapeHtml(selected.id)}">
+        <input type="hidden" id="selectedSubscriptionId" value="${escapeHtml(selected.id)}">
+        <input type="hidden" id="selectedSubscriptionTenantId" value="${escapeHtml(selected.tenantId)}">
+        <label><span>Transaction type</span><select id="platformTransactionType" ${canManage ? "" : "disabled"}><option value="subscription_payment">Subscription payment</option><option value="subscription_renewal">Subscription renewal</option><option value="platform_service_fee">Platform service fee</option></select></label>
+        <label><span>Payment amount</span><input id="subscriptionPaymentAmount" type="number" min="1" step="1" value="${due || selected.amount || 0}" ${canManage ? "" : "disabled"}></label>
+        <label><span>Payment channel</span><select id="subscriptionPaymentChannel" ${canManage ? "" : "disabled"}><option value="manual">Manual</option><option value="cash">Cash</option><option value="bank">Bank</option><option value="mobile_money">Mobile money</option></select></label>
+        <label><span>External reference</span><input id="subscriptionPaymentReference" placeholder="Bank slip, mobile money or manual reference" ${canManage ? "" : "disabled"}></label>
+        <input id="subscriptionPaymentMode" type="hidden" value="group">
+        <input id="subscriptionPaymentMemberSlots" type="hidden" value="">
+        <div class="source-grid wide">
+          ${mini("SACCO", selected.tenantName || selected.tenantId)}
+          ${mini("Invoice", selected.invoice || selected.id)}
+          ${mini("Package", selected.packageName || selected.packageId)}
+          ${mini("Balance due", money.format(due))}
+        </div>
+        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">Record platform-SACCO payment</button>` : `<span class="status pending">View only</span>`}</div>
+      </form>
+    </section>
+  `;
+}
+
+function platformSelectedSubscription(rows) {
+  const selectedId = state.selectedSubscriptionId || state.platformTransactionSubscriptionId || rows.find((row) => Number(row.balanceDue || 0) > 0)?.id || rows[0]?.id || "";
+  return rows.find((row) => row.id === selectedId) || rows[0] || null;
+}
+
+function platformTransactionSearchOptions(rows) {
+  return rows.map((row) => ({
+    id: row.id,
+    label: platformTransactionSearchLabel(row)
+  }));
+}
+
+function platformTransactionSearchLabel(row) {
+  return [row.saccoCode, row.tenantName || row.tenantId, row.invoice].filter(Boolean).join(" - ");
+}
+
+function resolvePlatformTransactionSearch(value, rows = platformSubscriptionTransactionRows()) {
+  const needle = normal(value);
+  if (!needle) return null;
+  return rows.find((row) => normal(platformTransactionSearchLabel(row)) === needle)
+    || rows.find((row) => normal(row.saccoCode) === needle || normal(row.tenantName) === needle || normal(row.invoice) === needle || normal(row.tenantId) === needle)
+    || null;
+}
+
+function openPlatformTransactionDetail(subscriptionId) {
+  state.selectedSubscriptionId = subscriptionId;
+  state.platformTransactionSubscriptionId = subscriptionId;
+  state.moduleTabs.transactions = "detail";
+  state.selectedSubscriptionMessage = "";
+  state.selectedSubscriptionError = "";
+  renderShell();
+}
+
+function platformTransactionDetailPanel(rows) {
+  const row = platformSelectedSubscription(rows);
+  if (!row) return "";
+  state.selectedSubscriptionId = row.id;
+  return subscriptionDetailPanel(rows);
 }
 
 function transactionControlFocusPanel(overview, receiptingQueue, receiptRegister) {
@@ -104,32 +229,24 @@ function transactionReceiptingPanel(rows) {
   `;
 }
 
-function transactionFormPanel() {
+function transactionFormPanel(options = {}) {
+  const paymentOnly = Boolean(options.paymentOnly);
   const canCreate = hasPermission("transactions:create");
   const members = dataRows("members");
   const branches = dataRows("branches");
   const selectedMemberId = members[0]?.id || "";
+  const paymentChannelOptions = paymentOnly
+    ? `<option value="cash">Cash</option><option value="mobile_money">Mobile money</option>`
+    : `<option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option><option value="payroll_deduction">Payroll deduction</option>`;
+  const transactionTypeOptions = paymentOnly
+    ? `<option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="loan_repayment">Loan repayment</option>`
+    : `<option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="loan_repayment">Loan repayment</option><option value="withdrawal">Withdrawal</option>`;
   return `
-    <section class="panel compact-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>Office receipt controls</h2>
-          <p>Treasurer/Admin captures office cash, bank and mobile-money evidence. Cash posts immediately; non-cash entries remain controlled.</p>
-        </div>
-        <span class="status active">Controlled capture</span>
-      </div>
-      <div class="mini-grid">
-        ${mini("Treasurer cash", "Available for deposits and loan repayments")}
-        ${mini("Mobile money", "Use provider reference or callback evidence")}
-        ${mini("Bank", "Record bank slip or transaction reference")}
-        ${mini("Receipt", "Issued after posting")}
-      </div>
-    </section>
     <section class="panel">
       <div class="panel-heading">
         <div>
           <h2>Record a transaction</h2>
-          <p>Capture a member deposit, loan repayment or withdrawal. Cash posts immediately; bank and mobile-money entries may require verification.</p>
+          <p>${paymentOnly ? "Initiate or record member payments by cash or mobile money." : "Capture a member deposit, loan repayment or withdrawal. Cash posts immediately; bank and mobile-money entries may require verification."}</p>
         </div>
       </div>
       ${state.transactionFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.transactionFormMessage)}</strong></div>` : ""}
@@ -138,15 +255,26 @@ function transactionFormPanel() {
         <input type="hidden" id="newTransactionTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
         <label><span>Member</span><select id="newTransactionMemberId" ${canCreate ? "" : "disabled"}>${members.map((member) => `<option value="${escapeHtml(member.id)}">${escapeHtml(member.membershipNo)} - ${escapeHtml(member.fullName)}</option>`).join("")}</select></label>
         <label><span>Branch</span><select id="newTransactionBranchId" ${canCreate ? "" : "disabled"}><option value="">Use member branch</option>${branches.map((branch) => `<option value="${escapeHtml(branch.id)}">${escapeHtml(branch.name || branch.code)}</option>`).join("")}</select></label>
-        <label><span>Transaction type</span><select id="newTransactionType" ${canCreate ? "" : "disabled"}><option value="savings_deposit">Savings deposit</option><option value="share_purchase">Share purchase</option><option value="welfare_contribution">Welfare contribution</option><option value="loan_repayment">Loan repayment</option><option value="withdrawal">Withdrawal</option></select><small>Use Loan repayment when the member pays a loan through Treasurer cash, bank or mobile money.</small></label>
-        <label><span>Payment channel</span><select id="newTransactionChannel" ${canCreate ? "" : "disabled"}><option value="cash">Cash</option><option value="mobile_money">Mobile money</option><option value="bank">Bank</option><option value="payroll_deduction">Payroll deduction</option></select></label>
+        <label><span>Transaction type</span><select id="newTransactionType" ${canCreate ? "" : "disabled"}>${transactionTypeOptions}</select><small>Use Loan repayment when the member pays a loan through Treasurer cash, bank or mobile money.</small></label>
+        <label><span>Payment channel</span><select id="newTransactionChannel" ${canCreate ? "" : "disabled"}>${paymentChannelOptions}</select></label>
+        <label id="newTransactionProviderWrap" class="payment-provider-field hidden"><span>Mobile money provider</span><select id="newTransactionProvider" ${canCreate ? "" : "disabled"}><option value="mtn">MTN</option><option value="airtel">Airtel</option></select></label>
         <div id="newTransactionLoanBalance" class="loan-balance-panel wide" aria-live="polite">${transactionLoanBalanceHtml(selectedMemberId, "savings_deposit")}</div>
         <label><span>Amount</span><input id="newTransactionAmount" type="number" min="1" step="1" required value="10000" ${canCreate ? "" : "disabled"}></label>
-        <label><span>Receipt note</span><input id="newTransactionNarration" placeholder="Cash receipt, loan repayment note or provider reference" ${canCreate ? "" : "disabled"}></label>
-        <div class="form-actions inline">${canCreate ? `<button class="button primary" type="submit">Post / submit transaction</button>` : `<span class="status pending">View only</span>`}</div>
+        <label><span>Payment note</span><input id="newTransactionNarration" placeholder="Cash receipt note or mobile money reference" ${canCreate ? "" : "disabled"}></label>
+        <div class="form-actions inline">${canCreate ? `<button class="button primary" type="submit">${paymentOnly ? "Initiate / post transaction" : "Post / submit transaction"}</button>` : `<span class="status pending">View only</span>`}</div>
       </form>
     </section>
   `;
+}
+
+function syncTransactionPaymentProvider() {
+  const channel = value("newTransactionChannel");
+  const wrapper = document.getElementById("newTransactionProviderWrap");
+  const provider = document.getElementById("newTransactionProvider");
+  if (!wrapper) return;
+  const mobileMoney = channel === "mobile_money";
+  wrapper.classList.toggle("hidden", !mobileMoney);
+  if (provider instanceof HTMLSelectElement) provider.disabled = !mobileMoney || !hasPermission("transactions:create");
 }
 
 function transactionLoanBalanceHtml(memberId, transactionType) {

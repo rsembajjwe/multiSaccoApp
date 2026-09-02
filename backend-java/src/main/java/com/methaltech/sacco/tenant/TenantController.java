@@ -5,16 +5,18 @@ import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.notification.NotificationService;
+import com.methaltech.sacco.subscription.Subscription;
+import com.methaltech.sacco.subscription.SubscriptionAccessService;
 import com.methaltech.sacco.subscription.SubscriptionRepository;
 import com.methaltech.sacco.subscription.SubscriptionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -32,7 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/tenants")
 class TenantController {
 
-    private static final Set<String> ALLOWED_STATUSES = Set.of("pending_review", "approved", "active", "suspended", "terminated");
+    private static final Set<String> ALLOWED_STATUSES = Set.of("pending_review", "approved", "active", "inactive", "suspended", "terminated");
 
     private final TenantRepository tenantRepository;
     private final SaccoProfileRepository saccoProfileRepository;
@@ -41,6 +43,7 @@ class TenantController {
     private final AuthService authService;
     private final AuditService auditService;
     private final NotificationService notificationService;
+    private final SubscriptionAccessService subscriptionAccessService;
     private final com.methaltech.sacco.finance.FundTypeProvisioningService fundTypeProvisioningService;
 
     TenantController(
@@ -51,6 +54,7 @@ class TenantController {
             AuthService authService,
             AuditService auditService,
             NotificationService notificationService,
+            SubscriptionAccessService subscriptionAccessService,
             com.methaltech.sacco.finance.FundTypeProvisioningService fundTypeProvisioningService) {
         this.tenantRepository = tenantRepository;
         this.saccoProfileRepository = saccoProfileRepository;
@@ -59,6 +63,7 @@ class TenantController {
         this.authService = authService;
         this.auditService = auditService;
         this.notificationService = notificationService;
+        this.subscriptionAccessService = subscriptionAccessService;
         this.fundTypeProvisioningService = fundTypeProvisioningService;
     }
 
@@ -110,19 +115,20 @@ class TenantController {
         if (!authService.isPlatform(currentSession.user())) return platformRequired("Only platform administrators can create tenants here.");
 
         boolean paid = "paid".equalsIgnoreCase(blankToDefault(body.paymentStatus()));
+        String saccoCode = nextAvailableSaccoCode(generatedSaccoCode(body.name()));
         Tenant tenant = new Tenant(
                 "tenant_" + UUID.randomUUID(),
                 body.name().trim(),
-                body.abbreviation().trim().toUpperCase(),
+                saccoCode,
                 blankToDefault(body.registrationNo()),
                 blankToDefault(body.district()),
                 blankToDefault(body.country(), "Uganda"),
                 blankToDefault(body.localeCode(), "en-UG"),
                 blankToDefault(body.currencyCode(), "UGX").toUpperCase(),
                 body.currencyDigits() == null ? 0 : body.currencyDigits(),
-                body.licenseExpiry(),
+                body.licenseExpiry() == null ? LocalDate.now().plusYears(1) : body.licenseExpiry(),
                 blankToDefault(body.packageId()));
-        if (paid) tenant.activate();
+        tenant.activate();
         Tenant savedTenant = tenantRepository.save(tenant);
         SaccoProfile profile = saccoProfileRepository.save(new SaccoProfile(
                 "profile_" + UUID.randomUUID(),
@@ -152,10 +158,10 @@ class TenantController {
         notificationService.notifySaccoContact(
                 savedTenant.getId(),
                 paid ? "sacco_created_active" : "sacco_created_pending_payment",
-                paid ? "SACCO account activated" : "SACCO account created",
+                paid ? "SACCO account activated" : "SACCO one-month setup trial activated",
                 paid
                         ? savedTenant.getName() + " has been created and activated on Tereka Online."
-                        : savedTenant.getName() + " has been created on Tereka Online. Activation will complete after subscription payment.",
+                        : savedTenant.getName() + " has been created on Tereka Online with a one-month setup and testing trial. Data entry will stop after the trial unless the subscription is paid.",
                 "tenant",
                 savedTenant.getId(),
                 profile.getPhone(),
@@ -188,6 +194,13 @@ class TenantController {
         }
 
         tenant.updateStatus(body.status());
+        if ("active".equals(body.status())) {
+            Subscription subscription = subscriptionRepository.findFirstByTenantIdOrderByCreatedAtDesc(tenantId).orElse(null);
+            if (subscription != null) {
+                subscriptionAccessService.activateTrialIfCovered(subscription, LocalDate.now().plusYears(1));
+                subscriptionRepository.save(subscription);
+            }
+        }
         Tenant savedTenant = tenantRepository.save(tenant);
         SaccoProfile profile = saccoProfileRepository.findByTenantId(tenantId).orElse(null);
         auditService.record(
@@ -431,16 +444,56 @@ class TenantController {
                 + "; Member range: " + blankToDefault(memberRange);
     }
 
+    private String generatedSaccoCode(String name) {
+        String[] words = blankToDefault(name, "SACCO")
+                .toUpperCase(Locale.ROOT)
+                .replaceAll("[^A-Z\\s]", " ")
+                .trim()
+                .split("\\s+");
+        List<String> usefulWords = java.util.Arrays.stream(words)
+                .filter(word -> !word.isBlank())
+                .filter(word -> !Set.of("SACCO", "COOPERATIVE", "COOP", "LIMITED", "LTD", "THE", "AND", "OF").contains(word))
+                .toList();
+        String source = usefulWords.isEmpty() ? "SACCO" : String.join("", usefulWords);
+        return (source.replaceAll("[^A-Z]", "") + "SACO").substring(0, 4);
+    }
+
+    private String nextAvailableSaccoCode(String base) {
+        String normalizedBase = (blankToDefault(base, "SACO").replaceAll("[^A-Z]", "") + "SACO").substring(0, 4);
+        if (!codeExists(normalizedBase)) return normalizedBase;
+        for (int index = 0; index < 26 * 26; index++) {
+            String suffix = "" + (char) ('A' + (index / 26)) + (char) ('A' + (index % 26));
+            String code = normalizedBase.substring(0, 2) + suffix;
+            if (!codeExists(code)) return code;
+        }
+        for (int index = 0; index < 26 * 26 * 26 * 26; index++) {
+            int cursor = index;
+            char[] letters = new char[4];
+            for (int position = 3; position >= 0; position--) {
+                letters[position] = (char) ('A' + (cursor % 26));
+                cursor = cursor / 26;
+            }
+            String code = new String(letters);
+            if (!codeExists(code)) return code;
+        }
+        return normalizedBase;
+    }
+
+    private boolean codeExists(String code) {
+        return tenantRepository.findAll().stream()
+                .anyMatch(tenant -> code.equalsIgnoreCase(tenant.getAbbreviation()));
+    }
+
     record CreateTenantRequest(
             @NotBlank String name,
-            @NotBlank String abbreviation,
+            String abbreviation,
             String registrationNo,
             String district,
             String country,
             String localeCode,
             String currencyCode,
             Integer currencyDigits,
-            @NotNull LocalDate licenseExpiry,
+            LocalDate licenseExpiry,
             String packageId,
             String paymentStatus,
             String parish,

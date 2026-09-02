@@ -67,8 +67,8 @@ class DemoSeedDataSanitizerTest {
     void disabledDemoLoginsSuspendSeededAccountsOnly() {
         insertUser("user_platform_admin", "admin@platform.local", "platform_admin_seed_salt_2026", "active");
         insertUser("user_live_admin", "admin@tereka.online", "live_salt", "active");
-        insertMember("member_green_amina", "GVS-0001", "amina@example.local", "member_seed_salt_2026", "active");
-        insertMember("member_live", "GVS-8244", "real.member@tereka.online", "live_salt", "active");
+        insertMember("member_green_amina", "GREE-0001", "amina@example.local", "member_seed_salt_2026", "active");
+        insertMember("member_live", "GREE-8244", "real.member@tereka.online", "live_salt", "active");
 
         int updates = new DemoSeedDataSanitizer(jdbcTemplate, false).sanitizeIfNeeded();
 
@@ -83,7 +83,7 @@ class DemoSeedDataSanitizerTest {
     @Test
     void enabledDemoLoginsLeaveSeededAccountsActive() {
         insertUser("user_platform_admin", "admin@platform.local", "platform_admin_seed_salt_2026", "active");
-        insertMember("member_green_amina", "GVS-0001", "amina@example.local", "member_seed_salt_2026", "active");
+        insertMember("member_green_amina", "GREE-0001", "amina@example.local", "member_seed_salt_2026", "active");
 
         int updates = new DemoSeedDataSanitizer(jdbcTemplate, true).sanitizeIfNeeded();
 

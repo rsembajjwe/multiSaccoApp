@@ -106,7 +106,7 @@ npm.cmd run backup:db
 Restore only after confirming the target environment:
 
 ```powershell
-npm.cmd run restore:db -- -BackupPath .\backups\sacco_app-YYYYMMDD-HHMMSS.dump -ConfirmRestore
+npm.cmd run restore:db -- -BackupPath .\backups\sacco_app-YYYYMMDD-HHMASAS.dump -ConfirmRestore
 ```
 
 Restore is destructive because the script cleans existing database objects before loading the backup.

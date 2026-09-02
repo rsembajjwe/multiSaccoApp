@@ -75,7 +75,7 @@ class MobileMoneyCallbackSignatureTest {
         return """
                 {
                   "tenantId": "tenant_green",
-                  "memberIdentifier": "GVS-0002",
+                  "memberIdentifier": "GREE-0002",
                   "purpose": "share_purchase",
                   "amount": 45000,
                   "externalReference": "%s",

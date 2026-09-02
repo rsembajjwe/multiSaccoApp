@@ -92,7 +92,7 @@ class GmailSmtpEmailNotificationProviderTest {
                     "member_green_amina",
                     "tenant_green",
                     "branch_green_main",
-                    "GVS-0001",
+                    "GREE-0001",
                     "Amina Green",
                     "individual",
                     "+256700000001",

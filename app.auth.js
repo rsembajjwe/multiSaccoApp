@@ -7,11 +7,15 @@ const demoAccounts = [
   { label: "Platform Billing", code: "PLATFORM", username: "billing@platform.local", password: "Billing@12345", portal: "Platform" },
   { label: "Platform Compliance", code: "PLATFORM", username: "compliance@platform.local", password: "Compliance@12345", portal: "Platform" },
   { label: "Platform Support", code: "PLATFORM", username: "support@platform.local", password: "Support@12345", portal: "Platform" },
-  { label: "SACCO Admin", code: "GVS", username: "admin@greenvalley.local", password: "Sacco@12345", portal: "SACCO" },
-  { label: "Treasurer", code: "GVS", username: "treasurer@greenvalley.local", password: "Treasurer@12345", portal: "SACCO" },
-  { label: "Secretary", code: "GVS", username: "secretary@greenvalley.local", password: "Secretary@12345", portal: "SACCO" },
-  { label: "Chairperson", code: "GVS", username: "chairperson@greenvalley.local", password: "Chair@12345", portal: "SACCO" },
-  { label: "Member", code: "GVS", username: "GVS-0001", password: "Member@12345", portal: "Member" }
+  { label: "SACCO Admin", code: "GREE", username: "admin@greenvalley.local", password: "Sacco@12345", portal: "SACCO" },
+  { label: "Treasurer", code: "GREE", username: "treasurer@greenvalley.local", password: "Treasurer@12345", portal: "SACCO" },
+  { label: "Secretary", code: "GREE", username: "secretary@greenvalley.local", password: "Secretary@12345", portal: "SACCO" },
+  { label: "Chairperson", code: "GREE", username: "chairperson@greenvalley.local", password: "Chair@12345", portal: "SACCO" },
+  { label: "Loans Officer", code: "GREE", username: "loans@greenvalley.local", password: "Loans@12345", portal: "SACCO" },
+  { label: "Accountant", code: "GREE", username: "accountant@greenvalley.local", password: "Accountant@12345", portal: "SACCO" },
+  { label: "Teller / Cashier", code: "GREE", username: "teller@greenvalley.local", password: "Teller@12345", portal: "SACCO" },
+  { label: "Auditor", code: "GREE", username: "auditor@greenvalley.local", password: "Auditor@12345", portal: "SACCO" },
+  { label: "Member", code: "GREE", username: "GREE-0001", password: "Member@12345", portal: "Member" }
 ];
 
 function renderLogin() {
@@ -142,7 +146,7 @@ function publicSaccoRegistrationPanel() {
     ${state.publicRegistrationError ? `<div class="notice warning" role="alert" aria-live="assertive"><strong>${t("registrationFailed")}</strong><span>${escapeHtml(state.publicRegistrationError)}</span></div>` : ""}
     <form id="publicSaccoRegistrationForm" class="form-grid">
       <label><span>${t("saccoName")}</span><input id="publicTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
-      <label><span>${t("saccoCode")}</span><input id="publicTenantCode" readonly placeholder="${escapeHtml(t("saccoCodeGenerated"))}"></label>
+      <label><span>${t("saccoCode")}</span><input id="publicTenantCode" readonly maxlength="4" placeholder="${escapeHtml(t("saccoCodeGenerated"))}"></label>
       <label><span>${t("registrationNumber")}</span><input id="publicTenantRegistrationNo" required placeholder="${escapeHtml(t("registrationNumberPlaceholder"))}"></label>
       <label><span>Country</span><select id="publicTenantCountry">${countryRegionOptions(COUNTRY_REGIONS, "uganda").map((option) => `<option value="${escapeHtml(option.value)}" data-country-label="${escapeHtml(option.label.split(" - ")[0])}" data-locale="${escapeHtml(option.locale)}" data-currency="${escapeHtml(option.currency)}" data-digits="${option.currencyDigits}" ${option.selected ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}</select></label>
       <label><span>Currency</span><input id="publicTenantCurrencyCode" readonly value="UGX"></label>
@@ -203,7 +207,7 @@ function passwordRecoveryPanel() {
     ${state.memberResetError ? `<div class="notice warning" role="alert" aria-live="assertive"><strong>Member reset request failed.</strong><span>${escapeHtml(state.memberResetError)}</span></div>` : ""}
     <form id="memberPasswordResetRequestForm" class="form-grid single">
       <label><span>SACCO code (optional)</span><input id="memberResetSacco" type="text" placeholder="e.g. GRN"></label>
-      <label><span>Membership number, phone or email</span><input id="memberResetIdentifier" type="text" required placeholder="GVS-0001 / +256... / name@email"></label>
+      <label><span>Membership number, phone or email</span><input id="memberResetIdentifier" type="text" required placeholder="GREE-0001 / +256... / name@email"></label>
       <label><span>Send code by</span><select id="memberResetChannel"><option value="email">Email (free)</option><option value="whatsapp">WhatsApp (free)</option><option value="sms">SMS (UGX 500)</option></select></label>
       <button class="button primary" type="submit">Request reset code</button>
     </form>

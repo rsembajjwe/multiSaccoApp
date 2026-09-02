@@ -7,6 +7,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Set;
 
 @Entity
@@ -58,6 +59,21 @@ public class Loan {
     @Column(name = "submitted_by_member_id")
     private String submittedByMemberId;
 
+    @Column(name = "application_source")
+    private String applicationSource;
+
+    @Column(name = "signed_form_reference")
+    private String signedFormReference;
+
+    @Column(name = "signed_form_received_at")
+    private LocalDate signedFormReceivedAt;
+
+    @Column(name = "signed_form_file_name")
+    private String signedFormFileName;
+
+    @Column(name = "signed_form_uploaded_by_user_id")
+    private String signedFormUploadedByUserId;
+
     @Column(name = "approved_by_user_id")
     private String approvedByUserId;
 
@@ -81,6 +97,30 @@ public class Loan {
 
     @Column(name = "resolution_reference")
     private String resolutionReference;
+
+    @Column(name = "paper_approved_by_chairperson")
+    private boolean paperApprovedByChairperson;
+
+    @Column(name = "paper_approved_by_secretary")
+    private boolean paperApprovedBySecretary;
+
+    @Column(name = "paper_approved_by_treasurer")
+    private boolean paperApprovedByTreasurer;
+
+    @Column(name = "paper_approved_by_committee")
+    private boolean paperApprovedByCommittee;
+
+    @Column(name = "paper_approval_reference")
+    private String paperApprovalReference;
+
+    @Column(name = "paper_approval_approvers")
+    private String paperApprovalApprovers;
+
+    @Column(name = "paper_approval_recorded_by_user_id")
+    private String paperApprovalRecordedByUserId;
+
+    @Column(name = "paper_approval_recorded_at")
+    private Instant paperApprovalRecordedAt;
 
     @Column(name = "disbursement_initiated_by_user_id")
     private String disbursementInitiatedByUserId;
@@ -130,6 +170,9 @@ public class Loan {
         this.purpose = purpose;
         this.channel = channel;
         this.submittedByMemberId = submittedByMemberId;
+        this.applicationSource = "mobile".equals(channel) ? "online_member_application" : "staff_captured_signed_form";
+        this.signedFormReference = "";
+        this.signedFormFileName = "";
         this.rejectionReason = "";
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
@@ -203,6 +246,25 @@ public class Loan {
         this.updatedAt = Instant.now();
     }
 
+    void recordPaperApproval(
+            boolean chairperson,
+            boolean secretary,
+            boolean treasurer,
+            boolean committee,
+            String reference,
+            String approvers,
+            String actorUserId) {
+        this.paperApprovedByChairperson = chairperson;
+        this.paperApprovedBySecretary = secretary;
+        this.paperApprovedByTreasurer = treasurer;
+        this.paperApprovedByCommittee = committee;
+        this.paperApprovalReference = reference == null ? "" : reference.trim();
+        this.paperApprovalApprovers = approvers == null ? "" : approvers.trim();
+        this.paperApprovalRecordedByUserId = actorUserId;
+        this.paperApprovalRecordedAt = Instant.now();
+        this.updatedAt = this.paperApprovalRecordedAt;
+    }
+
     public String getFirstApprovedByUserId() {
         return firstApprovedByUserId;
     }
@@ -213,6 +275,38 @@ public class Loan {
 
     public String getResolutionReference() {
         return resolutionReference;
+    }
+
+    public boolean isPaperApprovedByChairperson() {
+        return paperApprovedByChairperson;
+    }
+
+    public boolean isPaperApprovedBySecretary() {
+        return paperApprovedBySecretary;
+    }
+
+    public boolean isPaperApprovedByTreasurer() {
+        return paperApprovedByTreasurer;
+    }
+
+    public boolean isPaperApprovedByCommittee() {
+        return paperApprovedByCommittee;
+    }
+
+    public String getPaperApprovalReference() {
+        return paperApprovalReference;
+    }
+
+    public String getPaperApprovalApprovers() {
+        return paperApprovalApprovers;
+    }
+
+    public String getPaperApprovalRecordedByUserId() {
+        return paperApprovalRecordedByUserId;
+    }
+
+    public Instant getPaperApprovalRecordedAt() {
+        return paperApprovalRecordedAt;
     }
 
     void initiateDisbursement(String actorUserId) {
@@ -311,6 +405,22 @@ public class Loan {
         this.updatedAt = Instant.now();
     }
 
+    public void recordApplicationEvidence(
+            String applicationSource,
+            String signedFormReference,
+            LocalDate signedFormReceivedAt,
+            String signedFormFileName,
+            String actorUserId) {
+        this.applicationSource = applicationSource == null || applicationSource.isBlank()
+                ? this.applicationSource
+                : applicationSource.trim();
+        this.signedFormReference = signedFormReference == null ? "" : signedFormReference.trim();
+        this.signedFormReceivedAt = signedFormReceivedAt;
+        this.signedFormFileName = signedFormFileName == null ? "" : signedFormFileName.trim();
+        this.signedFormUploadedByUserId = actorUserId;
+        this.updatedAt = Instant.now();
+    }
+
     public String getId() {
         return id;
     }
@@ -381,6 +491,26 @@ public class Loan {
 
     public String getSubmittedByMemberId() {
         return submittedByMemberId;
+    }
+
+    public String getApplicationSource() {
+        return applicationSource;
+    }
+
+    public String getSignedFormReference() {
+        return signedFormReference;
+    }
+
+    public LocalDate getSignedFormReceivedAt() {
+        return signedFormReceivedAt;
+    }
+
+    public String getSignedFormFileName() {
+        return signedFormFileName;
+    }
+
+    public String getSignedFormUploadedByUserId() {
+        return signedFormUploadedByUserId;
     }
 
     public String getApprovedByUserId() {

@@ -1,7 +1,7 @@
 // Shared table rendering helpers for Tereka Online.
 // Loaded before app.js as a classic browser script.
 
-function recordTable(title, rows, columns) {
+function recordTable(title, rows, columns, options = {}) {
   const tableKey = tableStateKey(title);
   const translatedTitle = tableTitleLabel(title);
   const tableState = state.tableState[tableKey] || { search: "", page: 1, pageSize: 10 };
@@ -49,7 +49,7 @@ function recordTable(title, rows, columns) {
           ${searching ? `<button class="table-action" type="button" data-action="clear-search">${t("clearSearch")}</button>` : ""}
         </div>
       </div>
-      <div class="table-tools">
+      ${options.hideSearch ? "" : `<div class="table-tools">
         <label>
           <span>${t("search") || "Search"}</span>
           <input value="${escapeHtml(tableSearch)}" data-table-search="${escapeHtml(tableKey)}" placeholder="${escapeHtml(`${t("search")} ${translatedTitle.toLowerCase()}`)}" autocomplete="off" spellcheck="false">
@@ -60,12 +60,12 @@ function recordTable(title, rows, columns) {
             ${[10, 25, 50, 100].map((size) => `<option value="${size}" ${pageSize === size ? "selected" : ""}>${size}</option>`).join("")}
           </select>
         </label>
-      </div>
+      </div>`}
       ${filtered.length ? `
         <div class="table-wrap">
           <table>
             <thead><tr>${headerCells}${hasRowActions ? `<th>${t("actions")}</th>` : ""}</tr></thead>
-            <tbody>${pagedRows.map((row) => `<tr>${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}${hasRowActions ? `<td>${rowAction(row)}</td>` : ""}</tr>`).join("")}</tbody>
+            <tbody>${pagedRows.map((row) => `<tr class="${escapeHtml(row.rowClass || "")}">${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}${hasRowActions ? `<td>${rowAction(row)}</td>` : ""}</tr>`).join("")}</tbody>
           </table>
         </div>
         <div class="pagination">

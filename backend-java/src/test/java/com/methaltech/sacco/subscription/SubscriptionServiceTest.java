@@ -16,14 +16,14 @@ class SubscriptionServiceTest {
     private final SubscriptionService service = new SubscriptionService(memberRepository);
 
     @Test
-    void billsMinimumOneHundredMembersAtFiveThousandForSmallSaccos() {
+    void billsMinimumTwentyMembersAtFiveThousandForSmallSaccos() {
         SubscriptionBilling billing = service.calculateBilling(12);
 
         assertEquals(12, billing.memberCount());
-        assertEquals(100, billing.billableMembers());
+        assertEquals(20, billing.billableMembers());
         assertEquals(new BigDecimal("5000"), billing.unitPrice());
         assertEquals("per_member", billing.tierId());
-        assertEquals(new BigDecimal("500000"), billing.amount());
+        assertEquals(new BigDecimal("100000"), billing.amount());
     }
 
     @Test
@@ -33,7 +33,7 @@ class SubscriptionServiceTest {
         assertEquals(250, billing.memberCount());
         assertEquals(250, billing.billableMembers());
         assertEquals(new BigDecimal("5000"), billing.unitPrice());
-        assertEquals("100-250 members", billing.tierLabel());
+        assertEquals("20-250 members", billing.tierLabel());
         assertEquals(new BigDecimal("1250000"), billing.amount());
     }
 
@@ -41,7 +41,9 @@ class SubscriptionServiceTest {
     void switchesToFixedTiersAboveTwoHundredFiftyMembers() {
         SubscriptionBilling firstFixedTier = service.calculateBilling(251);
         SubscriptionBilling growthTier = service.calculateBilling(501);
+        SubscriptionBilling scaleTier = service.calculateBilling(1001);
         SubscriptionBilling enterpriseTier = service.calculateBilling(2501);
+        SubscriptionBilling enterprisePlusTier = service.calculateBilling(5001);
 
         assertEquals("starter_fixed", firstFixedTier.tierId());
         assertEquals(500, firstFixedTier.billableMembers());
@@ -49,12 +51,20 @@ class SubscriptionServiceTest {
         assertEquals(new BigDecimal("1200000"), firstFixedTier.amount());
 
         assertEquals("growth_fixed", growthTier.tierId());
-        assertEquals(2500, growthTier.billableMembers());
-        assertEquals(new BigDecimal("3600000"), growthTier.amount());
+        assertEquals(1000, growthTier.billableMembers());
+        assertEquals(new BigDecimal("2500000"), growthTier.amount());
+
+        assertEquals("scale_fixed", scaleTier.tierId());
+        assertEquals(2500, scaleTier.billableMembers());
+        assertEquals(new BigDecimal("5000000"), scaleTier.amount());
 
         assertEquals("enterprise_fixed", enterpriseTier.tierId());
-        assertEquals(10000, enterpriseTier.billableMembers());
-        assertEquals(new BigDecimal("9000000"), enterpriseTier.amount());
+        assertEquals(5000, enterpriseTier.billableMembers());
+        assertEquals(new BigDecimal("8000000"), enterpriseTier.amount());
+
+        assertEquals("enterprise_plus_fixed", enterprisePlusTier.tierId());
+        assertEquals(10000, enterprisePlusTier.billableMembers());
+        assertEquals(new BigDecimal("12000000"), enterprisePlusTier.amount());
     }
 
     @Test
@@ -82,7 +92,7 @@ class SubscriptionServiceTest {
         assertEquals(251, refreshed.getMemberCount());
         assertEquals("starter_fixed", refreshed.getTierId());
         assertEquals(new BigDecimal("1200000"), refreshed.getAmount());
-        assertEquals(new BigDecimal("500000"), refreshed.getPaid());
+        assertEquals(new BigDecimal("100000"), refreshed.getPaid());
         assertEquals("pending_payment", refreshed.getStatus());
     }
 }

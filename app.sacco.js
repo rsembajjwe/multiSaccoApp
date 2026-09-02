@@ -39,7 +39,7 @@ function saccoDashboard() {
     <div class="grid two">
       ${recordTable("Member monthly performance", monthlyPerformance, ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"])}
       ${recordTable("Recent transactions", transactions, ["reference", "memberName", "type", "amount", "status"])}
-      ${recordTable("Loan work queue", loans, ["applicationNo", "memberName", "product", "requestedAmount", "status"])}
+    ${recordTable("Loan work queue", financeLoanDisplayRows(loans), ["applicationNo", "memberName", "product", "requestedAmount", "status"])}
     </div>
   `;
 }
@@ -182,7 +182,7 @@ function saccoLoansOfficerDashboard() {
       ${summaryLink("Arrears watch", dashboard.arrearsWatch, "Repayment follow-up", "Assess", "loans")}
     </div>
     ${loanPortfolioChartPanel(loans)}
-    ${recordTable("Loan work queue", loans.map((row) => ({ ...row, memberName: row.memberName || memberName(row.memberId), action: "loan-detail", actionLabel: "Open", actionId: row.id })), ["applicationNo", "memberName", "product", "requestedAmount", "outstandingBalance", "status"])}
+    ${recordTable("Loan work queue", financeLoanDisplayRows(loans).map((row) => ({ ...row, memberName: row.memberName || memberName(row.memberId), action: "loan-detail", actionLabel: "Open", actionId: row.id })), ["applicationNo", "memberName", "product", "requestedAmount", "outstandingBalance", "status"])}
   `;
 }
 
@@ -208,24 +208,178 @@ function saccoAuditorDashboard() {
 
 function saccoChairpersonDashboard() {
   const cycle = currentSaccoCycleContext();
-  const loans = filterLoansBySaccoCycle(dataRows("loans"), cycle);
+  const loans = buildLoanRows({
+    loans: filterLoansBySaccoCycle(dataRows("loans"), cycle),
+    memberName,
+    labelize,
+    formatMoney: (value) => money.format(value)
+  });
   const transactions = filterTransactionsBySaccoCycle(dataRows("transactions"), cycle);
   const governanceMeetings = filterGovernanceMeetingsByCycle(dataRows("governanceMeetings"), cycle);
   const dashboard = buildSaccoChairpersonDashboardModel({ governanceMeetings, loans, transactions });
+  const portfolio = buildLoanPortfolioSummary(loans);
+  const visibleLoans = filteredLoanOverviewRows(financeLoanDisplayRows(loans));
+  const selectedLoan = visibleLoans.find((loan) => loan.id === state.selectedLoanId) || visibleLoans[0] || financeLoanDisplayRows(loans)[0];
+  const approvedThisCycle = loans.filter((loan) => normal(loan.status) === "approved" || normal(loan.status) === "active").length;
   return `
-    ${saccoCyclePanel(cycle)}
-    ${saccoRoleFocusPanel("SACCO Chairperson", "Chairperson decision focus", "Board-level approval, loan exposure and governance decisions.")}
-    <div class="dashboard-grid">
-      ${summaryLink("Loans awaiting approval", dashboard.loansAwaitingApproval, "Chairperson approval queue", "Decide", "approvals")}
-      ${summaryLink("Outstanding portfolio", money.format(dashboard.outstandingPortfolio), "Credit exposure", "Review", "loans")}
-      ${summaryLink("Arrears watch", dashboard.arrearsWatch, "Loans needing board attention", "Assess", "loans")}
-      ${summaryLink("Governance actions", dashboard.governanceActions, "Meetings and resolutions", "Open", "governance")}
-    </div>
-    ${loanPortfolioChartPanel(loans)}
+    ${saccoCyclePanel(cycle, { title: "Chairperson cycle" })}
+    <section class="panel compact-panel loan-overview-hero chairman-loan-dashboard">
+      <div class="panel-heading">
+        <div>
+          <h2>Loan Overview</h2>
+          <p>Review loan applications, confirm paper approvals and monitor credit risk on behalf of the SACCO.</p>
+        </div>
+        <button class="button primary" type="button" data-summary-view="loans" data-summary-tab="application">New Loan Application</button>
+      </div>
+      <div class="loan-kpi-grid">
+        ${loanMetricCard("Total loan portfolio", money.format(portfolio.outstandingPrincipal), `Across ${loans.length} loan(s)`, "portfolio")}
+        ${loanMetricCard("Pending approval", dashboard.loansAwaitingApproval, "Total applications", "pending")}
+        ${loanMetricCard("Approved loans", approvedThisCycle, `${cycle.label}`, "approved")}
+        ${loanMetricCard("Overdue loans", dashboard.arrearsWatch, `Amount ${money.format(portfolio.arrearsTotal)}`, "overdue")}
+      </div>
+    </section>
+    <section class="notice compact chairman-role-note">
+      <strong>Your role:</strong>
+      <span>Review signed loan files, record the people who approved on paper, and watch portfolio risk before disbursement.</span>
+    </section>
+    ${loanOverviewFilters(loans)}
+    ${recordTable(`Loan applications - ${cycle.label}`, visibleLoans.map((loan) => ({
+      ...loan,
+      loanNo: loan.applicationNo,
+      member: loan.memberName || memberName(loan.memberId),
+      loanType: loan.product,
+      amount: Number(loan.amount || loan.requestedAmount || 0),
+      appliedOn: loan.createdAt || loan.submittedAt || loan.updatedAt,
+      action: "loan-detail",
+      actionLabel: "Open",
+      actionId: loan.id,
+      rowClass: selectedLoan?.id === loan.id ? "selected-table-row" : ""
+    })), ["loanNo", "member", "loanType", "amount", "appliedOn", "status"])}
+    ${selectedLoan ? `
+      <div class="grid two chairman-loan-review-grid">
+        ${chairpersonLoanApplicationDetails(selectedLoan)}
+        ${chairpersonLoanAssessmentPanel(selectedLoan)}
+      </div>
+    ` : emptyState("Loan details", "Select a loan application to review details and record paper approval.")}
     <div class="grid two">
-      ${recordTable("Loans awaiting approval", dashboard.approvalLoans.map((row) => ({ ...row, memberName: row.memberName || memberName(row.memberId), action: "loan-detail", actionLabel: "Decide", actionId: row.id })), ["applicationNo", "memberName", "product", "requestedAmount", "status"])}
-      ${recordTable("Board risk watch", [...dashboard.arrearsLoans, ...dashboard.highValueTransactions], ["applicationNo", "reference", "memberName", "product", "amount", "outstandingBalance", "status"])}
+      ${chairpersonRecentLoanActivity(loans)}
+      ${chairpersonLoanPerformanceSummary(portfolio)}
     </div>
+  `;
+}
+
+function chairpersonLoanApplicationDetails(loan) {
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Application Details <span class="inline-code">(${escapeHtml(loan.applicationNo || loanApplicationCode(loan))})</span></h2>
+          <p>${escapeHtml(loan.memberName || memberName(loan.memberId))}</p>
+        </div>
+        <button class="button secondary" type="button" data-row-action="member-detail" data-row-id="${escapeHtml(loan.memberId || "")}">View Profile</button>
+      </div>
+      <div class="loan-detail-list">
+        ${loanDetailRow("Loan Type", loan.product || "-")}
+        ${loanDetailRow("Amount Requested", money.format(loan.amount || loan.requestedAmount || 0))}
+        ${loanDetailRow("Repayment Period", `${loan.repaymentMonths || "-"} months`)}
+        ${loanDetailRow("Interest Rate", `${loan.interestRate || 0}% monthly`)}
+        ${loanDetailRow("Purpose", loan.purpose || "-")}
+        ${loanDetailRow("Guarantors", loan.guarantors || 0)}
+        ${loanDetailRow("Amount Payable", money.format(loan.totalPayable || loan.amount || 0))}
+        ${loanDetailRow("Application Date", formatDate(loan.createdAt || loan.submittedAt || loan.updatedAt))}
+        ${loanDetailRow("Signed Form", loanSignedFormLabel(loan))}
+        ${loanDetailRow("Paper Approvers", loan.paperApprovalApprovers || "-")}
+      </div>
+      <div class="notice compact">
+        <strong>Before recording approval</strong>
+        <span>Confirm the physical form is signed by the applicant and guarantors, then enter the approvers listed on that file.</span>
+      </div>
+    </section>
+  `;
+}
+
+function chairpersonLoanAssessmentPanel(loan) {
+  const totalPayable = Number(loan.totalPayable || loan.amount || loan.requestedAmount || 0);
+  const outstanding = Number(loan.outstandingBalance || loan.balance || 0);
+  const guarantors = Number(loan.guarantors || 0);
+  const dsr = Number(loan.dsr || 0);
+  const rows = [
+    ["Member savings", loan.selfSecured ? "Savings can secure this loan" : "Review member savings capacity", loan.selfSecured || totalPayable <= 0],
+    ["Loan repayment history", "No unexplained repayment exception shown", !normal(loan.repaymentReadiness || "").includes("reconcile")],
+    ["Existing loan balance", outstanding > 0 ? `${money.format(outstanding)} outstanding` : "No outstanding balance shown", outstanding <= totalPayable],
+    ["Guarantors", guarantors ? `${guarantors} accepted guarantor(s)` : "Not required only when savings fully cover total payable", guarantors > 0 || loan.selfSecured],
+    ["Debt service ratio", dsr ? `${dsr}% DSR` : "DSR not supplied", !dsr || dsr <= 40],
+  ];
+  const ready = rows.every((row) => row[2]);
+  return `
+    <section class="panel compact-panel chairman-assessment-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Loan Assessment</h2>
+          <p>Decision checks for the Chairperson before recording paper approval.</p>
+        </div>
+        <span class="status ${ready ? "active" : "pending"}">${ready ? "Ready" : "Review"}</span>
+      </div>
+      <div class="assessment-list">
+        ${rows.map(([label, detail, ok]) => `
+          <div class="${ok ? "ok" : "warn"}">
+            <strong>${escapeHtml(label)}</strong>
+            <span>${escapeHtml(detail)}</span>
+          </div>
+        `).join("")}
+      </div>
+      <div class="notice compact ${ready ? "" : "warning"}">
+        <strong>Recommendation</strong>
+        <span>${ready ? "This file is ready for the Chairperson to record the paper approval details." : "Review the highlighted items before recording approval."}</span>
+      </div>
+      <input type="hidden" id="selectedLoanId" value="${escapeHtml(loan.id || "")}">
+      ${paperApprovalFields(hasPermission("loans:approve"), loan)}
+      <label><span>Decision note</span><input id="loanDecisionReason" placeholder="Short note from the signed paper approval" ${hasPermission("loans:approve") ? "" : "disabled"}></label>
+      <div class="loan-action-stack">
+        <button class="button primary" type="button" data-loan-action="approve" ${hasPermission("loans:approve") && ["submitted", "pending_approval", "under_review"].includes(normal(loan.status)) ? "" : "disabled"}>Record Paper Approval</button>
+        <button class="button ghost danger" type="button" data-loan-action="reject" ${hasPermission("loans:approve") && ["submitted", "pending_approval", "under_review"].includes(normal(loan.status)) ? "" : "disabled"}>Decline Loan</button>
+      </div>
+    </section>
+  `;
+}
+
+function chairpersonRecentLoanActivity(loans) {
+  const rows = [...(loans || [])]
+    .filter((loan) => loan.approvedAt || loan.updatedAt || loan.createdAt)
+    .sort((a, b) => String(b.approvedAt || b.updatedAt || b.createdAt).localeCompare(String(a.approvedAt || a.updatedAt || a.createdAt)))
+    .slice(0, 5)
+    .map((loan) => [
+      `${labelize(loan.status || "Updated")} ${loan.applicationNo || loanApplicationCode(loan)}`,
+      `${loan.memberName || memberName(loan.memberId)} - ${money.format(loan.amount || loan.requestedAmount || 0)}`,
+      formatDate(loan.approvedAt || loan.updatedAt || loan.createdAt)
+    ]);
+  return activityPanel("Recent Loan Activity", rows);
+}
+
+function chairpersonLoanPerformanceSummary(portfolio) {
+  const performing = Math.max(0, Number(portfolio.outstandingPrincipal || 0) - Number(portfolio.arrearsTotal || 0));
+  const watch = Math.max(0, Number(portfolio.arrearsTotal || 0) - Number(portfolio.over90Total || 0));
+  const nonPerforming = Number(portfolio.over90Total || 0);
+  const segments = [
+    { label: "Performing loans", value: performing, color: "#15803d" },
+    { label: "Watch loans", value: watch, color: "#f59e0b" },
+    { label: "Non-performing loans", value: nonPerforming, color: "#dc2626" }
+  ].filter((item) => item.value > 0);
+  return `
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Loan Performance Summary</h2>
+          <p>Portfolio split for Chairperson oversight.</p>
+        </div>
+      </div>
+      ${segments.length ? `
+        <div class="chart-figure">
+          ${svgDonutChart(segments, { title: "Loan performance", centreLabel: money.format(portfolio.outstandingPrincipal || 0) })}
+          ${chartLegend(segments, { format: (value) => money.format(value) })}
+        </div>
+      ` : emptyState("No loan performance data", "Loan balances will appear after disbursement.")}
+    </section>
   `;
 }
 
@@ -233,6 +387,9 @@ function saccoTreasurerDashboard() {
   const cycle = currentSaccoCycleContext();
   const transactions = filterTransactionsBySaccoCycle(dataRows("transactions"), cycle);
   const callbacks = filterCallbacksBySaccoCycle(dataRows("mobileMoneyCallbacks"), cycle);
+  const expenses = filterExpensesBySaccoCycle(dataRows("expenses"), cycle);
+  const loans = filterLoansBySaccoCycle(dataRows("loans"), cycle);
+  const members = filterMembersBySaccoCycle(dataRows("members"), cycle);
   const pending = filterApprovalsBySaccoCycle(pendingTransactions(), cycle);
   const monthlyPerformance = buildSaccoMonthlyPerformanceRows({
     callbacks,
@@ -241,69 +398,151 @@ function saccoTreasurerDashboard() {
   });
   const treasurer = buildSaccoTreasurerDashboardModel({
     callbacks,
-    members: filterMembersBySaccoCycle(dataRows("members"), cycle),
+    members,
     pendingTransactions: pending,
     transactions
   });
-  const recentReceipts = transactions
-    .filter((row) => ["posted", "approved", "completed"].some((word) => normal(row.status).includes(word)))
-    .slice(0, 8);
-  const exceptions = [...treasurer.failedCallbacks, ...callbacks.filter((row) => ["failed", "exception", "pending"].some((word) => normal(row.status).includes(word)))].slice(0, 8);
+  const overview = buildTreasurerFinanceOverviewModel({ callbacks, expenses, loans, members, monthlyPerformance, transactions });
+  const todayRows = treasuryTodayTransactions(transactions, callbacks);
+  const chartRows = treasuryCashFlowRows(transactions, expenses, callbacks);
   return `
     ${saccoCyclePanel(cycle)}
-    <div class="dashboard-grid">
-      ${summaryLink("Cash collected", money.format(treasurer.treasurerCash), "Treasurer office receipts", "Post", "finance", "transactions")}
-      ${summaryLink("Mobile money", money.format(treasurer.mobileMoney), "Provider collections", "Reconcile", "finance", "reconciliation")}
-      ${summaryLink("To approve", treasurer.pendingApprovals, "Verified finance queue", "Approve", "finance", "approvals")}
-      ${summaryLink("Exceptions", treasurer.mobileMoneyExceptions, "Needs correction", "Review", "finance", "reconciliation")}
+    <section class="panel compact-panel treasurer-overview-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Financial overview</h2>
+          <p>Cash, bank, member deposits, loan exposure, expenses and today's receipts for ${escapeHtml(cycle?.label || "the current cycle")}.</p>
+        </div>
+        <span class="status ${overview.netCash >= 0 ? "active" : "pending"}">${overview.netCash >= 0 ? "Positive cash" : "Cash pressure"}</span>
+      </div>
+      <div class="treasurer-kpi-grid">
+        ${treasurerMetricCard("Cash / bank", money.format(overview.cashBank), "Office cash, bank and mobile collections", "finance", "reconciliation")}
+        ${treasurerMetricCard("Savings", money.format(overview.savings), "Member savings balances", "finance", "member-transactions")}
+        ${treasurerMetricCard("Loans", money.format(overview.loans), "Outstanding loan portfolio", "loans")}
+        ${treasurerMetricCard("Today's receipts", money.format(overview.todayReceipts), `${todayRows.length} transaction(s) today`, "payments")}
+        ${treasurerMetricCard("Expenses", money.format(overview.expenses), "Operating spend", "expenses")}
+        ${treasurerMetricCard("Net cash", `${overview.netCash >= 0 ? "+" : ""}${money.format(overview.netCash)}`, "Receipts less expenses", "reports")}
+      </div>
+    </section>
+    <div class="grid two">
+      <section class="panel compact-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Cash flow</h2>
+            <p>Income against expenses for the selected cycle.</p>
+          </div>
+          <span class="status active">Cycle</span>
+        </div>
+        <div class="chart-figure">${svgBarChart(chartRows.map((row) => ({ label: row.label, value: row.value, color: row.color })), { title: "Cash flow", width: 560, height: 180, format: (value) => money.format(value) })}</div>
+      </section>
+      <section class="panel compact-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Today's transactions</h2>
+            <p>Deposit, loan repayment and withdrawal activity posted today.</p>
+          </div>
+          <span class="status ${todayRows.length ? "active" : "pending"}">${todayRows.length ? "Updated" : "No activity"}</span>
+        </div>
+        ${todayRows.length ? recordTable("Today's transactions", todayRows, ["reference", "memberName", "type", "paymentRoute", "amount", "postedAt", "status"]) : emptyState("No transactions today", "Today's posted deposits, repayments and withdrawals will appear here.")}
+      </section>
     </div>
     <section class="panel compact-panel treasurer-command-panel">
       <div class="panel-heading">
         <div>
-          <h2>Treasurer workbench</h2>
-          <p>Receive money, approve verified postings, reconcile bank/mobile-money evidence and close the cycle.</p>
+          <h2>Quick finance actions</h2>
+          <p>Receive money, reconcile collections, review reports and close the day.</p>
         </div>
         <span class="status ${treasurer.mobileMoneyExceptions || treasurer.pendingApprovals ? "pending" : "active"}">${treasurer.mobileMoneyExceptions || treasurer.pendingApprovals ? "Review" : "Clear"}</span>
       </div>
       <div class="access-grid compact-treasurer-actions">
-        ${treasurerAction("Receive cash", "Post savings, shares, welfare, subscriptions or loan repayment.", "transactions", "transactions:view")}
-        ${treasurerAction("Approve queue", "Confirm verified finance entries. Maker-checker still applies.", "approvals", "approvals:view")}
+        ${treasurerAction("Cash / bank", "Post cash and bank deposits or loan repayments.", "transactions", "transactions:view")}
+        ${treasurerAction("Payments", "Initiate or record member payments.", "payments", "transactions:view")}
         ${treasurerAction("Reconcile", "Match mobile-money and bank evidence before close of day.", "reconciliation", "transactions:view")}
         ${treasurerAction("Reports", "Export collections and member payment summaries.", "reports", "reports:view")}
       </div>
     </section>
-    <div class="grid two">
-      ${collectionsByChannelPanel(monthlyPerformance)}
-      ${treasurerCycleClosePanel(treasurer, cycle)}
-    </div>
-    <div class="grid two">
-      ${pending.length ? recordTable("Approval queue", pending, ["reference", "memberName", "type", "amount", "channel", "status"]) : emptyState("Approval queue clear", "No verified finance postings are waiting for Treasurer approval.")}
-      ${exceptions.length ? recordTable("Exception watch", exceptions, ["externalReference", "provider", "purpose", "amount", "status", "receivedAt"]) : emptyState("No reconciliation exceptions", "Mobile-money and bank evidence is clear for this cycle.")}
-      ${recentReceipts.length ? recordTable("Recent receipts", recentReceipts, ["reference", "memberName", "type", "amount", "channel", "postedAt", "status"]) : emptyState("No receipts yet", "Posted receipts for this cycle will appear here.")}
-      ${monthlyPerformance.length ? recordTable("Member payment summary", monthlyPerformance.slice(0, 8), ["month", "memberName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "treasurerCash", "mobileMoney", "totalDeposits"]) : emptyState("No member payments yet", "Member payment performance appears after postings.")}
-    </div>
   `;
 }
 
 function treasurerFinanceView() {
   const tabs = [
     ["overview", "Overview"],
-    ["member-transactions", "Member transactions"],
-    ["transactions", "Transactions"],
-    ["savings", "Savings"],
-    ["shares", "Shares"],
-    ["welfare", "Welfare"]
+    ["member-transactions", "Member transactions"]
   ];
   const tab = activeModuleTab("finance", tabs);
   return `
     ${moduleTabs("finance", tabs, tab)}
     ${tab === "overview" ? treasurerFinanceOverview() : ""}
     ${tab === "member-transactions" ? treasurerMemberTransactionsView() : ""}
-    ${tab === "transactions" ? transactionsView() : ""}
-    ${tab === "savings" ? savingsView() : ""}
-    ${tab === "shares" ? sharesView() : ""}
-    ${tab === "welfare" ? welfareView() : ""}
   `;
+}
+
+function buildTreasurerFinanceOverviewModel({ callbacks = [], expenses = [], loans = [], members = [], monthlyPerformance = [], transactions = [] }) {
+  const postedTransactions = (transactions || []).filter((row) => normalizePerformanceText(row.status) === "posted");
+  const postedCallbacks = (callbacks || []).filter((row) => normalizePerformanceText(row.status) === "posted");
+  const todayRows = treasuryTodayTransactions(postedTransactions, postedCallbacks);
+  const totalCollections = sum(postedTransactions, "credit", "amount") + sum(postedCallbacks, "amount");
+  const expensesTotal = sum(expenses.filter((row) => !["rejected", "cancelled"].some((word) => normal(row.status).includes(word))), "amount", "expenseTotal");
+  return {
+    cashBank: totalCollections,
+    savings: sum(members, "savingsBalance", "savings", "availableSavings"),
+    loans: sum(loans.filter((loan) => financeLoanHasBalance(loan)), "outstandingBalance", "balance"),
+    todayReceipts: sum(todayRows, "amount"),
+    expenses: expensesTotal,
+    netCash: totalCollections - expensesTotal,
+    memberDeposits: sum(monthlyPerformance, "totalDeposits")
+  };
+}
+
+function treasurerMetricCard(label, value, detail, view, tab = "") {
+  const allowed = canAccessView(view);
+  const tabAttribute = allowed && tab ? ` data-summary-tab="${escapeHtml(tab)}"` : "";
+  return `
+    <article class="treasurer-kpi-card">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(String(value))}</strong>
+      <small>${escapeHtml(detail)}</small>
+      <button type="button" ${allowed ? `data-summary-view="${escapeHtml(view)}"${tabAttribute}` : "disabled"}>${allowed ? "Open" : t("dashboardOnly")}</button>
+    </article>
+  `;
+}
+
+function treasuryTodayTransactions(transactions = [], callbacks = []) {
+  const today = new Date().toISOString().slice(0, 10);
+  const posted = (transactions || [])
+    .filter((row) => normalizePerformanceText(row.status) === "posted" && String(row.postedAt || row.transactionDate || row.createdAt || "").slice(0, 10) === today)
+    .map((row) => ({
+      reference: row.reference,
+      memberName: row.memberName || memberName(row.memberId),
+      type: row.type,
+      paymentRoute: row.paymentRoute || row.channel || "cash",
+      amount: Number(row.amount || row.credit || 0),
+      postedAt: row.postedAt || row.transactionDate || row.createdAt,
+      status: row.status
+    }));
+  const callbackRows = (callbacks || [])
+    .filter((row) => normalizePerformanceText(row.status) === "posted" && String(row.receivedAt || row.createdAt || "").slice(0, 10) === today)
+    .map((row) => ({
+      reference: row.externalReference || row.providerReference || row.id,
+      memberName: memberName(row.memberId),
+      type: row.purpose,
+      paymentRoute: row.provider || "mobile_money",
+      amount: Number(row.amount || 0),
+      postedAt: row.receivedAt || row.createdAt,
+      status: row.status
+    }));
+  return [...posted, ...callbackRows].sort((a, b) => new Date(b.postedAt || 0).getTime() - new Date(a.postedAt || 0).getTime());
+}
+
+function treasuryCashFlowRows(transactions = [], expenses = [], callbacks = []) {
+  const income = sum(transactions.filter((row) => normalizePerformanceText(row.status) === "posted"), "credit", "amount")
+    + sum(callbacks.filter((row) => normalizePerformanceText(row.status) === "posted"), "amount");
+  const spend = sum(expenses.filter((row) => !["rejected", "cancelled"].some((word) => normal(row.status).includes(word))), "amount", "expenseTotal");
+  return [
+    { label: "Income", value: income, color: "#0f766e" },
+    { label: "Expenses", value: spend, color: "#c8a24a" },
+    { label: "Net cash", value: Math.max(income - spend, 0), color: "#164e63" }
+  ];
 }
 
 function treasurerMemberTransactionsView() {
@@ -511,8 +750,8 @@ function buildMemberTransactionRows(transactions, callbacks, loans = [], guarant
         loanRepayments: 0,
         activeLoans: 0,
         loanOutstandingBalance: 0,
-        unclearedGuarantees: 0,
-        unclearedGuaranteedAmount: 0,
+        activeGuarantees: 0,
+        activeGuaranteeMembers: [],
         treasurerCash: 0,
         mobileMoney: 0
       });
@@ -540,19 +779,22 @@ function buildMemberTransactionRows(transactions, callbacks, loans = [], guarant
     target.loanOutstandingBalance += financeLoanBalance(loan);
   });
   financeUnclearedGuaranteeRows(loans, guarantorRequests).forEach((request) => {
-    const target = ensure(request.memberId, request.memberName);
-    target.unclearedGuarantees += 1;
-    target.unclearedGuaranteedAmount += Number(request.guaranteedAmount || request.capacity || 0);
+    const target = ensure(request.loanMemberId, request.borrower);
+    target.activeGuarantees += 1;
+    target.activeGuaranteeMembers = financeUniquePeople([
+      ...target.activeGuaranteeMembers,
+      financeMemberIdentity(request.guarantorMemberId, request.guarantor)
+    ]);
   });
   return [...rows.values()].sort((a, b) => String(a.fullName || "").localeCompare(String(b.fullName || "")));
 }
 
 function memberTransactionSummaryTable(title, rows) {
   const model = financeClickableTableModel(title, rows);
-  const allColumns = ["membershipNo", "fullName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "activeLoans", "loanOutstandingBalance", "unclearedGuarantees", "unclearedGuaranteedAmount"];
+  const allColumns = ["membershipNo", "fullName", "savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "activeLoans", "loanOutstandingBalance", "activeGuarantees"];
   const hidden = new Set(state.financeMemberHiddenColumns || []);
   const columns = allColumns.filter((column) => !hidden.has(column));
-  const clickableColumns = new Set(["savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "activeLoans", "loanOutstandingBalance", "unclearedGuarantees", "unclearedGuaranteedAmount"]);
+  const clickableColumns = new Set(["savingsDeposits", "shareDeposits", "welfareDeposits", "loanRepayments", "activeLoans", "loanOutstandingBalance", "activeGuarantees"]);
   const totalRows = model.filteredRows;
   const totals = {
     memberId: "__all__",
@@ -564,21 +806,20 @@ function memberTransactionSummaryTable(title, rows) {
     loanRepayments: sum(totalRows, "loanRepayments"),
     activeLoans: sum(totalRows, "activeLoans"),
     loanOutstandingBalance: sum(totalRows, "loanOutstandingBalance"),
-    unclearedGuarantees: sum(totalRows, "unclearedGuarantees"),
-    unclearedGuaranteedAmount: sum(totalRows, "unclearedGuaranteedAmount")
+    activeGuarantees: sum(totalRows, "activeGuarantees")
   };
   return `
     ${financeFigureNotice()}
     <div class="column-picker">
       <strong>Show columns</strong>
       ${allColumns.map((column) => `
-        <label><input type="checkbox" data-finance-member-column="${escapeHtml(column)}" ${hidden.has(column) ? "" : "checked"}> ${tableColumnLabel(column)}</label>
+        <label><input type="checkbox" data-finance-member-column="${escapeHtml(column)}" ${hidden.has(column) ? "" : "checked"}> ${financeMemberColumnLabel(column)}</label>
       `).join("")}
     </div>
     ${financeClickableTableTools(title, model)}
     <div class="table-wrap">
       <table>
-        <thead><tr>${columns.map((column) => `<th>${tableColumnLabel(column)}</th>`).join("")}</tr></thead>
+        <thead><tr>${columns.map((column) => `<th>${financeMemberColumnLabel(column)}</th>`).join("")}</tr></thead>
         <tbody>
           ${model.pagedRows.map((row) => `<tr>${columns.map((column) => memberTransactionCell(row, column, clickableColumns)).join("")}</tr>`).join("")}
           <tr class="total-row">${columns.map((column) => memberTransactionCell(totals, column, clickableColumns, true)).join("")}</tr>
@@ -595,16 +836,69 @@ function memberTransactionCell(row, column, clickableColumns, total = false) {
   const raw = Number(row[column] || 0);
   const disabled = raw <= 0;
   const memberId = total ? "__all__" : row.memberId;
-  const content = value;
+  const content = column === "activeGuarantees"
+    ? financeActiveGuarantorContent(row, total)
+    : value;
   return `<td><button class="table-action finance-figure-link" type="button" data-row-action="finance-member-detail" data-row-id="${escapeHtml(memberId)}" data-finance-metric="${escapeHtml(column)}" ${disabled ? "disabled" : ""}>${content}</button></td>`;
 }
 
+function financeMemberColumnLabel(column) {
+  return column === "activeGuarantees" ? "Active guarantors" : tableColumnLabel(column);
+}
+
+function financeActiveGuarantorContent(row, total = false) {
+  const count = Number(row.activeGuarantees || 0);
+  if (total) {
+    return `<span class="finance-guarantor-total">${count ? `${count} active` : "None"}</span>`;
+  }
+  const people = financeUniquePeople(row.activeGuaranteeMembers || []);
+  if (!people.length) return "None";
+  return `
+    <span class="finance-guarantor-list">
+      ${people.slice(0, 2).map((person) => `
+        <span class="finance-guarantor-chip">
+          <span class="finance-guarantor-name">${escapeHtml(person.name || person.display || "-")}</span>
+          ${person.code ? `<span class="finance-guarantor-code">${escapeHtml(person.code)}</span>` : ""}
+        </span>
+      `).join("")}
+      ${people.length > 2 ? `<span class="finance-guarantor-more">+${people.length - 2}</span>` : ""}
+    </span>
+  `;
+}
+
+function financeMemberIdentity(memberId, fallbackName = "") {
+  const member = dataRows("members").find((item) => item.id === memberId) || {};
+  const rawFallback = String(fallbackName || memberName(memberId) || "");
+  const fallbackParts = rawFallback.includes(" - ") ? rawFallback.split(" - ") : [];
+  const code = member.membershipNo || fallbackParts[0] || "";
+  const name = member.fullName || fallbackParts.slice(1).join(" - ") || rawFallback || memberId || "";
+  return {
+    id: memberId || code || name,
+    code,
+    name,
+    display: code ? `${name} (${code})` : name
+  };
+}
+
+function financeUniquePeople(people = []) {
+  const unique = new Map();
+  people.filter(Boolean).forEach((person) => {
+    const key = person.id || person.code || person.name || person.display;
+    if (key && !unique.has(key)) unique.set(key, person);
+  });
+  return [...unique.values()];
+}
+
 function financeMemberFigureRows({ callbacks, guarantorRequests, loans, memberId, metric, transactions }) {
-  if (["activeLoans", "loanOutstandingBalance"].includes(metric)) {
+  if (metric === "loanOutstandingBalance") {
+    return financeLoanPaymentHistoryRows({ callbacks, loans, memberId, transactions });
+  }
+  if (metric === "activeLoans") {
     return (loans || [])
       .filter((loan) => (memberId === "__all__" || loan.memberId === memberId) && financeLoanHasBalance(loan))
       .map((loan) => ({
         ...loan,
+        applicationNo: loanApplicationCode(loan),
         memberName: loan.memberName || memberName(loan.memberId),
         outstandingBalance: financeLoanBalance(loan),
         action: loan.id ? "loan-detail" : "none",
@@ -613,12 +907,120 @@ function financeMemberFigureRows({ callbacks, guarantorRequests, loans, memberId
       }))
       .sort((a, b) => String(a.memberName || "").localeCompare(String(b.memberName || "")));
   }
-  if (["unclearedGuarantees", "unclearedGuaranteedAmount"].includes(metric)) {
+  if (metric === "activeGuarantees") {
     return financeUnclearedGuaranteeRows(loans, guarantorRequests)
-      .filter((request) => memberId === "__all__" || request.memberId === memberId)
-      .sort((a, b) => String(a.memberName || "").localeCompare(String(b.memberName || "")));
+      .filter((request) => memberId === "__all__" || request.loanMemberId === memberId)
+      .sort((a, b) => String(a.borrower || "").localeCompare(String(b.borrower || "")));
   }
   return financeTransactionsForSelection(transactions, callbacks, "__all__", metric, memberId);
+}
+
+function financeLoanPaymentHistoryRows({ callbacks = [], loans = [], memberId = "__all__", transactions = [] }) {
+  const activeLoans = (loans || [])
+    .filter((loan) => (memberId === "__all__" || loan.memberId === memberId) && financeLoanHasBalance(loan));
+  const loanIds = new Set(activeLoans.map((loan) => loan.id).filter(Boolean));
+  const loanById = new Map(activeLoans.map((loan) => [loan.id, loan]));
+  const loanByMemberId = new Map(activeLoans.map((loan) => [loan.memberId, loan]));
+  const paymentsByLoanId = new Map();
+
+  const appendPayment = (sourceRow, source) => {
+    const sourceLoanId = sourceRow.loanId || sourceRow.resourceId || "";
+    const loan = (sourceLoanId && loanById.get(sourceLoanId)) || loanByMemberId.get(sourceRow.memberId);
+    if (!loan) return;
+    const amount = Number(sourceRow.amount || sourceRow.credit || 0);
+    if (!amount) return;
+    const paymentDate = sourceRow.receivedAt || sourceRow.postedAt || sourceRow.transactionDate || sourceRow.createdAt;
+    if (!sourceLoanId && paymentDate && financeLoanEventDate(loan) && new Date(paymentDate).getTime() < new Date(financeLoanEventDate(loan)).getTime()) return;
+    const row = {
+      loanId: loan.id,
+      applicationNo: loanApplicationCode(loan),
+      memberName: loan.memberName || memberName(loan.memberId),
+      product: loan.product || "Loan",
+      reference: sourceRow.reference || sourceRow.externalReference || sourceRow.providerReference || sourceRow.id,
+      date: paymentDate,
+      entry: "Payment received",
+      paymentRoute: sourceRow.paymentRoute || sourceRow.channel || sourceRow.provider || source,
+      loanReceived: 0,
+      payment: amount,
+      totalPayable: financeLoanTotalPayable(loan),
+      paidToDate: Number(loan.repaymentTotal || loan.repayments || 0),
+      outstandingBalance: financeLoanBalance(loan),
+      status: sourceRow.status || "posted",
+      action: loan.id ? "loan-detail" : "none",
+      actionLabel: "Open loan",
+      actionId: loan.id
+    };
+    const key = `${row.loanId}:${row.reference}:${row.payment}:${row.date}`;
+    const paymentRows = paymentsByLoanId.get(loan.id) || new Map();
+    if (!paymentRows.has(key)) paymentRows.set(key, row);
+    paymentsByLoanId.set(loan.id, paymentRows);
+  };
+
+  (dataRows("loanRepayments") || [])
+    .filter((row) => loanIds.has(row.loanId) && normalizePerformanceText(row.status || "posted") === "posted")
+    .forEach((row) => appendPayment(row, "Loan repayment"));
+  (transactions || [])
+    .filter((row) => normalizePerformanceText(row.status) === "posted" && financeRecordMatchesMetric(row, "loanRepayments"))
+    .forEach((row) => appendPayment(row, "Treasurer cash"));
+  (callbacks || [])
+    .filter((row) => normalizePerformanceText(row.status) === "posted" && financeRecordMatchesMetric(row, "loanRepayments"))
+    .forEach((row) => appendPayment(row, "Mobile money"));
+
+  return activeLoans.flatMap((loan) => financeLoanLedgerRows(loan, [...(paymentsByLoanId.get(loan.id)?.values() || [])]));
+}
+
+function financeLoanLedgerRows(loan, paymentRows = []) {
+  const totalPayable = financeLoanTotalPayable(loan);
+  let runningBalance = totalPayable;
+  const base = {
+    loanId: loan.id,
+    applicationNo: loanApplicationCode(loan),
+    memberName: loan.memberName || memberName(loan.memberId),
+    product: loan.product || "Loan",
+    totalPayable,
+    paidToDate: Number(loan.repaymentTotal || loan.repayments || 0),
+    action: loan.id ? "loan-detail" : "none",
+    actionLabel: "Open loan",
+    actionId: loan.id
+  };
+  const ledger = [{
+    ...base,
+    date: financeLoanEventDate(loan),
+    entry: "Loan received",
+    reference: loan.disbursementReference || loanApplicationCode(loan),
+    paymentRoute: loan.disbursementChannel || loan.channel || "SACCO disbursement",
+    loanReceived: Number(loan.amount || loan.requestedAmount || 0),
+    payment: 0,
+    outstandingBalance: runningBalance,
+    status: loan.status || "active"
+  }];
+
+  paymentRows
+    .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime())
+    .forEach((row) => {
+      runningBalance = Math.max(runningBalance - Number(row.payment || 0), 0);
+      ledger.push({
+        ...base,
+        ...row,
+        outstandingBalance: runningBalance,
+        status: row.status || "posted"
+      });
+    });
+
+  if (paymentRows.length && Math.abs(runningBalance - financeLoanBalance(loan)) > 0.01) {
+    ledger.push({
+      ...base,
+      date: "",
+      entry: "Balance reconciliation",
+      reference: "Saved loan balance",
+      paymentRoute: "-",
+      loanReceived: 0,
+      payment: 0,
+      outstandingBalance: financeLoanBalance(loan),
+      status: "balance carried"
+    });
+  }
+  return ledger;
 }
 
 function financeUnclearedGuaranteeRows(loans = [], guarantorRequests = []) {
@@ -627,17 +1029,24 @@ function financeUnclearedGuaranteeRows(loans = [], guarantorRequests = []) {
     .filter((request) => {
       const loan = request.loan || loansById.get(request.loanId);
       const status = normal(`${request.status || ""} ${request.guarantorReadiness || ""}`);
-      return financeLoanHasBalance(loan) && !["rejected", "cancelled", "released", "cleared"].some((word) => status.includes(word));
+      return status.includes("accepted")
+        && financeLoanHasBalance(loan)
+        && !["rejected", "cancelled", "released", "cleared"].some((word) => status.includes(word));
     })
     .map((request) => {
       const loan = request.loan || loansById.get(request.loanId) || {};
+      const guarantor = financeMemberIdentity(request.memberId, request.memberName);
+      const borrower = financeMemberIdentity(loan.memberId, loan.memberName);
       return {
         ...request,
-        memberName: memberName(request.memberId),
-        borrower: loan.memberName || memberName(loan.memberId),
+        guarantorMemberId: request.memberId,
+        loanMemberId: loan.memberId,
+        memberName: guarantor.display,
+        guarantor: guarantor.display,
+        borrower: borrower.display,
         product: loan.product || request.product || "Loan",
+        loanAmount: Number(loan.amount || loan.requestedAmount || 0),
         outstandingBalance: financeLoanBalance(loan),
-        guaranteedAmount: Number(request.guaranteedAmount || request.capacity || 0),
         action: loan.id ? "loan-detail" : "none",
         actionLabel: "Open loan",
         actionId: loan.id
@@ -652,9 +1061,21 @@ function financeLoanHasBalance(loan) {
 function financeLoanBalance(loan) {
   if (!loan) return 0;
   const recorded = loan.outstandingBalance ?? loan.balance;
-  if (recorded !== undefined && recorded !== null && recorded !== "") return Math.max(Number(recorded || 0), 0);
-  const total = Number(loan.totalPayable || 0) || Number(loan.amount || loan.requestedAmount || 0) + Number(loan.interestAmount || 0);
-  return Math.max(total - Number(loan.repaymentTotal || loan.repayments || 0), 0);
+  const total = financeLoanTotalPayable(loan);
+  const derived = total > 0 ? Math.max(total - Number(loan.repaymentTotal || 0), 0) : null;
+  if (recorded !== undefined && recorded !== null && recorded !== "") {
+    const recordedBalance = Math.max(Number(recorded || 0), 0);
+    return derived === null ? recordedBalance : Math.min(recordedBalance, derived);
+  }
+  return derived === null ? 0 : derived;
+}
+
+function financeLoanTotalPayable(loan) {
+  return Number(loan?.totalPayable || 0) || Number(loan?.amount || loan?.requestedAmount || 0) + Number(loan?.interestAmount || 0) + Number(loan?.chargesAmount || 0);
+}
+
+function financeLoanEventDate(loan) {
+  return loan?.disbursedAt || loan?.approvedAt || loan?.createdAt || loan?.updatedAt || "";
 }
 
 function monthlyTransactionCell(row, column, clickableColumns, total = false) {
@@ -671,10 +1092,10 @@ function financeTransactionsForSelection(transactions, callbacks, month, metric,
   const includeMonth = (date) => month === "__all__" || performanceMonthLabel(date) === month;
   const includeMember = (row) => memberId === "__all__" || row.memberId === memberId;
   const txRows = (transactions || [])
-    .filter((row) => includeMember(row) && includeMonth(row.postedAt || row.createdAt) && normalizePerformanceText(row.status) === "posted" && financeRecordMatchesMetric(row, metric))
+    .filter((row) => includeMember(row) && includeMonth(row.postedAt || row.transactionDate || row.createdAt) && normalizePerformanceText(row.status) === "posted" && financeRecordMatchesMetric(row, metric))
     .map((row) => ({
       reference: row.reference,
-      postedAt: row.postedAt || row.createdAt,
+      postedAt: row.postedAt || row.transactionDate || row.createdAt,
       memberName: row.memberName || memberName(row.memberId),
       type: row.type,
       paymentRoute: row.paymentRoute || row.channel,
@@ -703,7 +1124,12 @@ function financeRecordMatchesMetric(row, metric) {
   if (metric === "transactionCount") return true;
   if (metric === "mobileMoney") return isMobileMoneyPerformanceLine(row);
   if (metric === "treasurerCash") return !isMobileMoneyPerformanceLine(row);
-  const text = normalizePerformanceText(`${row.type || ""} ${row.purpose || ""} ${row.description || ""} ${row.narration || ""}`);
+  const typeText = normalizePerformanceText(`${row.type || ""} ${row.purpose || ""}`);
+  if (typeText.includes("savings") || typeText.includes("saving")) return metric === "savingsDeposits";
+  if (typeText.includes("share")) return metric === "shareDeposits";
+  if (typeText.includes("welfare")) return metric === "welfareDeposits";
+  if (typeText.includes("loan") || typeText.includes("repayment")) return metric === "loanRepayments";
+  const text = normalizePerformanceText(`${row.description || ""} ${row.narration || ""}`);
   if (metric === "loanRepayments") return text.includes("loan") || text.includes("repayment");
   if (metric === "shareDeposits") return text.includes("share");
   if (metric === "welfareDeposits") return text.includes("welfare");
@@ -722,17 +1148,22 @@ function financeMonthTransactionsPanel(label, rows) {
 }
 
 function financeFigureDetailPanel(label, rows, metric) {
-  const columns = ["activeLoans", "loanOutstandingBalance"].includes(metric)
+  const columns = metric === "activeLoans"
     ? ["applicationNo", "memberName", "product", "requestedAmount", "outstandingBalance", "monthlyInstallment", "nextDueDate", "status"]
-    : ["unclearedGuarantees", "unclearedGuaranteedAmount"].includes(metric)
-      ? ["memberName", "borrower", "product", "guaranteedAmount", "outstandingBalance", "status"]
+    : metric === "loanOutstandingBalance"
+      ? ["applicationNo", "memberName", "product", "date", "entry", "reference", "paymentRoute", "loanReceived", "payment", "totalPayable", "outstandingBalance", "status"]
+    : metric === "activeGuarantees"
+      ? ["guarantor", "borrower", "product", "loanAmount", "outstandingBalance", "status"]
       : ["reference", "postedAt", "memberName", "type", "paymentRoute", "amount", "status"];
+  const copy = metric === "loanOutstandingBalance"
+    ? "Loan payment history to date for the selected member balance. Open the loan for the full repayment schedule."
+    : "Records used to calculate the figure selected in the Finance overview.";
   return `
     <section class="panel compact-panel">
       <div class="panel-heading">
         <div>
           <h2>${escapeHtml(label)}</h2>
-          <p>Records used to calculate the figure selected in the Finance overview.</p>
+          <p>${escapeHtml(copy)}</p>
         </div>
         <button class="button ghost" type="button" data-action="close-finance-month-detail">Close</button>
       </div>
@@ -772,7 +1203,7 @@ function buildMonthlyTransactionRows(input) {
   };
   (input.transactions || [])
     .filter((row) => normalizePerformanceText(row.status) === "posted")
-    .forEach((row) => countMonth(row.postedAt || row.createdAt));
+    .forEach((row) => countMonth(row.postedAt || row.transactionDate || row.createdAt));
   (input.callbacks || [])
     .filter((row) => normalizePerformanceText(row.status) === "posted")
     .forEach((row) => countMonth(row.receivedAt || row.createdAt));

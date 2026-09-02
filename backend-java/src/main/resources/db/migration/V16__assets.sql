@@ -31,5 +31,5 @@ CREATE INDEX idx_assets_tenant_status ON assets (tenant_id, status);
 CREATE INDEX idx_assets_purchase_date ON assets (tenant_id, purchase_date);
 
 INSERT INTO assets (id, tenant_id, name, category, asset_account_code, cost, salvage_value, useful_life_months, purchase_date, depreciation_start_date, channel, reference, location, custodian_user_id, status, recorded_by_user_id) VALUES
-    ('asset_green_laptop_001', 'tenant_green', 'Branch operations laptop', 'technology', '1300', 2400000.00, 200000.00, 36, DATE '2026-01-15', DATE '2026-02-01', 'bank', 'GVS-AST-0001', 'Green Valley Main Branch', 'user_green_admin', 'active', 'user_green_admin'),
+    ('asset_green_laptop_001', 'tenant_green', 'Branch operations laptop', 'technology', '1300', 2400000.00, 200000.00, 36, DATE '2026-01-15', DATE '2026-02-01', 'bank', 'GREE-AST-0001', 'Green Valley Main Branch', 'user_green_admin', 'active', 'user_green_admin'),
     ('asset_lake_furniture_001', 'tenant_lake', 'Member service furniture', 'furniture', '1300', 1800000.00, 150000.00, 48, DATE '2026-03-10', DATE '2026-04-01', 'bank', 'LBS-AST-0001', 'Lake Branch Office', NULL, 'active', 'user_platform_admin');

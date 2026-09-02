@@ -24,6 +24,8 @@ export interface TerekaSubscriptionRow extends TerekaSubscription, TerekaRecord 
   approvalStage: string;
   balanceDue: number;
   billableMembers: number | string;
+  paidMemberCapacity: number | string;
+  inactiveMemberOverflow: number | string;
   operatingAccess: string;
   packageName?: string;
   paymentStage: string;
@@ -107,12 +109,15 @@ export function buildSubscriptionRows(input: {
     return {
       ...subscription,
       saccoCode: textOnboardingValue(tenant.abbreviation || tenant.code || subscription.tenantCode || subscription.tenantId),
+      tenantName: textOnboardingValue(tenant.name || subscription.tenantName || subscription.saccoName || subscription.tenantId),
       packageName: textOnboardingValue(subscription.tierLabel || subscription.packageName || subscription.packageId),
       paymentStatus: subscriptionPaymentLabelFor(subscription),
       paymentStage: saccoPaymentStageFor(tenant, subscription),
       operatingAccess: subscriptionAccessLabelFor(subscription, tenant),
       approvalStage: saccoApprovalStageFor(tenant, subscription),
       billableMembers: displayOnboardingValue(subscription.billableMembers || subscription.memberCount || tenant.memberCount || 0),
+      paidMemberCapacity: displayOnboardingValue(subscription.paidMemberCapacity || 0),
+      inactiveMemberOverflow: displayOnboardingValue(subscription.inactiveMemberOverflow || 0),
       balanceDue: balanceDueFor(subscription),
       action: "subscription-detail",
       actionLabel: "Manage",
@@ -153,22 +158,29 @@ export function buildPackageCardRows(packages: Array<TerekaSubscriptionPackage &
 export function generateSaccoCode(name: unknown, existingTenants: Array<TerekaTenantSummary & TerekaRecord>): string {
   const words = String(name || "")
     .toUpperCase()
-    .replace(/[^A-Z0-9\s]/g, " ")
+    .replace(/[^A-Z\s]/g, " ")
     .split(/\s+/)
     .filter(Boolean)
     .filter((word) => !["SACCO", "COOPERATIVE", "COOP", "LIMITED", "LTD", "THE", "AND", "OF"].includes(word));
-  const base = (words.length > 1 ? words.map((word) => word[0]).join("") : (words[0] || "SACCO").slice(0, 5))
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 8) || "SACCO";
+  const letterSource = words.join("") || "SACCO";
+  const base = `${letterSource.replace(/[^A-Z]/g, "")}SACO`.slice(0, 4);
   const existingCodes = new Set(existingTenants.map((tenant) => normalizeOnboardingText(tenant.saccoCode || tenant.abbreviation || tenant.code)));
-  let code = base.length >= 3 ? base : `${base}S`.slice(0, 3);
-  let suffix = 2;
-  while (existingCodes.has(normalizeOnboardingText(code))) {
-    const suffixText = String(suffix);
-    code = `${base.slice(0, Math.max(1, 8 - suffixText.length))}${suffixText}`;
-    suffix += 1;
+  if (!existingCodes.has(normalizeOnboardingText(base))) return base;
+  for (let index = 0; index < 26 * 26; index += 1) {
+    const suffix = String.fromCharCode(65 + Math.floor(index / 26)) + String.fromCharCode(65 + (index % 26));
+    const code = `${base.slice(0, 2)}${suffix}`;
+    if (!existingCodes.has(normalizeOnboardingText(code))) return code;
   }
-  return code.slice(0, 12);
+  for (let index = 0; index < 26 * 26 * 26 * 26; index += 1) {
+    let cursor = index;
+    const code = [0, 0, 0, 0].map(() => {
+      const letter = String.fromCharCode(65 + (cursor % 26));
+      cursor = Math.floor(cursor / 26);
+      return letter;
+    }).reverse().join("");
+    if (!existingCodes.has(normalizeOnboardingText(code))) return code;
+  }
+  return base;
 }
 
 export function saccoLocationAddress(district: unknown, parish: unknown, village: unknown, memberRange: unknown = ""): string {
@@ -190,6 +202,7 @@ export function tenantStatusOptions(): TerekaOnboardingOption[] {
     { value: "pending_review", label: "Pending review / request changes" },
     { value: "approved", label: "Approved" },
     { value: "active", label: "Active / operating" },
+    { value: "inactive", label: "Inactive / deactivated" },
     { value: "suspended", label: "Suspended" },
     { value: "terminated", label: "Rejected / terminated" },
   ];
@@ -201,10 +214,12 @@ export function tenantStatusLabel(status: unknown): string {
 
 export function memberRangeOptions(): TerekaOnboardingOption[] {
   return [
-    { value: "100-250", label: "100 to 250 members" },
+    { value: "20-250", label: "20 to 250 members" },
     { value: "251-500", label: "251 to 500 members" },
-    { value: "501-2500", label: "501 to 2,500 members" },
-    { value: "2501-10000", label: "2,501 to 10,000 members" },
+    { value: "501-1000", label: "501 to 1,000 members" },
+    { value: "1001-2500", label: "1,001 to 2,500 members" },
+    { value: "2501-5000", label: "2,501 to 5,000 members" },
+    { value: "5001-10000", label: "5,001 to 10,000 members" },
     { value: "10000+", label: "Above 10,000 members" },
   ];
 }
@@ -232,8 +247,9 @@ export function buildSaccoCollectionAccountReviewRows(accounts: Array<TerekaColl
 }
 
 export function subscriptionAccessLabelFor(subscription: Partial<TerekaSubscription & TerekaRecord>, tenant: Partial<TerekaTenantSummary & TerekaRecord> = {}): string {
-  if (normalizeOnboardingText(tenant.status).includes("suspended")) return "Suspended";
+  if (normalizeOnboardingText(tenant.status).includes("suspended")) return "Read-only until paid";
   if (normalizeOnboardingText(subscription.status) === "active" && normalizeOnboardingText(tenant.status) === "active") return "Active";
+  if (normalizeOnboardingText(subscription.status) === "trial" && normalizeOnboardingText(tenant.status) === "active") return "Setup trial";
   if (normalizeOnboardingText(subscription.status).includes("pending")) return "Payment pending";
   if (normalizeOnboardingText(subscription.status).includes("expired")) return "Expired";
   return String(subscription.status || tenant.status || "Pending");
@@ -246,6 +262,7 @@ export function saccoPaymentStageFor(tenant: Partial<TerekaTenantSummary & Terek
   const status = normalizeOnboardingText(subscription.status);
   if (amount > 0 && paid >= amount) return "Callback received";
   if (paid > 0) return "Part payment received";
+  if (status === "trial") return "Setup trial";
   if (normalizeOnboardingText(tenant.status).includes("pending_self_registration") || status.includes("pending")) return "Payment initiated";
   if (status === "active") return "Callback received";
   if (status.includes("expired")) return "Expired";
@@ -271,6 +288,7 @@ export function subscriptionPaymentLabelFor(subscription: Partial<TerekaSubscrip
   const status = normalizeOnboardingText(subscription.paymentStatus || subscription.status);
   if (amount > 0 && paid >= amount) return "Paid";
   if (status.includes("paid") || status === "active") return paid > 0 ? "Part paid" : "Payment confirmed";
+  if (status === "trial") return "Trial not paid";
   if (paid > 0) return "Part paid";
   if (status.includes("expired")) return "Expired";
   return "Pending payment";

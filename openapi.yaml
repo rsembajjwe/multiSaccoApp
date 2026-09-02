@@ -2326,7 +2326,7 @@ components:
       properties:
         id: { type: string, example: "tenant_green_valley" }
         name: { type: string, example: "Green Valley SACCO" }
-        abbreviation: { type: string, example: "GVS" }
+        abbreviation: { type: string, example: "GREE" }
         registrationNo: { type: string, example: "REG-001" }
         district: { type: string, example: "Wakiso" }
         country: { type: string, example: "Uganda" }
@@ -2357,7 +2357,7 @@ components:
         abbreviation:
           type: string
           description: SACCO code used at login.
-          example: "GVS"
+          example: "GREE"
         registrationNo: { type: string, example: "REG-001" }
         district: { type: string, example: "Wakiso" }
         parish: { type: string, example: "Nansana" }
@@ -2365,7 +2365,7 @@ components:
         contactNumber: { type: string, example: "+256700123456" }
         memberRange:
           type: string
-          example: "100-250"
+          example: "20-250"
         country: { type: string, example: "Uganda" }
         localeCode: { type: string, example: "en-UG" }
         currencyCode: { type: string, example: "UGX" }

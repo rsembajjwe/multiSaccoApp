@@ -151,7 +151,7 @@ This model defines the Phase 1 and Phase 2 foundation tables. Production storage
 | billing_description | text | Human-readable billing rule snapshot. |
 | expiry | date | Subscription expiry. |
 
-Subscription billing rule: SACCOs with up to 250 members pay UGX 5,000 per member annually, with a 100-member minimum. From 251-500 members the Starter fixed annual tier is UGX 1,200,000; from 501-2,500 members the Growth tier is UGX 3,600,000; from 2,501-10,000 members the Enterprise tier is UGX 9,000,000.
+Subscription billing rule: SACCOs with 20-250 members pay UGX 5,000 per member annually, with a 20-member minimum. From 251-500 members the Starter fixed annual tier is UGX 1,200,000; from 501-1,000 members the Growth tier is UGX 2,500,000; from 1,001-2,500 members the Scale tier is UGX 5,000,000; from 2,501-5,000 members the Enterprise tier is UGX 8,000,000; from 5,001-10,000 members the Enterprise Plus tier is UGX 12,000,000. Above 10,000 members requires a custom quotation.
 
 ### subscription_payments
 

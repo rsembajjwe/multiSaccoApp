@@ -2,12 +2,13 @@ package com.methaltech.sacco.notification;
 
 import com.methaltech.sacco.config.ProviderResilience;
 import com.methaltech.sacco.member.Member;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestClientResponseException;
 
 @Component
 @ConditionalOnProperty(name = "sacco.providers.sms", havingValue = "afrosms")
@@ -33,6 +34,7 @@ class AfroSmsNotificationProvider implements NotificationProvider {
             @Value("${sacco.integrations.sms.afrosms.email:}") String email,
             @Value("${sacco.integrations.sms.afrosms.password:}") String password,
             @Value("${sacco.integrations.sms.afrosms.source:Tereka}") String source) {
+        this.restClient = restClientBuilder.build();
         this.resilience = resilience;
         this.baseUrl = trimTrailingSlash(baseUrl);
         this.sendPath = ensureLeadingSlash(sendPath);
@@ -40,7 +42,6 @@ class AfroSmsNotificationProvider implements NotificationProvider {
         this.email = email;
         this.password = password;
         this.source = source;
-        this.restClient = restClientBuilder.baseUrl(this.baseUrl).build();
     }
 
     @Override
@@ -69,30 +70,17 @@ class AfroSmsNotificationProvider implements NotificationProvider {
         try {
             // Sending an SMS is not safely repeatable: circuit-break only (never retry) to avoid
             // dispatching duplicate messages when the provider is flaky.
-            String response = resilience.protect(CIRCUIT, () -> restClient.get()
-                    .uri(uriBuilder -> uriBuilder
-                            .path(sendPath)
-                            .queryParam("email", email)
-                            .queryParam("password", password)
-                            .queryParam("destination", msisdn(recipient))
-                            .queryParam("source", source)
-                            .queryParam("message", message)
-                            .queryParam("call", "sendsms")
-                            .build())
-                    .retrieve()
-                    .body(String.class));
+            String response = resilience.protect(CIRCUIT, () -> readUrlUnchecked(sendUrl(recipient, message)));
             return NotificationSendResult.sent(providerReference(response), "AfroSMS accepted the SMS.");
-        } catch (RestClientResponseException exception) {
-            return NotificationSendResult.failed("AfroSMS rejected the SMS: HTTP " + exception.getStatusCode().value());
-        } catch (RestClientException exception) {
-            return NotificationSendResult.failed("AfroSMS SMS could not be sent.");
+        } catch (RuntimeException exception) {
+            return NotificationSendResult.failed("AfroSMS rejected or could not send the SMS.");
         }
     }
 
     String balance() {
         try {
             return readBalance();
-        } catch (RestClientException exception) {
+        } catch (RuntimeException exception) {
             return "0";
         }
     }
@@ -108,18 +96,42 @@ class AfroSmsNotificationProvider implements NotificationProvider {
 
     private String readBalance() {
         assertConfigured();
-        String response = resilience.protectIdempotent(CIRCUIT, () -> restClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path(balancePath)
-                        .queryParam("email", email)
-                        .queryParam("password", password)
-                        .queryParam("call", "credits")
-                        .build())
-                .retrieve()
-                .body(String.class));
+        String response = resilience.protectIdempotent(CIRCUIT, () -> readUrlUnchecked(balanceUrl()));
         if (response == null) return "0";
         String digits = response.replaceAll("[^0-9]", "");
         return digits.isBlank() ? "0" : digits;
+    }
+
+    private String sendUrl(String recipient, String message) {
+        return baseUrl + sendPath
+                + "?email=" + encode(email)
+                + "&password=" + encode(password)
+                + "&destination=" + encode(msisdn(recipient))
+                + "&source=" + encode(source)
+                + "&message=" + encode(message)
+                + "&call=sendsms";
+    }
+
+    private String balanceUrl() {
+        return baseUrl + balancePath
+                + "?email=" + encode(email)
+                + "&password=" + encode(password)
+                + "&call=credits";
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
+    }
+
+    private String readUrlUnchecked(String url) {
+        try {
+            return restClient.get()
+                    .uri(URI.create(url))
+                    .retrieve()
+                    .body(String.class);
+        } catch (Exception exception) {
+            throw new NotificationProviderException("AfroSMS request failed.");
+        }
     }
 
     private void assertConfigured() {

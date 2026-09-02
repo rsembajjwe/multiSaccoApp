@@ -25,7 +25,7 @@ function buildSaccoMonthlyPerformanceRows(input) {
   input.transactions
     .filter((row) => normalizePerformanceText(row.status) === "posted")
     .forEach((transaction) => {
-      const month = performanceMonthLabel(transaction.postedAt || transaction.createdAt);
+      const month = performanceMonthLabel(transaction.postedAt || transaction.transactionDate || transaction.createdAt);
       const target = ensure(month, transaction.memberId, transaction.memberName);
       const amount = Number(transaction.amount || transaction.credit || 0);
       addPerformanceAmountToRow(target, transaction.type, amount);

@@ -74,7 +74,7 @@ Content-Type: application/json
   "dryRun": true,
   "rows": [
     {
-      "membershipNo": "GVS-0100",
+      "membershipNo": "GREE-0100",
       "branchId": "branch_green_main",
       "fullName": "Pilot Member",
       "memberType": "individual",
@@ -140,14 +140,14 @@ Content-Type: application/json
   "rows": [
     {
       "recordType": "document",
-      "membershipNo": "GVS-0100",
+      "membershipNo": "GREE-0100",
       "documentType": "national_id",
-      "storageKey": "kyc/GVS-0100/national-id.pdf",
+      "storageKey": "kyc/GREE-0100/national-id.pdf",
       "verificationStatus": "verified"
     },
     {
       "recordType": "beneficiary",
-      "membershipNo": "GVS-0100",
+      "membershipNo": "GREE-0100",
       "fullName": "Sample Beneficiary",
       "relationship": "daughter",
       "phone": "+256700333444",
@@ -208,7 +208,7 @@ Content-Type: application/json
   "dryRun": true,
   "rows": [
     {
-      "membershipNo": "GVS-0100",
+      "membershipNo": "GREE-0100",
       "product": "Development Loan",
       "originalAmount": "1200000",
       "outstandingBalance": "900000",
@@ -275,12 +275,12 @@ Content-Type: application/json
   "dryRun": true,
   "rows": [
     {
-      "membershipNo": "GVS-0100",
+      "membershipNo": "GREE-0100",
       "product": "Development Loan",
       "loanDisbursedDate": "2026-04-18",
       "amount": "300000",
       "channel": "bank",
-      "reference": "LRH-GVS-0100-001",
+      "reference": "LRH-GREE-0100-001",
       "receivedDate": "2026-05-18",
       "narration": "Migrated historical repayment"
     }
@@ -390,11 +390,11 @@ Content-Type: application/json
   "dryRun": true,
   "rows": [
     {
-      "membershipNo": "GVS-0100",
+      "membershipNo": "GREE-0100",
       "savingsBalance": "100000",
       "sharesBalance": "50000",
       "welfareBalance": "10000",
-      "reference": "OB-GVS-0100",
+      "reference": "OB-GREE-0100",
       "postingDate": "2026-07-18",
       "narration": "Opening balances from pilot data import"
     }

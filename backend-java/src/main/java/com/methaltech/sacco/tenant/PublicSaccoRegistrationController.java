@@ -11,7 +11,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -48,9 +50,7 @@ class PublicSaccoRegistrationController {
 
     @PostMapping
     ResponseEntity<?> registerSacco(@Valid @RequestBody PublicSaccoRegistrationRequest body, HttpServletRequest request) {
-        String saccoCode = cleanCode(body.saccoCode());
-        if (saccoCode.isBlank()) saccoCode = generatedSaccoCode(body.name());
-        String finalSaccoCode = nextAvailableCode(saccoCode);
+        String finalSaccoCode = nextAvailableCode(generatedSaccoCode(body.name()));
 
         Tenant tenant = new Tenant(
                 "tenant_" + UUID.randomUUID(),
@@ -110,25 +110,37 @@ class PublicSaccoRegistrationController {
     }
 
     private String generatedSaccoCode(String name) {
-        String letters = name == null ? "" : name.replaceAll("[^A-Za-z]", "").toUpperCase(Locale.ROOT);
-        if (letters.length() >= 3) return letters.substring(0, 3);
-        return (letters + "SAC").substring(0, 3);
-    }
-
-    private String cleanCode(String value) {
-        return value == null ? "" : value.replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT);
+        String[] words = blankToDefault(name, "SACCO")
+                .toUpperCase(Locale.ROOT)
+                .replaceAll("[^A-Z\\s]", " ")
+                .trim()
+                .split("\\s+");
+        List<String> usefulWords = java.util.Arrays.stream(words)
+                .filter(word -> !word.isBlank())
+                .filter(word -> !Set.of("SACCO", "COOPERATIVE", "COOP", "LIMITED", "LTD", "THE", "AND", "OF").contains(word))
+                .toList();
+        String source = usefulWords.isEmpty() ? "SACCO" : String.join("", usefulWords);
+        return (source.replaceAll("[^A-Z]", "") + "SACO").substring(0, 4);
     }
 
     private String nextAvailableCode(String requestedCode) {
-        String base = requestedCode.length() >= 3 ? requestedCode : (requestedCode + "SAC").substring(0, 3);
-        String code = base;
-        int suffix = 2;
-        while (codeExists(code)) {
-            String suffixText = String.valueOf(suffix);
-            code = base.substring(0, Math.max(1, Math.min(base.length(), 8 - suffixText.length()))) + suffixText;
-            suffix++;
+        String base = (blankToDefault(requestedCode, "SACO").replaceAll("[^A-Z]", "") + "SACO").substring(0, 4);
+        if (!codeExists(base)) return base;
+        for (int index = 0; index < 26 * 26; index++) {
+            String code = base.substring(0, 2) + (char) ('A' + (index / 26)) + (char) ('A' + (index % 26));
+            if (!codeExists(code)) return code;
         }
-        return code;
+        for (int index = 0; index < 26 * 26 * 26 * 26; index++) {
+            int cursor = index;
+            char[] letters = new char[4];
+            for (int position = 3; position >= 0; position--) {
+                letters[position] = (char) ('A' + (cursor % 26));
+                cursor = cursor / 26;
+            }
+            String code = new String(letters);
+            if (!codeExists(code)) return code;
+        }
+        return base;
     }
 
     private boolean codeExists(String code) {

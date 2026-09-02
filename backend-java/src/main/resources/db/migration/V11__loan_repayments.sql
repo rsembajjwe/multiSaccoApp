@@ -34,7 +34,7 @@ INSERT INTO loan_repayments (
     'member_green_amina',
     850000,
     'cash',
-    'LR-GVS-0001-001',
+    'LR-GREE-0001-001',
     'Opening repayment history',
     'user_green_admin',
     TIMESTAMP WITH TIME ZONE '2026-07-12 10:00:00+00'

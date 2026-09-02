@@ -35,7 +35,7 @@ class ChatControllerTest {
 
     @Test
     void staffListsBackfilledThreadAndReadsMessages() throws Exception {
-        String token = login("GVS", "admin@greenvalley.local", "Sacco@12345");
+        String token = login("GREE", "admin@greenvalley.local", "Sacco@12345");
 
         mockMvc.perform(get("/api/v1/chat/threads")
                         .header("Authorization", "Bearer " + token))
@@ -52,7 +52,7 @@ class ChatControllerTest {
 
     @Test
     void staffSendsMessageOnThread() throws Exception {
-        String token = login("GVS", "admin@greenvalley.local", "Sacco@12345");
+        String token = login("GREE", "admin@greenvalley.local", "Sacco@12345");
 
         mockMvc.perform(post("/api/v1/chat/threads/" + BACKFILLED_THREAD + "/messages")
                         .header("Authorization", "Bearer " + token)
@@ -75,7 +75,7 @@ class ChatControllerTest {
 
     @Test
     void unknownThreadReturnsNotFound() throws Exception {
-        String token = login("GVS", "admin@greenvalley.local", "Sacco@12345");
+        String token = login("GREE", "admin@greenvalley.local", "Sacco@12345");
 
         mockMvc.perform(get("/api/v1/chat/threads/chat_missing/messages")
                         .header("Authorization", "Bearer " + token))

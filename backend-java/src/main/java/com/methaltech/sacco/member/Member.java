@@ -37,6 +37,8 @@ public class Member {
 
     private String email;
 
+    private String whatsapp;
+
     @Column(name = "national_id")
     @Convert(converter = EncryptedNationalIdConverter.class)
     private String nationalId;
@@ -194,6 +196,18 @@ public class Member {
         this.kycStatus = kycStatus;
         this.joiningDate = joiningDate;
         this.updatedAt = Instant.now();
+    }
+
+    /** Member self-service update of their own reachable contact details. */
+    public void updateContact(String phone, String whatsapp, String email) {
+        this.phone = phone;
+        this.whatsapp = whatsapp;
+        this.email = email;
+        this.updatedAt = Instant.now();
+    }
+
+    public String getWhatsapp() {
+        return whatsapp;
     }
 
     /** Sets a new password hash/salt (used by the member self-service password reset). */

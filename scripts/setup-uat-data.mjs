@@ -29,7 +29,7 @@ try {
   })).data.token;
 
   const saccoToken = (await api("POST", "/auth/login", {
-    saccoCode: "GVS",
+    saccoCode: "GREE",
     username: evidence.saccoAdmin.email,
     email: evidence.saccoAdmin.email,
     password: evidence.saccoAdmin.password
@@ -139,7 +139,7 @@ try {
   evidence.created.guarantorRequest = pick(guarantor.data, ["id", "loanId", "memberId", "status", "guaranteedAmount"]);
 
   const memberToken = (await api("POST", "/member-auth/login", {
-    saccoCode: "GVS",
+    saccoCode: "GREE",
     identifier: activeMember.data.membershipNo,
     password: memberPassword
   })).data.token;

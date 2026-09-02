@@ -41,9 +41,9 @@ CREATE INDEX idx_expenses_tenant_date ON expenses (tenant_id, expense_date);
 CREATE INDEX idx_expenses_supplier ON expenses (supplier_id);
 
 INSERT INTO suppliers (id, tenant_id, name, phone, email, tax_id, status, created_by_user_id) VALUES
-    ('supplier_green_stationery', 'tenant_green', 'Green Valley Stationery', '+256700555100', 'accounts@gvstationery.local', 'TIN-GVS-001', 'active', 'user_green_admin'),
+    ('supplier_green_stationery', 'tenant_green', 'Green Valley Stationery', '+256700555100', 'accounts@gvstationery.local', 'TIN-GREE-001', 'active', 'user_green_admin'),
     ('supplier_lake_utilities', 'tenant_lake', 'Lake Utilities Services', '+256700555200', 'billing@lakeutilities.local', 'TIN-LBS-001', 'active', 'user_platform_admin');
 
 INSERT INTO expenses (id, tenant_id, supplier_id, account_code, amount, channel, reference, description, expense_date, status, recorded_by_user_id) VALUES
-    ('expense_green_0001', 'tenant_green', 'supplier_green_stationery', '5000', 180000.00, 'cash', 'GVS-EXP-0001', 'Office stationery and receipt books', CURRENT_DATE, 'posted', 'user_green_admin'),
+    ('expense_green_0001', 'tenant_green', 'supplier_green_stationery', '5000', 180000.00, 'cash', 'GREE-EXP-0001', 'Office stationery and receipt books', CURRENT_DATE, 'posted', 'user_green_admin'),
     ('expense_lake_0001', 'tenant_lake', 'supplier_lake_utilities', '5020', 95000.00, 'bank', 'LBS-EXP-0001', 'Monthly utilities', CURRENT_DATE, 'posted', 'user_platform_admin');

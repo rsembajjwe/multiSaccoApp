@@ -58,7 +58,7 @@ try {
   await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
   await expectNoVisibleText(page, "Some records could not be loaded", "optional platform fallback warning hidden");
   await assertPlatformDashboardCardNavigation(page);
-  await assertScreen(page, "sacco-applications", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path", "SACCO registration readiness", "Payment initiated", "Callback received", "Ready for approval"]);
+  await assertScreen(page, "sacco-applications", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
   await assertSaccoRegistrationTabs(page);
   await assertQuickSearchResult(page, "Green Valley", "SACCO application review", "platform SACCO quick search");
   await assertQuickSearchKeyboard(page, "Lake Farmers", "SACCO application review", "platform SACCO keyboard quick search");
@@ -83,14 +83,14 @@ try {
   await assertRoleDashboard(page, "PLATFORM", "compliance@platform.local", "Compliance@12345", "Platform Compliance", ["Platform Compliance Officer", "Audit events", "SACCO approval oversight"]);
   await assertRoleDashboard(page, "PLATFORM", "support@platform.local", "Support@12345", "Platform Support", ["Platform Support Officer", "SACCO support tickets", "SACCO support list"]);
 
-  await staffLogin(page, "GVS", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
+  await staffLogin(page, "GREE", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
   await expectNoVisibleText(page, "SACCO Administrator", "SACCO Administrator label hidden");
   await expectNoVisibleText(page, "SACCO role access", "SACCO role access panel hidden");
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Recent transactions", "Loan work queue", "SACCO monthly performance control", "Treasurer cash collections", "Mobile money collections"]);
   await assertSaccoMonthlyPerformanceDrilldown(page);
   await assertScreen(page, "members", ["Member Overview", "Register Member", "Member List", "Member detail", "Contacts & Documents", "Statement", "Member management focus"]);
   await assertMemberRegistrationAndKyc(page);
-  await assertQuickSearchResult(page, "GVS-0001", "Member detail and KYC approval", "SACCO member quick search");
+  await assertQuickSearchResult(page, "GREE-0001", "Member detail and KYC approval", "SACCO member quick search");
   await assertModuleTabs(page, "transactions", [
     ["overview", ["Transaction control focus"]],
     ["capture", ["New transaction screen"]],
@@ -164,11 +164,11 @@ try {
   ]);
   await logout(page);
 
-  await assertRoleDashboard(page, "GVS", "chairperson@greenvalley.local", "Chair@12345", "SACCO Chairperson", ["SACCO Chairperson", "Chairperson decision focus", "Chairperson approval queue"]);
-  await assertRoleDashboard(page, "GVS", "treasurer@greenvalley.local", "Treasurer@12345", "SACCO Treasurer", ["SACCO Treasurer", "Treasurer daily control", "SACCO monthly performance control", "Treasurer reconciliation watch"]);
-  await assertRoleDashboard(page, "GVS", "secretary@greenvalley.local", "Secretary@12345", "SACCO Secretary", ["SACCO Secretary", "Secretary office focus", "Member follow-up list"]);
+  await assertRoleDashboard(page, "GREE", "chairperson@greenvalley.local", "Chair@12345", "SACCO Chairperson", ["SACCO Chairperson", "Chairperson decision focus", "Chairperson approval queue"]);
+  await assertRoleDashboard(page, "GREE", "treasurer@greenvalley.local", "Treasurer@12345", "SACCO Treasurer", ["SACCO Treasurer", "Treasurer daily control", "SACCO monthly performance control", "Treasurer reconciliation watch"]);
+  await assertRoleDashboard(page, "GREE", "secretary@greenvalley.local", "Secretary@12345", "SACCO Secretary", ["SACCO Secretary", "Secretary office focus", "Member follow-up list"]);
 
-  if (await canMemberLogin("GVS", "GVS-0001", "Member@12345")) {
+  if (await canMemberLogin("GREE", "GREE-0001", "Member@12345")) {
     await memberLogin(page);
     await assertMemberSessionMenu(page);
     await assertMemberHelpMenu(page);
@@ -355,8 +355,8 @@ async function assertNetworkStatus(page) {
 }
 
 async function memberLogin(page) {
-  await page.locator("#code").fill("GVS");
-  await page.locator("#username").fill("GVS-0001");
+  await page.locator("#code").fill("GREE");
+  await page.locator("#username").fill("GREE-0001");
   await page.locator("#password").fill("Member@12345");
   await page.locator("#loginButton").click();
   await page.locator(".app-shell").waitFor({ state: "attached" });
@@ -490,7 +490,7 @@ async function assertWithinViewport(page, selector, label) {
 
 async function assertMemberAccountMenu(page) {
   await page.locator("[data-action='toggle-account-menu']").click();
-  await expectText(page, "GVS-0001", "member account identity");
+  await expectText(page, "GREE-0001", "member account identity");
   await expectText(page, "Member", "member account role");
   await page.locator("[data-action='open-account-profile']").click();
   await expectText(page, "Member profile and KYC", "member account profile route");

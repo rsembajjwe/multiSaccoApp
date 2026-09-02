@@ -49,7 +49,7 @@ class RateLimitFilterIntegrationTest {
     @Test
     void throttlesMemberPasswordResetRequestsBeyondTheConfiguredBudget() throws Exception {
         String memberResetBody = """
-                { "identifier": "GVS-0001", "channel": "email" }
+                { "identifier": "GREE-0001", "channel": "email" }
                 """;
         for (int i = 0; i < 2; i++) {
             mockMvc.perform(post("/api/v1/member-auth/password-reset/request").contentType("application/json").content(memberResetBody));

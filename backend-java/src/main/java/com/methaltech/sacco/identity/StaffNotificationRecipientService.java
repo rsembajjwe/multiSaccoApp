@@ -22,6 +22,14 @@ public class StaffNotificationRecipientService {
     }
 
     public List<StaffNotificationRecipient> saccoPaymentExceptionRecipients(String tenantId) {
+        return saccoRecipientsByRole(tenantId, this::isPaymentExceptionRole);
+    }
+
+    public List<StaffNotificationRecipient> saccoSubscriptionLeadershipRecipients(String tenantId) {
+        return saccoRecipientsByRole(tenantId, this::isSubscriptionLeadershipRole);
+    }
+
+    private List<StaffNotificationRecipient> saccoRecipientsByRole(String tenantId, java.util.function.Predicate<Role> rolePredicate) {
         if (tenantId == null || tenantId.isBlank() || "tenant_platform".equals(tenantId)) {
             return List.of();
         }
@@ -33,7 +41,7 @@ public class StaffNotificationRecipientService {
         }
         List<String> userIds = activeUsers.stream().map(User::getId).toList();
         Set<String> paymentRoleIds = roleRepository.findByTenantIdOrderByNameAsc(tenantId).stream()
-                .filter(this::isPaymentExceptionRole)
+                .filter(rolePredicate)
                 .map(Role::getId)
                 .collect(Collectors.toSet());
         if (paymentRoleIds.isEmpty()) {
@@ -60,13 +68,22 @@ public class StaffNotificationRecipientService {
                 || name.contains("chairperson");
     }
 
+    private boolean isSubscriptionLeadershipRole(Role role) {
+        String name = role.getName() == null ? "" : role.getName().toLowerCase();
+        return name.contains("chairperson")
+                || name.contains("chairman")
+                || name.contains("secretary")
+                || name.contains("treasurer");
+    }
+
     private List<StaffNotificationRecipient> recipients(List<User> users) {
         return users.stream()
                 .map(user -> new StaffNotificationRecipient(
                         user.getId(),
                         user.getTenantId(),
                         user.getFullName(),
-                        user.getEmail()))
+                        user.getEmail(),
+                        user.getPhone()))
                 .toList();
     }
 }

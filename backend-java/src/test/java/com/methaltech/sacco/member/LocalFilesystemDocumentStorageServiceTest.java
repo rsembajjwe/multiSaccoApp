@@ -17,7 +17,7 @@ class LocalFilesystemDocumentStorageServiceTest {
 
     @Test
     void deletesDocumentInsideConfiguredRoot() throws Exception {
-        Path document = root.resolve("tenant_green/members/GVS-0001/national-id.pdf");
+        Path document = root.resolve("tenant_green/members/GREE-0001/national-id.pdf");
         Files.createDirectories(document.getParent());
         Files.writeString(document, "kyc evidence");
 
@@ -25,7 +25,7 @@ class LocalFilesystemDocumentStorageServiceTest {
                 "local_filesystem",
                 root.toString());
 
-        DocumentStorageActionResult result = storage.dispose("tenant_green/members/GVS-0001/national-id.pdf");
+        DocumentStorageActionResult result = storage.dispose("tenant_green/members/GREE-0001/national-id.pdf");
 
         assertEquals("deleted", result.action());
         assertFalse(Files.exists(document));
@@ -46,7 +46,7 @@ class LocalFilesystemDocumentStorageServiceTest {
 
     @Test
     void demoModeDoesNotDeleteFiles() throws Exception {
-        Path document = root.resolve("tenant_green/members/GVS-0001/photo.jpg");
+        Path document = root.resolve("tenant_green/members/GREE-0001/photo.jpg");
         Files.createDirectories(document.getParent());
         Files.writeString(document, "photo");
 
@@ -54,7 +54,7 @@ class LocalFilesystemDocumentStorageServiceTest {
                 "demo_noop",
                 root.toString());
 
-        DocumentStorageActionResult result = storage.dispose("tenant_green/members/GVS-0001/photo.jpg");
+        DocumentStorageActionResult result = storage.dispose("tenant_green/members/GREE-0001/photo.jpg");
 
         assertEquals("demo_noop", result.action());
         assertTrue(Files.exists(document));

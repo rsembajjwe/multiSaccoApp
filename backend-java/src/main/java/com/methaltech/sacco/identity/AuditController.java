@@ -60,6 +60,10 @@ class AuditController {
         String tenantId = currentSession.user().getTenantId();
         boolean branchScoped = branchScoped(currentSession);
 
+        if (!platform && !branchScoped && !authService.hasPermission(currentSession.user(), "audit:view")) {
+            return authService.permissionRequired("audit:view");
+        }
+
         if (PageParams.requested(page, size)) {
             Sort sort = sortBy(platform, sortBy, direction, Map.of(
                     "createdAt", "createdAt",

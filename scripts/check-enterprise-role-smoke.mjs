@@ -65,7 +65,7 @@ async function assertPlatformSuperAdminFlow(page) {
 }
 
 async function assertSaccoAdminFlow(page) {
-  await staffLogin(page, "GVS", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
+  await staffLogin(page, "GREE", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
   await expectText(page, "SACCO Administration Portal", "SACCO shell");
   await assertNavigation(page, ["Dashboard", "Members", "Transactions", "Savings", "Shares", "Welfare", "Loans", "Guarantors", "Approvals", "Accounting", "Reconciliation", "Reports", "Governance", "Complaints", "Users and Roles", "Settings", "Audit Logs"]);
   await expectNoText(page, "Operations", "SACCO operations menu hidden");
@@ -77,11 +77,11 @@ async function assertSaccoAdminFlow(page) {
 }
 
 async function assertMemberPortalFlow(page) {
-  if (!(await canMemberLogin("GVS", "GVS-0001", "Member@12345"))) {
+  if (!(await canMemberLogin("GREE", "GREE-0001", "Member@12345"))) {
     console.log("SKIP member portal smoke: demo member login is unavailable in the running backend profile");
     return;
   }
-  await memberLogin(page, "GVS", "GVS-0001", "Member@12345");
+  await memberLogin(page, "GREE", "GREE-0001", "Member@12345");
   await expectText(page, "Member portal", "member shell");
   await assertNavigation(page, ["Home", "Accounts", "Loans", "Guarantor Requests", "Payments", "Statements", "Receipts", "Notifications", "Complaints", "Profile", "Security"]);
   await assertScreen(page, "home", ["Total savings", "Pay by mobile money", "Read SACCO messages"]);

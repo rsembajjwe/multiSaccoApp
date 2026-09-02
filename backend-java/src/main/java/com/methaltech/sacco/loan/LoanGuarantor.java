@@ -34,6 +34,15 @@ public class LoanGuarantor {
     @Column(name = "decided_at")
     private Instant decidedAt;
 
+    @Column(name = "signed_at")
+    private Instant signedAt;
+
+    @Column(name = "signature_reference")
+    private String signatureReference;
+
+    @Column(name = "signature_recorded_by_user_id")
+    private String signatureRecordedByUserId;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -77,6 +86,18 @@ public class LoanGuarantor {
         this.updatedAt = this.decidedAt;
     }
 
+    public void markSigned(String reference, String actorUserId) {
+        this.signedAt = Instant.now();
+        this.signatureReference = reference == null ? "" : reference.trim();
+        this.signatureRecordedByUserId = actorUserId;
+        this.updatedAt = this.signedAt;
+    }
+
+    public void release() {
+        this.status = "released";
+        this.updatedAt = Instant.now();
+    }
+
     public String getId() {
         return id;
     }
@@ -107,6 +128,18 @@ public class LoanGuarantor {
 
     public Instant getDecidedAt() {
         return decidedAt;
+    }
+
+    public Instant getSignedAt() {
+        return signedAt;
+    }
+
+    public String getSignatureReference() {
+        return signatureReference;
+    }
+
+    public String getSignatureRecordedByUserId() {
+        return signatureRecordedByUserId;
     }
 
     public Instant getCreatedAt() {

@@ -25,16 +25,16 @@ public class DemoCredentialPolicy {
             "@greenvalley.local",
             "@lakefarmers.local");
     private static final Set<String> MEMBER_IDENTIFIERS = Set.of(
-            "gvs-0001",
-            "gvs-0002",
-            "gvs-0003",
+            "gree-0001",
+            "gree-0002",
+            "gree-0003",
             "+256701234567",
             "+256772222118",
             "+256756300101",
             "amina@example.local",
             "daniel@example.local");
     private static final Set<String> MEMBER_DEMO_DOMAINS = Set.of("@example.local");
-    private static final Pattern MEMBER_DEMO_NUMBER = Pattern.compile("gvs-000\\d+");
+    private static final Pattern MEMBER_DEMO_NUMBER = Pattern.compile("gree-000\\d+");
 
     private final boolean demoLoginsEnabled;
 

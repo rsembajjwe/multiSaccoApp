@@ -40,7 +40,7 @@ const sandbox = {
     tenant: {
       id: "tenant_green",
       name: "Green Valley SACCO",
-      abbreviation: "GVS",
+      abbreviation: "GREE",
       country: "Uganda",
       currencyCode: "UGX"
     },
@@ -55,7 +55,7 @@ const sandbox = {
     member: {
       id: "member_green_amina",
       fullName: "Amina Naki",
-      membershipNo: "GVS-0001",
+      membershipNo: "GREE-0001",
       phone: "+256700000001",
       email: "amina@example.test",
       status: "active",

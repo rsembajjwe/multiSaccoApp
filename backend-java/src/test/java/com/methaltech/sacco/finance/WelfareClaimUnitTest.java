@@ -99,7 +99,7 @@ class WelfareClaimUnitTest {
                 "member_green_amina",
                 "medical",
                 new BigDecimal("25000.00"),
-                "GVS-WCL-0009",
+                "GREE-WCL-0009",
                 "Clinic support",
                 "user_treasurer");
     }

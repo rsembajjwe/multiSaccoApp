@@ -21,4 +21,4 @@ CREATE INDEX idx_mobile_money_callbacks_tenant_received ON mobile_money_callback
 CREATE INDEX idx_mobile_money_callbacks_member ON mobile_money_callbacks (member_id, received_at DESC);
 
 INSERT INTO mobile_money_callbacks (id, tenant_id, member_id, purpose, amount, external_reference, provider, provider_payload, status, resource_type, resource_id, received_at) VALUES
-    ('callback_green_seed_0001', 'tenant_green', 'member_green_amina', 'savings_deposit', 250000.00, 'GVS-TX-0001', 'demo_mobile_money', '{"seed":true}', 'posted', 'financial_transaction', 'txn_green_0001', TIMESTAMP WITH TIME ZONE '2026-07-14 09:15:00+00');
+    ('callback_green_seed_0001', 'tenant_green', 'member_green_amina', 'savings_deposit', 250000.00, 'GREE-TX-0001', 'demo_mobile_money', '{"seed":true}', 'posted', 'financial_transaction', 'txn_green_0001', TIMESTAMP WITH TIME ZONE '2026-07-14 09:15:00+00');

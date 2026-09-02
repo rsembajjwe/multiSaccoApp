@@ -176,7 +176,7 @@ class SubscriptionController {
             HttpServletRequest request) {
         subscriptionService.refreshBilling(subscription);
         BigDecimal due = Money.normalize(subscription.getAmount().subtract(subscription.getPaid()).max(BigDecimal.ZERO));
-        BigDecimal amount = body.amount() == null ? due : Money.normalize(body.amount());
+        BigDecimal amount = paymentAmountFor(subscription, body, due);
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_AMOUNT", "Payment amount must be greater than zero."));
@@ -230,6 +230,17 @@ class SubscriptionController {
                 SubscriptionResponse.from(savedSubscription),
                 SubscriptionPaymentResponse.from(payment),
                 false)));
+    }
+
+    private BigDecimal paymentAmountFor(Subscription subscription, RecordSubscriptionPaymentRequest body, BigDecimal due) {
+        String paymentMode = body.paymentMode() == null || body.paymentMode().isBlank()
+                ? "group"
+                : body.paymentMode().trim();
+        if ("per_member".equals(paymentMode) && subscription.getUnitPrice() != null) {
+            int memberSlots = body.memberSlots() == null ? 1 : Math.max(1, body.memberSlots());
+            return Money.normalize(subscription.getUnitPrice().multiply(BigDecimal.valueOf(memberSlots)).min(due));
+        }
+        return body.amount() == null ? due : Money.normalize(body.amount());
     }
 
     /**
@@ -299,6 +310,8 @@ class SubscriptionController {
     record RecordSubscriptionPaymentRequest(
             BigDecimal amount,
             String channel,
+            String paymentMode,
+            Integer memberSlots,
             String externalReference,
             Instant receivedAt) {
     }

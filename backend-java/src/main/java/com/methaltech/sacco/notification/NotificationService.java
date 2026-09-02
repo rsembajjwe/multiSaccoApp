@@ -59,11 +59,9 @@ public class NotificationService {
         return notification;
     }
 
-    public Notification notifyGuarantorRequested(Member guarantor, Member applicant, BigDecimal pledgeAmount, String loanId) {
+    public Notification notifyGuarantorRequested(Member guarantor, Member applicant, String loanId) {
         String title = "Guarantee request";
-        String message = applicant.getFullName() + " has requested you to guarantee "
-                + formattedAmount(guarantor.getTenantId(), pledgeAmount)
-                + " on their loan. Open Loans to accept or reject.";
+        String message = applicant.getFullName() + " has requested you to guarantee their loan. Open Loans to accept or reject.";
         Notification notification = notificationRepository.save(new Notification(
                 "notification_" + UUID.randomUUID(),
                 guarantor.getTenantId(),
@@ -260,14 +258,14 @@ public class NotificationService {
     }
 
     /**
-     * Notifies the SACCO's finance staff (payment-exception recipients: admins/treasurers) that the
-     * platform subscription is approaching expiry and should be renewed. In-app so it surfaces in the
-     * notification centre and the message repository.
+     * Notifies the SACCO's elected leadership that the platform subscription is approaching expiry.
+     * Delivery records include in-app plus configured SMS/email attempts so chairperson, secretary and
+     * treasurer all receive the renewal warning before operations are affected.
      */
     public List<Notification> notifySubscriptionExpiring(String tenantId, java.time.LocalDate expiry) {
         String title = "Subscription renewal due";
         String message = "Your SACCO subscription expires on " + expiry + ". Renew to avoid service interruption.";
-        return staffNotificationRecipientService.saccoPaymentExceptionRecipients(tenantId).stream()
+        return staffNotificationRecipientService.saccoSubscriptionLeadershipRecipients(tenantId).stream()
                 .map(recipient -> {
                     Notification notification = notificationRepository.save(new Notification(
                             "notification_" + UUID.randomUUID(),
@@ -279,16 +277,7 @@ public class NotificationService {
                             message,
                             "subscription",
                             tenantId));
-                    deliveryRepository.save(new NotificationDelivery(
-                            "delivery_" + UUID.randomUUID(),
-                            tenantId,
-                            notification.getId(),
-                            null,
-                            recipient.userId(),
-                            "in_app",
-                            "tereka_online",
-                            recipient.email() == null || recipient.email().isBlank() ? recipient.userId() : recipient.email(),
-                            message));
+                    createStaffDeliveries(notification, recipient, title, message);
                     return notification;
                 })
                 .toList();
@@ -298,7 +287,7 @@ public class NotificationService {
     public List<Notification> notifySubscriptionOverdue(String tenantId, java.time.LocalDate expiry) {
         String title = "Subscription overdue - renew now";
         String message = "Your SACCO subscription lapsed on " + expiry + ". Renew now to avoid suspension of write access.";
-        return staffNotificationRecipientService.saccoPaymentExceptionRecipients(tenantId).stream()
+        return staffNotificationRecipientService.saccoSubscriptionLeadershipRecipients(tenantId).stream()
                 .map(recipient -> {
                     Notification notification = notificationRepository.save(new Notification(
                             "notification_" + UUID.randomUUID(),
@@ -310,16 +299,7 @@ public class NotificationService {
                             message,
                             "subscription",
                             tenantId));
-                    deliveryRepository.save(new NotificationDelivery(
-                            "delivery_" + UUID.randomUUID(),
-                            tenantId,
-                            notification.getId(),
-                            null,
-                            recipient.userId(),
-                            "in_app",
-                            "tereka_online",
-                            recipient.email() == null || recipient.email().isBlank() ? recipient.userId() : recipient.email(),
-                            message));
+                    createStaffDeliveries(notification, recipient, title, message);
                     return notification;
                 })
                 .toList();
@@ -403,16 +383,7 @@ public class NotificationService {
                             message,
                             "mobile_money_payment_request",
                             resourceId));
-                    deliveryRepository.save(new NotificationDelivery(
-                            "delivery_" + UUID.randomUUID(),
-                            tenantId,
-                            notification.getId(),
-                            null,
-                            recipient.userId(),
-                            "in_app",
-                            "tereka_online",
-                            recipient.email() == null || recipient.email().isBlank() ? recipient.userId() : recipient.email(),
-                            message));
+                    createStaffDeliveries(notification, recipient, title, message);
                     return notification;
                 })
                 .toList();
@@ -517,6 +488,47 @@ public class NotificationService {
                             provider.channel(),
                             provider.providerId(),
                             recipient,
+                            result,
+                            deliveryMessage));
+                });
+    }
+
+    private void createStaffDeliveries(
+            Notification notification,
+            com.methaltech.sacco.identity.StaffNotificationRecipient recipient,
+            String title,
+            String message) {
+        deliveryRepository.save(new NotificationDelivery(
+                "delivery_" + UUID.randomUUID(),
+                notification.getTenantId(),
+                notification.getId(),
+                null,
+                recipient.userId(),
+                "in_app",
+                "tereka_online",
+                recipient.userId(),
+                message));
+
+        providers.stream()
+                .filter(provider -> "email".equals(provider.channel()) || "sms".equals(provider.channel()))
+                .filter(provider -> channelPreferenceService.saccoChannelEnabled(notification.getTenantId(), provider.channel()))
+                .filter(provider -> {
+                    String target = "email".equals(provider.channel()) ? recipient.email() : recipient.phone();
+                    return provider.enabledForRecipient(target);
+                })
+                .forEach(provider -> {
+                    String target = "email".equals(provider.channel()) ? recipient.email() : recipient.phone();
+                    String deliveryMessage = "email".equals(provider.channel()) ? title + ": " + message : message;
+                    NotificationSendResult result = sendTo(provider, target, title, deliveryMessage);
+                    deliveryRepository.save(new NotificationDelivery(
+                            "delivery_" + UUID.randomUUID(),
+                            notification.getTenantId(),
+                            notification.getId(),
+                            null,
+                            recipient.userId(),
+                            provider.channel(),
+                            provider.providerId(),
+                            target,
                             result,
                             deliveryMessage));
                 });

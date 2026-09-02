@@ -146,12 +146,12 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.page.size", is(2)))
 				.andExpect(jsonPath("$.page.totalElements", greaterThanOrEqualTo(0)));
 
-		mockMvc.perform(get("/api/v1/members?page=0&size=2&search=GVS-0001")
+		mockMvc.perform(get("/api/v1/members?page=0&size=2&search=GREE-0001")
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.page.size", is(2)))
 				.andExpect(jsonPath("$.page.totalElements", greaterThanOrEqualTo(1)))
-				.andExpect(jsonPath("$.data[0].membershipNo", is("GVS-0001")));
+				.andExpect(jsonPath("$.data[0].membershipNo", is("GREE-0001")));
 
 		mockMvc.perform(get("/api/v1/members?page=0&size=2&sort=fullName&direction=desc")
 						.header("Authorization", "Bearer " + token))
@@ -212,7 +212,7 @@ class SaccoBackendApplicationTests {
 	void platformControlsAllowedCollectionModeAndSaccoCannotExceedIt() throws Exception {
 		String platformToken = loginAndReturnToken();
 		String saccoAdminToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 
 		// 1) Platform sets NONE -> member online payment is blocked and the dashboard reflects it.
 		setCollectionMode(platformToken, "NONE");
@@ -270,7 +270,7 @@ class SaccoBackendApplicationTests {
 	void saccoManagesItsOwnCollectionAccountsAndMembersSeeThem() throws Exception {
 		String platformToken = loginAndReturnToken();
 		String saccoAdminToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 
 		setCollectionMode(platformToken, "BOTH");
 		setCollectionSettings(saccoAdminToken, true, true);
@@ -386,14 +386,15 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(header().string("X-Content-Type-Options", "nosniff"))
-				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(3)))
-				.andExpect(jsonPath("$.data[0].name", is("Green Valley SACCO")))
-				.andExpect(jsonPath("$.data[0].registrationNo", is("COOP/GVS/2018/014")))
-				.andExpect(jsonPath("$.data[0].country", is("Uganda")))
-				.andExpect(jsonPath("$.data[0].localeCode", is("en-UG")))
-				.andExpect(jsonPath("$.data[0].currencyCode", is("UGX")))
-				.andExpect(jsonPath("$.data[0].currencyDigits", is(0)))
-				.andExpect(jsonPath("$.data[0].packageId", is("starter")));
+				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(8)))
+				.andExpect(jsonPath("$.data[*].name", hasItem("Kabale Traders SACCO")))
+				.andExpect(jsonPath("$.data[*].name", hasItem("Green Valley SACCO")))
+				.andExpect(jsonPath("$.data[?(@.id == 'tenant_green')].registrationNo", hasItem("COOP/GREE/2018/014")))
+				.andExpect(jsonPath("$.data[?(@.id == 'tenant_green')].country", hasItem("Uganda")))
+				.andExpect(jsonPath("$.data[?(@.id == 'tenant_green')].localeCode", hasItem("en-UG")))
+				.andExpect(jsonPath("$.data[?(@.id == 'tenant_green')].currencyCode", hasItem("UGX")))
+				.andExpect(jsonPath("$.data[?(@.id == 'tenant_green')].currencyDigits", hasItem(0)))
+				.andExpect(jsonPath("$.data[?(@.id == 'tenant_green')].packageId", hasItem("starter")));
 	}
 
 	@Test
@@ -413,7 +414,7 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
-	void platformUserCanCreateAndApproveTenant() throws Exception {
+	void platformUserCanCreateAndReviewTenantStatuses() throws Exception {
 		String token = loginAndReturnToken();
 		String registrationNo = "COOP-SMOKE-" + System.currentTimeMillis();
 
@@ -433,10 +434,10 @@ class SaccoBackendApplicationTests {
 								  "licenseExpiry": "2027-12-31",
 								  "packageId": "starter"
 								}
-								""".formatted(registrationNo)))
-				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.data.status", is("pending_review")))
-				.andExpect(jsonPath("$.data.abbreviation", is("SJS")))
+				""".formatted(registrationNo)))
+		.andExpect(status().isCreated())
+		.andExpect(jsonPath("$.data.status", is("active")))
+				.andExpect(jsonPath("$.data.abbreviation", is("SMOK")))
 				.andExpect(jsonPath("$.data.country", is("Kenya")))
 				.andExpect(jsonPath("$.data.localeCode", is("en-KE")))
 				.andExpect(jsonPath("$.data.currencyCode", is("KES")))
@@ -466,14 +467,50 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status", is("approved")));
 
+		mockMvc.perform(patch("/api/v1/tenants/" + tenantId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "active" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("active")));
+
+		mockMvc.perform(patch("/api/v1/tenants/" + tenantId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "inactive" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("inactive")));
+
+		mockMvc.perform(patch("/api/v1/tenants/" + tenantId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "suspended" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("suspended")));
+
+		mockMvc.perform(patch("/api/v1/tenants/" + tenantId + "/status")
+						.header("Authorization", "Bearer " + token)
+						.contentType("application/json")
+						.content("""
+								{ "status": "active" }
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status", is("active")));
+
 		mockMvc.perform(get("/api/v1/audit-events")
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[0].action", is("Updated tenant status to approved")));
+				.andExpect(jsonPath("$.data[0].action", is("Updated tenant status to active")));
 	}
 
 	@Test
-	void platformPaidRegistrationCreatesActiveSubscriptionAndUnpaidSaccoCannotLogin() throws Exception {
+	void platformPaidRegistrationCreatesActiveSubscriptionAndUnpaidSaccoGetsSetupTrial() throws Exception {
 		String token = loginAndReturnToken();
 		long unique = System.currentTimeMillis();
 		String paidCode = "P" + (unique % 100000);
@@ -491,7 +528,7 @@ class SaccoBackendApplicationTests {
 								  "parish": "Central",
 								  "village": "Market Zone",
 								  "contactNumber": "+256701111111",
-								  "memberRange": "100-250",
+								  "memberRange": "20-250",
 								  "country": "Uganda",
 								  "localeCode": "en-UG",
 								  "currencyCode": "UGX",
@@ -503,7 +540,7 @@ class SaccoBackendApplicationTests {
 								""".formatted(paidCode, unique)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.status", is("active")))
-				.andExpect(jsonPath("$.data.abbreviation", is(paidCode)))
+				.andExpect(jsonPath("$.data.abbreviation", is("PAID")))
 				.andReturn();
 		String paidTenantId = objectMapper.readTree(paidTenantResult.getResponse().getContentAsString()).path("data").path("id").asString();
 
@@ -512,8 +549,8 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()", is(1)))
 				.andExpect(jsonPath("$.data[0].status", is("active")))
-				.andExpect(jsonPath("$.data[0].paid", is(500000.00)))
-				.andExpect(jsonPath("$.data[0].billingDescription", is("UGX 5,000 per member annually, minimum 100 members")));
+				.andExpect(jsonPath("$.data[0].paid", is(100000.00)))
+				.andExpect(jsonPath("$.data[0].billingDescription", is("UGX 5,000 per member annually, minimum 20 members")));
 
 		MvcResult unpaidTenantResult = mockMvc.perform(post("/api/v1/tenants")
 						.header("Authorization", "Bearer " + token)
@@ -528,19 +565,19 @@ class SaccoBackendApplicationTests {
 								  "packageId": "starter",
 								  "paymentStatus": "pending"
 								}
-								""".formatted(unpaidCode, unique)))
+				""".formatted(unpaidCode, unique)))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.data.status", is("pending_review")))
+				.andExpect(jsonPath("$.data.status", is("active")))
+				.andExpect(jsonPath("$.data.abbreviation", is("UNPA")))
 				.andReturn();
 		String unpaidTenantId = objectMapper.readTree(unpaidTenantResult.getResponse().getContentAsString()).path("data").path("id").asString();
 
-		mockMvc.perform(patch("/api/v1/tenants/" + unpaidTenantId + "/status")
-						.header("Authorization", "Bearer " + token)
-						.contentType("application/json")
-						.content("""
-								{ "status": "active" }
-								"""))
-				.andExpect(status().isOk());
+		mockMvc.perform(get("/api/v1/subscriptions?tenantId=" + unpaidTenantId)
+						.header("Authorization", "Bearer " + token))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.length()", is(1)))
+				.andExpect(jsonPath("$.data[0].status", is("trial")))
+				.andExpect(jsonPath("$.data[0].paid", is(0.00)));
 
 		String unpaidEmail = "unpaid-" + unique + "@example.local";
 		mockMvc.perform(post("/api/v1/users")
@@ -561,14 +598,13 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "%s",
+								  "saccoCode": "UNPA",
 								  "email": "%s",
 								  "password": "Unpaid@12345"
 								}
-								""".formatted(unpaidCode, unpaidEmail)))
-				.andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.error.code", is("SACCO_ACCESS_INACTIVE")))
-				.andExpect(jsonPath("$.error.message", containsString("subscription payment")));
+								""".formatted(unpaidEmail)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.tenantId", is(unpaidTenantId)));
 
 		String callbackReference = "SUB-MM-" + unique;
 		mockMvc.perform(post("/api/v1/integrations/mobile-money/subscription-callback")
@@ -585,7 +621,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.idempotent", is(false)))
 				.andExpect(jsonPath("$.data.subscription.status", is("active")))
-				.andExpect(jsonPath("$.data.subscription.paid", is(500000.00)))
+				.andExpect(jsonPath("$.data.subscription.paid", is(100000.00)))
 				.andExpect(jsonPath("$.data.payment.channel", is("mobile_money:mtn_momo")))
 				.andExpect(jsonPath("$.data.payment.externalReference", is(callbackReference)));
 
@@ -608,13 +644,92 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "%s",
+								  "saccoCode": "UNPA",
 								  "email": "%s",
 								  "password": "Unpaid@12345"
 								}
-								""".formatted(unpaidCode, unpaidEmail)))
+								""".formatted(unpaidEmail)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.user.tenantId", is(unpaidTenantId)));
+	}
+
+	@Test
+	void expiredSetupTrialAllowsReadOnlyLoginButBlocksDataEntry() throws Exception {
+		String platformToken = loginAndReturnToken();
+		long unique = System.currentTimeMillis();
+
+		MvcResult tenantResult = mockMvc.perform(post("/api/v1/tenants")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "name": "Trial Expiry Gate SACCO",
+								  "registrationNo": "COOP-TRIAL-EXPIRY-%s",
+								  "district": "Kampala",
+								  "licenseExpiry": "2027-12-31",
+								  "packageId": "starter",
+								  "paymentStatus": "pending"
+								}
+								""".formatted(unique)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.status", is("active")))
+				.andExpect(jsonPath("$.data.abbreviation", is("TRIA")))
+				.andReturn();
+		String tenantId = objectMapper.readTree(tenantResult.getResponse().getContentAsString()).path("data").path("id").asString();
+
+		String email = "trial-expired-" + unique + "@example.local";
+		mockMvc.perform(post("/api/v1/users")
+						.header("Authorization", "Bearer " + platformToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "tenantId": "%s",
+								  "fullName": "Trial Expired Admin",
+								  "email": "%s",
+								  "phone": "+256701333333",
+								  "password": "Trial@12345"
+								}
+								""".formatted(tenantId, email)))
+				.andExpect(status().isCreated());
+
+		jdbcTemplate.update("UPDATE subscriptions SET expiry = ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ?",
+				LocalDate.now().minusDays(1), tenantId);
+		org.junit.jupiter.api.Assertions.assertTrue(subscriptionLifecycleService.expireLapsed() >= 1);
+
+		MvcResult login = mockMvc.perform(post("/api/v1/auth/login")
+						.contentType("application/json")
+						.content("""
+								{
+								  "saccoCode": "TRIA",
+								  "email": "%s",
+								  "password": "Trial@12345"
+								}
+								""".formatted(email)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.user.tenantId", is(tenantId)))
+				.andReturn();
+		String saccoToken = objectMapper.readTree(login.getResponse().getContentAsString()).path("data").path("token").asString();
+
+		mockMvc.perform(get("/api/v1/subscriptions?tenantId=" + tenantId)
+						.header("Authorization", "Bearer " + saccoToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].status", is("expired")));
+
+		mockMvc.perform(post("/api/v1/audit-events")
+						.header("Authorization", "Bearer " + saccoToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "module": "Trial data entry",
+								  "action": "Attempted expired trial write",
+								  "recordType": "trial",
+								  "recordId": "%s",
+								  "result": "blocked"
+								}
+								""".formatted(tenantId)))
+				.andExpect(status().isPaymentRequired())
+				.andExpect(jsonPath("$.error.code", is("SUBSCRIPTION_EXPIRED")))
+				.andExpect(jsonPath("$.error.message", containsString("Renew the subscription")));
 	}
 
 	@Test
@@ -638,14 +753,14 @@ class SaccoBackendApplicationTests {
 								  "currencyCode": "UGX",
 								  "currencyDigits": 0,
 								  "contactNumber": "+256703333333",
-								  "memberRange": "100-250",
+								  "memberRange": "20-250",
 								  "paymentPhone": "+256704444444"
 								}
 								""".formatted(requestedCode, unique)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.tenant.status", is("pending_self_registration")))
 				.andExpect(jsonPath("$.data.subscription.status", is("trial")))
-				.andExpect(jsonPath("$.data.paymentAmount", is(500000)))
+				.andExpect(jsonPath("$.data.paymentAmount", is(100000)))
 				.andExpect(jsonPath("$.data.paymentStatus", is("trial_active")))
 				.andReturn();
 
@@ -684,7 +799,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
 				.andExpect(jsonPath("$.data.legalName", is("Green Valley Savings and Credit Cooperative Society Limited")))
 				.andExpect(jsonPath("$.data.tin", is("1002456789")))
-				.andExpect(jsonPath("$.data.cooperativeRegistrationNo", is("COOP/GVS/2018/014")));
+				.andExpect(jsonPath("$.data.cooperativeRegistrationNo", is("COOP/GREE/2018/014")));
 
 		mockMvc.perform(patch("/api/v1/tenants/tenant_green/profile")
 						.header("Authorization", "Bearer " + token)
@@ -693,8 +808,8 @@ class SaccoBackendApplicationTests {
 								{
 								  "legalName": "Green Valley SACCO Cooperative Society",
 								  "tin": "1002456789-UPDATED",
-								  "umraLicenseNo": "UMRA/GVS/2026/999",
-								  "cooperativeRegistrationNo": "COOP/GVS/2018/014",
+								  "umraLicenseNo": "UMRA/GREE/2026/999",
+								  "cooperativeRegistrationNo": "COOP/GREE/2018/014",
 								  "address": "Plot 99 Kampala Road",
 								  "email": "registry@greenvalley.example.local",
 								  "phone": "+256700999111",
@@ -785,9 +900,9 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(get("/api/v1/subscription-packages")
 						.header("Authorization", "Bearer " + platformToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()", is(3)))
+				.andExpect(jsonPath("$.data.length()", is(5)))
 				.andExpect(jsonPath("$.data[0].id", is("starter")))
-				.andExpect(jsonPath("$.data[0].minMembers", is(100)))
+				.andExpect(jsonPath("$.data[0].minMembers", is(251)))
 				.andExpect(jsonPath("$.data[0].memberLimit", is(500)));
 
 		mockMvc.perform(get("/api/v1/subscriptions?tenantId=tenant_green")
@@ -795,10 +910,10 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()", is(1)))
 				.andExpect(jsonPath("$.data[0].tenantId", is("tenant_green")))
-				.andExpect(jsonPath("$.data[0].memberCount", is(8)))
-				.andExpect(jsonPath("$.data[0].billableMembers", is(100)))
+				.andExpect(jsonPath("$.data[0].memberCount", is(12)))
+				.andExpect(jsonPath("$.data[0].billableMembers", is(20)))
 				.andExpect(jsonPath("$.data[0].tierId", is("per_member")))
-				.andExpect(jsonPath("$.data[0].billingDescription", is("UGX 5,000 per member annually, minimum 100 members")));
+				.andExpect(jsonPath("$.data[0].billingDescription", is("UGX 5,000 per member annually, minimum 20 members")));
 
 		MvcResult payment = mockMvc.perform(post("/api/v1/subscriptions/subscription_lake_starter/payments")
 						.header("Authorization", "Bearer " + platformToken)
@@ -831,7 +946,7 @@ class SaccoBackendApplicationTests {
 								""".formatted(paymentReference)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.idempotent", is(true)))
-				.andExpect(jsonPath("$.data.subscription.paid", is(500000.00)))
+				.andExpect(jsonPath("$.data.subscription.paid", is(100000.00)))
 				.andExpect(jsonPath("$.data.payment.amount", is(500000.00)));
 
 		String paymentId = objectMapper.readTree(payment.getResponse().getContentAsString()).path("data").path("payment").path("id").asString();
@@ -846,9 +961,9 @@ class SaccoBackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(1, countJournalReference(journalData, paymentReference, "subscription_payment"));
 
 		mockMvc.perform(get("/api/v1/subscriptions?tenantId=tenant_lake")
-						.header("Authorization", "Bearer " + platformToken))
+				.header("Authorization", "Bearer " + platformToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[0].paid", is(500000.00)))
+				.andExpect(jsonPath("$.data[0].paid", is(100000.00)))
 				.andExpect(jsonPath("$.data[0].status", is("active")));
 
 		mockMvc.perform(get("/api/v1/audit-events")
@@ -976,7 +1091,7 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "GVS",
+								  "saccoCode": "GREE",
 								  "username": "admin@greenvalley.local",
 								  "password": "Sacco@12345"
 								}
@@ -990,7 +1105,7 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "LFS",
+								  "saccoCode": "LAKE",
 								  "username": "admin@greenvalley.local",
 								  "password": "Sacco@12345"
 								}
@@ -1005,7 +1120,7 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "GVS",
+								  "saccoCode": "GREE",
 								  "username": "treasurer@greenvalley.local",
 								  "password": "Treasurer@12345"
 								}
@@ -1018,7 +1133,7 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "GVS",
+								  "saccoCode": "GREE",
 								  "username": "secretary@greenvalley.local",
 								  "password": "Secretary@12345"
 								}
@@ -1031,7 +1146,7 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "GVS",
+								  "saccoCode": "GREE",
 								  "username": "chairperson@greenvalley.local",
 								  "password": "Chair@12345"
 								}
@@ -1132,7 +1247,7 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[0].tenantId", is("tenant_green")))
-				.andExpect(jsonPath("$.data[*].membershipNo", hasItem("GVS-0001")));
+				.andExpect(jsonPath("$.data[*].membershipNo", hasItem("GREE-0001")));
 
 		mockMvc.perform(patch("/api/v1/members/member_green_amina/status")
 						.header("Authorization", "Bearer " + token)
@@ -1346,7 +1461,7 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "GVS",
+								  "saccoCode": "GREE",
 								  "username": "%s",
 								  "password": "Temp@12345"
 								}
@@ -1358,7 +1473,7 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "GVS",
+								  "saccoCode": "GREE",
 								  "username": "%s",
 								  "password": "Reset@12345"
 								}
@@ -1416,7 +1531,7 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "GVS",
+								  "saccoCode": "GREE",
 								  "username": "%s",
 								  "password": "MfaAdmin@12345"
 								}
@@ -1865,7 +1980,7 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(get("/api/v1/members/member_green_amina")
 						.header("Authorization", "Bearer " + saccoToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.membershipNo", is("GVS-0001")))
+				.andExpect(jsonPath("$.data.membershipNo", is("GREE-0001")))
 				.andExpect(jsonPath("$.data.privacyScope", is("detail_full")))
 				.andExpect(jsonPath("$.data.phone", is("+256701234567")))
 				.andExpect(jsonPath("$.data.nationalId", is("CM9000012K4PA")))
@@ -1880,7 +1995,7 @@ class SaccoBackendApplicationTests {
 	@Test
 	void membersAreAutoVerifiedOnRegistrationWithNoVerificationStep() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
-		String membershipNo = "GVS-AV-" + System.currentTimeMillis();
+		String membershipNo = "GREE-AV-" + System.currentTimeMillis();
 
 		// No kycStatus supplied: staff enter members directly, so the record is verified on entry.
 		mockMvc.perform(post("/api/v1/members")
@@ -1952,7 +2067,7 @@ class SaccoBackendApplicationTests {
 	@Test
 	void staffLinkedToMemberCannotApproveTheirOwnTransaction() throws Exception {
 		String admin = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
-		String membershipNo = "GVS-COI-" + System.currentTimeMillis();
+		String membershipNo = "GREE-COI-" + System.currentTimeMillis();
 		String phone = "+2567" + (System.currentTimeMillis() % 100000000L);
 		MvcResult createdMember = mockMvc.perform(post("/api/v1/members")
 						.header("Authorization", "Bearer " + admin)
@@ -2055,7 +2170,7 @@ class SaccoBackendApplicationTests {
 					.andExpect(jsonPath("$.data.linkedUserId", is("user_green_chairperson")));
 
 			// Amina submits a small self-secured loan.
-			String aminaToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+			String aminaToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 			MvcResult created = mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
 							.header("Authorization", "Bearer " + aminaToken)
 							.contentType("application/json")
@@ -2079,7 +2194,7 @@ class SaccoBackendApplicationTests {
 			mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
 							.header("Authorization", "Bearer " + admin)
 							.contentType("application/json")
-							.content("{ \"status\": \"approved\" }"))
+							.content(loanApprovalPayload("PAPER-TEST-COI")))
 					.andExpect(status().isOk());
 		} finally {
 			mockMvc.perform(patch("/api/v1/members/member_green_amina/staff-link")
@@ -2092,7 +2207,7 @@ class SaccoBackendApplicationTests {
 	@Test
 	void saccoUserCanRegisterOwnMemberAndAuditIsWritten() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
-		String membershipNo = "GVS-SM-" + System.currentTimeMillis();
+		String membershipNo = "GREE-SM-" + System.currentTimeMillis();
 
 		MvcResult createdMember = mockMvc.perform(post("/api/v1/members")
 						.header("Authorization", "Bearer " + token)
@@ -2155,7 +2270,7 @@ class SaccoBackendApplicationTests {
 								}
 								"""))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.data.membershipNo", startsWith("GVS-")))
+				.andExpect(jsonPath("$.data.membershipNo", startsWith("GREE-")))
 				.andExpect(jsonPath("$.data.memberType", is("group")))
 				.andReturn();
 
@@ -2190,7 +2305,7 @@ class SaccoBackendApplicationTests {
 						.content("""
 								{
 								  "documentType": "signature",
-								  "storageKey": "tenant_green/members/GVS-0001/signature.png"
+								  "storageKey": "tenant_green/members/GREE-0001/signature.png"
 								}
 								"""))
 				.andExpect(status().isCreated())
@@ -2269,7 +2384,7 @@ class SaccoBackendApplicationTests {
 						.content("""
 								{
 								  "documentType": "photo",
-								  "storageKey": "tenant_lake/members/LFS-0001/photo.jpg"
+								  "storageKey": "tenant_lake/members/LAKE-0001/photo.jpg"
 								}
 								"""))
 				.andExpect(status().isForbidden())
@@ -2281,7 +2396,7 @@ class SaccoBackendApplicationTests {
 						.content("""
 								{
 								  "documentType": "unknown",
-								  "storageKey": "tenant_green/members/GVS-0001/unknown.pdf"
+								  "storageKey": "tenant_green/members/GREE-0001/unknown.pdf"
 								}
 								"""))
 				.andExpect(status().isBadRequest())
@@ -2293,7 +2408,7 @@ class SaccoBackendApplicationTests {
 						.content("""
 								{
 								  "documentType": "photo",
-								  "storageKey": "tenant_green/members/GVS-0001/photo.jpg",
+								  "storageKey": "tenant_green/members/GREE-0001/photo.jpg",
 								  "verificationStatus": "stalled"
 								}
 								"""))
@@ -2471,7 +2586,7 @@ class SaccoBackendApplicationTests {
 						.content("""
 								{
 								  "branchId": "branch_green_main",
-								  "membershipNo": "GVS-0001",
+								  "membershipNo": "GREE-0001",
 								  "fullName": "Duplicate Member",
 								  "phone": "+256700999001"
 								}
@@ -2509,7 +2624,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.headers[0]", is("membershipNo")))
 				.andExpect(jsonPath("$.data.headers", hasItem("branchId")))
 				.andExpect(jsonPath("$.data.sampleRows[0].branchId", is("branch_green_main")))
-				.andExpect(jsonPath("$.data.sampleRows[0].membershipNo", startsWith("GVS-")))
+				.andExpect(jsonPath("$.data.sampleRows[0].membershipNo", startsWith("GREE-")))
 				.andExpect(jsonPath("$.data.csv", startsWith("membershipNo,branchId,fullName")));
 
 		mockMvc.perform(get("/api/v1/members/import-template?tenantId=tenant_lake")
@@ -2522,7 +2637,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.tenantId", is("tenant_lake")))
 				.andExpect(jsonPath("$.data.sampleRows[0].branchId", is("branch_lake_main")))
-				.andExpect(jsonPath("$.data.sampleRows[0].membershipNo", startsWith("LFS-")));
+				.andExpect(jsonPath("$.data.sampleRows[0].membershipNo", startsWith("LAKE-")));
 	}
 
 	@Test
@@ -2664,7 +2779,7 @@ class SaccoBackendApplicationTests {
 								  "dryRun": true,
 								  "rows": [
 								    {
-								      "membershipNo": "LFS-DENIED",
+								      "membershipNo": "LAKE-DENIED",
 								      "branchId": "branch_lake_main",
 								      "fullName": "Denied Import Member",
 								      "phone": "+256700555201",
@@ -2685,7 +2800,7 @@ class SaccoBackendApplicationTests {
 								  "dryRun": true,
 								  "rows": [
 								    {
-								      "membershipNo": "LFS-BAD-001",
+								      "membershipNo": "LAKE-BAD-001",
 								      "branchId": "branch_green_main",
 								      "fullName": "",
 								      "memberType": "alien",
@@ -2694,7 +2809,7 @@ class SaccoBackendApplicationTests {
 								      "password": "short"
 								    },
 								    {
-								      "membershipNo": "LFS-BAD-001",
+								      "membershipNo": "LAKE-BAD-001",
 								      "branchId": "branch_lake_main",
 								      "fullName": "Duplicate In File",
 								      "phone": "+256700555202",
@@ -3399,13 +3514,13 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "identifier": "GVS-0001",
+								  "identifier": "GREE-0001",
 								  "password": "Member@12345"
 								}
 								"""))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.token", notNullValue()))
-				.andExpect(jsonPath("$.data.member.membershipNo", is("GVS-0001")))
+				.andExpect(jsonPath("$.data.member.membershipNo", is("GREE-0001")))
 				.andExpect(jsonPath("$.data.member.passwordHash").doesNotExist())
 				.andExpect(jsonPath("$.data.tenant.id", is("tenant_green")))
 				.andExpect(jsonPath("$.data.branch.id", is("branch_green_main")))
@@ -3444,7 +3559,7 @@ class SaccoBackendApplicationTests {
 								}
 								"""))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.member.membershipNo", is("GVS-0002")));
+				.andExpect(jsonPath("$.data.member.membershipNo", is("GREE-0002")));
 
 		mockMvc.perform(post("/api/v1/member-auth/login")
 						.contentType("application/json")
@@ -3455,7 +3570,7 @@ class SaccoBackendApplicationTests {
 								}
 								"""))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.member.membershipNo", is("GVS-0002")));
+				.andExpect(jsonPath("$.data.member.membershipNo", is("GREE-0002")));
 	}
 
 	@Test
@@ -3464,21 +3579,21 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "GVS",
-								  "identifier": "GVS-0001",
+								  "saccoCode": "GREE",
+								  "identifier": "GREE-0001",
 								  "password": "Member@12345"
 								}
 								"""))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.tenant.id", is("tenant_green")))
-				.andExpect(jsonPath("$.data.member.membershipNo", is("GVS-0001")));
+				.andExpect(jsonPath("$.data.member.membershipNo", is("GREE-0001")));
 
 		mockMvc.perform(post("/api/v1/member-auth/login")
 						.contentType("application/json")
 						.content("""
 								{
-								  "saccoCode": "LFS",
-								  "identifier": "GVS-0001",
+								  "saccoCode": "LAKE",
+								  "identifier": "GREE-0001",
 								  "password": "Member@12345"
 								}
 								"""))
@@ -3492,7 +3607,7 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "identifier": "GVS-0001",
+								  "identifier": "GREE-0001",
 								  "password": "wrong"
 								}
 								"""))
@@ -3503,7 +3618,7 @@ class SaccoBackendApplicationTests {
 						.contentType("application/json")
 						.content("""
 								{
-								  "identifier": "LFS-0001",
+								  "identifier": "LAKE-0001",
 								  "password": "Member@12345"
 								}
 								"""))
@@ -3513,7 +3628,7 @@ class SaccoBackendApplicationTests {
 
 	@Test
 	void memberCanUpdatePrivacyConsentsAndAuditIsWritten() throws Exception {
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 
 		mockMvc.perform(patch("/api/v1/member-auth/privacy-consents")
 						.header("Authorization", "Bearer " + memberToken)
@@ -3551,7 +3666,7 @@ class SaccoBackendApplicationTests {
 
 	@Test
 	void memberCanSubmitAndListPrivacyRequests() throws Exception {
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 
 		MvcResult created = mockMvc.perform(post("/api/v1/member-auth/privacy-requests")
 						.header("Authorization", "Bearer " + memberToken)
@@ -3586,7 +3701,7 @@ class SaccoBackendApplicationTests {
 	@Test
 	void staffCanCompleteErasureRequestWithoutDeletingMemberRecord() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
-		String membershipNo = "GVS-ERASURE-" + System.currentTimeMillis();
+		String membershipNo = "GREE-ERASURE-" + System.currentTimeMillis();
 
 		MvcResult createdMember = mockMvc.perform(post("/api/v1/members")
 						.header("Authorization", "Bearer " + token)
@@ -3652,7 +3767,7 @@ class SaccoBackendApplicationTests {
 
 	@Test
 	void memberMobileDashboardAndLoanSubmissionUseServerConfirmedRecords() throws Exception {
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 
 		mockMvc.perform(get("/api/v1/member-auth/mobile-dashboard")
 						.header("Authorization", "Bearer " + memberToken))
@@ -3674,7 +3789,7 @@ class SaccoBackendApplicationTests {
 								  "amount": 450000,
 								  "repaymentMonths": 5,
 								  "purpose": "Mobile medical support",
-								  "guarantors": [{ "membershipNo": "GVS-0002", "pledgeAmount": 450000 }]
+								  "guarantors": [{ "membershipNo": "GREE-0002", "pledgeAmount": 450000 }]
 								}
 								"""))
 				.andExpect(status().isCreated())
@@ -3702,8 +3817,8 @@ class SaccoBackendApplicationTests {
 
 	@Test
 	void memberNotificationsAreListedForCurrentMemberOnly() throws Exception {
-		String aminaToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
-		String danielToken = memberLoginAndReturnToken("GVS-0002", "Member@12345");
+		String aminaToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
+		String danielToken = memberLoginAndReturnToken("GREE-0002", "Member@12345");
 
 		mockMvc.perform(get("/api/v1/member-auth/notifications")
 						.header("Authorization", "Bearer " + aminaToken))
@@ -3720,7 +3835,7 @@ class SaccoBackendApplicationTests {
 
 	@Test
 	void memberMobileLoanControlsAreEnforced() throws Exception {
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 
 		mockMvc.perform(get("/api/v1/member-auth/mobile-dashboard"))
 				.andExpect(status().isUnauthorized())
@@ -3796,13 +3911,13 @@ class SaccoBackendApplicationTests {
 	void financialProductsAreConfiguredWithTenantScope() throws Exception {
 		String platformToken = loginAndReturnToken();
 		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
-		String code = "GVS-SAV-" + System.currentTimeMillis();
+		String code = "GREE-SAV-" + System.currentTimeMillis();
 
 		mockMvc.perform(get("/api/v1/financial-products")
 						.header("Authorization", "Bearer " + platformToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(4)))
-				.andExpect(jsonPath("$.data[*].code", hasItem("GVS-SAV-ORD")));
+				.andExpect(jsonPath("$.data[*].code", hasItem("GREE-SAV-ORD")));
 
 		mockMvc.perform(get("/api/v1/financial-products?type=savings")
 						.header("Authorization", "Bearer " + saccoToken))
@@ -3879,7 +3994,7 @@ class SaccoBackendApplicationTests {
 								{
 								  "tenantId": "tenant_lake",
 								  "productType": "savings",
-								  "code": "LFS-CROSS",
+								  "code": "LAKE-CROSS",
 								  "name": "Cross Tenant Savings",
 								  "contributionAmount": 10000,
 								  "minimumBalance": 5000
@@ -3894,7 +4009,7 @@ class SaccoBackendApplicationTests {
 						.content("""
 								{
 								  "productType": "welfare",
-								  "code": "GVS-WEL-BAD",
+								  "code": "GREE-WEL-BAD",
 								  "name": "Bad Welfare",
 								  "contributionAmount": -1,
 								  "minimumBalance": 0
@@ -3908,20 +4023,20 @@ class SaccoBackendApplicationTests {
 	void financialAccountsAreOpenedWithTenantScope() throws Exception {
 		String platformToken = loginAndReturnToken();
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
-		String productCode = "GVS-SAV-ACC-" + System.currentTimeMillis();
+		String productCode = "GREE-SAV-ACC-" + System.currentTimeMillis();
 
 		mockMvc.perform(get("/api/v1/financial-accounts")
 						.header("Authorization", "Bearer " + platformToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(4)))
-				.andExpect(jsonPath("$.data[*].accountNo", hasItem("GVS-SAV-0001")));
+				.andExpect(jsonPath("$.data[*].accountNo", hasItem("GREE-SAV-0001")));
 
 		mockMvc.perform(get("/api/v1/financial-accounts?memberId=member_green_amina")
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(3)))
 				.andExpect(jsonPath("$.data[*].tenantId", everyItem(is("tenant_green"))))
-				.andExpect(jsonPath("$.data[*].membershipNo", everyItem(is("GVS-0001"))));
+				.andExpect(jsonPath("$.data[*].membershipNo", everyItem(is("GREE-0001"))));
 
 		MvcResult product = mockMvc.perform(post("/api/v1/financial-products")
 						.header("Authorization", "Bearer " + token)
@@ -3953,11 +4068,11 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
 				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
-				.andExpect(jsonPath("$.data.membershipNo", is("GVS-0001")))
+				.andExpect(jsonPath("$.data.membershipNo", is("GREE-0001")))
 				.andExpect(jsonPath("$.data.productId", is(productId)))
 				.andExpect(jsonPath("$.data.productCode", is(productCode)))
 				.andExpect(jsonPath("$.data.accountType", is("savings")))
-				.andExpect(jsonPath("$.data.accountNo", startsWith("GVS-SAV-")))
+				.andExpect(jsonPath("$.data.accountNo", startsWith("GREE-SAV-")))
 				.andExpect(jsonPath("$.data.status", is("active")))
 				.andReturn();
 		String accountId = objectMapper.readTree(account.getResponse().getContentAsString()).path("data").path("id").asString();
@@ -3980,7 +4095,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[0].resourceType", is("financial_account")))
 				.andExpect(jsonPath("$.data[0].resourceId", is(accountId)))
-				.andExpect(jsonPath("$.data[0].action", startsWith("Opened savings account GVS-SAV-")));
+				.andExpect(jsonPath("$.data[0].action", startsWith("Opened savings account GREE-SAV-")));
 	}
 
 	@Test
@@ -4061,7 +4176,7 @@ class SaccoBackendApplicationTests {
 	@Test
 	void welfareClaimsAreApprovedPaidAndJournaled() throws Exception {
 		String token = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
-		String reference = "GVS-WCL-SMOKE-" + System.currentTimeMillis();
+		String reference = "GREE-WCL-SMOKE-" + System.currentTimeMillis();
 
 		mockMvc.perform(get("/api/v1/welfare-claims")
 						.header("Authorization", "Bearer " + token))
@@ -4083,7 +4198,7 @@ class SaccoBackendApplicationTests {
 								""".formatted(reference)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.memberId", is("member_green_daniel")))
-				.andExpect(jsonPath("$.data.membershipNo", is("GVS-0002")))
+				.andExpect(jsonPath("$.data.membershipNo", is("GREE-0002")))
 				.andExpect(jsonPath("$.data.status", is("submitted")))
 				.andExpect(jsonPath("$.data.reference", is(reference)))
 				.andReturn();
@@ -4176,7 +4291,7 @@ class SaccoBackendApplicationTests {
 								  "memberId": "member_green_amina",
 								  "claimType": "medical",
 								  "amount": 10000,
-								  "reference": "GVS-WCL-0001"
+								  "reference": "GREE-WCL-0001"
 								}
 								"""))
 				.andExpect(status().isConflict())
@@ -4262,7 +4377,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk());
 
 		String checkerToken = loginAndReturnToken(checkerEmail, "Checker@12345");
-		String membershipNo = "GVS-TX-" + System.currentTimeMillis();
+		String membershipNo = "GREE-TX-" + System.currentTimeMillis();
 
 		MvcResult createdMember = mockMvc.perform(post("/api/v1/members")
 						.header("Authorization", "Bearer " + makerToken)
@@ -4302,7 +4417,7 @@ class SaccoBackendApplicationTests {
 								""".formatted(memberId)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.status", is("pending_approval")))
-				.andExpect(jsonPath("$.data.reference", startsWith("GVS-TX-")))
+				.andExpect(jsonPath("$.data.reference", startsWith("GREE-TX-")))
 				.andReturn();
 
 		String transactionId = objectMapper.readTree(createdTransaction.getResponse().getContentAsString()).path("data").path("id").asString();
@@ -4330,7 +4445,7 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(get("/api/v1/financial-transactions/" + transactionId + "/receipt")
 						.header("Authorization", "Bearer " + makerToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.receiptNo", startsWith("RCT-GVS-TX-")))
+				.andExpect(jsonPath("$.data.receiptNo", startsWith("RCT-GREE-TX-")))
 				.andExpect(jsonPath("$.data.tenantId", is("tenant_green")))
 				.andExpect(jsonPath("$.data.tenantName", is("Green Valley SACCO")))
 				.andExpect(jsonPath("$.data.branchName", is("Mukono Main")))
@@ -4368,7 +4483,7 @@ class SaccoBackendApplicationTests {
 								"""))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.status", is("posted")))
-				.andExpect(jsonPath("$.data.reference", startsWith("GVS-TX-")))
+				.andExpect(jsonPath("$.data.reference", startsWith("GREE-TX-")))
 				.andExpect(jsonPath("$.data.reference", is(objectMapper.readTree(createdTransaction.getResponse().getContentAsString()).path("data").path("reference").asString() + "-REV")))
 				.andExpect(jsonPath("$.data.originalTransactionId", is(transactionId)))
 				.andExpect(jsonPath("$.data.reversalReason", is("Duplicate opening payment")))
@@ -4420,7 +4535,7 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(get("/api/v1/financial-transactions/txn_green_0001/receipt")
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.receiptNo", is("RCT-GVS-TX-0001")))
+				.andExpect(jsonPath("$.data.receiptNo", is("RCT-GREE-TX-0001")))
 				.andExpect(jsonPath("$.data.memberName", is("Amina Nakitende")));
 
 		mockMvc.perform(get("/api/v1/financial-transactions/txn_green_0003/receipt")
@@ -4450,10 +4565,10 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(get("/api/v1/members/member_green_amina/statement/export.csv")
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
-				.andExpect(header().string("Content-Disposition", containsString("member-statement-GVS-0001.csv")))
+				.andExpect(header().string("Content-Disposition", containsString("member-statement-GREE-0001.csv")))
 				.andExpect(content().contentTypeCompatibleWith("text/csv"))
 				.andExpect(content().string(containsString("membershipNo,memberName,reference,type,channel,amount")))
-				.andExpect(content().string(containsString("GVS-0001")));
+				.andExpect(content().string(containsString("GREE-0001")));
 
 		mockMvc.perform(post("/api/v1/financial-transactions")
 						.header("Authorization", "Bearer " + token)
@@ -4972,7 +5087,7 @@ class SaccoBackendApplicationTests {
 						.content("""
 								{
 								  "tenantId": "tenant_green",
-								  "memberIdentifier": "GVS-0002",
+								  "memberIdentifier": "GREE-0002",
 								  "purpose": "share_purchase",
 								  "amount": 45000,
 								  "externalReference": "%s",
@@ -4996,7 +5111,7 @@ class SaccoBackendApplicationTests {
 						.content("""
 								{
 								  "tenantId": "tenant_green",
-								  "memberIdentifier": "GVS-0002",
+								  "memberIdentifier": "GREE-0002",
 								  "purpose": "share_purchase",
 								  "amount": 45000,
 								  "externalReference": "%s",
@@ -5147,7 +5262,7 @@ class SaccoBackendApplicationTests {
 
 	@Test
 	void memberCanInitiateMobileMoneyPaymentRequest() throws Exception {
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String externalReference = "MM-REQUEST-" + System.currentTimeMillis();
 
@@ -5424,7 +5539,7 @@ class SaccoBackendApplicationTests {
 								""".formatted(customTitle)))
 				.andExpect(status().isCreated());
 
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 		mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
 						.header("Authorization", "Bearer " + memberToken)
 						.contentType("application/json")
@@ -5434,7 +5549,7 @@ class SaccoBackendApplicationTests {
 								  "amount": 180000,
 								  "repaymentMonths": 6,
 								  "purpose": "Template smoke test",
-								  "guarantors": [{ "membershipNo": "GVS-0002", "pledgeAmount": 180000 }]
+								  "guarantors": [{ "membershipNo": "GREE-0002", "pledgeAmount": 180000 }]
 								}
 								"""))
 				.andExpect(status().isCreated());
@@ -5623,7 +5738,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.status", is("resolved")))
 				.andExpect(jsonPath("$.data.resolvedByUserId", is("user_green_admin")));
 
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 		mockMvc.perform(post("/api/v1/member-auth/mobile-complaints")
 						.header("Authorization", "Bearer " + memberToken)
 						.contentType("application/json")
@@ -5656,7 +5771,7 @@ class SaccoBackendApplicationTests {
 	void complaintControlsAreEnforced() throws Exception {
 		String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String platformToken = loginAndReturnToken();
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 
 		mockMvc.perform(get("/api/v1/complaints?tenantId=tenant_lake")
 						.header("Authorization", "Bearer " + saccoToken))
@@ -5955,7 +6070,7 @@ class SaccoBackendApplicationTests {
 									  "parish": "Central",
 									  "village": "Zone",
 									  "contactNumber": "+256701234000",
-									  "memberRange": "100-250",
+								  "memberRange": "20-250",
 									  "country": "Uganda",
 									  "localeCode": "en-UG",
 									  "currencyCode": "UGX",
@@ -5994,10 +6109,10 @@ class SaccoBackendApplicationTests {
 			// The composed bill for Green Valley = base subscription + its seeded add-ons.
 			mockMvc.perform(get("/api/v1/platform-billing/summary?tenantId=tenant_green").header("Authorization", "Bearer " + platformToken))
 					.andExpect(status().isOk())
-					.andExpect(jsonPath("$.data.baseSubscription", org.hamcrest.Matchers.closeTo(500000.0, 0.001)))
+					.andExpect(jsonPath("$.data.baseSubscription", org.hamcrest.Matchers.closeTo(100000.0, 0.001)))
 					.andExpect(jsonPath("$.data.lines[?(@.description=='Advanced reporting & analytics')].amount", hasItem(org.hamcrest.Matchers.closeTo(600000.0, 0.001))))
 					.andExpect(jsonPath("$.data.lines[?(@.description=='Premium support (priority SLA)')].amount", hasItem(org.hamcrest.Matchers.closeTo(1000000.0, 0.001))))
-					.andExpect(jsonPath("$.data.total", greaterThanOrEqualTo(2100000.0)));
+					.andExpect(jsonPath("$.data.total", greaterThanOrEqualTo(1700000.0)));
 
 			// Adding an API-access add-on increases the composed total by its rate.
 			var added = mockMvc.perform(post("/api/v1/platform-billing/items")
@@ -6012,7 +6127,7 @@ class SaccoBackendApplicationTests {
 			mockMvc.perform(get("/api/v1/platform-billing/summary?tenantId=tenant_green").header("Authorization", "Bearer " + platformToken))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.data.lines[?(@.description=='API access')].amount", hasItem(org.hamcrest.Matchers.closeTo(900000.0, 0.001))))
-					.andExpect(jsonPath("$.data.total", greaterThanOrEqualTo(3000000.0)));
+					.andExpect(jsonPath("$.data.total", greaterThanOrEqualTo(2600000.0)));
 
 			// A SACCO user cannot see platform billing.
 			String saccoToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
@@ -6090,7 +6205,7 @@ class SaccoBackendApplicationTests {
 					.andExpect(jsonPath("$.error.code", is("UNKNOWN_CHANNEL")));
 
 			// A member opts out of push; the SACCO-disabled WhatsApp also reads as off for the member.
-			String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+			String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 			mockMvc.perform(put("/api/v1/member-auth/notification-preferences")
 							.header("Authorization", "Bearer " + memberToken)
 							.contentType("application/json").content("{\"channel\":\"push\",\"enabled\":false}"))
@@ -6134,7 +6249,7 @@ class SaccoBackendApplicationTests {
 					.andExpect(jsonPath("$.data.status", is("active")));
 
 			// The member can see their membership through the portal.
-			String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+			String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 			mockMvc.perform(get("/api/v1/member-auth/membership").header("Authorization", "Bearer " + memberToken))
 					.andExpect(status().isOk());
 
@@ -6165,7 +6280,7 @@ class SaccoBackendApplicationTests {
 	@Test
 	void chairpersonTransfersSavingsUnderMakerCheckerAndRunsAGroupDeduction() throws Exception {
 		String treasurerToken = loginAndReturnToken("treasurer@greenvalley.local", "Treasurer@12345"); // maker
-		String chairToken = loginAndReturnToken("chairperson@greenvalley.local", "Chair@12345"); // checker
+		// Chairperson no longer approves savings transfers; the Admin is the checker here.
 		String adminToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345"); // both roles
 		java.math.BigDecimal originalSavings = jdbcTemplate.queryForObject(
 				"SELECT savings_balance FROM members WHERE id = 'member_green_amina'", java.math.BigDecimal.class);
@@ -6207,7 +6322,7 @@ class SaccoBackendApplicationTests {
 
 			// Chairperson (checker) approves the treasurer's transfer, applying the movement.
 			mockMvc.perform(patch("/api/v1/savings-transfers/" + transferId + "/decision")
-							.header("Authorization", "Bearer " + chairToken)
+							.header("Authorization", "Bearer " + adminToken)
 							.contentType("application/json").content("{\"status\":\"posted\"}"))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.data.status", is("posted")));
@@ -6233,7 +6348,7 @@ class SaccoBackendApplicationTests {
 					.andReturn();
 			String batchTransferId = objectMapper.readTree(batch.getResponse().getContentAsString()).path("data").path("transfers").path(0).path("id").asText();
 			mockMvc.perform(patch("/api/v1/savings-transfers/" + batchTransferId + "/decision")
-							.header("Authorization", "Bearer " + chairToken)
+							.header("Authorization", "Bearer " + adminToken)
 							.contentType("application/json").content("{\"status\":\"posted\"}"))
 					.andExpect(status().isOk());
 
@@ -6243,7 +6358,7 @@ class SaccoBackendApplicationTests {
 
 			// Chairperson reverses the first (savings -> shares) transfer, restoring savings.
 			mockMvc.perform(post("/api/v1/savings-transfers/" + transferId + "/reverse")
-							.header("Authorization", "Bearer " + chairToken)
+							.header("Authorization", "Bearer " + adminToken)
 							.contentType("application/json").content("{}"))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.data.status", is("reversed")));
@@ -6259,7 +6374,7 @@ class SaccoBackendApplicationTests {
 	@Test
 	void highValueSavingsTransferRequiresTwoDistinctApprovals() throws Exception {
 		String treasurerToken = loginAndReturnToken("treasurer@greenvalley.local", "Treasurer@12345");
-		String chairToken = loginAndReturnToken("chairperson@greenvalley.local", "Chair@12345");
+		String secretaryToken = loginAndReturnToken("secretary@greenvalley.local", "Secretary@12345");
 		String adminToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		java.math.BigDecimal originalSavings = jdbcTemplate.queryForObject(
 				"SELECT savings_balance FROM members WHERE id = 'member_green_amina'", java.math.BigDecimal.class);
@@ -6279,14 +6394,14 @@ class SaccoBackendApplicationTests {
 
 			// First approval moves it to awaiting a second approval (not yet posted).
 			mockMvc.perform(patch("/api/v1/savings-transfers/" + transferId + "/decision")
-							.header("Authorization", "Bearer " + chairToken)
+							.header("Authorization", "Bearer " + secretaryToken)
 							.contentType("application/json").content("{\"status\":\"posted\"}"))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.data.status", is("awaiting_second_approval")));
 
 			// The same checker cannot give the second approval.
 			mockMvc.perform(patch("/api/v1/savings-transfers/" + transferId + "/decision")
-							.header("Authorization", "Bearer " + chairToken)
+							.header("Authorization", "Bearer " + secretaryToken)
 							.contentType("application/json").content("{\"status\":\"posted\"}"))
 					.andExpect(status().isConflict())
 					.andExpect(jsonPath("$.error.code", is("SECOND_APPROVER_REQUIRED")));
@@ -6313,7 +6428,7 @@ class SaccoBackendApplicationTests {
 			// FREE email path: the reset code is issued immediately.
 			MvcResult emailReq = mockMvc.perform(post("/api/v1/member-auth/password-reset/request")
 							.contentType("application/json")
-							.content("{\"identifier\":\"GVS-0001\",\"channel\":\"email\"}"))
+							.content("{\"identifier\":\"GREE-0001\",\"channel\":\"email\"}"))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.data.paymentRequired", is(false)))
 					.andReturn();
@@ -6324,12 +6439,12 @@ class SaccoBackendApplicationTests {
 							.content("{\"token\":\"" + emailToken + "\",\"newPassword\":\"NewMember@123\"}"))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.data.reset", is(true)));
-			memberLoginAndReturnToken("GVS-0001", "NewMember@123");
+			memberLoginAndReturnToken("GREE-0001", "NewMember@123");
 
 			// PAID SMS path: a code is issued but not usable until the UGX 500 fee is paid.
 			MvcResult smsReq = mockMvc.perform(post("/api/v1/member-auth/password-reset/request")
 							.contentType("application/json")
-							.content("{\"identifier\":\"GVS-0001\",\"channel\":\"sms\"}"))
+							.content("{\"identifier\":\"GREE-0001\",\"channel\":\"sms\"}"))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.data.paymentRequired", is(true)))
 					.andExpect(jsonPath("$.data.amount", is(500)))
@@ -6348,7 +6463,7 @@ class SaccoBackendApplicationTests {
 			// Pay the fee via mobile money — the callback activates the reset.
 			mockMvc.perform(post("/api/v1/integrations/mobile-money/callback")
 							.contentType("application/json")
-							.content("{\"tenantId\":\"tenant_green\",\"memberIdentifier\":\"GVS-0001\",\"purpose\":\"password_reset_sms\",\"amount\":500,\"externalReference\":\"" + reference + "\",\"providerPayload\":{\"phone\":\"+256700000001\"}}"))
+							.content("{\"tenantId\":\"tenant_green\",\"memberIdentifier\":\"GREE-0001\",\"purpose\":\"password_reset_sms\",\"amount\":500,\"externalReference\":\"" + reference + "\",\"providerPayload\":{\"phone\":\"+256700000001\"}}"))
 					.andExpect(status().isCreated())
 					.andExpect(jsonPath("$.data.purpose", is("password_reset_sms")))
 					.andExpect(jsonPath("$.data.resourceType", is("member_password_reset")));
@@ -6358,12 +6473,12 @@ class SaccoBackendApplicationTests {
 							.contentType("application/json")
 							.content("{\"token\":\"" + smsToken + "\",\"newPassword\":\"SmsMember@123\"}"))
 					.andExpect(status().isOk());
-			memberLoginAndReturnToken("GVS-0001", "SmsMember@123");
+			memberLoginAndReturnToken("GREE-0001", "SmsMember@123");
 		} finally {
 			// Restore the seeded password so other tests still authenticate as this member.
 			MvcResult restoreReq = mockMvc.perform(post("/api/v1/member-auth/password-reset/request")
 							.contentType("application/json")
-							.content("{\"identifier\":\"GVS-0001\",\"channel\":\"email\"}"))
+							.content("{\"identifier\":\"GREE-0001\",\"channel\":\"email\"}"))
 					.andReturn();
 			String restoreToken = objectMapper.readTree(restoreReq.getResponse().getContentAsString()).path("data").path("resetToken").asText();
 			if (restoreToken != null && !restoreToken.isBlank()) {
@@ -6380,7 +6495,7 @@ class SaccoBackendApplicationTests {
 	@Test
 	void memberPaysMembershipDuesViaMobileMoney() throws Exception {
 		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 		String membershipId = null;
 		String reference = "MM-DUES-" + System.currentTimeMillis();
 		try {
@@ -6404,7 +6519,7 @@ class SaccoBackendApplicationTests {
 			// The provider callback confirms it; dues apply directly to the membership.
 			mockMvc.perform(post("/api/v1/integrations/mobile-money/callback")
 							.contentType("application/json")
-							.content("{\"tenantId\":\"tenant_green\",\"memberIdentifier\":\"GVS-0001\",\"purpose\":\"membership_dues\",\"amount\":30000,\"externalReference\":\"" + reference + "\",\"providerPayload\":{\"phone\":\"+256700000001\"}}"))
+							.content("{\"tenantId\":\"tenant_green\",\"memberIdentifier\":\"GREE-0001\",\"purpose\":\"membership_dues\",\"amount\":30000,\"externalReference\":\"" + reference + "\",\"providerPayload\":{\"phone\":\"+256700000001\"}}"))
 					.andExpect(status().isCreated())
 					.andExpect(jsonPath("$.data.purpose", is("membership_dues")))
 					.andExpect(jsonPath("$.data.resourceType", is("member_subscription")))
@@ -6426,37 +6541,199 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberPaidPlatformFeeUpdatesSaccoSubscriptionCapacity() throws Exception {
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
+		String reference = "MM-PLATFORM-FEE-" + System.currentTimeMillis();
+		try {
+			jdbcTemplate.update("""
+					UPDATE subscriptions
+					SET status = 'trial',
+						amount = 100000.00,
+						paid = 0.00,
+						member_count = 12,
+						billable_members = 20,
+						unit_price = 5000.00,
+						tier_id = 'per_member',
+						tier_label = '20-250 members',
+						billing_description = 'UGX 5,000 per member annually, minimum 20 members'
+					WHERE tenant_id = 'tenant_green'
+					""");
+
+			mockMvc.perform(post("/api/v1/integrations/mobile-money/payment-requests")
+							.header("Authorization", "Bearer " + memberToken)
+							.contentType("application/json")
+							.content("{\"purpose\":\"platform_fee\",\"amount\":100000,\"payerPhone\":\"+256700000001\",\"externalReference\":\"" + reference + "\",\"provider\":\"mtn\"}"))
+					.andExpect(status().isAccepted())
+					.andExpect(jsonPath("$.data.purpose", is("platform_fee")));
+
+			mockMvc.perform(post("/api/v1/integrations/mobile-money/callback")
+							.contentType("application/json")
+							.content("{\"tenantId\":\"tenant_green\",\"memberIdentifier\":\"GREE-0001\",\"purpose\":\"platform_fee\",\"amount\":100000,\"externalReference\":\"" + reference + "\",\"provider\":\"mtn\",\"providerPayload\":{\"phone\":\"+256700000001\"}}"))
+					.andExpect(status().isCreated())
+					.andExpect(jsonPath("$.data.purpose", is("platform_fee")))
+					.andExpect(jsonPath("$.data.resourceType", is("subscription")))
+					.andExpect(jsonPath("$.data.status", is("posted")));
+
+			String platformToken = loginAndReturnToken("admin@platform.local", "Admin@12345");
+			mockMvc.perform(get("/api/v1/subscriptions?tenantId=tenant_green")
+							.header("Authorization", "Bearer " + platformToken))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data[0].status", is("active")))
+					.andExpect(jsonPath("$.data[0].paidMemberCapacity", is(20)))
+					.andExpect(jsonPath("$.data[0].paid", is(100000.00)));
+		} finally {
+			jdbcTemplate.update("DELETE FROM statement_lines WHERE tenant_id = 'tenant_green' AND external_reference = ?", reference);
+			jdbcTemplate.update("DELETE FROM subscription_payments WHERE external_reference = ?", reference);
+			jdbcTemplate.update("DELETE FROM mobile_money_callbacks WHERE external_reference = ?", reference);
+			jdbcTemplate.update("DELETE FROM mobile_money_payment_requests WHERE external_reference = ?", reference);
+			jdbcTemplate.update("""
+					UPDATE subscriptions
+					SET status = 'active',
+						amount = 100000.00,
+						paid = 100000.00,
+						member_count = 12,
+						billable_members = 20,
+						unit_price = 5000.00,
+						tier_id = 'per_member',
+						tier_label = '20-250 members',
+						billing_description = 'UGX 5,000 per member annually, minimum 20 members',
+						expiry = DATE '2027-07-14'
+					WHERE tenant_id = 'tenant_green'
+					""");
+		}
+	}
+
+	@Test
 	void subscriptionLifecycleExpiresLapsedRemindsBeforeExpiryAndExposesState() throws Exception {
 		java.sql.Date originalExpiry = jdbcTemplate.queryForObject(
 				"SELECT expiry FROM subscriptions WHERE tenant_id = 'tenant_green'", java.sql.Date.class);
 		String originalStatus = jdbcTemplate.queryForObject(
 				"SELECT status FROM subscriptions WHERE tenant_id = 'tenant_green'", String.class);
+		String originalTenantStatus = jdbcTemplate.queryForObject(
+				"SELECT status FROM tenants WHERE id = 'tenant_green'", String.class);
 		try {
-			// A lapsed active subscription (past expiry + grace) is expired by the lifecycle job.
+			// A lapsed active subscription is expired and the SACCO account is suspended by the lifecycle job.
 			jdbcTemplate.update(
 					"UPDATE subscriptions SET status = 'active', last_reminder_on = NULL, expiry = ? WHERE tenant_id = 'tenant_green'",
-					java.sql.Date.valueOf(java.time.LocalDate.now().minusDays(30)));
+					java.sql.Date.valueOf(java.time.LocalDate.now().minusDays(1)));
+			jdbcTemplate.update("UPDATE tenants SET status = 'active' WHERE id = 'tenant_green'");
 			org.junit.jupiter.api.Assertions.assertTrue(subscriptionLifecycleService.expireLapsed() >= 1);
 			org.junit.jupiter.api.Assertions.assertEquals("expired",
 					jdbcTemplate.queryForObject("SELECT status FROM subscriptions WHERE tenant_id = 'tenant_green'", String.class));
+			org.junit.jupiter.api.Assertions.assertEquals("suspended",
+					jdbcTemplate.queryForObject("SELECT status FROM tenants WHERE id = 'tenant_green'", String.class));
 
-			// A subscription expiring soon triggers exactly one renewal reminder per day (deduplicated).
+			// A subscription expiring within 30 days triggers exactly one renewal reminder per day (deduplicated).
 			jdbcTemplate.update(
 					"UPDATE subscriptions SET status = 'active', last_reminder_on = NULL, expiry = ? WHERE tenant_id = 'tenant_green'",
-					java.sql.Date.valueOf(java.time.LocalDate.now().plusDays(5)));
+					java.sql.Date.valueOf(java.time.LocalDate.now().plusDays(30)));
 			org.junit.jupiter.api.Assertions.assertTrue(subscriptionLifecycleService.sendExpiryReminders() >= 1);
 			org.junit.jupiter.api.Assertions.assertNotNull(
 					jdbcTemplate.queryForObject("SELECT last_reminder_on FROM subscriptions WHERE tenant_id = 'tenant_green'", java.sql.Date.class));
 			org.junit.jupiter.api.Assertions.assertEquals(0, subscriptionLifecycleService.sendExpiryReminders());
-
-			// Dunning: a subscription lapsed but still within grace triggers an escalated overdue reminder.
-			jdbcTemplate.update("UPDATE subscriptions SET status = 'active', last_reminder_on = NULL, expiry = ? WHERE tenant_id = 'tenant_green'",
-					java.sql.Date.valueOf(java.time.LocalDate.now().minusDays(3)));
-			org.junit.jupiter.api.Assertions.assertTrue(subscriptionLifecycleService.sendExpiryReminders() >= 1);
 		} finally {
 			jdbcTemplate.update(
 					"UPDATE subscriptions SET status = ?, last_reminder_on = NULL, expiry = ? WHERE tenant_id = 'tenant_green'",
 					originalStatus, originalExpiry);
+			jdbcTemplate.update("UPDATE tenants SET status = ? WHERE id = 'tenant_green'", originalTenantStatus);
+		}
+	}
+
+	@Test
+	void trialAndPaidMemberCapacityControlsMemberDeposits() throws Exception {
+		String treasurerToken = loginAndReturnToken("treasurer@greenvalley.local", "Treasurer@12345");
+		String originalStatus = jdbcTemplate.queryForObject(
+				"SELECT status FROM subscriptions WHERE tenant_id = 'tenant_green'", String.class);
+		java.math.BigDecimal originalPaid = jdbcTemplate.queryForObject(
+				"SELECT paid FROM subscriptions WHERE tenant_id = 'tenant_green'", java.math.BigDecimal.class);
+		java.sql.Date originalExpiry = jdbcTemplate.queryForObject(
+				"SELECT expiry FROM subscriptions WHERE tenant_id = 'tenant_green'", java.sql.Date.class);
+		try {
+			for (int index = 13; index <= 21; index += 1) {
+				jdbcTemplate.update("""
+						INSERT INTO members (
+						    id, tenant_id, branch_id, membership_no, full_name, member_type, phone, email, national_id,
+						    password_hash, password_salt, status, kyc_status, joining_date, savings_balance, shares_balance, welfare_balance
+						) VALUES (?, 'tenant_green', 'branch_green_main', ?, ?, 'individual', ?, ?, ?, 'hash', 'salt', 'active', 'verified', DATE '2026-08-25', 0, 0, 0)
+						""",
+						"member_green_capacity_" + index,
+						"GREE-90" + index,
+						"Capacity Member " + index,
+						"+256709990" + index,
+						"capacity" + index + "@example.local",
+						"CAPACITY-" + index);
+			}
+			jdbcTemplate.update("""
+					UPDATE subscriptions
+					SET status = 'trial', paid = 0, unit_price = 5000, amount = 500000, member_count = 21,
+					    billable_members = 100, expiry = ?
+					WHERE tenant_id = 'tenant_green'
+					""", java.sql.Date.valueOf(LocalDate.now().plusMonths(1)));
+
+			mockMvc.perform(post("/api/v1/financial-transactions")
+							.header("Authorization", "Bearer " + treasurerToken)
+							.contentType("application/json")
+							.content("""
+									{
+									  "branchId": "branch_green_main",
+									  "memberId": "member_green_amina",
+									  "type": "savings_deposit",
+									  "channel": "bank",
+									  "amount": 10000,
+									  "narration": "Trial capacity blocked"
+									}
+									"""))
+					.andExpect(status().isForbidden())
+					.andExpect(jsonPath("$.error.code", is("SACCO_TRIAL_SETUP_ONLY")));
+
+			jdbcTemplate.update("""
+					UPDATE subscriptions
+					SET status = 'active', paid = 100000, unit_price = 5000, amount = 500000, member_count = 21,
+					    billable_members = 100, expiry = ?
+					WHERE tenant_id = 'tenant_green'
+					""", java.sql.Date.valueOf(LocalDate.now().plusYears(1)));
+
+			mockMvc.perform(get("/api/v1/subscriptions?tenantId=tenant_green")
+							.header("Authorization", "Bearer " + loginAndReturnToken()))
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data[0].paidMemberCapacity", is(20)))
+					.andExpect(jsonPath("$.data[0].inactiveMemberOverflow", is(3)));
+
+			mockMvc.perform(post("/api/v1/financial-transactions")
+							.header("Authorization", "Bearer " + treasurerToken)
+							.contentType("application/json")
+							.content("""
+									{
+									  "branchId": "branch_green_main",
+									  "memberId": "member_green_amina",
+									  "type": "savings_deposit",
+									  "channel": "bank",
+									  "amount": 10000,
+									  "narration": "Paid capacity allowed"
+									}
+									"""))
+					.andExpect(status().isCreated());
+
+			mockMvc.perform(post("/api/v1/financial-transactions")
+							.header("Authorization", "Bearer " + treasurerToken)
+							.contentType("application/json")
+							.content("""
+									{
+									  "branchId": "branch_green_main",
+									  "memberId": "member_green_capacity_21",
+									  "type": "savings_deposit",
+									  "channel": "bank",
+									  "amount": 10000,
+									  "narration": "Paid capacity overflow blocked"
+									}
+									"""))
+					.andExpect(status().isForbidden())
+					.andExpect(jsonPath("$.error.code", is("MEMBER_NOT_WITHIN_PAID_CAPACITY")));
+		} finally {
+			jdbcTemplate.update("DELETE FROM financial_transactions WHERE narration IN ('Paid capacity allowed', 'Trial capacity blocked', 'Paid capacity overflow blocked')");
+			jdbcTemplate.update("DELETE FROM members WHERE id LIKE 'member_green_capacity_%'");
+			jdbcTemplate.update("UPDATE subscriptions SET status = ?, paid = ?, expiry = ? WHERE tenant_id = 'tenant_green'",
+					originalStatus, originalPaid, originalExpiry);
 		}
 	}
 
@@ -6503,7 +6780,7 @@ class SaccoBackendApplicationTests {
 			org.hamcrest.MatcherAssert.assertThat(burial.compareTo(new java.math.BigDecimal("40000")), is(0));
 
 			// 4) The member sees all their fund balances (backfilled savings + the new burial fund).
-			String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+			String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 			mockMvc.perform(get("/api/v1/member-auth/fund-balances").header("Authorization", "Bearer " + memberToken))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.data[*].fundCode", hasItem("savings")))
@@ -6843,6 +7120,7 @@ class SaccoBackendApplicationTests {
 								  "product": "Development Loan",
 								  "amount": 1200000,
 								  "repaymentMonths": 12,
+								  "signedFormReference": "FORM-TEST-APPLICATION",
 								  "purpose": "Stock expansion"
 								}
 								"""))
@@ -6861,7 +7139,7 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(get("/api/v1/audit-events")
 						.header("Authorization", "Bearer " + token))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[0].action", is("Submitted loan application for GVS-0001")))
+				.andExpect(jsonPath("$.data[0].action", is("Submitted loan application for GREE-0001")))
 				.andExpect(jsonPath("$.data[0].resourceType", is("loan")))
 				.andExpect(jsonPath("$.data[0].resourceId", is(loanId)));
 	}
@@ -6925,7 +7203,8 @@ class SaccoBackendApplicationTests {
 								  "memberId": "member_green_amina",
 								  "product": "Emergency Loan",
 								  "amount": 200000,
-								  "repaymentMonths": 4
+								  "repaymentMonths": 4,
+								  "signedFormReference": "FORM-TEST-APPRAISAL"
 								}
 								"""))
 				.andExpect(status().isCreated())
@@ -6970,9 +7249,7 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(patch("/api/v1/loans/loan_green_0002/status")
 						.header("Authorization", "Bearer " + token)
 						.contentType("application/json")
-						.content("""
-								{ "status": "approved" }
-								"""))
+						.content(loanApprovalPayload("PAPER-LOAN-0002")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status", is("approved")))
 				.andExpect(jsonPath("$.data.stage", is("Ready for Disbursement")))
@@ -6993,7 +7270,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.error.code", is("DISBURSEMENT_CHECKER_REQUIRED")));
 
 		// A second, distinct officer confirms and the loan goes active.
-		String checkerToken = loginAndReturnToken("chairperson@greenvalley.local", "Chair@12345");
+		String checkerToken = loginAndReturnToken("treasurer@greenvalley.local", "Treasurer@12345");
 		mockMvc.perform(post("/api/v1/loans/loan_green_0002/disburse")
 						.header("Authorization", "Bearer " + checkerToken))
 				.andExpect(status().isOk())
@@ -7004,7 +7281,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.interestAmount", is(96000.00)))
 				.andExpect(jsonPath("$.data.totalPayable", is(896000.00)))
 				.andExpect(jsonPath("$.data.monthlyInstallment", is(149333.33)))
-				.andExpect(jsonPath("$.data.disbursedByUserId", is("user_green_chairperson")))
+				.andExpect(jsonPath("$.data.disbursedByUserId", is("user_green_treasurer")))
 				.andExpect(jsonPath("$.data.disbursedAt", notNullValue()));
 
 		mockMvc.perform(get("/api/v1/loans/loan_green_0002/schedule")
@@ -7029,25 +7306,26 @@ class SaccoBackendApplicationTests {
 								  "memberId": "member_green_amina",
 								  "product": "Emergency Loan",
 								  "amount": 2500000,
-								  "repaymentMonths": 6
+								  "repaymentMonths": 6,
+								  "signedFormReference": "FORM-TEST-DUAL-APPROVAL"
 								}
 								"""))
 				.andExpect(status().isCreated())
 				.andReturn();
 		String loanId = objectMapper.readTree(createdLoan.getResponse().getContentAsString()).path("data").path("id").asString();
 
-		// Guarantor pledge is large enough that applicant savings (900,000) + pledge covers the 2.5M loan.
+		// Guarantor pledge is large enough that applicant savings (900,000) + pledge covers the 2.8M total payable.
 		MvcResult guarantor = mockMvc.perform(post("/api/v1/loans/" + loanId + "/guarantors")
 						.header("Authorization", "Bearer " + staffToken)
 						.contentType("application/json")
 						.content("""
-								{ "memberId": "member_green_daniel", "guaranteedAmount": 1700000 }
+								{ "memberId": "member_green_grace", "guaranteedAmount": 1900000 }
 								"""))
 				.andExpect(status().isCreated())
 				.andReturn();
 		String guarantorId = objectMapper.readTree(guarantor.getResponse().getContentAsString()).path("data").path("id").asString();
 
-		String memberToken = memberLoginAndReturnToken("GVS-0002", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0005", "Member@12345");
 		mockMvc.perform(patch("/api/v1/member-auth/guarantor-requests/" + guarantorId + "/status")
 						.header("Authorization", "Bearer " + memberToken)
 						.contentType("application/json")
@@ -7056,13 +7334,19 @@ class SaccoBackendApplicationTests {
 								"""))
 				.andExpect(status().isOk());
 
+		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/guarantors/" + guarantorId + "/signature")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{ "signatureReference": "SIGN-TEST-DUAL-APPROVAL" }
+								"""))
+				.andExpect(status().isOk());
+
 		// First approval records but does not finalise.
 		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
 						.header("Authorization", "Bearer " + staffToken)
 						.contentType("application/json")
-						.content("""
-								{ "status": "approved" }
-								"""))
+						.content(loanApprovalPayload("PAPER-TEST-DUAL-APPROVAL")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status", is("under_review")))
 				.andExpect(jsonPath("$.data.stage", is("Awaiting Second Approval")));
@@ -7071,9 +7355,7 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
 						.header("Authorization", "Bearer " + staffToken)
 						.contentType("application/json")
-						.content("""
-								{ "status": "approved" }
-								"""))
+						.content(loanApprovalPayload("PAPER-TEST-DUAL-APPROVAL-2")))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error.code", is("SECOND_APPROVER_REQUIRED")));
 	}
@@ -7095,7 +7377,8 @@ class SaccoBackendApplicationTests {
 								  "memberId": "member_green_amina",
 								  "product": "Emergency Loan",
 								  "amount": 1000000,
-								  "repaymentMonths": 4
+								  "repaymentMonths": 4,
+								  "signedFormReference": "FORM-TEST-DECISION"
 								}
 								"""))
 				.andExpect(status().isCreated())
@@ -7106,9 +7389,7 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
 						.header("Authorization", "Bearer " + token)
 						.contentType("application/json")
-						.content("""
-								{ "status": "approved" }
-								"""))
+						.content(loanApprovalPayload("PAPER-TEST-DECISION")))
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.error.code", is("GUARANTOR_REQUIRED")));
 
@@ -7176,6 +7457,10 @@ class SaccoBackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals(2, openLoan.path("paidInstallments").asInt());
 		org.junit.jupiter.api.Assertions.assertEquals("on_track", openLoan.path("scheduleStatus").asString());
 		org.junit.jupiter.api.Assertions.assertFalse(openLoan.path("nextDueDate").asText().isBlank());
+		mockMvc.perform(get("/api/v1/loans/" + loanId + "/guarantors")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].status", is("accepted")));
 
 		String finalPaymentAmount = openLoan.path("balance").decimalValue().toPlainString();
 		mockMvc.perform(post("/api/v1/loans/" + loanId + "/repayments")
@@ -7200,9 +7485,14 @@ class SaccoBackendApplicationTests {
 		org.junit.jupiter.api.Assertions.assertEquals("closed", closedLoan.path("status").asString());
 		org.junit.jupiter.api.Assertions.assertEquals("Closed", closedLoan.path("stage").asString());
 		org.junit.jupiter.api.Assertions.assertEquals(0.0, closedLoan.path("balance").asDouble(), 0.01);
+		org.junit.jupiter.api.Assertions.assertEquals(0, closedLoan.path("guarantors").asInt());
 		org.junit.jupiter.api.Assertions.assertEquals(2, closedLoan.path("repayments").asInt());
 		org.junit.jupiter.api.Assertions.assertEquals(216000.0, closedLoan.path("repaymentTotal").asDouble(), 0.01);
 		org.junit.jupiter.api.Assertions.assertEquals("settled", closedLoan.path("scheduleStatus").asString());
+		mockMvc.perform(get("/api/v1/loans/" + loanId + "/guarantors")
+						.header("Authorization", "Bearer " + staffToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].status", is("released")));
 
 		MvcResult repaymentJournals = mockMvc.perform(get("/api/v1/journal-entries")
 						.header("Authorization", "Bearer " + staffToken))
@@ -7335,7 +7625,8 @@ class SaccoBackendApplicationTests {
 								  "memberId": "member_green_amina",
 								  "product": "Emergency Loan",
 								  "amount": 300000,
-								  "repaymentMonths": 4
+								  "repaymentMonths": 4,
+								  "signedFormReference": "FORM-TEST-GUARANTOR"
 								}
 								"""))
 				.andExpect(status().isCreated())
@@ -7367,7 +7658,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.length()", is(1)))
 				.andExpect(jsonPath("$.data[0].id", is(guarantorId)));
 
-		String memberToken = memberLoginAndReturnToken("GVS-0002", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0002", "Member@12345");
 
 		mockMvc.perform(get("/api/v1/member-auth/guarantor-requests")
 						.header("Authorization", "Bearer " + memberToken))
@@ -7376,7 +7667,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data[0].loan", notNullValue()))
 				.andExpect(jsonPath("$.data[0].capacity", notNullValue()));
 
-		String otherMemberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String otherMemberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 		mockMvc.perform(patch("/api/v1/member-auth/guarantor-requests/" + guarantorId + "/status")
 						.header("Authorization", "Bearer " + otherMemberToken)
 						.contentType("application/json")
@@ -7400,17 +7691,15 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + staffToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.covered", is(true)))
-				.andExpect(jsonPath("$.data.applicant.membershipNo", is("GVS-0001")))
+				.andExpect(jsonPath("$.data.applicant.membershipNo", is("GREE-0001")))
 				.andExpect(jsonPath("$.data.guarantors.length()", is(1)))
-				.andExpect(jsonPath("$.data.guarantors[0].membershipNo", is("GVS-0002")))
+				.andExpect(jsonPath("$.data.guarantors[0].membershipNo", is("GREE-0002")))
 				.andExpect(jsonPath("$.data.guarantors[0].status", is("accepted")));
 
 		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
 						.header("Authorization", "Bearer " + staffToken)
 						.contentType("application/json")
-						.content("""
-								{ "status": "approved" }
-								"""))
+						.content(loanApprovalPayload("PAPER-TEST-GUARANTOR")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status", is("approved")))
 				.andExpect(jsonPath("$.data.guarantors", is(1)));
@@ -7418,13 +7707,13 @@ class SaccoBackendApplicationTests {
 
 	@Test
 	void memberGuarantorSearchReturnsIdentityOnlyAndRespectsOptOut() throws Exception {
-		String aminaToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String aminaToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 
 		// Finds another active member by name; returns identity only (no balances).
 		mockMvc.perform(get("/api/v1/member-auth/members/search?q=Daniel")
 						.header("Authorization", "Bearer " + aminaToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data[0].membershipNo", is("GVS-0002")))
+				.andExpect(jsonPath("$.data[0].membershipNo", is("GREE-0002")))
 				.andExpect(jsonPath("$.data[0].fullName", is("Daniel Ssekajja")))
 				.andExpect(jsonPath("$.data[0].savingsBalance").doesNotExist())
 				.andExpect(jsonPath("$.data[0].savings").doesNotExist());
@@ -7442,7 +7731,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.length()", is(0)));
 
 		// A member who opts out disappears from the picker.
-		String danielToken = memberLoginAndReturnToken("GVS-0002", "Member@12345");
+		String danielToken = memberLoginAndReturnToken("GREE-0002", "Member@12345");
 		mockMvc.perform(patch("/api/v1/member-auth/guarantor-listing")
 						.header("Authorization", "Bearer " + danielToken)
 						.contentType("application/json")
@@ -7461,7 +7750,7 @@ class SaccoBackendApplicationTests {
 	@Test
 	void savingsSecuredLoanNeedsNoGuarantor() throws Exception {
 		// Amina's savings (900,000) fully cover a small loan plus interest, so no guarantor is required.
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 		MvcResult created = mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
 						.header("Authorization", "Bearer " + memberToken)
 						.contentType("application/json")
@@ -7483,9 +7772,7 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
 						.header("Authorization", "Bearer " + staffToken)
 						.contentType("application/json")
-						.content("""
-								{ "status": "approved" }
-								"""))
+						.content(loanApprovalPayload("PAPER-TEST-SAVINGS")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status", is("approved")))
 				.andExpect(jsonPath("$.data.guarantors", is(0)));
@@ -7494,7 +7781,7 @@ class SaccoBackendApplicationTests {
 	@Test
 	void savingsSecuredLoanHoldsAndReleasesSavings() throws Exception {
 		try {
-			String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+			String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 			MvcResult created = mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
 							.header("Authorization", "Bearer " + memberToken)
 							.contentType("application/json")
@@ -7508,13 +7795,13 @@ class SaccoBackendApplicationTests {
 			String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 			mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
 							.header("Authorization", "Bearer " + staffToken)
-							.contentType("application/json").content("{ \"status\": \"approved\" }"))
+							.contentType("application/json").content(loanApprovalPayload("PAPER-TEST-HOLD")))
 					.andExpect(status().isOk());
 
 			// Two officers disburse; total payable = 124,000 (100,000 + 2% x 12 months).
 			mockMvc.perform(post("/api/v1/loans/" + loanId + "/disburse").header("Authorization", "Bearer " + staffToken))
 					.andExpect(status().isOk());
-			String checkerToken = loginAndReturnToken("chairperson@greenvalley.local", "Chair@12345");
+			String checkerToken = loginAndReturnToken("treasurer@greenvalley.local", "Treasurer@12345");
 			mockMvc.perform(post("/api/v1/loans/" + loanId + "/disburse").header("Authorization", "Bearer " + checkerToken))
 					.andExpect(status().isOk())
 					.andExpect(jsonPath("$.data.status", is("active")));
@@ -7540,7 +7827,7 @@ class SaccoBackendApplicationTests {
 
 	@Test
 	void memberCanViewOwnLoanRepaymentHistory() throws Exception {
-		String memberToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 		mockMvc.perform(get("/api/v1/member-auth/loans/loan_green_0001/repayments")
 						.header("Authorization", "Bearer " + memberToken))
 				.andExpect(status().isOk())
@@ -7549,7 +7836,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data[0].amount", notNullValue()));
 
 		// A member cannot read another member's loan repayments.
-		String otherToken = memberLoginAndReturnToken("GVS-0002", "Member@12345");
+		String otherToken = memberLoginAndReturnToken("GREE-0002", "Member@12345");
 		mockMvc.perform(get("/api/v1/member-auth/loans/loan_green_0001/repayments")
 						.header("Authorization", "Bearer " + otherToken))
 				.andExpect(status().isNotFound());
@@ -7585,7 +7872,7 @@ class SaccoBackendApplicationTests {
 	@Test
 	void memberLoanWithoutGuarantorOrSavingsIsRejected() throws Exception {
 		// Daniel's savings (1,210,000) do not cover a 5,000,000 loan, so a guarantor is required.
-		String memberToken = memberLoginAndReturnToken("GVS-0002", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0002", "Member@12345");
 		mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
 						.header("Authorization", "Bearer " + memberToken)
 						.contentType("application/json")
@@ -7602,8 +7889,28 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void memberLoanCoveredByAvailableSavingsDoesNotRequireGuarantor() throws Exception {
+		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
+		mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
+						.header("Authorization", "Bearer " + memberToken)
+						.contentType("application/json")
+						.content("""
+								{
+								  "product": "Emergency Loan",
+								  "amount": 300000,
+								  "repaymentMonths": 12,
+								  "purpose": "Self secured by savings"
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.data.memberId", is("member_green_amina")))
+				.andExpect(jsonPath("$.data.guarantors", is(0)))
+				.andExpect(jsonPath("$.data.totalPayable", is(372000.00)));
+	}
+
+	@Test
 	void memberCanAddReplacementGuarantorAfterRejection() throws Exception {
-		String applicantToken = memberLoginAndReturnToken("GVS-0001", "Member@12345");
+		String applicantToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 		MvcResult loanResult = mockMvc.perform(post("/api/v1/member-auth/mobile-loans")
 						.header("Authorization", "Bearer " + applicantToken)
 						.contentType("application/json")
@@ -7613,14 +7920,14 @@ class SaccoBackendApplicationTests {
 								  "amount": 300000,
 								  "repaymentMonths": 5,
 								  "purpose": "Replacement guarantor flow",
-								  "guarantors": [{ "membershipNo": "GVS-0002", "pledgeAmount": 150000 }]
+								  "guarantors": [{ "membershipNo": "GREE-0002", "pledgeAmount": 150000 }]
 								}
 								"""))
 				.andExpect(status().isCreated())
 				.andReturn();
 		String loanId = objectMapper.readTree(loanResult.getResponse().getContentAsString()).path("data").path("id").asString();
 
-		String guarantorToken = memberLoginAndReturnToken("GVS-0002", "Member@12345");
+		String guarantorToken = memberLoginAndReturnToken("GREE-0002", "Member@12345");
 		MvcResult requests = mockMvc.perform(get("/api/v1/member-auth/guarantor-requests")
 						.header("Authorization", "Bearer " + guarantorToken))
 				.andExpect(status().isOk())
@@ -7643,7 +7950,7 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + applicantToken)
 						.contentType("application/json")
 						.content("""
-								{ "membershipNo": "GVS-0002", "pledgeAmount": 150000 }
+								{ "membershipNo": "GREE-0002", "pledgeAmount": 150000 }
 								"""))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.data.memberId", is("member_green_daniel")))
@@ -7662,7 +7969,8 @@ class SaccoBackendApplicationTests {
 								  "memberId": "member_green_amina",
 								  "product": "Emergency Loan",
 								  "amount": 250000,
-								  "repaymentMonths": 4
+								  "repaymentMonths": 4,
+								  "signedFormReference": "FORM-TEST-DUPLICATE-GUARANTOR"
 								}
 								"""))
 				.andExpect(status().isCreated())
@@ -7701,7 +8009,8 @@ class SaccoBackendApplicationTests {
 								  "memberId": "member_green_amina",
 								  "product": "School Fees Loan",
 								  "amount": 250000,
-								  "repaymentMonths": 4
+								  "repaymentMonths": 4,
+								  "signedFormReference": "FORM-TEST-GUARANTOR-CAPACITY"
 								}
 								"""))
 				.andExpect(status().isCreated())
@@ -7729,7 +8038,8 @@ class SaccoBackendApplicationTests {
 								  "memberId": "member_green_amina",
 								  "product": "Development Loan",
 								  "amount": 250000,
-								  "repaymentMonths": 4
+								  "repaymentMonths": 4,
+								  "signedFormReference": "FORM-TEST-GUARANTOR-AMOUNT"
 								}
 								"""))
 				.andExpect(status().isCreated())
@@ -7762,7 +8072,8 @@ class SaccoBackendApplicationTests {
 								  "memberId": "member_green_amina",
 								  "product": "Emergency Loan",
 								  "amount": 200000,
-								  "repaymentMonths": 3
+								  "repaymentMonths": 3,
+								  "signedFormReference": "FORM-TEST-GUARANTOR-INVALID"
 								}
 								"""))
 				.andExpect(status().isCreated())
@@ -7795,7 +8106,7 @@ class SaccoBackendApplicationTests {
 				.andReturn();
 
 		String guarantorId = objectMapper.readTree(guarantor.getResponse().getContentAsString()).path("data").path("id").asString();
-		String memberToken = memberLoginAndReturnToken("GVS-0002", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0002", "Member@12345");
 
 		mockMvc.perform(patch("/api/v1/member-auth/guarantor-requests/" + guarantorId + "/status")
 						.header("Authorization", "Bearer " + memberToken)
@@ -8398,7 +8709,7 @@ class SaccoBackendApplicationTests {
 				.andReturn();
 		String managedBranchId = objectMapper.readTree(createdBranch.getResponse().getContentAsString()).path("data").path("id").asString();
 		String branchManagerToken = loginAndReturnToken(managerEmail, "Plain@12345");
-		String membershipNo = "GVS-BM-" + suffix;
+		String membershipNo = "GREE-BM-" + suffix;
 
 		MvcResult createdMember = mockMvc.perform(post("/api/v1/members")
 						.header("Authorization", "Bearer " + branchManagerToken)
@@ -8417,12 +8728,13 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.branchId", is(managedBranchId)))
 				.andReturn();
 		String managedMemberId = objectMapper.readTree(createdMember.getResponse().getContentAsString()).path("data").path("id").asString();
+		jdbcTemplate.update("update members set savings_balance = 20000 where id = ?", managedMemberId);
 
 		mockMvc.perform(get("/api/v1/members")
 						.header("Authorization", "Bearer " + branchManagerToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[*].membershipNo", hasItem(membershipNo)))
-				.andExpect(jsonPath("$.data[*].membershipNo", not(hasItem("GVS-0002"))));
+				.andExpect(jsonPath("$.data[*].membershipNo", not(hasItem("GREE-0002"))));
 
 		mockMvc.perform(get("/api/v1/members/member_green_daniel")
 						.header("Authorization", "Bearer " + branchManagerToken))
@@ -8436,7 +8748,7 @@ class SaccoBackendApplicationTests {
 								{
 								  "tenantId": "tenant_green",
 								  "branchId": "branch_green_seeta",
-								  "membershipNo": "GVS-BLOCK-%s",
+								  "membershipNo": "GREE-BLOCK-%s",
 								  "fullName": "Blocked Branch Member",
 								  "phone": "+25670255%s"
 								}
@@ -8452,10 +8764,10 @@ class SaccoBackendApplicationTests {
 								  "tenantId": "tenant_green",
 								  "branchId": "%s",
 								  "memberId": "%s",
-								  "type": "savings_deposit",
+								  "type": "withdrawal",
 								  "channel": "cash",
 								  "amount": 15000,
-								  "narration": "Branch manager deposit"
+								  "narration": "Branch manager withdrawal"
 								}
 								""".formatted(managedBranchId, managedMemberId)))
 				.andExpect(status().isCreated())
@@ -8466,7 +8778,7 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + branchManagerToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[*].reference", hasItem(reference)))
-				.andExpect(jsonPath("$.data[*].reference", not(hasItem("GVS-TX-0002"))));
+				.andExpect(jsonPath("$.data[*].reference", not(hasItem("GREE-TX-0002"))));
 
 		mockMvc.perform(post("/api/v1/financial-transactions")
 						.header("Authorization", "Bearer " + branchManagerToken)
@@ -8554,7 +8866,7 @@ class SaccoBackendApplicationTests {
 								{
 								  "tenantId": "tenant_green",
 								  "branchId": "%s",
-								  "membershipNo": "GVS-LB-%s",
+								  "membershipNo": "GREE-LB-%s",
 								  "fullName": "Branch Loan Borrower",
 								  "phone": "+25670455%s",
 								  "password": "Member@12345"
@@ -8571,7 +8883,7 @@ class SaccoBackendApplicationTests {
 								{
 								  "tenantId": "tenant_green",
 								  "branchId": "%s",
-								  "membershipNo": "GVS-LG-%s",
+								  "membershipNo": "GREE-LG-%s",
 								  "fullName": "Branch Loan Guarantor",
 								  "phone": "+25670555%s",
 								  "password": "Member@12345"
@@ -8605,6 +8917,7 @@ class SaccoBackendApplicationTests {
 								  "product": "Development Loan",
 								  "amount": 120000,
 								  "repaymentMonths": 6,
+								  "signedFormReference": "FORM-TEST-BRANCH-LOAN",
 								  "purpose": "Branch-scoped loan"
 								}
 								""".formatted(borrowerId)))
@@ -8690,7 +9003,7 @@ class SaccoBackendApplicationTests {
 						.content("""
 								{
 								  "name": "%s",
-								  "permissionIds": ["members:view", "transactions:create", "accounting:view", "reports:view", "complaints:view", "complaints:manage", "governance:view", "governance:manage"]
+								  "permissionIds": ["members:view", "transactions:create", "accounting:view", "reports:view", "audit:view", "complaints:view", "complaints:manage", "governance:view", "governance:manage"]
 								}
 								""".formatted(roleName)))
 				.andExpect(status().isCreated())
@@ -8728,7 +9041,7 @@ class SaccoBackendApplicationTests {
 								{
 								  "tenantId": "tenant_green",
 								  "branchId": "%s",
-								  "membershipNo": "GVS-BA-%s",
+								  "membershipNo": "GREE-BA-%s",
 								  "fullName": "Branch Accounting Member",
 								  "phone": "+25670755%s",
 								  "password": "Member@12345"
@@ -8737,6 +9050,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isCreated())
 				.andReturn();
 		String memberId = objectMapper.readTree(member.getResponse().getContentAsString()).path("data").path("id").asString();
+		jdbcTemplate.update("update members set savings_balance = 30000 where id = ?", memberId);
 
 		mockMvc.perform(patch("/api/v1/members/" + memberId + "/status")
 						.header("Authorization", "Bearer " + saccoToken)
@@ -8753,10 +9067,10 @@ class SaccoBackendApplicationTests {
 								  "tenantId": "tenant_green",
 								  "branchId": "%s",
 								  "memberId": "%s",
-								  "type": "savings_deposit",
+								  "type": "withdrawal",
 								  "channel": "cash",
 								  "amount": 20000,
-								  "narration": "Branch-scoped accounting deposit"
+								  "narration": "Branch-scoped accounting withdrawal"
 								}
 								""".formatted(managedBranchId, memberId)))
 				.andExpect(status().isCreated())
@@ -8768,7 +9082,7 @@ class SaccoBackendApplicationTests {
 						.header("Authorization", "Bearer " + branchManagerToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data[*].reference", hasItem(reference)))
-				.andExpect(jsonPath("$.data[*].reference", not(hasItem("GVS-TX-0001"))));
+				.andExpect(jsonPath("$.data[*].reference", not(hasItem("GREE-TX-0001"))));
 
 		mockMvc.perform(get("/api/v1/statement-lines")
 						.header("Authorization", "Bearer " + branchManagerToken))
@@ -9224,7 +9538,8 @@ class SaccoBackendApplicationTests {
 								  "memberId": "member_green_amina",
 								  "product": "Emergency Loan",
 								  "amount": 100000,
-								  "repaymentMonths": 6
+								  "repaymentMonths": 6,
+								  "signedFormReference": "FORM-TEST-PERMISSIONS"
 								}
 								"""))
 				.andExpect(status().isCreated())
@@ -9296,7 +9611,7 @@ class SaccoBackendApplicationTests {
 
 	private String loginCodeFor(String email) {
 		String normalized = email.toLowerCase();
-		return normalized.contains("@platform.") || normalized.contains("platform-") || normalized.contains("@tereka.local") ? "PLATFORM" : "GVS";
+		return normalized.contains("@platform.") || normalized.contains("platform-") || normalized.contains("@tereka.local") ? "PLATFORM" : "GREE";
 	}
 
 	private String memberLoginAndReturnToken(String identifier, String password) throws Exception {
@@ -9324,7 +9639,8 @@ class SaccoBackendApplicationTests {
 								  "memberId": "member_green_amina",
 								  "product": "Emergency Loan",
 								  "amount": %d,
-								  "repaymentMonths": 4
+								  "repaymentMonths": 4,
+								  "signedFormReference": "FORM-TEST-HELPER"
 								}
 								""".formatted(amount)))
 				.andExpect(status().isCreated())
@@ -9344,7 +9660,7 @@ class SaccoBackendApplicationTests {
 				.andReturn();
 
 		String guarantorId = objectMapper.readTree(guarantor.getResponse().getContentAsString()).path("data").path("id").asString();
-		String memberToken = memberLoginAndReturnToken("GVS-0002", "Member@12345");
+		String memberToken = memberLoginAndReturnToken("GREE-0002", "Member@12345");
 
 		mockMvc.perform(patch("/api/v1/member-auth/guarantor-requests/" + guarantorId + "/status")
 						.header("Authorization", "Bearer " + memberToken)
@@ -9354,12 +9670,18 @@ class SaccoBackendApplicationTests {
 								"""))
 				.andExpect(status().isOk());
 
-		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
+		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/guarantors/" + guarantorId + "/signature")
 						.header("Authorization", "Bearer " + staffToken)
 						.contentType("application/json")
 						.content("""
-								{ "status": "approved" }
+								{ "signatureReference": "SIGN-TEST-HELPER" }
 								"""))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(patch("/api/v1/loans/" + loanId + "/status")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content(loanApprovalPayload("PAPER-TEST-HELPER")))
 				.andExpect(status().isOk());
 
 		mockMvc.perform(post("/api/v1/loans/" + loanId + "/disburse")
@@ -9367,13 +9689,24 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.stage", is("Awaiting Disbursement Approval")));
 
-		String disbursementCheckerToken = loginAndReturnToken("chairperson@greenvalley.local", "Chair@12345");
+		String disbursementCheckerToken = loginAndReturnToken("treasurer@greenvalley.local", "Treasurer@12345");
 		mockMvc.perform(post("/api/v1/loans/" + loanId + "/disburse")
 						.header("Authorization", "Bearer " + disbursementCheckerToken))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.status", is("active")));
 
 		return loanId;
+	}
+
+	private String loanApprovalPayload(String reference) {
+		return """
+				{
+				  "status": "approved",
+				  "paperApprovedByChairperson": true,
+				  "paperApprovalReference": "%s",
+				  "paperApprovalApprovers": "Chairperson"
+				}
+				""".formatted(reference);
 	}
 
 	private JsonNode loanFromList(MvcResult loans, String loanId) throws Exception {

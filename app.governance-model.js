@@ -167,7 +167,11 @@ function filterMembersBySaccoCycle(rows, cycle) {
 }
 
 function filterTransactionsBySaccoCycle(rows, cycle) {
-  return rowsInSaccoCycle(rows, cycle, ["postedAt", "transactionDate", "createdAt"]);
+  if (!cycle || cycle.period === "once") return rows || [];
+  return (rows || []).filter((row) => {
+    const financialDate = row.postedAt || row.transactionDate || row.createdAt;
+    return financialDate ? governanceDateFallsInCycle(financialDate, cycle) : true;
+  });
 }
 
 function filterLoansBySaccoCycle(rows, cycle) {

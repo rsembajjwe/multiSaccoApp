@@ -7,6 +7,11 @@ function stValue(id) {
 }
 
 async function createSavingsTransfer() {
+  if (!hasPermission("savings-transfer:create") && !hasPermission("savings-transfer:manage")) {
+    state.savingsTransferError = "Savings transfer creation permission is required.";
+    renderShell();
+    return;
+  }
   const destinationType = stValue("#stDestType");
   const payload = {
     sourceMemberId: stValue("#stSource"),
@@ -38,6 +43,11 @@ async function createSavingsTransfer() {
 }
 
 async function createGroupDeduction() {
+  if (!hasPermission("savings-transfer:create") && !hasPermission("savings-transfer:manage")) {
+    state.savingsTransferError = "Savings transfer creation permission is required.";
+    renderShell();
+    return;
+  }
   const select = document.querySelector("#gdMembers");
   const memberIds = select ? Array.from(select.selectedOptions).map((option) => option.value) : [];
   const destinationType = stValue("#gdDestType");
@@ -72,6 +82,11 @@ async function createGroupDeduction() {
 
 async function decideSavingsTransfer(id, decision) {
   if (!id) return;
+  if (!hasPermission("savings-transfer:approve") && !hasPermission("savings-transfer:manage")) {
+    state.savingsTransferError = "Savings transfer approval permission is required.";
+    renderShell();
+    return;
+  }
   if (decision === "posted" && !window.confirm("Approve and post this transfer? This moves money and cannot be undone (reverse if needed).")) return;
   state.savingsTransferMessage = "";
   state.savingsTransferError = "";
@@ -92,6 +107,11 @@ async function decideSavingsTransfer(id, decision) {
 
 async function reverseSavingsTransfer(id) {
   if (!id) return;
+  if (!hasPermission("savings-transfer:approve") && !hasPermission("savings-transfer:manage")) {
+    state.savingsTransferError = "Savings transfer reversal permission is required.";
+    renderShell();
+    return;
+  }
   if (!window.confirm("Reverse this posted transfer? It mirrors the original movement back.")) return;
   state.savingsTransferMessage = "";
   state.savingsTransferError = "";
@@ -108,6 +128,11 @@ async function reverseSavingsTransfer(id) {
 }
 
 async function saveFundType(fundTypeId) {
+  if (!hasPermission("fund-types:manage")) {
+    state.fundTypeError = "Fund type management permission is required.";
+    renderShell();
+    return;
+  }
   const payload = {
     name: (document.getElementById("ftName")?.value || "").trim(),
     code: (document.getElementById("ftCode")?.value || "").trim().toLowerCase(),
@@ -136,6 +161,11 @@ async function saveFundType(fundTypeId) {
 }
 
 async function saveFundingSource(sourceId) {
+  if (!hasPermission("finance-source:manage")) {
+    state.fundingSourceError = "Funding source management permission is required.";
+    renderShell();
+    return;
+  }
   const payload = {
     sourceType: document.getElementById("fsType")?.value || "",
     provider: (document.getElementById("fsProvider")?.value || "").trim(),
@@ -170,6 +200,13 @@ async function createTransactionFromForm(event) {
   event.preventDefault();
   state.transactionFormMessage = "";
   state.transactionFormError = "";
+  if (!hasPermission("transactions:create")) {
+    state.transactionFormError = "Transaction creation permission is required.";
+    renderShell();
+    return;
+  }
+  const channel = value("newTransactionChannel");
+  const provider = channel === "mobile_money" ? value("newTransactionProvider") : "";
   try {
     const transaction = await api("/financial-transactions", {
       method: "POST",
@@ -178,7 +215,9 @@ async function createTransactionFromForm(event) {
         branchId: value("newTransactionBranchId"),
         memberId: value("newTransactionMemberId"),
         type: value("newTransactionType"),
-        channel: value("newTransactionChannel"),
+        channel,
+        provider,
+        paymentProvider: provider,
         amount: Number(value("newTransactionAmount")),
         narration: value("newTransactionNarration")
       })
@@ -202,9 +241,85 @@ function openTransactionDetail(transactionId) {
   renderShell();
 }
 
+function openSubscriptionDetail(subscriptionId) {
+  state.selectedSubscriptionId = subscriptionId;
+  state.platformTransactionSubscriptionId = subscriptionId;
+  state.moduleTabs.subscriptions = "list";
+  state.selectedSubscriptionMessage = "";
+  state.selectedSubscriptionError = "";
+  renderShell();
+}
+
+async function recordSubscriptionPayment() {
+  if (!hasPermission("subscriptions:manage") && roleKind() !== "super" && roleKind() !== "billing") {
+    state.selectedSubscriptionError = "Subscription management permission is required to record platform-SACCO payments.";
+    renderShell();
+    return;
+  }
+  const searchedSubscription = typeof resolvePlatformTransactionSearch === "function"
+    ? resolvePlatformTransactionSearch(value("platformTransactionSaccoSearch"))
+    : null;
+  if (searchedSubscription) {
+    state.selectedSubscriptionId = searchedSubscription.id;
+    state.platformTransactionSubscriptionId = searchedSubscription.id;
+  }
+  const subscriptionId = searchedSubscription?.id || value("selectedSubscriptionId") || state.selectedSubscriptionId || value("platformTransactionSubscriptionId");
+  if (!subscriptionId) return;
+  state.selectedSubscriptionMessage = "";
+  state.selectedSubscriptionError = "";
+  try {
+    const payload = {
+      amount: Number(value("subscriptionPaymentAmount") || 0),
+      channel: value("subscriptionPaymentChannel") || "manual",
+      paymentMode: value("subscriptionPaymentMode") || "group",
+      memberSlots: value("subscriptionPaymentMemberSlots") ? Number(value("subscriptionPaymentMemberSlots")) : null,
+      externalReference: value("subscriptionPaymentReference") || undefined
+    };
+    const result = await api(`/subscriptions/${encodeURIComponent(subscriptionId)}/payments`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    const payment = result.payment || {};
+    const subscription = result.subscription || {};
+    state.selectedSubscriptionId = subscription.id || subscriptionId;
+    state.platformTransactionSubscriptionId = state.selectedSubscriptionId;
+    state.selectedSubscriptionMessage = `Recorded platform-SACCO payment ${payment.externalReference || ""}`.trim() + ".";
+    await refreshAll();
+    renderShell();
+  } catch (error) {
+    state.selectedSubscriptionError = error.message;
+    renderShell();
+  }
+}
+
+function syncSubscriptionPaymentMode() {
+  const mode = value("subscriptionPaymentMode");
+  const slotsInput = document.getElementById("subscriptionPaymentMemberSlots");
+  const amountInput = document.getElementById("subscriptionPaymentAmount");
+  const modeSelect = document.querySelector("[data-subscription-payment-mode]");
+  if (!(slotsInput instanceof HTMLInputElement) || !(amountInput instanceof HTMLInputElement) || !(modeSelect instanceof HTMLSelectElement)) return;
+  const perMember = mode === "per_member";
+  slotsInput.disabled = !perMember;
+  if (perMember) {
+    const unitPrice = Number(modeSelect.dataset.unitPrice || 0);
+    amountInput.value = String(unitPrice * Math.max(1, Number(slotsInput.value || 1)));
+  }
+}
+
+async function runSubscriptionAction(action) {
+  if (action === "renew") return recordSubscriptionPayment();
+  state.selectedSubscriptionMessage = "Use SACCO Registration to update SACCO operating access.";
+  renderShell();
+}
+
 async function runTransactionAction(action) {
   const transactionId = value("selectedTransactionId") || state.selectedTransactionId;
   if (!transactionId) return;
+  if (action !== "receipt" && !hasPermission("transactions:approve")) {
+    state.selectedTransactionError = "Transaction approval permission is required for this action.";
+    renderShell();
+    return;
+  }
   state.selectedTransactionMessage = "";
   state.selectedTransactionError = "";
   state.selectedTransactionReceipt = action === "receipt" ? state.selectedTransactionReceipt : null;
@@ -241,18 +356,64 @@ async function createLoanFromForm(event) {
   event.preventDefault();
   state.loanFormMessage = "";
   state.loanFormError = "";
+  if (!hasPermission("loans:create")) {
+    state.loanFormError = "Loan creation permission is required.";
+    renderShell();
+    return;
+  }
+  const applicationSource = value("newLoanApplicationSource") || "staff_captured_signed_form";
+  const signedFormReference = value("newLoanSignedFormReference");
+  const signedFormReceivedAt = value("newLoanSignedFormReceivedAt");
+  const fileInput = document.getElementById("newLoanSignedFormFile");
+  const signedFormFile = fileInput instanceof HTMLInputElement ? fileInput.files?.[0] || null : null;
+  if (signedFormFile && signedFormFile.size > 1024 * 1024) {
+    state.loanFormError = "Signed loan form files must be 1 MB or smaller.";
+    renderShell();
+    return;
+  }
+  if (signedFormFile && !["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(signedFormFile.type)) {
+    state.loanFormError = "Attach a signed loan form as PDF, JPG, PNG or WEBP.";
+    renderShell();
+    return;
+  }
+  if (applicationSource === "staff_captured_signed_form" && !signedFormReference && !signedFormFile) {
+    state.loanFormError = "Enter a signed form reference or attach the signed loan form before submission.";
+    renderShell();
+    return;
+  }
   try {
+    const memberId = value("newLoanMemberId");
     const loan = await api("/loans", {
       method: "POST",
       body: JSON.stringify({
         tenantId: value("newLoanTenantId"),
-        memberId: value("newLoanMemberId"),
+        memberId,
         product: value("newLoanProduct"),
         amount: Number(value("newLoanAmount")),
         repaymentMonths: Number(value("newLoanRepaymentMonths")),
-        purpose: value("newLoanPurpose")
+        purpose: value("newLoanPurpose"),
+        applicationSource,
+        signedFormReference,
+        signedFormReceivedAt,
+        signedFormFileName: signedFormFile?.name || ""
       })
     });
+    if (signedFormFile) {
+      const form = new FormData();
+      form.append("documentType", "loan_application_form");
+      form.append("verificationStatus", "pending_verification");
+      form.append("file", signedFormFile);
+      await api(`/members/${encodeURIComponent(memberId)}/documents/upload`, { method: "POST", body: form });
+    } else if (signedFormReference) {
+      await api(`/members/${encodeURIComponent(memberId)}/documents`, {
+        method: "POST",
+        body: JSON.stringify({
+          documentType: "loan_application_form",
+          storageKey: signedFormReference,
+          verificationStatus: "pending_verification"
+        })
+      });
+    }
     state.loanFormMessage = `Submitted loan ${loan.applicationNo || loan.id} for review.`;
     state.selectedLoanId = loan.id;
     await refreshAll();
@@ -301,6 +462,11 @@ async function recordLoanAppraisal(event) {
   if (!loanId) return;
   state.selectedLoanMessage = "";
   state.selectedLoanError = "";
+  if (!hasPermission("loans:create")) {
+    state.selectedLoanError = "Loan creation permission is required to record appraisals.";
+    renderShell();
+    return;
+  }
   try {
     await api(`/loans/${encodeURIComponent(loanId)}/appraisals`, {
       method: "POST",
@@ -329,12 +495,16 @@ async function addLoanGuarantor(event) {
   if (!loanId) return;
   state.selectedLoanMessage = "";
   state.selectedLoanError = "";
+  if (!hasPermission("loans:create")) {
+    state.selectedLoanError = "Loan creation permission is required to add guarantors.";
+    renderShell();
+    return;
+  }
   try {
     await api(`/loans/${encodeURIComponent(loanId)}/guarantors`, {
       method: "POST",
       body: JSON.stringify({
-        memberId: value("newGuarantorMemberId"),
-        guaranteedAmount: Number(value("newGuarantorAmount"))
+        memberId: value("newGuarantorMemberId")
       })
     });
     state.selectedLoanMessage = "Guarantor request added.";
@@ -349,11 +519,47 @@ async function addLoanGuarantor(event) {
   }
 }
 
+async function markLoanGuarantorSigned(event) {
+  event.preventDefault();
+  const loanId = value("selectedLoanId") || state.selectedLoanId;
+  const guarantorId = value("signedGuarantorRequestId");
+  if (!loanId || !guarantorId) return;
+  state.selectedLoanMessage = "";
+  state.selectedLoanError = "";
+  if (!hasPermission("loans:create")) {
+    state.selectedLoanError = "Loan creation permission is required to confirm guarantor signatures.";
+    renderShell();
+    return;
+  }
+  try {
+    await api(`/loans/${encodeURIComponent(loanId)}/guarantors/${encodeURIComponent(guarantorId)}/signature`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        signatureReference: value("guarantorSignatureReference")
+      })
+    });
+    const message = "Guarantor physical signature confirmed.";
+    await refreshAll();
+    state.selectedLoanId = loanId;
+    await openLoanDetail(loanId, false);
+    state.selectedLoanMessage = message;
+    renderShell();
+  } catch (error) {
+    state.selectedLoanError = error.message;
+    renderShell();
+  }
+}
+
 async function runLoanAction(action) {
   const loanId = value("selectedLoanId") || state.selectedLoanId;
   if (!loanId) return;
   state.selectedLoanMessage = "";
   state.selectedLoanError = "";
+  if (!hasPermission("loans:approve")) {
+    state.selectedLoanError = "Loan approval permission is required for this action.";
+    renderShell();
+    return;
+  }
   try {
     if (action === "disburse") {
       const loan = await api(`/loans/${encodeURIComponent(loanId)}/disburse`, { method: "POST" });
@@ -367,12 +573,20 @@ async function runLoanAction(action) {
         body: JSON.stringify({
           status,
           reason: value("loanDecisionReason") || "Reviewed in Tereka Online",
-          resolutionReference: value("loanResolutionReference") || ""
+          resolutionReference: value("loanResolutionReference") || "",
+          paperApprovalReference: value("loanResolutionReference") || "",
+          paperApprovalApprovers: value("loanPaperApprovers") || "",
+          paperApprovedByChairperson: checked("loanPaperChairperson"),
+          paperApprovedBySecretary: checked("loanPaperSecretary"),
+          paperApprovedByTreasurer: checked("loanPaperTreasurer"),
+          paperApprovedByCommittee: checked("loanPaperCommittee")
         })
       });
       state.selectedLoanMessage = normal(loan.stage) === "awaiting second approval"
         ? `First approval recorded for loan ${loan.applicationNo || loan.id}. A second, different approver must confirm.`
-        : `Loan ${loan.applicationNo || loan.id} ${status}.`;
+        : status === "approved"
+          ? `Paper approval recorded for loan ${loan.applicationNo || loan.id}.`
+          : `Loan ${loan.applicationNo || loan.id} ${status}.`;
     }
     const message = state.selectedLoanMessage;
     await refreshAll();
@@ -386,12 +600,22 @@ async function runLoanAction(action) {
   }
 }
 
+function checked(id) {
+  const field = document.getElementById(id);
+  return field instanceof HTMLInputElement && field.checked;
+}
+
 async function recordLoanRepayment(event) {
   event.preventDefault();
   const loanId = value("selectedLoanId") || state.selectedLoanId;
   if (!loanId) return;
   state.selectedLoanMessage = "";
   state.selectedLoanError = "";
+  if (!hasPermission("transactions:create") && !hasPermission("transactions:approve")) {
+    state.selectedLoanError = "Transaction permission is required to record loan repayments.";
+    renderShell();
+    return;
+  }
   try {
     await api(`/loans/${encodeURIComponent(loanId)}/repayments`, {
       method: "POST",

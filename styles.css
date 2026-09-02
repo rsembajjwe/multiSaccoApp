@@ -247,6 +247,21 @@ textarea:focus-visible,
   height: 50px;
 }
 
+.logo.sacco-logo {
+  overflow: hidden;
+  padding: 4px;
+  background: #ffffff;
+  border: 1px solid rgba(18, 61, 53, 0.18);
+}
+
+.logo.sacco-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 5px;
+}
+
 .login-hero h1 {
   max-width: 520px;
   margin: 0;
@@ -499,6 +514,10 @@ small {
 
 .form-grid .wide {
   grid-column: 1 / -1;
+}
+
+.hidden {
+  display: none !important;
 }
 
 .form-actions {
@@ -799,6 +818,46 @@ textarea {
   min-height: 23px;
   padding: 0 7px;
   font-size: var(--text-xs);
+}
+
+tr.selected-table-row td {
+  background: #dff8ef;
+  border-top-color: #7ccfbb;
+  border-bottom-color: #7ccfbb;
+  color: var(--green-900);
+  font-weight: 800;
+}
+
+tr.table-row-warning td {
+  background: #fff8e6;
+}
+
+.paper-approval-box {
+  display: grid;
+  gap: 8px;
+}
+
+.checkline-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.checkline {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.checkline input {
+  width: 14px;
+  height: 14px;
+  min-height: auto;
 }
 
 .danger-zone {
@@ -1964,6 +2023,53 @@ th {
   background: var(--green-700);
 }
 
+.platform-subscription-chart-panel .compact-heading {
+  align-items: end;
+  gap: 12px;
+}
+
+.compact-filter {
+  min-width: 120px;
+}
+
+.chart-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--green-50);
+}
+
+.chart-total-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chart-total-row strong {
+  font-size: 16px;
+}
+
+.horizontal-month-chart {
+  gap: 6px;
+}
+
+.horizontal-month-chart div {
+  grid-template-columns: 38px minmax(0, 1fr) 34px;
+  gap: 8px;
+}
+
+.horizontal-month-chart b {
+  height: 9px;
+}
+
+.horizontal-month-chart strong {
+  text-align: right;
+}
+
 .activity-list {
   display: grid;
   gap: 7px;
@@ -3098,6 +3204,218 @@ th {
   font-size: var(--text-xs);
 }
 
+.treasurer-overview-panel {
+  margin-bottom: 12px;
+}
+
+.treasurer-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.treasurer-kpi-card {
+  display: grid;
+  gap: 4px;
+  min-height: 108px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfc;
+}
+
+.treasurer-kpi-card span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.treasurer-kpi-card strong {
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.treasurer-kpi-card small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.treasurer-kpi-card button {
+  align-self: end;
+  justify-self: start;
+  min-height: 26px;
+  padding: 3px 9px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  background: #f5fffb;
+  color: var(--green-900);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.loan-overview-hero {
+  margin-bottom: 12px;
+}
+
+.loan-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.loan-kpi-card {
+  display: grid;
+  gap: 5px;
+  min-height: 92px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(18, 61, 53, 0.08);
+}
+
+.loan-kpi-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--green-800);
+}
+
+.loan-kpi-card.approved .loan-kpi-icon { background: #16a34a; }
+.loan-kpi-card.pending .loan-kpi-icon { background: #f59e0b; }
+.loan-kpi-card.overdue .loan-kpi-icon { background: #7c3aed; }
+
+.loan-kpi-card small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.loan-kpi-card strong {
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1.1;
+}
+
+.loan-kpi-card em {
+  color: var(--green-800);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.loan-filter-panel {
+  margin-bottom: 12px;
+}
+
+.chairman-role-note,
+.chairman-loan-review-grid {
+  margin-bottom: 12px;
+}
+
+.chairman-loan-dashboard .panel-heading {
+  align-items: center;
+}
+
+.chairman-assessment-panel label {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+}
+
+.assessment-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.assessment-list > div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px 8px 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  position: relative;
+}
+
+.assessment-list > div::before {
+  content: "";
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  position: absolute;
+  left: 10px;
+  top: 11px;
+}
+
+.assessment-list > div.ok::before {
+  background: #15803d;
+}
+
+.assessment-list > div.warn::before {
+  background: #f59e0b;
+}
+
+.assessment-list strong,
+.assessment-list span {
+  font-size: 12px;
+}
+
+.assessment-list span {
+  color: var(--muted);
+}
+
+.loan-detail-workspace {
+  align-items: stretch;
+}
+
+.loan-detail-list {
+  display: grid;
+  gap: 10px;
+}
+
+.loan-detail-list > div {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(160px, 1.2fr);
+  gap: 16px;
+  padding: 2px 0;
+}
+
+.loan-detail-list span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.loan-detail-list strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.loan-capture-note {
+  margin: 0;
+}
+
+.loan-actions-panel label {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+}
+
+.loan-action-stack {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 14px;
+}
+
+.inline-code {
+  color: var(--green-800);
+  font-size: 0.9em;
+}
+
 .treasurer-command-panel .access-grid,
 .compact-treasurer-actions {
   grid-template-columns: repeat(4, minmax(150px, 1fr));
@@ -3114,6 +3432,14 @@ th {
 }
 
 @media (max-width: 980px) {
+  .treasurer-kpi-grid {
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+  }
+
+  .loan-kpi-grid {
+    grid-template-columns: repeat(2, minmax(170px, 1fr));
+  }
+
   .treasurer-command-panel .access-grid,
   .compact-treasurer-actions {
     grid-template-columns: repeat(2, minmax(150px, 1fr));
@@ -3121,6 +3447,15 @@ th {
 }
 
 @media (max-width: 560px) {
+  .treasurer-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-kpi-grid,
+  .loan-detail-list > div {
+    grid-template-columns: 1fr;
+  }
+
   .treasurer-command-panel .access-grid,
   .compact-treasurer-actions {
     grid-template-columns: 1fr;
@@ -3176,6 +3511,45 @@ th {
 
 .finance-figure-link:not(:disabled):hover {
   color: var(--green-800);
+}
+
+.finance-guarantor-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  align-items: center;
+  max-width: 210px;
+}
+
+.finance-guarantor-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f7fbfa;
+  line-height: 1.1;
+}
+
+.finance-guarantor-name {
+  overflow: hidden;
+  max-width: 118px;
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finance-guarantor-code,
+.finance-guarantor-more,
+.finance-guarantor-total {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .finance-figure-notice {
@@ -3466,6 +3840,23 @@ th {
 }
 .summary-card button:not(:disabled)::after { content: "\2192"; font-weight: 800; }
 
+.summary-card.warning-card {
+  border-color: #f1c27d;
+  background: #fffaf0;
+}
+
+.summary-card.warning-card::before {
+  background: #c77700;
+}
+
+.summary-card .danger-text {
+  padding: 0;
+  color: #9b1c13;
+  background: transparent;
+  border: 0;
+  font-weight: 800;
+}
+
 /* Panels: clearer header hierarchy with a divider. */
 .panel { border-radius: 10px; padding: 12px 14px; }
 .panel-heading {
@@ -3485,7 +3876,11 @@ tbody tr { transition: background 0.12s ease; }
 tbody tr:hover { background: #f6faf8; }
 tbody tr:last-child td { border-bottom: 0; }
 td.amount, th.amount { text-align: right; font-variant-numeric: tabular-nums; }
-.total-row td, .section-row td { background: #f4f8f6; }
+.total-row td, .section-row td { background: #f4f8f6; font-weight: 800; }
+.total-row .table-action,
+.total-row .finance-figure-link {
+  font-weight: 800;
+}
 
 /* Status pills gain a leading dot in their own colour. */
 .status { gap: 5px; padding: 1px 8px; text-transform: uppercase; letter-spacing: 0.04em; }

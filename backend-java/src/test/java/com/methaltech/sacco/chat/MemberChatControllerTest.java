@@ -32,7 +32,7 @@ class MemberChatControllerTest {
 
     @Test
     void memberSeesOwnThreadAndCanReply() throws Exception {
-        String token = memberLogin("GVS-0001", "Member@12345");
+        String token = memberLogin("GREE-0001", "Member@12345");
 
         mockMvc.perform(get("/api/v1/member-auth/chat/threads")
                         .header("Authorization", "Bearer " + token))
@@ -52,7 +52,7 @@ class MemberChatControllerTest {
 
     @Test
     void memberCannotAccessUnknownThread() throws Exception {
-        String token = memberLogin("GVS-0001", "Member@12345");
+        String token = memberLogin("GREE-0001", "Member@12345");
 
         mockMvc.perform(get("/api/v1/member-auth/chat/threads/chat_not_mine/messages")
                         .header("Authorization", "Bearer " + token))
@@ -62,7 +62,7 @@ class MemberChatControllerTest {
 
     @Test
     void memberCanStartNewThread() throws Exception {
-        String token = memberLogin("GVS-0001", "Member@12345");
+        String token = memberLogin("GREE-0001", "Member@12345");
 
         mockMvc.perform(post("/api/v1/member-auth/chat/threads")
                         .header("Authorization", "Bearer " + token)
@@ -80,7 +80,7 @@ class MemberChatControllerTest {
 
     @Test
     void memberIsNotifiedWhenStaffReplies() throws Exception {
-        String staff = staffLogin("GVS", "admin@greenvalley.local", "Sacco@12345");
+        String staff = staffLogin("GREE", "admin@greenvalley.local", "Sacco@12345");
         mockMvc.perform(post("/api/v1/chat/threads/" + OWN_THREAD + "/messages")
                         .header("Authorization", "Bearer " + staff)
                         .contentType("application/json")
@@ -89,7 +89,7 @@ class MemberChatControllerTest {
                                 """))
                 .andExpect(status().isCreated());
 
-        String member = memberLogin("GVS-0001", "Member@12345");
+        String member = memberLogin("GREE-0001", "Member@12345");
         mockMvc.perform(get("/api/v1/member-auth/notifications")
                         .header("Authorization", "Bearer " + member))
                 .andExpect(status().isOk())

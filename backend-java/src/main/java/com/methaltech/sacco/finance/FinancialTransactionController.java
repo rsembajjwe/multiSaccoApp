@@ -17,6 +17,7 @@ import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.notification.NotificationService;
+import com.methaltech.sacco.subscription.SubscriptionAccessService;
 import com.methaltech.sacco.tenant.TenantMoneyFormatter;
 import com.methaltech.sacco.tenant.CollectionMode;
 import com.methaltech.sacco.tenant.TenantResponse;
@@ -91,6 +92,7 @@ class FinancialTransactionController {
     private final com.methaltech.sacco.member.MemberFundBalanceService memberFundBalanceService;
     private final FundTypeRepository fundTypeRepository;
     private final NotificationService notificationService;
+    private final SubscriptionAccessService subscriptionAccessService;
 
     FinancialTransactionController(
             FinancialTransactionRepository transactionRepository,
@@ -105,7 +107,8 @@ class FinancialTransactionController {
             LoanRepaymentRepository loanRepaymentRepository,
             com.methaltech.sacco.member.MemberFundBalanceService memberFundBalanceService,
             FundTypeRepository fundTypeRepository,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            SubscriptionAccessService subscriptionAccessService) {
         this.transactionRepository = transactionRepository;
         this.memberRepository = memberRepository;
         this.branchRepository = branchRepository;
@@ -119,6 +122,7 @@ class FinancialTransactionController {
         this.memberFundBalanceService = memberFundBalanceService;
         this.fundTypeRepository = fundTypeRepository;
         this.notificationService = notificationService;
+        this.subscriptionAccessService = subscriptionAccessService;
     }
 
     /** A custom contribution type ({@code <fundCode>_contribution}) whose fund is configured and active. */
@@ -244,6 +248,10 @@ class FinancialTransactionController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_CHANNEL", "Unsupported payment channel."));
         }
+        if (!"withdrawal".equals(type)) {
+            ResponseEntity<?> memberAccess = memberDepositAccessCheck(member);
+            if (memberAccess != null) return memberAccess;
+        }
 
         BigDecimal amount = Money.normalize(body.amount());
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -280,6 +288,13 @@ class FinancialTransactionController {
                 request.getRemoteAddr());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(FinancialTransactionResponse.from(transaction)));
+    }
+
+    private ResponseEntity<?> memberDepositAccessCheck(Member member) {
+        SubscriptionAccessService.MemberDepositAccess access = subscriptionAccessService.memberDepositAccess(member);
+        if (access.allowed()) return null;
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiErrorResponse.of(403, access.code(), access.message()));
     }
 
     @GetMapping("/opening-balances/import-template")

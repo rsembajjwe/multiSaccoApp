@@ -357,11 +357,12 @@ function memberSubscriptionMonthOptions() {
 
 function memberDuesPaymentPanel(subscriptions, selectedSub) {
   const suggestedAmount = selectedSub ? Number(selectedSub.balanceDue || selectedSub.amount || 0) : 0;
-  const disabled = subscriptions.length ? "" : "disabled";
+  const canCollect = hasPermission("transactions:create");
+  const disabled = subscriptions.length && canCollect ? "" : "disabled";
   return `<section class="panel">
     <div class="panel-heading">
       <div><h2>Collect subscription payment</h2><p>Record cash, bank, mobile-money or office payment against the selected member subscription.</p></div>
-      <span class="status ${subscriptions.length ? "pending" : "active"}">${subscriptions.length ? "Collection queue" : "Paid up"}</span>
+      <span class="status ${subscriptions.length && canCollect ? "pending" : "active"}">${subscriptions.length ? (canCollect ? "Collection queue" : "View only") : "Paid up"}</span>
     </div>
     <form id="memberDuesPayForm" class="form-grid">
       <label><span>Subscription</span><select id="memberDuesPayId" data-member-dues-select ${disabled}>${subscriptions.length ? subscriptions.map((sub) => `<option value="${escapeHtml(sub.id)}" ${selectedSub?.id === sub.id ? "selected" : ""}>${escapeHtml(memberName(sub.memberId))} - ${escapeHtml(sub.planName)} (${escapeHtml(money.format(sub.balanceDue || 0))} due)</option>`).join("") : `<option>No payment due</option>`}</select></label>
@@ -374,8 +375,9 @@ function memberDuesPaymentPanel(subscriptions, selectedSub) {
         ${mini("Expiry", selectedSub?.expiry ? formatDate(selectedSub.expiry) : "Not set")}
         ${mini("Lifecycle", selectedSub ? labelize(selectedSub.lifecycleState || selectedSub.status || "") : "None")}
       </div>
-      <div class="form-actions inline"><button class="button primary" type="button" data-pay-member-dues="1" ${disabled}>Record payment</button></div>
+      <div class="form-actions inline">${canCollect ? `<button class="button primary" type="button" data-pay-member-dues="1" ${disabled}>Record payment</button>` : `<span class="status pending">View only</span>`}</div>
     </form>
+    ${canCollect ? "" : `<p class="muted-note">Only users with transaction capture rights can collect member subscription payments.</p>`}
     ${subscriptions.length ? "" : emptyState("No payment due", "There are no payable or renewing member subscriptions right now.")}
   </section>`;
 }
@@ -450,6 +452,7 @@ function memberDuesApprovalRow(sub) {
 }
 
 function memberRegistrationPanel() {
+  const canCreate = hasPermission("members:create");
   const branches = dataRows("branches");
   const defaultBranch = branches[0]?.id || "";
   return `
@@ -464,16 +467,16 @@ function memberRegistrationPanel() {
       ${state.memberFormError ? `<div class="notice warning"><strong>Member registration failed.</strong><span>${escapeHtml(state.memberFormError)}</span></div>` : ""}
       <form id="memberRegistrationForm" class="form-grid">
         <input type="hidden" id="newMemberTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
-        <label><span>Membership number</span><input id="newMemberNo" placeholder="Auto if blank"></label>
-        <label><span>Branch</span><select id="newMemberBranchId">${branches.map((branch) => `<option value="${escapeHtml(branch.id)}" ${branch.id === defaultBranch ? "selected" : ""}>${escapeHtml(branch.name || branch.code)}</option>`).join("")}</select></label>
-        <label><span>Full name</span><input id="newMemberFullName" required placeholder="Member full name"></label>
-        <label><span>Member type</span><select id="newMemberType">${memberTypeOptions().map((type) => `<option value="${escapeHtml(type.value)}">${escapeHtml(type.label)}</option>`).join("")}</select></label>
-        <label><span>Phone</span><input id="newMemberPhone" required placeholder="+256..."></label>
-        <label><span>Email</span><input id="newMemberEmail" type="email" placeholder="member@example.com"></label>
-        <label><span>National ID</span><input id="newMemberNationalId" placeholder="CM..."></label>
-        <label><span>Temporary password</span><input id="newMemberPassword" type="password" value="Member@12345"></label>
-        <label><span>Joining date</span><input id="newMemberJoiningDate" type="date" value="${new Date().toISOString().slice(0, 10)}"></label>
-        <div class="form-actions inline"><button class="button primary" type="submit">Create member</button></div>
+        <label><span>Membership number</span><input id="newMemberNo" placeholder="Auto if blank" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Branch</span><select id="newMemberBranchId" ${canCreate ? "" : "disabled"}>${branches.map((branch) => `<option value="${escapeHtml(branch.id)}" ${branch.id === defaultBranch ? "selected" : ""}>${escapeHtml(branch.name || branch.code)}</option>`).join("")}</select></label>
+        <label><span>Full name</span><input id="newMemberFullName" required placeholder="Member full name" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Member type</span><select id="newMemberType" ${canCreate ? "" : "disabled"}>${memberTypeOptions().map((type) => `<option value="${escapeHtml(type.value)}">${escapeHtml(type.label)}</option>`).join("")}</select></label>
+        <label><span>Phone</span><input id="newMemberPhone" required placeholder="+256..." ${canCreate ? "" : "disabled"}></label>
+        <label><span>Email</span><input id="newMemberEmail" type="email" placeholder="member@example.com" ${canCreate ? "" : "disabled"}></label>
+        <label><span>National ID</span><input id="newMemberNationalId" placeholder="CM..." ${canCreate ? "" : "disabled"}></label>
+        <label><span>Temporary password</span><input id="newMemberPassword" type="password" value="Member@12345" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Joining date</span><input id="newMemberJoiningDate" type="date" value="${new Date().toISOString().slice(0, 10)}" ${canCreate ? "" : "disabled"}></label>
+        <div class="form-actions inline">${canCreate ? `<button class="button primary" type="submit">Create member</button>` : `<span class="status pending">View only</span>`}</div>
       </form>
     </section>
   `;

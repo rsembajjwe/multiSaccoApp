@@ -45,4 +45,4 @@ INSERT INTO welfare_claims (
     paid_at,
     updated_at
 ) VALUES
-    ('welfare_claim_green_0001', 'tenant_green', 'member_green_amina', 'medical', 50000.00, NULL, 'GVS-WCL-0001', 'Medical support reimbursement', 'approved', 'user_green_admin', 'user_green_admin', NULL, TIMESTAMP WITH TIME ZONE '2026-07-02 09:00:00+00', TIMESTAMP WITH TIME ZONE '2026-07-02 10:00:00+00', NULL, TIMESTAMP WITH TIME ZONE '2026-07-02 10:00:00+00');
+    ('welfare_claim_green_0001', 'tenant_green', 'member_green_amina', 'medical', 50000.00, NULL, 'GREE-WCL-0001', 'Medical support reimbursement', 'approved', 'user_green_admin', 'user_green_admin', NULL, TIMESTAMP WITH TIME ZONE '2026-07-02 09:00:00+00', TIMESTAMP WITH TIME ZONE '2026-07-02 10:00:00+00', NULL, TIMESTAMP WITH TIME ZONE '2026-07-02 10:00:00+00');

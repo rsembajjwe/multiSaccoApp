@@ -92,8 +92,10 @@ try {
   const packages = await api("GET", "/subscription-packages", null, platformToken);
   assert(packages.data.length >= 3, "Subscription packages should be listed");
   assert(packages.data.some((pkg) => packagePrice(pkg) === 1200000 && packageMemberLimit(pkg) === 500), "Starter fixed tier should be retained for 251-500 members");
-  assert(packages.data.some((pkg) => packagePrice(pkg) === 3600000 && packageMemberLimit(pkg) === 2500), "Growth fixed tier should be retained for 501-2,500 members");
-  assert(packages.data.some((pkg) => packagePrice(pkg) === 9000000 && packageMemberLimit(pkg) === 10000), "Enterprise fixed tier should be retained for 2,501-10,000 members");
+  assert(packages.data.some((pkg) => packagePrice(pkg) === 2500000 && packageMemberLimit(pkg) === 1000), "Growth fixed tier should be retained for 501-1,000 members");
+  assert(packages.data.some((pkg) => packagePrice(pkg) === 5000000 && packageMemberLimit(pkg) === 2500), "Scale fixed tier should be retained for 1,001-2,500 members");
+  assert(packages.data.some((pkg) => packagePrice(pkg) === 8000000 && packageMemberLimit(pkg) === 5000), "Enterprise fixed tier should be retained for 2,501-5,000 members");
+  assert(packages.data.some((pkg) => packagePrice(pkg) === 12000000 && packageMemberLimit(pkg) === 10000), "Enterprise plus fixed tier should be retained for 5,001-10,000 members");
 
   const subscriptions = await api("GET", "/subscriptions", null, platformToken);
   assert(subscriptions.data.length >= 2, "Platform admin should list subscriptions");
@@ -118,7 +120,7 @@ try {
   assert(!("passwordHash" in user.data), "Public user should not expose password hash");
 
   const saccoLogin = await api("POST", "/auth/login", {
-    saccoCode: "GVS",
+    saccoCode: "GREE",
     username: "admin@greenvalley.local",
     email: "admin@greenvalley.local",
     password: "Sacco@12345"
@@ -200,7 +202,7 @@ try {
     roleIds: [loanCheckerRole.data.id]
   }, saccoToken);
   const loanCheckerLogin = await api("POST", "/auth/login", {
-    saccoCode: "GVS",
+    saccoCode: "GREE",
     username: user.data.email,
     email: user.data.email,
     password: "Sacco@12345"
@@ -254,12 +256,12 @@ try {
   assert(crossTenantWorkflows.status === 403, "SACCO admin should not list another tenant approval workflows");
 
   const memberLogin = await api("POST", "/member-auth/login", {
-    saccoCode: "GVS",
-    identifier: "GVS-0001",
+    saccoCode: "GREE",
+    identifier: "GREE-0001",
     password: "Member@12345"
   });
   const memberToken = memberLogin.data.token;
-  assert(memberLogin.data.member.membershipNo === "GVS-0001", "Member login should return the member profile");
+  assert(memberLogin.data.member.membershipNo === "GREE-0001", "Member login should return the member profile");
   const initialMemberSavings = Number(memberLogin.data.balances.savings);
   assert(initialMemberSavings > 0, "Member login should return posted savings balance");
   assert(!("passwordHash" in memberLogin.data.member), "Member profile should not expose password hash");
@@ -332,7 +334,7 @@ try {
   }, memberToken);
   const mobileMoneyCallback = await api("POST", "/integrations/mobile-money/callback", {
     tenantId: "tenant_green",
-    memberIdentifier: "GVS-0001",
+    memberIdentifier: "GREE-0001",
     purpose: "savings_deposit",
     amount: 30000,
     externalReference: mobileMoneyReference,
@@ -356,7 +358,7 @@ try {
 
   const duplicateMobileMoneyCallback = await api("POST", "/integrations/mobile-money/callback", {
     tenantId: "tenant_green",
-    memberIdentifier: "GVS-0001",
+    memberIdentifier: "GREE-0001",
     purpose: "savings_deposit",
     amount: 30000,
     externalReference: mobileMoneyReference,
@@ -504,7 +506,7 @@ try {
 
   const listedMembers = await api("GET", "/members", null, saccoToken);
   assert(listedMembers.data.every((item) => !("passwordHash" in item)), "Member lists should not expose password hashes");
-  assert(listedMembers.data.some((item) => item.membershipNo === "GVS-0001" && item.savingsBalance > 0), "Member lists should include computed balances");
+  assert(listedMembers.data.some((item) => item.membershipNo === "GREE-0001" && item.savingsBalance > 0), "Member lists should include computed balances");
 
   const importTemplate = await api("GET", "/members/import-template", null, saccoToken);
   assert(importTemplate.data.tenantId === "tenant_green", "Member import template should use the authenticated tenant");

@@ -1,7 +1,8 @@
 function subscriptionsView() {
   const rows = dataRows("subscriptions");
-  const tableRows = buildSubscriptionRows({ subscriptions: rows, tenants: tenantRows() });
-  const subscriptionSummary = buildSubscriptionSummary(rows, tableRows);
+  const rawTableRows = buildSubscriptionRows({ subscriptions: rows, tenants: tenantRows() });
+  const tableRows = filterAndSortSubscriptionRows(rawTableRows);
+  const subscriptionSummary = buildSubscriptionSummary(rows, rawTableRows);
   return `
     <div class="dashboard-grid">
       ${summary(t("activeSubscriptions"), subscriptionSummary.activeSubscriptions, "Operating access", "View")}
@@ -10,16 +11,53 @@ function subscriptionsView() {
       ${summary(t("revenueThisMonth"), money.format(subscriptionSummary.revenueThisMonth), "Invoice value", t("export"))}
       ${summary(t("outstandingInvoices"), money.format(subscriptionSummary.outstandingInvoices), "Unpaid balance", "Follow up")}
     </div>
-    ${subscriptionStatusGuide(subscriptionSummary)}
-    ${subscriptionHealthPanel()}
-    ${filterToolbar("Search by SACCO code, SACCO name, package, payment status, access status or expiry", "Record payment", "Generate invoice")}
-    ${subscriptionDetailPanel(rows)}
-    ${recordTable("Subscription list", tableRows, ["saccoCode", "tenantName", "packageName", "billingDescription", "billableMembers", "amount", "paid", "balanceDue", "paymentStage", "approvalStage", "operatingAccess", "expiry"])}
-    ${revenueRateCardPanel()}
-    ${billingBreakdownPanel()}
-    ${packageCards()}
-    ${packageSetupPanel()}
+    ${subscriptionTabs()}
+    ${subscriptionTabContent(rows, rawTableRows, tableRows)}
   `;
+}
+
+function subscriptionTabs() {
+  const tabs = [
+    ["expiring", "Expiring soon"],
+    ["list", "Subscription list"],
+    ["rates", "Revenue avenues"],
+    ["breakdown", "SACCO billing breakdown"],
+    ["packages", "Package Setup"]
+  ];
+  const current = subscriptionCurrentTab(tabs);
+  return `
+    <section class="panel compact-panel">
+      <div class="tabs management-tabs">
+        ${tabs.map(([id, label]) => `<button class="${current === id ? "active" : ""}" type="button" data-module-tab-view="subscriptions" data-module-tab="${id}">${escapeHtml(label)}</button>`).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function subscriptionCurrentTab(tabs) {
+  const requested = state.moduleTabs.subscriptions || "expiring";
+  return tabs.some(([id]) => id === requested) ? requested : "expiring";
+}
+
+function subscriptionTabContent(rows, rawTableRows, tableRows) {
+  const tab = subscriptionCurrentTab([
+    ["expiring"],
+    ["list"],
+    ["rates"],
+    ["breakdown"],
+    ["packages"]
+  ]);
+  if (tab === "list") {
+    return `
+      ${subscriptionListControls(rawTableRows)}
+      ${subscriptionDetailPanel(rows)}
+      ${recordTable("Subscription list", tableRows, ["saccoCode", "tenantName", "packageName", "billingDescription", "subscriptionYear", "billableMembers", "amount", "paid", "balanceDue", "paymentStage", "approvalStage", "operatingAccess", "expiry"])}
+    `;
+  }
+  if (tab === "rates") return revenueRateCardPanel();
+  if (tab === "breakdown") return billingBreakdownPanel();
+  if (tab === "packages") return `${packageCards()}${packageSetupPanel()}`;
+  return subscriptionHealthPanel();
 }
 
 function subscriptionHealthPanel() {
@@ -47,8 +85,8 @@ function subscriptionHealthPanel() {
   return `
     <section class="panel">
       <div class="panel-heading">
-        <div><h2>Subscription health</h2><p>Lifecycle mix and annual recurring revenue across SACCO subscriptions.</p></div>
-        <span class="status ${counts.expired ? "pending" : "active"}">${counts.expired} expired</span>
+        <div><h2>Expiring soon</h2><p>Current lifecycle mix, annual recurring revenue and SACCO subscriptions approaching expiry.</p></div>
+        <span class="status ${counts.expired ? "pending" : "active"}">Updated${state.lastSync ? ` ${escapeHtml(formatDateTime(state.lastSync))}` : ""}</span>
       </div>
       <div class="source-grid compact">
         ${mini("SACCO subscriptions", subs.length)}
@@ -61,6 +99,54 @@ function subscriptionHealthPanel() {
       <div class="chart-figure">${svgBarChart(chartData, { title: "Subscriptions by lifecycle", format: (value) => String(Math.round(value)) })}</div>
       ${expiringSoon.length ? recordTable("Expiring soon", expiringSoon, ["tenantName", "status", "daysToExpiry", "expiry", "amount"]) : `<div class="notice compact"><span>No SACCO subscriptions are expiring within the window.</span></div>`}
     </section>`;
+}
+
+function subscriptionListControls(rows) {
+  const years = subscriptionYearOptions(rows);
+  return `
+    <section class="panel compact-panel">
+      <div class="filter-toolbar compact-filter-toolbar">
+        <label>
+          <span>Subscription year</span>
+          <select id="subscriptionYearFilter">
+            <option value="">All years</option>
+            ${years.map((year) => `<option value="${escapeHtml(year)}" ${state.subscriptionYearFilter === year ? "selected" : ""}>${escapeHtml(year)}</option>`).join("")}
+          </select>
+        </label>
+        <label>
+          <span>Year sort</span>
+          <select id="subscriptionYearSort">
+            <option value="desc" ${state.subscriptionYearSort !== "asc" ? "selected" : ""}>Newest first</option>
+            <option value="asc" ${state.subscriptionYearSort === "asc" ? "selected" : ""}>Oldest first</option>
+          </select>
+        </label>
+        <button class="button secondary" type="button" data-action="clear-subscription-year-filter">Clear year</button>
+      </div>
+    </section>
+  `;
+}
+
+function filterAndSortSubscriptionRows(rows) {
+  const selectedYear = String(state.subscriptionYearFilter || "");
+  const direction = state.subscriptionYearSort === "asc" ? 1 : -1;
+  return (rows || [])
+    .map((row) => ({ ...row, subscriptionYear: subscriptionYearFor(row) || "-" }))
+    .filter((row) => !selectedYear || row.subscriptionYear === selectedYear)
+    .sort((a, b) => {
+      const yearCompare = String(a.subscriptionYear || "").localeCompare(String(b.subscriptionYear || "")) * direction;
+      if (yearCompare) return yearCompare;
+      return String(b.expiry || b.createdAt || "").localeCompare(String(a.expiry || a.createdAt || ""));
+    });
+}
+
+function subscriptionYearOptions(rows) {
+  return Array.from(new Set((rows || []).map(subscriptionYearFor).filter(Boolean))).sort((a, b) => b.localeCompare(a));
+}
+
+function subscriptionYearFor(row) {
+  const value = row.startDate || row.subscribedAt || row.activatedAt || row.paidAt || row.expiry || row.createdAt || row.updatedAt || "";
+  const match = String(value).match(/\b(20\d{2}|19\d{2})\b/);
+  return match ? match[1] : "";
 }
 
 function billingBreakdownPanel() {
@@ -148,32 +234,14 @@ function revenueRateCardPanel() {
     </section>`;
 }
 
-function subscriptionStatusGuide(subscriptionSummary) {
-  return `
-    <section class="panel compact-panel">
-      <div class="panel-heading">
-        <div>
-          <h2>${escapeHtml(t("subscriptionPaymentAccessStatus"))}</h2>
-          <p>Track subscription payment, callback confirmation and operating access before a SACCO can transact.</p>
-        </div>
-        <span class="status ${subscriptionSummary.pendingPayments || subscriptionSummary.expiredOrSuspended ? "pending" : "active"}">${subscriptionSummary.pendingPayments || subscriptionSummary.expiredOrSuspended ? "Follow up" : "Current"}</span>
-      </div>
-      <div class="mini-grid">
-        ${mini("Paid and active", `${subscriptionSummary.paidAndActive} SACCO(s)`)}
-        ${mini("Payment initiated", `${subscriptionSummary.paymentInitiated} SACCO(s) waiting for confirmation`)}
-        ${mini("Callback received", `${subscriptionSummary.callbackReceived} SACCO(s) confirmed`)}
-        ${mini("Expired or suspended", `${subscriptionSummary.expiredOrSuspended} SACCO(s)`)}
-      </div>
-    </section>
-  `;
-}
-
 function subscriptionDetailPanel(rows) {
   const subscription = rows.find((item) => item.id === state.selectedSubscriptionId);
   if (!subscription) return "";
   const tenant = tenantRows().find((item) => item.id === subscription.tenantId) || {};
   const canManage = isPlatform() && (hasPermission("subscriptions:manage") || roleKind() === "super" || roleKind() === "billing");
   const due = Math.max(0, Number(subscription.amount || 0) - Number(subscription.paid || 0));
+  const perMemberUnit = Number(subscription.unitPrice || 0);
+  const isPerMemberTier = perMemberUnit > 0;
   return `
     <section class="panel detail-panel">
       <div class="panel-heading">
@@ -202,6 +270,10 @@ function subscriptionDetailPanel(rows) {
       <form id="subscriptionPaymentForm" class="form-grid">
         <input type="hidden" id="selectedSubscriptionId" value="${escapeHtml(subscription.id)}">
         <input type="hidden" id="selectedSubscriptionTenantId" value="${escapeHtml(subscription.tenantId)}">
+        ${isPerMemberTier ? `
+          <label><span>Payment mode</span><select id="subscriptionPaymentMode" data-subscription-payment-mode data-unit-price="${escapeHtml(String(perMemberUnit))}" ${canManage ? "" : "disabled"}><option value="group">Group payment</option><option value="per_member">Per member slots</option></select><small>Group pays any amount; per-member slots multiply ${escapeHtml(money.format(perMemberUnit))} by the number of members paid for.</small></label>
+          <label><span>Member slots</span><input id="subscriptionPaymentMemberSlots" data-subscription-member-slots type="number" min="1" step="1" value="1" ${canManage ? "" : "disabled"}></label>
+        ` : `<input id="subscriptionPaymentMode" type="hidden" value="group"><input id="subscriptionPaymentMemberSlots" type="hidden" value="">`}
         <label><span>Payment amount</span><input id="subscriptionPaymentAmount" type="number" min="1" step="1" value="${due || subscription.amount || 0}" ${canManage ? "" : "disabled"}></label>
         <label><span>Payment channel</span><select id="subscriptionPaymentChannel" ${canManage ? "" : "disabled"}><option value="manual">Manual</option><option value="cash">Cash</option><option value="bank">Bank</option><option value="mobile_money">Mobile money</option></select></label>
         <div class="notice compact"><strong>Receipt number is generated by Tereka Online.</strong></div>

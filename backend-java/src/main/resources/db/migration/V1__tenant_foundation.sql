@@ -25,6 +25,6 @@ INSERT INTO tenants (
     package_id,
     onboarding_percent
 ) VALUES
-    ('tenant_green', 'Green Valley SACCO', 'GVS', 'active', 'COOP/GVS/2018/014', 'Kampala', DATE '2027-09-30', 'starter', 92),
-    ('tenant_lake', 'Lake Farmers SACCO', 'LFS', 'active', 'COOP/LFS/2020/082', 'Wakiso', DATE '2026-12-15', 'growth', 76),
-    ('tenant_pending', 'Kigezi Traders SACCO', 'KTS', 'pending_review', 'COOP/KTS/2026/011', 'Kabale', DATE '2027-04-10', 'starter', 38);
+    ('tenant_green', 'Green Valley SACCO', 'GREE', 'active', 'COOP/GREE/2018/014', 'Kampala', DATE '2027-09-30', 'starter', 92),
+    ('tenant_lake', 'Lake Farmers SACCO', 'LAKE', 'active', 'COOP/LAKE/2020/082', 'Wakiso', DATE '2026-12-15', 'growth', 76),
+    ('tenant_pending', 'Kigezi Traders SACCO', 'KIGE', 'pending_review', 'COOP/KIGE/2026/011', 'Kabale', DATE '2027-04-10', 'starter', 38);

@@ -1,34 +1,27 @@
-class SaccoApiContract {
-  static const basePath = '/api/v1';
-  static const emulatorBaseUrl = 'http://10.0.2.2:5173/api/v1';
+/// Member-facing API endpoint paths. To be replaced by a client generated from
+/// `openapi.yaml` in CI (see the development plan).
+class ApiPaths {
+  const ApiPaths._();
 
-  static const memberLogin = '$basePath/member-auth/login';
-  static const memberDashboard = '$basePath/member-auth/mobile-dashboard';
-  static const memberNotifications = '$basePath/member-auth/notifications';
-  static const memberMobileLoans = '$basePath/member-auth/mobile-loans';
-  static const memberMobileComplaints = '$basePath/member-auth/mobile-complaints';
-  static const memberGuarantorRequests = '$basePath/member-auth/guarantor-requests';
-  static const mobileMoneyCallback = '$basePath/integrations/mobile-money/callback';
-}
-
-class MemberDashboardSummary {
-  const MemberDashboardSummary({
-    required this.memberName,
-    required this.savings,
-    required this.shares,
-    required this.welfare,
-    required this.loanBalance,
-    required this.notificationCount,
-    required this.lastUpdatedAt,
-    required this.serverConfirmed,
-  });
-
-  final String memberName;
-  final int savings;
-  final int shares;
-  final int welfare;
-  final int loanBalance;
-  final int notificationCount;
-  final String lastUpdatedAt;
-  final bool serverConfirmed;
+  static const login = '/member-auth/login';
+  static const logout = '/member-auth/logout';
+  static const me = '/member-auth/me';
+  static const dashboard = '/member-auth/mobile-dashboard';
+  static const notifications = '/member-auth/notifications';
+  static const statement = '/member-auth/statement';
+  static const fundBalances = '/member-auth/fund-balances';
+  static const passwordResetRequest = '/member-auth/password-reset/request';
+  static const passwordResetConfirm = '/member-auth/password-reset/confirm';
+  static const mobileComplaints = '/member-auth/mobile-complaints';
+  static const complaints = '/member-auth/complaints';
+  static const membership = '/member-auth/membership';
+  static const profilePhoto = '/member-auth/profile-photo';
+  static const profileUpdate = '/member-auth/profile';
+  static String loanRepayments(String loanId) =>
+      '/member-auth/loans/$loanId/repayments';
+  static const loanProducts = '/member-auth/loan-products';
+  static const mobileLoans = '/member-auth/mobile-loans';
+  static const guarantorRequests = '/member-auth/guarantor-requests';
+  static const mobileMoneyPaymentRequests =
+      '/integrations/mobile-money/payment-requests';
 }

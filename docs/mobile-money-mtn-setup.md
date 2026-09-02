@@ -59,7 +59,7 @@ mobile-money allowed + active from the collection-mode migration.)
 
 ## 3. Test a collection (sandbox)
 
-1. Log in as a Green Valley member (e.g. `GVS-0001`) → **Money → Pay by mobile money** → enter an
+1. Log in as a Green Valley member (e.g. `GREE-0001`) → **Money → Pay by mobile money** → enter an
    amount, payer `0779494225`, **Pay now**. The backend calls MTN `requesttopay`; you should get an
    accepted payment request (status `pending_provider_callback`).
 
@@ -70,7 +70,7 @@ mobile-money allowed + active from the collection-mode migration.)
      -H "Content-Type: application/json" \
      -d '{
            "tenantId": "tenant_green",
-           "memberIdentifier": "GVS-0001",
+           "memberIdentifier": "GREE-0001",
            "purpose": "savings_deposit",
            "amount": 5000,
            "externalReference": "PASTE-THE-REQUEST-REFERENCE",

@@ -367,7 +367,6 @@ async function createPlatformSacco(event) {
         localeCode: region.locale,
         currencyCode: region.currency,
         currencyDigits: region.currencyDigits,
-        licenseExpiry: value("newTenantLicenseExpiry"),
         packageId: value("newTenantPackageId"),
         paymentStatus,
         parish,
@@ -571,6 +570,8 @@ async function recordSubscriptionPayment(amountOverride = null) {
   if (!subscription) return;
   const due = Math.max(0, Number(subscription.amount || 0) - Number(subscription.paid || 0));
   const amount = amountOverride ?? Number(value("subscriptionPaymentAmount") || due || subscription.amount || 0);
+  const paymentMode = value("subscriptionPaymentMode") || "group";
+  const memberSlots = Number(value("subscriptionPaymentMemberSlots") || 0);
   state.selectedSubscriptionMessage = "";
   state.selectedSubscriptionError = "";
   try {
@@ -578,7 +579,9 @@ async function recordSubscriptionPayment(amountOverride = null) {
       method: "POST",
       body: JSON.stringify({
         amount,
-        channel: value("subscriptionPaymentChannel") || "manual"
+        channel: value("subscriptionPaymentChannel") || "manual",
+        paymentMode,
+        memberSlots: Number.isFinite(memberSlots) && memberSlots > 0 ? memberSlots : null
       })
     });
     state.selectedSubscriptionMessage = `${result.idempotent ? "Existing payment found" : "Payment recorded"}: ${money.format(result.payment?.amount || amount)}.`;
@@ -590,6 +593,17 @@ async function recordSubscriptionPayment(amountOverride = null) {
     state.selectedSubscriptionError = error.message;
     renderShell();
   }
+}
+
+function syncSubscriptionPaymentMode() {
+  const mode = value("subscriptionPaymentMode") || "group";
+  const modeSelect = document.getElementById("subscriptionPaymentMode");
+  const slots = /** @type {HTMLInputElement | null} */ (document.getElementById("subscriptionPaymentMemberSlots"));
+  const amount = /** @type {HTMLInputElement | null} */ (document.getElementById("subscriptionPaymentAmount"));
+  if (!modeSelect || !slots || !amount || mode !== "per_member") return;
+  const unitPrice = Number(modeSelect.dataset.unitPrice || 0);
+  const slotCount = Math.max(1, Number(slots.value || 1));
+  if (unitPrice > 0) amount.value = String(Math.round(unitPrice * slotCount));
 }
 
 async function runSubscriptionAction(action) {

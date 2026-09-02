@@ -145,7 +145,7 @@ By default, backups are written to `backups/` and are ignored by git.
 Restore from a backup:
 
 ```powershell
-npm.cmd run restore:db -- -BackupPath .\backups\sacco_app-YYYYMMDD-HHMMSS.dump -ConfirmRestore
+npm.cmd run restore:db -- -BackupPath .\backups\sacco_app-YYYYMMDD-HHMASAS.dump -ConfirmRestore
 ```
 
 Restore is destructive because it runs `pg_restore --clean --if-exists`. Confirm the target environment and backup path before using `-ConfirmRestore`.

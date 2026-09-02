@@ -1,4 +1,4 @@
-﻿// Shared configuration, data helpers and formatting utilities for Tereka Online.
+// Shared configuration, data helpers and formatting utilities for Tereka Online.
 // Loaded before feature modules; functions intentionally remain global for classic script compatibility.
 
 const MEMBER_DRAFTS_KEY = "tereka-member-offline-drafts-v1";
@@ -295,10 +295,12 @@ function mobileMoneyOperationalRows() {
 
 function fallbackPackages() {
   return [
-    { name: "100-250 members", price: 500000, maxMembers: 250, maxBranches: 1, modules: `${money.format(5000)} per member annually, minimum 100 members` },
+    { name: "20-250 members", price: 100000, maxMembers: 250, maxBranches: 1, modules: `${money.format(5000)} per member annually, minimum 20 members` },
     { name: "251-500 members", price: 1200000, maxMembers: 500, maxBranches: 2, modules: "Starter fixed billing" },
-    { name: "501-2,500 members", price: 3600000, maxMembers: 2500, maxBranches: 5, modules: "Growth SACCO operations" },
-    { name: "2,501-10,000 members", price: 9000000, maxMembers: 10000, maxBranches: 25, modules: "Enterprise support" }
+    { name: "501-1,000 members", price: 2500000, maxMembers: 1000, maxBranches: 5, modules: "Growth SACCO operations" },
+    { name: "1,001-2,500 members", price: 5000000, maxMembers: 2500, maxBranches: 10, modules: "Scale SACCO operations" },
+    { name: "2,501-5,000 members", price: 8000000, maxMembers: 5000, maxBranches: 20, modules: "Enterprise support" },
+    { name: "5,001-10,000 members", price: 12000000, maxMembers: 10000, maxBranches: 25, modules: "Enterprise plus support" }
   ];
 }
 
@@ -340,7 +342,11 @@ function field(label, id, type, placeholder, hint) {
   return `<label><span>${label}</span><input id="${id}" type="${type}" placeholder="${placeholder || ""}" autocomplete="${type === "password" ? "current-password" : "on"}" ${hintId ? `aria-describedby="${hintId}"` : ""}>${hint ? `<small id="${hintId}">${hint}</small>` : ""}</label>`;
 }
 
-function logo(size = "") {
+function logo(size = "", imageUrl = "") {
+  const source = String(imageUrl || "").trim();
+  if (source) {
+    return `<div class="logo ${size} sacco-logo" aria-hidden="true"><img src="${escapeHtml(source)}" alt=""></div>`;
+  }
   return `<div class="logo ${size}" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M7 9h34v8H28v22h-8V17H7z"></path><path d="M31 22h10v17H31z"></path></svg></div>`;
 }
 
@@ -358,7 +364,7 @@ function contextName() {
 }
 
 function contextCode() {
-  return state.tenant?.abbreviation || state.tenant?.registrationNo || state.tenant?.code || "GVS";
+  return state.tenant?.abbreviation || state.tenant?.registrationNo || state.tenant?.code || "GREE";
 }
 
 function paymentRoutePanel() {
@@ -537,4 +543,34 @@ function statusClass(value) {
 
 function escapeHtml(value) {
   return TerekaFormatters.escapeHtmlValue(value);
+}
+
+function loanApplicationCode(loan) {
+  if (!loan) return "";
+  const tenant = tenantRows().find((item) => item.id === loan.tenantId) || dataRows("tenants").find((item) => item.id === loan.tenantId) || {};
+  const saccoCode = String(tenant.abbreviation || tenant.code || loan.saccoCode || "SACCO")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 10) || "SACCO";
+  const receivedAt = loan.createdAt || loan.submittedAt || loan.appliedAt || loan.receivedAt || loan.updatedAt || new Date().toISOString();
+  const date = String(receivedAt).slice(0, 10).replace(/-/g, "") || "00000000";
+  const uniqueSource = String(loan.id || loan.applicationNo || loan.reference || "");
+  const digits = uniqueSource.replace(/\D/g, "");
+  const suffix = (digits || loanApplicationHash(uniqueSource)).slice(-4).padStart(4, "0");
+  return `${saccoCode}-${date}-${suffix}`;
+}
+
+function loanApplicationHash(value) {
+  let hash = 0;
+  String(value || "loan").split("").forEach((char) => {
+    hash = ((hash * 31) + char.charCodeAt(0)) % 10000;
+  });
+  return String(hash).padStart(4, "0");
+}
+
+function financeLoanDisplayRows(rows = []) {
+  return (rows || []).map((row) => ({
+    ...row,
+    applicationNo: loanApplicationCode(row)
+  }));
 }

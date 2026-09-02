@@ -2,6 +2,11 @@
 // Covers member creation, profile detail loading, statements, KYC decisions and profile updates.
 
 async function recordMemberDuesPayment() {
+  if (!hasPermission("transactions:create")) {
+    state.memberDuesError = "Transaction capture permission is required to collect member subscription payments.";
+    renderShell();
+    return;
+  }
   const selectedId = document.querySelector("#memberDuesCashId")?.value || document.querySelector("#memberDuesPayId")?.value || "";
   const memberId = document.querySelector("#memberDuesCashMemberId")?.value || "";
   const amount = Number(document.querySelector("#memberDuesCashAmount")?.value || document.querySelector("#memberDuesPayAmount")?.value || 0);
@@ -82,6 +87,11 @@ function selectMemberDuesPayment(subscriptionId) {
 }
 
 function openMemberDuesCashDialog(subscriptionId) {
+  if (!hasPermission("transactions:create")) {
+    state.memberDuesError = "Transaction capture permission is required to collect member subscription payments.";
+    renderShell();
+    return;
+  }
   state.memberDuesCashDialogId = subscriptionId;
   state.memberDuesError = "";
   renderShell();
@@ -106,6 +116,11 @@ function closeMemberDuesDetailsDialog() {
 }
 
 function openSubscriptionPaymentDialog(subscriptionId) {
+  if (!hasPermission("transactions:create")) {
+    state.memberDuesError = "Transaction capture permission is required to initiate member subscription payments.";
+    renderShell();
+    return;
+  }
   state.subscriptionPaymentDialogId = subscriptionId;
   state.subscriptionPaymentDialogError = "";
   state.memberDuesError = "";
@@ -120,6 +135,11 @@ function closeSubscriptionPaymentDialog() {
 
 async function initiateMemberDuesMobileMoney(event) {
   if (event?.preventDefault) event.preventDefault();
+  if (!hasPermission("transactions:create")) {
+    state.subscriptionPaymentDialogError = "Transaction capture permission is required to initiate member subscription payments.";
+    renderShell();
+    return;
+  }
   const subscriptionId = value("subscriptionPaymentId");
   const memberId = value("subscriptionPaymentMemberId");
   const subscription = dataRows("memberSubscriptions").find((item) => item.id === subscriptionId);
@@ -182,6 +202,11 @@ async function createMemberFromForm(event) {
   event.preventDefault();
   state.memberFormMessage = "";
   state.memberFormError = "";
+  if (!hasPermission("members:create")) {
+    state.memberFormError = "Member creation permission is required.";
+    renderShell();
+    return;
+  }
   try {
     const created = await api("/members", {
       method: "POST",

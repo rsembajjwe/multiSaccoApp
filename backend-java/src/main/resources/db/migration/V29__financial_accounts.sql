@@ -32,7 +32,7 @@ INSERT INTO financial_accounts (
     opened_at,
     updated_at
 ) VALUES
-    ('account_green_amina_savings', 'tenant_green', 'member_green_amina', 'product_green_savings_ordinary', 'savings', 'GVS-SAV-0001', 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 09:00:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 09:00:00+00'),
-    ('account_green_amina_shares', 'tenant_green', 'member_green_amina', 'product_green_shares_standard', 'shares', 'GVS-SHR-0001', 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 09:05:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 09:05:00+00'),
-    ('account_green_amina_welfare', 'tenant_green', 'member_green_amina', 'product_green_welfare_family', 'welfare', 'GVS-WEL-0001', 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 09:10:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 09:10:00+00'),
-    ('account_green_daniel_savings', 'tenant_green', 'member_green_daniel', 'product_green_savings_ordinary', 'savings', 'GVS-SAV-0002', 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 09:15:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 09:15:00+00');
+    ('account_green_amina_savings', 'tenant_green', 'member_green_amina', 'product_green_savings_ordinary', 'savings', 'GREE-SAV-0001', 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 09:00:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 09:00:00+00'),
+    ('account_green_amina_shares', 'tenant_green', 'member_green_amina', 'product_green_shares_standard', 'shares', 'GREE-SHR-0001', 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 09:05:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 09:05:00+00'),
+    ('account_green_amina_welfare', 'tenant_green', 'member_green_amina', 'product_green_welfare_family', 'welfare', 'GREE-WEL-0001', 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 09:10:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 09:10:00+00'),
+    ('account_green_daniel_savings', 'tenant_green', 'member_green_daniel', 'product_green_savings_ordinary', 'savings', 'GREE-SAV-0002', 'active', 'user_green_admin', TIMESTAMP WITH TIME ZONE '2026-07-01 09:15:00+00', TIMESTAMP WITH TIME ZONE '2026-07-01 09:15:00+00');

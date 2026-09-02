@@ -296,7 +296,7 @@ function memberLoanHistoryPanel() {
   if (!loanId) return "";
   const loans = state.memberData.loans || [];
   const loan = loans.find((item) => item.id === loanId);
-  const title = loan ? `${loan.product || loan.applicationNo || "Loan"} repayments` : "Loan repayments";
+  const title = loan ? `${loan.product || loanApplicationCode(loan) || "Loan"} repayments` : "Loan repayments";
   const rows = (state.memberLoanHistory || []).map((row) => ({
     paidAt: (row.paidAt || "").slice(0, 10),
     reference: row.reference || "-",
@@ -421,7 +421,7 @@ function memberLoansView(cycle = null) {
     ${moduleTabs("loans", tabs, tab)}
     ${tab === "request" ? `${memberLoanApplicationPanel()}${memberReplaceGuarantorPanel()}` : ""}
     ${tab === "member-loans" ? `${memberLoanHistoryPanel()}${loanRows.length ? recordTable(`Member loans - ${cycle?.label || "current"}`, loanRows, ["product", "principalAmount", "totalPayableAmount", "postedRepaymentAmount", "outstandingBalance", "nextDueDate", "status"]) : emptyState("Member loans", "Submitted and active loans will appear here after SACCO review.")}` : ""}
-    ${tab === "guarantor" ? `${state.memberGuarantorMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorMessage)}</strong></div>` : ""}${state.memberGuarantorError ? `<div class="notice warning"><strong>Guarantor decision failed.</strong><span>${escapeHtml(state.memberGuarantorError)}</span></div>` : ""}${requests.length ? recordTable(`Guarantor requests - ${cycle?.label || "current"}`, requests, ["borrower", "product", "requestedAmount", "guaranteedAmount", "guaranteeCeiling", "committedGuarantees", "capacity", "status"]) : emptyState("No guarantor requests", "Requests to guarantee other members' loans appear here.")}` : ""}
+    ${tab === "guarantor" ? `${state.memberGuarantorMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorMessage)}</strong></div>` : ""}${state.memberGuarantorError ? `<div class="notice warning"><strong>Guarantor decision failed.</strong><span>${escapeHtml(state.memberGuarantorError)}</span></div>` : ""}${requests.length ? recordTable(`Guarantor requests - ${cycle?.label || "current"}`, requests, ["borrower", "product", "requestedAmount", "status"]) : emptyState("No guarantor requests", "Requests to guarantee other members' loans appear here.")}` : ""}
   `;
 }
 
@@ -455,10 +455,9 @@ function memberReplaceGuarantorPanel() {
       ${state.memberGuarantorAddMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorAddMessage)}</strong></div>` : ""}
       ${state.memberGuarantorAddError ? `<div class="notice warning"><strong>Could not add guarantor.</strong><span>${escapeHtml(state.memberGuarantorAddError)}</span></div>` : ""}
       <form id="memberAddGuarantorForm" class="form-grid">
-        <label><span>Loan</span><select id="memberAddGuarantorLoanId">${loans.map((loan) => `<option value="${escapeHtml(loan.id)}">${escapeHtml(`${loan.applicationNo || loan.id} · ${loan.product || ""} · ${money.format(loan.amount || loan.requestedAmount || 0)}`)}</option>`).join("")}</select></label>
+        <label><span>Loan</span><select id="memberAddGuarantorLoanId">${loans.map((loan) => `<option value="${escapeHtml(loan.id)}">${escapeHtml(`${loanApplicationCode(loan)} · ${loan.product || ""} · ${money.format(loan.amount || loan.requestedAmount || 0)}`)}</option>`).join("")}</select></label>
         ${memberGuarantorPicker("replacement", true)}
-        <label><span>Guarantor member no.</span><input id="memberAddGuarantorNo" placeholder="e.g. GVS-0003"></label>
-        <label><span>Pledge</span><input id="memberAddGuarantorAmount" type="number" min="0" step="1" placeholder="0"></label>
+        <label><span>Guarantor member no.</span><input id="memberAddGuarantorNo" placeholder="e.g. GREE-0003"></label>
         <div class="form-actions inline"><button class="button secondary" type="submit">Add guarantor</button></div>
       </form>
     </section>
@@ -504,12 +503,11 @@ function memberLoanApplicationPanel() {
         <label><span>Repayment months</span><input id="memberLoanMonths" type="number" min="1" max="60" value="12" ${memberActive ? "" : "disabled"}></label>
         <label class="wide"><span>Purpose</span><textarea id="memberLoanPurpose" placeholder="Business, school fees, farming input, emergency..." ${memberActive ? "" : "disabled"}></textarea></label>
         <div class="wide">
-          <p class="field-note">Select up to 3 fellow SACCO members to guarantee this loan and the amount each pledges. They will be notified to accept or reject. If your savings already cover the loan plus its interest, you can submit without a guarantor.</p>
+          <p class="field-note">Select up to 3 fellow SACCO members to guarantee this loan. They will be notified to accept or reject. If your savings already cover the loan plus its interest, you can submit without a guarantor.</p>
         </div>
         ${memberGuarantorPicker("loan", memberActive)}
         ${[1, 2, 3].map((index) => `
-          <label><span>Guarantor ${index} member no. (optional)</span><input id="memberLoanGuarantor${index}No" placeholder="e.g. GVS-0002" ${memberActive ? "" : "disabled"}></label>
-          <label><span>Guarantor ${index} pledge</span><input id="memberLoanGuarantor${index}Amount" type="number" min="0" step="1" placeholder="0" ${memberActive ? "" : "disabled"}></label>
+          <label><span>Guarantor ${index} member no. (optional)</span><input id="memberLoanGuarantor${index}No" placeholder="e.g. GREE-0002" ${memberActive ? "" : "disabled"}></label>
         `).join("")}
         <div class="form-actions inline">${memberActive ? `<button class="button primary" type="submit">Submit loan application</button>` : `<span class="status pending">Contact SACCO office</span>`}</div>
       </form>
@@ -684,12 +682,14 @@ function memberPaymentPurposeControl(payableLoans) {
   const baseOptions = [
     ["savings_deposit", "Savings deposit"],
     ["share_purchase", "Share purchase"],
-    ["welfare_contribution", "Welfare contribution"]
+    ["welfare_contribution", "Welfare contribution"],
+    ["platform_fee", "Tereka platform fee"],
+    ["personal_app_fee", "Personal app fee"]
   ];
   if (state.memberData.membership) baseOptions.push(["membership_dues", "Membership subscription"]);
   const loanOptions = (payableLoans || []).map((loan) => {
     const outstanding = memberLoanOutstandingBalance(loan);
-    const label = `${loan.product || loan.applicationNo || "Loan"} - outstanding ${money.format(outstanding)}`;
+    const label = `${loan.product || loanApplicationCode(loan) || "Loan"} - outstanding ${money.format(outstanding)}`;
     return [memberLoanPaymentPurposeValue(loan.id), label, outstanding];
   });
   return `

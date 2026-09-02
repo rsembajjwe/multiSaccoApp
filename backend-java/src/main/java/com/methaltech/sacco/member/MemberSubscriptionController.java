@@ -40,8 +40,8 @@ class MemberSubscriptionController {
             @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
         AuthService.CurrentSession session = authService.currentSession(authorization);
         if (session == null) return authService.authRequired();
-        if (!authService.hasPermission(session.user(), "members:view")) {
-            return authService.permissionRequired("members:view");
+        if (!authService.hasPermission(session.user(), "member-subscription:view")) {
+            return authService.permissionRequired("member-subscription:view");
         }
         String tenantId = resolveTenant(session, requestedTenantId);
         if (tenantId == null) {
@@ -61,8 +61,8 @@ class MemberSubscriptionController {
             HttpServletRequest request) {
         AuthService.CurrentSession session = authService.currentSession(authorization);
         if (session == null) return authService.authRequired();
-        if (!authService.hasPermission(session.user(), "members:create")) {
-            return authService.permissionRequired("members:create");
+        if (!authService.hasPermission(session.user(), "member-subscription:manage")) {
+            return authService.permissionRequired("member-subscription:manage");
         }
         String tenantId = resolveTenant(session, body == null ? null : body.tenantId());
         if (tenantId == null) {
@@ -94,8 +94,8 @@ class MemberSubscriptionController {
             HttpServletRequest request) {
         AuthService.CurrentSession session = authService.currentSession(authorization);
         if (session == null) return authService.authRequired();
-        if (!authService.hasPermission(session.user(), "members:create")) {
-            return authService.permissionRequired("members:create");
+        if (!authService.hasPermission(session.user(), "member-subscription:manage")) {
+            return authService.permissionRequired("member-subscription:manage");
         }
         MemberSubscription subscription = repository.findById(id).orElse(null);
         if (subscription == null) {

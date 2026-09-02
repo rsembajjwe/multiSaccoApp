@@ -14,7 +14,7 @@ export const TEMPLATE_DEFINITIONS = [
     javaFile: "backend-java/src/main/java/com/methaltech/sacco/member/MemberController.java",
     headers: ["membershipNo", "branchId", "fullName", "memberType", "phone", "email", "nationalId", "kycStatus", "joiningDate", "password"],
     sampleRows: [
-      ["GVS-0100", "branch_green_main", "Pilot Member", "individual", "+256700000000", "pilot.member@example.local", "CM0000000PILOT", "pending_verification", "2026-07-18", "Member@12345"]
+      ["GREE-0100", "branch_green_main", "Pilot Member", "individual", "+256700000000", "pilot.member@example.local", "CM0000000PILOT", "pending_verification", "2026-07-18", "Member@12345"]
     ],
     guidance: [
       ["membershipNo", "Required, unique inside the SACCO and the import file."],
@@ -31,10 +31,10 @@ export const TEMPLATE_DEFINITIONS = [
     javaFile: "backend-java/src/main/java/com/methaltech/sacco/member/MemberController.java",
     headers: ["recordType", "membershipNo", "fullName", "relationship", "phone", "address", "primaryContact", "allocationPercent", "documentType", "storageKey", "verificationStatus", "kycStatus"],
     sampleRows: [
-      ["kyc_status", "GVS-0100", "", "", "", "", "", "", "", "", "", "verified"],
-      ["document", "GVS-0100", "", "", "", "", "", "", "national_id", "kyc/GVS-0100/national-id.pdf", "verified", ""],
-      ["next_of_kin", "GVS-0100", "Sample Next Of Kin", "spouse", "+256700111222", "Kampala", "true", "", "", "", "", ""],
-      ["beneficiary", "GVS-0100", "Sample Beneficiary", "daughter", "+256700333444", "", "", "50", "", "", "", ""]
+      ["kyc_status", "GREE-0100", "", "", "", "", "", "", "", "", "", "verified"],
+      ["document", "GREE-0100", "", "", "", "", "", "", "national_id", "kyc/GREE-0100/national-id.pdf", "verified", ""],
+      ["next_of_kin", "GREE-0100", "Sample Next Of Kin", "spouse", "+256700111222", "Kampala", "true", "", "", "", "", ""],
+      ["beneficiary", "GREE-0100", "Sample Beneficiary", "daughter", "+256700333444", "", "", "50", "", "", "", ""]
     ],
     guidance: [
       ["recordType", "Allowed: kyc_status, document, next_of_kin, beneficiary."],
@@ -51,7 +51,7 @@ export const TEMPLATE_DEFINITIONS = [
     javaFile: "backend-java/src/main/java/com/methaltech/sacco/finance/FinancialTransactionController.java",
     headers: ["membershipNo", "savingsBalance", "sharesBalance", "welfareBalance", "reference", "postingDate", "narration"],
     sampleRows: [
-      ["GVS-0100", "100000", "50000", "10000", "OB-GVS-0100", "2026-07-18", "Opening balances from pilot data import"]
+      ["GREE-0100", "100000", "50000", "10000", "OB-GREE-0100", "2026-07-18", "Opening balances from pilot data import"]
     ],
     guidance: [
       ["membershipNo", "Required, must already exist in the selected SACCO tenant."],
@@ -68,7 +68,7 @@ export const TEMPLATE_DEFINITIONS = [
     javaFile: "backend-java/src/main/java/com/methaltech/sacco/loan/LoanController.java",
     headers: ["membershipNo", "product", "originalAmount", "outstandingBalance", "repaymentMonths", "remainingMonths", "monthlyInstallment", "disbursedDate", "status", "purpose"],
     sampleRows: [
-      ["GVS-0100", "Development Loan", "1200000", "900000", "12", "9", "100000", "2026-04-18", "active", "Migrated dairy equipment loan"]
+      ["GREE-0100", "Development Loan", "1200000", "900000", "12", "9", "100000", "2026-04-18", "active", "Migrated dairy equipment loan"]
     ],
     guidance: [
       ["product", "Allowed: Development Loan, Emergency Loan, Agriculture Loan, School Fees Loan."],
@@ -85,7 +85,7 @@ export const TEMPLATE_DEFINITIONS = [
     javaFile: "backend-java/src/main/java/com/methaltech/sacco/loan/LoanController.java",
     headers: ["membershipNo", "product", "loanDisbursedDate", "amount", "channel", "reference", "receivedDate", "narration"],
     sampleRows: [
-      ["GVS-0100", "Development Loan", "2026-04-18", "300000", "bank", "LRH-GVS-0100-001", "2026-05-18", "Migrated historical repayment"]
+      ["GREE-0100", "Development Loan", "2026-04-18", "300000", "bank", "LRH-GREE-0100-001", "2026-05-18", "Migrated historical repayment"]
     ],
     guidance: [
       ["amount", "Must be greater than zero and cannot exceed paid-to-date capacity."],

@@ -43,6 +43,14 @@ class BranchController {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
 
+        if (!(authService.isPlatform(currentSession.user())
+                || authService.hasPermission(currentSession.user(), "members:view")
+                || authService.hasPermission(currentSession.user(), "sacco-profile:manage")
+                || authService.hasPermission(currentSession.user(), "transactions:view")
+                || authService.hasPermission(currentSession.user(), "loans:view"))) {
+            return authService.permissionRequired("members:view");
+        }
+
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null) return tenantAccessDenied();
 
@@ -60,6 +68,11 @@ class BranchController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+
+        if (!(authService.isPlatform(currentSession.user())
+                || authService.hasPermission(currentSession.user(), "sacco-profile:manage"))) {
+            return authService.permissionRequired("sacco-profile:manage");
+        }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();

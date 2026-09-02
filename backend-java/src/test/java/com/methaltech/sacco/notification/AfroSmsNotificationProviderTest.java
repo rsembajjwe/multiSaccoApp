@@ -33,7 +33,7 @@ class AfroSmsNotificationProviderTest {
                 "sms-password",
                 "Tereka");
 
-        server.expect(once(), requestTo("https://afrosms.test/smskings/api.php?email=sms@example.com&password=sms-password&destination=256700000001&source=Tereka&message=Your%20deposit%20was%20posted.&call=sendsms"))
+        server.expect(once(), requestTo("https://afrosms.test/smskings/api.php?email=sms%40example.com&password=sms-password&destination=256700000001&source=Tereka&message=Your+deposit+was+posted.&call=sendsms"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("sms-ref-1", MediaType.TEXT_PLAIN));
 
@@ -58,7 +58,7 @@ class AfroSmsNotificationProviderTest {
                 "sms-password",
                 "Tereka");
 
-        server.expect(once(), requestTo("https://afrosms.test/smskings/api.php?email=sms@example.com&password=sms-password&destination=256700000001&source=Tereka&message=Your%20deposit%20was%20posted.&call=sendsms"))
+        server.expect(once(), requestTo("https://afrosms.test/smskings/api.php?email=sms%40example.com&password=sms-password&destination=256700000001&source=Tereka&message=Your+deposit+was+posted.&call=sendsms"))
                 .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withUnauthorizedRequest());
 
         NotificationSendResult result = provider.send(member(), "Payment received", "Your deposit was posted.");
@@ -82,7 +82,7 @@ class AfroSmsNotificationProviderTest {
                 "sms-password",
                 "Tereka");
 
-        server.expect(once(), requestTo("https://afrosms.test/smskings/balance_api.php?email=sms@example.com&password=sms-password&call=credits"))
+        server.expect(once(), requestTo("https://afrosms.test/smskings/balance_api.php?email=sms%40example.com&password=sms-password&call=credits"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("Credits: 1250", MediaType.TEXT_PLAIN));
 
@@ -104,7 +104,7 @@ class AfroSmsNotificationProviderTest {
                 "sms-password",
                 "Tereka");
 
-        server.expect(once(), requestTo("https://afrosms.test/smskings/balance_api.php?email=sms@example.com&password=sms-password&call=credits"))
+        server.expect(once(), requestTo("https://afrosms.test/smskings/balance_api.php?email=sms%40example.com&password=sms-password&call=credits"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("Credits: 1250", MediaType.TEXT_PLAIN));
 
@@ -129,7 +129,7 @@ class AfroSmsNotificationProviderTest {
                 "sms-password",
                 "Tereka");
 
-        server.expect(once(), requestTo("https://afrosms.test/smskings/balance_api.php?email=sms@example.com&password=sms-password&call=credits"))
+        server.expect(once(), requestTo("https://afrosms.test/smskings/balance_api.php?email=sms%40example.com&password=sms-password&call=credits"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withServerError());
 
@@ -162,7 +162,7 @@ class AfroSmsNotificationProviderTest {
                     "member_green_amina",
                     "tenant_green",
                     "branch_green_main",
-                    "GVS-0001",
+                    "GREE-0001",
                     "Amina Green",
                     "individual",
                     "+256700000001",

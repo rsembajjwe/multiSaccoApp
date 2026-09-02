@@ -182,6 +182,12 @@ class SavingsTransferController {
         if (transfer.getCreatedByUserId().equals(userId)) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiErrorResponse.of(409, "MAKER_CHECKER_REQUIRED", "A different user must approve this transfer."));
         }
+        String linkedMemberId = memberRepository.findFirstByLinkedUserId(userId).map(Member::getId).orElse(null);
+        if (linkedMemberId != null
+                && (linkedMemberId.equals(transfer.getSourceMemberId()) || linkedMemberId.equals(transfer.getDestinationMemberId()))) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiErrorResponse.of(409, "CONFLICT_OF_INTEREST",
+                    "Your staff account is linked to a member in this transfer, so you cannot approve or reject it. Another officer must handle it."));
+        }
         String decision = body == null || body.status() == null ? "" : body.status().trim();
         SavingsTransfer saved;
         if ("posted".equals(decision)) {

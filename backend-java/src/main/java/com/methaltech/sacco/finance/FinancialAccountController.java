@@ -194,7 +194,7 @@ class FinancialAccountController {
     }
 
     private String nextAccountNo(String tenantId, String accountType) {
-        String prefix = "tenant_lake".equals(tenantId) ? "LFS" : "GVS";
+        String prefix = "tenant_lake".equals(tenantId) ? "LAKE" : "GREE";
         String typePrefix = switch (accountType) {
             case "shares" -> "SHR";
             case "welfare" -> "WEL";

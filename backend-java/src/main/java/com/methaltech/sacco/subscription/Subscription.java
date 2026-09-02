@@ -102,17 +102,39 @@ public class Subscription {
         this.billingDescription = billing.billingDescription();
         this.amount = billing.amount();
         if (this.paid.compareTo(this.amount) > 0) this.paid = this.amount;
-        if ("active".equals(this.status) && this.paid.compareTo(this.amount) < 0) this.status = "pending_payment";
+        if ("active".equals(this.status)
+                && this.paid.compareTo(this.amount) < 0
+                && paidMemberCapacity() < SubscriptionService.MINIMUM_ACTIVE_MEMBER_COVERAGE) {
+            this.status = "pending_payment";
+        }
         this.updatedAt = Instant.now();
     }
 
-    void recordPayment(BigDecimal paymentAmount, LocalDate activeExpiry) {
+    public void recordPayment(BigDecimal paymentAmount, LocalDate activeExpiry) {
         this.paid = this.paid.add(paymentAmount).min(this.amount);
-        this.status = this.paid.compareTo(this.amount) >= 0 ? "active" : "pending_payment";
+        if (this.paid.compareTo(this.amount) >= 0 || paidMemberCapacity() >= SubscriptionService.MINIMUM_ACTIVE_MEMBER_COVERAGE) {
+            this.status = "active";
+        } else if (!"trial".equals(this.status)) {
+            this.status = "pending_payment";
+        }
         if ("active".equals(this.status)) {
             this.expiry = activeExpiry;
             this.lastReminderOn = null;
         }
+        this.updatedAt = Instant.now();
+    }
+
+    public int paidMemberCapacity() {
+        if (this.unitPrice == null || this.unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return this.paid.compareTo(this.amount) >= 0 ? this.billableMembers : 0;
+        }
+        return this.paid.divideToIntegralValue(this.unitPrice).intValue();
+    }
+
+    void activateFromTrial(LocalDate activeExpiry) {
+        this.status = "active";
+        this.expiry = activeExpiry;
+        this.lastReminderOn = null;
         this.updatedAt = Instant.now();
     }
 

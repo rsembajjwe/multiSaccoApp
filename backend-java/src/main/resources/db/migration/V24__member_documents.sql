@@ -30,7 +30,7 @@ INSERT INTO member_documents (
         'tenant_green',
         'member_green_amina',
         'national_id',
-        'tenant_green/members/GVS-0001/national-id.pdf',
+        'tenant_green/members/GREE-0001/national-id.pdf',
         'verified',
         'user_green_admin'
     ),
@@ -39,7 +39,7 @@ INSERT INTO member_documents (
         'tenant_green',
         'member_green_daniel',
         'photo',
-        'tenant_green/members/GVS-0002/photo.jpg',
+        'tenant_green/members/GREE-0002/photo.jpg',
         'pending_verification',
         'user_green_admin'
     );

@@ -1,5 +1,6 @@
 package com.methaltech.sacco.loan;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.api.PageParams;
@@ -237,6 +238,17 @@ class LoanController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_PERIOD", "Repayment period must be between 1 and 60 months."));
         }
+        String applicationSource = normalizedOrDefault(body.applicationSource(), "staff_captured_signed_form");
+        if (!Set.of("staff_captured_signed_form", "staff_member_request").contains(applicationSource)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_APPLICATION_SOURCE", "Unsupported staff loan application source."));
+        }
+        String signedFormReference = body.signedFormReference() == null ? "" : body.signedFormReference().trim();
+        String signedFormFileName = body.signedFormFileName() == null ? "" : body.signedFormFileName().trim();
+        if ("staff_captured_signed_form".equals(applicationSource) && signedFormReference.isBlank() && signedFormFileName.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "SIGNED_FORM_REQUIRED", "Enter a signed form reference or attach the signed loan form."));
+        }
 
         Loan loan = loanRepository.save(new Loan(
                 "loan_" + UUID.randomUUID(),
@@ -249,6 +261,13 @@ class LoanController {
                 body.purpose() == null ? "" : body.purpose().trim(),
                 "staff",
                 null));
+        loan.recordApplicationEvidence(
+                applicationSource,
+                signedFormReference,
+                body.signedFormReceivedAt(),
+                signedFormFileName,
+                currentSession.user().getId());
+        loan = loanRepository.save(loan);
 
         auditService.record(
                 tenantId,
@@ -535,7 +554,7 @@ class LoanController {
         }
 
         return loanRepository.findById(loanId)
-                .<ResponseEntity<?>>map(loan -> decideLoan(loan, status, body.reason(), body.resolutionReference(), currentSession, request))
+                .<ResponseEntity<?>>map(loan -> decideLoan(loan, status, body.reason(), body.resolutionReference(), body, currentSession, request))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
     }
@@ -612,6 +631,58 @@ class LoanController {
                         .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
     }
 
+    @PatchMapping("/{loanId}/guarantors/{guarantorId}/signature")
+    @Transactional
+    ResponseEntity<?> markGuarantorSigned(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId,
+            @PathVariable String guarantorId,
+            @RequestBody GuarantorSignatureRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:create")) {
+            return authService.permissionRequired("loans:create");
+        }
+        Loan loan = loanRepository.findById(loanId).orElse(null);
+        if (loan == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found."));
+        }
+        if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
+        LoanGuarantor guarantor = guarantorRepository.findById(guarantorId)
+                .filter(item -> item.getLoanId().equals(loan.getId()))
+                .orElse(null);
+        if (guarantor == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "GUARANTOR_REQUEST_NOT_FOUND", "Guarantor request not found."));
+        }
+        if (!Set.of("pending", "accepted").contains(guarantor.getStatus())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "GUARANTOR_NOT_SIGNABLE", "Only pending or accepted guarantor requests can have signed consent confirmed."));
+        }
+        String reference = body == null || body.signatureReference() == null ? "" : body.signatureReference().trim();
+        if (reference.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "SIGNATURE_REFERENCE_REQUIRED", "Enter the signed form page, file or witness reference."));
+        }
+        if ("pending".equals(guarantor.getStatus())) {
+            guarantor.decide("accepted");
+        }
+        guarantor.markSigned(reference, currentSession.user().getId());
+        LoanGuarantor saved = guarantorRepository.save(guarantor);
+        loan.refreshGuarantors((int) guarantorRepository.countByLoanIdAndStatus(loan.getId(), "accepted"));
+        loanRepository.save(loan);
+        auditService.record(
+                loan.getTenantId(),
+                currentSession.user(),
+                "Confirmed guarantor physical signature",
+                "loan_guarantor",
+                saved.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(LoanGuarantorResponse.from(saved)));
+    }
+
     @PostMapping("/{loanId}/disburse")
     @Transactional
     ResponseEntity<?> disburseLoan(
@@ -620,8 +691,8 @@ class LoanController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
-        if (!authService.hasPermission(currentSession.user(), "loans:approve")) {
-            return authService.permissionRequired("loans:approve");
+        if (!authService.hasPermission(currentSession.user(), "loans:disburse")) {
+            return authService.permissionRequired("loans:disburse");
         }
 
         return loanRepository.findById(loanId)
@@ -740,9 +811,26 @@ class LoanController {
         }
     }
 
+    private void releaseGuaranteesIfLoanCleared(Loan loan) {
+        if (!"closed".equals(loan.getStatus()) || loan.getBalance().compareTo(BigDecimal.ZERO) > 0) {
+            return;
+        }
+        List<LoanGuarantor> acceptedGuarantors = guarantorRepository.findByLoanIdOrderByCreatedAtDesc(loan.getId())
+                .stream()
+                .filter(guarantor -> "accepted".equals(guarantor.getStatus()))
+                .toList();
+        if (acceptedGuarantors.isEmpty()) {
+            return;
+        }
+        acceptedGuarantors.forEach(LoanGuarantor::release);
+        guarantorRepository.saveAll(acceptedGuarantors);
+        loan.refreshGuarantors(0);
+    }
+
     private LoanCoverResponse buildLoanCover(Loan loan) {
         Member applicant = memberRepository.findById(loan.getMemberId()).orElse(null);
-        BigDecimal selfCover = applicant == null ? BigDecimal.ZERO : applicant.getSavingsBalance();
+        BigDecimal selfCover = applicant == null ? BigDecimal.ZERO : applicant.getAvailableSavings();
+        BigDecimal totalPayable = loan.getTotalPayable() == null ? loan.getAmount() : loan.getTotalPayable();
         LoanCoverResponse.ApplicantCover applicantCover = new LoanCoverResponse.ApplicantCover(
                 loan.getMemberId(),
                 applicant == null ? "-" : applicant.getMembershipNo(),
@@ -779,6 +867,7 @@ class LoanController {
         return new LoanCoverResponse(
                 loan.getId(),
                 loan.getAmount(),
+                totalPayable,
                 applicantCover,
                 guarantorCovers,
                 acceptedPledges,
@@ -983,6 +1072,7 @@ class LoanController {
             }
             loan.recordRepayment(repayment.getAmount());
             releaseSecuredHoldForRepayment(loan, repayment.getAmount());
+            releaseGuaranteesIfLoanCleared(loan);
             loanRepository.save(loan);
             repayment.approve(currentSession.user().getId());
             memberRepository.findById(loan.getMemberId())
@@ -1197,6 +1287,7 @@ class LoanController {
             String status,
             String reason,
             String resolutionReference,
+            UpdateLoanStatusRequest body,
             AuthService.CurrentSession currentSession,
             HttpServletRequest request) {
         if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
@@ -1209,6 +1300,36 @@ class LoanController {
         if ("rejected".equals(status)) {
             return finaliseLoanDecision(loan, "rejected", reason, currentSession, request);
         }
+        boolean paperApprovedByChairperson = Boolean.TRUE.equals(body.paperApprovedByChairperson());
+        boolean paperApprovedBySecretary = Boolean.TRUE.equals(body.paperApprovedBySecretary());
+        boolean paperApprovedByTreasurer = Boolean.TRUE.equals(body.paperApprovedByTreasurer());
+        boolean paperApprovedByCommittee = Boolean.TRUE.equals(body.paperApprovedByCommittee());
+        boolean hasPaperApproval = paperApprovedByChairperson
+                || paperApprovedBySecretary
+                || paperApprovedByTreasurer
+                || paperApprovedByCommittee;
+        if (!hasPaperApproval) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "PAPER_APPROVAL_REQUIRED", "Tick the SACCO officers or committee members who signed the paper loan approval."));
+        }
+        String paperReference = body.paperApprovalReference() == null ? "" : body.paperApprovalReference().trim();
+        if (paperReference.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "PAPER_APPROVAL_REFERENCE_REQUIRED", "Enter the paper approval form, minute or file reference."));
+        }
+        String paperApprovers = body.paperApprovalApprovers() == null ? "" : body.paperApprovalApprovers().trim();
+        if (paperApprovers.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "PAPER_APPROVERS_REQUIRED", "Enter the names or titles of the people who approved the signed paper loan."));
+        }
+        loan.recordPaperApproval(
+                paperApprovedByChairperson,
+                paperApprovedBySecretary,
+                paperApprovedByTreasurer,
+                paperApprovedByCommittee,
+                paperReference,
+                paperApprovers,
+                currentSession.user().getId());
 
         // Approval path.
         BigDecimal selfCover = memberRepository.findById(loan.getMemberId())
@@ -1222,57 +1343,49 @@ class LoanController {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
                         .body(ApiErrorResponse.of(409, "GUARANTOR_REQUIRED", "At least one accepted guarantor is required before loan approval."));
             }
-            BigDecimal acceptedPledges = guarantorRepository.findByLoanIdOrderByCreatedAtDesc(loan.getId())
+            long acceptedSignedGuarantors = guarantorRepository.findByLoanIdOrderByCreatedAtDesc(loan.getId())
                     .stream()
                     .filter(item -> "accepted".equals(item.getStatus()))
-                    .map(LoanGuarantor::getGuaranteedAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (selfCover.add(acceptedPledges).compareTo(loan.getAmount()) < 0) {
+                    .filter(item -> item.getSignedAt() != null)
+                    .count();
+            if (acceptedSignedGuarantors < 1) {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(ApiErrorResponse.of(409, "LOAN_NOT_COVERED",
-                                "Applicant savings plus accepted guarantor pledges must at least equal the loan amount before approval."));
+                        .body(ApiErrorResponse.of(409, "GUARANTOR_SIGNATURE_REQUIRED",
+                                "At least one accepted guarantor with a confirmed physical signature is required before loan approval."));
             }
         }
 
-        BigDecimal amount = loan.getAmount();
-        String actorId = currentSession.user().getId();
-
-        // High-value tier: a recorded committee resolution reference is required.
-        if (amount.compareTo(approvalDualMax) > 0) {
-            String reference = resolutionReference == null ? "" : resolutionReference.trim();
-            if (reference.isBlank()) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(ApiErrorResponse.of(409, "LOAN_RESOLUTION_REQUIRED",
-                                "Loans above " + approvalDualMax + " require a loan committee/board resolution reference to approve."));
-            }
-            loan.applyResolutionReference(reference);
-            return finaliseLoanDecision(loan, "approved", reason, currentSession, request);
-        }
-
-        // Mid-value tier: two distinct approvers (maker != checker).
-        if (amount.compareTo(approvalSingleMax) > 0) {
-            if (loan.getFirstApprovedByUserId() == null) {
-                loan.recordFirstApproval(actorId);
-                Loan saved = loanRepository.save(loan);
-                auditService.record(
-                        saved.getTenantId(),
-                        currentSession.user(),
-                        "Recorded first approval on loan application (awaiting second approver)",
-                        "loan",
-                        saved.getId(),
-                        request.getRemoteAddr());
-                return ResponseEntity.ok(ApiResponse.of(loanResponse(saved)));
-            }
-            if (loan.getFirstApprovedByUserId().equals(actorId)) {
-                return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(ApiErrorResponse.of(409, "SECOND_APPROVER_REQUIRED",
-                                "This loan needs a second, different approver to complete approval."));
-            }
-            return finaliseLoanDecision(loan, "approved", reason, currentSession, request);
-        }
-
-        // Low-value tier: single approval.
+        loan.applyResolutionReference(paperReference);
+        ResponseEntity<?> stagedApproval = maybeStageMultiOfficerApproval(loan, currentSession, request);
+        if (stagedApproval != null) return stagedApproval;
         return finaliseLoanDecision(loan, "approved", reason, currentSession, request);
+    }
+
+    private ResponseEntity<?> maybeStageMultiOfficerApproval(
+            Loan loan,
+            AuthService.CurrentSession currentSession,
+            HttpServletRequest request) {
+        if (loan.getAmount().compareTo(approvalSingleMax) <= 0 || loan.getAmount().compareTo(approvalDualMax) > 0) {
+            return null;
+        }
+        String actorId = currentSession.user().getId();
+        if (loan.getFirstApprovedByUserId() == null || loan.getFirstApprovedByUserId().isBlank()) {
+            loan.recordFirstApproval(actorId);
+            Loan saved = loanRepository.save(loan);
+            auditService.record(
+                    saved.getTenantId(),
+                    currentSession.user(),
+                    "Recorded first loan approval",
+                    "loan",
+                    saved.getId(),
+                    request.getRemoteAddr());
+            return ResponseEntity.ok(ApiResponse.of(loanResponse(saved)));
+        }
+        if (loan.getFirstApprovedByUserId().equals(actorId)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "SECOND_APPROVER_REQUIRED", "A different officer must complete this loan approval."));
+        }
+        return null;
     }
 
     private ResponseEntity<?> finaliseLoanDecision(
@@ -1323,17 +1436,15 @@ class LoanController {
                     .body(ApiErrorResponse.of(409, "GUARANTOR_ALREADY_REQUESTED", "This guarantor already has an active request for the loan."));
         }
 
-        BigDecimal amount = body.guaranteedAmount() == null
-                ? loan.getAmount().divide(BigDecimal.valueOf(2), 0, RoundingMode.CEILING)
-                : body.guaranteedAmount();
+        BigDecimal amount = body.guaranteedAmount() == null ? loan.getAmount() : Money.normalize(body.guaranteedAmount());
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "INVALID_GUARANTEE_AMOUNT", "Guarantee amount must be greater than zero."));
+                    .body(ApiErrorResponse.of(400, "INVALID_GUARANTEE_AMOUNT", "Guaranteed amount must be greater than zero."));
         }
         BigDecimal capacity = guaranteeCapacity(guarantor, null);
         if (amount.compareTo(capacity) > 0) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Requested guarantee exceeds the member's available guarantee capacity."));
+                    .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Guarantor capacity is too low for this pledge."));
         }
 
         LoanGuarantor requestRecord = guarantorRepository.save(new LoanGuarantor(
@@ -1353,6 +1464,7 @@ class LoanController {
                 "loan_guarantor",
                 requestRecord.getId(),
                 request.getRemoteAddr());
+        notificationService.notifyGuarantorRequested(guarantor, memberRepository.findById(loan.getMemberId()).orElse(guarantor), loan.getId());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(LoanGuarantorResponse.from(requestRecord)));
     }
@@ -1406,6 +1518,7 @@ class LoanController {
                 currentSession.user().getId()));
         loan.recordRepayment(repayment.getAmount());
         releaseSecuredHoldForRepayment(loan, repayment.getAmount());
+        releaseGuaranteesIfLoanCleared(loan);
         loanRepository.save(loan);
 
         auditService.record(
@@ -1747,6 +1860,10 @@ class LoanController {
                 .findByMemberIdAndStatusIn(member.getId(), List.of("pending", "accepted"))
                 .stream()
                 .filter(request -> excludedGuarantorId == null || !request.getId().equals(excludedGuarantorId))
+                .filter(request -> loanRepository.findById(request.getLoanId())
+                        .filter(loan -> !"closed".equals(loan.getStatus()))
+                        .filter(loan -> loan.getBalance().compareTo(BigDecimal.ZERO) > 0)
+                        .isPresent())
                 .map(LoanGuarantor::getGuaranteedAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
@@ -1862,7 +1979,11 @@ class LoanController {
             @NotBlank String product,
             @NotNull BigDecimal amount,
             Integer repaymentMonths,
-            String purpose) {
+            String purpose,
+            String applicationSource,
+            String signedFormReference,
+            LocalDate signedFormReceivedAt,
+            String signedFormFileName) {
     }
 
     record AppraisalRequest(
@@ -1872,10 +1993,22 @@ class LoanController {
             String notes) {
     }
 
-    record UpdateLoanStatusRequest(@NotBlank String status, String reason, String resolutionReference) {
+    record UpdateLoanStatusRequest(
+            @NotBlank String status,
+            String reason,
+            String resolutionReference,
+            String paperApprovalReference,
+            String paperApprovalApprovers,
+            @JsonProperty("paperApprovedByChairperson") Boolean paperApprovedByChairperson,
+            @JsonProperty("paperApprovedBySecretary") Boolean paperApprovedBySecretary,
+            @JsonProperty("paperApprovedByTreasurer") Boolean paperApprovedByTreasurer,
+            @JsonProperty("paperApprovedByCommittee") Boolean paperApprovedByCommittee) {
     }
 
     record CreateGuarantorRequest(@NotBlank String memberId, BigDecimal guaranteedAmount) {
+    }
+
+    record GuarantorSignatureRequest(String signatureReference) {
     }
 
     record CreateRepaymentRequest(

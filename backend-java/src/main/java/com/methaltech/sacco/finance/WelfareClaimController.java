@@ -64,8 +64,8 @@ class WelfareClaimController {
             @RequestParam(name = "memberId", required = false) String memberId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
-        if (!authService.hasPermission(currentSession.user(), "transactions:view")) {
-            return authService.permissionRequired("transactions:view");
+        if (!authService.hasPermission(currentSession.user(), "welfare:view")) {
+            return authService.permissionRequired("welfare:view");
         }
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
@@ -95,8 +95,8 @@ class WelfareClaimController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
-        if (!authService.hasPermission(currentSession.user(), "transactions:create")) {
-            return authService.permissionRequired("transactions:create");
+        if (!authService.hasPermission(currentSession.user(), "welfare:manage")) {
+            return authService.permissionRequired("welfare:manage");
         }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
@@ -154,8 +154,8 @@ class WelfareClaimController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
-        if (!authService.hasPermission(currentSession.user(), "transactions:approve")) {
-            return authService.permissionRequired("transactions:approve");
+        if (!authService.hasPermission(currentSession.user(), "welfare:manage")) {
+            return authService.permissionRequired("welfare:manage");
         }
 
         String status = body.status().trim();
@@ -209,6 +209,13 @@ class WelfareClaimController {
         if (WelfareClaimRules.requiresRejectionReason(status) && (reason == null || reason.isBlank())) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "WELFARE_REJECTION_REASON_REQUIRED", "A rejection reason is required."));
+        }
+        if (memberRepository.findFirstByLinkedUserId(currentSession.user().getId())
+                .map(linked -> linked.getId().equals(claim.getMemberId()))
+                .orElse(false)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "CONFLICT_OF_INTEREST",
+                            "Your staff account is linked to this member, so you cannot approve or reject your own welfare claim. Another officer must handle it."));
         }
 
         if ("approved".equals(status)) {
@@ -294,7 +301,7 @@ class WelfareClaimController {
     }
 
     private String referenceForTenant(String tenantId) {
-        String prefix = "tenant_lake".equals(tenantId) ? "LFS" : "GVS";
+        String prefix = "tenant_lake".equals(tenantId) ? "LAKE" : "GREE";
         return prefix + "-WCL-" + String.format("%04d", claimRepository.countByTenantId(tenantId) + 1);
     }
 

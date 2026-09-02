@@ -159,17 +159,26 @@ for (const file of [
 }
 
 const rows = [
-  { id: "row_1", fullName: "Amina Naki", membershipNo: "GVS-0001", savings: 10000, action: "member-detail", actionLabel: "Open", actionId: "row_1" },
-  { id: "row_2", fullName: "Brian Kato", membershipNo: "GVS-0002", savings: 20000 },
-  { id: "row_3", fullName: "Charles & Sons", membershipNo: "GVS-0003", savings: 30000 }
+  { id: "row_1", fullName: "Amina Naki", membershipNo: "GREE-0001", savings: 10000, action: "member-detail", actionLabel: "Open", actionId: "row_1" },
+  { id: "row_2", fullName: "Brian Kato", membershipNo: "GREE-0002", savings: 20000 },
+  { id: "row_3", fullName: "Charles & Sons", membershipNo: "GREE-0003", savings: 30000 }
 ];
 
 assert.equal(sandbox.tableStateKey("Member Directory / Active"), "member-directory-active");
 assert.equal(sandbox.filterRecordRows(rows, "kato").length, 1);
-assert.equal(sandbox.filterRecordRows(rows, "GVS-000").length, 3);
+assert.equal(sandbox.filterRecordRows(rows, "GREE-000").length, 3);
 assert.equal(sandbox.escapeHtml("<b>Amina & Brian</b>"), "&lt;b&gt;Amina &amp; Brian&lt;/b&gt;");
+assert.equal(sandbox.generateSaccoCode("Lake Farmers SACCO", []), "LAKE");
+assert.equal(sandbox.generateSaccoCode("Lake Farmers SACCO", [{ abbreviation: "LAKE" }]), "LAAA");
+assert.match(sandbox.generateSaccoCode("A1 SACCO", []), /^[A-Z]{4}$/);
+const subscriptionRows = sandbox.buildSubscriptionRows({
+  subscriptions: [{ id: "sub_green", tenantId: "tenant_green", packageId: "growth", amount: 100000, paid: 25000 }],
+  tenants: [{ id: "tenant_green", name: "Green Valley SACCO", abbreviation: "GREE", memberCount: 12 }]
+});
+assert.equal(subscriptionRows[0].tenantName, "Green Valley SACCO");
+assert.equal(subscriptionRows[0].saccoCode, "GREE");
 
-sandbox.state.tableState["member-directory"] = { search: "GVS-000", page: 1, pageSize: 2 };
+sandbox.state.tableState["member-directory"] = { search: "GREE-000", page: 1, pageSize: 2 };
 const tableHtml = sandbox.recordTable("Member directory", rows, ["membershipNo", "fullName", "savings"]);
 assert.match(tableHtml, /Search member directory/);
 assert.match(tableHtml, /2 of 3/);
@@ -178,7 +187,7 @@ assert.match(tableHtml, /data-table-search="member-directory"/);
 assert.doesNotMatch(tableHtml, /Charles &amp; Sons/);
 assert.match(tableHtml, /data-row-action="member-detail"/);
 
-sandbox.state.tableState["member-directory"] = { search: "GVS-000", page: 2, pageSize: 2 };
+sandbox.state.tableState["member-directory"] = { search: "GREE-000", page: 2, pageSize: 2 };
 const secondPageHtml = sandbox.recordTable("Member directory", rows, ["membershipNo", "fullName", "savings"]);
 assert.match(secondPageHtml, /Page 2 of 2/);
 assert.match(secondPageHtml, /Charles &amp; Sons/);
@@ -272,7 +281,7 @@ sandbox.fetch = async (url) => {
     return response(true, 200, {
       data: {
         token: "member-token-001",
-        member: { id: "member_green_amina", fullName: "Amina Naki", membershipNo: "GVS-0001" },
+        member: { id: "member_green_amina", fullName: "Amina Naki", membershipNo: "GREE-0001" },
         tenant: { id: "tenant_green", name: "Green Valley SACCO" },
         balances: { savings: 100000 },
         expiresAt: "2026-08-08T12:00:00.000Z"
@@ -281,10 +290,10 @@ sandbox.fetch = async (url) => {
   }
   throw new Error(`Unexpected URL ${url}`);
 };
-await sandbox.login("GVS", "GVS-0001", "Member@12345");
+await sandbox.login("GREE", "GREE-0001", "Member@12345");
 assert.equal(sandbox.state.auth, "member");
 assert.equal(sandbox.state.token, "member-token-001");
-assert.equal(sandbox.state.member.membershipNo, "GVS-0001");
+assert.equal(sandbox.state.member.membershipNo, "GREE-0001");
 assert.equal(sandbox.localStorage.getItem("tereka-member-token"), "member-token-001");
 assert.equal(sandbox.localStorage.getItem("tereka-staff-token"), null);
 assert.equal(refreshMemberCount, 1);
@@ -359,10 +368,73 @@ assert.equal(sandbox.isPlatform(), false);
 assert.equal(sandbox.roleKind(), "treasurer");
 assert.ok(treasurerModules.includes("finance"));
 assert.ok(!treasurerModules.includes("transactions"));
-assert.ok(!treasurerModules.includes("reconciliation"));
+assert.ok(treasurerModules.includes("reconciliation"));
 assert.ok(!treasurerModules.includes("members"));
 assert.ok(!treasurerModules.includes("users"));
 assert.equal(sandbox.sessionTimeLabel(), "Session active");
+
+function assertVisibleModulesForRole({ label, session, expected, forbidden }) {
+  sandbox.applyStaffSession({
+    token: `${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-token`,
+    expiresAt: "",
+    ...session
+  });
+  const modules = sandbox.visibleModules().map(([id]) => id);
+  for (const view of expected) {
+    assert.ok(modules.includes(view), `${label} should see ${view}; visible=${modules.join(",")}`);
+  }
+  for (const view of forbidden) {
+    assert.ok(!modules.includes(view), `${label} should not see ${view}; visible=${modules.join(",")}`);
+  }
+}
+
+assertVisibleModulesForRole({
+  label: "Platform Billing Officer",
+  session: {
+    user: { id: "user_platform_billing", tenantId: "tenant_platform", email: "billing@platform.local" },
+    tenant: { id: "tenant_platform", name: "Platform Administration" },
+    roleNames: ["Platform Billing Officer"],
+    permissionIds: ["dashboard:view", "tenants:view", "subscriptions:view", "reports:view", "operations:view"]
+  },
+  expected: ["dashboard", "sacco-applications", "subscriptions", "sacco-accounts"],
+  forbidden: ["transactions", "users", "settings"]
+});
+
+assertVisibleModulesForRole({
+  label: "Platform Compliance Officer",
+  session: {
+    user: { id: "user_platform_compliance", tenantId: "tenant_platform", email: "compliance@platform.local" },
+    tenant: { id: "tenant_platform", name: "Platform Administration" },
+    roleNames: ["Platform Compliance Officer"],
+    permissionIds: ["dashboard:view", "tenants:view", "transactions:view", "accounting:view", "reports:view", "operations:view", "approvals:view"]
+  },
+  expected: ["dashboard", "sacco-applications", "sacco-accounts", "audit"],
+  forbidden: ["subscriptions", "transactions", "users", "settings"]
+});
+
+assertVisibleModulesForRole({
+  label: "Chairperson",
+  session: {
+    user: { id: "user_green_chairperson", tenantId: "tenant_green", email: "chairperson@greenvalley.local" },
+    tenant: { id: "tenant_green", name: "Green Valley SACCO" },
+    roleNames: ["Chairperson"],
+    permissionIds: ["dashboard:view", "members:view", "transactions:view", "loans:view", "loans:approve", "reports:view", "governance:view", "complaints:view", "notifications:view", "sacco-profile:manage"]
+  },
+  expected: ["dashboard", "members", "loans", "loan-approvals", "reports", "governance", "complaints", "notifications", "documents", "settings"],
+  forbidden: ["payments", "finance", "users", "audit"]
+});
+
+assertVisibleModulesForRole({
+  label: "Teller",
+  session: {
+    user: { id: "user_green_teller", tenantId: "tenant_green", email: "teller@greenvalley.local" },
+    tenant: { id: "tenant_green", name: "Green Valley SACCO" },
+    roleNames: ["Teller / Cashier"],
+    permissionIds: ["dashboard:view", "members:view", "transactions:view", "transactions:create"]
+  },
+  expected: ["dashboard", "payments", "transactions"],
+  forbidden: ["members", "approvals", "accounting", "users", "audit"]
+});
 
 sandbox.applyStaffSession({
   token: "staff-super-token",
@@ -396,6 +468,13 @@ assert.match(superAdminUserListHtml, /2 record\(s\)/);
 assert.match(superAdminUserListHtml, /admin@platform.local/);
 assert.match(superAdminUserListHtml, /billing@platform.local/);
 assert.doesNotMatch(superAdminUserListHtml, /treasurer@greenvalley.local/);
+
+sandbox.state.userAdminTab = "functions";
+const platformFunctionMatrixHtml = sandbox.usersView();
+assert.match(platformFunctionMatrixHtml, /Platform function matrix/);
+assert.match(platformFunctionMatrixHtml, /Platform role functions/);
+assert.match(platformFunctionMatrixHtml, /System Settings: Manage protected platform configuration/);
+assert.match(platformFunctionMatrixHtml, /Subscriptions: Manage subscription payments/);
 
 sandbox.state.userAdminTab = "detail";
 sandbox.state.selectedUserId = "user_platform_billing";
@@ -432,15 +511,15 @@ sandbox.applyStaffSession({
 });
 sandbox.state.data.tenants = [
   { id: "tenant_platform", name: "Platform Administration", abbreviation: "PLATFORM", status: "active" },
-  { id: "tenant_green", name: "Green Valley SACCO", abbreviation: "GVS", country: "Uganda", currencyCode: "UGX", district: "Wakiso", registrationNo: "REG-001", status: "active" },
-  { id: "tenant_market", name: "Market Women SACCO", abbreviation: "MWS", country: "Uganda", currencyCode: "UGX", district: "Kampala", registrationNo: "REG-002", status: "pending_self_registration" }
+  { id: "tenant_green", name: "Green Valley SACCO", abbreviation: "GREE", country: "Uganda", currencyCode: "UGX", district: "Wakiso", registrationNo: "REG-001", status: "active" },
+  { id: "tenant_market", name: "Market Women SACCO", abbreviation: "MBAL", country: "Uganda", currencyCode: "UGX", district: "Kampala", registrationNo: "REG-002", status: "pending_self_registration" }
 ];
 sandbox.state.data.subscriptions = [
   { id: "sub_green", tenantId: "tenant_green", packageId: "pkg_250", amount: 500000, paid: 500000, status: "active", expiry: "2027-08-08" },
   { id: "sub_market", tenantId: "tenant_market", packageId: "pkg_250", amount: 500000, paid: 0, status: "pending", expiry: "2027-08-08" }
 ];
 sandbox.state.data.subscriptionPackages = [
-  { id: "pkg_250", name: "Starter 100-250", memberRange: "100-250" },
+  { id: "pkg_250", name: "Starter 20-250", memberRange: "20-250" },
   { id: "pkg_500", name: "Growth 251-500", memberRange: "251-500" }
 ];
 sandbox.state.saccoRegistrationTab = "platform";
@@ -453,15 +532,18 @@ assert.match(platformRegistrationHtml, /id="newTenantParish"/);
 assert.match(platformRegistrationHtml, /id="newTenantVillage"/);
 assert.match(platformRegistrationHtml, /id="newTenantContactNumber"/);
 assert.match(platformRegistrationHtml, /id="newTenantMemberRange"/);
-assert.match(platformRegistrationHtml, /100 to 250 members/);
+assert.match(platformRegistrationHtml, /20 to 250 members/);
 assert.match(platformRegistrationHtml, /251 to 500 members/);
 assert.match(platformRegistrationHtml, /id="newTenantPaymentStatus"/);
 assert.match(platformRegistrationHtml, /Paid - activate SACCO/);
-assert.match(platformRegistrationHtml, /Not paid - keep pending payment/);
+assert.match(platformRegistrationHtml, /Not paid - activate one-month setup trial/);
 assert.doesNotMatch(platformRegistrationHtml, /Creation mode/);
-assert.equal(sandbox.generatedSaccoCode("Green Valley SACCO"), "GV2");
-assert.equal(sandbox.generatedSaccoCode("Tereka Farmers SACCO Limited"), "TFS");
-assert.equal(sandbox.saccoLocationAddress("Kampala", "Central", "Market Zone", "100-250"), "District: Kampala; Parish: Central; Village: Market Zone; Member range: 100-250");
+assert.doesNotMatch(platformRegistrationHtml, /SACCO registration readiness/);
+assert.doesNotMatch(platformRegistrationHtml, /Track payment confirmation, self-registration approval and activation before a SACCO starts operating/);
+assert.match(sandbox.generatedSaccoCode("Green Valley SACCO"), /^[A-Z]{4}$/);
+assert.notEqual(sandbox.generatedSaccoCode("Green Valley SACCO"), "GREE");
+assert.equal(sandbox.generatedSaccoCode("Tereka Farmers SACCO Limited"), "TERE");
+assert.equal(sandbox.saccoLocationAddress("Kampala", "Central", "Market Zone", "20-250"), "District: Kampala; Parish: Central; Village: Market Zone; Member range: 20-250");
 
 sandbox.state.saccoRegistrationTab = "applications";
 const applicationListHtml = sandbox.saccoApplications();
@@ -472,11 +554,12 @@ assert.match(applicationListHtml, /Callback received/);
 assert.match(applicationListHtml, /Payment initiated/);
 assert.match(applicationListHtml, /Active/);
 assert.match(applicationListHtml, /Awaiting payment/);
+assert.doesNotMatch(applicationListHtml, /SACCO registration readiness/);
 
 sandbox.state.authTab = "register";
 const publicRegistrationHtml = sandbox.publicSaccoRegistrationPanel();
 assert.match(publicRegistrationHtml, /Complete SACCO details/);
-assert.match(publicRegistrationHtml, /id="publicTenantCode" readonly/);
+assert.match(publicRegistrationHtml, /id="publicTenantCode" readonly maxlength="4"/);
 assert.match(publicRegistrationHtml, /id="publicTenantDistrict"/);
 assert.match(publicRegistrationHtml, /id="publicTenantParish"/);
 assert.match(publicRegistrationHtml, /id="publicTenantVillage"/);
@@ -499,7 +582,7 @@ sandbox.state.data.members = [
     id: "member_green_amina",
     tenantId: "tenant_green",
     branchId: "branch_main",
-    membershipNo: "GVS-0001",
+    membershipNo: "GREE-0001",
     fullName: "Amina Naki",
     memberType: "individual",
     phone: "+256700000001",
@@ -527,7 +610,7 @@ sandbox.state.memberTab = "list";
 const memberListHtml = sandbox.membersView();
 assert.match(memberListHtml, /Member account base/);
 assert.match(memberListHtml, /Select member account cycle/);
-assert.match(memberListHtml, /GVS-0001/);
+assert.match(memberListHtml, /GREE-0001/);
 assert.match(memberListHtml, /Amina Naki/);
 assert.match(memberListHtml, /Open profile/);
 assert.doesNotMatch(memberListHtml, /Platform administrator list/);
@@ -585,6 +668,38 @@ assert.doesNotMatch(treasurerMemberKycHtml, /Save member profile/);
 assert.doesNotMatch(treasurerMemberKycHtml, /Approve member/);
 
 sandbox.applyStaffSession({
+  token: "platform-token",
+  user: { id: "user_platform_super", tenantId: "tenant_platform", email: "admin@platform.local" },
+  tenant: { id: "tenant_platform", name: "Platform Administration", currencyCode: "UGX" },
+  roleNames: ["Platform Super Admin"],
+  permissionIds: ["dashboard:view", "transactions:view", "subscriptions:view", "subscriptions:manage"],
+  expiresAt: ""
+});
+sandbox.state.data.tenants = [
+  { id: "tenant_green", name: "Green Valley SACCO", abbreviation: "GREE", status: "active" }
+];
+sandbox.state.data.subscriptions = [
+  { id: "sub_green", tenantId: "tenant_green", packageId: "growth", tierLabel: "20-250 members", invoice: "INV-2026-001", amount: 100000, paid: 25000, status: "pending_payment", expiry: "2027-08-08" }
+];
+sandbox.state.moduleTabs.transactions = "overview";
+const platformTransactionsHtml = sandbox.transactionsView();
+assert.doesNotMatch(platformTransactionsHtml, />Overview</);
+assert.doesNotMatch(platformTransactionsHtml, /Office receipt controls/);
+assert.doesNotMatch(platformTransactionsHtml, /id="newTransactionMemberId"/);
+assert.match(platformTransactionsHtml, /Record platform-SACCO transaction/);
+assert.match(platformTransactionsHtml, /These are not SACCO member transactions/);
+assert.match(platformTransactionsHtml, /id="platformTransactionSaccoSearch"/);
+assert.match(platformTransactionsHtml, /id="platformTransactionSaccoOptions"/);
+assert.match(platformTransactionsHtml, /id="platformTransactionSubscriptionId"/);
+assert.doesNotMatch(platformTransactionsHtml, /<select id="platformTransactionSubscriptionId"/);
+
+sandbox.state.moduleTabs.transactions = "list";
+const platformTransactionListHtml = sandbox.transactionsView();
+assert.match(platformTransactionListHtml, /Platform-SACCO transaction list/);
+assert.match(platformTransactionListHtml, /Green Valley SACCO/);
+assert.match(platformTransactionListHtml, /GREE/);
+
+sandbox.applyStaffSession({
   token: "staff-treasurer-token",
   user: { id: "user_green_treasurer", tenantId: "tenant_green", email: "treasurer@greenvalley.local" },
   tenant: { id: "tenant_green", name: "Green Valley SACCO", currencyCode: "UGX" },
@@ -632,7 +747,7 @@ sandbox.state.selectedTransactionReceipt = {
   receiptNo: "RCT-MM-001",
   tenantName: "Green Valley SACCO",
   memberName: "Amina Naki",
-  membershipNo: "GVS-0001",
+  membershipNo: "GREE-0001",
   channel: "mobile_money",
   amount: 30000,
   issuedAt: "2026-08-08T09:05:00.000Z",
@@ -778,8 +893,8 @@ assert.match(loanApplicationHtml, /Submit loan application/);
 
 sandbox.state.moduleTabs.loans = "list";
 const loanListHtml = sandbox.loansView();
-assert.match(loanListHtml, /Loan application list/);
-assert.match(loanListHtml, /LN-2026-001/);
+assert.match(loanListHtml, /Loan applications/);
+assert.match(loanListHtml, /GREE-/);
 assert.match(loanListHtml, /Development Loan/);
 assert.match(loanListHtml, /Awaiting approval/);
 assert.match(loanListHtml, /Arrears/);
@@ -994,7 +1109,7 @@ sandbox.applyStaffSession({
   expiresAt: ""
 });
 sandbox.state.data.tenants = [
-  { id: "tenant_green", name: "Green Valley SACCO", abbreviation: "GVS", allowedCollectionMode: "BOTH", mobileMoneyCollectionActive: true, bankCollectionActive: true }
+  { id: "tenant_green", name: "Green Valley SACCO", abbreviation: "GREE", allowedCollectionMode: "BOTH", mobileMoneyCollectionActive: true, bankCollectionActive: true }
 ];
 sandbox.state.data.financialProducts = [
   { id: "prod_sav", tenantId: "tenant_green", productType: "savings", code: "SAV-MONTHLY", name: "Monthly Savings", contributionAmount: 10000, minimumBalance: 0, interestRate: 0, status: "active" },
@@ -1002,13 +1117,13 @@ sandbox.state.data.financialProducts = [
   { id: "prod_welfare", tenantId: "tenant_green", productType: "welfare", code: "WEL-MED", name: "Medical Welfare", contributionAmount: 3000, minimumBalance: 0, interestRate: 0, status: "active" }
 ];
 sandbox.state.data.financialAccounts = [
-  { id: "acct_sav_1", tenantId: "tenant_green", memberId: "member_green_amina", membershipNo: "GVS-0001", memberName: "Amina Naki", productId: "prod_sav", productName: "Monthly Savings", accountType: "savings", accountNo: "SAV-0001", status: "active", openedAt: "2026-08-01T09:00:00.000Z" },
-  { id: "acct_share_1", tenantId: "tenant_green", memberId: "member_green_amina", membershipNo: "GVS-0001", memberName: "Amina Naki", productId: "prod_share", productName: "Standard Shares", accountType: "share", accountNo: "SHR-0001", status: "active", openedAt: "2026-08-01T09:05:00.000Z" },
-  { id: "acct_welfare_1", tenantId: "tenant_green", memberId: "member_green_amina", membershipNo: "GVS-0001", memberName: "Amina Naki", productId: "prod_welfare", productName: "Medical Welfare", accountType: "welfare", accountNo: "WEL-0001", status: "active", openedAt: "2026-08-01T09:10:00.000Z" }
+  { id: "acct_sav_1", tenantId: "tenant_green", memberId: "member_green_amina", membershipNo: "GREE-0001", memberName: "Amina Naki", productId: "prod_sav", productName: "Monthly Savings", accountType: "savings", accountNo: "SAV-0001", status: "active", openedAt: "2026-08-01T09:00:00.000Z" },
+  { id: "acct_share_1", tenantId: "tenant_green", memberId: "member_green_amina", membershipNo: "GREE-0001", memberName: "Amina Naki", productId: "prod_share", productName: "Standard Shares", accountType: "share", accountNo: "SHR-0001", status: "active", openedAt: "2026-08-01T09:05:00.000Z" },
+  { id: "acct_welfare_1", tenantId: "tenant_green", memberId: "member_green_amina", membershipNo: "GREE-0001", memberName: "Amina Naki", productId: "prod_welfare", productName: "Medical Welfare", accountType: "welfare", accountNo: "WEL-0001", status: "active", openedAt: "2026-08-01T09:10:00.000Z" }
 ];
 sandbox.state.data.welfareClaims = [
-  { id: "claim_1", tenantId: "tenant_green", memberId: "member_green_amina", membershipNo: "GVS-0001", memberName: "Amina Naki", claimType: "medical", amount: 50000, channel: "mobile_money", reference: "WEL-001", status: "submitted", submittedAt: "2026-08-08T09:00:00.000Z" },
-  { id: "claim_2", tenantId: "tenant_green", memberId: "member_green_brian", membershipNo: "GVS-0002", memberName: "Brian Kato", claimType: "funeral", amount: 75000, channel: "bank", reference: "WEL-002", status: "approved", submittedAt: "2026-08-08T10:00:00.000Z" }
+  { id: "claim_1", tenantId: "tenant_green", memberId: "member_green_amina", membershipNo: "GREE-0001", memberName: "Amina Naki", claimType: "medical", amount: 50000, channel: "mobile_money", reference: "WEL-001", status: "submitted", submittedAt: "2026-08-08T09:00:00.000Z" },
+  { id: "claim_2", tenantId: "tenant_green", memberId: "member_green_brian", membershipNo: "GREE-0002", memberName: "Brian Kato", claimType: "funeral", amount: 75000, channel: "bank", reference: "WEL-002", status: "approved", submittedAt: "2026-08-08T10:00:00.000Z" }
 ];
 sandbox.state.data.chartOfAccounts = [
   { code: "1000", name: "Cash at bank", type: "asset", normalBalance: "debit" },
@@ -1141,10 +1256,17 @@ assert.match(readonlyTransactionFormHtml, /View only/);
 assert.match(readonlyTransactionFormHtml, /id="newTransactionType" disabled/);
 const readonlyPaymentRequestsHtml = sandbox.paymentRequestOperationsPanel(sandbox.state.data.mobileMoneyPaymentRequests);
 assert.match(readonlyPaymentRequestsHtml, /Only users with posting rights can change payment request status/);
+assert.match(readonlyPaymentRequestsHtml, /id="paymentRequestReason"[^>]*disabled/);
 assert.match(readonlyPaymentRequestsHtml, /data-payment-request-status="failed" disabled/);
 const readonlyLoanApplicationHtml = sandbox.loanApplicationPanel();
 assert.match(readonlyLoanApplicationHtml, /View only/);
 assert.match(readonlyLoanApplicationHtml, /id="newLoanMemberId" disabled/);
+const readonlyMemberRegistrationHtml = sandbox.memberRegistrationPanel();
+assert.match(readonlyMemberRegistrationHtml, /View only/);
+assert.match(readonlyMemberRegistrationHtml, /id="newMemberFullName"[^>]*disabled/);
+const readonlyMemberDuesHtml = sandbox.memberDuesPaymentPanel([{ id: "dues_1", memberId: "member_green_amina", planName: "Annual dues", balanceDue: 5000 }], { id: "dues_1", memberId: "member_green_amina", planName: "Annual dues", balanceDue: 5000 });
+assert.match(readonlyMemberDuesHtml, /Only users with transaction capture rights can collect member subscription payments/);
+assert.doesNotMatch(readonlyMemberDuesHtml, /data-pay-member-dues="1"/);
 const readonlyLoanRows = sandbox.buildLoanRows({
   loans: sandbox.dataRows("loans"),
   memberName: sandbox.memberName,
@@ -1155,6 +1277,11 @@ const readonlyLoanDetailHtml = sandbox.loanDetailPanel(readonlyLoanRows);
 assert.match(readonlyLoanDetailHtml, /View only/);
 assert.match(readonlyLoanDetailHtml, /id="loanRepaymentAmount"[^>]*disabled/);
 assert.doesNotMatch(readonlyLoanDetailHtml, /Approve loan<\/button>/);
+
+await sandbox.createMemberFromForm({ preventDefault() {} });
+assert.match(sandbox.state.memberFormError, /Member creation permission is required/);
+await sandbox.recordMemberDuesPayment();
+assert.match(sandbox.state.memberDuesError, /Transaction capture permission is required/);
 
 sandbox.state.auth = "member";
 sandbox.state.user = null;
@@ -1198,9 +1325,9 @@ sandbox.state.user = { id: "user_platform_super", tenantId: "tenant_platform", e
 sandbox.state.roleNames = ["Platform Super Admin"];
 sandbox.state.permissionIds = ["notifications:view", "notifications:manage"];
 sandbox.state.moduleTabs.notifications = "payment-exceptions";
-sandbox.state.data.tenants = [{ id: "tenant_green", name: "Green Valley SACCO", abbreviation: "GVS" }];
+sandbox.state.data.tenants = [{ id: "tenant_green", name: "Green Valley SACCO", abbreviation: "GREE" }];
 sandbox.state.data.users = [{ id: "user_green_admin", fullName: "Grace Admin", email: "admin@greenvalley.local" }];
-sandbox.state.data.members = [{ id: "member_green_amina", membershipNo: "GVS-0001", fullName: "Amina Naki" }];
+sandbox.state.data.members = [{ id: "member_green_amina", membershipNo: "GREE-0001", fullName: "Amina Naki" }];
 sandbox.state.data.notifications = [
   {
     id: "delivery_1",

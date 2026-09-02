@@ -35,7 +35,7 @@ class AirtelMoneyMobileMoneyProviderTest {
         MobileMoneyPaymentResult result = provider.requestPayment(new MobileMoneyPaymentRequest(
                 "tenant_green",
                 "member_green_amina",
-                "GVS-0001",
+                "GREE-0001",
                 null,
                 "savings_deposit",
                 BigDecimal.valueOf(5000),

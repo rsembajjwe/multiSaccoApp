@@ -23,6 +23,7 @@ function settingsView() {
     ` : ""}
     ${tab === "membership" ? membershipCalendarSettingsPanel() : ""}
     ${tab === "branding" ? saccoLogoSettingsPanel() : ""}
+    ${tab === "mobile-approval" ? mobileNumberApprovalSettingsPanel() : ""}
     ${tab === "branches" ? branchSetupPanel() : ""}
     ${tab === "funds" ? fundTypesSetupPanel() : ""}
     ${tab === "products" ? financialProductSetupPanel() : ""}
@@ -39,6 +40,7 @@ function saccoSettingsTabs(activeTab) {
     ["overview", t("settingsOverview")],
     ["membership", "Membership calendar"],
     ["branding", "SACCO logo"],
+    ["mobile-approval", "Mobile number approval"],
     ["branches", t("branchSetup")],
     ["funds", "Fund sources"],
     ["products", t("productSetup")],
@@ -132,6 +134,160 @@ async function saveSaccoLogoSettings(clear = false) {
     state.saccoLogoError = error.message || "Could not save SACCO logo.";
   }
   renderShell();
+}
+
+function mobileApprovalStorageKey() {
+  return `tereka-mobile-number-approval:${state.user?.tenantId || state.tenant?.id || "current"}`;
+}
+
+function currentMobileApprovalRecord() {
+  try {
+    return JSON.parse(localStorage.getItem(mobileApprovalStorageKey()) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function mobileNumberApprovalSettingsPanel() {
+  const canManage = hasPermission("sacco-profile:manage") || ["admin", "chairperson"].includes(roleKind());
+  const record = currentMobileApprovalRecord();
+  const uploaded = Boolean(record.fileName || record.fileDataUrl);
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Mobile number approval</h2>
+          <p>Download the approval form, let SACCO leaders sign with their contacts, then upload the signed copy before mobile-money collection goes live.</p>
+        </div>
+        <span class="status ${uploaded ? "active" : "pending"}">${uploaded ? "Signed copy uploaded" : "Signed copy needed"}</span>
+      </div>
+      ${state.mobileApprovalMessage ? `<div class="notice compact"><strong>${escapeHtml(state.mobileApprovalMessage)}</strong></div>` : ""}
+      ${state.mobileApprovalError ? `<div class="notice warning"><strong>Mobile approval not saved.</strong><span>${escapeHtml(state.mobileApprovalError)}</span></div>` : ""}
+      <div class="source-grid compact">
+        ${mini("SACCO", contextName())}
+        ${mini("Approved provider", record.provider || "Not recorded")}
+        ${mini("Approved mobile number", record.mobileNumber || "Not recorded")}
+        ${mini("Signed document", uploaded ? record.fileName || "Uploaded" : "Missing")}
+      </div>
+      <form id="mobileApprovalForm" class="form-grid">
+        <label><span>Mobile-money provider</span><select id="mobileApprovalProvider" ${canManage ? "" : "disabled"}>
+          ${["MTN", "Airtel"].map((provider) => `<option value="${provider}" ${record.provider === provider ? "selected" : ""}>${provider}</option>`).join("")}
+        </select></label>
+        <label><span>Approved SACCO mobile number</span><input id="mobileApprovalNumber" value="${escapeHtml(record.mobileNumber || "")}" placeholder="+256..." ${canManage ? "" : "readonly"}></label>
+        <label><span>Chairperson name</span><input id="mobileApprovalChairName" value="${escapeHtml(record.chairName || "")}" ${canManage ? "" : "readonly"}></label>
+        <label><span>Chairperson contact</span><input id="mobileApprovalChairContact" value="${escapeHtml(record.chairContact || "")}" ${canManage ? "" : "readonly"}></label>
+        <label><span>Secretary name</span><input id="mobileApprovalSecretaryName" value="${escapeHtml(record.secretaryName || "")}" ${canManage ? "" : "readonly"}></label>
+        <label><span>Secretary contact</span><input id="mobileApprovalSecretaryContact" value="${escapeHtml(record.secretaryContact || "")}" ${canManage ? "" : "readonly"}></label>
+        <label><span>Treasurer name</span><input id="mobileApprovalTreasurerName" value="${escapeHtml(record.treasurerName || "")}" ${canManage ? "" : "readonly"}></label>
+        <label><span>Treasurer contact</span><input id="mobileApprovalTreasurerContact" value="${escapeHtml(record.treasurerContact || "")}" ${canManage ? "" : "readonly"}></label>
+        <label class="wide"><span>Upload signed approval copy</span><input id="mobileApprovalFile" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" ${canManage ? "" : "disabled"}></label>
+        <div class="form-actions inline">
+          <button class="button secondary" type="button" data-download-mobile-approval="1">Download approval form</button>
+          <button class="button primary" type="button" data-save-mobile-approval="1" ${canManage ? "" : "disabled"}>Save signed approval</button>
+          <button class="button ghost" type="button" data-clear-mobile-approval="1" ${canManage && uploaded ? "" : "disabled"}>Remove signed copy</button>
+        </div>
+      </form>
+      <p class="helper-text">Keep this signed copy in SACCO records. It proves that the collection number was approved by SACCO leaders and their contacts were captured.</p>
+    </section>
+  `;
+}
+
+function mobileApprovalPayloadFromForm(existing = {}) {
+  /** @type {Record<string, any>} */
+  const payload = {
+    ...existing,
+    provider: value("mobileApprovalProvider"),
+    mobileNumber: value("mobileApprovalNumber").trim(),
+    chairName: value("mobileApprovalChairName").trim(),
+    chairContact: value("mobileApprovalChairContact").trim(),
+    secretaryName: value("mobileApprovalSecretaryName").trim(),
+    secretaryContact: value("mobileApprovalSecretaryContact").trim(),
+    treasurerName: value("mobileApprovalTreasurerName").trim(),
+    treasurerContact: value("mobileApprovalTreasurerContact").trim(),
+    updatedAt: new Date().toISOString()
+  };
+  return payload;
+}
+
+async function saveMobileNumberApproval(clear = false) {
+  state.mobileApprovalMessage = "";
+  state.mobileApprovalError = "";
+  try {
+    if (clear) {
+      localStorage.removeItem(mobileApprovalStorageKey());
+      state.mobileApprovalMessage = "Mobile-number approval record removed.";
+      renderShell();
+      return;
+    }
+    const existing = currentMobileApprovalRecord();
+    const payload = mobileApprovalPayloadFromForm(existing);
+    if (!payload.mobileNumber) throw new Error("Enter the approved SACCO mobile number.");
+    const fileInput = document.getElementById("mobileApprovalFile");
+    const file = fileInput instanceof HTMLInputElement ? fileInput.files?.[0] : null;
+    if (file) {
+      if (file.size > 900 * 1024) throw new Error("Signed approval file must be 900 KB or smaller.");
+      payload.fileName = file.name;
+      payload.fileType = file.type || "application/octet-stream";
+      payload.fileDataUrl = await blobToDataUrl(file);
+    }
+    if (!payload.fileDataUrl && !payload.fileName) throw new Error("Upload the signed approval copy.");
+    localStorage.setItem(mobileApprovalStorageKey(), JSON.stringify(payload));
+    state.mobileApprovalMessage = "Signed mobile-number approval saved.";
+  } catch (error) {
+    state.mobileApprovalError = error.message || "Could not save mobile-number approval.";
+  }
+  renderShell();
+}
+
+function downloadMobileNumberApprovalForm() {
+  const record = mobileApprovalPayloadFromForm(currentMobileApprovalRecord());
+  const date = formatDate(new Date().toISOString());
+  const rows = [
+    ["SACCO", contextName()],
+    ["SACCO code", contextCode()],
+    ["Mobile-money provider", record.provider || ""],
+    ["Approved SACCO mobile number", record.mobileNumber || ""],
+    ["Chairperson", `${record.chairName || ""} / ${record.chairContact || ""}`],
+    ["Secretary", `${record.secretaryName || ""} / ${record.secretaryContact || ""}`],
+    ["Treasurer", `${record.treasurerName || ""} / ${record.treasurerContact || ""}`],
+    ["Generated", date]
+  ];
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Mobile Number Approval</title>
+    <style>
+      @page{size:A4 portrait;margin:18mm}body{font-family:Arial,sans-serif;color:#111;margin:0;font-size:12px}
+      h1,h2{text-align:center;margin:0}h1{font-size:20px}h2{font-size:14px;margin-top:4px}
+      table{width:100%;border-collapse:collapse;margin-top:18px}td,th{border:1px solid #111;padding:8px;vertical-align:top}
+      .section{margin-top:18px}.line{height:34px;border-bottom:1px solid #111}.signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:22px}
+      .footer{position:fixed;bottom:10mm;left:18mm;right:18mm;display:flex;justify-content:space-between;font-size:10px}
+    </style></head><body>
+      <h1>${escapeHtml(contextName())}</h1><h2>Mobile Money Collection Number Approval Form</h2>
+      <table>${rows.map(([label, text]) => `<tr><th style="width:34%;text-align:left">${escapeHtml(label)}</th><td>${escapeHtml(text)}</td></tr>`).join("")}</table>
+      <div class="section"><strong>Approval statement</strong><p>We confirm that the mobile-money number above is approved for SACCO collection use. Funds collected through this number belong to the SACCO and must be reconciled in Tereka Online.</p></div>
+      <div class="signatures">
+        <div><strong>Chairperson</strong><div class="line"></div><small>Name, contact and signature</small></div>
+        <div><strong>Secretary</strong><div class="line"></div><small>Name, contact and signature</small></div>
+        <div><strong>Treasurer</strong><div class="line"></div><small>Name, contact and signature</small></div>
+      </div>
+      <div class="footer"><span>Signed SACCO mobile-number approval record</span><span>Powered by Tereka Online</span></div>
+    </body></html>`;
+  downloadSettingsFile(`${contextCode()}-mobile-number-approval.html`, html, "text/html;charset=utf-8");
+  state.mobileApprovalMessage = "Approval form downloaded. Print, sign, scan and upload it here.";
+  renderShell();
+}
+
+function downloadSettingsFile(filename, content, type) {
+  if (typeof downloadClientFile === "function") {
+    downloadClientFile(filename, content, type);
+    return;
+  }
+  const blob = new Blob([content], { type });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 function membershipCalendarSettingsPanel() {

@@ -4,5 +4,6 @@ public record StaffNotificationRecipient(
         String userId,
         String tenantId,
         String fullName,
-        String email) {
+        String email,
+        String phone) {
 }

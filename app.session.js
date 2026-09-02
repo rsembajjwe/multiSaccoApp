@@ -371,7 +371,7 @@ async function refreshAll() {
   if (hasPermission("finance-source:view")) endpoints.push(["fundingSources", "/funding-sources"]);
   if (hasPermission("fund-types:view")) endpoints.push(["fundTypes", "/fund-types"]);
   if (!isPlatform() && hasPermission("members:view")) endpoints.push(["memberFundBalances", "/members/fund-balances"]);
-  if (!isPlatform() && hasPermission("members:view")) endpoints.push(["memberSubscriptions", "/member-subscriptions"]);
+  if (!isPlatform() && hasPermission("member-subscription:view")) endpoints.push(["memberSubscriptions", "/member-subscriptions"]);
   if (!isPlatform() && hasPermission("members:approve")) endpoints.push(["staffDirectory", "/members/staff-directory"]);
   if (hasPermission("loans:view")) endpoints.push(["guarantorRequests", "/loans/guarantor-requests"]);
   if (hasPermission("savings-transfer:view")) endpoints.push(["savingsTransfers", "/savings-transfers"]);
@@ -515,6 +515,10 @@ async function logout() {
     tenantFormMessage: "",
     tenantFormError: "",
     saccoRegistrationTab: "platform",
+    saccoApplicationApprovalFilter: "",
+    saccoApplicationAccessFilter: "",
+    saccoApplicationYearFilter: "",
+    saccoApplicationMonthFilter: "",
     publicRegistrationMessage: "",
     publicRegistrationError: "",
     selectedSubscriptionId: "",

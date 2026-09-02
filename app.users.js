@@ -23,6 +23,7 @@
         detailPanel,
         coveragePanel: roleCoveragePanel(users, roles, true),
         listPanel,
+        functionPanel: roleFunctionMatrixPanel(roles, true),
         permissionPanel: permissionMatrix()
       })}
     `;
@@ -43,6 +44,7 @@
       guidePanel: saccoStaffAccessGuide(roles),
       coveragePanel: roleCoveragePanel(users, roles, false),
       listPanel,
+      functionPanel: roleFunctionMatrixPanel(roles, false),
       permissionPanel: permissionMatrix()
     })}
   `;
@@ -54,6 +56,7 @@ function userManagementTabs(canCreate) {
     ["detail", t("userDetailRoleAssignment"), true],
     ["coverage", t("platformRoleCoverage"), true],
     ["list", t("platformAdministratorList"), true],
+    ["functions", "Function matrix", true],
     ["matrix", t("permissionMatrix"), true]
   ];
   if (!tabs.some(([id]) => id === state.userAdminTab)) state.userAdminTab = "list";
@@ -67,10 +70,11 @@ function userManagementTabs(canCreate) {
   `;
 }
 
-function platformUserTabContent({ activeTab, canCreate, addPanel, detailPanel, coveragePanel, listPanel, permissionPanel }) {
+function platformUserTabContent({ activeTab, canCreate, addPanel, detailPanel, coveragePanel, listPanel, functionPanel, permissionPanel }) {
   if (activeTab === "add") return addPanel;
   if (activeTab === "detail") return detailPanel;
   if (activeTab === "coverage") return coveragePanel;
+  if (activeTab === "functions") return functionPanel;
   if (activeTab === "matrix") return permissionPanel;
   return listPanel;
 }
@@ -82,6 +86,7 @@ function saccoUserManagementTabs(canCreate) {
     ["guide", "SACCO staff role guide", true],
     ["coverage", "SACCO staff role coverage", true],
     ["list", "SACCO staff access list", true],
+    ["functions", "Function matrix", true],
     ["matrix", "Permission matrix", true]
   ];
   if (!tabs.some(([id]) => id === state.userAdminTab)) state.userAdminTab = "list";
@@ -95,11 +100,12 @@ function saccoUserManagementTabs(canCreate) {
   `;
 }
 
-function saccoUserTabContent({ activeTab, canCreate, addPanel, detailPanel, guidePanel, coveragePanel, listPanel, permissionPanel }) {
+function saccoUserTabContent({ activeTab, canCreate, addPanel, detailPanel, guidePanel, coveragePanel, listPanel, functionPanel, permissionPanel }) {
   if (activeTab === "add") return addPanel;
   if (activeTab === "detail") return detailPanel;
   if (activeTab === "guide") return guidePanel;
   if (activeTab === "coverage") return coveragePanel;
+  if (activeTab === "functions") return functionPanel;
   if (activeTab === "matrix") return permissionPanel;
   return listPanel;
 }
@@ -252,7 +258,7 @@ function userDetailPanel(users, canManageRoles) {
 
 function roleCoveragePanel(users, roles, platformOnly) {
   const rows = buildRoleCoverageRows({ platformOnly, roles, users });
-  return recordTable(platformOnly ? "Platform role coverage" : "SACCO staff role coverage", rows, ["roleName", "scope", "assignedUsers", "accessPurpose", "moduleScope", "status"]);
+  return recordTable(platformOnly ? "Platform role coverage" : "SACCO staff role coverage", rows, ["roleName", "scope", "assignedUsers", "accessPurpose", "moduleScope", "functionCount", "status"]);
 }
 
 function staffAccessRow(user, platformOnly) {
@@ -279,6 +285,21 @@ function permissionMatrix() {
   return `<section class="panel"><h2>Permission matrix</h2><div class="permission-grid">${rows.map((item) => `<div><strong>${escapeHtml(item.moduleName)}</strong>${item.actions.map((action) => `<span>${escapeHtml(action)}</span>`).join("")}</div>`).join("")}</div></section>`;
 }
 
+function roleFunctionMatrixPanel(roles, platformOnly) {
+  const rows = buildRoleFunctionMatrixRows(roles, platformOnly);
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <h2>${platformOnly ? "Platform function matrix" : "SACCO staff function matrix"}</h2>
+          <p>Review role functions and descriptions before assigning access. This hardens role setup by making permission intent visible.</p>
+        </div>
+      </div>
+      ${recordTable(platformOnly ? "Platform role functions" : "SACCO role functions", rows, ["roleName", "accessPurpose", "functionCount", "functions", "descriptions", "status"])}
+    </section>
+  `;
+}
+
 function userRoleOptions(platformOnly) {
   return filterRolesForScope(dataRows("roles"), platformOnly, state.user?.tenantId);
 }
@@ -286,4 +307,3 @@ function userRoleOptions(platformOnly) {
 function checkedRoleIds(name) {
   return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map((input) => input.value);
 }
-

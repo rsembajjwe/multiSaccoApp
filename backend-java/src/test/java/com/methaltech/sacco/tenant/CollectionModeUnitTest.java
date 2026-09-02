@@ -64,7 +64,7 @@ class CollectionModeUnitTest {
         Tenant tenant = new Tenant(
                 "tenant_green",
                 "Green Valley SACCO",
-                "GVS",
+                "GREE",
                 "REG-002",
                 "Mukono",
                 LocalDate.of(2027, 12, 31),

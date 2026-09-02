@@ -30,11 +30,11 @@ class DemoCredentialPolicyTest {
     void productionBlocksSeededMemberIdentifiersAndDemoEmails() {
         DemoCredentialPolicy policy = new DemoCredentialPolicy(false);
 
-        assertFalse(policy.memberLoginAllowed("GVS-0001"));
-        assertFalse(policy.memberLoginAllowed("GVS-0009"));
+        assertFalse(policy.memberLoginAllowed("GREE-0001"));
+        assertFalse(policy.memberLoginAllowed("GREE-0009"));
         assertFalse(policy.memberLoginAllowed("amina@example.local"));
         assertFalse(policy.memberLoginAllowed("future-member@example.local"));
-        assertTrue(policy.memberLoginAllowed("GVS-8244"));
+        assertTrue(policy.memberLoginAllowed("GREE-8244"));
         assertTrue(policy.memberLoginAllowed("+256700555111"));
     }
 
@@ -42,7 +42,7 @@ class DemoCredentialPolicyTest {
     void demoProfileAllowsSeededMemberIdentifiers() {
         DemoCredentialPolicy policy = new DemoCredentialPolicy(true);
 
-        assertTrue(policy.memberLoginAllowed("GVS-0001"));
+        assertTrue(policy.memberLoginAllowed("GREE-0001"));
         assertTrue(policy.memberLoginAllowed("amina@example.local"));
     }
 }

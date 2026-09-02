@@ -438,6 +438,16 @@ function scheduleServerTableSearch(tableKey) {
   serverTableSearchTimers[tableKey] = window.setTimeout(() => loadServerTablePage(tableKey, 0), 350);
 }
 
+function resetSaccoApplicationTableSearch() {
+  const tableKey = tableStateKey("SACCO application list");
+  state.search = "";
+  state.tableState[tableKey] = {
+    ...(state.tableState[tableKey] || {}),
+    search: "",
+    page: 1
+  };
+}
+
 function bindEvents() {
   document.querySelector("#loginLocale")?.addEventListener("change", (event) => {
     state.locale = supportedLocales.some((locale) => locale.code === event.target.value) ? event.target.value : DEFAULT_REGION.locale;
@@ -557,6 +567,34 @@ function bindEvents() {
       renderShell();
     });
   });
+  document.querySelector("#saccoApplicationApprovalFilter")?.addEventListener("change", (event) => {
+    state.saccoApplicationApprovalFilter = event.target.value;
+    resetSaccoApplicationTableSearch();
+    renderShell();
+  });
+  document.querySelector("#saccoApplicationAccessFilter")?.addEventListener("change", (event) => {
+    state.saccoApplicationAccessFilter = event.target.value;
+    resetSaccoApplicationTableSearch();
+    renderShell();
+  });
+  document.querySelector("#saccoApplicationYearFilter")?.addEventListener("change", (event) => {
+    state.saccoApplicationYearFilter = event.target.value;
+    resetSaccoApplicationTableSearch();
+    renderShell();
+  });
+  document.querySelector("#saccoApplicationMonthFilter")?.addEventListener("change", (event) => {
+    state.saccoApplicationMonthFilter = event.target.value;
+    resetSaccoApplicationTableSearch();
+    renderShell();
+  });
+  document.querySelector("[data-action='clear-sacco-application-filters']")?.addEventListener("click", () => {
+    state.saccoApplicationApprovalFilter = "";
+    state.saccoApplicationAccessFilter = "";
+    state.saccoApplicationYearFilter = "";
+    state.saccoApplicationMonthFilter = "";
+    resetSaccoApplicationTableSearch();
+    renderShell();
+  });
   document.querySelectorAll("[data-sacco-settings-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.saccoSettingsTab = button.dataset.saccoSettingsTab;
@@ -669,7 +707,36 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='subscription-detail']").forEach((button) => {
     button.addEventListener("click", () => openSubscriptionDetail(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='platform-transaction-detail']").forEach((button) => {
+    button.addEventListener("click", () => openPlatformTransactionDetail(button.dataset.rowId));
+  });
+  document.querySelector("#platformTransactionSaccoSearch")?.addEventListener("change", (event) => {
+    const match = resolvePlatformTransactionSearch(event.target.value);
+    if (!match) return;
+    state.selectedSubscriptionId = match.id;
+    state.platformTransactionSubscriptionId = match.id;
+    renderShell();
+  });
+  document.querySelector("#platformTransactionSaccoSearch")?.addEventListener("input", (event) => {
+    const match = resolvePlatformTransactionSearch(event.target.value);
+    if (!match) return;
+    document.getElementById("platformTransactionSubscriptionId").value = match.id;
+    document.getElementById("selectedSubscriptionId").value = match.id;
+    document.getElementById("selectedSubscriptionTenantId").value = match.tenantId || "";
+  });
   document.querySelector("#billingTenantSelect")?.addEventListener("change", (event) => openBillingBreakdown(event.target.value));
+  document.querySelector("#subscriptionYearFilter")?.addEventListener("change", (event) => {
+    state.subscriptionYearFilter = event.target.value;
+    renderShell();
+  });
+  document.querySelector("#subscriptionYearSort")?.addEventListener("change", (event) => {
+    state.subscriptionYearSort = event.target.value;
+    renderShell();
+  });
+  document.querySelector("[data-action='clear-subscription-year-filter']")?.addEventListener("click", () => {
+    state.subscriptionYearFilter = "";
+    renderShell();
+  });
   document.querySelectorAll("[data-assign-billing-item]").forEach((button) => {
     button.addEventListener("click", () => assignBillingItem());
   });
@@ -805,6 +872,14 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='loan-detail']").forEach((button) => {
     button.addEventListener("click", () => openLoanDetail(button.dataset.rowId));
   });
+  document.querySelector("[data-loan-status-filter]")?.addEventListener("change", (event) => {
+    state.loanStatusFilter = event.target.value;
+    renderShell();
+  });
+  document.querySelector("[data-loan-type-filter]")?.addEventListener("change", (event) => {
+    state.loanTypeFilter = event.target.value;
+    renderShell();
+  });
   document.querySelectorAll("[data-row-action='complaint-detail']").forEach((button) => {
     button.addEventListener("click", () => openComplaintDetail(button.dataset.rowId));
   });
@@ -849,6 +924,9 @@ function bindEvents() {
   document.querySelector("[data-save-membership-calendar]")?.addEventListener("click", () => saveMembershipCalendar());
   document.querySelector("[data-save-sacco-logo]")?.addEventListener("click", () => saveSaccoLogoSettings(false));
   document.querySelector("[data-clear-sacco-logo]")?.addEventListener("click", () => saveSaccoLogoSettings(true));
+  document.querySelector("[data-download-mobile-approval]")?.addEventListener("click", () => downloadMobileNumberApprovalForm());
+  document.querySelector("[data-save-mobile-approval]")?.addEventListener("click", () => saveMobileNumberApproval(false));
+  document.querySelector("[data-clear-mobile-approval]")?.addEventListener("click", () => saveMobileNumberApproval(true));
   document.querySelector("[data-member-dues-filter]")?.addEventListener("change", (event) => {
     state.memberDuesFilter = event.target.value;
     renderShell();
@@ -1100,9 +1178,12 @@ function bindEvents() {
   document.querySelector("#newTransactionMemberId")?.addEventListener("change", syncTransactionLoanBalance);
   document.querySelector("#newTransactionType")?.addEventListener("change", syncTransactionLoanBalance);
   document.querySelector("#newTransactionAmount")?.addEventListener("input", syncTransactionLoanBalance);
+  document.querySelector("#newTransactionChannel")?.addEventListener("change", syncTransactionPaymentProvider);
   syncTransactionLoanBalance();
+  syncTransactionPaymentProvider();
   document.querySelector("#loanApplicationForm")?.addEventListener("submit", createLoanFromForm);
   document.querySelector("#loanGuarantorForm")?.addEventListener("submit", addLoanGuarantor);
+  document.querySelector("#loanGuarantorSignatureForm")?.addEventListener("submit", markLoanGuarantorSigned);
   document.querySelector("#loanAppraisalForm")?.addEventListener("submit", recordLoanAppraisal);
   document.querySelector("#loanRepaymentForm")?.addEventListener("submit", recordLoanRepayment);
   document.querySelector("#complaintForm")?.addEventListener("submit", createComplaintFromForm);
@@ -1150,6 +1231,10 @@ function bindEvents() {
   });
   document.querySelector("[data-report-cycle-month]")?.addEventListener("change", (event) => {
     setSaccoCycleSelection(undefined, event.target.value);
+    renderShell();
+  });
+  document.querySelector("[data-platform-dashboard-year]")?.addEventListener("change", (event) => {
+    state.platformDashboardYear = event.target.value;
     renderShell();
   });
   document.querySelector("[data-sacco-cycle-year]")?.addEventListener("change", (event) => {
@@ -1204,6 +1289,8 @@ function bindEvents() {
     event.preventDefault();
     recordSubscriptionPayment();
   });
+  document.querySelector("[data-subscription-payment-mode]")?.addEventListener("change", syncSubscriptionPaymentMode);
+  document.querySelector("[data-subscription-member-slots]")?.addEventListener("input", syncSubscriptionPaymentMode);
   document.querySelector("#packageSetupForm")?.addEventListener("submit", savePackageSetup);
   document.querySelectorAll("[data-tenant-status]").forEach((button) => {
     button.addEventListener("click", () => saveTenantStatus(button.dataset.tenantStatus));

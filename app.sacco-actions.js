@@ -6,6 +6,11 @@ async function createFinancialProduct(event) {
   const form = event.currentTarget;
   state.productFormMessage = "";
   state.productFormError = "";
+  if (!hasPermission("sacco-profile:manage")) {
+    state.productFormError = "SACCO settings permission is required to create financial products.";
+    renderShell();
+    return;
+  }
   try {
     const product = await api("/financial-products", {
       method: "POST",
@@ -33,6 +38,11 @@ async function createBranchFromForm(event) {
   event.preventDefault();
   state.branchFormMessage = "";
   state.branchFormError = "";
+  if (!hasPermission("sacco-profile:manage")) {
+    state.branchFormError = "SACCO settings permission is required to create branches.";
+    renderShell();
+    return;
+  }
   try {
     const branch = await api("/branches", {
       method: "POST",
@@ -59,6 +69,11 @@ async function openFinancialAccount(event) {
   const form = event.currentTarget;
   state.accountFormMessage = "";
   state.accountFormError = "";
+  if (!hasPermission("transactions:create")) {
+    state.accountFormError = "Transaction creation permission is required to open financial accounts.";
+    renderShell();
+    return;
+  }
   try {
     const account = await api("/financial-accounts", {
       method: "POST",
@@ -84,6 +99,11 @@ async function submitWelfareClaim(event) {
   event.preventDefault();
   state.welfareClaimMessage = "";
   state.welfareClaimError = "";
+  if (!hasPermission("transactions:create")) {
+    state.welfareClaimError = "Transaction creation permission is required to submit welfare claims.";
+    renderShell();
+    return;
+  }
   try {
     const claim = await api("/welfare-claims", {
       method: "POST",
@@ -121,6 +141,11 @@ async function runWelfareClaimAction(action) {
   if (!claimId) return;
   state.selectedWelfareClaimMessage = "";
   state.selectedWelfareClaimError = "";
+  if (!hasPermission("transactions:approve") && !hasPermission("accounting:post")) {
+    state.selectedWelfareClaimError = "Approval or accounting posting permission is required for welfare claim decisions.";
+    renderShell();
+    return;
+  }
   try {
     let claim;
     if (action === "pay") {
@@ -156,6 +181,11 @@ async function postExpense(event) {
   event.preventDefault();
   state.expenseFormMessage = "";
   state.expenseFormError = "";
+  if (!hasPermission("accounting:post")) {
+    state.expenseFormError = "Accounting posting permission is required to post expenses.";
+    renderShell();
+    return;
+  }
   try {
     const expense = await api("/expenses", {
       method: "POST",
@@ -183,6 +213,11 @@ async function registerAsset(event) {
   event.preventDefault();
   state.assetFormMessage = "";
   state.assetFormError = "";
+  if (!hasPermission("accounting:post")) {
+    state.assetFormError = "Accounting posting permission is required to register assets.";
+    renderShell();
+    return;
+  }
   try {
     const asset = await api("/assets", {
       method: "POST",
@@ -217,6 +252,11 @@ async function createGovernanceMeeting(event) {
   const chairMemberId = resolveGovernanceChairpersonMemberId(true, "newMeetingChairSearch", "newMeetingChairUserId");
   state.governanceMeetingMessage = "";
   state.governanceMeetingError = "";
+  if (!hasPermission("governance:manage")) {
+    state.governanceMeetingError = "Governance management permission is required to create meetings.";
+    renderShell();
+    return;
+  }
   if (!chairMemberId) {
     state.governanceMeetingError = "Search and select the chairperson from the SACCO member list.";
     renderShell();
@@ -257,6 +297,11 @@ async function updateGovernanceMeeting(event) {
   if (!meetingId) return;
   state.selectedMeetingMessage = "";
   state.selectedMeetingError = "";
+  if (!hasPermission("governance:manage")) {
+    state.selectedMeetingError = "Governance management permission is required to update meetings.";
+    renderShell();
+    return;
+  }
   if (!chairMemberId) {
     state.selectedMeetingError = "Search and select the chairperson from the SACCO member list.";
     renderShell();
@@ -303,6 +348,11 @@ async function createGovernanceResolution(event) {
   if (!meetingId) return;
   state.selectedMeetingMessage = "";
   state.selectedMeetingError = "";
+  if (!hasPermission("governance:manage")) {
+    state.selectedMeetingError = "Governance management permission is required to create resolutions.";
+    renderShell();
+    return;
+  }
   if (!value("newResolutionOwnerName")) {
     state.selectedMeetingError = "Enter the responsible person for this resolution.";
     renderShell();

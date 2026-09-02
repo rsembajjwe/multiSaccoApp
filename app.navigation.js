@@ -18,23 +18,28 @@ const platformModules = [
 const saccoModules = [
   ["dashboard", "Dashboard", "Role-specific SACCO operating view", "dashboard:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "teller", "auditor"]],
   ["finance", "Finance", "Treasurer receipts, approvals and reconciliation", "transactions:view", ["treasurer"]],
+  ["payments", "Payments", "Member deposits and loan repayments", "transactions:view", ["treasurer", "admin", "accountant", "teller"]],
   ["loans", "Loans", "Applications and repayments", "transactions:view", ["admin", "chairperson", "treasurer", "loans", "auditor"]],
+  ["loan-approvals", "Loan Approval", "Paper approval records and decisions", "loans:approve", ["chairperson", "admin", "loans"]],
   ["expenses", "Expenses", "Operating expense capture and register", "transactions:view", ["treasurer", "admin", "accountant"]],
-  ["member-dues", "Member Subscriptions", "Mandatory membership payments and expiry", "transactions:view", ["admin", "chairperson", "treasurer", "secretary"]],
-  ["savings-transfers", "Transfers", "Savings transfers and deductions", "transactions:view", ["admin", "chairperson", "treasurer"]],
-  ["approvals", "Approvals", "Maker-checker decisions", "transactions:view", ["admin", "chairperson", "treasurer", "secretary", "loans"]],
+  ["subscriptions", "Subscriptions", "SACCO, SMS and USSD subscriptions", "dashboard:view", ["chairperson"]],
+  ["member-dues", "Member Subscriptions", "Mandatory membership payments and expiry", "member-subscription:view", ["admin", "treasurer", "secretary"]],
+  ["savings-transfers", "Transfers", "Savings transfers and deductions", "transactions:view", ["admin", "treasurer"]],
+  ["approvals", "Approvals", "Maker-checker decisions", "transactions:view", ["admin", "treasurer", "secretary", "loans"]],
   ["reconciliation", "Reconciliation", "Bank and mobile money", "transactions:view", ["admin", "treasurer", "accountant"]],
   ["reports", "Reports", "Operational and financial reporting", "reports:view", ["admin", "chairperson", "treasurer", "secretary", "loans", "accountant", "auditor"]],
   ["members", "Members", "Profiles and statements", "members:view", ["admin", "chairperson", "secretary", "loans", "auditor"]],
   ["transactions", "Transactions", "Deposits and reversals", "transactions:view", ["admin", "accountant", "teller", "auditor"]],
-  ["savings", "Savings", "Products, accounts and statements", "transactions:view", ["admin", "accountant", "auditor"]],
-  ["shares", "Shares", "Share register and certificates", "transactions:view", ["admin", "secretary", "auditor"]],
-  ["welfare", "Welfare", "Contributions, balances and claims", "transactions:view", ["admin", "secretary"]],
-  ["funding-sources", "Sources of Funds", "Capital, grants and borrowings register", "finance-source:view", ["admin", "chairperson"]],
-  ["guarantors", "Guarantors", "Guarantee requests and obligations", "loans:view", ["admin", "chairperson", "loans"]],
+  ["savings", "Savings", "Products, accounts and statements", "transactions:view", ["admin", "chairperson", "accountant", "auditor"]],
+  ["shares", "Shares", "Share register and certificates", "transactions:view", ["admin", "chairperson", "secretary", "auditor"]],
+  ["welfare", "Welfare", "Contributions, balances and claims", "welfare:view", ["admin", "secretary"]],
+  ["funding-sources", "Sources of Funds", "Capital, grants and borrowings register", "finance-source:view", ["admin"]],
+  ["guarantors", "Guarantors", "Guarantee requests and obligations", "loans:view", ["admin", "loans"]],
   ["accounting", "Accounting", "Trial balance, journals and reports", "transactions:view", ["admin", "accountant"]],
   ["governance", "Governance", "Meetings, minutes and resolutions", "governance:view", ["admin", "chairperson", "secretary"]],
   ["complaints", "Complaints", "Member cases and support", "complaints:view", ["admin", "secretary", "chairperson"]],
+  ["notifications", "Alerts", "Loan, governance and member alerts", "notifications:view", ["chairperson"]],
+  ["documents", "Documents", "Signed forms and member files", "members:view", ["chairperson"]],
   ["users", "Users and Roles", "SACCO staff access", "roles:view", ["admin"]],
   ["settings", "Settings", "Products, branches and controls", "sacco-profile:manage", ["admin", "chairperson"]],
   ["audit", "Audit Logs", "Read-only sensitive activity", "reports:view", ["admin", "auditor"]]
@@ -69,7 +74,114 @@ function saccoAccounts() {
     </div>
     ${filterToolbar("Search SACCO code, name, country, currency, district, status, subscription or package", "Activate SACCO", "Export accounts")}
     ${tenantDetailPanel()}
-    ${recordTable("SACCO account health", rows, ["saccoCode", "name", "country", "currencyCode", "district", "status", "accountHealth", "paymentStage", "approvalStage", "subscriptionStatus", "packageName", "billableMembers", "expiry"])}
+    ${recordTable("SACCO account health", rows, ["saccoCode", "name", "country", "currencyCode", "district", "status", "accountHealth", "paymentStage", "approvalStage", "subscriptionStatus", "packageName", "billableMembers", "smsCreditsAllocated", "smsCreditsUsed", "currentSmsCredit", "expiry"])}
+  `;
+}
+
+function saccoSubscriptionsView() {
+  const tenantId = state.user?.tenantId || state.tenant?.id;
+  const tenant = tenantRows().find((row) => row.id === tenantId) || state.tenant || {};
+  const subscription = dataRows("subscriptions").find((row) => row.tenantId === tenantId) || {};
+  const packageRow = dataRows("subscriptionPackages").find((row) => row.id === subscription.packageId || row.packageId === subscription.packageId) || {};
+  const smsUsage = dataRows("notifications").filter((row) => row.tenantId === tenantId && normal(row.channel || row.type).includes("sms")).length;
+  const rows = [
+    {
+      subscription: "SACCO platform",
+      packageName: packageRow.name || subscription.packageName || subscription.tierLabel || "Base SACCO package",
+      status: subscription.status || tenant.status || "pending",
+      billingCycle: labelize(subscription.billingPeriod || packageRow.billingPeriod || "annual"),
+      amount: Number(subscription.amount || packageRow.price || 0),
+      paid: Number(subscription.paid || 0),
+      expiry: subscription.expiry || "-"
+    },
+    {
+      subscription: "SMS",
+      packageName: "SMS notifications",
+      status: smsUsage ? "active" : "not_configured",
+      billingCycle: "Usage based",
+      amount: 0,
+      paid: 0,
+      expiry: "Managed by platform"
+    },
+    {
+      subscription: "USSD",
+      packageName: "USSD member self-service",
+      status: tenant.ussdSubscriptionStatus || "not_configured",
+      billingCycle: "Optional add-on",
+      amount: Number(tenant.ussdSubscriptionAmount || 0),
+      paid: Number(tenant.ussdSubscriptionPaid || 0),
+      expiry: tenant.ussdSubscriptionExpiry || "Not enabled"
+    }
+  ];
+  return `
+    <div class="dashboard-grid">
+      ${summary("SACCO subscription", labelize(rows[0].status), "Platform operating access", "View")}
+      ${summary("SMS subscription", labelize(rows[1].status), `${smsUsage} SMS record(s) this cycle`, "Monitor")}
+      ${summary("USSD subscription", labelize(rows[2].status), "Member short-code access", "Review")}
+      ${summary("Current package", rows[0].packageName, "Base platform package", "Current")}
+    </div>
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>SACCO subscription control</h2>
+          <p>View platform access, SMS notification billing and optional USSD access for this SACCO. Platform billing officers manage prices and activation.</p>
+        </div>
+        <span class="status ${normal(subscription.status).includes("active") ? "active" : "pending"}">${escapeHtml(labelize(subscription.status || "pending"))}</span>
+      </div>
+      <div class="source-grid compact">
+        ${mini("SACCO", tenant.name || contextName())}
+        ${mini("SACCO code", tenant.abbreviation || tenant.code || contextCode())}
+        ${mini("Billable members", subscription.billableMembers || subscription.memberCount || "-")}
+        ${mini("Expiry", subscription.expiry || "-")}
+      </div>
+    </section>
+    ${recordTable("SACCO subscription modules", rows, ["subscription", "packageName", "status", "billingCycle", "amount", "paid", "expiry"])}
+  `;
+}
+
+function loanApprovalsView() {
+  const cycle = currentSaccoCycleContext();
+  const loans = buildLoanRows({
+    loans: filterLoansBySaccoCycle(dataRows("loans"), cycle),
+    memberName,
+    labelize,
+    formatMoney: (value) => money.format(value)
+  });
+  const approvalRows = financeLoanDisplayRows(loans)
+    .filter((loan) => ["submitted", "pending_approval", "under_review", "approved"].includes(normal(loan.status)) || !loan.paperApprovalReference)
+    .map((loan) => ({
+      ...loan,
+      member: loan.memberName || memberName(loan.memberId),
+      loanType: loan.product,
+      amount: Number(loan.amount || loan.requestedAmount || 0),
+      appliedOn: loan.createdAt || loan.submittedAt || loan.updatedAt,
+      paperApproval: loan.paperApprovalReference ? "Recorded" : "Pending",
+      approvedBy: loan.paperApprovalApprovers || "-",
+      action: "loan-detail",
+      actionLabel: "Open",
+      actionId: loan.id,
+      rowClass: state.selectedLoanId === loan.id ? "selected-table-row" : ""
+    }));
+  const selectedLoan = approvalRows.find((loan) => loan.id === state.selectedLoanId) || approvalRows[0];
+  return `
+    ${saccoCyclePanel(cycle, { title: "Loan approval cycle" })}
+    <div class="dashboard-grid">
+      ${summary("Awaiting paper approval", approvalRows.filter((loan) => normal(loan.paperApproval).includes("pending")).length, "Needs Chairperson record", "Review")}
+      ${summary("Recorded approvals", approvalRows.filter((loan) => normal(loan.paperApproval).includes("recorded")).length, "Paper files captured", "Audit")}
+      ${summary("Ready for disbursement", approvalRows.filter((loan) => normal(loan.status) === "approved").length, "Approved but not active", "Track")}
+      ${summary("Approval role", "Chairperson", "Records paper approvers", "Owner")}
+    </div>
+    <section class="panel compact-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Loan approval desk</h2>
+          <p>Loan approvals are paper-based. The Chairperson records the signed approval reference and the people who approved.</p>
+        </div>
+        <span class="status active">${escapeHtml(cycle.label)}</span>
+      </div>
+    </section>
+    ${recordTable(`Loan approval queue - ${cycle.label}`, approvalRows, ["applicationNo", "member", "loanType", "amount", "appliedOn", "status", "paperApproval", "approvedBy"])}
+    ${selectedLoan ? chairpersonLoanAssessmentPanel(selectedLoan) : emptyState("No loan approvals", "Loan approval files will appear here when loans are submitted.")}
   `;
 }
 
@@ -259,8 +371,33 @@ function moduleBlueprint(view = "") {
   if (view === "governance") return governanceView();
   if (view === "settings") return settingsView();
   if (view === "guarantors") return guarantorsView();
+  if (view === "documents") return saccoDocumentsView();
   const labels = {
   };
   const item = labels[view] || ["Module", ["Search", "Filters", "Tables", "Actions"]];
   return tabsCard(item[0], item[1]);
+}
+
+function saccoDocumentsView() {
+  const cycle = currentSaccoCycleContext();
+  const documents = rowsInSaccoCycle(dataRows("memberDocuments"), cycle, ["createdAt", "uploadedAt", "verifiedAt"]);
+  const rows = documents.map((document) => ({
+    ...document,
+    memberName: document.memberName || memberName(document.memberId),
+    documentType: labelize(document.documentType || document.type || "document"),
+    fileName: document.originalFileName || document.fileName || document.storageKey || "-",
+    uploadedOn: document.createdAt || document.uploadedAt,
+    status: document.verificationStatus || document.status || "pending"
+  }));
+  const pending = rows.filter((row) => normal(row.status).includes("pending")).length;
+  return `
+    ${saccoCyclePanel(cycle, { title: "Document cycle" })}
+    <div class="dashboard-grid">
+      ${summary("Member files", rows.length, "Signed forms and uploads", "Review")}
+      ${summary("Pending review", pending, "Need office verification", "Check")}
+      ${summary("Registration forms", rows.filter((row) => normal(row.documentType).includes("registration")).length, "Physical filing evidence", "Open")}
+      ${summary("Loan files", rows.filter((row) => normal(row.documentType).includes("loan")).length, "Credit approval evidence", "Open")}
+    </div>
+    ${recordTable(`Documents - ${cycle.label}`, rows, ["memberName", "documentType", "fileName", "status", "uploadedOn"])}
+  `;
 }
