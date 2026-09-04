@@ -3,6 +3,7 @@ package com.methaltech.sacco.notification;
 import com.methaltech.sacco.identity.StaffNotificationRecipientService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.tenant.TenantMoneyFormatter;
+import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
 import java.math.BigDecimal;
 import java.util.List;
@@ -22,6 +23,7 @@ public class NotificationService {
     private final StaffNotificationRecipientService staffNotificationRecipientService;
     private final NotificationChannelPreferenceService channelPreferenceService;
     private final List<NotificationProvider> providers;
+    private final StaffPushNotifier staffPushNotifier;
 
     public Notification notifyPaymentPosted(Member member, String purpose, BigDecimal amount, String resourceType, String resourceId) {
         String eventType = "loan_repayment".equals(purpose) ? "loan_repayment_received" : "payment_received";
@@ -203,6 +205,21 @@ public class NotificationService {
                 message,
                 "complaint",
                 complaintId));
+    }
+
+    /**
+     * Best-effort push to the SACCO's staff so they see a member-filed complaint promptly.
+     * No-op unless FCM push is configured.
+     */
+    public void notifyStaffOfComplaint(Member member, String subject) {
+        String saccoCode = tenantService.findById(member.getTenantId())
+                .map(TenantResponse::abbreviation)
+                .orElse(null);
+        if (saccoCode == null || saccoCode.isBlank()) {
+            return;
+        }
+        staffPushNotifier.notifyStaff(saccoCode, "New complaint",
+                subject == null || subject.isBlank() ? "A member filed a complaint." : subject);
     }
 
     public Notification notifyComplaintReply(Member member, String complaintId, String subject, String reply) {

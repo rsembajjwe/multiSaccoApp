@@ -72,9 +72,16 @@ class FcmPushNotificationProvider implements NotificationProvider {
         if (recipient == null || recipient.isBlank()) {
             return NotificationSendResult.failed("No member id for push delivery.");
         }
+        return sendToTopic("member_" + recipient, title, message);
+    }
+
+    /** Sends a notification-type push to an arbitrary FCM topic (e.g. a staff topic). */
+    NotificationSendResult sendToTopic(String topic, String title, String message) {
+        if (topic == null || topic.isBlank()) {
+            return NotificationSendResult.failed("No topic for push delivery.");
+        }
         try {
             ensureInitialised();
-            String topic = "member_" + recipient;
             Message push = Message.builder()
                     .setTopic(topic)
                     .setNotification(Notification.builder()

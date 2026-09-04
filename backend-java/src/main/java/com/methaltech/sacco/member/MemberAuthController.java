@@ -1100,6 +1100,7 @@ class MemberAuthController {
                 body.description() == null ? "" : body.description().trim(),
                 priority);
         notificationService.notifyComplaintSynced(member, complaint.getId());
+        notificationService.notifyStaffOfComplaint(member, complaint.getSubject());
         auditService.record(
                 member.getTenantId(),
                 (String) null,
