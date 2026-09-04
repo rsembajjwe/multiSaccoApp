@@ -819,3 +819,46 @@ class MemberDocument {
         createdAt: _str(j['createdAt']),
       );
 }
+
+/// A member complaint (GET /complaints).
+class Complaint {
+  const Complaint({
+    required this.id,
+    required this.memberId,
+    required this.category,
+    required this.subject,
+    required this.description,
+    required this.channel,
+    required this.priority,
+    required this.status,
+    required this.resolutionNotes,
+    required this.resolvedAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String memberId;
+  final String category;
+  final String subject;
+  final String description;
+  final String channel;
+  final String priority;
+  final String status;
+  final String resolutionNotes;
+  final String resolvedAt;
+  final String createdAt;
+
+  factory Complaint.fromJson(Map<String, dynamic> j) => Complaint(
+        id: _str(j['id']),
+        memberId: _str(j['memberId']),
+        category: _str(j['category']),
+        subject: _str(j['subject']),
+        description: _str(j['description']),
+        channel: _str(j['channel']),
+        priority: _str(j['priority']),
+        status: _str(j['status']),
+        resolutionNotes: _str(j['resolutionNotes']),
+        resolvedAt: _str(j['resolvedAt']),
+        createdAt: _str(j['createdAt']),
+      );
+}

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../audit/audit_screen.dart';
+import '../complaints/complaints_screen.dart';
 import '../interest/interest_screen.dart';
 import '../loans/loans_screen.dart';
 import '../members/members_screen.dart';
@@ -38,6 +39,8 @@ const _sections = <_Section>[
       Color(0xFFB91C1C)),
   _Section('Welfare', Icons.volunteer_activism_outlined,
       ['welfare:view', 'welfare:manage'], Color(0xFF9333EA)),
+  _Section('Complaints', Icons.forum_outlined,
+      ['complaints:view', 'complaints:manage'], Color(0xFFDB2777)),
   _Section('Reports', Icons.insights_outlined, ['reports:view'],
       Color(0xFF0369A1)),
   _Section('Audit log', Icons.receipt_long_outlined, ['audit:view'],
@@ -256,6 +259,8 @@ Widget _screenFor(_Section s, StaffSession session) {
       return const TransactionsScreen();
     case 'Subscription':
       return SubscriptionScreen(canPay: session.can('tenants:manage'));
+    case 'Complaints':
+      return ComplaintsScreen(canManage: session.can('complaints:manage'));
     case 'Interest income':
       return const InterestScreen();
     case 'Reports':

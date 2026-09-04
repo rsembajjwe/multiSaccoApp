@@ -176,3 +176,8 @@ final memberDocumentsProvider =
     FutureProvider.autoDispose.family<List<MemberDocument>, String>(
   (ref, id) => ref.watch(adminRepositoryProvider).memberDocuments(id),
 );
+
+/// Member complaints across the SACCO.
+final complaintsProvider = FutureProvider.autoDispose<List<Complaint>>(
+  (ref) => ref.watch(adminRepositoryProvider).complaints(),
+);

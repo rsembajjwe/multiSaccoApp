@@ -101,6 +101,20 @@ class AdminRepository {
     throw ApiException('Payment did not return an updated subscription.');
   }
 
+  Future<List<Complaint>> complaints() async {
+    final rows = await _api.getList('/complaints');
+    return rows.map(Complaint.fromJson).toList();
+  }
+
+  /// Update a complaint's status, optionally adding resolution notes.
+  Future<void> updateComplaint(String id, String status,
+      {String? notes}) async {
+    await _api.patch('/complaints/$id/status', {
+      'status': status,
+      if (notes != null && notes.isNotEmpty) 'resolutionNotes': notes,
+    });
+  }
+
   Future<List<WelfareClaim>> welfareClaims() async {
     final rows = await _api.getList('/welfare-claims');
     return rows.map(WelfareClaim.fromJson).toList();
