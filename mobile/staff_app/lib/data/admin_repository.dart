@@ -26,6 +26,10 @@ class AdminRepository {
           .map(Beneficiary.fromJson)
           .toList();
 
+  Future<DocumentBytes> memberDocumentContent(
+          String memberId, String documentId) =>
+      _api.getBytes('/members/$memberId/documents/$documentId/content');
+
   Future<List<MemberDocument>> memberDocuments(String id) async =>
       (await _api.getList('/members/$id/documents'))
           .map(MemberDocument.fromJson)

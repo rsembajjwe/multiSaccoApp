@@ -195,3 +195,10 @@ final staffNamesProvider = FutureProvider.autoDispose<Map<String, String>>(
     };
   },
 );
+
+/// Raw bytes of a member document, keyed by (memberId, documentId).
+final memberDocumentContentProvider =
+    FutureProvider.autoDispose.family<DocumentBytes, (String, String)>(
+  (ref, key) =>
+      ref.watch(adminRepositoryProvider).memberDocumentContent(key.$1, key.$2),
+);

@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
+
+import '../domain/models.dart';
 
 import '../core/auth_events.dart';
 import '../core/config.dart';
@@ -42,6 +46,15 @@ class ApiClient {
   Future<Map<String, dynamic>> get(String path) async {
     final r = await _guard(() => _dio.get<dynamic>(path));
     return _envelope(r.data);
+  }
+
+  /// Fetches raw bytes (e.g. a document/image) with its content type.
+  Future<DocumentBytes> getBytes(String path) async {
+    final r = await _guard(() => _dio.get<List<int>>(path,
+        options: Options(responseType: ResponseType.bytes)));
+    final ct = r.headers.value('content-type') ?? 'application/octet-stream';
+    return DocumentBytes(
+        Uint8List.fromList(r.data ?? const <int>[]), ct);
   }
 
   Future<List<Map<String, dynamic>>> getList(String path,

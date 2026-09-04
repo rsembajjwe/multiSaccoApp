@@ -6,6 +6,7 @@ import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
+import 'document_viewer_screen.dart';
 
 /// A member's KYC context: next of kin, beneficiaries and documents.
 class MemberKycScreen extends ConsumerWidget {
@@ -143,28 +144,43 @@ class _DocumentsSection extends ConsumerWidget {
       title: 'Documents',
       async: ref.watch(memberDocumentsProvider(memberId)),
       empty: 'No documents uploaded.',
-      itemBuilder: (d) => Row(
-        children: [
-          Icon(Icons.description_outlined,
-              size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(Fmt.label(d.documentType),
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                Text('Uploaded ${Fmt.date(d.createdAt)}',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              ],
-            ),
+      itemBuilder: (d) => InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => DocumentViewerScreen(
+                memberId: memberId, documentId: d.id, title: d.documentType))),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Icon(d.isPdf ? Icons.picture_as_pdf_outlined : Icons.image_outlined,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(Fmt.label(d.documentType),
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text('Uploaded ${Fmt.date(d.createdAt)}',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              StatusChip(d.verificationStatus.isEmpty
+                  ? d.retentionStatus
+                  : d.verificationStatus),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ],
           ),
-          StatusChip(d.verificationStatus.isEmpty
-              ? d.retentionStatus
-              : d.verificationStatus),
-        ],
+        ),
       ),
     );
   }

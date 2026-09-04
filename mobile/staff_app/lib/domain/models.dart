@@ -814,17 +814,22 @@ class Beneficiary {
 /// A member KYC document (GET /members/{id}/documents).
 class MemberDocument {
   const MemberDocument({
+    required this.id,
     required this.documentType,
     required this.verificationStatus,
     required this.retentionStatus,
     required this.createdAt,
   });
+  final String id;
   final String documentType;
   final String verificationStatus;
   final String retentionStatus;
   final String createdAt;
 
+  bool get isPdf => documentType.toLowerCase().contains('pdf');
+
   factory MemberDocument.fromJson(Map<String, dynamic> j) => MemberDocument(
+        id: _str(j['id']),
         documentType: _str(j['documentType']),
         verificationStatus: _str(j['verificationStatus']),
         retentionStatus: _str(j['retentionStatus']),
@@ -873,4 +878,13 @@ class Complaint {
         resolvedAt: _str(j['resolvedAt']),
         createdAt: _str(j['createdAt']),
       );
+}
+
+/// Raw bytes of a fetched document plus its content type.
+class DocumentBytes {
+  const DocumentBytes(this.bytes, this.contentType);
+  final List<int> bytes;
+  final String contentType;
+  bool get isImage => contentType.startsWith('image/');
+  bool get isPdf => contentType.contains('pdf');
 }
