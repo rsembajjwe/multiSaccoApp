@@ -113,6 +113,10 @@ class SaccoStatus {
 
 String _str(dynamic v) => v == null ? '' : '$v';
 
+List<String> _strListTop(dynamic v) => v is List
+    ? v.map((e) => '$e').where((e) => e.isNotEmpty).toList()
+    : const <String>[];
+
 /// A member with their financial balances (from GET /members[/{id}]).
 class Member {
   const Member({
@@ -694,6 +698,6 @@ class AppRole {
         id: _str(j['id']),
         name: _str(j['name']),
         protectedRole: j['protectedRole'] == true,
-        permissionIds: _strList(j['permissionIds']),
+        permissionIds: _strListTop(j['permissionIds']),
       );
 }
