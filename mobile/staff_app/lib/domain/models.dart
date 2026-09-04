@@ -586,6 +586,10 @@ class FinancialTxn {
         narration: _str(j['narration']),
         postedAt: _str(j['postedAt']),
         createdAt: _str(j['createdAt']),
+        makerUserId: _str(j['makerUserId']),
+        checkerUserId: _str(j['checkerUserId']),
+        rejectionReason: _str(j['rejectionReason']),
+        reversalReason: _str(j['reversalReason']),
       );
 }
 
