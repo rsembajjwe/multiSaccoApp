@@ -701,3 +701,46 @@ class AppRole {
         permissionIds: _strListTop(j['permissionIds']),
       );
 }
+
+/// One installment in a loan's repayment schedule (GET /loans/{id}/schedule).
+class LoanScheduleRow {
+  const LoanScheduleRow({
+    required this.installmentNo,
+    required this.dueDate,
+    required this.principalDue,
+    required this.interestDue,
+    required this.totalDue,
+    required this.paidAmount,
+    required this.balanceDue,
+    required this.daysPastDue,
+    required this.agingBucket,
+    required this.status,
+  });
+
+  final int installmentNo;
+  final String dueDate;
+  final num principalDue;
+  final num interestDue;
+  final num totalDue;
+  final num paidAmount;
+  final num balanceDue;
+  final int daysPastDue;
+  final String agingBucket;
+  final String status;
+
+  bool get isPaid => status.contains('paid') || balanceDue <= 0;
+  bool get isOverdue => daysPastDue > 0 && balanceDue > 0;
+
+  factory LoanScheduleRow.fromJson(Map<String, dynamic> j) => LoanScheduleRow(
+        installmentNo: _int(j['installmentNo']),
+        dueDate: _str(j['dueDate']),
+        principalDue: _num(j['principalDue']),
+        interestDue: _num(j['interestDue']),
+        totalDue: _num(j['totalDue']),
+        paidAmount: _num(j['paidAmount']),
+        balanceDue: _num(j['balanceDue']),
+        daysPastDue: _int(j['daysPastDue']),
+        agingBucket: _str(j['agingBucket']),
+        status: _str(j['status']),
+      );
+}

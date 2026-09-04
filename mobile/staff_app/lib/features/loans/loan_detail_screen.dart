@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
+import 'loan_schedule_screen.dart';
 
 /// A single loan with its full terms and complete payment (repayment) history.
 class LoanDetailScreen extends ConsumerWidget {
@@ -87,6 +88,12 @@ class LoanDetailScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             SectionCard(
               title: 'Schedule',
+              trailing: TextButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => LoanScheduleScreen(
+                        loanId: loan.id, product: loan.product))),
+                child: const Text('View all'),
+              ),
               child: Column(
                 children: [
                   KeyValueRow('Installments',

@@ -36,6 +36,11 @@ class AdminRepository {
         .toList();
   }
 
+  Future<List<LoanScheduleRow>> loanSchedule(String loanId) async {
+    final rows = await _api.getList('/loans/$loanId/schedule');
+    return rows.map(LoanScheduleRow.fromJson).toList();
+  }
+
   Future<List<LoanRepayment>> repayments(String loanId) async {
     final rows = await _api.getList('/loans/$loanId/repayments');
     return rows.map(LoanRepayment.fromJson).toList();

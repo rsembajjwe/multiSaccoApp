@@ -149,3 +149,9 @@ final biometricSupportedProvider = FutureProvider<bool>(
 
 final biometricLockProvider = FutureProvider<bool>(
     (ref) => ref.watch(sessionStoreProvider).biometricLockEnabled());
+
+/// A loan's repayment schedule (installments).
+final loanScheduleProvider =
+    FutureProvider.autoDispose.family<List<LoanScheduleRow>, String>(
+  (ref, loanId) => ref.watch(adminRepositoryProvider).loanSchedule(loanId),
+);
