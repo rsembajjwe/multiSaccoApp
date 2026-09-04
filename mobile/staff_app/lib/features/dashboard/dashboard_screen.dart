@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/format.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../audit/audit_screen.dart';
@@ -96,6 +97,25 @@ class DashboardScreen extends ConsumerWidget {
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               _SectionGrid(session: s),
+              if (s.can('audit:view')) ...[
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('Recent activity',
+                          style: Theme.of(context).textTheme.titleMedium),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => const AuditScreen())),
+                      child: const Text('View all'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const _RecentActivity(),
+              ],
             ],
           ),
         ),
@@ -273,6 +293,55 @@ Widget _screenFor(_Section s, StaffSession session) {
       return const UsersScreen();
     default:
       return _ComingSoon(title: s.label);
+  }
+}
+
+class _RecentActivity extends ConsumerWidget {
+  const _RecentActivity();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(auditEventsProvider(''));
+    return async.when(
+      loading: () =>
+          const Shimmer(child: SkeletonBox(height: 120, radius: 14)),
+      error: (e, _) => const SizedBox.shrink(),
+      data: (events) {
+        if (events.isEmpty) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('No recent activity.'),
+            ),
+          );
+        }
+        final recent = events.take(6).toList();
+        final scheme = Theme.of(context).colorScheme;
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              children: [
+                for (var i = 0; i < recent.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  ListTile(
+                    dense: true,
+                    leading: Icon(Icons.history,
+                        size: 18, color: scheme.primary),
+                    title: Text(Fmt.label(recent[i].action),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(
+                        '${recent[i].actorName.isEmpty ? "System" : recent[i].actorName} · ${Fmt.dateTime(recent[i].createdAt)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
