@@ -10,6 +10,7 @@ import '../../providers.dart';
 import '../loans/loan_detail_screen.dart';
 import 'fund_transactions_screen.dart';
 import 'full_statement_screen.dart';
+import 'member_kyc_screen.dart';
 import 'loan_transactions_screen.dart';
 
 /// A member's financial profile: savings, shares, welfare and loan balances,
@@ -111,6 +112,19 @@ class MemberDetailScreen extends ConsumerWidget {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => FullStatementScreen(
+                        memberId: memberId, memberName: m.fullName),
+                  )),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.badge_outlined),
+                  title: const Text('Next of kin, beneficiaries & documents'),
+                  subtitle: const Text('KYC and contact details'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => MemberKycScreen(
                         memberId: memberId, memberName: m.fullName),
                   )),
                 ),

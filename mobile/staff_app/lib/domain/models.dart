@@ -747,3 +747,69 @@ class LoanScheduleRow {
         status: _str(j['status']),
       );
 }
+
+/// A member's next of kin (GET /members/{id}/next-of-kin).
+class NextOfKin {
+  const NextOfKin({
+    required this.fullName,
+    required this.relationship,
+    required this.phone,
+    required this.address,
+    required this.primaryContact,
+  });
+  final String fullName;
+  final String relationship;
+  final String phone;
+  final String address;
+  final bool primaryContact;
+
+  factory NextOfKin.fromJson(Map<String, dynamic> j) => NextOfKin(
+        fullName: _str(j['fullName']),
+        relationship: _str(j['relationship']),
+        phone: _str(j['phone']),
+        address: _str(j['address']),
+        primaryContact: j['primaryContact'] == true,
+      );
+}
+
+/// A member's beneficiary (GET /members/{id}/beneficiaries).
+class Beneficiary {
+  const Beneficiary({
+    required this.fullName,
+    required this.relationship,
+    required this.phone,
+    required this.allocationPercent,
+  });
+  final String fullName;
+  final String relationship;
+  final String phone;
+  final num allocationPercent;
+
+  factory Beneficiary.fromJson(Map<String, dynamic> j) => Beneficiary(
+        fullName: _str(j['fullName']),
+        relationship: _str(j['relationship']),
+        phone: _str(j['phone']),
+        allocationPercent: _num(j['allocationPercent']),
+      );
+}
+
+/// A member KYC document (GET /members/{id}/documents).
+class MemberDocument {
+  const MemberDocument({
+    required this.documentType,
+    required this.verificationStatus,
+    required this.retentionStatus,
+    required this.createdAt,
+  });
+  final String documentType;
+  final String verificationStatus;
+  final String retentionStatus;
+  final String createdAt;
+
+  factory MemberDocument.fromJson(Map<String, dynamic> j) => MemberDocument(
+        documentType: _str(j['documentType']),
+        verificationStatus: _str(j['verificationStatus']),
+        retentionStatus: _str(j['retentionStatus']),
+        createdAt: _str(j['createdAt']),
+      );
+}

@@ -162,3 +162,17 @@ final memberFullStatementProvider =
   (ref, memberId) =>
       ref.watch(adminRepositoryProvider).memberStatement(memberId),
 );
+
+/// Member KYC & contacts.
+final memberNextOfKinProvider =
+    FutureProvider.autoDispose.family<List<NextOfKin>, String>(
+  (ref, id) => ref.watch(adminRepositoryProvider).memberNextOfKin(id),
+);
+final memberBeneficiariesProvider =
+    FutureProvider.autoDispose.family<List<Beneficiary>, String>(
+  (ref, id) => ref.watch(adminRepositoryProvider).memberBeneficiaries(id),
+);
+final memberDocumentsProvider =
+    FutureProvider.autoDispose.family<List<MemberDocument>, String>(
+  (ref, id) => ref.watch(adminRepositoryProvider).memberDocuments(id),
+);

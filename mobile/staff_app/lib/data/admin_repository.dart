@@ -16,6 +16,21 @@ class AdminRepository {
     return rows.map(Member.fromJson).toList();
   }
 
+  Future<List<NextOfKin>> memberNextOfKin(String id) async =>
+      (await _api.getList('/members/$id/next-of-kin'))
+          .map(NextOfKin.fromJson)
+          .toList();
+
+  Future<List<Beneficiary>> memberBeneficiaries(String id) async =>
+      (await _api.getList('/members/$id/beneficiaries'))
+          .map(Beneficiary.fromJson)
+          .toList();
+
+  Future<List<MemberDocument>> memberDocuments(String id) async =>
+      (await _api.getList('/members/$id/documents'))
+          .map(MemberDocument.fromJson)
+          .toList();
+
   Future<Member> member(String id) async =>
       Member.fromJson(await _api.get('/members/$id'));
 
