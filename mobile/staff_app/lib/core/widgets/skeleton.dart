@@ -92,21 +92,21 @@ class ListSkeleton extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           itemCount: count,
           separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (_, __) => Row(
+          itemBuilder: (_, __) => const Row(
             children: [
-              const SkeletonBox(width: 44, height: 44, radius: 12),
-              const SizedBox(width: 12),
+              SkeletonBox(width: 44, height: 44, radius: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     SkeletonBox(width: 160, height: 13),
                     SizedBox(height: 8),
                     SkeletonBox(width: 100, height: 11),
                   ],
                 ),
               ),
-              const SkeletonBox(width: 60, height: 13),
+              SkeletonBox(width: 60, height: 13),
             ],
           ),
         ),
