@@ -176,15 +176,3 @@ final memberDocumentsProvider =
     FutureProvider.autoDispose.family<List<MemberDocument>, String>(
   (ref, id) => ref.watch(adminRepositoryProvider).memberDocuments(id),
 );
-
-/// Financial transactions awaiting approval.
-final pendingTransactionsProvider =
-    FutureProvider.autoDispose<List<FinancialTxn>>(
-  (ref) => ref.watch(adminRepositoryProvider).pendingTransactions(),
-);
-
-/// Loan repayments awaiting approval.
-final pendingRepaymentsProvider =
-    FutureProvider.autoDispose<List<LoanRepayment>>(
-  (ref) => ref.watch(adminRepositoryProvider).pendingRepayments(),
-);

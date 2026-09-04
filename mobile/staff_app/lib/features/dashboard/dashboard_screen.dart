@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
-import '../approvals/approvals_screen.dart';
 import '../audit/audit_screen.dart';
 import '../interest/interest_screen.dart';
 import '../loans/loans_screen.dart';
@@ -29,9 +28,6 @@ class _Section {
 }
 
 const _sections = <_Section>[
-  _Section('Approvals', Icons.fact_check_outlined,
-      ['transactions:approve', 'approvals:decide', 'approvals:view'],
-      Color(0xFF4338CA)),
   _Section('Members', Icons.groups_outlined,
       ['members:view', 'members:create', 'members:approve'], Color(0xFF0F766E)),
   _Section('Transactions', Icons.swap_horiz,
@@ -252,8 +248,6 @@ class _SectionGrid extends StatelessWidget {
 
 Widget _screenFor(_Section s, StaffSession session) {
   switch (s.label) {
-    case 'Approvals':
-      return ApprovalsScreen(canApprove: session.can('transactions:approve'));
     case 'Members':
       return const MembersScreen();
     case 'Loans':

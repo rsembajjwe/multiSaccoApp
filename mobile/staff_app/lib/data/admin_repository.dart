@@ -69,36 +69,6 @@ class AdminRepository {
     return rows.map(FinancialTxn.fromJson).toList();
   }
 
-  /// Financial transactions awaiting a checker's decision.
-  Future<List<FinancialTxn>> pendingTransactions() async {
-    final all = await transactions();
-    return all.where((t) => t.status == 'pending_approval').toList();
-  }
-
-  /// Loan repayments awaiting a checker's decision.
-  Future<List<LoanRepayment>> pendingRepayments() async {
-    final rows = await _api.getList('/loans/repayments/pending');
-    return rows.map(LoanRepayment.fromJson).toList();
-  }
-
-  /// Post or reject a pending financial transaction.
-  Future<void> decideTransaction(String id, String decision,
-      {String? reason}) async {
-    await _api.patch('/financial-transactions/$id/status', {
-      'status': decision,
-      if (reason != null && reason.isNotEmpty) 'reason': reason,
-    });
-  }
-
-  /// Post or reject a pending loan repayment.
-  Future<void> decideRepayment(String loanId, String repaymentId, String decision,
-      {String? reason}) async {
-    await _api.post('/loans/$loanId/repayments/$repaymentId/decision', {
-      'status': decision,
-      if (reason != null && reason.isNotEmpty) 'reason': reason,
-    });
-  }
-
   Future<List<Subscription>> subscriptions() async {
     final rows = await _api.getList('/subscriptions');
     return rows.map(Subscription.fromJson).toList();
