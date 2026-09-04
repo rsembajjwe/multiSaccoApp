@@ -5,7 +5,6 @@ import '../../core/format.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
-import '../../domain/models.dart';
 import '../../providers.dart';
 
 class _Filter {

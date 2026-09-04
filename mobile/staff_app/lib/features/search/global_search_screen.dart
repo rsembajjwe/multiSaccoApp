@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
 import '../../core/widgets/ui.dart';
-import '../../domain/models.dart';
 import '../../providers.dart';
 import '../loans/loan_detail_screen.dart';
 import '../members/member_detail_screen.dart';
