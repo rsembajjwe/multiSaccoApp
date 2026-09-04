@@ -55,6 +55,12 @@ class OperationsController {
         counts.put("deliveryExceptions", count("SELECT COUNT(*) FROM notification_deliveries WHERE status <> 'sent'", tenantId));
         counts.put("closedAccountingPeriods", count("SELECT COUNT(*) FROM accounting_periods WHERE status = 'closed'", tenantId));
 
+        java.util.Map<String, Object> financials = new java.util.LinkedHashMap<>();
+        financials.put("totalSavings", sum("SELECT COALESCE(SUM(savings_balance), 0) FROM members", tenantId));
+        financials.put("totalShares", sum("SELECT COALESCE(SUM(shares_balance), 0) FROM members", tenantId));
+        financials.put("totalWelfare", sum("SELECT COALESCE(SUM(welfare_balance), 0) FROM members", tenantId));
+        financials.put("loanPortfolio", sum("SELECT COALESCE(SUM(balance), 0) FROM loans WHERE status NOT IN ('closed', 'rejected')", tenantId));
+
         List<Map<String, Object>> alerts = alerts(counts);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("ok", true);
@@ -62,6 +68,7 @@ class OperationsController {
         response.put("scope", platformWide ? "platform" : tenantId);
         response.put("database", Map.of("reachable", true));
         response.put("counts", counts);
+        response.put("financials", financials);
         response.put("alerts", alerts);
         return ResponseEntity.ok(ApiResponse.of(response));
     }
@@ -72,6 +79,14 @@ class OperationsController {
                 ? jdbcTemplate.queryForObject(scopedSql, Long.class)
                 : jdbcTemplate.queryForObject(scopedSql, Long.class, tenantId);
         return value == null ? 0 : value;
+    }
+
+    private java.math.BigDecimal sum(String sql, String tenantId) {
+        String scopedSql = tenantId == null ? sql : sql + (sql.toLowerCase().contains(" where ") ? " AND tenant_id = ?" : " WHERE tenant_id = ?");
+        java.math.BigDecimal value = tenantId == null
+                ? jdbcTemplate.queryForObject(scopedSql, java.math.BigDecimal.class)
+                : jdbcTemplate.queryForObject(scopedSql, java.math.BigDecimal.class, tenantId);
+        return value == null ? java.math.BigDecimal.ZERO : value;
     }
 
     private List<Map<String, Object>> alerts(Map<String, Object> counts) {

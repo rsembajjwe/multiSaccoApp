@@ -102,6 +102,36 @@ class SubscriptionController {
                         .body(ApiErrorResponse.of(404, "SUBSCRIPTION_NOT_FOUND", "Subscription not found.")));
     }
 
+    /**
+     * Tenant-facing subscription payment. Lets a SACCO administrator pay their own subscription
+     * balance or top up member capacity (mobile-money), without needing a platform admin. Reuses
+     * the same payment application logic as the platform recording endpoint. The caller must own
+     * the subscription's tenant and hold tenants:manage (platform admins may act for any tenant).
+     */
+    @PostMapping("/api/v1/subscriptions/{subscriptionId}/self-payments")
+    ResponseEntity<?> paySubscriptionSelf(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String subscriptionId,
+            @Valid @RequestBody RecordSubscriptionPaymentRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return subscriptionRepository.findById(subscriptionId)
+                .<ResponseEntity<?>>map(subscription -> {
+                    boolean platform = authService.isPlatform(currentSession.user());
+                    if (!platform && !subscription.getTenantId().equals(currentSession.user().getTenantId())) {
+                        return tenantAccessDenied();
+                    }
+                    if (!platform && !authService.hasPermission(currentSession.user(), "tenants:manage")) {
+                        return authService.permissionRequired("tenants:manage");
+                    }
+                    return createPayment(subscription, body, currentSession, request);
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "SUBSCRIPTION_NOT_FOUND", "Subscription not found.")));
+    }
+
     @PostMapping("/api/v1/integrations/mobile-money/subscription-callback")
     ResponseEntity<?> receiveSubscriptionCallback(
             @Valid @RequestBody SubscriptionPaymentCallbackRequest body,
