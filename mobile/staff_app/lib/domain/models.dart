@@ -888,3 +888,37 @@ class DocumentBytes {
   bool get isImage => contentType.startsWith('image/');
   bool get isPdf => contentType.contains('pdf');
 }
+
+/// A SACCO notification message (GET /notifications/messages).
+class AppNotification {
+  const AppNotification({
+    required this.id,
+    required this.memberId,
+    required this.category,
+    required this.eventType,
+    required this.title,
+    required this.body,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String memberId;
+  final String category;
+  final String eventType;
+  final String title;
+  final String body;
+  final String status;
+  final String createdAt;
+
+  factory AppNotification.fromJson(Map<String, dynamic> j) => AppNotification(
+        id: _str(j['id']),
+        memberId: _str(j['memberId']),
+        category: _str(j['category']),
+        eventType: _str(j['eventType']),
+        title: _str(j['title']),
+        body: _str(j['body']),
+        status: _str(j['status']),
+        createdAt: _str(j['createdAt']),
+      );
+}

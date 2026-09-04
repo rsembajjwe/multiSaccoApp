@@ -105,6 +105,14 @@ class AdminRepository {
     throw ApiException('Payment did not return an updated subscription.');
   }
 
+  Future<List<AppNotification>> notificationsFeed({String? search}) async {
+    final rows = await _api.getList('/notifications/messages',
+        query: (search != null && search.trim().isNotEmpty)
+            ? {'search': search.trim()}
+            : null);
+    return rows.map(AppNotification.fromJson).toList();
+  }
+
   Future<List<Complaint>> complaints() async {
     final rows = await _api.getList('/complaints');
     return rows.map(Complaint.fromJson).toList();

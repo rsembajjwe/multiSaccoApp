@@ -202,3 +202,10 @@ final memberDocumentContentProvider =
   (ref, key) =>
       ref.watch(adminRepositoryProvider).memberDocumentContent(key.$1, key.$2),
 );
+
+/// The SACCO's notification activity feed, optionally filtered by search.
+final notificationsFeedProvider =
+    FutureProvider.autoDispose.family<List<AppNotification>, String>(
+  (ref, search) =>
+      ref.watch(adminRepositoryProvider).notificationsFeed(search: search),
+);

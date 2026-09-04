@@ -10,6 +10,7 @@ import '../complaints/complaints_screen.dart';
 import '../interest/interest_screen.dart';
 import '../loans/loans_screen.dart';
 import '../members/members_screen.dart';
+import '../notifications/notifications_screen.dart';
 import '../reports/reports_screen.dart';
 import '../settings/settings_screen.dart';
 import '../subscription/subscription_screen.dart';
@@ -50,6 +51,9 @@ const _sections = <_Section>[
       Color(0xFF0369A1), 'SACCO metrics & portfolio'),
   _Section('Audit log', Icons.receipt_long_outlined, ['audit:view'],
       Color(0xFF525252), 'Who did what, when'),
+  _Section('Notifications', Icons.notifications_outlined,
+      ['notifications:view'], Color(0xFF0891B2),
+      'SACCO alerts & messages sent'),
   _Section('Users & Roles', Icons.manage_accounts_outlined,
       ['users:view', 'roles:view'], Color(0xFF7C3AED),
       'Staff directory & permissions'),
@@ -320,6 +324,8 @@ Widget _screenFor(_Section s, StaffSession session) {
       return const WelfareScreen();
     case 'Audit log':
       return const AuditScreen();
+    case 'Notifications':
+      return const NotificationsScreen();
     case 'Users & Roles':
       return const UsersScreen();
     default:
