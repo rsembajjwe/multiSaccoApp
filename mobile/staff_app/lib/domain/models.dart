@@ -249,6 +249,8 @@ class Loan {
 class LoanRepayment {
   const LoanRepayment({
     required this.id,
+    required this.loanId,
+    required this.memberId,
     required this.amount,
     required this.channel,
     required this.reference,
@@ -259,6 +261,8 @@ class LoanRepayment {
   });
 
   final String id;
+  final String loanId;
+  final String memberId;
   final num amount;
   final String channel;
   final String reference;
@@ -269,6 +273,8 @@ class LoanRepayment {
 
   factory LoanRepayment.fromJson(Map<String, dynamic> j) => LoanRepayment(
         id: _str(j['id']),
+        loanId: _str(j['loanId']),
+        memberId: _str(j['memberId']),
         amount: _num(j['amount']),
         channel: _str(j['channel']),
         reference: _str(j['reference']),
