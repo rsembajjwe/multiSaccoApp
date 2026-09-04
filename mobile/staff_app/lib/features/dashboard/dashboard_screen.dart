@@ -22,36 +22,42 @@ import '../../providers.dart';
 /// A staff feature area, shown on the dashboard when the user holds any of
 /// [perms]. [route] will point to the real screen as each section is built.
 class _Section {
-  const _Section(this.label, this.icon, this.perms, this.color);
+  const _Section(this.label, this.icon, this.perms, this.color, this.description);
   final String label;
   final IconData icon;
   final List<String> perms;
   final Color color;
+  final String description;
 }
 
 const _sections = <_Section>[
   _Section('Members', Icons.groups_outlined,
-      ['members:view', 'members:create', 'members:approve'], Color(0xFF0F766E)),
+      ['members:view', 'members:create', 'members:approve'], Color(0xFF0F766E),
+      'Balances, statements & KYC'),
   _Section('Transactions', Icons.swap_horiz,
       ['transactions:view', 'transactions:create', 'transactions:approve'],
-      Color(0xFFB45309)),
+      Color(0xFFB45309), 'Deposits, withdrawals & shares'),
   _Section('Loans', Icons.account_balance_outlined,
       ['loans:view', 'loans:approve', 'loans:disburse', 'loans:create'],
-      Color(0xFFB91C1C)),
+      Color(0xFFB91C1C), 'Loan book, schedules & payments'),
   _Section('Welfare', Icons.volunteer_activism_outlined,
-      ['welfare:view', 'welfare:manage'], Color(0xFF9333EA)),
+      ['welfare:view', 'welfare:manage'], Color(0xFF9333EA),
+      'Member welfare claims'),
   _Section('Complaints', Icons.forum_outlined,
-      ['complaints:view', 'complaints:manage'], Color(0xFFDB2777)),
+      ['complaints:view', 'complaints:manage'], Color(0xFFDB2777),
+      'Member complaints & responses'),
   _Section('Reports', Icons.insights_outlined, ['reports:view'],
-      Color(0xFF0369A1)),
+      Color(0xFF0369A1), 'SACCO metrics & portfolio'),
   _Section('Audit log', Icons.receipt_long_outlined, ['audit:view'],
-      Color(0xFF525252)),
+      Color(0xFF525252), 'Who did what, when'),
   _Section('Users & Roles', Icons.manage_accounts_outlined,
-      ['users:view', 'roles:view'], Color(0xFF7C3AED)),
+      ['users:view', 'roles:view'], Color(0xFF7C3AED),
+      'Staff directory & permissions'),
   _Section('Subscription', Icons.workspace_premium_outlined,
-      ['subscriptions:view'], Color(0xFF0D9488)),
+      ['subscriptions:view'], Color(0xFF0D9488), 'Plan, capacity & payment'),
   _Section('Interest income', Icons.trending_up,
-      ['loans:view', 'reports:view'], Color(0xFF16A34A)),
+      ['loans:view', 'reports:view'], Color(0xFF16A34A),
+      'Interest booked by year'),
 ];
 
 class DashboardScreen extends ConsumerWidget {
@@ -128,6 +134,13 @@ class _Header extends StatelessWidget {
   const _Header({required this.session});
   final StaffSession session;
 
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -174,6 +187,10 @@ class _Header extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
+          Text(_greeting(),
+              style: TextStyle(
+                  color: scheme.onPrimary.withValues(alpha: 0.85),
+                  fontSize: 12)),
           Text(name,
               style: TextStyle(
                   color: scheme.onPrimary,
@@ -227,39 +244,53 @@ class _SectionGrid extends StatelessWidget {
             child: Text('No operations are available for your role yet.')),
       );
     }
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.5,
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
       children: visible
-          .map((s) => Card(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => _screenFor(s, session))),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: s.color.withValues(alpha: 0.13),
-                            borderRadius: BorderRadius.circular(10),
+          .map((s) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Card(
+                  margin: EdgeInsets.zero,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => _screenFor(s, session))),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: s.color.withValues(alpha: 0.13),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(s.icon, color: s.color, size: 22),
                           ),
-                          child: Icon(s.icon, color: s.color, size: 20),
-                        ),
-                        Text(s.label,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700)),
-                      ],
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(s.label,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 2),
+                                Text(s.description,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: scheme.onSurfaceVariant)),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right,
+                              color: scheme.onSurfaceVariant),
+                        ],
+                      ),
                     ),
                   ),
                 ),
