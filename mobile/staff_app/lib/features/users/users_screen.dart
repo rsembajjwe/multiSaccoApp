@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/widgets/error_retry.dart';
+import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -37,7 +38,7 @@ class _StaffTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(usersProvider);
     return async.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const ListSkeleton(),
       error: (e, _) => ErrorRetry(
         message: 'Could not load staff.',
         detail: '$e',
@@ -204,7 +205,7 @@ class _RolesTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(rolesProvider);
     return async.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const ListSkeleton(),
       error: (e, _) => ErrorRetry(
         message: 'Could not load roles.',
         detail: '$e',

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/widgets/error_retry.dart';
+import '../../core/widgets/skeleton.dart';
 import '../audit/audit_screen.dart';
 import '../interest/interest_screen.dart';
 import '../loans/loans_screen.dart';
@@ -70,7 +71,7 @@ class DashboardScreen extends ConsumerWidget {
         ],
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const DashboardSkeleton(),
         error: (e, _) => ErrorRetry(
           message: 'Could not load your account.',
           detail: '$e',

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
 import '../../core/widgets/error_retry.dart';
+import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -58,7 +59,7 @@ class _WelfareScreenState extends ConsumerState<WelfareScreen> {
           ),
           Expanded(
             child: async.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const ListSkeleton(),
               error: (e, _) => ErrorRetry(
                 message: 'Could not load welfare claims.',
                 detail: '$e',

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
 import '../../core/widgets/error_retry.dart';
+import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -34,7 +35,7 @@ class FundTransactionsScreen extends ConsumerWidget {
         title: Text('$fundLabel transactions'),
       ),
       body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const ListSkeleton(),
         error: (e, _) => ErrorRetry(
           message: 'Could not load transactions.',
           detail: '$e',

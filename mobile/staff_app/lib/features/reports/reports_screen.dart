@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
 import '../../core/widgets/error_retry.dart';
+import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -21,7 +22,7 @@ class ReportsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Reports')),
       body: statusAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const ListSkeleton(),
         error: (e, _) => ErrorRetry(
           message: 'Could not load reports.',
           detail: '$e',
