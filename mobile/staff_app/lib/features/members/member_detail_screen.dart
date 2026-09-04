@@ -35,6 +35,9 @@ class MemberDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final memberAsync = ref.watch(memberProvider(memberId));
+    final canApprove =
+        ref.watch(sessionProvider).asData?.value?.can('members:approve') ??
+            false;
     return Scaffold(
       appBar: AppBar(title: const Text('Member')),
       body: memberAsync.when(
@@ -53,6 +56,23 @@ class MemberDetailScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             children: [
               _Identity(member: m),
+              if (canApprove) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.manage_accounts_outlined),
+                    label: const Text('Change status'),
+                    onPressed: () => showModalBottomSheet<void>(
+                      context: context,
+                      showDragHandle: true,
+                      isScrollControlled: true,
+                      builder: (_) => _MemberStatusSheet(
+                          memberId: memberId, current: m.status),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               Text('Balances',
                   style: Theme.of(context).textTheme.titleMedium),
@@ -287,6 +307,100 @@ class _MemberLoanTile extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+const _memberStatuses = [
+  'applicant',
+  'pending_approval',
+  'active',
+  'inactive',
+  'dormant',
+  'suspended',
+  'exited',
+];
+
+class _MemberStatusSheet extends ConsumerStatefulWidget {
+  const _MemberStatusSheet({required this.memberId, required this.current});
+  final String memberId;
+  final String current;
+
+  @override
+  ConsumerState<_MemberStatusSheet> createState() => _MemberStatusSheetState();
+}
+
+class _MemberStatusSheetState extends ConsumerState<_MemberStatusSheet> {
+  late String _status =
+      widget.current.isEmpty ? 'active' : widget.current;
+  bool _busy = false;
+
+  Future<void> _save() async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(adminRepositoryProvider)
+          .updateMemberStatus(widget.memberId, _status);
+      ref.invalidate(memberProvider(widget.memberId));
+      ref.invalidate(membersProvider(''));
+      ref.invalidate(saccoStatusProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Member status updated.')));
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Member status',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _memberStatuses
+                .map((st) => ChoiceChip(
+                      label: Text(Fmt.label(st)),
+                      selected: _status == st,
+                      onSelected:
+                          _busy ? null : (_) => setState(() => _status = st),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _busy ? null : _save,
+              child: _busy
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Save'),
+            ),
+          ),
+        ],
       ),
     );
   }

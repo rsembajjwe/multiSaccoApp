@@ -57,6 +57,12 @@ class AdminRepository {
     return r.mapItems(Loan.fromJson);
   }
 
+  /// Change a member's status (members:approve). Returns the updated member.
+  Future<Member> updateMemberStatus(String id, String status) async {
+    final data = await _api.patch('/members/$id/status', {'status': status});
+    return Member.fromJson(data);
+  }
+
   Future<Member> member(String id) async =>
       Member.fromJson(await _api.get('/members/$id'));
 
