@@ -9,6 +9,7 @@ import '../../domain/models.dart';
 import '../../providers.dart';
 import '../loans/loan_detail_screen.dart';
 import 'fund_transactions_screen.dart';
+import 'full_statement_screen.dart';
 import 'loan_transactions_screen.dart';
 
 /// A member's financial profile: savings, shares, welfare and loan balances,
@@ -100,6 +101,20 @@ class MemberDetailScreen extends ConsumerWidget {
               Text('Loans', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               _MemberLoans(memberId: memberId),
+              const SizedBox(height: 20),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.receipt_long_outlined),
+                  title: const Text('View full statement'),
+                  subtitle:
+                      const Text('All transactions with running balances'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => FullStatementScreen(
+                        memberId: memberId, memberName: m.fullName),
+                  )),
+                ),
+              ),
               const SizedBox(height: 24),
             ],
           ),

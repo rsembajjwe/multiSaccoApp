@@ -155,3 +155,10 @@ final loanScheduleProvider =
     FutureProvider.autoDispose.family<List<LoanScheduleRow>, String>(
   (ref, loanId) => ref.watch(adminRepositoryProvider).loanSchedule(loanId),
 );
+
+/// A member's full statement (all transactions, all funds).
+final memberFullStatementProvider =
+    FutureProvider.autoDispose.family<MemberStatement, String>(
+  (ref, memberId) =>
+      ref.watch(adminRepositoryProvider).memberStatement(memberId),
+);

@@ -456,6 +456,7 @@ class MemberStatement {
     required this.closeShares,
     required this.closeWelfare,
     required this.lines,
+    required this.csv,
   });
 
   final num openSavings;
@@ -465,6 +466,7 @@ class MemberStatement {
   final num closeShares;
   final num closeWelfare;
   final List<StatementLine> lines;
+  final String csv;
 
   num openingFor(String fund) => fund == 'savings'
       ? openSavings
@@ -500,6 +502,7 @@ class MemberStatement {
           .whereType<Map<String, dynamic>>()
           .map(StatementLine.fromJson)
           .toList(),
+      csv: _str(j['csv']),
     );
   }
 }
