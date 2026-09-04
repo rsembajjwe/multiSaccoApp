@@ -209,3 +209,14 @@ final notificationsFeedProvider =
   (ref, search) =>
       ref.watch(adminRepositoryProvider).notificationsFeed(search: search),
 );
+
+/// Support chat threads.
+final chatThreadsProvider = FutureProvider.autoDispose<List<ChatThread>>(
+  (ref) => ref.watch(adminRepositoryProvider).chatThreads(),
+);
+
+/// Messages in a chat thread.
+final chatMessagesProvider =
+    FutureProvider.autoDispose.family<List<ChatMessage>, String>(
+  (ref, threadId) => ref.watch(adminRepositoryProvider).chatMessages(threadId),
+);

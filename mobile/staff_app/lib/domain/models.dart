@@ -944,3 +944,70 @@ class PageResult<T> {
   PageResult<R> mapItems<R>(R Function(T) f) =>
       PageResult<R>(items.map(f).toList(), page, totalPages, total);
 }
+
+/// A support chat thread (GET /chat/threads).
+class ChatThread {
+  const ChatThread({
+    required this.id,
+    required this.type,
+    required this.memberId,
+    required this.memberName,
+    required this.subject,
+    required this.status,
+    required this.lastMessageAt,
+    required this.lastMessagePreview,
+    required this.lastMessageSenderType,
+  });
+
+  final String id;
+  final String type;
+  final String memberId;
+  final String memberName;
+  final String subject;
+  final String status;
+  final String lastMessageAt;
+  final String lastMessagePreview;
+  final String lastMessageSenderType;
+
+  /// The member spoke last, so the thread is awaiting a staff reply.
+  bool get awaitingReply => lastMessageSenderType == 'member';
+
+  factory ChatThread.fromJson(Map<String, dynamic> j) => ChatThread(
+        id: _str(j['id']),
+        type: _str(j['type']),
+        memberId: _str(j['memberId']),
+        memberName: _str(j['memberName']),
+        subject: _str(j['subject']),
+        status: _str(j['status']),
+        lastMessageAt: _str(j['lastMessageAt']),
+        lastMessagePreview: _str(j['lastMessagePreview']),
+        lastMessageSenderType: _str(j['lastMessageSenderType']),
+      );
+}
+
+/// A message within a chat thread (GET /chat/threads/{id}/messages).
+class ChatMessage {
+  const ChatMessage({
+    required this.id,
+    required this.senderType,
+    required this.senderName,
+    required this.body,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String senderType;
+  final String senderName;
+  final String body;
+  final String createdAt;
+
+  bool get fromStaff => senderType != 'member';
+
+  factory ChatMessage.fromJson(Map<String, dynamic> j) => ChatMessage(
+        id: _str(j['id']),
+        senderType: _str(j['senderType']),
+        senderName: _str(j['senderName']),
+        body: _str(j['body']),
+        createdAt: _str(j['createdAt']),
+      );
+}

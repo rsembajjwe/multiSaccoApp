@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../audit/audit_screen.dart';
+import '../chat/chat_threads_screen.dart';
 import '../complaints/complaints_screen.dart';
 import '../interest/interest_screen.dart';
 import '../loans/loans_screen.dart';
@@ -47,6 +48,9 @@ const _sections = <_Section>[
   _Section('Complaints', Icons.forum_outlined,
       ['complaints:view', 'complaints:manage'], Color(0xFFDB2777),
       'Member complaints & responses'),
+  _Section('Support chat', Icons.support_agent,
+      ['complaints:view', 'complaints:manage'], Color(0xFF2563EB),
+      'Member support conversations'),
   _Section('Reports', Icons.insights_outlined, ['reports:view'],
       Color(0xFF0369A1), 'SACCO metrics & portfolio'),
   _Section('Audit log', Icons.receipt_long_outlined, ['audit:view'],
@@ -322,6 +326,8 @@ Widget _screenFor(_Section s, StaffSession session) {
       return SubscriptionScreen(canPay: session.can('tenants:manage'));
     case 'Complaints':
       return ComplaintsScreen(canManage: session.can('complaints:manage'));
+    case 'Support chat':
+      return ChatThreadsScreen(canReply: session.can('complaints:manage'));
     case 'Interest income':
       return const InterestScreen();
     case 'Reports':

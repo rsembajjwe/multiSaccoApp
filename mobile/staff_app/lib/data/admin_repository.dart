@@ -141,6 +141,26 @@ class AdminRepository {
     return rows.map(AppNotification.fromJson).toList();
   }
 
+  Future<List<ChatThread>> chatThreads() async {
+    final rows = await _api.getList('/chat/threads');
+    return rows.map(ChatThread.fromJson).toList();
+  }
+
+  Future<List<ChatMessage>> chatMessages(String threadId) async {
+    final rows = await _api.getList('/chat/threads/$threadId/messages');
+    return rows.map(ChatMessage.fromJson).toList();
+  }
+
+  Future<void> sendChatMessage(String threadId, String body) async {
+    await _api.post('/chat/threads/$threadId/messages', {'body': body});
+  }
+
+  Future<void> markThreadRead(String threadId) async {
+    try {
+      await _api.post('/chat/threads/$threadId/read', const {});
+    } catch (_) {}
+  }
+
   Future<List<Complaint>> complaints() async {
     final rows = await _api.getList('/complaints');
     return rows.map(Complaint.fromJson).toList();
