@@ -547,6 +547,10 @@ class FinancialTxn {
     required this.narration,
     required this.postedAt,
     required this.createdAt,
+    required this.makerUserId,
+    required this.checkerUserId,
+    required this.rejectionReason,
+    required this.reversalReason,
   });
 
   final String id;
@@ -559,6 +563,10 @@ class FinancialTxn {
   final String narration;
   final String postedAt;
   final String createdAt;
+  final String makerUserId;
+  final String checkerUserId;
+  final String rejectionReason;
+  final String reversalReason;
 
   /// Whether this transaction reduces a member's funds (outflow).
   bool get isOutflow =>

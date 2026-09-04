@@ -184,3 +184,14 @@ final memberDocumentsProvider =
 final complaintsProvider = FutureProvider.autoDispose<List<Complaint>>(
   (ref) => ref.watch(adminRepositoryProvider).complaints(),
 );
+
+/// Map of staff user id -> display name, used to label maker/checker on records.
+final staffNamesProvider = FutureProvider.autoDispose<Map<String, String>>(
+  (ref) async {
+    final users = await ref.watch(adminRepositoryProvider).users();
+    return {
+      for (final u in users)
+        u.id: u.fullName.isEmpty ? u.email : u.fullName
+    };
+  },
+);

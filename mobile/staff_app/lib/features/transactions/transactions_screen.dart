@@ -7,6 +7,7 @@ import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
+import 'transaction_detail_screen.dart';
 
 class _Filter {
   const _Filter(this.label, this.match);
@@ -154,7 +155,12 @@ class _TxnTile extends StatelessWidget {
     final title = txn.narration.isNotEmpty ? txn.narration : Fmt.label(txn.type);
     return Card(
       margin: EdgeInsets.zero,
-      child: Padding(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => TransactionDetailScreen(
+                txn: txn, memberName: memberName))),
+        child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
@@ -197,6 +203,7 @@ class _TxnTile extends StatelessWidget {
               ],
             ),
           ],
+        ),
         ),
       ),
     );
