@@ -11,6 +11,7 @@ import '../interest/interest_screen.dart';
 import '../loans/loans_screen.dart';
 import '../members/members_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../search/global_search_screen.dart';
 import '../reports/reports_screen.dart';
 import '../settings/settings_screen.dart';
 import '../subscription/subscription_screen.dart';
@@ -74,6 +75,12 @@ class DashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Dashboard'),
         actions: [
+          IconButton(
+            tooltip: 'Search',
+            icon: const Icon(Icons.search),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const GlobalSearchScreen())),
+          ),
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),
