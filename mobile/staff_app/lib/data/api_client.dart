@@ -68,6 +68,23 @@ class ApiClient {
         : const [];
   }
 
+  /// Fetches a page of results, reading the PagedResponse `{data, page}` envelope.
+  Future<PageResult<Map<String, dynamic>>> getPage(String path,
+      {int page = 0, int size = 20, Map<String, dynamic>? query}) async {
+    final q = <String, dynamic>{'page': page, 'size': size, ...?query};
+    final r = await _guard(() => _dio.get<dynamic>(path, queryParameters: q));
+    final d = r.data;
+    final rows = (d is Map && d['data'] is List)
+        ? (d['data'] as List).whereType<Map<String, dynamic>>().toList()
+        : <Map<String, dynamic>>[];
+    final meta = (d is Map && d['page'] is Map) ? d['page'] as Map : const {};
+    final number = (meta['number'] as num?)?.toInt() ?? page;
+    final totalPages = (meta['totalPages'] as num?)?.toInt() ??
+        (rows.isEmpty ? number : number + 1);
+    final total = (meta['totalElements'] as num?)?.toInt() ?? rows.length;
+    return PageResult<Map<String, dynamic>>(rows, number, totalPages, total);
+  }
+
   Future<Map<String, dynamic>> patch(String path, Map<String, dynamic> body) async {
     final r = await _guard(() => _dio.patch<dynamic>(path, data: body));
     return _envelope(r.data);

@@ -35,6 +35,28 @@ class AdminRepository {
           .map(MemberDocument.fromJson)
           .toList();
 
+  Future<PageResult<Member>> membersPage(
+      {String? search, required int page, int size = 20}) async {
+    final r = await _api.getPage('/members',
+        page: page,
+        size: size,
+        query: (search != null && search.trim().isNotEmpty)
+            ? {'search': search.trim()}
+            : null);
+    return r.mapItems(Member.fromJson);
+  }
+
+  Future<PageResult<Loan>> loansPage(
+      {String? search, required int page, int size = 20}) async {
+    final r = await _api.getPage('/loans',
+        page: page,
+        size: size,
+        query: (search != null && search.trim().isNotEmpty)
+            ? {'search': search.trim()}
+            : null);
+    return r.mapItems(Loan.fromJson);
+  }
+
   Future<Member> member(String id) async =>
       Member.fromJson(await _api.get('/members/$id'));
 

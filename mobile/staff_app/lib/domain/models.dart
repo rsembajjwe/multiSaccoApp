@@ -922,3 +922,17 @@ class AppNotification {
         createdAt: _str(j['createdAt']),
       );
 }
+
+/// A page of results with paging metadata (from a PagedResponse envelope).
+class PageResult<T> {
+  const PageResult(this.items, this.page, this.totalPages, this.total);
+  final List<T> items;
+  final int page;
+  final int totalPages;
+  final int total;
+
+  bool get hasMore => page + 1 < totalPages;
+
+  PageResult<R> mapItems<R>(R Function(T) f) =>
+      PageResult<R>(items.map(f).toList(), page, totalPages, total);
+}

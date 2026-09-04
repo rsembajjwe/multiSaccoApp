@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
-import '../../core/widgets/error_retry.dart';
-import '../../core/widgets/skeleton.dart';
+import '../../core/widgets/paged_list.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -30,7 +29,6 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(loansProvider(_query));
     final names = ref.watch(memberNamesProvider).asData?.value ?? const {};
     return Scaffold(
       appBar: AppBar(title: const Text('Loans')),
@@ -63,35 +61,16 @@ class _LoansScreenState extends ConsumerState<LoansScreen> {
             ),
           ),
           Expanded(
-            child: async.when(
-              loading: () => const ListSkeleton(),
-              error: (e, _) => ErrorRetry(
-                message: 'Could not load loans.',
-                detail: '$e',
-                onRetry: () => ref.invalidate(loansProvider(_query)),
-              ),
-              data: (loans) {
-                if (loans.isEmpty) {
-                  return const EmptyState(
-                      icon: Icons.account_balance_outlined,
-                      message: 'No loans match your search.');
-                }
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    ref.invalidate(loansProvider(_query));
-                    ref.invalidate(memberNamesProvider);
-                  },
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                    itemCount: loans.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _LoanTile(
-                      loan: loans[i],
-                      memberName: names[loans[i].memberId],
-                    ),
-                  ),
-                );
-              },
+            child: PagedListView<Loan>(
+              search: _query,
+              fetch: (page) => ref
+                  .read(adminRepositoryProvider)
+                  .loansPage(search: _query, page: page),
+              itemBuilder: (context, l) =>
+                  _LoanTile(loan: l, memberName: names[l.memberId]),
+              emptyIcon: Icons.account_balance_outlined,
+              emptyMessage: 'No loans match your search.',
+              errorMessage: 'Could not load loans.',
             ),
           ),
         ],

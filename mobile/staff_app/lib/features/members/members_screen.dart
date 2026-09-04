@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
-import '../../core/widgets/error_retry.dart';
-import '../../core/widgets/skeleton.dart';
+import '../../core/widgets/paged_list.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -29,7 +28,6 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(membersProvider(_query));
     return Scaffold(
       appBar: AppBar(title: const Text('Members')),
       body: Column(
@@ -61,30 +59,15 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
             ),
           ),
           Expanded(
-            child: async.when(
-              loading: () => const ListSkeleton(),
-              error: (e, _) => ErrorRetry(
-                message: 'Could not load members.',
-                detail: '$e',
-                onRetry: () => ref.invalidate(membersProvider(_query)),
-              ),
-              data: (members) {
-                if (members.isEmpty) {
-                  return const EmptyState(
-                      icon: Icons.groups_outlined,
-                      message: 'No members match your search.');
-                }
-                return RefreshIndicator(
-                  onRefresh: () async =>
-                      ref.invalidate(membersProvider(_query)),
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                    itemCount: members.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _MemberTile(member: members[i]),
-                  ),
-                );
-              },
+            child: PagedListView<Member>(
+              search: _query,
+              fetch: (page) => ref
+                  .read(adminRepositoryProvider)
+                  .membersPage(search: _query, page: page),
+              itemBuilder: (context, m) => _MemberTile(member: m),
+              emptyIcon: Icons.groups_outlined,
+              emptyMessage: 'No members match your search.',
+              errorMessage: 'Could not load members.',
             ),
           ),
         ],
