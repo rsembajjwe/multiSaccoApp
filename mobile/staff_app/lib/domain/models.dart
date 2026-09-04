@@ -10,6 +10,8 @@ class StaffSession {
     required this.permissions,
     required this.saccoName,
     this.expiresAt,
+    this.currency = 'UGX',
+    this.currencyDigits = 0,
   });
 
   final String token;
@@ -19,6 +21,8 @@ class StaffSession {
   final List<String> permissions;
   final String saccoName;
   final DateTime? expiresAt;
+  final String currency;
+  final int currencyDigits;
 
   bool can(String permission) => permissions.contains(permission);
   bool canAny(List<String> perms) => perms.any(permissions.contains);
@@ -38,6 +42,10 @@ class StaffSession {
       permissions: _strList(j['permissionIds']),
       saccoName: '${tenant?['name'] ?? tenant?['saccoName'] ?? ''}',
       expiresAt: DateTime.tryParse('${j['expiresAt'] ?? ''}'),
+      currency: '${tenant?['currencyCode'] ?? 'UGX'}'.isEmpty
+          ? 'UGX'
+          : '${tenant?['currencyCode'] ?? 'UGX'}',
+      currencyDigits: _int(tenant?['currencyDigits'] ?? 0),
     );
   }
 }

@@ -5,8 +5,20 @@ import 'package:intl/intl.dart';
 class Fmt {
   Fmt._();
 
-  static final NumberFormat _money =
+  static String _currency = 'UGX';
+  static int _digits = 0;
+  static NumberFormat _money =
       NumberFormat.currency(symbol: 'UGX ', decimalDigits: 0);
+
+  /// Sets the display currency (from the signed-in SACCO's tenant settings).
+  static void setCurrency(String code, int digits) {
+    final c = code.trim().isEmpty ? 'UGX' : code.trim();
+    final d = digits < 0 ? 0 : (digits > 4 ? 4 : digits);
+    if (c == _currency && d == _digits) return;
+    _currency = c;
+    _digits = d;
+    _money = NumberFormat.currency(symbol: '$c ', decimalDigits: d);
+  }
   static final NumberFormat _plain = NumberFormat.decimalPattern();
   static final DateFormat _date = DateFormat('d MMM yyyy');
   static final DateFormat _dateTime = DateFormat('d MMM yyyy, h:mm a');

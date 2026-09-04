@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/format.dart';
 import '../../core/widgets/error_retry.dart';
@@ -395,7 +394,6 @@ class _StatusSummary extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(saccoStatusProvider);
-    final money = NumberFormat.currency(symbol: 'UGX ', decimalDigits: 0);
     return async.when(
       loading: () => const SizedBox(
           height: 140, child: Center(child: CircularProgressIndicator())),
@@ -413,7 +411,7 @@ class _StatusSummary extends ConsumerWidget {
               Expanded(
                 child: _MoneyCard(
                     'Total savings',
-                    money.format(st.totalSavings),
+                    Fmt.money(st.totalSavings),
                     Icons.savings_outlined,
                     const Color(0xFF0F766E)),
               ),
@@ -421,7 +419,7 @@ class _StatusSummary extends ConsumerWidget {
               Expanded(
                 child: _MoneyCard(
                     'Loan portfolio',
-                    money.format(st.loanPortfolio),
+                    Fmt.money(st.loanPortfolio),
                     Icons.account_balance_outlined,
                     const Color(0xFFB91C1C)),
               ),

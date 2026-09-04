@@ -1,3 +1,4 @@
+import '../core/format.dart';
 import '../domain/models.dart';
 import 'api_client.dart';
 import 'session_store.dart';
@@ -43,6 +44,7 @@ class AuthRepository {
   Future<StaffSession> me() async {
     final data = await _api.get('/auth/me');
     final session = StaffSession.fromLogin(data);
+    Fmt.setCurrency(session.currency, session.currencyDigits);
     // keep permissions fresh
     await _session.writePermissions(session.permissions);
     if (session.userName.isNotEmpty) await _session.writeName(session.userName);
