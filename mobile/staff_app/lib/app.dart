@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'core/auth_events.dart';
 import 'core/theme.dart';
@@ -42,6 +43,21 @@ class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initPush();
+  }
+
+  Future<void> _initPush() async {
+    try {
+      final push = ref.read(pushServiceProvider);
+      await push.requestPermission();
+      final code = await ref.read(sessionStoreProvider).readSacco();
+      if (code != null && code.isNotEmpty) await push.subscribeStaff(code);
+      FirebaseMessaging.onMessage.listen((_) {
+        ref.invalidate(saccoStatusProvider);
+      });
+    } catch (_) {
+      // Push not configured — the app works without it.
+    }
   }
 
   @override

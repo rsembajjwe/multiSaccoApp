@@ -2,10 +2,17 @@ plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.methaltech.sacco_staff_app"
+    packaging {
+        resources {
+            excludes += "/META-INF/androidx/annotation/annotation/LICENSE.txt"
+            excludes += "/META-INF/androidx/annotation/annotation/LICENSE-*.txt"
+        }
+    }
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 

@@ -4,10 +4,13 @@ import 'data/api_client.dart';
 import 'data/admin_repository.dart';
 import 'data/auth_repository.dart';
 import 'data/biometric_service.dart';
+import 'data/push_service.dart';
 import 'data/session_store.dart';
 import 'domain/models.dart';
 
 final sessionStoreProvider = Provider<SessionStore>((ref) => SessionStore());
+
+final pushServiceProvider = Provider<PushService>((ref) => PushService());
 
 final apiClientProvider =
     Provider<ApiClient>((ref) => ApiClient(ref.watch(sessionStoreProvider)));
