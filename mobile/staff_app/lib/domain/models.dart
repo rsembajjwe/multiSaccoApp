@@ -196,6 +196,11 @@ class FundBalanceSummary {
 }
 
 String _str(dynamic v) => v == null ? '' : '$v';
+String? _strn(dynamic v) {
+  if (v == null) return null;
+  final t = '$v';
+  return t.isEmpty ? null : t;
+}
 
 List<String> _strListTop(dynamic v) => v is List
     ? v.map((e) => '$e').where((e) => e.isNotEmpty).toList()
@@ -1661,5 +1666,86 @@ class FinancialProduct {
         minimumBalance: _num(j['minimumBalance']),
         interestRate: _num(j['interestRate']),
         status: _str(j['status']),
+      );
+}
+
+class SavingsTransfer {
+  const SavingsTransfer({
+    required this.id,
+    required this.sourceMemberId,
+    required this.amount,
+    required this.destinationType,
+    this.destinationFundCode,
+    this.destinationMemberId,
+    this.loanId,
+    this.batchId,
+    required this.reference,
+    this.reason,
+    this.authorizationReference,
+    this.resolutionReference,
+    required this.status,
+    this.createdByUserId,
+    this.decidedByUserId,
+    this.firstApprovedByUserId,
+    this.decisionReason,
+    this.createdAt,
+  });
+
+  final String id;
+  final String sourceMemberId;
+  final num amount;
+  final String destinationType;
+  final String? destinationFundCode;
+  final String? destinationMemberId;
+  final String? loanId;
+  final String? batchId;
+  final String reference;
+  final String? reason;
+  final String? authorizationReference;
+  final String? resolutionReference;
+  final String status;
+  final String? createdByUserId;
+  final String? decidedByUserId;
+  final String? firstApprovedByUserId;
+  final String? decisionReason;
+  final DateTime? createdAt;
+
+  bool get isPending =>
+      status == 'pending' || status == 'awaiting_second_approval';
+
+  String get destinationLabel {
+    switch (destinationType) {
+      case 'own_fund':
+        return 'To ${destinationFundCode ?? 'fund'}';
+      case 'loan_repayment':
+        return 'Loan repayment';
+      case 'sacco_income':
+        return 'SACCO income';
+      case 'another_member':
+        return 'Another member';
+      default:
+        return destinationType.replaceAll('_', ' ');
+    }
+  }
+
+  factory SavingsTransfer.fromJson(Map<String, dynamic> j) => SavingsTransfer(
+        id: _str(j['id']),
+        sourceMemberId: _str(j['sourceMemberId']),
+        amount: _num(j['amount']),
+        destinationType: _str(j['destinationType']),
+        destinationFundCode: _strn(j['destinationFundCode']),
+        destinationMemberId: _strn(j['destinationMemberId']),
+        loanId: _strn(j['loanId']),
+        batchId: _strn(j['batchId']),
+        reference: _str(j['reference']),
+        reason: _strn(j['reason']),
+        authorizationReference: _strn(j['authorizationReference']),
+        resolutionReference: _strn(j['resolutionReference']),
+        status: _str(j['status']),
+        createdByUserId: _strn(j['createdByUserId']),
+        decidedByUserId: _strn(j['decidedByUserId']),
+        firstApprovedByUserId: _strn(j['firstApprovedByUserId']),
+        decisionReason: _strn(j['decisionReason']),
+        createdAt: DateTime.tryParse(_str(j['createdAt'])),
       );
 }

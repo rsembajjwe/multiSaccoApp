@@ -155,6 +155,11 @@ final welfareClaimsProvider = FutureProvider.autoDispose<List<WelfareClaim>>(
   (ref) => ref.watch(adminRepositoryProvider).welfareClaims(),
 );
 
+final savingsTransfersProvider =
+    FutureProvider.autoDispose<List<SavingsTransfer>>(
+  (ref) => ref.watch(adminRepositoryProvider).savingsTransfers(),
+);
+
 /// Audit events, optionally filtered by a search term.
 final auditEventsProvider =
     FutureProvider.autoDispose.family<List<AuditEvent>, String>(

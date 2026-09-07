@@ -500,6 +500,19 @@ class AdminRepository {
     return rows.map(WelfareClaim.fromJson).toList();
   }
 
+  Future<List<SavingsTransfer>> savingsTransfers() async {
+    final rows = await _api.getList('/savings-transfers');
+    return rows.map(SavingsTransfer.fromJson).toList();
+  }
+
+  Future<void> decideSavingsTransfer(String id, String status,
+      {String? reason}) async {
+    await _api.patch('/savings-transfers/$id/decision', {
+      'status': status,
+      if (reason != null && reason.isNotEmpty) 'reason': reason,
+    });
+  }
+
   Future<List<AuditEvent>> auditEvents({String? search}) async {
     final rows = await _api.getList('/audit-events',
         query: (search != null && search.trim().isNotEmpty)
