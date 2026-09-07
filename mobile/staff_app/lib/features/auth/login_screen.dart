@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth_events.dart';
+import '../../core/config.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
 
@@ -14,7 +15,8 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _sacco = TextEditingController(text: 'GREE');
+  final _sacco =
+      TextEditingController(text: AppConfig.isProduction ? '' : 'GREE');
   final _username = TextEditingController();
   final _password = TextEditingController();
   final _code = TextEditingController();
@@ -169,7 +171,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ] else ...[
                     Text(
                       'A code was sent via ${_mfa!.deliveryChannel.isEmpty ? 'your configured channel' : _mfa!.deliveryChannel}.'
-                      '${_mfa!.demoCode.isNotEmpty ? ' Demo code: ${_mfa!.demoCode}' : ''}',
+                      '${!AppConfig.isProduction && _mfa!.demoCode.isNotEmpty ? ' Demo code: ${_mfa!.demoCode}' : ''}',
                       style: TextStyle(color: scheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 12),

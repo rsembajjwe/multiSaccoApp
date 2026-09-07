@@ -1,12 +1,14 @@
 import '../core/format.dart';
 import '../domain/models.dart';
 import 'api_client.dart';
+import 'push_service.dart';
 import 'session_store.dart';
 
 class AuthRepository {
-  AuthRepository(this._api, this._session);
+  AuthRepository(this._api, this._session, this._push);
   final ApiClient _api;
   final SessionStore _session;
+  final StaffPushTopics _push;
 
   Future<LoginOutcome> login({
     required String saccoCode,
@@ -52,9 +54,13 @@ class AuthRepository {
   }
 
   Future<void> logout() async {
+    final saccoCode = await _session.readSacco();
     try {
       await _api.post('/auth/logout', const {});
     } catch (_) {}
+    if (saccoCode != null && saccoCode.isNotEmpty) {
+      await _push.unsubscribeStaff(saccoCode);
+    }
     await _session.clear();
   }
 
@@ -64,6 +70,9 @@ class AuthRepository {
     if (s.token.isNotEmpty) await _session.writeToken(s.token);
     await _session.writePermissions(s.permissions);
     if (s.userName.isNotEmpty) await _session.writeName(s.userName);
-    if (saccoCode.isNotEmpty) await _session.writeSacco(saccoCode);
+    if (saccoCode.isNotEmpty) {
+      await _session.writeSacco(saccoCode);
+      await _push.subscribeStaff(saccoCode);
+    }
   }
 }

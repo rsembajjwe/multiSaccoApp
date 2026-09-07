@@ -6,12 +6,13 @@ import '../domain/models.dart';
 
 import '../core/auth_events.dart';
 import '../core/config.dart';
+import 'push_service.dart';
 import 'session_store.dart';
 
 /// Thin Dio wrapper: injects the bearer token, clears a stale session on 401,
 /// and maps transport failures to readable [ApiException]s.
 class ApiClient {
-  ApiClient(this._session, {Dio? dio}) : _dio = dio ?? Dio() {
+  ApiClient(this._session, this._push, {Dio? dio}) : _dio = dio ?? Dio() {
     _dio.options
       ..baseUrl = AppConfig.baseUrl
       ..connectTimeout = const Duration(seconds: 15)
@@ -26,6 +27,10 @@ class ApiClient {
         },
         onError: (e, handler) async {
           if (e.response?.statusCode == 401) {
+            final saccoCode = await _session.readSacco();
+            if (saccoCode != null && saccoCode.isNotEmpty) {
+              await _push.unsubscribeStaff(saccoCode);
+            }
             await _session.clear();
             sessionExpiredNotifier.value = true;
           }
@@ -37,6 +42,7 @@ class ApiClient {
 
   final Dio _dio;
   final SessionStore _session;
+  final StaffPushTopics _push;
 
   Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
     final r = await _guard(() => _dio.post<dynamic>(path, data: body));

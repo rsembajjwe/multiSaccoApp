@@ -24,7 +24,7 @@ lib/
     shell/                  (reserved for bottom-nav as sections land)
 ```
 
-`StaffSession.can('loans:approve')` / `canAny([...])` gate the UI; the same
+`StaffSession.can('loans:create')` / `canAny([...])` gate the UI; the same
 permission strings the backend enforces.
 
 ## Auth
@@ -73,5 +73,5 @@ Demo staff logins (dev profile): SACCO **GREE**, e.g.
 9. **Audit log (done)** — recent audit events (who did what, when) with search.
 10. **Users & roles (done, view)** — staff directory with per-user roles, and
     a roles list with permission counts.
-11. **Approvals** — maker-checker queues (loans, transfers, repayments).
+11. **Fund sources** — configurable member funds such as school fees or health.
 12. **Cross-cutting** — push (staff topics), biometric lock, offline resilience.

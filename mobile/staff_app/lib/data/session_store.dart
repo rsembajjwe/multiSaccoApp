@@ -40,5 +40,6 @@ class SessionStore {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _permsKey);
     await _storage.delete(key: _nameKey);
+    await _storage.delete(key: _saccoKey);
   }
 }

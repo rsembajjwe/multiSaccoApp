@@ -1,11 +1,16 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../domain/models.dart';
 import '../../providers.dart';
+import '../funds/fund_sources_screen.dart';
+import '../subscription/subscriptions_hub_screen.dart';
 
-/// Account & security: profile, biometric app lock, and sign out.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -14,98 +19,360 @@ class SettingsScreen extends ConsumerWidget {
     final sessionAsync = ref.watch(sessionProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          sessionAsync.maybeWhen(
-            data: (s) => _ProfileCard(session: s),
-            orElse: () => const SizedBox.shrink(),
-          ),
-          const SizedBox(height: 16),
-          Text('Security', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          const _BiometricToggle(),
-          const SizedBox(height: 24),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.logout, color: Color(0xFFB91C1C)),
-              title: const Text('Sign out'),
-              onTap: () async {
-                await ref.read(authRepositoryProvider).logout();
-                if (context.mounted) context.go('/login');
-              },
+      body: sessionAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('Could not load settings: $e'),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: Text('SACCO Administrator · v0.1.0',
-                style: Theme.of(context).textTheme.bodySmall),
-          ),
-          const SizedBox(height: 24),
-        ],
+          ],
+        ),
+        data: (session) => _SettingsBody(session: session),
       ),
     );
   }
 }
 
-class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({required this.session});
+class _SettingsBody extends ConsumerWidget {
+  const _SettingsBody({required this.session});
   final StaffSession session;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final canManageProfile =
+        session.can('sacco-profile:manage') || session.can('tenants:manage');
+    final canManageFunds = session.can('fund-types:manage');
+    final canManageTerms = session.can('loans:terms');
+    final canPaySubscription = session.can('subscriptions:manage');
+    final canManageMemberSubscriptions = session.can('member-subscription:manage');
+    final canPromptMemberSubscriptions = canManageMemberSubscriptions ||
+        session.can('member-subscription:prompt');
+    final profileAsync = session.tenantId.isEmpty
+        ? null
+        : ref.watch(saccoProfileProvider(session.tenantId));
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _ProfileCard(session: session, profileAsync: profileAsync),
+        const SizedBox(height: 16),
+        Text('SACCO controls', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        _SettingsTile(
+          icon: Icons.percent,
+          title: 'Loan interest rate',
+          subtitle: profileAsync?.maybeWhen(
+                data: (p) => '${p.loanInterestRate.toStringAsFixed(2)}% monthly default',
+                orElse: () => 'Set default rate for new loans and top-ups',
+              ) ??
+              'Set default rate for new loans and top-ups',
+          enabled: canManageTerms && session.tenantId.isNotEmpty,
+          onTap: () => _showInterestDialog(context, ref, session, profileAsync),
+        ),
+        _SettingsTile(
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'Fund sources',
+          subtitle: 'Savings, shares, welfare and custom funds',
+          enabled: canManageFunds,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => FundSourcesScreen(canManage: canManageFunds),
+          )),
+        ),
+        _SettingsTile(
+          icon: Icons.workspace_premium_outlined,
+          title: 'Subscriptions',
+          subtitle: 'Platform subscription, member dues and SMS credits',
+          enabled: session.can('subscriptions:view') ||
+              session.can('member-subscription:view') ||
+              session.can('notifications:manage'),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => SubscriptionsHubScreen(
+              canViewSubscription: session.can('subscriptions:view'),
+              canPaySubscription: canPaySubscription,
+              canViewMemberSubscriptions:
+                  session.can('member-subscription:view'),
+              canManageMemberSubscriptions: canManageMemberSubscriptions,
+              canPromptMemberSubscriptions: canPromptMemberSubscriptions,
+              canManageNotifications: session.can('notifications:manage'),
+            ),
+          )),
+        ),
+        _SettingsTile(
+          icon: Icons.image_outlined,
+          title: 'SACCO logo',
+          subtitle: 'Upload or replace the SACCO logo',
+          enabled: canManageProfile && session.tenantId.isNotEmpty,
+          onTap: () => _pickLogo(context, ref, session),
+        ),
+        const SizedBox(height: 24),
+        Text('Security', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        const _BiometricToggle(),
+        const SizedBox(height: 24),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.logout, color: Color(0xFFB91C1C)),
+            title: const Text('Sign out'),
+            onTap: () async {
+              await ref.read(authRepositoryProvider).logout();
+              if (context.mounted) context.go('/login');
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: Text('SACCO Administrator - v0.1.0',
+              style: Theme.of(context).textTheme.bodySmall),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Future<void> _showInterestDialog(
+    BuildContext context,
+    WidgetRef ref,
+    StaffSession session,
+    AsyncValue<SaccoProfile>? profileAsync,
+  ) async {
+    final current = profileAsync?.asData?.value.loanInterestRate;
+    final value = await showDialog<num>(
+      context: context,
+      builder: (_) => _InterestRateDialog(initialRate: current),
+    );
+    if (value == null) return;
+    if (value < 0 || value > 100) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Interest rate must be between 0 and 100 percent.')));
+      }
+      return;
+    }
+    try {
+      await ref
+          .read(adminRepositoryProvider)
+          .updateSaccoProfile(session.tenantId, loanInterestRate: value);
+      ref.invalidate(saccoProfileProvider(session.tenantId));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Loan interest rate updated.')));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  Future<void> _pickLogo(
+      BuildContext context, WidgetRef ref, StaffSession session) async {
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 82,
+    );
+    if (image == null) return;
+    final bytes = await image.readAsBytes();
+    if (bytes.length > 512 * 1024) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Choose a logo under 512 KB.')));
+      }
+      return;
+    }
+    final mime = _mimeFor(image.name);
+    final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
+    try {
+      await ref
+          .read(adminRepositoryProvider)
+          .updateSaccoProfile(session.tenantId, logoDataUrl: dataUrl);
+      ref.invalidate(saccoProfileProvider(session.tenantId));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('SACCO logo updated.')));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  String _mimeFor(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'image/png';
+  }
+}
+
+class _InterestRateDialog extends StatefulWidget {
+  const _InterestRateDialog({required this.initialRate});
+
+  final num? initialRate;
+
+  @override
+  State<_InterestRateDialog> createState() => _InterestRateDialogState();
+}
+
+class _InterestRateDialogState extends State<_InterestRateDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    final rate = widget.initialRate;
+    _controller = TextEditingController(
+        text: rate == null || rate == 0 ? '' : rate.toStringAsFixed(2));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final parsed = num.tryParse(_controller.text.trim().replaceAll(',', ''));
+    Navigator.of(context).pop(parsed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Loan interest rate'),
+      content: TextField(
+        controller: _controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: 'Monthly rate (%)',
+          prefixIcon: Icon(Icons.percent),
+        ),
+        onSubmitted: (_) => _save(),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
+        FilledButton(
+          onPressed: _save,
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileCard extends StatelessWidget {
+  const _ProfileCard({required this.session, required this.profileAsync});
+  final StaffSession session;
+  final AsyncValue<SaccoProfile>? profileAsync;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final profile = profileAsync?.asData?.value;
+    final logoBytes = _decodeLogo(profile?.logoDataUrl ?? '');
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: scheme.primaryContainer,
+              backgroundImage:
+                  logoBytes == null ? null : MemoryImage(logoBytes),
+              child: logoBytes == null
+                  ? Icon(Icons.account_balance_outlined,
+                      color: scheme.onPrimaryContainer)
+                  : null,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    session.userName.isEmpty ? 'Administrator' : session.userName,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  Text(
+                    profile?.legalName.isNotEmpty == true
+                        ? profile!.legalName
+                        : session.saccoName,
+                    style:
+                        TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                  ),
+                  if (session.email.isNotEmpty)
+                    Text(session.email,
+                        style: TextStyle(
+                            fontSize: 12, color: scheme.onSurfaceVariant)),
+                  if (session.roleNames.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children:
+                          session.roleNames.map((r) => Chip(label: Text(r))).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Uint8List? _decodeLogo(String dataUrl) {
+    final comma = dataUrl.indexOf(',');
+    if (comma < 0) return null;
+    try {
+      return base64Decode(dataUrl.substring(comma + 1));
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool enabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: scheme.primaryContainer,
-                  child: Icon(Icons.person_outline,
-                      color: scheme.onPrimaryContainer),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                          session.userName.isEmpty
-                              ? 'Administrator'
-                              : session.userName,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800)),
-                      if (session.saccoName.isNotEmpty)
-                        Text(session.saccoName,
-                            style: TextStyle(
-                                fontSize: 12, color: scheme.onSurfaceVariant)),
-                      if (session.email.isNotEmpty)
-                        Text(session.email,
-                            style: TextStyle(
-                                fontSize: 12, color: scheme.onSurfaceVariant)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (session.roleNames.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children:
-                    session.roleNames.map((r) => Chip(label: Text(r))).toList(),
-              ),
-            ],
-          ],
-        ),
+      child: ListTile(
+        enabled: enabled,
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+        onTap: enabled ? onTap : null,
       ),
     );
   }

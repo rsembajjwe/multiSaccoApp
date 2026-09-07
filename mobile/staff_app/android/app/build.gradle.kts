@@ -9,8 +9,18 @@ android {
     namespace = "com.methaltech.sacco_staff_app"
     packaging {
         resources {
-            excludes += "/META-INF/androidx/annotation/annotation/LICENSE.txt"
-            excludes += "/META-INF/androidx/annotation/annotation/LICENSE-*.txt"
+            pickFirsts += setOf(
+                "META-INF/androidx/annotation/annotation/LICENSE.txt",
+                "/META-INF/androidx/annotation/annotation/LICENSE.txt",
+            )
+            excludes += setOf(
+                "META-INF/androidx/annotation/annotation/LICENSE.txt",
+                "/META-INF/androidx/annotation/annotation/LICENSE.txt",
+                "META-INF/androidx/annotation/annotation/LICENSE-*.txt",
+                "/META-INF/androidx/annotation/annotation/LICENSE-*.txt",
+                "META-INF/androidx/annotation/**",
+                "/META-INF/androidx/annotation/**",
+            )
         }
     }
     compileSdk = flutter.compileSdkVersion
@@ -22,21 +32,45 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.methaltech.sacco_staff_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["networkSecurityConfig"] = "@xml/network_security_config"
+        manifestPlaceholders["usesCleartextTraffic"] = "true"
+    }
+
+    signingConfigs {
+        create("release") {
+            val storeFilePath = providers.gradleProperty("SACCO_STAFF_UPLOAD_STORE_FILE").orNull
+                ?: System.getenv("SACCO_STAFF_UPLOAD_STORE_FILE")
+            val storePasswordValue = providers.gradleProperty("SACCO_STAFF_UPLOAD_STORE_PASSWORD").orNull
+                ?: System.getenv("SACCO_STAFF_UPLOAD_STORE_PASSWORD")
+            val keyAliasValue = providers.gradleProperty("SACCO_STAFF_UPLOAD_KEY_ALIAS").orNull
+                ?: System.getenv("SACCO_STAFF_UPLOAD_KEY_ALIAS")
+            val keyPasswordValue = providers.gradleProperty("SACCO_STAFF_UPLOAD_KEY_PASSWORD").orNull
+                ?: System.getenv("SACCO_STAFF_UPLOAD_KEY_PASSWORD")
+
+            if (!storeFilePath.isNullOrBlank()) {
+                storeFile = file(storeFilePath)
+            }
+            storePassword = storePasswordValue
+            keyAlias = keyAliasValue
+            keyPassword = keyPasswordValue
+        }
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["networkSecurityConfig"] = "@xml/network_security_config"
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
+
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            manifestPlaceholders["networkSecurityConfig"] = "@xml/network_security_config_prod"
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

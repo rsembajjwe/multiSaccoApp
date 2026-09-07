@@ -84,7 +84,9 @@ class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
     if (token == null) return;
     if (!await store.biometricLockEnabled()) return;
     appLockedNotifier.value = true;
-    _router.go('/lock');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _router.go('/lock');
+    });
   }
 
   @override

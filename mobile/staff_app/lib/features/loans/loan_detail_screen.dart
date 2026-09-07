@@ -15,11 +15,29 @@ class LoanDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repaysAsync = ref.watch(loanRepaymentsProvider(loan.id));
+    final extensionsAsync = ref.watch(loanExtensionsProvider(loan.id));
+    final session = ref.watch(sessionProvider).asData?.value;
+    final canExtend = loan.isOpen && (session?.can('loans:create') ?? false);
     final progress = loan.totalPayable > 0
         ? (loan.repaymentTotal / loan.totalPayable).clamp(0.0, 1.0).toDouble()
         : 0.0;
     return Scaffold(
-      appBar: AppBar(title: Text(Fmt.label(loan.product))),
+      appBar: AppBar(
+        title: Text(Fmt.label(loan.product)),
+        actions: [
+          if (canExtend)
+            IconButton(
+              tooltip: 'Extend loan',
+              icon: const Icon(Icons.more_time),
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (_) => _LoanExtensionSheet(loan: loan),
+              ),
+            ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(loanRepaymentsProvider(loan.id)),
         child: ListView(
@@ -73,8 +91,9 @@ class LoanDetailScreen extends ConsumerWidget {
                 children: [
                   KeyValueRow('Principal', Fmt.money(loan.amount)),
                   KeyValueRow('Interest rate',
-                      '${(loan.interestRate * 100).toStringAsFixed(loan.interestRate < 1 ? 1 : 0)}%'),
+                      '${loan.interestRate.toStringAsFixed(2)}%'),
                   KeyValueRow('Interest', Fmt.money(loan.interestAmount)),
+                  KeyValueRow('Charge fee', Fmt.money(loan.chargeFee)),
                   KeyValueRow('Total payable', Fmt.money(loan.totalPayable),
                       emphasize: true),
                   KeyValueRow(
@@ -104,6 +123,47 @@ class LoanDetailScreen extends ConsumerWidget {
                         '${Fmt.money(loan.arrearsAmount)} (${loan.arrearsInstallments})',
                         emphasize: true),
                 ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            SectionCard(
+              title: 'Extensions',
+              trailing: canExtend
+                  ? TextButton.icon(
+                      icon: const Icon(Icons.more_time, size: 18),
+                      label: const Text('Add'),
+                      onPressed: () => showModalBottomSheet<void>(
+                        context: context,
+                        isScrollControlled: true,
+                        showDragHandle: true,
+                        builder: (_) => _LoanExtensionSheet(loan: loan),
+                      ),
+                    )
+                  : null,
+              child: extensionsAsync.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (e, _) => Text('Could not load extensions. $e',
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
+                data: (extensions) {
+                  if (extensions.isEmpty) {
+                    return Text(
+                      'No extensions recorded.',
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    );
+                  }
+                  return Column(
+                    children: extensions
+                        .map((extension) => KeyValueRow(
+                              '${extension.additionalMonths} month(s)',
+                              extension.chargeFee > 0
+                                  ? Fmt.money(extension.chargeFee)
+                                  : Fmt.date(extension.createdAt),
+                            ))
+                        .toList(),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 16),
@@ -145,6 +205,144 @@ class LoanDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LoanExtensionSheet extends ConsumerStatefulWidget {
+  const _LoanExtensionSheet({required this.loan});
+  final Loan loan;
+
+  @override
+  ConsumerState<_LoanExtensionSheet> createState() =>
+      _LoanExtensionSheetState();
+}
+
+class _LoanExtensionSheetState extends ConsumerState<_LoanExtensionSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _months = TextEditingController(text: '1');
+  final _chargeFee = TextEditingController(text: '0');
+  final _reason = TextEditingController();
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _months.dispose();
+    _chargeFee.dispose();
+    _reason.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _busy = true);
+    try {
+      final updatedLoan = await ref.read(adminRepositoryProvider).extendLoan(
+            loanId: widget.loan.id,
+            additionalMonths: int.parse(_months.text.trim()),
+            chargeFee: num.parse(_chargeFee.text.trim().replaceAll(',', '')),
+            reason: _reason.text,
+          );
+      ref.invalidate(loansProvider(''));
+      ref.invalidate(memberLoansProvider(widget.loan.memberId));
+      ref.invalidate(loanExtensionsProvider(widget.loan.id));
+      ref.invalidate(saccoStatusProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Loan extension recorded.')),
+        );
+        Navigator.of(context).pop();
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => LoanDetailScreen(loan: updatedLoan),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        0,
+        20,
+        20 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Extend loan',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _months,
+                keyboardType: TextInputType.number,
+                decoration:
+                    const InputDecoration(labelText: 'Additional months'),
+                validator: (v) {
+                  final parsed = int.tryParse((v ?? '').trim());
+                  return parsed == null || parsed < 1 || parsed > 60
+                      ? '1 to 60.'
+                      : null;
+                },
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _chargeFee,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Charge fee'),
+                validator: (v) {
+                  final parsed =
+                      num.tryParse((v ?? '').trim().replaceAll(',', ''));
+                  return parsed == null || parsed < 0
+                      ? 'Enter zero or more.'
+                      : null;
+                },
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _reason,
+                minLines: 2,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Reason'),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  icon: _busy
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_outlined),
+                  label: const Text('Save extension'),
+                  onPressed: _busy ? null : _save,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -22,6 +22,40 @@ class SubscriptionScreen extends ConsumerStatefulWidget {
 class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   bool _busy = false;
 
+  Future<void> _mobileMoneyPay(Subscription sub,
+      {num? amount, int? memberSlots}) async {
+    final payAmount = memberSlots != null && memberSlots > 0
+        ? sub.unitPrice * memberSlots
+        : (amount ?? sub.balanceDue);
+    final payment = await showDialog<_MobileMoneyDetails>(
+      context: context,
+      builder: (_) => const _PhoneDialog(title: 'Platform subscription payment'),
+    );
+    if (payment == null || payment.phone.trim().isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      final request = await ref
+          .read(adminRepositoryProvider)
+          .requestSaccoSubscriptionMobileMoney(
+            amount: payAmount,
+            payerPhone: payment.phone,
+            provider: payment.provider,
+          );
+      ref.invalidate(mobileMoneyPaymentRequestsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Mobile-money prompt sent: ${request.externalReference}')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _pay(Subscription sub, {num? amount, int? memberSlots}) async {
     setState(() => _busy = true);
     try {
@@ -81,7 +115,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       ),
     );
     if (slots != null && slots > 0) {
-      await _pay(sub, memberSlots: slots);
+      await _mobileMoneyPay(sub, memberSlots: slots);
     }
   }
 
@@ -138,8 +172,9 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
                   _PayActions(
                     sub: sub,
                     busy: _busy,
-                    onPayBalance: () => _pay(sub),
+                    onPayBalance: () => _mobileMoneyPay(sub),
                     onTopUp: () => _topUpDialog(sub),
+                    onRecordManual: () => _pay(sub),
                   )
                 else
                   Card(
@@ -291,11 +326,13 @@ class _PayActions extends StatelessWidget {
     required this.busy,
     required this.onPayBalance,
     required this.onTopUp,
+    required this.onRecordManual,
   });
   final Subscription sub;
   final bool busy;
   final VoidCallback onPayBalance;
   final VoidCallback onTopUp;
+  final VoidCallback onRecordManual;
 
   @override
   Widget build(BuildContext context) {
@@ -312,7 +349,7 @@ class _PayActions extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.payments_outlined),
             label: Text(sub.balanceDue > 0
-                ? 'Pay balance ${Fmt.money(sub.balanceDue)}'
+                ? 'Mobile money ${Fmt.money(sub.balanceDue)}'
                 : 'Balance settled'),
           ),
         ),
@@ -325,9 +362,87 @@ class _PayActions extends StatelessWidget {
             label: const Text('Top up members'),
           ),
         ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: TextButton.icon(
+            onPressed: (busy || sub.balanceDue <= 0) ? null : onRecordManual,
+            icon: const Icon(Icons.edit_note_outlined),
+            label: const Text('Record already received payment'),
+          ),
+        ),
         const SizedBox(height: 8),
         Text('Payments are collected by mobile money.',
             style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
+class _MobileMoneyDetails {
+  const _MobileMoneyDetails({required this.phone, required this.provider});
+
+  final String phone;
+  final String provider;
+}
+
+class _PhoneDialog extends StatefulWidget {
+  const _PhoneDialog({required this.title});
+  final String title;
+
+  @override
+  State<_PhoneDialog> createState() => _PhoneDialogState();
+}
+
+class _PhoneDialogState extends State<_PhoneDialog> {
+  final _controller = TextEditingController(text: '+256');
+  String _provider = 'mtn';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'mtn', label: Text('MTN')),
+              ButtonSegment(value: 'airtel', label: Text('Airtel')),
+            ],
+            selected: {_provider},
+            onSelectionChanged: (value) =>
+                setState(() => _provider = value.first),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _controller,
+            keyboardType: TextInputType.phone,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Payer phone number',
+              prefixIcon: Icon(Icons.phone_android_outlined),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_MobileMoneyDetails(
+            phone: _controller.text.trim(),
+            provider: _provider,
+          )),
+          child: const Text('Send prompt'),
+        ),
       ],
     );
   }

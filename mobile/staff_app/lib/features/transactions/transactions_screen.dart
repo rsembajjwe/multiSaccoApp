@@ -45,9 +45,23 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(transactionsProvider(_query));
+    final session = ref.watch(sessionProvider).asData?.value;
+    final canCreate = session?.can('transactions:create') ?? false;
     final names = ref.watch(memberNamesProvider).asData?.value ?? const {};
     return Scaffold(
       appBar: AppBar(title: const Text('Transactions')),
+      floatingActionButton: canCreate
+          ? FloatingActionButton.extended(
+              icon: const Icon(Icons.savings_outlined),
+              label: const Text('Savings'),
+              onPressed: () => showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (_) => const _SavingsDepositSheet(),
+              ),
+            )
+          : null,
       body: Column(
         children: [
           Padding(
@@ -137,6 +151,251 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SavingsDepositSheet extends ConsumerStatefulWidget {
+  const _SavingsDepositSheet();
+
+  @override
+  ConsumerState<_SavingsDepositSheet> createState() =>
+      _SavingsDepositSheetState();
+}
+
+class _SavingsDepositSheetState extends ConsumerState<_SavingsDepositSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _amount = TextEditingController();
+  final _phone = TextEditingController();
+  final _narration = TextEditingController();
+  String _mode = 'cash';
+  String _provider = 'mtn';
+  String? _memberId;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _phone.dispose();
+    _narration.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate() || _memberId == null) return;
+    setState(() => _busy = true);
+    try {
+      final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
+      if (_mode == 'cash') {
+        await ref.read(adminRepositoryProvider).createCashSavingsDeposit(
+              memberId: _memberId!,
+              amount: amount,
+              narration: _narration.text,
+            );
+        ref.invalidate(transactionsProvider(''));
+        ref.invalidate(memberProvider(_memberId!));
+        ref.invalidate(memberFundBalancesProvider);
+        ref.invalidate(saccoStatusProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cash savings posted.')),
+          );
+          Navigator.of(context).pop();
+        }
+      } else {
+        final request = await ref
+            .read(adminRepositoryProvider)
+            .requestMemberSavingsMobileMoney(
+              memberId: _memberId!,
+              amount: amount,
+              payerPhone: _phone.text,
+              provider: _provider,
+            );
+        ref.invalidate(mobileMoneyPaymentRequestsProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(request.checkoutPrompt.isEmpty
+                  ? 'Mobile-money prompt sent to member phone.'
+                  : request.checkoutPrompt),
+            ),
+          );
+          Navigator.of(context).pop();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final membersAsync = ref.watch(membersProvider(''));
+    final members = membersAsync.asData?.value
+            .where((m) => m.status == 'active')
+            .toList() ??
+        const <Member>[];
+    Member? selectedMember;
+    for (final member in members) {
+      if (member.id == _memberId) {
+        selectedMember = member;
+        break;
+      }
+    }
+    if (_mode == 'mobile_money' &&
+        _phone.text.isEmpty &&
+        selectedMember != null &&
+        selectedMember.phone.isNotEmpty) {
+      _phone.text = selectedMember.phone;
+    }
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        0,
+        20,
+        20 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Member savings',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: 'cash',
+                    icon: Icon(Icons.payments_outlined),
+                    label: Text('Cash'),
+                  ),
+                  ButtonSegment(
+                    value: 'mobile_money',
+                    icon: Icon(Icons.phone_android_outlined),
+                    label: Text('Mobile money'),
+                  ),
+                ],
+                selected: {_mode},
+                onSelectionChanged: _busy
+                    ? null
+                    : (value) => setState(() => _mode = value.first),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _memberId,
+                decoration: const InputDecoration(labelText: 'Member'),
+                items: members
+                    .map((m) => DropdownMenuItem(
+                          value: m.id,
+                          child: Text(
+                            '${m.fullName} - ${m.membershipNo}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ))
+                    .toList(),
+                onChanged: _busy
+                    ? null
+                    : (v) {
+                        setState(() {
+                          _memberId = v;
+                          Member? member;
+                          for (final candidate in members) {
+                            if (candidate.id == v) {
+                              member = candidate;
+                              break;
+                            }
+                          }
+                          if (member != null && member.phone.isNotEmpty) {
+                            _phone.text = member.phone;
+                          }
+                        });
+                      },
+                validator: (v) => v == null ? 'Choose a member.' : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _amount,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Amount'),
+                validator: (v) {
+                  final parsed =
+                      num.tryParse((v ?? '').trim().replaceAll(',', ''));
+                  return parsed == null || parsed <= 0
+                      ? 'Enter amount.'
+                      : null;
+                },
+              ),
+              if (_mode == 'mobile_money') ...[
+                const SizedBox(height: 10),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'mtn', label: Text('MTN')),
+                    ButtonSegment(value: 'airtel', label: Text('Airtel')),
+                  ],
+                  selected: {_provider},
+                  onSelectionChanged: _busy
+                      ? null
+                      : (value) => setState(() => _provider = value.first),
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _phone,
+                  keyboardType: TextInputType.phone,
+                  decoration:
+                      const InputDecoration(labelText: 'Member phone'),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Enter member phone.'
+                      : null,
+                ),
+              ] else ...[
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _narration,
+                  minLines: 2,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Narration'),
+                ),
+              ],
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  icon: _busy
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(_mode == 'cash'
+                          ? Icons.save_outlined
+                          : Icons.send_to_mobile_outlined),
+                  label: Text(_mode == 'cash'
+                      ? 'Post cash savings'
+                      : 'Send phone prompt'),
+                  onPressed: _busy ? null : _save,
+                ),
+              ),
+              if (membersAsync.isLoading) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

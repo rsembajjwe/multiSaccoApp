@@ -13,12 +13,16 @@ final sessionStoreProvider = Provider<SessionStore>((ref) => SessionStore());
 final pushServiceProvider = Provider<PushService>((ref) => PushService());
 
 final apiClientProvider =
-    Provider<ApiClient>((ref) => ApiClient(ref.watch(sessionStoreProvider)));
+    Provider<ApiClient>((ref) => ApiClient(
+          ref.watch(sessionStoreProvider),
+          ref.watch(pushServiceProvider),
+        ));
 
 final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => AuthRepository(
     ref.watch(apiClientProvider),
     ref.watch(sessionStoreProvider),
+    ref.watch(pushServiceProvider),
   ),
 );
 
@@ -55,6 +59,16 @@ final memberLoansProvider =
   (ref, memberId) => ref.watch(adminRepositoryProvider).memberLoans(memberId),
 );
 
+final memberFundBalancesProvider =
+    FutureProvider.autoDispose<List<MemberFundBalance>>(
+  (ref) => ref.watch(adminRepositoryProvider).memberFundBalances(),
+);
+
+final saccoProfileProvider =
+    FutureProvider.autoDispose.family<SaccoProfile, String>(
+  (ref, tenantId) => ref.watch(adminRepositoryProvider).saccoProfile(tenantId),
+);
+
 /// Loans list, optionally filtered by a search term.
 final loansProvider = FutureProvider.autoDispose.family<List<Loan>, String>(
   (ref, search) => ref.watch(adminRepositoryProvider).loans(search: search),
@@ -63,6 +77,16 @@ final loansProvider = FutureProvider.autoDispose.family<List<Loan>, String>(
 final loanRepaymentsProvider =
     FutureProvider.autoDispose.family<List<LoanRepayment>, String>(
   (ref, loanId) => ref.watch(adminRepositoryProvider).repayments(loanId),
+);
+
+final loanExtensionsProvider =
+    FutureProvider.autoDispose.family<List<LoanExtension>, String>(
+  (ref, loanId) => ref.watch(adminRepositoryProvider).loanExtensions(loanId),
+);
+
+final guarantorRequestsProvider =
+    FutureProvider.autoDispose<List<LoanGuarantor>>(
+  (ref) => ref.watch(adminRepositoryProvider).guarantorRequests(),
 );
 
 final subscriptionsProvider =
@@ -75,8 +99,17 @@ final subscriptionPackagesProvider =
   (ref) => ref.watch(adminRepositoryProvider).packages(),
 );
 
+final memberSubscriptionsProvider =
+    FutureProvider.autoDispose<List<MemberSubscription>>(
+  (ref) => ref.watch(adminRepositoryProvider).memberSubscriptions(),
+);
+
 final interestByYearProvider = FutureProvider.autoDispose<List<InterestYear>>(
   (ref) => ref.watch(adminRepositoryProvider).interestByYear(),
+);
+
+final fundTypesProvider = FutureProvider.autoDispose<List<FundType>>(
+  (ref) => ref.watch(adminRepositoryProvider).fundTypes(),
 );
 
 /// Map of member id -> display name, used to label loans (which carry only ids).
@@ -208,6 +241,23 @@ final notificationsFeedProvider =
     FutureProvider.autoDispose.family<List<AppNotification>, String>(
   (ref, search) =>
       ref.watch(adminRepositoryProvider).notificationsFeed(search: search),
+);
+
+/// Staff mobile-money payment requests.
+final mobileMoneyPaymentRequestsProvider =
+    FutureProvider.autoDispose<List<MobileMoneyPaymentRequest>>(
+  (ref) => ref.watch(adminRepositoryProvider).mobileMoneyPaymentRequests(),
+);
+
+/// Provider callbacks received from mobile-money integrations.
+final mobileMoneyCallbacksProvider =
+    FutureProvider.autoDispose<List<MobileMoneyCallback>>(
+  (ref) => ref.watch(adminRepositoryProvider).mobileMoneyCallbacks(),
+);
+
+/// SACCO-wide cash reconciliation.
+final reconciliationProvider = FutureProvider.autoDispose<ReconciliationReport>(
+  (ref) => ref.watch(adminRepositoryProvider).reconciliation(),
 );
 
 /// Support chat threads.

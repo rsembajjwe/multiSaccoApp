@@ -7,14 +7,17 @@ import '../../core/widgets/skeleton.dart';
 import '../audit/audit_screen.dart';
 import '../chat/chat_threads_screen.dart';
 import '../complaints/complaints_screen.dart';
+import '../funds/fund_sources_screen.dart';
 import '../interest/interest_screen.dart';
 import '../loans/loans_screen.dart';
 import '../members/members_screen.dart';
+import '../mobile_money/mobile_money_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../reconciliation/reconciliation_screen.dart';
 import '../search/global_search_screen.dart';
 import '../reports/reports_screen.dart';
 import '../settings/settings_screen.dart';
-import '../subscription/subscription_screen.dart';
+import '../subscription/subscriptions_hub_screen.dart';
 import '../transactions/transactions_screen.dart';
 import '../users/users_screen.dart';
 import '../welfare/welfare_screen.dart';
@@ -39,12 +42,19 @@ const _sections = <_Section>[
   _Section('Transactions', Icons.swap_horiz,
       ['transactions:view', 'transactions:create', 'transactions:approve'],
       Color(0xFFB45309), 'Deposits, withdrawals & shares'),
+  _Section('Mobile Money', Icons.phone_android_outlined,
+      ['accounting:view'], Color(0xFF0E7490), 'Requests, callbacks & status'),
+  _Section('Reconciliation', Icons.fact_check_outlined,
+      ['accounting:view'], Color(0xFF4338CA), 'Cash matches & exceptions'),
   _Section('Loans', Icons.account_balance_outlined,
       ['loans:view', 'loans:approve', 'loans:disburse', 'loans:create'],
       Color(0xFFB91C1C), 'Loan book, schedules & payments'),
   _Section('Welfare', Icons.volunteer_activism_outlined,
       ['welfare:view', 'welfare:manage'], Color(0xFF9333EA),
       'Member welfare claims'),
+  _Section('Fund Sources', Icons.account_balance_wallet_outlined,
+      ['fund-types:view', 'fund-types:manage'], Color(0xFF64748B),
+      'Savings, shares & custom funds'),
   _Section('Complaints', Icons.forum_outlined,
       ['complaints:view', 'complaints:manage'], Color(0xFFDB2777),
       'Member complaints & responses'),
@@ -61,8 +71,12 @@ const _sections = <_Section>[
   _Section('Users & Roles', Icons.manage_accounts_outlined,
       ['users:view', 'roles:view'], Color(0xFF7C3AED),
       'Staff directory & permissions'),
-  _Section('Subscription', Icons.workspace_premium_outlined,
-      ['subscriptions:view'], Color(0xFF0D9488), 'Plan, capacity & payment'),
+  _Section(
+      'Subscriptions',
+      Icons.workspace_premium_outlined,
+      ['subscriptions:view', 'member-subscription:view', 'notifications:manage'],
+      Color(0xFF0D9488),
+      'Platform, member dues & SMS'),
   _Section('Interest income', Icons.trending_up,
       ['loans:view', 'reports:view'], Color(0xFF16A34A),
       'Interest booked by year'),
@@ -322,8 +336,20 @@ Widget _screenFor(_Section s, StaffSession session) {
       return const LoansScreen();
     case 'Transactions':
       return const TransactionsScreen();
-    case 'Subscription':
-      return SubscriptionScreen(canPay: session.can('tenants:manage'));
+    case 'Mobile Money':
+      return MobileMoneyScreen(canManage: session.can('accounting:post'));
+    case 'Reconciliation':
+      return const ReconciliationScreen();
+    case 'Subscriptions':
+      return SubscriptionsHubScreen(
+        canViewSubscription: session.can('subscriptions:view'),
+        canPaySubscription: session.can('subscriptions:manage'),
+        canViewMemberSubscriptions: session.can('member-subscription:view'),
+        canManageMemberSubscriptions: session.can('member-subscription:manage'),
+        canPromptMemberSubscriptions: session.can('member-subscription:manage') ||
+            session.can('member-subscription:prompt'),
+        canManageNotifications: session.can('notifications:manage'),
+      );
     case 'Complaints':
       return ComplaintsScreen(canManage: session.can('complaints:manage'));
     case 'Support chat':
@@ -334,10 +360,12 @@ Widget _screenFor(_Section s, StaffSession session) {
       return const ReportsScreen();
     case 'Welfare':
       return const WelfareScreen();
+    case 'Fund Sources':
+      return FundSourcesScreen(canManage: session.can('fund-types:manage'));
     case 'Audit log':
       return const AuditScreen();
     case 'Notifications':
-      return const NotificationsScreen();
+      return NotificationsScreen(canManage: session.can('notifications:manage'));
     case 'Users & Roles':
       return const UsersScreen();
     default:
@@ -412,25 +440,7 @@ class _StatusSummary extends ConsumerWidget {
       ),
       data: (st) => Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _MoneyCard(
-                    'Total savings',
-                    Fmt.money(st.totalSavings),
-                    Icons.savings_outlined,
-                    const Color(0xFF0F766E)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _MoneyCard(
-                    'Loan portfolio',
-                    Fmt.money(st.loanPortfolio),
-                    Icons.account_balance_outlined,
-                    const Color(0xFFB91C1C)),
-              ),
-            ],
-          ),
+          _FundSummaryGrid(status: st),
           const SizedBox(height: 12),
           GridView.count(
             crossAxisCount: 3,
@@ -442,7 +452,7 @@ class _StatusSummary extends ConsumerWidget {
             children: [
               _StatTile('Members', '${st.members}', Icons.groups_outlined),
               _StatTile('Active', '${st.activeMembers}', Icons.person_outline),
-              _StatTile('Pending', '${st.pendingApprovals}',
+              _StatTile('Pending postings', '${st.pendingPostings}',
                   Icons.pending_actions_outlined),
               _StatTile('Open loans', '${st.openLoans}',
                   Icons.request_quote_outlined),
@@ -453,6 +463,108 @@ class _StatusSummary extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+class _FundSummaryGrid extends StatelessWidget {
+  const _FundSummaryGrid({required this.status});
+
+  final SaccoStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final funds = status.memberFunds.isEmpty
+        ? [
+            FundBalanceSummary(
+              code: 'savings',
+              name: 'Savings',
+              basis: 'savings',
+              system: true,
+              balance: status.totalSavings,
+            ),
+            FundBalanceSummary(
+              code: 'shares',
+              name: 'Shares',
+              basis: 'shares',
+              system: true,
+              balance: status.totalShares,
+            ),
+            FundBalanceSummary(
+              code: 'welfare',
+              name: 'Welfare',
+              basis: 'welfare',
+              system: true,
+              balance: status.totalWelfare,
+            ),
+          ]
+        : status.memberFunds;
+    final cards = [
+      ...funds.map((f) => _MoneyCard(
+            f.name,
+            Fmt.money(f.balance),
+            _fundIcon(f.code, f.basis),
+            _fundColor(f.code, f.basis),
+          )),
+      _MoneyCard(
+        'Loan portfolio',
+        Fmt.money(status.loanPortfolio),
+        Icons.account_balance_outlined,
+        const Color(0xFFB91C1C),
+      ),
+      _MoneyCard(
+        'SMS balance',
+        '${status.smsBalance} SMS',
+        Icons.sms_outlined,
+        const Color(0xFF0E7490),
+      ),
+    ];
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 1.35,
+      children: cards,
+    );
+  }
+}
+
+IconData _fundIcon(String code, String basis) {
+  switch (code) {
+    case 'savings':
+      return Icons.savings_outlined;
+    case 'shares':
+      return Icons.pie_chart_outline;
+    case 'welfare':
+      return Icons.volunteer_activism_outlined;
+  }
+  switch (basis) {
+    case 'shares':
+      return Icons.pie_chart_outline;
+    case 'welfare':
+      return Icons.health_and_safety_outlined;
+    default:
+      return Icons.account_balance_wallet_outlined;
+  }
+}
+
+Color _fundColor(String code, String basis) {
+  switch (code) {
+    case 'savings':
+      return const Color(0xFF0F766E);
+    case 'shares':
+      return const Color(0xFF7C3AED);
+    case 'welfare':
+      return const Color(0xFF9333EA);
+  }
+  switch (basis) {
+    case 'shares':
+      return const Color(0xFF2563EB);
+    case 'welfare':
+      return const Color(0xFFDB2777);
+    default:
+      return const Color(0xFF64748B);
   }
 }
 

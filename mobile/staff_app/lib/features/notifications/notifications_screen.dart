@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
+import '../../domain/models.dart';
 import '../../providers.dart';
 
 class _Filter {
@@ -26,7 +27,9 @@ const _filters = <_Filter>[
 /// The SACCO's notification activity: what members have been notified about,
 /// searchable and filterable by category.
 class NotificationsScreen extends ConsumerStatefulWidget {
-  const NotificationsScreen({super.key});
+  const NotificationsScreen({super.key, required this.canManage});
+
+  final bool canManage;
 
   @override
   ConsumerState<NotificationsScreen> createState() =>
@@ -37,6 +40,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   final _controller = TextEditingController();
   String _query = '';
   int _filter = 0;
+  bool _busy = false;
 
   @override
   void dispose() {
@@ -64,9 +68,28 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(notificationsFeedProvider(_query));
+    final membersAsync = widget.canManage ? ref.watch(membersProvider('')) : null;
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
+      appBar: AppBar(
+        title: const Text('Notifications'),
+        actions: [
+          if (widget.canManage)
+            IconButton(
+              tooltip: 'Send SMS',
+              icon: _busy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.sms_outlined),
+              onPressed: _busy
+                  ? null
+                  : () => _composeSms(membersAsync?.asData?.value),
+            ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -191,6 +214,153 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _composeSms(List<Member>? members) async {
+    if (members == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Members are still loading.')));
+      return;
+    }
+    final draft = await showDialog<_SmsDraft>(
+      context: context,
+      builder: (_) => _SmsComposeDialog(members: members),
+    );
+    if (draft == null || draft.message.trim().isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      final balance = await ref.read(adminRepositoryProvider).sendSmsBroadcast(
+            title: draft.title,
+            message: draft.message,
+            memberIds: draft.allMembers ? const [] : draft.memberIds,
+          );
+      ref.invalidate(notificationsFeedProvider(_query));
+      ref.invalidate(saccoStatusProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('SMS sent. Balance: $balance SMS.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+}
+
+class _SmsDraft {
+  const _SmsDraft({
+    required this.title,
+    required this.message,
+    required this.allMembers,
+    required this.memberIds,
+  });
+
+  final String title;
+  final String message;
+  final bool allMembers;
+  final List<String> memberIds;
+}
+
+class _SmsComposeDialog extends StatefulWidget {
+  const _SmsComposeDialog({required this.members});
+
+  final List<Member> members;
+
+  @override
+  State<_SmsComposeDialog> createState() => _SmsComposeDialogState();
+}
+
+class _SmsComposeDialogState extends State<_SmsComposeDialog> {
+  final _title = TextEditingController(text: 'SACCO message');
+  final _message = TextEditingController();
+  final Set<String> _selected = {};
+  bool _allMembers = true;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _message.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final membersWithPhones =
+        widget.members.where((m) => m.phone.trim().isNotEmpty).toList();
+    final count = _allMembers ? membersWithPhones.length : _selected.length;
+    return AlertDialog(
+      title: const Text('Send SMS'),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _title,
+                decoration: const InputDecoration(
+                  labelText: 'Title',
+                  prefixIcon: Icon(Icons.subject_outlined),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _message,
+                minLines: 3,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  labelText: 'SMS message',
+                  prefixIcon: Icon(Icons.sms_outlined),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('All members with phones ($count)'),
+                value: _allMembers,
+                onChanged: (v) => setState(() => _allMembers = v),
+              ),
+              if (!_allMembers)
+                ...membersWithPhones.map((m) => CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title:
+                          Text(m.fullName.isEmpty ? m.membershipNo : m.fullName),
+                      subtitle: Text(m.phone),
+                      value: _selected.contains(m.id),
+                      onChanged: (v) => setState(() {
+                        if (v == true) {
+                          _selected.add(m.id);
+                        } else {
+                          _selected.remove(m.id);
+                        }
+                      }),
+                    )),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
+        FilledButton.icon(
+          onPressed: count == 0
+              ? null
+              : () => Navigator.of(context).pop(_SmsDraft(
+                    title: _title.text.trim(),
+                    message: _message.text.trim(),
+                    allMembers: _allMembers,
+                    memberIds: _selected.toList(),
+                  )),
+          icon: const Icon(Icons.send_outlined),
+          label: Text('Send $count'),
+        ),
+      ],
     );
   }
 }

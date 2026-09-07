@@ -40,7 +40,19 @@ class ReportsScreen extends ConsumerWidget {
               loans
                   .where((l) => l.status != 'rejected' && l.status != 'cancelled')
                   .fold<num>(0, (s, l) => s + l.interestAmount);
-          final memberFunds = st.totalSavings + st.totalShares + st.totalWelfare;
+          final fundSegments = st.memberFunds.isEmpty
+              ? [
+                  _Seg('Savings', st.totalSavings, const Color(0xFF0F766E)),
+                  _Seg('Shares', st.totalShares, const Color(0xFF7C3AED)),
+                  _Seg('Welfare', st.totalWelfare, const Color(0xFF9333EA)),
+                ]
+              : [
+                  for (var i = 0; i < st.memberFunds.length; i++)
+                    _Seg(st.memberFunds[i].name, st.memberFunds[i].balance,
+                        _fundReportColor(i, st.memberFunds[i].code)),
+                ];
+          final memberFunds =
+              fundSegments.fold<num>(0, (s, fund) => s + fund.value);
           final inactive = (st.members - st.activeMembers).clamp(0, st.members);
 
           return RefreshIndicator(
@@ -90,19 +102,11 @@ class ReportsScreen extends ConsumerWidget {
                   child: Column(
                     children: [
                       _CompositionBar(
-                        segments: [
-                          _Seg('Savings', st.totalSavings,
-                              const Color(0xFF0F766E)),
-                          _Seg('Shares', st.totalShares,
-                              const Color(0xFF7C3AED)),
-                          _Seg('Welfare', st.totalWelfare,
-                              const Color(0xFF9333EA)),
-                        ],
+                        segments: fundSegments,
                       ),
                       const SizedBox(height: 12),
-                      KeyValueRow('Savings', Fmt.money(st.totalSavings)),
-                      KeyValueRow('Shares', Fmt.money(st.totalShares)),
-                      KeyValueRow('Welfare', Fmt.money(st.totalWelfare)),
+                      for (final fund in fundSegments)
+                        KeyValueRow(fund.label, Fmt.money(fund.value)),
                       const Divider(height: 20),
                       KeyValueRow('Total', Fmt.money(memberFunds),
                           emphasize: true),
@@ -184,8 +188,8 @@ class ReportsScreen extends ConsumerWidget {
                   title: 'Operations',
                   child: Column(
                     children: [
-                      KeyValueRow('Pending approvals',
-                          Fmt.number(st.pendingApprovals)),
+                      KeyValueRow('Pending postings',
+                          Fmt.number(st.pendingPostings)),
                       KeyValueRow('Open loans', Fmt.number(st.openLoans)),
                       KeyValueRow('Open complaints',
                           Fmt.number(st.openComplaints)),
@@ -200,6 +204,25 @@ class ReportsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+Color _fundReportColor(int index, String code) {
+  switch (code) {
+    case 'savings':
+      return const Color(0xFF0F766E);
+    case 'shares':
+      return const Color(0xFF7C3AED);
+    case 'welfare':
+      return const Color(0xFF9333EA);
+  }
+  const colors = [
+    Color(0xFF64748B),
+    Color(0xFF2563EB),
+    Color(0xFFDB2777),
+    Color(0xFF16A34A),
+    Color(0xFFB45309),
+  ];
+  return colors[index % colors.length];
 }
 
 class _Seg {
