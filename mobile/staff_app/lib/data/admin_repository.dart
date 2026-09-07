@@ -513,6 +513,11 @@ class AdminRepository {
     });
   }
 
+  Future<List<GovernanceMeeting>> governanceMeetings() async {
+    final rows = await _api.getList('/governance-meetings');
+    return rows.map(GovernanceMeeting.fromJson).toList();
+  }
+
   Future<List<AuditEvent>> auditEvents({String? search}) async {
     final rows = await _api.getList('/audit-events',
         query: (search != null && search.trim().isNotEmpty)

@@ -160,6 +160,11 @@ final savingsTransfersProvider =
   (ref) => ref.watch(adminRepositoryProvider).savingsTransfers(),
 );
 
+final governanceMeetingsProvider =
+    FutureProvider.autoDispose<List<GovernanceMeeting>>(
+  (ref) => ref.watch(adminRepositoryProvider).governanceMeetings(),
+);
+
 /// Audit events, optionally filtered by a search term.
 final auditEventsProvider =
     FutureProvider.autoDispose.family<List<AuditEvent>, String>(

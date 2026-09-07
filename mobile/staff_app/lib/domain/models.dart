@@ -1749,3 +1749,74 @@ class SavingsTransfer {
         createdAt: DateTime.tryParse(_str(j['createdAt'])),
       );
 }
+
+class GovernanceResolution {
+  const GovernanceResolution({
+    required this.id,
+    required this.title,
+    this.decision,
+    this.ownerName,
+    this.ownerTitle,
+    this.dueDate,
+    required this.status,
+  });
+
+  final String id;
+  final String title;
+  final String? decision;
+  final String? ownerName;
+  final String? ownerTitle;
+  final String? dueDate;
+  final String status;
+
+  factory GovernanceResolution.fromJson(Map<String, dynamic> j) =>
+      GovernanceResolution(
+        id: _str(j['id']),
+        title: _str(j['title']),
+        decision: _strn(j['decision']),
+        ownerName: _strn(j['ownerName']),
+        ownerTitle: _strn(j['ownerTitle']),
+        dueDate: _strn(j['dueDate']),
+        status: _str(j['status']),
+      );
+}
+
+class GovernanceMeeting {
+  const GovernanceMeeting({
+    required this.id,
+    required this.title,
+    required this.meetingType,
+    this.scheduledAt,
+    required this.status,
+    this.minutes,
+    this.openResolutions = 0,
+    this.resolutions = const [],
+  });
+
+  final String id;
+  final String title;
+  final String meetingType;
+  final DateTime? scheduledAt;
+  final String status;
+  final String? minutes;
+  final int openResolutions;
+  final List<GovernanceResolution> resolutions;
+
+  String get typeLabel => meetingType.replaceAll('_', ' ');
+
+  factory GovernanceMeeting.fromJson(Map<String, dynamic> j) =>
+      GovernanceMeeting(
+        id: _str(j['id']),
+        title: _str(j['title']),
+        meetingType: _str(j['meetingType']),
+        scheduledAt: DateTime.tryParse(_str(j['scheduledAt'])),
+        status: _str(j['status']),
+        minutes: _strn(j['minutes']),
+        openResolutions: _int(j['openResolutions']),
+        resolutions: (j['resolutions'] as List?)
+                ?.whereType<Map<String, dynamic>>()
+                .map(GovernanceResolution.fromJson)
+                .toList() ??
+            const [],
+      );
+}
