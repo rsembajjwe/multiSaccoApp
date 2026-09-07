@@ -508,6 +508,11 @@ class AdminRepository {
     return rows.map(AuditEvent.fromJson).toList();
   }
 
+  Future<List<FinancialProduct>> financialProducts() async {
+    final rows = await _api.getList('/financial-products');
+    return rows.map(FinancialProduct.fromJson).toList();
+  }
+
   Future<List<Branch>> branches() async {
     final rows = await _api.getList('/branches');
     return rows.map(Branch.fromJson).toList();

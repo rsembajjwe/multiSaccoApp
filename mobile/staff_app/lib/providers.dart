@@ -275,3 +275,9 @@ final chatMessagesProvider =
 final branchesProvider = FutureProvider.autoDispose<List<Branch>>(
   (ref) => ref.watch(adminRepositoryProvider).branches(),
 );
+
+/// Financial products (loan/savings/share/welfare product setup).
+final financialProductsProvider =
+    FutureProvider.autoDispose<List<FinancialProduct>>(
+  (ref) => ref.watch(adminRepositoryProvider).financialProducts(),
+);

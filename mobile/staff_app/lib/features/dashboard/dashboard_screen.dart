@@ -6,6 +6,7 @@ import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../audit/audit_screen.dart';
 import '../branches/branches_screen.dart';
+import '../finance/financial_products_screen.dart';
 import '../chat/chat_threads_screen.dart';
 import '../complaints/complaints_screen.dart';
 import '../funds/fund_sources_screen.dart';
@@ -75,6 +76,8 @@ const _sections = <_Section>[
   _Section('Branches', Icons.account_tree_outlined,
       ['members:view', 'transactions:view', 'loans:view'], Color(0xFF0E7490),
       'SACCO branch directory'),
+  _Section('Products', Icons.category_outlined, ['transactions:view'],
+      Color(0xFF15803D), 'Savings & loan product setup'),
   _Section(
       'Subscriptions',
       Icons.workspace_premium_outlined,
@@ -374,6 +377,8 @@ Widget _screenFor(_Section s, StaffSession session) {
       return const UsersScreen();
     case 'Branches':
       return const BranchesScreen();
+    case 'Products':
+      return const FinancialProductsScreen();
     default:
       return _ComingSoon(title: s.label);
   }

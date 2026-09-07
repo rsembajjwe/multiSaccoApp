@@ -1623,3 +1623,43 @@ class Branch {
         status: _str(j['status']),
       );
 }
+
+/// A financial product (GET /financial-products).
+class FinancialProduct {
+  const FinancialProduct({
+    required this.id,
+    required this.productType,
+    required this.code,
+    required this.name,
+    required this.contributionAmount,
+    required this.minimumBalance,
+    required this.interestRate,
+    required this.status,
+  });
+
+  final String id;
+  final String productType;
+  final String code;
+  final String name;
+  final num contributionAmount;
+  final num minimumBalance;
+  final num interestRate;
+  final String status;
+
+  String get interestLabel {
+    if (interestRate <= 0) return '—';
+    final pct = interestRate <= 1 ? interestRate * 100 : interestRate;
+    return '${pct.toStringAsFixed(pct % 1 == 0 ? 0 : 1)}%';
+  }
+
+  factory FinancialProduct.fromJson(Map<String, dynamic> j) => FinancialProduct(
+        id: _str(j['id']),
+        productType: _str(j['productType']),
+        code: _str(j['code']),
+        name: _str(j['name']),
+        contributionAmount: _num(j['contributionAmount']),
+        minimumBalance: _num(j['minimumBalance']),
+        interestRate: _num(j['interestRate']),
+        status: _str(j['status']),
+      );
+}
