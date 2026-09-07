@@ -202,11 +202,19 @@ final loanScheduleProvider =
   (ref, loanId) => ref.watch(adminRepositoryProvider).loanSchedule(loanId),
 );
 
-/// A member's full statement (all transactions, all funds).
+/// Key for a member's full statement over an optional date range. A null
+/// [from]/[to] lets the backend apply its default window (start of the
+/// current year through today).
+typedef StatementRange = ({String memberId, DateTime? from, DateTime? to});
+
+/// A member's full statement (all transactions, all funds) over a date range.
 final memberFullStatementProvider =
-    FutureProvider.autoDispose.family<MemberStatement, String>(
-  (ref, memberId) =>
-      ref.watch(adminRepositoryProvider).memberStatement(memberId),
+    FutureProvider.autoDispose.family<MemberStatement, StatementRange>(
+  (ref, key) => ref.watch(adminRepositoryProvider).memberStatement(
+        key.memberId,
+        from: key.from,
+        to: key.to,
+      ),
 );
 
 /// Member KYC & contacts.

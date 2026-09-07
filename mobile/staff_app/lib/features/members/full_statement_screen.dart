@@ -9,8 +9,8 @@ import '../../domain/models.dart';
 import '../../providers.dart';
 
 /// A member's full statement: every transaction across all funds with running
-/// balances, plus a copy-as-CSV action.
-class FullStatementScreen extends ConsumerWidget {
+/// balances over a selectable date range, plus a copy-as-CSV action.
+class FullStatementScreen extends ConsumerStatefulWidget {
   const FullStatementScreen({
     super.key,
     required this.memberId,
@@ -21,12 +21,51 @@ class FullStatementScreen extends ConsumerWidget {
   final String memberName;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(memberFullStatementProvider(memberId));
+  ConsumerState<FullStatementScreen> createState() =>
+      _FullStatementScreenState();
+}
+
+class _FullStatementScreenState extends ConsumerState<FullStatementScreen> {
+  DateTime? _from;
+  DateTime? _to;
+
+  StatementRange get _key =>
+      (memberId: widget.memberId, from: _from, to: _to);
+
+  // The effective window shown to the user; mirrors the backend default of
+  // start-of-year through today when no custom range is chosen.
+  DateTime get _effectiveFrom => _from ?? DateTime(DateTime.now().year, 1, 1);
+  DateTime get _effectiveTo => _to ?? DateTime.now();
+
+  Future<void> _pickRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+      initialDateRange:
+          DateTimeRange(start: _effectiveFrom, end: _effectiveTo),
+    );
+    if (picked != null) {
+      setState(() {
+        _from = DateTime(picked.start.year, picked.start.month, picked.start.day);
+        _to = DateTime(picked.end.year, picked.end.month, picked.end.day);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(memberFullStatementProvider(_key));
     return Scaffold(
       appBar: AppBar(
         title: const Text('Full statement'),
         actions: [
+          IconButton(
+            tooltip: 'Choose date range',
+            icon: const Icon(Icons.date_range_outlined),
+            onPressed: _pickRange,
+          ),
           async.maybeWhen(
             data: (st) => IconButton(
               tooltip: 'Copy as CSV',
@@ -52,14 +91,14 @@ class FullStatementScreen extends ConsumerWidget {
         error: (e, _) => ErrorRetry(
           message: 'Could not load the statement.',
           detail: '$e',
-          onRetry: () => ref.invalidate(memberFullStatementProvider(memberId)),
+          onRetry: () => ref.invalidate(memberFullStatementProvider(_key)),
         ),
         data: (st) {
           final lines = [...st.lines]
             ..sort((a, b) => b.postedAt.compareTo(a.postedAt));
           return RefreshIndicator(
             onRefresh: () async =>
-                ref.invalidate(memberFullStatementProvider(memberId)),
+                ref.invalidate(memberFullStatementProvider(_key)),
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -69,7 +108,10 @@ class FullStatementScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(memberName.isEmpty ? 'Member' : memberName,
+                        Text(
+                            widget.memberName.isEmpty
+                                ? 'Member'
+                                : widget.memberName,
                             style:
                                 const TextStyle(fontWeight: FontWeight.w700)),
                         const Divider(height: 20),
@@ -88,6 +130,33 @@ class FullStatementScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
+                InkWell(
+                  onTap: _pickRange,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 6),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.date_range_outlined, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '${Fmt.date(_effectiveFrom)} – ${Fmt.date(_effectiveTo)}',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                        if (_from != null || _to != null)
+                          TextButton(
+                            onPressed: () =>
+                                setState(() { _from = null; _to = null; }),
+                            child: const Text('Reset'),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Text('${lines.length} transaction(s)',
                     style: Theme.of(context).textTheme.bodySmall),
                 const SizedBox(height: 8),
