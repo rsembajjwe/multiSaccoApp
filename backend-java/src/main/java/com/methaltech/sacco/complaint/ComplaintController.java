@@ -2,6 +2,7 @@ package com.methaltech.sacco.complaint;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.api.PageParams;
 import com.methaltech.sacco.branch.Branch;
 import com.methaltech.sacco.branch.BranchRepository;
 import com.methaltech.sacco.identity.AuditService;
@@ -42,7 +43,10 @@ class ComplaintController {
     @GetMapping
     ResponseEntity<?> listComplaints(
             @RequestHeader(name = "Authorization", required = false) String authorization,
-            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
         if (!authService.hasPermission(currentSession.user(), "complaints:view")) {
@@ -58,7 +62,15 @@ class ComplaintController {
         complaints = complaints.stream()
                 .filter(complaint -> canAccessComplaint(currentSession, complaint))
                 .toList();
-        return ResponseEntity.ok(ApiResponse.of(complaints.stream().map(ComplaintResponse::from).toList()));
+        if (status != null && !status.isBlank()) {
+            String wanted = status.trim();
+            complaints = complaints.stream().filter(complaint -> wanted.equals(complaint.getStatus())).toList();
+        }
+        List<ComplaintResponse> responses = complaints.stream().map(ComplaintResponse::from).toList();
+        if (PageParams.requested(page, size)) {
+            return ResponseEntity.ok(PageParams.paged(responses, page, size));
+        }
+        return ResponseEntity.ok(ApiResponse.of(responses));
     }
 
     @PostMapping

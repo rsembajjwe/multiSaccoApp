@@ -2,6 +2,7 @@ package com.methaltech.sacco.api;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import java.util.List;
 import org.springframework.data.domain.Sort;
 
 /**
@@ -28,5 +29,20 @@ public final class PageParams {
         int resolvedPage = (page == null || page < 0) ? 0 : page;
         int resolvedSize = (size == null) ? DEFAULT_SIZE : Math.min(Math.max(size, 1), MAX_SIZE);
         return PageRequest.of(resolvedPage, resolvedSize, sort);
+    }
+
+    /**
+     * In-memory pagination for endpoints whose result list is built after access filtering (so it
+     * cannot be paged at the database level). The full list is sliced to the requested page and
+     * wrapped in a {@link PagedResponse} with correct totals. Suitable for low-volume lists.
+     */
+    public static <T> PagedResponse<T> paged(List<T> all, Integer page, Integer size) {
+        int resolvedPage = (page == null || page < 0) ? 0 : page;
+        int resolvedSize = (size == null) ? DEFAULT_SIZE : Math.min(Math.max(size, 1), MAX_SIZE);
+        int total = all.size();
+        int totalPages = total == 0 ? 0 : (int) Math.ceil((double) total / resolvedSize);
+        int from = Math.min(resolvedPage * resolvedSize, total);
+        int to = Math.min(from + resolvedSize, total);
+        return PagedResponse.of(all.subList(from, to), resolvedPage, resolvedSize, (long) total, totalPages);
     }
 }

@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
-import '../../core/widgets/error_retry.dart';
-import '../../core/widgets/skeleton.dart';
+import '../../core/widgets/paged_list.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -36,10 +35,10 @@ class ComplaintsScreen extends ConsumerStatefulWidget {
 
 class _ComplaintsScreenState extends ConsumerState<ComplaintsScreen> {
   int _filter = 0;
+  int _reloadTick = 0;
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(complaintsProvider);
     final names = ref.watch(memberNamesProvider).asData?.value ?? const {};
     return Scaffold(
       appBar: AppBar(title: const Text('Complaints')),
@@ -63,37 +62,22 @@ class _ComplaintsScreenState extends ConsumerState<ComplaintsScreen> {
             ),
           ),
           Expanded(
-            child: async.when(
-              loading: () => const ListSkeleton(),
-              error: (e, _) => ErrorRetry(
-                message: 'Could not load complaints.',
-                detail: '$e',
-                onRetry: () => ref.invalidate(complaintsProvider),
+            child: PagedListView<Complaint>(
+              search: '${_filters[_filter].match ?? ''}|$_reloadTick',
+              fetch: (page) => ref
+                  .read(adminRepositoryProvider)
+                  .complaintsPage(status: _filters[_filter].match, page: page),
+              itemBuilder: (context, c) => _ComplaintTile(
+                complaint: c,
+                memberName: names[c.memberId],
+                canManage: widget.canManage,
+                onChanged: () {
+                  if (mounted) setState(() => _reloadTick++);
+                },
               ),
-              data: (all) {
-                final match = _filters[_filter].match;
-                final rows = match == null
-                    ? all
-                    : all.where((c) => c.status == match).toList();
-                if (rows.isEmpty) {
-                  return const EmptyState(
-                      icon: Icons.forum_outlined,
-                      message: 'No complaints in this view.');
-                }
-                return RefreshIndicator(
-                  onRefresh: () async => ref.invalidate(complaintsProvider),
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                    itemCount: rows.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _ComplaintTile(
-                      complaint: rows[i],
-                      memberName: names[rows[i].memberId],
-                      canManage: widget.canManage,
-                    ),
-                  ),
-                );
-              },
+              emptyIcon: Icons.forum_outlined,
+              emptyMessage: 'No complaints in this view.',
+              errorMessage: 'Could not load complaints.',
             ),
           ),
         ],
@@ -107,10 +91,12 @@ class _ComplaintTile extends ConsumerWidget {
     required this.complaint,
     required this.canManage,
     this.memberName,
+    this.onChanged,
   });
   final Complaint complaint;
   final String? memberName;
   final bool canManage;
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -121,7 +107,10 @@ class _ComplaintTile extends ConsumerWidget {
       margin: EdgeInsets.zero,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => _openDetail(context, ref),
+        onTap: () async {
+          await _openDetail(context, ref);
+          onChanged?.call();
+        },
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -166,8 +155,8 @@ class _ComplaintTile extends ConsumerWidget {
     );
   }
 
-  void _openDetail(BuildContext context, WidgetRef ref) {
-    Navigator.of(context).push(MaterialPageRoute(
+  Future<void> _openDetail(BuildContext context, WidgetRef ref) {
+    return Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ComplaintDetailScreen(
         complaint: complaint,
         memberName: memberName,

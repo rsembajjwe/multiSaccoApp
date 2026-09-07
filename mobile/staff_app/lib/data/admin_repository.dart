@@ -497,6 +497,15 @@ class AdminRepository {
     return rows.map(Complaint.fromJson).toList();
   }
 
+  Future<PageResult<Complaint>> complaintsPage(
+      {String? status, required int page, int size = 25}) async {
+    final r = await _api.getPage('/complaints',
+        page: page,
+        size: size,
+        query: (status != null && status.isNotEmpty) ? {'status': status} : null);
+    return r.mapItems(Complaint.fromJson);
+  }
+
   /// Update a complaint's status, optionally adding resolution notes.
   Future<void> updateComplaint(String id, String status,
       {String? notes}) async {
@@ -509,6 +518,15 @@ class AdminRepository {
   Future<List<WelfareClaim>> welfareClaims() async {
     final rows = await _api.getList('/welfare-claims');
     return rows.map(WelfareClaim.fromJson).toList();
+  }
+
+  Future<PageResult<WelfareClaim>> welfareClaimsPage(
+      {String? status, required int page, int size = 25}) async {
+    final r = await _api.getPage('/welfare-claims',
+        page: page,
+        size: size,
+        query: (status != null && status.isNotEmpty) ? {'status': status} : null);
+    return r.mapItems(WelfareClaim.fromJson);
   }
 
   Future<List<SavingsTransfer>> savingsTransfers() async {

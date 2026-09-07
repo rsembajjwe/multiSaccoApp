@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
-import '../../core/widgets/error_retry.dart';
-import '../../core/widgets/skeleton.dart';
+import '../../core/widgets/paged_list.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -35,7 +34,6 @@ class _WelfareScreenState extends ConsumerState<WelfareScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(welfareClaimsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Welfare claims')),
       body: Column(
@@ -58,47 +56,15 @@ class _WelfareScreenState extends ConsumerState<WelfareScreen> {
             ),
           ),
           Expanded(
-            child: async.when(
-              loading: () => const ListSkeleton(),
-              error: (e, _) => ErrorRetry(
-                message: 'Could not load welfare claims.',
-                detail: '$e',
-                onRetry: () => ref.invalidate(welfareClaimsProvider),
-              ),
-              data: (all) {
-                final match = _filters[_filter].match;
-                final rows = match == null
-                    ? all
-                    : all
-                        .where((c) => c.status.toLowerCase().contains(match))
-                        .toList();
-                if (rows.isEmpty) {
-                  return const EmptyState(
-                      icon: Icons.volunteer_activism_outlined,
-                      message: 'No welfare claims in this view.');
-                }
-                final total = rows.fold<num>(0, (s, c) => s + c.amount);
-                return RefreshIndicator(
-                  onRefresh: () async =>
-                      ref.invalidate(welfareClaimsProvider),
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                    itemCount: rows.length + 1,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) {
-                      if (i == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(
-                              '${rows.length} claim(s) · ${Fmt.money(total)}',
-                              style: Theme.of(context).textTheme.bodySmall),
-                        );
-                      }
-                      return _ClaimTile(claim: rows[i - 1]);
-                    },
-                  ),
-                );
-              },
+            child: PagedListView<WelfareClaim>(
+              search: _filters[_filter].match ?? '',
+              fetch: (page) => ref
+                  .read(adminRepositoryProvider)
+                  .welfareClaimsPage(status: _filters[_filter].match, page: page),
+              itemBuilder: (context, c) => _ClaimTile(claim: c),
+              emptyIcon: Icons.volunteer_activism_outlined,
+              emptyMessage: 'No welfare claims in this view.',
+              errorMessage: 'Could not load welfare claims.',
             ),
           ),
         ],

@@ -3,6 +3,7 @@ package com.methaltech.sacco.finance;
 import com.methaltech.sacco.accounting.AccountingPeriodService;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.api.PageParams;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.member.Member;
@@ -61,7 +62,10 @@ class WelfareClaimController {
     ResponseEntity<?> listClaims(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @RequestParam(name = "tenantId", required = false) String requestedTenantId,
-            @RequestParam(name = "memberId", required = false) String memberId) {
+            @RequestParam(name = "memberId", required = false) String memberId,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
         if (!authService.hasPermission(currentSession.user(), "welfare:view")) {
@@ -85,7 +89,17 @@ class WelfareClaimController {
             claims = claimRepository.findByTenantIdOrderBySubmittedAtDesc(tenantId);
         }
 
-        return ResponseEntity.ok(ApiResponse.of(toResponses(claims)));
+        if (status != null && !status.isBlank()) {
+            String wanted = status.trim().toLowerCase();
+            claims = claims.stream()
+                    .filter(claim -> claim.getStatus() != null && claim.getStatus().toLowerCase().contains(wanted))
+                    .toList();
+        }
+        List<WelfareClaimResponse> responses = toResponses(claims);
+        if (PageParams.requested(page, size)) {
+            return ResponseEntity.ok(PageParams.paged(responses, page, size));
+        }
+        return ResponseEntity.ok(ApiResponse.of(responses));
     }
 
     @PostMapping
