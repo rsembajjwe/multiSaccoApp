@@ -434,6 +434,20 @@ class AdminRepository {
     return rows.map(AppNotification.fromJson).toList();
   }
 
+  /// The current staff member's personal notification inbox.
+  Future<List<AppNotification>> myNotifications() async {
+    final rows = await _api.getList('/notifications/inbox');
+    return rows.map(AppNotification.fromJson).toList();
+  }
+
+  Future<void> markNotificationRead(String id) async {
+    await _api.patch('/notifications/inbox/$id/read', const {});
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await _api.post('/notifications/inbox/read-all', const {});
+  }
+
   Future<List<MobileMoneyPaymentRequest>> mobileMoneyPaymentRequests() async {
     final rows = await _api.getList('/integrations/mobile-money/payment-requests');
     return rows.map(MobileMoneyPaymentRequest.fromJson).toList();

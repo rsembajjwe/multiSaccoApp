@@ -52,6 +52,7 @@ class NotificationController {
     private final AuthService authService;
     private final AuditService auditService;
     private final AfroSmsCreditService afroSmsCreditService;
+    private final SmsWalletService smsWalletService;
 
     @GetMapping("/deliveries")
     ResponseEntity<?> listDeliveries(
@@ -323,6 +324,55 @@ class NotificationController {
         return ResponseEntity.ok(ApiResponse.of(new BulkAcknowledgeResponse(allowed.size())));
     }
 
+    /**
+     * The current staff member's personal notification inbox (notifications addressed to their user
+     * id). Available to any authenticated staff member without the notifications:view permission,
+     * since it only ever exposes their own notifications.
+     */
+    @GetMapping("/inbox")
+    ResponseEntity<?> inbox(
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        List<NotificationResponse> items = notificationRepository
+                .findByUserIdOrderByCreatedAtDesc(currentSession.user().getId())
+                .stream()
+                .map(NotificationResponse::from)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.of(items));
+    }
+
+    @PatchMapping("/inbox/{notificationId}/read")
+    ResponseEntity<?> markInboxRead(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String notificationId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        Notification notification = notificationRepository.findById(notificationId).orElse(null);
+        if (notification == null || !currentSession.user().getId().equals(notification.getUserId())) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "NOTIFICATION_NOT_FOUND", "Notification was not found."));
+        }
+        notification.markRead();
+        Notification saved = notificationRepository.save(notification);
+        return ResponseEntity.ok(ApiResponse.of(NotificationResponse.from(saved)));
+    }
+
+    @PostMapping("/inbox/read-all")
+    ResponseEntity<?> markInboxAllRead(
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        List<Notification> unread = notificationRepository
+                .findByUserIdOrderByCreatedAtDesc(currentSession.user().getId())
+                .stream()
+                .filter(notification -> notification.getReadAt() == null)
+                .toList();
+        unread.forEach(Notification::markRead);
+        notificationRepository.saveAll(unread);
+        return ResponseEntity.ok(ApiResponse.of(new BulkAcknowledgeResponse(unread.size())));
+    }
+
     private void auditBulkAcknowledgement(
             AuthService.CurrentSession currentSession,
             List<Notification> notifications,
@@ -440,6 +490,66 @@ class NotificationController {
                 .body(ApiResponse.of(new BroadcastMessageResponse(recipientCount, title)));
     }
 
+    @PostMapping("/messages/sms")
+    ResponseEntity<?> sendSmsMessage(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestBody BroadcastMessageRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "notifications:manage")) {
+            return authService.permissionRequired("notifications:manage");
+        }
+
+        String tenantId = tenantScope(currentSession, body == null ? null : body.tenantId());
+        if (tenantId == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "TENANT_REQUIRED", "Select a SACCO to send the SMS to."));
+        }
+        String title = body == null || body.title() == null || body.title().isBlank()
+                ? "SACCO message"
+                : body.title().trim();
+        String message = body == null || body.body() == null ? "" : body.body().trim();
+        if (message.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "SMS_MESSAGE_REQUIRED", "Enter the SMS message to send."));
+        }
+
+        List<String> memberIds = body.memberIds() == null
+                ? List.of()
+                : body.memberIds().stream().filter(id -> id != null && !id.isBlank()).map(String::trim).distinct().toList();
+        List<Member> recipients = memberIds.isEmpty()
+                ? memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId)
+                : memberRepository.findAllById(memberIds).stream()
+                        .filter(member -> tenantId.equals(member.getTenantId()))
+                        .toList();
+        recipients = recipients.stream()
+                .filter(member -> member.getPhone() != null && !member.getPhone().isBlank())
+                .toList();
+        if (recipients.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "NO_SMS_RECIPIENTS", "No members with phone numbers were found."));
+        }
+
+        int recipientCount = recipients.size();
+        try {
+            smsWalletService.debit(tenantId, recipientCount, "SMS-BCAST-" + java.util.UUID.randomUUID(), "SACCO SMS broadcast");
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "INSUFFICIENT_SMS_BALANCE", ex.getMessage()));
+        }
+        List<Notification> sent = notificationService.notifySmsBroadcast(tenantId, recipients, title, message);
+        auditService.record(
+                tenantId,
+                currentSession.user(),
+                "Sent SMS message \"" + title + "\" to " + sent.size() + " member(s)",
+                "sms_wallet",
+                "broadcast_" + sent.size(),
+                request.getRemoteAddr());
+        return ResponseEntity.accepted()
+                .body(ApiResponse.of(new SmsBroadcastResponse(sent.size(), smsWalletService.balance(tenantId))));
+    }
+
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
         if (authService.isPlatform(currentSession.user()) && (requestedTenantId == null || requestedTenantId.isBlank())) {
             return null;
@@ -473,5 +583,8 @@ class NotificationController {
     }
 
     record BroadcastMessageResponse(int recipients, String title) {
+    }
+
+    record SmsBroadcastResponse(int recipients, int smsBalance) {
     }
 }

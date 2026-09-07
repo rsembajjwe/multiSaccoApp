@@ -17,6 +17,7 @@ import '../loans/loans_screen.dart';
 import '../members/members_screen.dart';
 import '../mobile_money/mobile_money_screen.dart';
 import '../notifications/notifications_screen.dart';
+import '../notifications/inbox_screen.dart';
 import '../reconciliation/reconciliation_screen.dart';
 import '../search/global_search_screen.dart';
 import '../reports/reports_screen.dart';
@@ -102,10 +103,28 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(sessionProvider);
+    final unread = ref
+            .watch(myNotificationsProvider)
+            .asData
+            ?.value
+            .where((n) => !n.isRead)
+            .length ??
+        0;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dashboard'),
         actions: [
+          IconButton(
+            tooltip: 'Notifications',
+            icon: unread > 0
+                ? Badge.count(
+                    count: unread,
+                    child: const Icon(Icons.notifications_none_outlined),
+                  )
+                : const Icon(Icons.notifications_none_outlined),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => const InboxScreen())),
+          ),
           IconButton(
             tooltip: 'Search',
             icon: const Icon(Icons.search),

@@ -1179,6 +1179,9 @@ class AppNotification {
     required this.body,
     required this.status,
     required this.createdAt,
+    this.readAt,
+    this.resourceType,
+    this.resourceId,
   });
 
   final String id;
@@ -1189,6 +1192,11 @@ class AppNotification {
   final String body;
   final String status;
   final String createdAt;
+  final String? readAt;
+  final String? resourceType;
+  final String? resourceId;
+
+  bool get isRead => readAt != null && readAt!.isNotEmpty;
 
   factory AppNotification.fromJson(Map<String, dynamic> j) => AppNotification(
         id: _str(j['id']),
@@ -1199,6 +1207,9 @@ class AppNotification {
         body: _str(j['body']),
         status: _str(j['status']),
         createdAt: _str(j['createdAt']),
+        readAt: _strn(j['readAt']),
+        resourceType: _strn(j['resourceType']),
+        resourceId: _strn(j['resourceId']),
       );
 }
 

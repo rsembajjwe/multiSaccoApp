@@ -295,6 +295,12 @@ final memberDocumentContentProvider =
 );
 
 /// The SACCO's notification activity feed, optionally filtered by search.
+/// The current staff member's personal notification inbox.
+final myNotificationsProvider =
+    FutureProvider.autoDispose<List<AppNotification>>(
+  (ref) => ref.watch(adminRepositoryProvider).myNotifications(),
+);
+
 final notificationsFeedProvider =
     FutureProvider.autoDispose.family<List<AppNotification>, String>(
   (ref, search) =>

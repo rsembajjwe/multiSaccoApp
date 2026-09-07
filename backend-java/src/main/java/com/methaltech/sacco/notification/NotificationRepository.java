@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface NotificationRepository extends JpaRepository<Notification, String> {
     List<Notification> findByMemberIdOrderByCreatedAtDesc(String memberId);
 
+    List<Notification> findByUserIdOrderByCreatedAtDesc(String userId);
+
     List<Notification> findByTenantIdOrderByCreatedAtDesc(String tenantId);
 
     List<Notification> findAllByOrderByTenantIdAscCreatedAtDesc();
