@@ -19,6 +19,11 @@ class TransactionDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final staff = ref.watch(staffNamesProvider).asData?.value ?? const {};
+    final canReverse =
+        (ref.watch(sessionProvider).asData?.value?.can('transactions:approve') ??
+                false) &&
+            txn.status == 'posted' &&
+            txn.reversalReason.isEmpty;
     final out = txn.isOutflow;
     final color = out ? const Color(0xFFB91C1C) : const Color(0xFF15803D);
     String? nameFor(String id) =>
@@ -89,8 +94,101 @@ class TransactionDetailScreen extends ConsumerWidget {
               ],
             ),
           ),
+          if (canReverse) ...[
+            const SizedBox(height: 16),
+            _ReverseButton(txn: txn),
+          ],
           const SizedBox(height: 24),
         ],
+      ),
+    );
+  }
+}
+
+class _ReverseButton extends ConsumerStatefulWidget {
+  const _ReverseButton({required this.txn});
+  final FinancialTxn txn;
+
+  @override
+  ConsumerState<_ReverseButton> createState() => _ReverseButtonState();
+}
+
+class _ReverseButtonState extends ConsumerState<_ReverseButton> {
+  bool _busy = false;
+
+  Future<void> _reverse() async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reverse transaction'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+                'This posts a reversing entry. Give a reason for the audit trail.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(hintText: 'Reason'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFB91C1C)),
+            onPressed: () {
+              final r = controller.text.trim();
+              if (r.isNotEmpty) Navigator.pop(ctx, r);
+            },
+            child: const Text('Reverse'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null || reason.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(adminRepositoryProvider)
+          .reverseTransaction(widget.txn.id, reason);
+      ref.invalidate(transactionsProvider(''));
+      ref.invalidate(saccoStatusProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Transaction reversed.')));
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFB91C1C)),
+        onPressed: _busy ? null : _reverse,
+        icon: _busy
+            ? const SizedBox(
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.undo),
+        label: const Text('Reverse transaction'),
       ),
     );
   }

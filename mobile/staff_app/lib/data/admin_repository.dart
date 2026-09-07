@@ -189,6 +189,11 @@ class AdminRepository {
     return rows.map(LoanRepayment.fromJson).toList();
   }
 
+  /// Reverse a posted financial transaction (transactions:approve).
+  Future<void> reverseTransaction(String id, String reason) async {
+    await _api.post('/financial-transactions/$id/reversal', {'reason': reason});
+  }
+
   Future<List<FinancialTxn>> transactions({String? search}) async {
     final rows = await _api.getList('/financial-transactions',
         query: (search != null && search.trim().isNotEmpty)
