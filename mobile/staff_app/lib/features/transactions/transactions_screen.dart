@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
-import '../../core/widgets/error_retry.dart';
-import '../../core/widgets/skeleton.dart';
+import '../../core/widgets/paged_list.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -35,6 +34,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   final _controller = TextEditingController();
   String _query = '';
   int _filter = 0;
+  int _reloadTick = 0;
 
   @override
   void dispose() {
@@ -42,9 +42,14 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
     super.dispose();
   }
 
+  // Text search and the type chips share the backend `search` channel (the
+  // server LIKE-matches the type column), so paging stays correct — a free
+  // text query takes priority, otherwise the selected chip's token is sent.
+  String get _effectiveSearch =>
+      _query.isNotEmpty ? _query : (_filters[_filter].match ?? '');
+
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(transactionsProvider(_query));
     final session = ref.watch(sessionProvider).asData?.value;
     final canCreate = session?.can('transactions:create') ?? false;
     final names = ref.watch(memberNamesProvider).asData?.value ?? const {};
@@ -54,12 +59,15 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           ? FloatingActionButton.extended(
               icon: const Icon(Icons.savings_outlined),
               label: const Text('Savings'),
-              onPressed: () => showModalBottomSheet<void>(
-                context: context,
-                isScrollControlled: true,
-                showDragHandle: true,
-                builder: (_) => const _SavingsDepositSheet(),
-              ),
+              onPressed: () async {
+                await showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  showDragHandle: true,
+                  builder: (_) => const _SavingsDepositSheet(),
+                );
+                if (mounted) setState(() => _reloadTick++);
+              },
             )
           : null,
       body: Column(
@@ -69,7 +77,10 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
             child: TextField(
               controller: _controller,
               textInputAction: TextInputAction.search,
-              onSubmitted: (v) => setState(() => _query = v.trim()),
+              onSubmitted: (v) => setState(() {
+                _query = v.trim();
+                if (_query.isNotEmpty) _filter = 0;
+              }),
               onChanged: (v) {
                 if (v.trim().isEmpty && _query.isNotEmpty) {
                   setState(() => _query = '');
@@ -100,54 +111,25 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
               itemBuilder: (_, i) => ChoiceChip(
                 label: Text(_filters[i].label),
                 selected: _filter == i,
-                onSelected: (_) => setState(() => _filter = i),
+                onSelected: (_) => setState(() {
+                  _filter = i;
+                  _query = '';
+                  _controller.clear();
+                }),
               ),
             ),
           ),
           Expanded(
-            child: async.when(
-              loading: () => const ListSkeleton(),
-              error: (e, _) => ErrorRetry(
-                message: 'Could not load transactions.',
-                detail: '$e',
-                onRetry: () => ref.invalidate(transactionsProvider(_query)),
-              ),
-              data: (all) {
-                final match = _filters[_filter].match;
-                final rows = match == null
-                    ? all
-                    : all.where((t) => t.type.contains(match)).toList();
-                if (rows.isEmpty) {
-                  return const EmptyState(
-                      icon: Icons.receipt_long_outlined,
-                      message: 'No transactions match this view.');
-                }
-                final total =
-                    rows.fold<num>(0, (s, t) => s + (t.isOutflow ? -t.amount : t.amount));
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    ref.invalidate(transactionsProvider(_query));
-                    ref.invalidate(memberNamesProvider);
-                  },
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    itemCount: rows.length + 1,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) {
-                      if (i == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(
-                              '${rows.length} transaction(s) · net ${Fmt.money(total)}',
-                              style: Theme.of(context).textTheme.bodySmall),
-                        );
-                      }
-                      final t = rows[i - 1];
-                      return _TxnTile(txn: t, memberName: names[t.memberId]);
-                    },
-                  ),
-                );
-              },
+            child: PagedListView<FinancialTxn>(
+              search: '$_effectiveSearch|$_reloadTick',
+              fetch: (page) => ref
+                  .read(adminRepositoryProvider)
+                  .transactionsPage(search: _effectiveSearch, page: page),
+              itemBuilder: (context, t) =>
+                  _TxnTile(txn: t, memberName: names[t.memberId]),
+              emptyIcon: Icons.receipt_long_outlined,
+              emptyMessage: 'No transactions match this view.',
+              errorMessage: 'Could not load transactions.',
             ),
           ),
         ],

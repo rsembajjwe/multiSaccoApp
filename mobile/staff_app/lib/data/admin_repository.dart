@@ -202,6 +202,17 @@ class AdminRepository {
     return rows.map(FinancialTxn.fromJson).toList();
   }
 
+  Future<PageResult<FinancialTxn>> transactionsPage(
+      {String? search, required int page, int size = 25}) async {
+    final r = await _api.getPage('/financial-transactions',
+        page: page,
+        size: size,
+        query: (search != null && search.trim().isNotEmpty)
+            ? {'search': search.trim()}
+            : null);
+    return r.mapItems(FinancialTxn.fromJson);
+  }
+
   Future<FinancialTxn> createCashSavingsDeposit({
     required String memberId,
     required num amount,
