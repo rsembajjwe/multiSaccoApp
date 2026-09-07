@@ -2,13 +2,14 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdfx/pdfx.dart';
 
 import '../../core/format.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../providers.dart';
 
-/// Views a member KYC document. Images render inline (pinch to zoom); PDFs
-/// show a clear notice since in-app PDF rendering isn't wired.
+/// Views a member KYC document. Images render inline (pinch to zoom) and
+/// PDFs render page-by-page with pinch-zoom.
 class DocumentViewerScreen extends ConsumerWidget {
   const DocumentViewerScreen({
     super.key,
@@ -52,10 +53,7 @@ class DocumentViewerScreen extends ConsumerWidget {
             );
           }
           if (doc.isPdf) {
-            return const _Notice(
-                icon: Icons.picture_as_pdf_outlined,
-                text:
-                    'This is a PDF document. In-app PDF preview isn\'t available yet — view it from the web console.');
+            return _PdfView(bytes: Uint8List.fromList(doc.bytes));
           }
           return const _Notice(
               icon: Icons.description_outlined,
@@ -87,4 +85,47 @@ class _Notice extends StatelessWidget {
           ),
         ),
       );
+}
+
+class _PdfView extends StatefulWidget {
+  const _PdfView({required this.bytes});
+  final Uint8List bytes;
+
+  @override
+  State<_PdfView> createState() => _PdfViewState();
+}
+
+class _PdfViewState extends State<_PdfView> {
+  late final PdfControllerPinch _controller;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PdfControllerPinch(
+      document: PdfDocument.openData(widget.bytes),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed) {
+      return const _Notice(
+        icon: Icons.picture_as_pdf_outlined,
+        text: 'This PDF could not be opened.',
+      );
+    }
+    return PdfViewPinch(
+      controller: _controller,
+      onDocumentError: (_) {
+        if (mounted) setState(() => _failed = true);
+      },
+    );
+  }
 }
