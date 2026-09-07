@@ -25,6 +25,12 @@ class MemberDetailScreen extends ConsumerWidget {
     final canChangeStatus =
         ref.watch(sessionProvider).asData?.value.can('members:approve') ??
             false;
+    final canEdit = ref
+            .watch(sessionProvider)
+            .asData
+            ?.value
+            .canAny(['members:create', 'members:approve']) ??
+        false;
     return Scaffold(
       appBar: AppBar(title: const Text('Member')),
       body: memberAsync.when(
