@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../audit/audit_screen.dart';
+import '../branches/branches_screen.dart';
 import '../chat/chat_threads_screen.dart';
 import '../complaints/complaints_screen.dart';
 import '../funds/fund_sources_screen.dart';
@@ -71,6 +72,9 @@ const _sections = <_Section>[
   _Section('Users & Roles', Icons.manage_accounts_outlined,
       ['users:view', 'roles:view'], Color(0xFF7C3AED),
       'Staff directory & permissions'),
+  _Section('Branches', Icons.account_tree_outlined,
+      ['members:view', 'transactions:view', 'loans:view'], Color(0xFF0E7490),
+      'SACCO branch directory'),
   _Section(
       'Subscriptions',
       Icons.workspace_premium_outlined,
@@ -368,6 +372,8 @@ Widget _screenFor(_Section s, StaffSession session) {
       return NotificationsScreen(canManage: session.can('notifications:manage'));
     case 'Users & Roles':
       return const UsersScreen();
+    case 'Branches':
+      return const BranchesScreen();
     default:
       return _ComingSoon(title: s.label);
   }

@@ -503,6 +503,11 @@ class AdminRepository {
     return rows.map(AuditEvent.fromJson).toList();
   }
 
+  Future<List<Branch>> branches() async {
+    final rows = await _api.getList('/branches');
+    return rows.map(Branch.fromJson).toList();
+  }
+
   Future<List<AppUser>> users() async {
     final rows = await _api.getList('/users');
     return rows.map(AppUser.fromJson).toList();

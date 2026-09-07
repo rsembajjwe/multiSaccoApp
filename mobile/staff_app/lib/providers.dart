@@ -270,3 +270,8 @@ final chatMessagesProvider =
     FutureProvider.autoDispose.family<List<ChatMessage>, String>(
   (ref, threadId) => ref.watch(adminRepositoryProvider).chatMessages(threadId),
 );
+
+/// SACCO branches.
+final branchesProvider = FutureProvider.autoDispose<List<Branch>>(
+  (ref) => ref.watch(adminRepositoryProvider).branches(),
+);

@@ -1595,3 +1595,31 @@ class ChatMessage {
         createdAt: _str(j['createdAt']),
       );
 }
+
+/// A SACCO branch (GET /branches).
+class Branch {
+  const Branch({
+    required this.id,
+    required this.code,
+    required this.name,
+    required this.address,
+    required this.managerUserId,
+    required this.status,
+  });
+
+  final String id;
+  final String code;
+  final String name;
+  final String address;
+  final String managerUserId;
+  final String status;
+
+  factory Branch.fromJson(Map<String, dynamic> j) => Branch(
+        id: _str(j['id']),
+        code: _str(j['code']),
+        name: _str(j['name']),
+        address: _str(j['address']),
+        managerUserId: _str(j['managerUserId']),
+        status: _str(j['status']),
+      );
+}
