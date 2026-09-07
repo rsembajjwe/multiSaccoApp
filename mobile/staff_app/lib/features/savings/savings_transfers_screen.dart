@@ -40,7 +40,7 @@ class _SavingsTransfersScreenState
     final async = ref.watch(savingsTransfersProvider);
     final names = ref.watch(memberNamesProvider).asData?.value ?? const {};
     final canApprove =
-        ref.watch(sessionProvider).asData?.value?.can('savings-transfer:approve') ??
+        ref.watch(sessionProvider).asData?.value.can('savings-transfer:approve') ??
             false;
     return Scaffold(
       appBar: AppBar(title: const Text('Savings transfers')),

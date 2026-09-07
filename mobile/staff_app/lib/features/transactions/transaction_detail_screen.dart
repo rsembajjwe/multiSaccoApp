@@ -20,7 +20,7 @@ class TransactionDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final staff = ref.watch(staffNamesProvider).asData?.value ?? const {};
     final canReverse =
-        (ref.watch(sessionProvider).asData?.value?.can('transactions:approve') ??
+        (ref.watch(sessionProvider).asData?.value.can('transactions:approve') ??
                 false) &&
             txn.status == 'posted' &&
             txn.reversalReason.isEmpty;
