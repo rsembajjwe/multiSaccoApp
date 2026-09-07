@@ -57,6 +57,25 @@ class AdminRepository {
     return r.mapItems(Loan.fromJson);
   }
 
+  /// Update a member's editable details (staff PATCH is a full update, so we
+  /// resend the member's current fields with the contact overrides).
+  Future<Member> updateMember(Member m,
+      {String? fullName, String? phone, String? email}) async {
+    final body = <String, dynamic>{
+      'branchId': m.branchId,
+      'fullName': (fullName ?? m.fullName).trim(),
+      'memberType': m.memberType.isEmpty ? 'individual' : m.memberType,
+      'phone': (phone ?? m.phone).trim(),
+      'email': (email ?? m.email).trim(),
+      'nationalId': m.nationalId,
+      'status': m.status,
+      'kycStatus': m.kycStatus,
+    };
+    if (m.joiningDate.isNotEmpty) body['joiningDate'] = m.joiningDate;
+    final data = await _api.patch('/members/${m.id}', body);
+    return Member.fromJson(data);
+  }
+
   /// Change a member's status (members:approve). Returns the updated member.
   Future<Member> updateMemberStatus(String id, String status) async {
     final data = await _api.patch('/members/$id/status', {'status': status});
@@ -74,6 +93,45 @@ class AdminRepository {
     return rows.map(Loan.fromJson).toList();
   }
 
+  Future<Loan> createLoan({
+    required String memberId,
+    required String product,
+    required num amount,
+    num? interestRate,
+    required num chargeFee,
+    required int repaymentMonths,
+    required String purpose,
+    required String signedFormReference,
+  }) async {
+    final data = await _api.post('/loans', {
+      'memberId': memberId,
+      'product': product,
+      'amount': amount,
+      if (interestRate != null) 'interestRate': interestRate,
+      'chargeFee': chargeFee,
+      'repaymentMonths': repaymentMonths,
+      'purpose': purpose.trim(),
+      'applicationSource': 'staff_captured_signed_form',
+      'signedFormReference': signedFormReference.trim(),
+    });
+    return Loan.fromJson(data);
+  }
+
+  Future<LoanGuarantor> createLoanGuarantor({
+    required String loanId,
+    required String memberId,
+  }) async {
+    final data = await _api.post('/loans/$loanId/guarantors', {
+      'memberId': memberId,
+    });
+    return LoanGuarantor.fromJson(data);
+  }
+
+  Future<List<LoanGuarantor>> guarantorRequests() async {
+    final rows = await _api.getList('/loans/guarantor-requests');
+    return rows.map(LoanGuarantor.fromJson).toList();
+  }
+
   /// A single member's loans (server search matches the member id).
   Future<List<Loan>> memberLoans(String memberId) async {
     final rows = await _api.getList('/loans', query: {'search': memberId});
@@ -86,6 +144,44 @@ class AdminRepository {
   Future<List<LoanScheduleRow>> loanSchedule(String loanId) async {
     final rows = await _api.getList('/loans/$loanId/schedule');
     return rows.map(LoanScheduleRow.fromJson).toList();
+  }
+
+  Future<List<LoanExtension>> loanExtensions(String loanId) async {
+    final rows = await _api.getList('/loans/$loanId/extensions');
+    return rows.map(LoanExtension.fromJson).toList();
+  }
+
+  Future<Loan> extendLoan({
+    required String loanId,
+    required int additionalMonths,
+    required num chargeFee,
+    required String reason,
+  }) async {
+    final data = await _api.post('/loans/$loanId/extensions', {
+      'additionalMonths': additionalMonths,
+      'chargeFee': chargeFee,
+      'reason': reason.trim(),
+      'requestedByMember': true,
+    });
+    return Loan.fromJson(data);
+  }
+
+  Future<Loan> topUpLoan({
+    required String loanId,
+    required num amount,
+    required int repaymentMonths,
+    num? interestRate,
+    required num chargeFee,
+    required String reason,
+  }) async {
+    final data = await _api.post('/loans/$loanId/top-ups', {
+      'amount': amount,
+      'repaymentMonths': repaymentMonths,
+      if (interestRate != null) 'interestRate': interestRate,
+      'chargeFee': chargeFee,
+      'reason': reason.trim(),
+    });
+    return Loan.fromJson(data);
   }
 
   Future<List<LoanRepayment>> repayments(String loanId) async {
@@ -101,9 +197,190 @@ class AdminRepository {
     return rows.map(FinancialTxn.fromJson).toList();
   }
 
+  Future<FinancialTxn> createCashSavingsDeposit({
+    required String memberId,
+    required num amount,
+    String? narration,
+  }) async {
+    final data = await _api.post('/financial-transactions', {
+      'memberId': memberId,
+      'type': 'savings_deposit',
+      'channel': 'cash',
+      'amount': amount,
+      if (narration != null && narration.trim().isNotEmpty)
+        'narration': narration.trim(),
+    });
+    return FinancialTxn.fromJson(data);
+  }
+
+  Future<MobileMoneyPaymentRequest> requestMemberSavingsMobileMoney({
+    required String memberId,
+    required num amount,
+    required String payerPhone,
+    String? provider,
+  }) async {
+    final data = await _api.post(
+      '/integrations/mobile-money/payment-requests/staff',
+      {
+        'memberId': memberId,
+        'purpose': 'savings_deposit',
+        'amount': amount,
+        'payerPhone': payerPhone.trim(),
+        if (provider != null && provider.trim().isNotEmpty)
+          'provider': provider.trim(),
+      },
+    );
+    return MobileMoneyPaymentRequest.fromJson(data);
+  }
+
+  Future<List<MemberFundBalance>> memberFundBalances() async {
+    final rows = await _api.getList('/members/fund-balances');
+    return rows.map(MemberFundBalance.fromJson).toList();
+  }
+
+  Future<SaccoProfile> saccoProfile(String tenantId) async {
+    final data = await _api.get('/tenants/$tenantId/profile');
+    return SaccoProfile.fromJson(data);
+  }
+
+  Future<SaccoProfile> updateSaccoProfile(
+    String tenantId, {
+    num? loanInterestRate,
+    String? logoDataUrl,
+  }) async {
+    final data = await _api.patch('/tenants/$tenantId/profile', {
+      if (loanInterestRate != null) 'loanInterestRate': loanInterestRate,
+      if (logoDataUrl != null) 'logoDataUrl': logoDataUrl,
+    });
+    return SaccoProfile.fromJson(data);
+  }
+
+  Future<List<FundType>> fundTypes() async {
+    final rows = await _api.getList('/fund-types');
+    return rows.map(FundType.fromJson).toList();
+  }
+
+  Future<FundType> createFundType({
+    required String name,
+    required String code,
+    required String basis,
+    String? description,
+  }) async {
+    final data = await _api.post('/fund-types', {
+      'name': name.trim(),
+      'code': code.trim().toLowerCase(),
+      'basis': basis.trim().toLowerCase(),
+      if (description != null && description.trim().isNotEmpty)
+        'description': description.trim(),
+      'active': true,
+    });
+    return FundType.fromJson(data);
+  }
+
   Future<List<Subscription>> subscriptions() async {
     final rows = await _api.getList('/subscriptions');
     return rows.map(Subscription.fromJson).toList();
+  }
+
+  Future<List<MemberSubscription>> memberSubscriptions() async {
+    final rows = await _api.getList('/member-subscriptions');
+    return rows.map(MemberSubscription.fromJson).toList();
+  }
+
+  Future<MemberSubscription> recordMemberSubscriptionPayment(
+    String subscriptionId, {
+    required num amount,
+  }) async {
+    final data = await _api.post('/member-subscriptions/$subscriptionId/payments', {
+      'amount': amount,
+      'method': 'cash',
+    });
+    return MemberSubscription.fromJson(data);
+  }
+
+  Future<void> recordBulkMemberSubscriptionPayment({
+    required num amount,
+    required List<String> subscriptionIds,
+  }) async {
+    await _api.post('/member-subscriptions/bulk-payments', {
+      'amount': amount,
+      'subscriptionIds': subscriptionIds,
+      'method': 'cash',
+    });
+  }
+
+  Future<MobileMoneyPaymentRequest> requestMemberDuesMobileMoney({
+    required String memberId,
+    required String subscriptionId,
+    required String payerPhone,
+    String? provider,
+  }) async {
+    final data = await _api.post(
+      '/integrations/mobile-money/payment-requests/staff',
+      {
+        'memberId': memberId,
+        'subscriptionId': subscriptionId,
+        'purpose': 'membership_dues',
+        'amount': 1,
+        'payerPhone': payerPhone.trim(),
+        if (provider != null && provider.trim().isNotEmpty)
+          'provider': provider.trim(),
+      },
+    );
+    return MobileMoneyPaymentRequest.fromJson(data);
+  }
+
+  Future<MobileMoneyPaymentRequest> requestSaccoSubscriptionMobileMoney({
+    required num amount,
+    required String payerPhone,
+    List<String> memberSubscriptionIds = const [],
+    String? provider,
+  }) async {
+    final data = await _api.post(
+      '/integrations/mobile-money/subscription-payment-requests/staff',
+      {
+        'amount': amount,
+        'payerPhone': payerPhone.trim(),
+        if (memberSubscriptionIds.isNotEmpty)
+          'memberSubscriptionIds': memberSubscriptionIds,
+        if (provider != null && provider.trim().isNotEmpty)
+          'provider': provider.trim(),
+      },
+    );
+    return MobileMoneyPaymentRequest.fromJson(data);
+  }
+
+  Future<MobileMoneyPaymentRequest> requestSmsTopUpMobileMoney({
+    required int smsCount,
+    required String payerPhone,
+    String? provider,
+  }) async {
+    final data = await _api.post(
+      '/integrations/mobile-money/sms-payment-requests/staff',
+      {
+        'smsCount': smsCount,
+        'payerPhone': payerPhone.trim(),
+        if (provider != null && provider.trim().isNotEmpty)
+          'provider': provider.trim(),
+      },
+    );
+    return MobileMoneyPaymentRequest.fromJson(data);
+  }
+
+  Future<int> sendSmsBroadcast({
+    required String message,
+    String title = 'SACCO message',
+    List<String> memberIds = const [],
+  }) async {
+    final data = await _api.post('/notifications/messages/sms', {
+      'title': title.trim().isEmpty ? 'SACCO message' : title.trim(),
+      'body': message.trim(),
+      if (memberIds.isNotEmpty) 'memberIds': memberIds,
+    });
+    final balance = data['smsBalance'];
+    if (balance is int) return balance;
+    if (balance is num) return balance.toInt();
+    return int.tryParse('$balance') ?? 0;
   }
 
   Future<List<SubscriptionPackage>> packages() async {
@@ -139,6 +416,44 @@ class AdminRepository {
             ? {'search': search.trim()}
             : null);
     return rows.map(AppNotification.fromJson).toList();
+  }
+
+  Future<List<MobileMoneyPaymentRequest>> mobileMoneyPaymentRequests() async {
+    final rows = await _api.getList('/integrations/mobile-money/payment-requests');
+    return rows.map(MobileMoneyPaymentRequest.fromJson).toList();
+  }
+
+  Future<List<MobileMoneyCallback>> mobileMoneyCallbacks() async {
+    final rows = await _api.getList('/integrations/mobile-money/callbacks');
+    return rows.map(MobileMoneyCallback.fromJson).toList();
+  }
+
+  Future<MobileMoneyPaymentRequest> refreshMobileMoneyProviderStatus(
+      String requestId) async {
+    final data = await _api
+        .get('/integrations/mobile-money/payment-requests/$requestId/provider-status');
+    return MobileMoneyPaymentRequest.fromJson(data);
+  }
+
+  Future<MobileMoneyPaymentRequest> updateMobileMoneyPaymentRequestStatus(
+    String requestId,
+    String status, {
+    String? reason,
+  }) async {
+    final data = await _api.patch(
+      '/integrations/mobile-money/payment-requests/$requestId/status',
+      {
+        'status': status,
+        if (reason != null && reason.trim().isNotEmpty)
+          'reason': reason.trim(),
+      },
+    );
+    return MobileMoneyPaymentRequest.fromJson(data);
+  }
+
+  Future<ReconciliationReport> reconciliation() async {
+    final data = await _api.get('/reconciliation');
+    return ReconciliationReport.fromJson(data);
   }
 
   Future<List<ChatThread>> chatThreads() async {

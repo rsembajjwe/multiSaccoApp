@@ -19,24 +19,11 @@ class MemberDetailScreen extends ConsumerWidget {
   const MemberDetailScreen({super.key, required this.memberId});
   final String memberId;
 
-  void _openFund(BuildContext context, Member m, String fund, String label,
-      Color color) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => FundTransactionsScreen(
-        memberId: m.id,
-        memberName: m.fullName,
-        fund: fund,
-        fundLabel: label,
-        color: color,
-      ),
-    ));
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final memberAsync = ref.watch(memberProvider(memberId));
-    final canApprove =
-        ref.watch(sessionProvider).asData?.value?.can('members:approve') ??
+    final canChangeStatus =
+        ref.watch(sessionProvider).asData?.value.can('members:approve') ??
             false;
     return Scaffold(
       appBar: AppBar(title: const Text('Member')),
@@ -51,12 +38,14 @@ class MemberDetailScreen extends ConsumerWidget {
           onRefresh: () async {
             ref.invalidate(memberProvider(memberId));
             ref.invalidate(memberLoansProvider(memberId));
+            ref.invalidate(memberFundBalancesProvider);
+            ref.invalidate(fundTypesProvider);
           },
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
               _Identity(member: m),
-              if (canApprove) ...[
+              if (canChangeStatus) ...[
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
@@ -73,51 +62,27 @@ class MemberDetailScreen extends ConsumerWidget {
                   ),
                 ),
               ],
+              if (canEdit) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit contact'),
+                    onPressed: () => showModalBottomSheet<void>(
+                      context: context,
+                      showDragHandle: true,
+                      isScrollControlled: true,
+                      builder: (_) => _MemberContactSheet(member: m),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               Text('Balances',
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: BalanceCard(
-                        label: 'Savings',
-                        value: Fmt.money(m.savings),
-                        icon: Icons.savings_outlined,
-                        color: const Color(0xFF0F766E),
-                        onTap: () => _openFund(context, m, 'savings', 'Savings',
-                            const Color(0xFF0F766E))),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: BalanceCard(
-                        label: 'Shares',
-                        value: Fmt.money(m.shares),
-                        icon: Icons.pie_chart_outline,
-                        color: const Color(0xFF7C3AED),
-                        onTap: () => _openFund(context, m, 'shares', 'Shares',
-                            const Color(0xFF7C3AED))),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: BalanceCard(
-                        label: 'Welfare',
-                        value: Fmt.money(m.welfare),
-                        icon: Icons.volunteer_activism_outlined,
-                        color: const Color(0xFF9333EA),
-                        onTap: () => _openFund(context, m, 'welfare', 'Welfare',
-                            const Color(0xFF9333EA))),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: _LoanBalanceCard(
-                          memberId: memberId, memberName: m.fullName)),
-                ],
-              ),
+              _MemberBalanceBoard(member: m),
               const SizedBox(height: 24),
               Text('Loans', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
@@ -156,6 +121,123 @@ class MemberDetailScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _MemberBalanceBoard extends ConsumerWidget {
+  const _MemberBalanceBoard({required this.member});
+
+  final Member member;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final funds = ref.watch(fundTypesProvider).asData?.value ?? const <FundType>[];
+    final balances =
+        ref.watch(memberFundBalancesProvider).asData?.value ?? const <MemberFundBalance>[];
+    final byCode = {
+      for (final b in balances.where((b) => b.memberId == member.id))
+        b.fundCode: b.balance
+    };
+    final activeFunds = funds.where((f) => f.active).toList();
+    final visibleFunds = activeFunds.isEmpty
+        ? const [
+            FundType(
+              id: 'savings',
+              code: 'savings',
+              name: 'Savings',
+              basis: 'savings',
+              description: '',
+              system: true,
+              active: true,
+              displayOrder: 10,
+            ),
+            FundType(
+              id: 'shares',
+              code: 'shares',
+              name: 'Shares',
+              basis: 'shares',
+              description: '',
+              system: true,
+              active: true,
+              displayOrder: 20,
+            ),
+            FundType(
+              id: 'welfare',
+              code: 'welfare',
+              name: 'Welfare',
+              basis: 'welfare',
+              description: '',
+              system: true,
+              active: true,
+              displayOrder: 30,
+            ),
+          ]
+        : activeFunds;
+    final cards = [
+      ...visibleFunds.map((f) {
+        final value = byCode[f.code] ??
+            (f.code == 'savings'
+                ? member.savings
+                : f.code == 'shares'
+                    ? member.shares
+                    : f.code == 'welfare'
+                        ? member.welfare
+                        : 0);
+        return BalanceCard(
+          label: f.name,
+          value: Fmt.money(value),
+          icon: _fundIcon(f.code, f.basis),
+          color: _fundColor(f.code, f.basis),
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => FundTransactionsScreen(
+              memberId: member.id,
+              memberName: member.fullName,
+              fund: f.code,
+              fundLabel: f.name,
+              color: _fundColor(f.code, f.basis),
+            ),
+          )),
+        );
+      }),
+      _LoanBalanceCard(memberId: member.id, memberName: member.fullName),
+    ];
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 1.25,
+      children: cards,
+    );
+  }
+}
+
+IconData _fundIcon(String code, String basis) {
+  switch (code) {
+    case 'savings':
+      return Icons.savings_outlined;
+    case 'shares':
+      return Icons.pie_chart_outline;
+    case 'welfare':
+      return Icons.volunteer_activism_outlined;
+  }
+  return basis == 'welfare'
+      ? Icons.health_and_safety_outlined
+      : Icons.account_balance_wallet_outlined;
+}
+
+Color _fundColor(String code, String basis) {
+  switch (code) {
+    case 'savings':
+      return const Color(0xFF0F766E);
+    case 'shares':
+      return const Color(0xFF7C3AED);
+    case 'welfare':
+      return const Color(0xFF9333EA);
+  }
+  return basis == 'welfare'
+      ? const Color(0xFFDB2777)
+      : const Color(0xFF64748B);
 }
 
 class _Identity extends StatelessWidget {
@@ -314,7 +396,6 @@ class _MemberLoanTile extends StatelessWidget {
 
 const _memberStatuses = [
   'applicant',
-  'pending_approval',
   'active',
   'inactive',
   'dormant',
@@ -388,6 +469,114 @@ class _MemberStatusSheetState extends ConsumerState<_MemberStatusSheet> {
                 .toList(),
           ),
           const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _busy ? null : _save,
+              child: _busy
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Save'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MemberContactSheet extends ConsumerStatefulWidget {
+  const _MemberContactSheet({required this.member});
+  final Member member;
+
+  @override
+  ConsumerState<_MemberContactSheet> createState() =>
+      _MemberContactSheetState();
+}
+
+class _MemberContactSheetState extends ConsumerState<_MemberContactSheet> {
+  late final _name = TextEditingController(text: widget.member.fullName);
+  late final _phone = TextEditingController(text: widget.member.phone);
+  late final _email = TextEditingController(text: widget.member.email);
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _email.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_name.text.trim().isEmpty || _phone.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Name and phone are required.')));
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepositoryProvider).updateMember(
+            widget.member,
+            fullName: _name.text.trim(),
+            phone: _phone.text.trim(),
+            email: _email.text.trim(),
+          );
+      ref.invalidate(memberProvider(widget.member.id));
+      ref.invalidate(membersProvider(''));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Member updated.')));
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Edit contact',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _name,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Full name'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _phone,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(labelText: 'Phone'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(labelText: 'Email (optional)'),
+          ),
+          const SizedBox(height: 8),
+          Text('WhatsApp is edited by the member in their app.',
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
