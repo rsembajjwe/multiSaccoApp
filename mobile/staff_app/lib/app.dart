@@ -96,7 +96,7 @@ class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: _router,
     );
   }

@@ -12,6 +12,7 @@ class SessionStore {
   static const _nameKey = 'staff_name';
   static const _saccoKey = 'staff_sacco';
   static const _lockKey = 'biometric_lock';
+  static const _themeKey = 'theme_mode';
 
   Future<String?> readToken() => _storage.read(key: _tokenKey);
   Future<void> writeToken(String token) =>
@@ -35,6 +36,12 @@ class SessionStore {
       (await _storage.read(key: _lockKey)) == 'true';
   Future<void> setBiometricLock(bool enabled) =>
       _storage.write(key: _lockKey, value: enabled ? 'true' : 'false');
+
+  /// Theme preference: 'system' | 'light' | 'dark'. Kept out of [clear] so it
+  /// survives logout.
+  Future<String?> readThemeMode() => _storage.read(key: _themeKey);
+  Future<void> writeThemeMode(String mode) =>
+      _storage.write(key: _themeKey, value: mode);
 
   Future<void> clear() async {
     await _storage.delete(key: _tokenKey);

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/api_client.dart';
@@ -9,6 +10,45 @@ import 'data/session_store.dart';
 import 'domain/models.dart';
 
 final sessionStoreProvider = Provider<SessionStore>((ref) => SessionStore());
+
+/// App theme preference (System / Light / Dark), persisted in [SessionStore].
+class ThemeModeController extends StateNotifier<ThemeMode> {
+  ThemeModeController(this._store) : super(ThemeMode.system) {
+    _load();
+  }
+  final SessionStore _store;
+
+  Future<void> _load() async {
+    state = _parse(await _store.readThemeMode());
+  }
+
+  Future<void> setMode(ThemeMode mode) async {
+    state = mode;
+    await _store.writeThemeMode(_name(mode));
+  }
+
+  static ThemeMode _parse(String? raw) {
+    switch (raw) {
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+      default:
+        return ThemeMode.system;
+    }
+  }
+
+  static String _name(ThemeMode mode) => switch (mode) {
+        ThemeMode.light => 'light',
+        ThemeMode.dark => 'dark',
+        ThemeMode.system => 'system',
+      };
+}
+
+final themeModeProvider =
+    StateNotifierProvider<ThemeModeController, ThemeMode>(
+  (ref) => ThemeModeController(ref.watch(sessionStoreProvider)),
+);
 
 final pushServiceProvider = Provider<PushService>((ref) => PushService());
 

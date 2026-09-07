@@ -110,6 +110,10 @@ class _SettingsBody extends ConsumerWidget {
           onTap: () => _pickLogo(context, ref, session),
         ),
         const SizedBox(height: 24),
+        Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        const _ThemeModeControl(),
+        const SizedBox(height: 24),
         Text('Security', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         const _BiometricToggle(),
@@ -373,6 +377,51 @@ class _SettingsTile extends StatelessWidget {
         subtitle: Text(subtitle),
         trailing: Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
         onTap: enabled ? onTap : null,
+      ),
+    );
+  }
+}
+
+class _ThemeModeControl extends ConsumerWidget {
+  const _ThemeModeControl();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider);
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.brightness_6_outlined, color: scheme.primary),
+                const SizedBox(width: 12),
+                const Text('Theme',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<ThemeMode>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                      value: ThemeMode.system, label: Text('System')),
+                  ButtonSegment(value: ThemeMode.light, label: Text('Light')),
+                  ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
+                ],
+                selected: {mode},
+                onSelectionChanged: (selection) => ref
+                    .read(themeModeProvider.notifier)
+                    .setMode(selection.first),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
