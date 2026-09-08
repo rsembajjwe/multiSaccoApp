@@ -29,6 +29,10 @@ public class StaffNotificationRecipientService {
         return saccoRecipientsByRole(tenantId, this::isSubscriptionLeadershipRole);
     }
 
+    public List<StaffNotificationRecipient> saccoComplaintRecipients(String tenantId) {
+        return saccoRecipientsByRole(tenantId, this::isComplaintHandlingRole);
+    }
+
     private List<StaffNotificationRecipient> saccoRecipientsByRole(String tenantId, java.util.function.Predicate<Role> rolePredicate) {
         if (tenantId == null || tenantId.isBlank() || "tenant_platform".equals(tenantId)) {
             return List.of();
@@ -74,6 +78,18 @@ public class StaffNotificationRecipientService {
                 || name.contains("chairman")
                 || name.contains("secretary")
                 || name.contains("treasurer");
+    }
+
+    private boolean isComplaintHandlingRole(Role role) {
+        String name = role.getName() == null ? "" : role.getName().toLowerCase();
+        return role.isProtectedRole()
+                || name.contains("administrator")
+                || name.contains("manager")
+                || name.contains("secretary")
+                || name.contains("chairperson")
+                || name.contains("support")
+                || name.contains("relations")
+                || name.contains("customer");
     }
 
     private List<StaffNotificationRecipient> recipients(List<User> users) {

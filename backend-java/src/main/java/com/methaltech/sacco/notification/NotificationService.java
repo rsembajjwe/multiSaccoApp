@@ -211,15 +211,37 @@ public class NotificationService {
      * Best-effort push to the SACCO's staff so they see a member-filed complaint promptly.
      * No-op unless FCM push is configured.
      */
-    public void notifyStaffOfComplaint(Member member, String subject) {
-        String saccoCode = tenantService.findById(member.getTenantId())
+    public void notifyStaffOfComplaint(Member member, String complaintId, String subject) {
+        String title = "New complaint";
+        String message = subject == null || subject.isBlank()
+                ? "A member filed a complaint."
+                : "New complaint: " + subject;
+
+        // Persist a per-officer inbox notification for complaint-handling staff, so it appears in
+        // their personal inbox (not just as a transient push).
+        String tenantId = member.getTenantId();
+        for (com.methaltech.sacco.identity.StaffNotificationRecipient recipient : staffNotificationRecipientService.saccoComplaintRecipients(tenantId)) {
+            Notification notification = notificationRepository.save(new Notification(
+                    "notification_" + UUID.randomUUID(),
+                    tenantId,
+                    member.getId(),
+                    recipient.userId(),
+                    "complaint_filed",
+                    title,
+                    message,
+                    "complaint",
+                    complaintId));
+            createStaffDeliveries(notification, recipient, title, message);
+        }
+
+        // Best-effort push to the SACCO's staff topic.
+        String saccoCode = tenantService.findById(tenantId)
                 .map(TenantResponse::abbreviation)
                 .orElse(null);
         if (saccoCode == null || saccoCode.isBlank()) {
             return;
         }
-        staffPushNotifier.notifyStaff(saccoCode, "New complaint",
-                subject == null || subject.isBlank() ? "A member filed a complaint." : subject);
+        staffPushNotifier.notifyStaff(saccoCode, title, message);
     }
 
     public Notification notifyComplaintReply(Member member, String complaintId, String subject, String reply) {
@@ -269,6 +291,40 @@ public class NotificationService {
                             "sacco_message",
                             null));
                     createDeliveries(notification, member, title, message);
+                    return notification;
+                })
+                .toList();
+    }
+
+    public List<Notification> notifySmsBroadcast(String tenantId, List<Member> recipients, String title, String message) {
+        NotificationProvider smsProvider = providers.stream()
+                .filter(provider -> "sms".equals(provider.channel()))
+                .findFirst()
+                .orElse(null);
+        if (smsProvider == null) {
+            throw new NotificationProviderException("SMS provider is not configured.");
+        }
+        return recipients.stream()
+                .filter(member -> smsProvider.enabledFor(member))
+                .map(member -> {
+                    Notification notification = notificationRepository.save(new Notification(
+                            "notification_" + UUID.randomUUID(),
+                            tenantId,
+                            member.getId(),
+                            "sacco_sms_broadcast",
+                            title,
+                            message,
+                            "sacco_sms",
+                            null));
+                    NotificationSendResult result = send(smsProvider, member, title, message);
+                    createDelivery(
+                            notification,
+                            member,
+                            smsProvider.channel(),
+                            smsProvider.providerId(),
+                            smsProvider.recipient(member),
+                            result,
+                            message);
                     return notification;
                 })
                 .toList();
