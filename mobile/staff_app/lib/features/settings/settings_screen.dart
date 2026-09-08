@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../core/widgets/confirm_action.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
 import '../funds/fund_sources_screen.dart';
@@ -60,6 +61,8 @@ class _SettingsBody extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       children: [
         _ProfileCard(session: session, profileAsync: profileAsync),
+        const SizedBox(height: 16),
+        _AccessSummaryCard(session: session),
         const SizedBox(height: 16),
         Text('SACCO controls', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
@@ -123,6 +126,15 @@ class _SettingsBody extends ConsumerWidget {
             leading: const Icon(Icons.logout, color: Color(0xFFB91C1C)),
             title: const Text('Sign out'),
             onTap: () async {
+              final confirmed = await confirmAction(
+                context,
+                title: 'Sign out?',
+                message:
+                    'You will need to enter your SACCO code, username, and password again.',
+                confirmLabel: 'Sign out',
+                icon: Icons.logout,
+              );
+              if (!confirmed || !context.mounted) return;
               await ref.read(authRepositoryProvider).logout();
               if (context.mounted) context.go('/login');
             },
@@ -192,6 +204,15 @@ class _SettingsBody extends ConsumerWidget {
     }
     final mime = _mimeFor(image.name);
     final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
+    final confirmed = await confirmAction(
+      context,
+      title: 'Update SACCO logo?',
+      message:
+          'Replace the logo shown to staff and members for ${session.saccoName}.',
+      confirmLabel: 'Update logo',
+      icon: Icons.image_outlined,
+    );
+    if (!confirmed || !context.mounted) return;
     try {
       await ref
           .read(adminRepositoryProvider)
@@ -227,6 +248,7 @@ class _InterestRateDialog extends StatefulWidget {
 
 class _InterestRateDialogState extends State<_InterestRateDialog> {
   late final TextEditingController _controller;
+  final _formKey = GlobalKey<FormState>();
 
   @override
   void initState() {
@@ -243,6 +265,7 @@ class _InterestRateDialogState extends State<_InterestRateDialog> {
   }
 
   void _save() {
+    if (!_formKey.currentState!.validate()) return;
     final parsed = num.tryParse(_controller.text.trim().replaceAll(',', ''));
     Navigator.of(context).pop(parsed);
   }
@@ -251,15 +274,25 @@ class _InterestRateDialogState extends State<_InterestRateDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Loan interest rate'),
-      content: TextField(
-        controller: _controller,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        autofocus: true,
-        decoration: const InputDecoration(
-          labelText: 'Monthly rate (%)',
-          prefixIcon: Icon(Icons.percent),
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Monthly rate (%)',
+            prefixIcon: Icon(Icons.percent),
+          ),
+          validator: (v) {
+            final parsed =
+                num.tryParse((v ?? '').trim().replaceAll(',', ''));
+            return parsed == null || parsed < 0 || parsed > 100
+                ? 'Enter a rate from 0 to 100.'
+                : null;
+          },
+          onFieldSubmitted: (_) => _save(),
         ),
-        onSubmitted: (_) => _save(),
       ),
       actions: [
         TextButton(
@@ -271,6 +304,83 @@ class _InterestRateDialogState extends State<_InterestRateDialog> {
         ),
       ],
     );
+  }
+}
+
+class _AccessSummaryCard extends StatelessWidget {
+  const _AccessSummaryCard({required this.session});
+  final StaffSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final functions = _accessibleFunctions(session);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.admin_panel_settings_outlined,
+                    color: scheme.primary),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text('Access summary',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+                Chip(label: Text('${session.permissions.length} permissions')),
+              ],
+            ),
+            if (session.roleNames.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children:
+                    session.roleNames.map((r) => Chip(label: Text(r))).toList(),
+              ),
+            ],
+            const SizedBox(height: 10),
+            if (functions.isEmpty)
+              Text('No staff functions are enabled for this account.',
+                  style: TextStyle(color: scheme.error))
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children:
+                    functions.map((f) => InputChip(label: Text(f))).toList(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<String> _accessibleFunctions(StaffSession session) {
+    final functions = <String>[];
+    void add(String label, List<String> perms) {
+      if (session.canAny(perms)) functions.add(label);
+    }
+
+    add('Members', ['members:view', 'members:create', 'members:approve']);
+    add('Loans', ['loans:view', 'loans:create', 'loans:terms']);
+    add('Transactions',
+        ['transactions:view', 'transactions:create', 'transactions:approve']);
+    add('Mobile money', ['accounting:view', 'accounting:post']);
+    add('Subscriptions', [
+      'subscriptions:view',
+      'subscriptions:manage',
+      'member-subscription:view',
+    ]);
+    add('SMS', ['notifications:manage']);
+    add('Fund sources', ['fund-types:view', 'fund-types:manage']);
+    add('Reports', ['reports:view']);
+    add('Audit', ['audit:view']);
+    add('Users & roles', ['users:view', 'roles:view']);
+    return functions;
   }
 }
 
