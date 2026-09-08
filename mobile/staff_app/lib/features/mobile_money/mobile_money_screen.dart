@@ -473,6 +473,7 @@ class _RequestTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final stale = _isStalePending(request);
     return Card(
       margin: EdgeInsets.zero,
       child: InkWell(
@@ -548,6 +549,26 @@ class _RequestTile extends StatelessWidget {
                   style: TextStyle(fontSize: 12, color: scheme.onSurface),
                 ),
               ],
+              if (stale) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(Icons.timer_off_outlined,
+                        size: 16, color: Color(0xFFB45309)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Pending for more than 15 minutes. Refresh provider '
+                        'status or reconcile before closing.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -600,6 +621,14 @@ class _RequestTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  bool _isStalePending(MobileMoneyPaymentRequest request) {
+    if (!request.status.toLowerCase().contains('pending')) return false;
+    final requestedAt = DateTime.tryParse(request.requestedAt);
+    if (requestedAt == null) return false;
+    return DateTime.now().difference(requestedAt.toLocal()) >
+        const Duration(minutes: 15);
   }
 }
 

@@ -233,11 +233,25 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         members.where((m) => m.phone.trim().isNotEmpty).toList();
     final recipientCount =
         draft.allMembers ? membersWithPhones.length : draft.memberIds.length;
+    final segments = _smsSegments(draft.message);
+    final requiredCredits = recipientCount * segments;
+    final status = ref.read(saccoStatusProvider).asData?.value;
+    if (status != null && requiredCredits > status.smsBalance) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          'SMS balance is too low. Required: $requiredCredits, '
+          'available: ${status.smsBalance}.',
+        ),
+      ));
+      return;
+    }
     final confirmed = await confirmAction(
       context,
       title: 'Send SMS broadcast?',
       message:
-          'Send this SMS to $recipientCount member(s). This will deduct SMS credits from the SACCO balance.',
+          'Send this SMS to $recipientCount member(s). Estimated cost is '
+          '$requiredCredits SMS credit(s)'
+          '${status == null ? '.' : ', leaving ${status.smsBalance - requiredCredits}.'}',
       confirmLabel: 'Send SMS',
       icon: Icons.sms_outlined,
     );
@@ -263,6 +277,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       if (mounted) setState(() => _busy = false);
     }
   }
+}
+
+int _smsSegments(String message) {
+  final length = message.trim().length;
+  if (length <= 0) return 0;
+  if (length <= 160) return 1;
+  return ((length + 152) ~/ 153);
 }
 
 class _SmsDraft {
@@ -306,6 +327,9 @@ class _SmsComposeDialogState extends State<_SmsComposeDialog> {
     final membersWithPhones =
         widget.members.where((m) => m.phone.trim().isNotEmpty).toList();
     final count = _allMembers ? membersWithPhones.length : _selected.length;
+    final segments = _smsSegments(_message.text);
+    final estimatedCredits = count * segments;
+    final canSend = count > 0 && _message.text.trim().isNotEmpty;
     return AlertDialog(
       title: const Text('Send SMS'),
       content: SizedBox(
@@ -326,9 +350,19 @@ class _SmsComposeDialogState extends State<_SmsComposeDialog> {
                 controller: _message,
                 minLines: 3,
                 maxLines: 5,
+                onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(
                   labelText: 'SMS message',
                   prefixIcon: Icon(Icons.sms_outlined),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${_message.text.trim().length} characters - '
+                  '$segments segment(s) - $estimatedCredits credit(s)',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
               const SizedBox(height: 8),
@@ -363,7 +397,7 @@ class _SmsComposeDialogState extends State<_SmsComposeDialog> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Cancel')),
         FilledButton.icon(
-          onPressed: count == 0
+          onPressed: !canSend
               ? null
               : () => Navigator.of(context).pop(_SmsDraft(
                     title: _title.text.trim(),
