@@ -35,6 +35,9 @@ public class Loan {
     @Column(name = "interest_amount")
     private BigDecimal interestAmount;
 
+    @Column(name = "charge_fee")
+    private BigDecimal chargeFee = BigDecimal.ZERO;
+
     @Column(name = "total_payable")
     private BigDecimal totalPayable;
 
@@ -155,15 +158,31 @@ public class Loan {
             String purpose,
             String channel,
             String submittedByMemberId) {
+        this(id, tenantId, memberId, product, amount, null, BigDecimal.ZERO, dsr, repaymentMonths, purpose, channel, submittedByMemberId);
+    }
+
+    Loan(
+            String id,
+            String tenantId,
+            String memberId,
+            String product,
+            BigDecimal amount,
+            BigDecimal interestRate,
+            BigDecimal chargeFee,
+            int dsr,
+            int repaymentMonths,
+            String purpose,
+            String channel,
+            String submittedByMemberId) {
         this.id = id;
         this.tenantId = tenantId;
         this.memberId = memberId;
         this.product = product;
         this.amount = amount;
         this.balance = BigDecimal.ZERO;
-        applyTerms(product, amount, repaymentMonths);
-        this.status = "submitted";
-        this.stage = "Credit Appraisal";
+        applyTerms(product, amount, repaymentMonths, interestRate, chargeFee);
+        this.status = "active";
+        this.stage = "Active";
         this.guarantors = 0;
         this.dsr = dsr;
         this.repaymentMonths = repaymentMonths;
@@ -208,10 +227,11 @@ public class Loan {
         loan.balance = balance;
         loan.interestRate = BigDecimal.ZERO;
         loan.interestAmount = BigDecimal.ZERO;
+        loan.chargeFee = BigDecimal.ZERO;
         loan.totalPayable = amount;
         loan.monthlyInstallment = repaymentMonths <= 0 ? amount : amount.divide(BigDecimal.valueOf(repaymentMonths), 2, java.math.RoundingMode.HALF_UP);
-        loan.status = balance.compareTo(BigDecimal.ZERO) == 0 ? "closed" : "active";
-        loan.stage = balance.compareTo(BigDecimal.ZERO) == 0 ? "Migrated Closed" : "Migrated Active";
+        loan.status = balance.compareTo(BigDecimal.ZERO) == 0 ? "paid" : "active";
+        loan.stage = balance.compareTo(BigDecimal.ZERO) == 0 ? "Migrated Paid" : "Migrated Active";
         loan.approvedByUserId = importedByUserId;
         loan.approvedAt = disbursedAt;
         loan.disbursedByUserId = importedByUserId;
@@ -371,29 +391,88 @@ public class Loan {
 
     /** Total repayable (principal + interest/charges) for a proposed loan, before it is created. */
     public static BigDecimal totalPayableFor(String product, BigDecimal amount, int repaymentMonths) {
-        BigDecimal months = BigDecimal.valueOf(Math.max(1, repaymentMonths));
-        BigDecimal interest = amount
-                .multiply(interestRateFor(product))
-                .multiply(months)
-                .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
-        return amount.add(interest);
+        return totalPayableFor(product, amount, repaymentMonths, null, BigDecimal.ZERO);
     }
 
-    private void applyTerms(String product, BigDecimal amount, int repaymentMonths) {
-        this.interestRate = interestRateFor(product);
+    public static BigDecimal totalPayableFor(
+            String product,
+            BigDecimal amount,
+            int repaymentMonths,
+            BigDecimal interestRate,
+            BigDecimal chargeFee) {
+        BigDecimal months = BigDecimal.valueOf(Math.max(1, repaymentMonths));
+        BigDecimal interest = amount
+                .multiply(interestRate == null ? interestRateFor(product) : interestRate)
+                .multiply(months)
+                .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+        return amount.add(interest).add(chargeFee == null ? BigDecimal.ZERO : chargeFee);
+    }
+
+    private void applyTerms(
+            String product,
+            BigDecimal amount,
+            int repaymentMonths,
+            BigDecimal interestRate,
+            BigDecimal chargeFee) {
+        this.interestRate = interestRate == null ? interestRateFor(product) : interestRate;
+        this.chargeFee = chargeFee == null ? BigDecimal.ZERO : chargeFee.max(BigDecimal.ZERO);
         BigDecimal months = BigDecimal.valueOf(Math.max(1, repaymentMonths));
         this.interestAmount = amount
                 .multiply(this.interestRate)
                 .multiply(months)
                 .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
-        this.totalPayable = amount.add(this.interestAmount);
+        this.totalPayable = amount.add(this.interestAmount).add(this.chargeFee);
         this.monthlyInstallment = this.totalPayable.divide(months, 2, java.math.RoundingMode.HALF_UP);
+        this.balance = this.totalPayable;
     }
 
     public void recordRepayment(BigDecimal amount) {
         this.balance = this.balance.subtract(amount).max(BigDecimal.ZERO);
-        this.status = this.balance.compareTo(BigDecimal.ZERO) == 0 ? "closed" : "active";
-        this.stage = this.balance.compareTo(BigDecimal.ZERO) == 0 ? "Closed" : "Repayment";
+        this.status = this.balance.compareTo(BigDecimal.ZERO) == 0 ? "paid" : "active";
+        this.stage = this.balance.compareTo(BigDecimal.ZERO) == 0 ? "Paid" : "Repayment";
+        this.updatedAt = Instant.now();
+    }
+
+    public void extendTerm(int additionalMonths, BigDecimal extensionChargeFee) {
+        int months = Math.max(1, additionalMonths);
+        BigDecimal fee = extensionChargeFee == null ? BigDecimal.ZERO : extensionChargeFee.max(BigDecimal.ZERO);
+        this.repaymentMonths += months;
+        this.chargeFee = getChargeFee().add(fee);
+        this.totalPayable = getTotalPayable().add(fee);
+        this.balance = getBalance().add(fee);
+        BigDecimal denominator = BigDecimal.valueOf(Math.max(1, this.repaymentMonths));
+        this.monthlyInstallment = this.totalPayable.divide(denominator, 2, java.math.RoundingMode.HALF_UP);
+        this.status = this.balance.compareTo(BigDecimal.ZERO) == 0 ? "paid" : "active";
+        this.stage = "Extended";
+        this.updatedAt = Instant.now();
+    }
+
+    public void topUp(
+            BigDecimal topUpAmount,
+            int newRepaymentMonths,
+            BigDecimal topUpInterestRate,
+            BigDecimal topUpChargeFee,
+            BigDecimal repaymentTotal) {
+        BigDecimal principal = topUpAmount == null ? BigDecimal.ZERO : topUpAmount.max(BigDecimal.ZERO);
+        BigDecimal months = BigDecimal.valueOf(Math.max(1, newRepaymentMonths));
+        BigDecimal rate = topUpInterestRate == null ? getInterestRate() : topUpInterestRate;
+        BigDecimal fee = topUpChargeFee == null ? BigDecimal.ZERO : topUpChargeFee.max(BigDecimal.ZERO);
+        BigDecimal restructuredBase = getBalance().add(principal);
+        BigDecimal newInterest = restructuredBase
+                .multiply(rate)
+                .multiply(months)
+                .divide(BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+        BigDecimal newBalance = restructuredBase.add(newInterest).add(fee);
+        this.amount = getAmount().add(principal);
+        this.interestRate = rate;
+        this.interestAmount = getInterestAmount().add(newInterest);
+        this.chargeFee = getChargeFee().add(fee);
+        this.totalPayable = (repaymentTotal == null ? BigDecimal.ZERO : repaymentTotal).add(newBalance);
+        this.balance = newBalance;
+        this.repaymentMonths = Math.max(1, newRepaymentMonths);
+        this.monthlyInstallment = this.balance.divide(months, 2, java.math.RoundingMode.HALF_UP);
+        this.status = "active";
+        this.stage = "Restructured Top-Up";
         this.updatedAt = Instant.now();
     }
 
@@ -438,11 +517,11 @@ public class Loan {
     }
 
     public BigDecimal getAmount() {
-        return amount;
+        return amount == null ? BigDecimal.ZERO : amount;
     }
 
     public BigDecimal getBalance() {
-        return balance;
+        return balance == null ? BigDecimal.ZERO : balance;
     }
 
     public BigDecimal getInterestRate() {
@@ -453,8 +532,12 @@ public class Loan {
         return interestAmount;
     }
 
+    public BigDecimal getChargeFee() {
+        return chargeFee == null ? BigDecimal.ZERO : chargeFee;
+    }
+
     public BigDecimal getTotalPayable() {
-        return totalPayable;
+        return totalPayable == null ? getAmount() : totalPayable;
     }
 
     public BigDecimal getMonthlyInstallment() {

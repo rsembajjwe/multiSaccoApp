@@ -9,8 +9,18 @@ android {
     namespace = "com.methaltech.sacco_member_app"
     packaging {
         resources {
-            excludes += "/META-INF/androidx/annotation/annotation/LICENSE.txt"
-            excludes += "/META-INF/androidx/annotation/annotation/LICENSE-*.txt"
+            pickFirsts += setOf(
+                "META-INF/androidx/annotation/annotation/LICENSE.txt",
+                "/META-INF/androidx/annotation/annotation/LICENSE.txt",
+            )
+            excludes += setOf(
+                "META-INF/androidx/annotation/annotation/LICENSE.txt",
+                "/META-INF/androidx/annotation/annotation/LICENSE.txt",
+                "META-INF/androidx/annotation/annotation/LICENSE-*.txt",
+                "/META-INF/androidx/annotation/annotation/LICENSE-*.txt",
+                "META-INF/androidx/annotation/**",
+                "/META-INF/androidx/annotation/**",
+            )
         }
     }
     compileSdk = flutter.compileSdkVersion

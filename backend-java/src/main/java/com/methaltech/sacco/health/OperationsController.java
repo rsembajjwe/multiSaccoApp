@@ -3,6 +3,7 @@ package com.methaltech.sacco.health;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuthService;
+import com.methaltech.sacco.notification.SmsWalletService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ class OperationsController {
 
     private final JdbcTemplate jdbcTemplate;
     private final AuthService authService;
+    private final SmsWalletService smsWalletService;
 
     @GetMapping("/status")
     ResponseEntity<?> status(
@@ -59,7 +61,12 @@ class OperationsController {
         financials.put("totalSavings", sum("SELECT COALESCE(SUM(savings_balance), 0) FROM members", tenantId));
         financials.put("totalShares", sum("SELECT COALESCE(SUM(shares_balance), 0) FROM members", tenantId));
         financials.put("totalWelfare", sum("SELECT COALESCE(SUM(welfare_balance), 0) FROM members", tenantId));
+        financials.put("memberFunds", memberFunds(tenantId));
         financials.put("loanPortfolio", sum("SELECT COALESCE(SUM(balance), 0) FROM loans WHERE status NOT IN ('closed', 'rejected')", tenantId));
+        if (!platformWide && tenantId != null) {
+            financials.put("smsBalance", smsWalletService.balance(tenantId));
+            financials.put("smsRate", smsWalletService.smsRate());
+        }
 
         List<Map<String, Object>> alerts = alerts(counts);
         Map<String, Object> response = new LinkedHashMap<>();
@@ -91,7 +98,6 @@ class OperationsController {
 
     private List<Map<String, Object>> alerts(Map<String, Object> counts) {
         List<Map<String, Object>> alerts = new ArrayList<>();
-        addAlert(alerts, "pending_financial_transactions", (long) counts.get("pendingFinancialTransactions"), "warning", "Financial postings are waiting for approval.");
         addAlert(alerts, "open_complaints", (long) counts.get("openComplaints"), "warning", "Member or service complaints are still open.");
         addAlert(alerts, "callback_exceptions", (long) counts.get("callbackExceptions"), "critical", "Mobile-money callbacks need operational review.");
         addAlert(alerts, "delivery_exceptions", (long) counts.get("deliveryExceptions"), "warning", "Notification deliveries need provider follow-up.");
@@ -105,6 +111,35 @@ class OperationsController {
                 "count", count,
                 "severity", severity,
                 "message", message));
+    }
+
+    private List<Map<String, Object>> memberFunds(String tenantId) {
+        String sql = """
+                SELECT ft.code, ft.name, ft.basis, ft.is_system,
+                       COALESCE(SUM(mfb.balance), 0) AS balance
+                FROM sacco_fund_types ft
+                LEFT JOIN member_fund_balances mfb
+                  ON mfb.tenant_id = ft.tenant_id
+                 AND mfb.fund_code = ft.code
+                WHERE ft.active = TRUE
+                """;
+        if (tenantId != null) {
+            sql += " AND ft.tenant_id = ?";
+        }
+        sql += """
+                GROUP BY ft.display_order, ft.code, ft.name, ft.basis, ft.is_system
+                ORDER BY ft.display_order ASC, ft.name ASC
+                """;
+        Object[] args = tenantId == null ? new Object[]{} : new Object[]{tenantId};
+        return jdbcTemplate.query(sql, args, (rs, rowNum) -> {
+            Map<String, Object> fund = new LinkedHashMap<>();
+            fund.put("code", rs.getString("code"));
+            fund.put("name", rs.getString("name"));
+            fund.put("basis", rs.getString("basis"));
+            fund.put("system", rs.getBoolean("is_system"));
+            fund.put("balance", rs.getBigDecimal("balance"));
+            return fund;
+        });
     }
 
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {

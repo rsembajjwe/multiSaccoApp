@@ -10,6 +10,7 @@ public interface MemberSubscriptionRepository extends JpaRepository<MemberSubscr
     List<MemberSubscription> findByTenantIdOrderByCreatedAtDesc(String tenantId);
 
     Optional<MemberSubscription> findFirstByMemberIdOrderByCreatedAtDesc(String memberId);
+    long countByTenantIdAndStatus(String tenantId, String status);
 
     /** Active memberships lapsed past their grace window — candidates to expire. */
     List<MemberSubscription> findByStatusAndExpiryLessThan(String status, LocalDate date);

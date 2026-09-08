@@ -13,6 +13,7 @@ public record LoanResponse(
         BigDecimal balance,
         BigDecimal interestRate,
         BigDecimal interestAmount,
+        BigDecimal chargeFee,
         BigDecimal totalPayable,
         BigDecimal monthlyInstallment,
         String status,
@@ -121,9 +122,10 @@ public record LoanResponse(
                 loan.getBalance(),
                 loan.getInterestRate(),
                 loan.getInterestAmount(),
+                loan.getChargeFee(),
                 loan.getTotalPayable(),
                 loan.getMonthlyInstallment(),
-                loan.getStatus(),
+                normalizedStatus(loan, arrearsInstallments),
                 loan.getStage(),
                 loan.getGuarantors(),
                 0,
@@ -167,5 +169,11 @@ public record LoanResponse(
                 loan.getRejectionReason(),
                 loan.getCreatedAt(),
                 loan.getUpdatedAt());
+    }
+
+    private static String normalizedStatus(Loan loan, int arrearsInstallments) {
+        if (loan.getBalance().compareTo(BigDecimal.ZERO) == 0) return "paid";
+        if (arrearsInstallments > 0) return "overdue";
+        return "active";
     }
 }

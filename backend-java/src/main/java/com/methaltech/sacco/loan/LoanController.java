@@ -8,6 +8,7 @@ import com.methaltech.sacco.api.PagedResponse;
 import com.methaltech.sacco.branch.Branch;
 import com.methaltech.sacco.branch.BranchRepository;
 import com.methaltech.sacco.tenant.CollectionMode;
+import com.methaltech.sacco.tenant.SaccoSettingsService;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
 import com.methaltech.sacco.accounting.AccountingPeriodService;
@@ -63,7 +64,7 @@ class LoanController {
             "School Fees Loan");
     private static final Set<String> DECISION_STATUSES = Set.of("approved", "rejected");
     private static final Set<String> REPAYMENT_CHANNELS = Set.of("cash", "bank", "mobile_money", "payroll");
-    private static final Set<String> IMPORT_STATUSES = Set.of("active", "closed");
+    private static final Set<String> IMPORT_STATUSES = Set.of("active", "paid");
 
     /** Loans up to this amount need a single approval. */
     @Value("${sacco.loans.approval.single-max:2000000}")
@@ -97,6 +98,7 @@ class LoanController {
     private final LoanGuarantorRepository guarantorRepository;
     private final LoanRepaymentRepository repaymentRepository;
     private final LoanRepaymentScheduleRepository scheduleRepository;
+    private final LoanExtensionRepository extensionRepository;
     private final LoanAppraisalRepository appraisalRepository;
     private final MemberRepository memberRepository;
     private final BranchRepository branchRepository;
@@ -104,6 +106,7 @@ class LoanController {
     private final AuditService auditService;
     private final AccountingPeriodService periodService;
     private final TenantService tenantService;
+    private final SaccoSettingsService saccoSettingsService;
     private final NotificationService notificationService;
 
     LoanController(
@@ -111,6 +114,7 @@ class LoanController {
             LoanGuarantorRepository guarantorRepository,
             LoanRepaymentRepository repaymentRepository,
             LoanRepaymentScheduleRepository scheduleRepository,
+            LoanExtensionRepository extensionRepository,
             LoanAppraisalRepository appraisalRepository,
             MemberRepository memberRepository,
             BranchRepository branchRepository,
@@ -118,11 +122,13 @@ class LoanController {
             AuditService auditService,
             AccountingPeriodService periodService,
             TenantService tenantService,
+            SaccoSettingsService saccoSettingsService,
             NotificationService notificationService) {
         this.loanRepository = loanRepository;
         this.guarantorRepository = guarantorRepository;
         this.repaymentRepository = repaymentRepository;
         this.scheduleRepository = scheduleRepository;
+        this.extensionRepository = extensionRepository;
         this.appraisalRepository = appraisalRepository;
         this.memberRepository = memberRepository;
         this.branchRepository = branchRepository;
@@ -130,6 +136,7 @@ class LoanController {
         this.auditService = auditService;
         this.periodService = periodService;
         this.tenantService = tenantService;
+        this.saccoSettingsService = saccoSettingsService;
         this.notificationService = notificationService;
     }
 
@@ -225,6 +232,14 @@ class LoanController {
         if (!canAccessMemberBranch(currentSession, tenantId, member)) {
             return branchAccessDenied();
         }
+        List<Loan> unclearedLoans = loanRepository.findByTenantIdAndMemberIdOrderByCreatedAtAsc(tenantId, member.getId())
+                .stream()
+                .filter(loan -> loan.getBalance().compareTo(BigDecimal.ZERO) > 0)
+                .toList();
+        if (!unclearedLoans.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "UNCLEARED_LOAN_EXISTS", "Member has an uncleared loan. Top up the existing loan instead."));
+        }
         if (!ALLOWED_PRODUCTS.contains(body.product())) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_LOAN_PRODUCT", "Unsupported loan product."));
@@ -237,6 +252,23 @@ class LoanController {
         if (body.repaymentMonths() == null || body.repaymentMonths() < 1 || body.repaymentMonths() > 60) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_PERIOD", "Repayment period must be between 1 and 60 months."));
+        }
+        BigDecimal chargeFee = Money.normalize(body.chargeFee() == null ? BigDecimal.ZERO : body.chargeFee());
+        if (chargeFee.compareTo(BigDecimal.ZERO) < 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_CHARGE_FEE", "Charge fee cannot be negative."));
+        }
+        BigDecimal interestRate = body.interestRate() == null
+                ? saccoSettingsService.loanInterestRateForTenant(tenantId).setScale(4, RoundingMode.HALF_UP)
+                : body.interestRate().setScale(4, RoundingMode.HALF_UP);
+        if (interestRate != null) {
+            if (body.interestRate() != null && !authService.hasPermission(currentSession.user(), "loans:terms")) {
+                return authService.permissionRequired("loans:terms");
+            }
+            if (interestRate.compareTo(BigDecimal.ZERO) < 0 || interestRate.compareTo(BigDecimal.valueOf(100)) > 0) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "INVALID_INTEREST_RATE", "Interest rate must be between 0 and 100 percent."));
+            }
         }
         String applicationSource = normalizedOrDefault(body.applicationSource(), "staff_captured_signed_form");
         if (!Set.of("staff_captured_signed_form", "staff_member_request").contains(applicationSource)) {
@@ -256,6 +288,8 @@ class LoanController {
                 member.getId(),
                 body.product(),
                 amount,
+                interestRate,
+                chargeFee,
                 dsr(amount, member.getSavingsBalance()),
                 body.repaymentMonths(),
                 body.purpose() == null ? "" : body.purpose().trim(),
@@ -268,6 +302,7 @@ class LoanController {
                 signedFormFileName,
                 currentSession.user().getId());
         loan = loanRepository.save(loan);
+        createRepaymentSchedule(loan);
 
         auditService.record(
                 tenantId,
@@ -774,6 +809,144 @@ class LoanController {
                         .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
     }
 
+    @GetMapping("/{loanId}/extensions")
+    ResponseEntity<?> loanExtensions(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:view")) {
+            return authService.permissionRequired("loans:view");
+        }
+
+        return loanRepository.findById(loanId)
+                .<ResponseEntity<?>>map(loan -> {
+                    if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
+                    return ResponseEntity.ok(ApiResponse.of(extensionRepository.findByLoanIdOrderByCreatedAtDesc(loanId)
+                            .stream()
+                            .map(LoanExtensionResponse::from)
+                            .toList()));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
+    }
+
+    @PostMapping("/{loanId}/extensions")
+    @Transactional
+    ResponseEntity<?> extendLoan(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId,
+            @Valid @RequestBody ExtendLoanRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:create")) {
+            return authService.permissionRequired("loans:create");
+        }
+
+        return loanRepository.findById(loanId)
+                .<ResponseEntity<?>>map(loan -> {
+                    if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
+                    if (loan.getBalance().compareTo(BigDecimal.ZERO) <= 0) {
+                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .body(ApiErrorResponse.of(409, "LOAN_ALREADY_PAID", "Paid loans cannot be extended."));
+                    }
+                    if (body.additionalMonths() == null || body.additionalMonths() < 1 || body.additionalMonths() > 60) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "INVALID_EXTENSION_PERIOD", "Extension must be between 1 and 60 months."));
+                    }
+                    BigDecimal chargeFee = Money.normalize(body.chargeFee() == null ? BigDecimal.ZERO : body.chargeFee());
+                    if (chargeFee.compareTo(BigDecimal.ZERO) < 0) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "INVALID_CHARGE_FEE", "Charge fee cannot be negative."));
+                    }
+
+                    LoanExtension extension = extensionRepository.save(new LoanExtension(
+                            "loan_ext_" + UUID.randomUUID(),
+                            loan.getTenantId(),
+                            loan.getId(),
+                            body.additionalMonths(),
+                            chargeFee,
+                            body.reason() == null ? "" : body.reason().trim(),
+                            body.requestedByMember() == null || body.requestedByMember(),
+                            currentSession.user().getId()));
+                    loan.extendTerm(body.additionalMonths(), chargeFee);
+                    Loan saved = loanRepository.save(loan);
+                    scheduleRepository.deleteByLoanId(saved.getId());
+                    createRepaymentSchedule(saved);
+                    auditService.record(
+                            saved.getTenantId(),
+                            currentSession.user(),
+                            "Recorded loan extension request",
+                            "loan_extension",
+                            extension.getId(),
+                            request.getRemoteAddr());
+                    return ResponseEntity.ok(ApiResponse.of(loanResponse(saved)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
+    }
+
+    @PostMapping("/{loanId}/top-ups")
+    @Transactional
+    ResponseEntity<?> topUpLoan(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String loanId,
+            @Valid @RequestBody TopUpLoanRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:create")) {
+            return authService.permissionRequired("loans:create");
+        }
+
+        return loanRepository.findById(loanId)
+                .<ResponseEntity<?>>map(loan -> {
+                    if (!canAccessLoan(currentSession, loan)) return loanAccessDenied(currentSession, loan);
+                    if (loan.getBalance().compareTo(BigDecimal.ZERO) <= 0) {
+                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                .body(ApiErrorResponse.of(409, "LOAN_ALREADY_PAID", "Paid loans cannot be topped up."));
+                    }
+                    BigDecimal amount = Money.normalize(body.amount());
+                    if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "INVALID_TOP_UP_AMOUNT", "Top-up amount must be greater than zero."));
+                    }
+                    if (body.repaymentMonths() == null || body.repaymentMonths() < 1 || body.repaymentMonths() > 60) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_PERIOD", "Restructured repayment period must be between 1 and 60 months."));
+                    }
+                    BigDecimal interestRate = body.interestRate() == null ? loan.getInterestRate() : body.interestRate().setScale(4, RoundingMode.HALF_UP);
+                    if (body.interestRate() != null && !authService.hasPermission(currentSession.user(), "loans:terms")) {
+                        return authService.permissionRequired("loans:terms");
+                    }
+                    if (interestRate.compareTo(BigDecimal.ZERO) < 0 || interestRate.compareTo(BigDecimal.valueOf(100)) > 0) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "INVALID_INTEREST_RATE", "Interest rate must be between 0 and 100 percent."));
+                    }
+                    BigDecimal chargeFee = Money.normalize(body.chargeFee() == null ? BigDecimal.ZERO : body.chargeFee());
+                    if (chargeFee.compareTo(BigDecimal.ZERO) < 0) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "INVALID_CHARGE_FEE", "Charge fee cannot be negative."));
+                    }
+                    BigDecimal repaymentTotal = repaymentRepository.totalAmountByLoanId(loan.getId());
+                    loan.topUp(amount, body.repaymentMonths(), interestRate, chargeFee, repaymentTotal);
+                    Loan saved = loanRepository.save(loan);
+                    scheduleRepository.deleteByLoanId(saved.getId());
+                    createRepaymentSchedule(saved);
+                    auditService.record(
+                            saved.getTenantId(),
+                            currentSession.user(),
+                            "Recorded loan top-up",
+                            "loan",
+                            saved.getId(),
+                            request.getRemoteAddr());
+                    return ResponseEntity.ok(ApiResponse.of(loanResponse(saved)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "LOAN_NOT_FOUND", "Loan not found.")));
+    }
+
     @GetMapping("/{loanId}/cover")
     ResponseEntity<?> loanCover(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -801,7 +974,7 @@ class LoanController {
         if (loan.getSecuredHoldAmount().compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
-        BigDecimal toRelease = "closed".equals(loan.getStatus()) ? loan.getSecuredHoldAmount() : repaymentAmount;
+        BigDecimal toRelease = "paid".equals(loan.getStatus()) ? loan.getSecuredHoldAmount() : repaymentAmount;
         BigDecimal released = loan.reduceSecuredHold(toRelease);
         if (released.compareTo(BigDecimal.ZERO) > 0) {
             memberRepository.findById(loan.getMemberId()).ifPresent(borrower -> {
@@ -812,7 +985,7 @@ class LoanController {
     }
 
     private void releaseGuaranteesIfLoanCleared(Loan loan) {
-        if (!"closed".equals(loan.getStatus()) || loan.getBalance().compareTo(BigDecimal.ZERO) > 0) {
+        if (!"paid".equals(loan.getStatus()) || loan.getBalance().compareTo(BigDecimal.ZERO) > 0) {
             return;
         }
         List<LoanGuarantor> acceptedGuarantors = guarantorRepository.findByLoanIdOrderByCreatedAtDesc(loan.getId())
@@ -1134,13 +1307,14 @@ class LoanController {
                 .toLocalDate()
                 .plusMonths(1);
         BigDecimal principalBase = loan.getAmount().divide(BigDecimal.valueOf(months), 2, RoundingMode.HALF_UP);
-        BigDecimal interestBase = loan.getInterestAmount().divide(BigDecimal.valueOf(months), 2, RoundingMode.HALF_UP);
+        BigDecimal chargeTotal = loan.getInterestAmount().add(loan.getChargeFee());
+        BigDecimal interestBase = chargeTotal.divide(BigDecimal.valueOf(months), 2, RoundingMode.HALF_UP);
         BigDecimal principalAllocated = BigDecimal.ZERO;
         BigDecimal interestAllocated = BigDecimal.ZERO;
         List<LoanRepaymentSchedule> schedules = new ArrayList<>();
         for (int installment = 1; installment <= months; installment++) {
             BigDecimal principalDue = installment == months ? loan.getAmount().subtract(principalAllocated) : principalBase;
-            BigDecimal interestDue = installment == months ? loan.getInterestAmount().subtract(interestAllocated) : interestBase;
+            BigDecimal interestDue = installment == months ? chargeTotal.subtract(interestAllocated) : interestBase;
             principalAllocated = principalAllocated.add(principalDue);
             interestAllocated = interestAllocated.add(interestDue);
             schedules.add(new LoanRepaymentSchedule(
@@ -1580,13 +1754,13 @@ class LoanController {
 
             String status = normalizedOrDefault(row.status(), "active");
             if (!IMPORT_STATUSES.contains(status)) {
-                errors.add(new LoanImportError(rowNumber, "status", "INVALID_LOAN_STATUS", "Imported loan status must be active or closed."));
+                errors.add(new LoanImportError(rowNumber, "status", "INVALID_LOAN_STATUS", "Imported loan status must be active or paid."));
             }
             if ("active".equals(status) && outstandingBalance.compareTo(BigDecimal.ZERO) <= 0) {
                 errors.add(new LoanImportError(rowNumber, "outstandingBalance", "ACTIVE_LOAN_NEEDS_BALANCE", "Active imported loans must have outstanding balance."));
             }
-            if ("closed".equals(status) && outstandingBalance.compareTo(BigDecimal.ZERO) != 0) {
-                errors.add(new LoanImportError(rowNumber, "outstandingBalance", "CLOSED_LOAN_HAS_BALANCE", "Closed imported loans must have zero outstanding balance."));
+            if ("paid".equals(status) && outstandingBalance.compareTo(BigDecimal.ZERO) != 0) {
+                errors.add(new LoanImportError(rowNumber, "outstandingBalance", "PAID_LOAN_HAS_BALANCE", "Paid imported loans must have zero outstanding balance."));
             }
 
             if (row.disbursedDate() != null && !row.disbursedDate().isBlank()) {
@@ -1709,8 +1883,8 @@ class LoanController {
             return new LoanImportMatch(null, "loanDisbursedDate", "LOAN_MATCH_AMBIGUOUS", "Multiple matching loans found; include loanDisbursedDate.");
         }
         Loan loan = candidates.get(0);
-        if (!Set.of("active", "closed").contains(loan.getStatus())) {
-            return new LoanImportMatch(null, "status", "LOAN_NOT_MIGRATED", "Repayment history can only be imported for active or closed loans.");
+        if (!Set.of("active", "paid").contains(loan.getStatus())) {
+            return new LoanImportMatch(null, "status", "LOAN_NOT_MIGRATED", "Repayment history can only be imported for active or paid loans.");
         }
         return new LoanImportMatch(loan, null, null, null);
     }
@@ -1861,7 +2035,7 @@ class LoanController {
                 .stream()
                 .filter(request -> excludedGuarantorId == null || !request.getId().equals(excludedGuarantorId))
                 .filter(request -> loanRepository.findById(request.getLoanId())
-                        .filter(loan -> !"closed".equals(loan.getStatus()))
+                        .filter(loan -> !"paid".equals(loan.getStatus()))
                         .filter(loan -> loan.getBalance().compareTo(BigDecimal.ZERO) > 0)
                         .isPresent())
                 .map(LoanGuarantor::getGuaranteedAmount)
@@ -1978,6 +2152,8 @@ class LoanController {
             @NotBlank String memberId,
             @NotBlank String product,
             @NotNull BigDecimal amount,
+            BigDecimal interestRate,
+            BigDecimal chargeFee,
             Integer repaymentMonths,
             String purpose,
             String applicationSource,
@@ -2006,6 +2182,21 @@ class LoanController {
     }
 
     record CreateGuarantorRequest(@NotBlank String memberId, BigDecimal guaranteedAmount) {
+    }
+
+    record ExtendLoanRequest(
+            @NotNull Integer additionalMonths,
+            BigDecimal chargeFee,
+            String reason,
+            Boolean requestedByMember) {
+    }
+
+    record TopUpLoanRequest(
+            @NotNull BigDecimal amount,
+            Integer repaymentMonths,
+            BigDecimal interestRate,
+            BigDecimal chargeFee,
+            String reason) {
     }
 
     record GuarantorSignatureRequest(String signatureReference) {

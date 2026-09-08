@@ -50,6 +50,12 @@ class SaccoProfile {
     @Column(name = "membership_subscription_amount")
     private BigDecimal membershipSubscriptionAmount;
 
+    @Column(name = "loan_interest_rate")
+    private BigDecimal loanInterestRate;
+
+    @Column(name = "logo_data_url")
+    private String logoDataUrl;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
@@ -81,6 +87,8 @@ class SaccoProfile {
         this.membershipCalendarStartMonth = 1;
         this.membershipCalendarStartDay = 1;
         this.membershipSubscriptionAmount = BigDecimal.valueOf(5000);
+        this.loanInterestRate = BigDecimal.valueOf(1.5000);
+        this.logoDataUrl = "";
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
@@ -110,6 +118,16 @@ class SaccoProfile {
         this.membershipCalendarStartMonth = startMonth;
         this.membershipCalendarStartDay = startDay;
         this.membershipSubscriptionAmount = amount == null || amount.signum() <= 0 ? BigDecimal.valueOf(5000) : amount;
+        this.updatedAt = Instant.now();
+    }
+
+    void updateLoanInterestRate(BigDecimal loanInterestRate) {
+        this.loanInterestRate = loanInterestRate == null ? BigDecimal.valueOf(1.5000) : loanInterestRate;
+        this.updatedAt = Instant.now();
+    }
+
+    void updateBranding(String logoDataUrl) {
+        this.logoDataUrl = logoDataUrl == null ? "" : logoDataUrl;
         this.updatedAt = Instant.now();
     }
 }

@@ -375,6 +375,20 @@ class TenantController {
                 normalizeCalendarMonth(body.membershipCalendarStartMonth(), profile.getMembershipCalendarStartMonth()),
                 normalizeCalendarDay(body.membershipCalendarStartDay(), profile.getMembershipCalendarStartDay()),
                 normalizePositiveAmount(body.membershipSubscriptionAmount(), profile.getMembershipSubscriptionAmount()));
+        BigDecimal loanInterestRate = normalizeInterestRate(body.loanInterestRate(), profile.getLoanInterestRate());
+        if (loanInterestRate == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_INTEREST_RATE", "Loan interest rate must be between 0 and 100 percent."));
+        }
+        profile.updateLoanInterestRate(loanInterestRate);
+        if (body.logoDataUrl() != null) {
+            String logoDataUrl = normalizeLogoDataUrl(body.logoDataUrl());
+            if (logoDataUrl == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "INVALID_LOGO", "Logo must be a PNG, JPEG, or WebP image under 512 KB."));
+            }
+            profile.updateBranding(logoDataUrl);
+        }
         SaccoProfile savedProfile = saccoProfileRepository.save(profile);
         auditService.record(
                 tenantId,
@@ -435,6 +449,25 @@ class TenantController {
     private BigDecimal normalizePositiveAmount(BigDecimal requestedValue, BigDecimal currentValue) {
         BigDecimal value = requestedValue == null ? (currentValue == null ? BigDecimal.valueOf(5000) : currentValue) : requestedValue;
         return value.signum() <= 0 ? BigDecimal.valueOf(5000) : value;
+    }
+
+    private BigDecimal normalizeInterestRate(BigDecimal requestedValue, BigDecimal currentValue) {
+        BigDecimal value = requestedValue == null ? (currentValue == null ? BigDecimal.valueOf(1.5000) : currentValue) : requestedValue;
+        if (value.signum() < 0 || value.compareTo(BigDecimal.valueOf(100)) > 0) return null;
+        return value.setScale(4, java.math.RoundingMode.HALF_UP);
+    }
+
+    private String normalizeLogoDataUrl(String requestedValue) {
+        String value = requestedValue == null ? "" : requestedValue.trim();
+        if (value.isEmpty()) return "";
+        if (value.length() > 700_000) return null;
+        String lower = value.toLowerCase(Locale.ROOT);
+        if (!lower.startsWith("data:image/png;base64,")
+                && !lower.startsWith("data:image/jpeg;base64,")
+                && !lower.startsWith("data:image/webp;base64,")) {
+            return null;
+        }
+        return value;
     }
 
     private String address(String district, String parish, String village, String memberRange) {
@@ -523,6 +556,8 @@ class TenantController {
             String membershipDuesPeriod,
             Integer membershipCalendarStartMonth,
             Integer membershipCalendarStartDay,
-            BigDecimal membershipSubscriptionAmount) {
+            BigDecimal membershipSubscriptionAmount,
+            BigDecimal loanInterestRate,
+            String logoDataUrl) {
     }
 }

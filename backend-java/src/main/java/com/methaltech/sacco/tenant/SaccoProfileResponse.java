@@ -18,6 +18,8 @@ record SaccoProfileResponse(
         Integer membershipCalendarStartMonth,
         Integer membershipCalendarStartDay,
         BigDecimal membershipSubscriptionAmount,
+        BigDecimal loanInterestRate,
+        String logoDataUrl,
         Instant createdAt,
         Instant updatedAt) {
 
@@ -37,6 +39,8 @@ record SaccoProfileResponse(
                 profile.getMembershipCalendarStartMonth(),
                 profile.getMembershipCalendarStartDay(),
                 profile.getMembershipSubscriptionAmount(),
+                profile.getLoanInterestRate(),
+                profile.getLogoDataUrl(),
                 profile.getCreatedAt(),
                 profile.getUpdatedAt());
     }
