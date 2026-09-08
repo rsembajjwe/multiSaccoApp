@@ -1294,7 +1294,7 @@ class MobileMoneyPaymentRequest {
       status != 'expired' &&
       status != 'cancelled';
 
-  bool get canCloseManually => status != 'posted';
+  bool get canCloseManually => canRefresh;
 
   factory MobileMoneyPaymentRequest.fromJson(Map<String, dynamic> j) =>
       MobileMoneyPaymentRequest(

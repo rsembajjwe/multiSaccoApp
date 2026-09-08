@@ -686,6 +686,7 @@ class _CloseRequestDialog extends StatefulWidget {
 
 class _CloseRequestDialogState extends State<_CloseRequestDialog> {
   final _controller = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
   @override
   void dispose() {
@@ -697,13 +698,19 @@ class _CloseRequestDialogState extends State<_CloseRequestDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text('Mark ${Fmt.label(widget.status)}'),
-      content: TextField(
-        controller: _controller,
-        minLines: 2,
-        maxLines: 4,
-        decoration: const InputDecoration(
-          labelText: 'Reason',
-          hintText: 'Add the reason recorded during reconciliation',
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _controller,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Reason',
+            hintText: 'Add the reason recorded during reconciliation',
+          ),
+          validator: (v) => v == null || v.trim().length < 8
+              ? 'Enter a clear reconciliation reason.'
+              : null,
         ),
       ),
       actions: [
@@ -712,7 +719,11 @@ class _CloseRequestDialogState extends State<_CloseRequestDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          onPressed: () {
+            if (_formKey.currentState!.validate()) {
+              Navigator.pop(context, _controller.text.trim());
+            }
+          },
           child: const Text('Save'),
         ),
       ],
