@@ -244,6 +244,40 @@ public class NotificationService {
         staffPushNotifier.notifyStaff(saccoCode, title, message);
     }
 
+    /**
+     * Notifies savings-transfer approvers (administrators and the chairperson) that a transfer or
+     * group deduction is awaiting their approval. The maker is skipped, since they cannot approve
+     * their own transfer. Persists a per-officer inbox notification plus in-app/SMS/email deliveries.
+     */
+    public void notifyStaffOfSavingsTransfer(
+            String tenantId, String resourceId, BigDecimal amount, int memberCount, String makerUserId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return;
+        }
+        String title = "Savings transfer to approve";
+        String amountLabel = formattedAmount(tenantId, amount);
+        String message = memberCount > 1
+                ? "A group savings deduction of " + amountLabel + " for " + memberCount + " members needs approval."
+                : "A savings transfer of " + amountLabel + " needs a second officer's approval.";
+        for (com.methaltech.sacco.identity.StaffNotificationRecipient recipient
+                : staffNotificationRecipientService.saccoSavingsTransferApproverRecipients(tenantId)) {
+            if (makerUserId != null && makerUserId.equals(recipient.userId())) {
+                continue;
+            }
+            Notification notification = notificationRepository.save(new Notification(
+                    "notification_" + UUID.randomUUID(),
+                    tenantId,
+                    null,
+                    recipient.userId(),
+                    "savings_transfer_pending",
+                    title,
+                    message,
+                    "savings_transfer",
+                    resourceId));
+            createStaffDeliveries(notification, recipient, title, message);
+        }
+    }
+
     public Notification notifyComplaintReply(Member member, String complaintId, String subject, String reply) {
         String title = "SACCO admin replied";
         String message = "Reply on " + subject + ": " + reply;

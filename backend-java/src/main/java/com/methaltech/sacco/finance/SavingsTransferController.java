@@ -6,6 +6,7 @@ import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
+import com.methaltech.sacco.notification.NotificationService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ class SavingsTransferController {
     private final MemberRepository memberRepository;
     private final AuthService authService;
     private final AuditService auditService;
+    private final NotificationService notificationService;
 
     @GetMapping
     ResponseEntity<?> list(
@@ -97,6 +99,7 @@ class SavingsTransferController {
                 trimOrNull(body.loanId()), null, "SAVTR-" + UUID.randomUUID(), trimOrNull(body.reason()),
                 trimOrNull(body.authorizationReference()), null, session.user().getId()));
         auditService.record(tenantId, session.user(), "Created savings transfer " + transfer.getReference(), "savings_transfer", transfer.getId(), request.getRemoteAddr());
+        notificationService.notifyStaffOfSavingsTransfer(tenantId, transfer.getId(), transfer.getAmount(), 1, session.user().getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(SavingsTransferResponse.from(transfer)));
     }
 
@@ -154,6 +157,7 @@ class SavingsTransferController {
         auditService.record(tenantId, session.user(),
                 "Created group savings deduction " + batchId + " for " + created.size() + " member(s)",
                 "savings_transfer", batchId, request.getRemoteAddr());
+        notificationService.notifyStaffOfSavingsTransfer(tenantId, batchId, amount, created.size(), session.user().getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(new GroupDeductionResponse(batchId, created.size(), created)));
     }
 
