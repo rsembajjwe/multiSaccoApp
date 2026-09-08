@@ -26,6 +26,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Instant;
@@ -1007,7 +1008,7 @@ class FinancialTransactionController {
     record UpdateTransactionStatusRequest(@NotBlank String status, String reason) {
     }
 
-    record ReverseTransactionRequest(@NotBlank String reason) {
+    record ReverseTransactionRequest(@NotBlank @Size(min = 8, max = 240) String reason) {
     }
 
     record OpeningBalanceImportTemplateResponse(

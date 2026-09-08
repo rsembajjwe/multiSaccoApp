@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/widgets/confirm_action.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -118,6 +119,7 @@ class _ReverseButtonState extends ConsumerState<_ReverseButton> {
 
   Future<void> _reverse() async {
     final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
     final reason = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -129,10 +131,21 @@ class _ReverseButtonState extends ConsumerState<_ReverseButton> {
             const Text(
                 'This posts a reversing entry. Give a reason for the audit trail.'),
             const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: 'Reason'),
+            Form(
+              key: formKey,
+              child: TextFormField(
+                controller: controller,
+                autofocus: true,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Reason',
+                  hintText: 'Give the audit reason for this reversal',
+                ),
+                validator: (v) => v == null || v.trim().length < 8
+                    ? 'Enter a clear reversal reason.'
+                    : null,
+              ),
             ),
           ],
         ),
@@ -143,8 +156,9 @@ class _ReverseButtonState extends ConsumerState<_ReverseButton> {
             style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFFB91C1C)),
             onPressed: () {
-              final r = controller.text.trim();
-              if (r.isNotEmpty) Navigator.pop(ctx, r);
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(ctx, controller.text.trim());
+              }
             },
             child: const Text('Reverse'),
           ),
@@ -152,6 +166,15 @@ class _ReverseButtonState extends ConsumerState<_ReverseButton> {
       ),
     );
     if (reason == null || reason.isEmpty) return;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Reverse this transaction?',
+      message:
+          'Post a reversal for ${Fmt.money(widget.txn.amount)}. This changes the member balance and creates an audit entry.',
+      confirmLabel: 'Reverse',
+      icon: Icons.undo,
+    );
+    if (!confirmed || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref
