@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/widgets/confirm_action.dart';
 import '../../core/widgets/paged_list.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
@@ -155,19 +156,41 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate() || _memberId == null) return;
+    final members =
+        ref.read(membersProvider('')).asData?.value ?? const <Member>[];
+    final loans = ref.read(loansProvider('')).asData?.value ?? const <Loan>[];
+    final unclearedLoan = _unclearedLoan(loans);
+    final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
+    final months = int.parse(_months.text.trim());
+    final interestRate = _interestRate.text.trim().isEmpty
+        ? null
+        : num.parse(_interestRate.text.trim().replaceAll(',', ''));
+    final chargeFee = num.parse(_chargeFee.text.trim().replaceAll(',', ''));
+    final borrowerName = _selectedBorrower(members)?.fullName ?? 'the borrower';
+    final confirmed = await confirmAction(
+      context,
+      title: unclearedLoan == null ? 'Save loan data?' : 'Top up loan?',
+      message: unclearedLoan == null
+          ? 'Create a ${Fmt.money(amount)} $_product for $borrowerName over '
+              '$months month(s), charge fee ${Fmt.money(chargeFee)}, with '
+              '${_guarantorIds.length} guarantor(s).'
+          : 'Top up and restructure ${Fmt.label(unclearedLoan.product)} for '
+              '$borrowerName. Existing balance is ${Fmt.money(unclearedLoan.balance)}, '
+              'top-up is ${Fmt.money(amount)}, new term is $months month(s), '
+              'charge fee is ${Fmt.money(chargeFee)}.',
+      confirmLabel: unclearedLoan == null ? 'Save loan' : 'Top up loan',
+      icon: Icons.account_balance_outlined,
+    );
+    if (!confirmed || !mounted) return;
     setState(() => _busy = true);
     try {
-      final loans = ref.read(loansProvider('')).asData?.value ?? const <Loan>[];
-      final unclearedLoan = _unclearedLoan(loans);
       if (unclearedLoan != null) {
         await ref.read(adminRepositoryProvider).topUpLoan(
               loanId: unclearedLoan.id,
-              amount: num.parse(_amount.text.trim().replaceAll(',', '')),
-              repaymentMonths: int.parse(_months.text.trim()),
-              interestRate: _interestRate.text.trim().isEmpty
-                  ? null
-                  : num.parse(_interestRate.text.trim().replaceAll(',', '')),
-              chargeFee: num.parse(_chargeFee.text.trim().replaceAll(',', '')),
+              amount: amount,
+              repaymentMonths: months,
+              interestRate: interestRate,
+              chargeFee: chargeFee,
               reason: _purpose.text,
             );
         ref.invalidate(loansProvider(''));
@@ -185,12 +208,10 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
       final loan = await ref.read(adminRepositoryProvider).createLoan(
             memberId: _memberId!,
             product: _product,
-            amount: num.parse(_amount.text.trim().replaceAll(',', '')),
-            interestRate: _interestRate.text.trim().isEmpty
-                ? null
-                : num.parse(_interestRate.text.trim().replaceAll(',', '')),
-            chargeFee: num.parse(_chargeFee.text.trim().replaceAll(',', '')),
-            repaymentMonths: int.parse(_months.text.trim()),
+            amount: amount,
+            interestRate: interestRate,
+            chargeFee: chargeFee,
+            repaymentMonths: months,
             purpose: _purpose.text,
             signedFormReference: _formRef.text,
           );
@@ -395,6 +416,9 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
                 maxLines: 3,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(labelText: 'Purpose'),
+                validator: (v) => v == null || v.trim().length < 3
+                    ? 'Enter a loan purpose.'
+                    : null,
               ),
               const SizedBox(height: 10),
               TextFormField(
