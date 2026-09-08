@@ -1,6 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 abstract class StaffPushTopics {
+  Future<void> requestPermission();
   Future<void> subscribeStaff(String saccoCode);
   Future<void> unsubscribeStaff(String saccoCode);
 }
@@ -10,12 +11,14 @@ abstract class StaffPushTopics {
 /// staff-facing alerts to that topic (no device-token storage needed).
 class PushService implements StaffPushTopics {
   final FirebaseMessaging _fm = FirebaseMessaging.instance;
+  static const _pushTimeout = Duration(seconds: 2);
 
+  @override
   Future<void> requestPermission() async {
     try {
-      await _fm.requestPermission();
+      await _fm.requestPermission().timeout(_pushTimeout);
     } catch (_) {
-      // permission dialog unavailable / Firebase not ready — ignore
+      // Permission dialog unavailable / Firebase not ready; login must continue.
     }
   }
 
@@ -23,7 +26,7 @@ class PushService implements StaffPushTopics {
   Future<void> subscribeStaff(String saccoCode) async {
     if (saccoCode.isEmpty) return;
     try {
-      await _fm.subscribeToTopic('staff_$saccoCode');
+      await _fm.subscribeToTopic('staff_$saccoCode').timeout(_pushTimeout);
     } catch (_) {}
   }
 
@@ -31,7 +34,7 @@ class PushService implements StaffPushTopics {
   Future<void> unsubscribeStaff(String saccoCode) async {
     if (saccoCode.isEmpty) return;
     try {
-      await _fm.unsubscribeFromTopic('staff_$saccoCode');
+      await _fm.unsubscribeFromTopic('staff_$saccoCode').timeout(_pushTimeout);
     } catch (_) {}
   }
 }
