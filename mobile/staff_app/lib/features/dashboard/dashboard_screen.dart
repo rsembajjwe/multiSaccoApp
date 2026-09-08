@@ -159,6 +159,7 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 const _StatusSummary(),
               ],
+              if (s.can('finance-source:view')) const _MobileMoneyBalances(),
               const SizedBox(height: 24),
               Text('Operations',
                   style: Theme.of(context).textTheme.titleMedium),
@@ -706,6 +707,77 @@ class _ComingSoon extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact MTN/Airtel float balances for leadership (treasurer, chairperson,
+/// admins) on the dashboard. Renders nothing when no provider is configured.
+class _MobileMoneyBalances extends ConsumerWidget {
+  const _MobileMoneyBalances();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final balances = ref.watch(mobileMoneyBalancesProvider).asData?.value ??
+        const <MobileMoneyBalance>[];
+    if (balances.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Text('Mobile money balances',
+            style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
+        for (final b in balances)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _MmBalanceRow(balance: b),
+          ),
+      ],
+    );
+  }
+}
+
+class _MmBalanceRow extends StatelessWidget {
+  const _MmBalanceRow({required this.balance});
+  final MobileMoneyBalance balance;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final ok = balance.available && balance.balance != null;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.phone_android_outlined,
+                  color: scheme.primary, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(balance.label,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(width: 8),
+            ok
+                ? Text(
+                    '${balance.currency ?? ''} ${Fmt.number(balance.balance)}'
+                        .trim(),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w800, fontSize: 14))
+                : Text('Unavailable',
+                    style: TextStyle(fontSize: 12, color: scheme.error)),
+          ],
         ),
       ),
     );
