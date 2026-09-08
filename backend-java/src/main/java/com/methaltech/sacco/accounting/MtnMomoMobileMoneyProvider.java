@@ -1,5 +1,6 @@
 package com.methaltech.sacco.accounting;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -47,6 +48,37 @@ class MtnMomoMobileMoneyProvider implements MobileMoneyProvider {
     @Override
     public String providerId() {
         return "mtn_momo";
+    }
+
+    @Override
+    public String label() {
+        return "MTN MoMo";
+    }
+
+    @Override
+    public MobileMoneyBalanceResult queryBalance() {
+        String token = collectionToken();
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = resilience.protectIdempotent(CIRCUIT, () -> restClient.get()
+                    .uri("/collection/v1_0/account/balance")
+                    .header("Authorization", "Bearer " + token)
+                    .header("X-Target-Environment", targetEnvironment)
+                    .header("Ocp-Apim-Subscription-Key", subscriptionKey)
+                    .retrieve()
+                    .body(Map.class));
+            Object rawAmount = body == null ? null : body.get("availableBalance");
+            Object rawCurrency = body == null ? null : body.get("currency");
+            BigDecimal amount = rawAmount == null ? null : new BigDecimal(rawAmount.toString());
+            String currency = rawCurrency == null ? null : rawCurrency.toString();
+            return MobileMoneyBalanceResult.ok(providerId(), label(), amount, currency);
+        } catch (RestClientResponseException exception) {
+            return MobileMoneyBalanceResult.error(providerId(), label(),
+                    "MTN MoMo balance check failed: HTTP " + exception.getStatusCode().value());
+        } catch (RestClientException | NumberFormatException exception) {
+            return MobileMoneyBalanceResult.error(providerId(), label(),
+                    "MTN MoMo balance check could not be completed.");
+        }
     }
 
     @Override

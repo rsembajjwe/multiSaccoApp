@@ -1,5 +1,6 @@
 package com.methaltech.sacco.accounting;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
@@ -51,6 +52,39 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
     @Override
     public String providerId() {
         return "airtel_money";
+    }
+
+    @Override
+    public String label() {
+        return "Airtel Money";
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public MobileMoneyBalanceResult queryBalance() {
+        String token = accessToken();
+        try {
+            Map<String, Object> body = resilience.protectIdempotent(CIRCUIT, () -> restClient.get()
+                    .uri("/standard/v1/users/balance")
+                    .header("Authorization", "Bearer " + token)
+                    .header("X-Country", country())
+                    .header("X-Currency", currency(null))
+                    .retrieve()
+                    .body(Map.class));
+            Object rawData = body == null ? null : body.get("data");
+            Map<String, Object> data = rawData instanceof Map ? (Map<String, Object>) rawData : null;
+            Object rawAmount = data == null ? null : data.get("balance");
+            Object rawCurrency = data == null ? null : data.get("currency");
+            BigDecimal amount = rawAmount == null ? null : new BigDecimal(rawAmount.toString());
+            String currency = rawCurrency == null ? currency(null) : rawCurrency.toString();
+            return MobileMoneyBalanceResult.ok(providerId(), label(), amount, currency);
+        } catch (RestClientResponseException exception) {
+            return MobileMoneyBalanceResult.error(providerId(), label(),
+                    "Airtel Money balance check failed: HTTP " + exception.getStatusCode().value());
+        } catch (RestClientException | NumberFormatException exception) {
+            return MobileMoneyBalanceResult.error(providerId(), label(),
+                    "Airtel Money balance check could not be completed.");
+        }
     }
 
     @Override

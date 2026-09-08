@@ -458,6 +458,12 @@ class AdminRepository {
     return rows.map(MobileMoneyCallback.fromJson).toList();
   }
 
+  /// Live MTN/Airtel account (float) balances for configured providers.
+  Future<List<MobileMoneyBalance>> mobileMoneyBalances() async {
+    final rows = await _api.getList('/integrations/mobile-money/balances');
+    return rows.map(MobileMoneyBalance.fromJson).toList();
+  }
+
   Future<MobileMoneyPaymentRequest> refreshMobileMoneyProviderStatus(
       String requestId) async {
     final data = await _api

@@ -319,6 +319,12 @@ final mobileMoneyCallbacksProvider =
   (ref) => ref.watch(adminRepositoryProvider).mobileMoneyCallbacks(),
 );
 
+/// Live MTN/Airtel provider account balances (configured providers only).
+final mobileMoneyBalancesProvider =
+    FutureProvider.autoDispose<List<MobileMoneyBalance>>(
+  (ref) => ref.watch(adminRepositoryProvider).mobileMoneyBalances(),
+);
+
 /// SACCO-wide cash reconciliation.
 final reconciliationProvider = FutureProvider.autoDispose<ReconciliationReport>(
   (ref) => ref.watch(adminRepositoryProvider).reconciliation(),

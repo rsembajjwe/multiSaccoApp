@@ -94,7 +94,7 @@ class _MobileMoneyScreenState extends ConsumerState<MobileMoneyScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(mobileMoneyPaymentRequestsProvider);
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Mobile Money'),
@@ -102,6 +102,7 @@ class _MobileMoneyScreenState extends ConsumerState<MobileMoneyScreen> {
             tabs: [
               Tab(text: 'Requests'),
               Tab(text: 'Callbacks'),
+              Tab(text: 'Balances'),
             ],
           ),
         ),
@@ -175,6 +176,7 @@ class _MobileMoneyScreenState extends ConsumerState<MobileMoneyScreen> {
               ],
             ),
             const _CallbacksTab(),
+            const _BalancesTab(),
           ],
         ),
       ),
@@ -675,6 +677,104 @@ class _CloseRequestDialogState extends State<_CloseRequestDialog> {
           child: const Text('Save'),
         ),
       ],
+    );
+  }
+}
+
+
+/// Live MTN / Airtel account (float) balances for configured providers.
+/// Added alongside Codex's mobile-money screen (with consent).
+class _BalancesTab extends ConsumerWidget {
+  const _BalancesTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(mobileMoneyBalancesProvider);
+    return async.when(
+      loading: () => const ListSkeleton(),
+      error: (e, _) => ErrorRetry(
+        message: 'Could not load provider balances.',
+        detail: '$e',
+        onRetry: () => ref.invalidate(mobileMoneyBalancesProvider),
+      ),
+      data: (balances) {
+        if (balances.isEmpty) {
+          return const EmptyState(
+            icon: Icons.account_balance_wallet_outlined,
+            message:
+                'No mobile-money provider is configured for balance lookup.',
+          );
+        }
+        return RefreshIndicator(
+          onRefresh: () async => ref.invalidate(mobileMoneyBalancesProvider),
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            itemCount: balances.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (_, i) => _BalanceCard(balance: balances[i]),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _BalanceCard extends StatelessWidget {
+  const _BalanceCard({required this.balance});
+  final MobileMoneyBalance balance;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final ok = balance.available && balance.balance != null;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.phone_android_outlined,
+                  color: scheme.primary, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(balance.label,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  if (ok)
+                    Text(
+                      '${balance.currency ?? ''} ${Fmt.number(balance.balance)}'
+                          .trim(),
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w800),
+                    )
+                  else
+                    Text(
+                      balance.message ?? 'Balance unavailable.',
+                      style: TextStyle(fontSize: 12.5, color: scheme.error),
+                    ),
+                  if (balance.checkedAt != null && ok) ...[
+                    const SizedBox(height: 2),
+                    Text('As of ${Fmt.dateTime(balance.checkedAt)}',
+                        style:
+                            TextStyle(fontSize: 11, color: scheme.outline)),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -1213,6 +1213,37 @@ class AppNotification {
       );
 }
 
+class MobileMoneyBalance {
+  const MobileMoneyBalance({
+    required this.providerId,
+    required this.label,
+    required this.available,
+    this.balance,
+    this.currency,
+    this.message,
+    this.checkedAt,
+  });
+
+  final String providerId;
+  final String label;
+  final bool available;
+  final num? balance;
+  final String? currency;
+  final String? message;
+  final String? checkedAt;
+
+  factory MobileMoneyBalance.fromJson(Map<String, dynamic> j) =>
+      MobileMoneyBalance(
+        providerId: _str(j['providerId']),
+        label: _str(j['label']),
+        available: j['available'] == true,
+        balance: j['balance'] == null ? null : _num(j['balance']),
+        currency: _strn(j['currency']),
+        message: _strn(j['message']),
+        checkedAt: _strn(j['checkedAt']),
+      );
+}
+
 /// A mobile-money payment request initiated by a member or staff prompt.
 class MobileMoneyPaymentRequest {
   const MobileMoneyPaymentRequest({

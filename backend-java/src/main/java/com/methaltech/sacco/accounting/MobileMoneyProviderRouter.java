@@ -63,6 +63,25 @@ public class MobileMoneyProviderRouter {
         return defaultProvider;
     }
 
+    /** Live account/float balances for every configured provider that supports a balance lookup
+     *  (currently MTN and Airtel). Unconfigured or unsupported providers are omitted, so an empty
+     *  list means no provider is both configured and balance-capable. */
+    public List<MobileMoneyBalanceResult> balances() {
+        return providersById.values().stream()
+                .filter(MobileMoneyProvider::isConfigured)
+                .map(provider -> {
+                    try {
+                        return provider.queryBalance();
+                    } catch (RuntimeException exception) {
+                        return MobileMoneyBalanceResult.error(
+                                provider.providerId(), provider.label(), "Balance check could not be completed.");
+                    }
+                })
+                .filter(MobileMoneyBalanceResult::supported)
+                .sorted(java.util.Comparator.comparing(MobileMoneyBalanceResult::label))
+                .toList();
+    }
+
     public record PaymentProviderOption(String network, String label, String providerId, boolean available) {
     }
 
