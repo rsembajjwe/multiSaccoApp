@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/widgets/confirm_action.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
@@ -32,6 +33,15 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       builder: (_) => const _PhoneDialog(title: 'Platform subscription payment'),
     );
     if (payment == null || payment.phone.trim().isEmpty) return;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Send platform payment prompt?',
+      message:
+          'Send a ${Fmt.money(payAmount)} ${payment.provider.toUpperCase()} mobile money prompt to ${payment.phone.trim()} for the SACCO platform subscription.',
+      confirmLabel: 'Send prompt',
+      icon: Icons.account_balance_wallet_outlined,
+    );
+    if (!confirmed || !mounted) return;
     setState(() => _busy = true);
     try {
       final request = await ref
@@ -57,6 +67,18 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
   }
 
   Future<void> _pay(Subscription sub, {num? amount, int? memberSlots}) async {
+    final payAmount = memberSlots != null && memberSlots > 0
+        ? sub.unitPrice * memberSlots
+        : (amount ?? sub.balanceDue);
+    final confirmed = await confirmAction(
+      context,
+      title: 'Record received payment?',
+      message:
+          'Record ${Fmt.money(payAmount)} as already received for this SACCO platform subscription.',
+      confirmLabel: 'Record payment',
+      icon: Icons.edit_note_outlined,
+    );
+    if (!confirmed || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref

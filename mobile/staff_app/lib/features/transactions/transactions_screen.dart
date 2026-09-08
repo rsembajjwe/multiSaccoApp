@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/widgets/confirm_action.dart';
 import '../../core/widgets/paged_list.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
@@ -166,9 +167,32 @@ class _SavingsDepositSheetState extends ConsumerState<_SavingsDepositSheet> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate() || _memberId == null) return;
+    final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
+    final members =
+        ref.read(membersProvider('')).asData?.value ?? const <Member>[];
+    Member? selectedMember;
+    for (final member in members) {
+      if (member.id == _memberId) {
+        selectedMember = member;
+        break;
+      }
+    }
+    final memberName = selectedMember?.fullName ?? 'the selected member';
+    final confirmed = await confirmAction(
+      context,
+      title: _mode == 'cash' ? 'Post cash savings?' : 'Send payment prompt?',
+      message: _mode == 'cash'
+          ? 'Post ${Fmt.money(amount)} as cash savings for $memberName.'
+          : 'Send a ${Fmt.money(amount)} ${_provider.toUpperCase()} mobile '
+              'money prompt to ${_phone.text.trim()} for $memberName.',
+      confirmLabel: _mode == 'cash' ? 'Post savings' : 'Send prompt',
+      icon: _mode == 'cash'
+          ? Icons.savings_outlined
+          : Icons.send_to_mobile_outlined,
+    );
+    if (!confirmed || !mounted) return;
     setState(() => _busy = true);
     try {
-      final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
       if (_mode == 'cash') {
         await ref.read(adminRepositoryProvider).createCashSavingsDeposit(
               memberId: _memberId!,

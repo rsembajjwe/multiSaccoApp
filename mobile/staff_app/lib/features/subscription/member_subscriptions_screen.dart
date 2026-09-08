@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/widgets/confirm_action.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
@@ -162,6 +163,15 @@ class _MemberSubscriptionsScreenState
       builder: (_) => const _PhoneDialog(title: 'SACCO account mobile money'),
     );
     if (payment == null || payment.phone.trim().isEmpty) return;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Pay platform for selected members?',
+      message:
+          'Send a ${Fmt.money(total)} ${payment.provider.toUpperCase()} mobile money prompt to ${payment.phone.trim()}. Selected members will activate after payment succeeds.',
+      confirmLabel: 'Send prompt',
+      icon: Icons.account_balance_wallet_outlined,
+    );
+    if (!confirmed || !mounted) return;
     setState(() => _busy = true);
     try {
       final request = await ref
@@ -197,6 +207,15 @@ class _MemberSubscriptionsScreenState
           content: Text('Selected dues require ${Fmt.money(total)}.')));
       return;
     }
+    final confirmed = await confirmAction(
+      context,
+      title: 'Activate selected members?',
+      message:
+          'Use paid capacity to activate ${_selected.length} member subscription(s) worth ${Fmt.money(total)}.',
+      confirmLabel: 'Activate',
+      icon: Icons.verified_user_outlined,
+    );
+    if (!confirmed || !mounted) return;
     setState(() => _busy = true);
     try {
       await ref.read(adminRepositoryProvider).recordBulkMemberSubscriptionPayment(
@@ -225,6 +244,15 @@ class _MemberSubscriptionsScreenState
       builder: (_) => const _PhoneDialog(title: 'Member mobile money'),
     );
     if (payment == null || payment.phone.trim().isEmpty) return;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Send member dues prompt?',
+      message:
+          'Send a ${payment.provider.toUpperCase()} mobile money prompt to ${payment.phone.trim()} for this member subscription.',
+      confirmLabel: 'Send prompt',
+      icon: Icons.send_to_mobile_outlined,
+    );
+    if (!confirmed) return;
     try {
       final request = await ref
           .read(adminRepositoryProvider)

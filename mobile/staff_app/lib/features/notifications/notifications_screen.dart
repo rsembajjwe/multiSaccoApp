@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/widgets/confirm_action.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
@@ -228,6 +229,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       builder: (_) => _SmsComposeDialog(members: members),
     );
     if (draft == null || draft.message.trim().isEmpty) return;
+    final membersWithPhones =
+        members.where((m) => m.phone.trim().isNotEmpty).toList();
+    final recipientCount =
+        draft.allMembers ? membersWithPhones.length : draft.memberIds.length;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Send SMS broadcast?',
+      message:
+          'Send this SMS to $recipientCount member(s). This will deduct SMS credits from the SACCO balance.',
+      confirmLabel: 'Send SMS',
+      icon: Icons.sms_outlined,
+    );
+    if (!confirmed || !mounted) return;
     setState(() => _busy = true);
     try {
       final balance = await ref.read(adminRepositoryProvider).sendSmsBroadcast(

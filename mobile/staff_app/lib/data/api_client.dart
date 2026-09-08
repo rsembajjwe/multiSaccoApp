@@ -23,6 +23,12 @@ class ApiClient {
         onRequest: (options, handler) async {
           final token = await _session.readToken();
           if (token != null) options.headers['Authorization'] = 'Bearer $token';
+          if (_isMutating(options.method) &&
+              !_isAuthPath(options.path) &&
+              !options.headers.containsKey('Idempotency-Key')) {
+            options.headers['Idempotency-Key'] =
+                _idempotencyKey(options.method, options.path);
+          }
           handler.next(options);
         },
         onError: (e, handler) async {
@@ -43,8 +49,10 @@ class ApiClient {
   final Dio _dio;
   final SessionStore _session;
   final StaffPushTopics _push;
+  int _idempotencySequence = 0;
 
-  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> post(
+      String path, Map<String, dynamic> body) async {
     final r = await _guard(() => _dio.post<dynamic>(path, data: body));
     return _envelope(r.data);
   }
@@ -59,8 +67,7 @@ class ApiClient {
     final r = await _guard(() => _dio.get<List<int>>(path,
         options: Options(responseType: ResponseType.bytes)));
     final ct = r.headers.value('content-type') ?? 'application/octet-stream';
-    return DocumentBytes(
-        Uint8List.fromList(r.data ?? const <int>[]), ct);
+    return DocumentBytes(Uint8List.fromList(r.data ?? const <int>[]), ct);
   }
 
   Future<List<Map<String, dynamic>>> getList(String path,
@@ -91,12 +98,14 @@ class ApiClient {
     return PageResult<Map<String, dynamic>>(rows, number, totalPages, total);
   }
 
-  Future<Map<String, dynamic>> patch(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> patch(
+      String path, Map<String, dynamic> body) async {
     final r = await _guard(() => _dio.patch<dynamic>(path, data: body));
     return _envelope(r.data);
   }
 
-  Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> put(
+      String path, Map<String, dynamic> body) async {
     final r = await _guard(() => _dio.put<dynamic>(path, data: body));
     return _envelope(r.data);
   }
@@ -125,8 +134,12 @@ class ApiClient {
       return ApiException(
           'Cannot reach the server at ${AppConfig.baseUrl}. Check that the backend is running and reachable.');
     }
-    if (code == 401) return ApiException(serverMsg ?? 'Session expired. Please sign in again.');
-    if (code == 403) return ApiException(serverMsg ?? 'You do not have permission to do that.');
+    if (code == 401) {
+      return ApiException(serverMsg ?? 'Session expired. Please sign in again.');
+    }
+    if (code == 403) {
+      return ApiException(serverMsg ?? 'You do not have permission to do that.');
+    }
     return ApiException(serverMsg ?? 'Request failed (${code ?? 'network'}).');
   }
 
@@ -137,6 +150,28 @@ class ApiClient {
       return data;
     }
     return <String, dynamic>{};
+  }
+
+  bool _isMutating(String method) =>
+      method == 'POST' ||
+      method == 'PATCH' ||
+      method == 'PUT' ||
+      method == 'DELETE';
+
+  bool _isAuthPath(String path) =>
+      path.contains('/auth/login') || path.contains('/auth/mfa/');
+
+  String _idempotencyKey(String method, String path) {
+    final safePath = path
+        .replaceAll(RegExp(r'[^A-Za-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    return [
+      'staff',
+      method.toLowerCase(),
+      safePath,
+      DateTime.now().microsecondsSinceEpoch,
+      _idempotencySequence++,
+    ].join('-');
   }
 }
 

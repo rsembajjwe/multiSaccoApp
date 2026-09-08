@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -19,7 +21,10 @@ class SaccoStaffApp extends ConsumerStatefulWidget {
 
 class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
     with WidgetsBindingObserver {
+  static const _idleLockAfter = Duration(minutes: 5);
+
   bool _wasBackgrounded = false;
+  Timer? _idleLockTimer;
 
   late final GoRouter _router = GoRouter(
     initialLocation: '/login',
@@ -43,6 +48,7 @@ class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _resetIdleLockTimer();
     _initPush();
   }
 
@@ -62,6 +68,7 @@ class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
 
   @override
   void dispose() {
+    _idleLockTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -89,6 +96,11 @@ class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
     });
   }
 
+  void _resetIdleLockTimer() {
+    _idleLockTimer?.cancel();
+    _idleLockTimer = Timer(_idleLockAfter, _maybeLock);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
@@ -98,6 +110,13 @@ class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
       darkTheme: AppTheme.dark(),
       themeMode: ref.watch(themeModeProvider),
       routerConfig: _router,
+      builder: (context, child) => Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => _resetIdleLockTimer(),
+        onPointerMove: (_) => _resetIdleLockTimer(),
+        onPointerSignal: (_) => _resetIdleLockTimer(),
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 }
