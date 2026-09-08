@@ -532,8 +532,10 @@ class NotificationController {
         }
 
         int recipientCount = recipients.size();
+        int segmentCount = smsSegments(message);
+        int requiredCredits = recipientCount * segmentCount;
         try {
-            smsWalletService.debit(tenantId, recipientCount, "SMS-BCAST-" + java.util.UUID.randomUUID(), "SACCO SMS broadcast");
+            smsWalletService.debit(tenantId, requiredCredits, "SMS-BCAST-" + java.util.UUID.randomUUID(), "SACCO SMS broadcast");
         } catch (IllegalStateException ex) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "INSUFFICIENT_SMS_BALANCE", ex.getMessage()));
@@ -547,7 +549,14 @@ class NotificationController {
                 "broadcast_" + sent.size(),
                 request.getRemoteAddr());
         return ResponseEntity.accepted()
-                .body(ApiResponse.of(new SmsBroadcastResponse(sent.size(), smsWalletService.balance(tenantId))));
+                .body(ApiResponse.of(new SmsBroadcastResponse(sent.size(), segmentCount, requiredCredits, smsWalletService.balance(tenantId))));
+    }
+
+    private static int smsSegments(String message) {
+        int length = message == null ? 0 : message.trim().length();
+        if (length <= 0) return 0;
+        if (length <= 160) return 1;
+        return (length + 152) / 153;
     }
 
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
@@ -585,6 +594,6 @@ class NotificationController {
     record BroadcastMessageResponse(int recipients, String title) {
     }
 
-    record SmsBroadcastResponse(int recipients, int smsBalance) {
+    record SmsBroadcastResponse(int recipients, int smsSegments, int smsCreditsUsed, int smsBalance) {
     }
 }
