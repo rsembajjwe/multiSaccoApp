@@ -158,6 +158,8 @@ class DashboardScreen extends ConsumerWidget {
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 const _StatusSummary(),
+                const SizedBox(height: 12),
+                const _OperationsAlerts(),
               ],
               if (s.can('finance-source:view')) const _MobileMoneyBalances(),
               const SizedBox(height: 24),
@@ -503,6 +505,162 @@ class _StatusSummary extends ConsumerWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OperationsAlerts extends ConsumerWidget {
+  const _OperationsAlerts();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(saccoStatusProvider).asData?.value;
+    final subscriptions = ref.watch(subscriptionsProvider).asData?.value;
+    final reconciliation = ref.watch(reconciliationProvider).asData?.value;
+    final mobileMoney =
+        ref.watch(mobileMoneyPaymentRequestsProvider).asData?.value;
+
+    final alerts = <_AlertItem>[];
+    if (status != null) {
+      if (status.smsBalance <= 20) {
+        alerts.add(_AlertItem(
+          icon: Icons.sms_failed_outlined,
+          title: 'SMS balance is low',
+          detail:
+              '${status.smsBalance} SMS left. Buy SMS credits before sending member broadcasts.',
+          color: const Color(0xFFB45309),
+        ));
+      }
+      if (status.pendingPostings > 0) {
+        alerts.add(_AlertItem(
+          icon: Icons.pending_actions_outlined,
+          title: 'Pending postings',
+          detail: '${status.pendingPostings} transaction(s) need attention.',
+          color: const Color(0xFFB45309),
+        ));
+      }
+    }
+
+    if (subscriptions != null && subscriptions.isNotEmpty) {
+      final sub = subscriptions.first;
+      if (sub.uncoveredMembers > 0) {
+        alerts.add(_AlertItem(
+          icon: Icons.group_off_outlined,
+          title: 'Subscription capacity exceeded',
+          detail:
+              '${sub.uncoveredMembers} member(s) are outside paid platform capacity.',
+          color: const Color(0xFFB91C1C),
+        ));
+      } else if (sub.paidMemberCapacity - sub.memberCount <= 2) {
+        alerts.add(_AlertItem(
+          icon: Icons.group_add_outlined,
+          title: 'Few paid slots left',
+          detail:
+              '${sub.paidMemberCapacity - sub.memberCount} paid member slot(s) remain.',
+          color: const Color(0xFFB45309),
+        ));
+      }
+      if (sub.daysToExpiry != null && sub.daysToExpiry! <= 7) {
+        alerts.add(_AlertItem(
+          icon: Icons.workspace_premium_outlined,
+          title: 'Subscription renewal due',
+          detail: 'Platform subscription expires in ${sub.daysToExpiry} day(s).',
+          color: const Color(0xFFB45309),
+        ));
+      }
+    }
+
+    final exceptions = reconciliation?.summary.exceptionCount ?? 0;
+    if (exceptions > 0) {
+      alerts.add(_AlertItem(
+        icon: Icons.fact_check_outlined,
+        title: 'Reconciliation exceptions',
+        detail: '$exceptions unmatched statement or ledger line(s).',
+        color: const Color(0xFFB91C1C),
+      ));
+    }
+
+    final pendingPrompts = mobileMoney
+            ?.where((r) => r.status.toLowerCase().contains('pending'))
+            .length ??
+        0;
+    if (pendingPrompts > 0) {
+      alerts.add(_AlertItem(
+        icon: Icons.phone_android_outlined,
+        title: 'Pending mobile-money prompts',
+        detail: '$pendingPrompts request(s) are awaiting member payment.',
+        color: const Color(0xFF0E7490),
+      ));
+    }
+
+    if (alerts.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Needs attention', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        for (final alert in alerts.take(4))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _AlertTile(alert: alert),
+          ),
+      ],
+    );
+  }
+}
+
+class _AlertItem {
+  const _AlertItem({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final Color color;
+}
+
+class _AlertTile extends StatelessWidget {
+  const _AlertTile({required this.alert});
+  final _AlertItem alert;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: alert.color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(alert.icon, color: alert.color, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(alert.title,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(alert.detail,
+                      style: TextStyle(
+                          fontSize: 12, color: scheme.onSurfaceVariant)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

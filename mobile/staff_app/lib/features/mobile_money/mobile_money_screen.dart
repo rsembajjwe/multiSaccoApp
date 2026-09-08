@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/widgets/confirm_action.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
@@ -65,6 +66,15 @@ class _MobileMoneyScreenState extends ConsumerState<MobileMoneyScreen> {
       builder: (ctx) => _CloseRequestDialog(status: status),
     );
     if (reason == null) return;
+    final confirmed = await confirmAction(
+      context,
+      title: 'Mark request ${Fmt.label(status)}?',
+      message:
+          'This will close ${request.externalReference.isEmpty ? 'this mobile-money request' : request.externalReference} as ${Fmt.label(status)}. Use this only after reconciliation confirms the payment will not be posted.',
+      confirmLabel: 'Mark ${Fmt.label(status)}',
+      icon: Icons.fact_check_outlined,
+    );
+    if (!confirmed || !mounted) return;
     setState(() => _busyRequestId = request.id);
     try {
       await ref
