@@ -54,6 +54,9 @@ public interface MemberRepository extends JpaRepository<Member, String> {
             @Param("search") String search,
             Pageable pageable);
     long countByTenantId(String tenantId);
+    // Count of members with a usable phone number: the size of an "all members" SMS broadcast.
+    @Query("SELECT COUNT(m) FROM Member m WHERE m.tenantId = :tenantId AND m.phone IS NOT NULL AND TRIM(m.phone) <> ''")
+    long countSmsRecipientsByTenantId(@Param("tenantId") String tenantId);
     Optional<Member> findFirstByLinkedUserId(String linkedUserId);
     boolean existsByTenantIdAndMembershipNoIgnoreCase(String tenantId, String membershipNo);
     Optional<Member> findFirstByTenantIdAndMembershipNoIgnoreCase(String tenantId, String membershipNo);

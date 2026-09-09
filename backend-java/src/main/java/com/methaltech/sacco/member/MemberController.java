@@ -258,6 +258,26 @@ class MemberController {
     record MemberNameResponse(String id, String name) {
     }
 
+    /**
+     * Count of members who would receive an all-members SMS broadcast (those
+     * with a phone number), so the SMS composer can estimate cost without
+     * loading every member.
+     */
+    @GetMapping("/sms-recipient-count")
+    ResponseEntity<?> smsRecipientCount(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+        long count = memberRepository.countSmsRecipientsByTenantId(tenantId);
+        return ResponseEntity.ok(ApiResponse.of(new SmsRecipientCountResponse(count)));
+    }
+
+    record SmsRecipientCountResponse(long count) {
+    }
+
         // Member summaries, adding each member outstanding loan balance (sum of active/overdue loans) in
     // one query. Financial figures are withheld unless the viewer holds finance-source:view.
     private List<MemberResponse> toSummaries(List<Member> members, boolean financialsVisible) {

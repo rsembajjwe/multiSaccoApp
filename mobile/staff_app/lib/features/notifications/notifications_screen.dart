@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
 import '../../core/widgets/confirm_action.dart';
+import '../../core/widgets/member_picker.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
@@ -69,7 +70,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(notificationsFeedProvider(_query));
-    final membersAsync = widget.canManage ? ref.watch(membersProvider('')) : null;
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
@@ -87,7 +87,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                   : const Icon(Icons.sms_outlined),
               onPressed: _busy
                   ? null
-                  : () => _composeSms(membersAsync?.asData?.value),
+                  : () => _composeSms(),
             ),
         ],
       ),
@@ -218,21 +218,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
-  Future<void> _composeSms(List<Member>? members) async {
-    if (members == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Members are still loading.')));
-      return;
-    }
+  Future<void> _composeSms() async {
     final draft = await showDialog<_SmsDraft>(
       context: context,
-      builder: (_) => _SmsComposeDialog(members: members),
+      builder: (_) => const _SmsComposeDialog(),
     );
     if (draft == null || draft.message.trim().isEmpty) return;
-    final membersWithPhones =
-        members.where((m) => m.phone.trim().isNotEmpty).toList();
-    final recipientCount =
-        draft.allMembers ? membersWithPhones.length : draft.memberIds.length;
+    final recipientCount = draft.recipientCount;
+    if (recipientCount <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No recipients selected.')),
+        );
+      }
+      return;
+    }
     final segments = _smsSegments(draft.message);
     final requiredCredits = recipientCount * segments;
     final status = ref.read(saccoStatusProvider).asData?.value;
@@ -295,28 +295,54 @@ class _SmsDraft {
     required this.message,
     required this.allMembers,
     required this.memberIds,
+    required this.recipientCount,
   });
 
   final String title;
   final String message;
   final bool allMembers;
   final List<String> memberIds;
+  final int recipientCount;
 }
 
-class _SmsComposeDialog extends StatefulWidget {
-  const _SmsComposeDialog({required this.members});
-
-  final List<Member> members;
+class _SmsComposeDialog extends ConsumerStatefulWidget {
+  const _SmsComposeDialog();
 
   @override
-  State<_SmsComposeDialog> createState() => _SmsComposeDialogState();
+  ConsumerState<_SmsComposeDialog> createState() => _SmsComposeDialogState();
 }
 
-class _SmsComposeDialogState extends State<_SmsComposeDialog> {
+class _SmsComposeDialogState extends ConsumerState<_SmsComposeDialog> {
   final _title = TextEditingController(text: 'SACCO message');
   final _message = TextEditingController();
-  final Set<String> _selected = {};
+  final List<Member> _recipients = [];
   bool _allMembers = true;
+  int? _allCount;
+  bool _loadingCount = true;
+  String? _countError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCount();
+  }
+
+  Future<void> _loadCount() async {
+    try {
+      final c = await ref.read(adminRepositoryProvider).smsRecipientCount();
+      if (!mounted) return;
+      setState(() {
+        _allCount = c;
+        _loadingCount = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _countError = '$e';
+        _loadingCount = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -325,11 +351,31 @@ class _SmsComposeDialogState extends State<_SmsComposeDialog> {
     super.dispose();
   }
 
+  Future<void> _addRecipient() async {
+    final picked = await showMemberPicker(context, title: 'Add SMS recipient');
+    if (picked == null || !mounted) return;
+    if (picked.phone.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That member has no phone number.')),
+      );
+      return;
+    }
+    if (_recipients.any((m) => m.id == picked.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That member is already a recipient.')),
+      );
+      return;
+    }
+    setState(() => _recipients.add(picked));
+  }
+
+  void _removeRecipient(String id) {
+    setState(() => _recipients.removeWhere((m) => m.id == id));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final membersWithPhones =
-        widget.members.where((m) => m.phone.trim().isNotEmpty).toList();
-    final count = _allMembers ? membersWithPhones.length : _selected.length;
+    final count = _allMembers ? (_allCount ?? 0) : _recipients.length;
     final segments = _smsSegments(_message.text);
     final estimatedCredits = count * segments;
     final canSend = count > 0 && _message.text.trim().isNotEmpty;
@@ -340,6 +386,7 @@ class _SmsComposeDialogState extends State<_SmsComposeDialog> {
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               TextField(
                 controller: _title,
@@ -371,26 +418,46 @@ class _SmsComposeDialogState extends State<_SmsComposeDialog> {
               const SizedBox(height: 8),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text('All members with phones ($count)'),
+                title: Text(
+                  _loadingCount
+                      ? 'All members with phones (loading...)'
+                      : _countError != null
+                          ? 'All members with phones'
+                          : 'All members with phones (${_allCount ?? 0})',
+                ),
                 value: _allMembers,
                 onChanged: (v) => setState(() => _allMembers = v),
               ),
-              if (!_allMembers)
-                ...membersWithPhones.map((m) => CheckboxListTile(
+              if (!_allMembers) ...[
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${_recipients.length} recipient(s) selected',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                ..._recipients.map((m) => ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      title:
-                          Text(m.fullName.isEmpty ? m.membershipNo : m.fullName),
+                      title: Text(
+                          m.fullName.isEmpty ? m.membershipNo : m.fullName),
                       subtitle: Text(m.phone),
-                      value: _selected.contains(m.id),
-                      onChanged: (v) => setState(() {
-                        if (v == true) {
-                          _selected.add(m.id);
-                        } else {
-                          _selected.remove(m.id);
-                        }
-                      }),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Remove',
+                        onPressed: () => _removeRecipient(m.id),
+                      ),
                     )),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.person_add_alt_1_outlined),
+                    label: const Text('Add recipient'),
+                    onPressed: _addRecipient,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -406,7 +473,8 @@ class _SmsComposeDialogState extends State<_SmsComposeDialog> {
                     title: _title.text.trim(),
                     message: _message.text.trim(),
                     allMembers: _allMembers,
-                    memberIds: _selected.toList(),
+                    memberIds: _recipients.map((m) => m.id).toList(),
+                    recipientCount: count,
                   )),
           icon: const Icon(Icons.send_outlined),
           label: Text('Send $count'),

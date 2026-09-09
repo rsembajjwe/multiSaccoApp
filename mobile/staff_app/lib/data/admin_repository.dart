@@ -419,6 +419,17 @@ class AdminRepository {
     return MobileMoneyPaymentRequest.fromJson(data);
   }
 
+  /// Number of members who would receive an all-members SMS broadcast (those
+  /// with a phone number). Lets the SMS composer estimate cost without loading
+  /// every member.
+  Future<int> smsRecipientCount() async {
+    final data = await _api.get('/members/sms-recipient-count');
+    final c = data['count'];
+    if (c is int) return c;
+    if (c is num) return c.toInt();
+    return int.tryParse('$c') ?? 0;
+  }
+
   Future<int> sendSmsBroadcast({
     required String message,
     String title = 'SACCO message',
