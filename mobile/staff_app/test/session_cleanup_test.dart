@@ -102,6 +102,9 @@ class _RecordingPushTopics implements StaffPushTopics {
   final unsubscribed = <String>[];
 
   @override
+  Future<void> requestPermission() async {}
+
+  @override
   Future<void> subscribeStaff(String saccoCode) async {
     subscribed.add(saccoCode);
   }
