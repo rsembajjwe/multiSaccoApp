@@ -737,15 +737,22 @@ class LoanController {
             return branchAccessDenied();
         }
 
-        List<Loan> openLoans = loanRepository.findByTenantIdAndMemberIdOrderByCreatedAtAsc(tenantId, member.getId())
-                .stream()
+        List<Loan> memberLoans = loanRepository.findByTenantIdAndMemberIdOrderByCreatedAtAsc(tenantId, member.getId());
+        List<Loan> openLoans = memberLoans.stream()
                 .filter(loan -> OPEN_LOAN_STATUSES.contains(loan.getStatus()))
                 .toList();
         BigDecimal openLoanBalance = openLoans.stream()
                 .map(Loan::getBalance)
                 .filter(value -> value != null)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        Loan topUpTarget = openLoans.isEmpty() ? null : openLoans.get(0);
+        // Top-up target follows createLoan's uncleared-loan rule (any loan still
+        // carrying a balance), so the form offers a top-up in exactly the cases
+        // where creating a fresh loan would be rejected.
+        Loan topUpTarget = memberLoans.stream()
+                .filter(loan -> loan.getBalance() != null
+                        && loan.getBalance().compareTo(BigDecimal.ZERO) > 0)
+                .findFirst()
+                .orElse(null);
 
         List<LoanGuarantor> activeGuarantees = guarantorRepository
                 .findByMemberIdOrderByCreatedAtDesc(member.getId())
