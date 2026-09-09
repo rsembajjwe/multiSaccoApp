@@ -27,12 +27,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    // Reaching the login screen means any prior session is over. Clear the
-    // expiry flag so the router does not immediately redirect us back out,
-    // and only skip ahead if a token is actually stored (it will be
-    // re-validated by /auth/me on the dashboard).
-    sessionExpiredNotifier.value = false;
+    // Everything that could notify the router (the refreshListenable) or
+    // navigate must run AFTER this frame, never synchronously during
+    // initState/build, or GoRouter markNeedsBuild()s while the tree is still
+    // building. Reaching the login screen means any prior session is over, so
+    // we clear the expiry flag here (safe post-frame; the router's redirect
+    // already ignores the flag while on /login, so there is no loop), then
+    // skip ahead only if a token is actually stored (re-validated by /auth/me
+    // on the dashboard).
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      sessionExpiredNotifier.value = false;
       final has = await ref.read(authRepositoryProvider).hasSession();
       if (!has || !mounted) return;
       final locked =
