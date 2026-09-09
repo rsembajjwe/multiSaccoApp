@@ -4,7 +4,15 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 /// keystore. Permissions gate which admin features are shown.
 class SessionStore {
   SessionStore([FlutterSecureStorage? storage])
-      : _storage = storage ?? const FlutterSecureStorage();
+      : _storage = storage ??
+            const FlutterSecureStorage(
+              // EncryptedSharedPreferences is the reliable Android backend; the
+              // default KeyStore-only backend can silently fail to read back a
+              // just-written value on Android 13/14, which drops the bearer
+              // token and makes every authenticated call 401.
+              aOptions: AndroidOptions(encryptedSharedPreferences: true),
+              iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock),
+            );
 
   final FlutterSecureStorage _storage;
   static const _tokenKey = 'staff_token';
@@ -14,7 +22,13 @@ class SessionStore {
   static const _lockKey = 'biometric_lock';
   static const _themeKey = 'theme_mode';
 
-  Future<String?> readToken() => _storage.read(key: _tokenKey);
+  Future<String?> readToken() async {
+    try {
+      return await _storage.read(key: _tokenKey);
+    } catch (_) {
+      return null;
+    }
+  }
   Future<void> writeToken(String token) =>
       _storage.write(key: _tokenKey, value: token);
 
