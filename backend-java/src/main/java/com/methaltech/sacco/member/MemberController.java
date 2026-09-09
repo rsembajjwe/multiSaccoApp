@@ -236,7 +236,29 @@ class MemberController {
         return ResponseEntity.ok(ApiResponse.of(toSummaries(members, showFinancials)));
     }
 
-    // Member summaries, adding each member outstanding loan balance (sum of active/overdue loans) in
+    /**
+     * Lightweight member id -> name lookup for the whole tenant. Any authenticated staff member can
+     * read it (no PII or balances are exposed). Used by list screens to label rows by member without
+     * downloading full member records.
+     */
+    @GetMapping("/names")
+    ResponseEntity<?> memberNames(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+        List<MemberNameResponse> names = memberRepository.findNamesByTenantId(tenantId).stream()
+                .map(view -> new MemberNameResponse(view.getId(), view.getFullName()))
+                .toList();
+        return ResponseEntity.ok(ApiResponse.of(names));
+    }
+
+    record MemberNameResponse(String id, String name) {
+    }
+
+        // Member summaries, adding each member outstanding loan balance (sum of active/overdue loans) in
     // one query. Financial figures are withheld unless the viewer holds finance-source:view.
     private List<MemberResponse> toSummaries(List<Member> members, boolean financialsVisible) {
         if (members.isEmpty()) return List.of();

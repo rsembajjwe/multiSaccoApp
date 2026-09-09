@@ -16,6 +16,17 @@ class AdminRepository {
     return rows.map(Member.fromJson).toList();
   }
 
+  /// Lightweight id -> name map for all members in the tenant (no PII/balances).
+  Future<Map<String, String>> memberNames() async {
+    final rows = await _api.getList('/members/names');
+    final map = <String, String>{};
+    for (final r in rows) {
+      final id = '${r['id'] ?? ''}';
+      if (id.isNotEmpty) map[id] = '${r['name'] ?? ''}';
+    }
+    return map;
+  }
+
   Future<List<NextOfKin>> memberNextOfKin(String id) async =>
       (await _api.getList('/members/$id/next-of-kin'))
           .map(NextOfKin.fromJson)

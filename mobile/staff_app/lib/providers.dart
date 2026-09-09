@@ -154,13 +154,7 @@ final fundTypesProvider = FutureProvider.autoDispose<List<FundType>>(
 
 /// Map of member id -> display name, used to label loans (which carry only ids).
 final memberNamesProvider = FutureProvider.autoDispose<Map<String, String>>(
-  (ref) async {
-    final members = await ref.watch(adminRepositoryProvider).members();
-    return {
-      for (final m in members)
-        m.id: m.fullName.isEmpty ? m.membershipNo : m.fullName
-    };
-  },
+  (ref) => ref.watch(adminRepositoryProvider).memberNames(),
 );
 
 /// A member's statement from the start of the current year to today. Used to

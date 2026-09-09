@@ -11,6 +11,9 @@ import org.springframework.data.repository.query.Param;
 public interface MemberRepository extends JpaRepository<Member, String> {
     List<Member> findAllByOrderByTenantIdAscMembershipNoAsc();
     List<Member> findByTenantIdOrderByMembershipNoAsc(String tenantId);
+    // Lightweight id+name projection for member-name lookups (no PII/balances).
+    @Query("SELECT m.id AS id, m.fullName AS fullName FROM Member m WHERE m.tenantId = :tenantId")
+    List<MemberNameView> findNamesByTenantId(@Param("tenantId") String tenantId);
     List<Member> findByTenantIdAndBranchIdInOrderByMembershipNoAsc(String tenantId, List<String> branchIds);
     Page<Member> findByTenantId(String tenantId, Pageable pageable);
     Page<Member> findByTenantIdAndBranchIdIn(String tenantId, List<String> branchIds, Pageable pageable);
