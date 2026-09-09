@@ -11,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 public interface MemberRepository extends JpaRepository<Member, String> {
     List<Member> findAllByOrderByTenantIdAscMembershipNoAsc();
     List<Member> findByTenantIdOrderByMembershipNoAsc(String tenantId);
+    // One sample member for import templates (avoids loading the whole tenant).
+    Optional<Member> findFirstByTenantIdOrderByMembershipNoAsc(String tenantId);
     // Lightweight id+name projection for member-name lookups (no PII/balances).
     @Query("SELECT m.id AS id, m.fullName AS fullName FROM Member m WHERE m.tenantId = :tenantId")
     List<MemberNameView> findNamesByTenantId(@Param("tenantId") String tenantId);
@@ -59,6 +61,9 @@ public interface MemberRepository extends JpaRepository<Member, String> {
     long countSmsRecipientsByTenantId(@Param("tenantId") String tenantId);
     Optional<Member> findFirstByLinkedUserId(String linkedUserId);
     boolean existsByTenantIdAndMembershipNoIgnoreCase(String tenantId, String membershipNo);
+    // Targeted duplicate checks for member updates (avoid scanning all members).
+    boolean existsByTenantIdAndIdNotAndPhoneIgnoreCase(String tenantId, String id, String phone);
+    boolean existsByTenantIdAndIdNotAndEmailIgnoreCase(String tenantId, String id, String email);
     Optional<Member> findFirstByTenantIdAndMembershipNoIgnoreCase(String tenantId, String membershipNo);
     Optional<Member> findFirstByTenantIdAndMembershipNoIgnoreCaseOrTenantIdAndPhoneIgnoreCaseOrTenantIdAndEmailIgnoreCase(
             String membershipTenantId,

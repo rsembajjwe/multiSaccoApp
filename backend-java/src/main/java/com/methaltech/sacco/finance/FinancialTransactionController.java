@@ -311,7 +311,7 @@ class FinancialTransactionController {
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null) return tenantAccessDenied();
 
-        Member sampleMember = memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId).stream().findFirst().orElse(null);
+        Member sampleMember = memberRepository.findFirstByTenantIdOrderByMembershipNoAsc(tenantId).orElse(null);
         OpeningBalanceImportRow sample = new OpeningBalanceImportRow(
                 sampleMember == null ? "" : sampleMember.getMembershipNo(),
                 "100000",

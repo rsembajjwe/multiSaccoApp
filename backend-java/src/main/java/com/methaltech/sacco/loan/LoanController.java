@@ -389,7 +389,7 @@ class LoanController {
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null) return tenantAccessDenied();
 
-        Member sampleMember = memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId).stream().findFirst().orElse(null);
+        Member sampleMember = memberRepository.findFirstByTenantIdOrderByMembershipNoAsc(tenantId).orElse(null);
         LoanImportRow sample = new LoanImportRow(
                 sampleMember == null ? "" : sampleMember.getMembershipNo(),
                 "Development Loan",

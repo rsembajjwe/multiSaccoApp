@@ -450,7 +450,7 @@ class MemberController {
         String tenantId = tenantScope(currentSession, requestedTenantId);
         if (tenantId == null) return tenantAccessDenied();
 
-        Member sampleMember = memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId).stream().findFirst().orElse(null);
+        Member sampleMember = memberRepository.findFirstByTenantIdOrderByMembershipNoAsc(tenantId).orElse(null);
         String membershipNo = sampleMember == null ? "" : sampleMember.getMembershipNo();
         List<MemberMetadataImportRow> sampleRows = List.of(
                 new MemberMetadataImportRow("kyc_status", membershipNo, "", "", "", "", "", "", "", "", "", "verified"),
@@ -702,19 +702,15 @@ class MemberController {
                     }
 
                     String phone = body.phone().trim();
-                    if (memberRepository.findByTenantIdOrderByMembershipNoAsc(member.getTenantId()).stream()
-                            .anyMatch(existing -> !existing.getId().equals(member.getId())
-                                    && existing.getPhone() != null
-                                    && existing.getPhone().equalsIgnoreCase(phone))) {
+                    if (memberRepository.existsByTenantIdAndIdNotAndPhoneIgnoreCase(
+                            member.getTenantId(), member.getId(), phone)) {
                         return ResponseEntity.status(HttpStatus.CONFLICT)
                                 .body(ApiErrorResponse.of(409, "MEMBER_PHONE_EXISTS", "Another member already uses that phone number."));
                     }
 
                     String email = blankToDefault(body.email());
-                    if (!email.isBlank() && memberRepository.findByTenantIdOrderByMembershipNoAsc(member.getTenantId()).stream()
-                            .anyMatch(existing -> !existing.getId().equals(member.getId())
-                                    && existing.getEmail() != null
-                                    && existing.getEmail().equalsIgnoreCase(email))) {
+                    if (!email.isBlank() && memberRepository.existsByTenantIdAndIdNotAndEmailIgnoreCase(
+                            member.getTenantId(), member.getId(), email)) {
                         return ResponseEntity.status(HttpStatus.CONFLICT)
                                 .body(ApiErrorResponse.of(409, "MEMBER_EMAIL_EXISTS", "Another member already uses that email address."));
                     }
