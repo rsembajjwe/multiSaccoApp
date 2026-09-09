@@ -150,6 +150,7 @@ class MemberController {
             MemberPrivacyRequestRepository privacyRequestRepository,
             MemberFundBalanceRepository memberFundBalanceRepository,
             FinancialTransactionRepository financialTransactionRepository,
+            LoanRepository loanRepository,
             BranchLookup branchLookup,
             TenantService tenantService,
             AuthService authService,
@@ -164,6 +165,7 @@ class MemberController {
         this.privacyRequestRepository = privacyRequestRepository;
         this.memberFundBalanceRepository = memberFundBalanceRepository;
         this.financialTransactionRepository = financialTransactionRepository;
+        this.loanRepository = loanRepository;
         this.branchLookup = branchLookup;
         this.tenantService = tenantService;
         this.authService = authService;
