@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/widgets/member_picker.dart';
 import '../../core/widgets/confirm_action.dart';
 import '../../core/widgets/paged_list.dart';
 import '../../core/widgets/ui.dart';
@@ -154,7 +155,7 @@ class _SavingsDepositSheetState extends ConsumerState<_SavingsDepositSheet> {
   final _narration = TextEditingController();
   String _mode = 'cash';
   String _provider = 'mtn';
-  String? _memberId;
+  Member? _member;
   bool _busy = false;
 
   @override
@@ -166,18 +167,14 @@ class _SavingsDepositSheetState extends ConsumerState<_SavingsDepositSheet> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate() || _memberId == null) return;
-    final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
-    final members =
-        ref.read(membersProvider('')).asData?.value ?? const <Member>[];
-    Member? selectedMember;
-    for (final member in members) {
-      if (member.id == _memberId) {
-        selectedMember = member;
-        break;
-      }
+    if (!_formKey.currentState!.validate()) return;
+    if (_member == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Choose a member.')));
+      return;
     }
-    final memberName = selectedMember?.fullName ?? 'the selected member';
+    final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
+    final memberName = _member?.fullName ?? 'the selected member';
     final confirmed = await confirmAction(
       context,
       title: _mode == 'cash' ? 'Post cash savings?' : 'Send payment prompt?',
@@ -195,12 +192,12 @@ class _SavingsDepositSheetState extends ConsumerState<_SavingsDepositSheet> {
     try {
       if (_mode == 'cash') {
         await ref.read(adminRepositoryProvider).createCashSavingsDeposit(
-              memberId: _memberId!,
+              memberId: _member!.id,
               amount: amount,
               narration: _narration.text,
             );
         ref.invalidate(transactionsProvider(''));
-        ref.invalidate(memberProvider(_memberId!));
+        ref.invalidate(memberProvider(_member!.id));
         ref.invalidate(memberFundBalancesProvider);
         ref.invalidate(saccoStatusProvider);
         if (mounted) {
@@ -213,7 +210,7 @@ class _SavingsDepositSheetState extends ConsumerState<_SavingsDepositSheet> {
         final request = await ref
             .read(adminRepositoryProvider)
             .requestMemberSavingsMobileMoney(
-              memberId: _memberId!,
+              memberId: _member!.id,
               amount: amount,
               payerPhone: _phone.text,
               provider: _provider,
@@ -242,23 +239,11 @@ class _SavingsDepositSheetState extends ConsumerState<_SavingsDepositSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final membersAsync = ref.watch(membersProvider(''));
-    final members = membersAsync.asData?.value
-            .where((m) => m.status == 'active')
-            .toList() ??
-        const <Member>[];
-    Member? selectedMember;
-    for (final member in members) {
-      if (member.id == _memberId) {
-        selectedMember = member;
-        break;
-      }
-    }
     if (_mode == 'mobile_money' &&
         _phone.text.isEmpty &&
-        selectedMember != null &&
-        selectedMember.phone.isNotEmpty) {
-      _phone.text = selectedMember.phone;
+        _member != null &&
+        _member!.phone.isNotEmpty) {
+      _phone.text = _member!.phone;
     }
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -301,36 +286,38 @@ class _SavingsDepositSheetState extends ConsumerState<_SavingsDepositSheet> {
                     : (value) => setState(() => _mode = value.first),
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _memberId,
-                decoration: const InputDecoration(labelText: 'Member'),
-                items: members
-                    .map((m) => DropdownMenuItem(
-                          value: m.id,
-                          child: Text(
-                            '${m.fullName} - ${m.membershipNo}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ))
-                    .toList(),
-                onChanged: _busy
+              InkWell(
+                onTap: _busy
                     ? null
-                    : (v) {
-                        setState(() {
-                          _memberId = v;
-                          Member? member;
-                          for (final candidate in members) {
-                            if (candidate.id == v) {
-                              member = candidate;
-                              break;
+                    : () async {
+                        final picked = await showMemberPicker(context);
+                        if (picked != null && mounted) {
+                          setState(() {
+                            _member = picked;
+                            if (_mode == 'mobile_money' &&
+                                picked.phone.isNotEmpty) {
+                              _phone.text = picked.phone;
                             }
-                          }
-                          if (member != null && member.phone.isNotEmpty) {
-                            _phone.text = member.phone;
-                          }
-                        });
+                          });
+                        }
                       },
-                validator: (v) => v == null ? 'Choose a member.' : null,
+                borderRadius: BorderRadius.circular(8),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Member',
+                    suffixIcon: Icon(Icons.search),
+                  ),
+                  child: Text(
+                    _member == null
+                        ? 'Tap to search & select a member'
+                        : '${_member!.fullName} - ${_member!.membershipNo}',
+                    overflow: TextOverflow.ellipsis,
+                    style: _member == null
+                        ? TextStyle(
+                            color: Theme.of(context).hintColor)
+                        : null,
+                  ),
+                ),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -395,10 +382,6 @@ class _SavingsDepositSheetState extends ConsumerState<_SavingsDepositSheet> {
                   onPressed: _busy ? null : _save,
                 ),
               ),
-              if (membersAsync.isLoading) ...[
-                const SizedBox(height: 12),
-                const LinearProgressIndicator(),
-              ],
             ],
           ),
         ),
