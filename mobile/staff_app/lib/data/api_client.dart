@@ -23,6 +23,9 @@ class ApiClient {
         onRequest: (options, handler) async {
           final token = await _session.readToken();
           if (token != null) options.headers['Authorization'] = 'Bearer $token';
+          // ignore: avoid_print
+          print('[SACCO-HTTP] -> ${options.method} ${options.path} '
+              'auth=${token != null && token.isNotEmpty}');
           if (_isMutating(options.method) &&
               !_isAuthPath(options.path) &&
               !options.headers.containsKey('Idempotency-Key')) {
@@ -31,7 +34,15 @@ class ApiClient {
           }
           handler.next(options);
         },
+        onResponse: (r, handler) {
+          // ignore: avoid_print
+          print('[SACCO-HTTP] <- ${r.statusCode} ${r.requestOptions.path}');
+          handler.next(r);
+        },
         onError: (e, handler) async {
+          // ignore: avoid_print
+          print('[SACCO-HTTP] !! ${e.response?.statusCode} '
+              '${e.requestOptions.path} :: ${e.message}');
           if (e.response?.statusCode == 401) {
             final saccoCode = await _session.readSacco();
             if (saccoCode != null && saccoCode.isNotEmpty) {
