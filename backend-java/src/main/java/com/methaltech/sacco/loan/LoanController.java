@@ -65,6 +65,8 @@ class LoanController {
     private static final Set<String> DECISION_STATUSES = Set.of("approved", "rejected");
     private static final Set<String> REPAYMENT_CHANNELS = Set.of("cash", "bank", "mobile_money", "payroll");
     private static final Set<String> IMPORT_STATUSES = Set.of("active", "paid");
+    private static final Set<String> OPEN_LOAN_STATUSES = Set.of("active", "overdue");
+    private static final Set<String> GUARANTEE_INACTIVE_STATUSES = Set.of("rejected", "released", "cancelled");
 
     /** Loans up to this amount need a single approval. */
     @Value("${sacco.loans.approval.single-max:2000000}")
@@ -644,6 +646,90 @@ class LoanController {
             BigDecimal committed = member == null ? BigDecimal.ZERO : committedGuarantees(member, request.getId());
             return LoanGuarantorResponse.from(request, loan, capacity, ceiling, committed);
         }).toList();
+        return ResponseEntity.ok(ApiResponse.of(data));
+    }
+
+    /**
+     * A single member's loan standing (savings/shares/welfare, own open-loan
+     * balance, guarantee commitments and capacity), so the loan form can assess
+     * a picked borrower or guarantor without loading every member and loan.
+     */
+    @GetMapping("/member-exposure/{memberId}")
+    ResponseEntity<?> memberLoanExposure(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:view")) {
+            return authService.permissionRequired("loans:view");
+        }
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+
+        Member member = memberRepository.findById(memberId == null ? "" : memberId.trim())
+                .filter(candidate -> candidate.getTenantId().equals(tenantId))
+                .orElse(null);
+        if (member == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_MEMBER", "Member does not exist for this tenant."));
+        }
+        if (!canAccessMemberBranch(currentSession, tenantId, member)) {
+            return branchAccessDenied();
+        }
+
+        List<Loan> openLoans = loanRepository.findByTenantIdAndMemberIdOrderByCreatedAtAsc(tenantId, member.getId())
+                .stream()
+                .filter(loan -> OPEN_LOAN_STATUSES.contains(loan.getStatus()))
+                .toList();
+        BigDecimal openLoanBalance = openLoans.stream()
+                .map(Loan::getBalance)
+                .filter(value -> value != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        Loan topUpTarget = openLoans.isEmpty() ? null : openLoans.get(0);
+
+        List<LoanGuarantor> activeGuarantees = guarantorRepository
+                .findByMemberIdOrderByCreatedAtDesc(member.getId())
+                .stream()
+                .filter(request -> !GUARANTEE_INACTIVE_STATUSES.contains(request.getStatus()))
+                .toList();
+        BigDecimal guaranteedLoanBalance = BigDecimal.ZERO;
+        List<String> guaranteeLabels = new ArrayList<>();
+        for (LoanGuarantor guarantee : activeGuarantees) {
+            Loan guaranteedLoan = loanRepository.findById(guarantee.getLoanId()).orElse(null);
+            BigDecimal balance = guaranteedLoan != null && guaranteedLoan.getBalance() != null
+                    ? guaranteedLoan.getBalance()
+                    : (guarantee.getGuaranteedAmount() == null ? BigDecimal.ZERO : guarantee.getGuaranteedAmount());
+            guaranteedLoanBalance = guaranteedLoanBalance.add(balance);
+            String borrowerName = guaranteedLoan == null
+                    ? guarantee.getLoanId()
+                    : memberRepository.findById(guaranteedLoan.getMemberId())
+                            .map(Member::getFullName)
+                            .orElse(guaranteedLoan.getMemberId());
+            String product = guaranteedLoan == null ? "loan" : guaranteedLoan.getProduct();
+            guaranteeLabels.add("Guaranteed: " + borrowerName + " - " + product + " - " + balance.toPlainString());
+        }
+
+        BigDecimal ceiling = guaranteeCeiling(member);
+        BigDecimal committed = committedGuarantees(member, null);
+        BigDecimal capacity = guaranteeCapacity(member, null);
+
+        MemberLoanExposureResponse data = new MemberLoanExposureResponse(
+                member.getId(),
+                member.getFullName(),
+                member.getMembershipNo(),
+                member.getStatus(),
+                member.getSavingsBalance(),
+                member.getSharesBalance(),
+                member.getWelfareBalance(),
+                openLoans.size(),
+                openLoanBalance,
+                guaranteedLoanBalance,
+                ceiling,
+                committed,
+                capacity,
+                guaranteeLabels,
+                topUpTarget == null ? null : LoanResponse.from(topUpTarget));
         return ResponseEntity.ok(ApiResponse.of(data));
     }
 

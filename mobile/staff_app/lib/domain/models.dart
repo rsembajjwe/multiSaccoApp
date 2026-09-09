@@ -446,6 +446,70 @@ class LoanGuarantor {
       );
 }
 
+/// A member's loan standing for the loan form (GET /loans/member-exposure/:id),
+/// computed server-side so the form need not load all members, loans and
+/// guarantor requests. [openLoan] is the current uncleared loan, or null.
+class MemberLoanExposure {
+  const MemberLoanExposure({
+    required this.memberId,
+    required this.fullName,
+    required this.membershipNo,
+    required this.status,
+    required this.savings,
+    required this.shares,
+    required this.welfare,
+    required this.openLoanCount,
+    required this.openLoanBalance,
+    required this.guaranteedLoanBalance,
+    required this.guaranteeCeiling,
+    required this.committedGuarantees,
+    required this.guaranteeCapacity,
+    required this.guaranteeLabels,
+    required this.openLoan,
+  });
+
+  final String memberId;
+  final String fullName;
+  final String membershipNo;
+  final String status;
+  final num savings;
+  final num shares;
+  final num welfare;
+  final int openLoanCount;
+  final num openLoanBalance;
+  final num guaranteedLoanBalance;
+  final num guaranteeCeiling;
+  final num committedGuarantees;
+  final num guaranteeCapacity;
+  final List<String> guaranteeLabels;
+  final Loan? openLoan;
+
+  bool get hasOpenLoan => openLoan != null;
+
+  factory MemberLoanExposure.fromJson(Map<String, dynamic> j) =>
+      MemberLoanExposure(
+        memberId: _str(j['memberId']),
+        fullName: _str(j['fullName']),
+        membershipNo: _str(j['membershipNo']),
+        status: _str(j['status']),
+        savings: _num(j['savingsBalance']),
+        shares: _num(j['sharesBalance']),
+        welfare: _num(j['welfareBalance']),
+        openLoanCount: _int(j['openLoanCount']),
+        openLoanBalance: _num(j['openLoanBalance']),
+        guaranteedLoanBalance: _num(j['guaranteedLoanBalance']),
+        guaranteeCeiling: _num(j['guaranteeCeiling']),
+        committedGuarantees: _num(j['committedGuarantees']),
+        guaranteeCapacity: _num(j['guaranteeCapacity']),
+        guaranteeLabels: (j['guaranteeLabels'] as List<dynamic>? ?? const [])
+            .map((e) => '$e')
+            .toList(),
+        openLoan: j['openLoan'] is Map<String, dynamic>
+            ? Loan.fromJson(j['openLoan'] as Map<String, dynamic>)
+            : null,
+      );
+}
+
 class LoanExtension {
   const LoanExtension({
     required this.id,

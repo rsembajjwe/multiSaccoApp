@@ -162,6 +162,12 @@ class AdminRepository {
     return rows.map(LoanGuarantor.fromJson).toList();
   }
 
+  /// A single member's loan standing for the loan form (borrower or guarantor).
+  Future<MemberLoanExposure> memberLoanExposure(String memberId) async {
+    final data = await _api.get('/loans/member-exposure/$memberId');
+    return MemberLoanExposure.fromJson(data);
+  }
+
   /// A single member's loans (server search matches the member id).
   Future<List<Loan>> memberLoans(String memberId) async {
     final rows = await _api.getList('/loans', query: {'search': memberId});

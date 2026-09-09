@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
 import '../../core/widgets/confirm_action.dart';
+import '../../core/widgets/member_picker.dart';
 import '../../core/widgets/paged_list.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
@@ -116,9 +117,14 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
   final _months = TextEditingController(text: '12');
   final _purpose = TextEditingController();
   final _formRef = TextEditingController();
-  String? _memberId;
+
+  Member? _borrower;
+  MemberLoanExposure? _borrowerExposure;
+  bool _loadingBorrower = false;
+
   String _product = _loanProducts.first;
-  final Set<String> _guarantorIds = {};
+  final List<Member> _guarantors = [];
+  final Map<String, MemberLoanExposure> _guarantorExposures = {};
   bool _busy = false;
 
   @override
@@ -132,48 +138,115 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
     super.dispose();
   }
 
-  Member? _selectedBorrower(List<Member> members) {
-    for (final member in members) {
-      if (member.id == _memberId) return member;
+  bool get _canSetTerms =>
+      ref.read(sessionProvider).asData?.value?.can('loans:terms') ?? false;
+
+  Future<void> _pickBorrower() async {
+    final picked = await showMemberPicker(context, title: 'Select borrower');
+    if (picked == null || !mounted) return;
+    setState(() {
+      _borrower = picked;
+      _borrowerExposure = null;
+      _loadingBorrower = true;
+    });
+    try {
+      final exposure =
+          await ref.read(adminRepositoryProvider).memberLoanExposure(picked.id);
+      if (!mounted) return;
+      if (exposure.status != 'active') {
+        setState(() {
+          _borrower = null;
+          _borrowerExposure = null;
+          _loadingBorrower = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Only active members can apply for loans.')),
+        );
+        return;
+      }
+      setState(() {
+        _borrowerExposure = exposure;
+        _loadingBorrower = false;
+        final open = exposure.openLoan;
+        if (open != null) {
+          _months.text = '${open.repaymentMonths}';
+          if (_canSetTerms) {
+            _interestRate.text = open.interestRate.toStringAsFixed(2);
+          }
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loadingBorrower = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not load member: $e')));
     }
-    return null;
   }
 
-  Loan? _unclearedLoan(List<Loan> loans) {
-    for (final loan in loans) {
-      if (loan.memberId == _memberId && loan.isOpen) return loan;
+  Future<void> _addGuarantor() async {
+    final picked = await showMemberPicker(context, title: 'Add guarantor');
+    if (picked == null || !mounted) return;
+    if (picked.id == _borrower?.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The borrower cannot guarantee.')),
+      );
+      return;
     }
-    return null;
+    if (picked.status != 'active') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only active members can guarantee.')),
+      );
+      return;
+    }
+    if (_guarantors.any((g) => g.id == picked.id)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That guarantor is already added.')),
+      );
+      return;
+    }
+    setState(() => _guarantors.add(picked));
+    try {
+      final exposure =
+          await ref.read(adminRepositoryProvider).memberLoanExposure(picked.id);
+      if (!mounted) return;
+      setState(() => _guarantorExposures[picked.id] = exposure);
+    } catch (_) {
+      // Exposure is advisory; keep the guarantor even if it fails to load.
+    }
   }
 
-  void _setGuarantorSelected(String memberId, bool selected) {
-    if (selected) {
-      _guarantorIds.add(memberId);
-    } else {
-      _guarantorIds.remove(memberId);
-    }
+  void _removeGuarantor(String memberId) {
+    setState(() {
+      _guarantors.removeWhere((g) => g.id == memberId);
+      _guarantorExposures.remove(memberId);
+    });
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate() || _memberId == null) return;
-    final members =
-        ref.read(membersProvider('')).asData?.value ?? const <Member>[];
-    final loans = ref.read(loansProvider('')).asData?.value ?? const <Loan>[];
-    final unclearedLoan = _unclearedLoan(loans);
+    final borrower = _borrower;
+    if (borrower == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a borrower first.')),
+      );
+      return;
+    }
+    if (!_formKey.currentState!.validate()) return;
+    final unclearedLoan = _borrowerExposure?.openLoan;
     final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
     final months = int.parse(_months.text.trim());
     final interestRate = _interestRate.text.trim().isEmpty
         ? null
         : num.parse(_interestRate.text.trim().replaceAll(',', ''));
     final chargeFee = num.parse(_chargeFee.text.trim().replaceAll(',', ''));
-    final borrowerName = _selectedBorrower(members)?.fullName ?? 'the borrower';
+    final borrowerName = borrower.fullName;
     final confirmed = await confirmAction(
       context,
       title: unclearedLoan == null ? 'Save loan data?' : 'Top up loan?',
       message: unclearedLoan == null
           ? 'Create a ${Fmt.money(amount)} $_product for $borrowerName over '
               '$months month(s), charge fee ${Fmt.money(chargeFee)}, with '
-              '${_guarantorIds.length} guarantor(s).'
+              '${_guarantors.length} guarantor(s).'
           : 'Top up and restructure ${Fmt.label(unclearedLoan.product)} for '
               '$borrowerName. Existing balance is ${Fmt.money(unclearedLoan.balance)}, '
               'top-up is ${Fmt.money(amount)}, new term is $months month(s), '
@@ -194,7 +267,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
               reason: _purpose.text,
             );
         ref.invalidate(loansProvider(''));
-        ref.invalidate(memberLoansProvider(_memberId!));
+        ref.invalidate(memberLoansProvider(borrower.id));
         ref.invalidate(saccoStatusProvider);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -206,7 +279,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
       }
 
       final loan = await ref.read(adminRepositoryProvider).createLoan(
-            memberId: _memberId!,
+            memberId: borrower.id,
             product: _product,
             amount: amount,
             interestRate: interestRate,
@@ -215,20 +288,20 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
             purpose: _purpose.text,
             signedFormReference: _formRef.text,
           );
-      for (final guarantorId in _guarantorIds) {
+      for (final guarantor in _guarantors) {
         await ref.read(adminRepositoryProvider).createLoanGuarantor(
               loanId: loan.id,
-              memberId: guarantorId,
+              memberId: guarantor.id,
             );
       }
       ref.invalidate(loansProvider(''));
-      ref.invalidate(memberLoansProvider(_memberId!));
+      ref.invalidate(memberLoansProvider(borrower.id));
       ref.invalidate(guarantorRequestsProvider);
       ref.invalidate(saccoStatusProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_guarantorIds.isEmpty
+            content: Text(_guarantors.isEmpty
                 ? 'Loan data saved.'
                 : 'Loan data and guarantors saved.'),
           ),
@@ -247,20 +320,12 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final membersAsync = ref.watch(membersProvider(''));
-    final loansAsync = ref.watch(loansProvider(''));
-    final guarantorsAsync = ref.watch(guarantorRequestsProvider);
-    final session = ref.watch(sessionProvider).asData?.value;
-    final canSetTerms = session?.can('loans:terms') ?? false;
-    final members = membersAsync.asData?.value
-            .where((m) => m.status == 'active')
-            .toList() ??
-        const <Member>[];
-    final loans = loansAsync.asData?.value ?? const <Loan>[];
-    final guarantorRequests =
-        guarantorsAsync.asData?.value ?? const <LoanGuarantor>[];
-    final borrower = _selectedBorrower(members);
-    final unclearedLoan = _unclearedLoan(loans);
+    final scheme = Theme.of(context).colorScheme;
+    final canSetTerms =
+        ref.watch(sessionProvider).asData?.value?.can('loans:terms') ?? false;
+    final borrower = _borrower;
+    final exposure = _borrowerExposure;
+    final unclearedLoan = exposure?.openLoan;
     return Padding(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -283,43 +348,32 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
                     ?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _memberId,
-                decoration: const InputDecoration(labelText: 'Member'),
-                items: members
-                    .map((m) => DropdownMenuItem(
-                          value: m.id,
-                          child: Text(
-                            '${m.fullName} - ${m.membershipNo}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ))
-                    .toList(),
-                onChanged: _busy
-                    ? null
-                    : (v) => setState(() {
-                          _memberId = v;
-                          for (final loan in loans) {
-                            if (loan.memberId == v && loan.isOpen) {
-                              _months.text = '${loan.repaymentMonths}';
-                              if (canSetTerms) {
-                                _interestRate.text =
-                                    loan.interestRate.toStringAsFixed(2);
-                              }
-                              break;
-                            }
-                          }
-                        }),
-                validator: (v) => v == null ? 'Choose a member.' : null,
-              ),
-              if (borrower != null) ...[
-                const SizedBox(height: 8),
-                _BorrowerExposure(
-                  member: borrower,
-                  members: members,
-                  loans: loans,
-                  guarantorRequests: guarantorRequests,
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: _busy ? null : _pickBorrower,
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'Borrower',
+                    suffixIcon: const Icon(Icons.search),
+                  ),
+                  child: Text(
+                    borrower == null
+                        ? 'Tap to choose a member'
+                        : '${borrower.fullName} - ${borrower.membershipNo}',
+                    style: TextStyle(
+                      color: borrower == null ? scheme.onSurfaceVariant : null,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
+              ),
+              if (_loadingBorrower) ...[
+                const SizedBox(height: 8),
+                const LinearProgressIndicator(),
+              ],
+              if (exposure != null) ...[
+                const SizedBox(height: 8),
+                _BorrowerExposureCard(exposure: exposure),
                 if (unclearedLoan != null) ...[
                   const SizedBox(height: 8),
                   _TopUpNotice(loan: unclearedLoan),
@@ -445,35 +499,32 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
               if (unclearedLoan != null)
                 Text(
                   'Guarantors are not changed for a top-up.',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  style: TextStyle(color: scheme.onSurfaceVariant),
                 )
-              else if (_memberId == null)
+              else if (borrower == null)
                 Text(
                   'Choose the borrower first.',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                  style: TextStyle(color: scheme.onSurfaceVariant),
                 )
-              else
-                ...members
-                    .where((m) => m.id != _memberId)
-                    .map((m) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _GuarantorChoice(
-                            member: m,
-                            members: members,
-                            loans: loans,
-                            guarantorRequests: guarantorRequests,
-                            selected: _guarantorIds.contains(m.id),
-                            onChanged: _busy
-                                ? null
-                                : (selected) => setState(() {
-                                      _setGuarantorSelected(m.id, selected);
-                                    }),
-                          ),
-                        )),
+              else ...[
+                ..._guarantors.map((g) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _GuarantorCard(
+                        member: g,
+                        exposure: _guarantorExposures[g.id],
+                        onRemove:
+                            _busy ? null : () => _removeGuarantor(g.id),
+                      ),
+                    )),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.person_add_alt_1_outlined),
+                    label: const Text('Add guarantor'),
+                    onPressed: _busy ? null : _addGuarantor,
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
@@ -491,12 +542,6 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
                   onPressed: _busy ? null : _save,
                 ),
               ),
-              if (membersAsync.isLoading ||
-                  loansAsync.isLoading ||
-                  guarantorsAsync.isLoading) ...[
-                const SizedBox(height: 12),
-                const LinearProgressIndicator(),
-              ],
             ],
           ),
         ),
@@ -505,32 +550,13 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
   }
 }
 
-class _BorrowerExposure extends StatelessWidget {
-  const _BorrowerExposure({
-    required this.member,
-    required this.members,
-    required this.loans,
-    required this.guarantorRequests,
-  });
+class _BorrowerExposureCard extends StatelessWidget {
+  const _BorrowerExposureCard({required this.exposure});
 
-  final Member member;
-  final List<Member> members;
-  final List<Loan> loans;
-  final List<LoanGuarantor> guarantorRequests;
+  final MemberLoanExposure exposure;
 
   @override
   Widget build(BuildContext context) {
-    final openLoans = loans
-        .where((loan) => loan.memberId == member.id && loan.isOpen)
-        .toList();
-    final loanBalance =
-        openLoans.fold<num>(0, (sum, loan) => sum + loan.balance);
-    final guarantees = guarantorRequests
-        .where((request) =>
-            request.memberId == member.id && request.activeCommitment)
-        .toList();
-    final guaranteedBalance = guarantees.fold<num>(
-        0, (sum, request) => sum + request.guaranteedLoanBalance);
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -538,25 +564,26 @@ class _BorrowerExposure extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(member.fullName,
+            Text(exposure.fullName,
                 style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
             Wrap(
               spacing: 12,
               runSpacing: 4,
               children: [
-                Text('Savings ${Fmt.money(member.savings)}'),
-                Text('Shares ${Fmt.money(member.shares)}'),
-                Text('Welfare ${Fmt.money(member.welfare)}'),
-                Text('${openLoans.length} open loan(s)'),
-                Text('Loan bal ${Fmt.money(loanBalance)}'),
-                Text('Guaranteed loan bal ${Fmt.money(guaranteedBalance)}'),
+                Text('Savings ${Fmt.money(exposure.savings)}'),
+                Text('Shares ${Fmt.money(exposure.shares)}'),
+                Text('Welfare ${Fmt.money(exposure.welfare)}'),
+                Text('${exposure.openLoanCount} open loan(s)'),
+                Text('Loan bal ${Fmt.money(exposure.openLoanBalance)}'),
+                Text(
+                    'Guaranteed loan bal ${Fmt.money(exposure.guaranteedLoanBalance)}'),
               ],
             ),
-            if (guarantees.isNotEmpty) ...[
+            if (exposure.guaranteeLabels.isNotEmpty) ...[
               const SizedBox(height: 6),
-              ...guarantees.map((request) => Text(
-                    _guaranteedMemberLabel(request),
+              ...exposure.guaranteeLabels.map((label) => Text(
+                    label,
                     style: const TextStyle(fontSize: 12),
                   )),
             ],
@@ -564,20 +591,6 @@ class _BorrowerExposure extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _guaranteedMemberLabel(LoanGuarantor request) {
-    final loan = request.loan;
-    final borrowerId = loan?.memberId ?? '';
-    var borrowerName = borrowerId;
-    for (final candidate in members) {
-      if (candidate.id == borrowerId) {
-        borrowerName = candidate.fullName;
-        break;
-      }
-    }
-    final product = loan == null ? 'loan' : Fmt.label(loan.product);
-    return 'Guaranteed: $borrowerName - $product - ${Fmt.money(request.guaranteedLoanBalance)}';
   }
 }
 
@@ -606,113 +619,91 @@ class _TopUpNotice extends StatelessWidget {
   }
 }
 
-class _GuarantorChoice extends StatelessWidget {
-  const _GuarantorChoice({
+class _GuarantorCard extends StatelessWidget {
+  const _GuarantorCard({
     required this.member,
-    required this.members,
-    required this.loans,
-    required this.guarantorRequests,
-    required this.selected,
-    required this.onChanged,
+    required this.exposure,
+    required this.onRemove,
   });
 
   final Member member;
-  final List<Member> members;
-  final List<Loan> loans;
-  final List<LoanGuarantor> guarantorRequests;
-  final bool selected;
-  final ValueChanged<bool>? onChanged;
+  final MemberLoanExposure? exposure;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final openLoans = loans
-        .where((loan) => loan.memberId == member.id && loan.isOpen)
-        .toList();
-    final loanBalance =
-        openLoans.fold<num>(0, (sum, loan) => sum + loan.balance);
-    final guarantees = guarantorRequests
-        .where((request) =>
-            request.memberId == member.id && request.activeCommitment)
-        .toList();
-    final guaranteedBalance = guarantees.fold<num>(
-        0, (sum, request) => sum + request.guaranteedLoanBalance);
-    var capacity = member.savings;
-    for (final request in guarantees) {
-      if (request.capacity > 0 && request.capacity < capacity) {
-        capacity = request.capacity;
-      }
-    }
+    final data = exposure;
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              value: selected,
-              onChanged: onChanged == null
-                  ? null
-                  : (value) => onChanged!(value ?? false),
-              title: Text(member.fullName,
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text(member.membershipNo),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(member.fullName,
+                          style:
+                              const TextStyle(fontWeight: FontWeight.w700)),
+                      Text(member.membershipNo,
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: scheme.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Remove guarantor',
+                  onPressed: onRemove,
+                ),
+              ],
             ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Wrap(
+            if (data == null)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Text('Loading capacity...',
+                    style: TextStyle(fontSize: 12)),
+              )
+            else ...[
+              Wrap(
                 spacing: 10,
                 runSpacing: 4,
                 children: [
-                  _mini('Savings', Fmt.money(member.savings)),
-                  _mini('Shares', Fmt.money(member.shares)),
-                  _mini('Welfare', Fmt.money(member.welfare)),
-                  _mini('Open loans', '${openLoans.length}'),
-                  _mini('Loan bal', Fmt.money(loanBalance)),
-                  _mini('Guaranteed loan bal', Fmt.money(guaranteedBalance)),
-                  _mini('Capacity', Fmt.money(capacity)),
+                  _mini('Savings', Fmt.money(data.savings)),
+                  _mini('Shares', Fmt.money(data.shares)),
+                  _mini('Welfare', Fmt.money(data.welfare)),
+                  _mini('Open loans', '${data.openLoanCount}'),
+                  _mini('Loan bal', Fmt.money(data.openLoanBalance)),
+                  _mini('Guaranteed loan bal',
+                      Fmt.money(data.guaranteedLoanBalance)),
+                  _mini('Capacity', Fmt.money(data.guaranteeCapacity)),
                 ],
               ),
-            ),
-            if (openLoans.isNotEmpty || guarantees.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
+              if (data.openLoanCount > 0 ||
+                  data.guaranteeLabels.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
                   [
-                    if (openLoans.isNotEmpty) 'Has active loan exposure',
-                    if (guarantees.isNotEmpty)
+                    if (data.openLoanCount > 0) 'Has active loan exposure',
+                    if (data.guaranteeLabels.isNotEmpty)
                       'Already guaranteeing another loan',
                   ].join(' - '),
                   style: TextStyle(fontSize: 12, color: scheme.error),
                 ),
-              ),
-            ],
-            if (guarantees.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: guarantees
-                      .map((request) => Text(
-                            _guaranteedMemberLabel(request),
-                            style: const TextStyle(fontSize: 12),
-                          ))
-                      .toList(),
-                ),
-              ),
-            ],
-            if (selected && guarantees.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Guaranteed loan balance: ${Fmt.money(guaranteedBalance)}',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
+              ],
+              if (data.guaranteeLabels.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                ...data.guaranteeLabels.map((label) => Text(
+                      label,
+                      style: const TextStyle(fontSize: 12),
+                    )),
+              ],
             ],
           ],
         ),
@@ -722,20 +713,6 @@ class _GuarantorChoice extends StatelessWidget {
 
   Widget _mini(String label, String value) {
     return Text('$label $value', style: const TextStyle(fontSize: 12));
-  }
-
-  String _guaranteedMemberLabel(LoanGuarantor request) {
-    final loan = request.loan;
-    final borrowerId = loan?.memberId ?? '';
-    var borrowerName = borrowerId;
-    for (final candidate in members) {
-      if (candidate.id == borrowerId) {
-        borrowerName = candidate.fullName;
-        break;
-      }
-    }
-    final product = loan == null ? 'loan' : Fmt.label(loan.product);
-    return 'Guaranteed: $borrowerName - $product - ${Fmt.money(request.guaranteedLoanBalance)}';
   }
 }
 
