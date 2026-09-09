@@ -237,14 +237,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final requiredCredits = recipientCount * segments;
     final status = ref.read(saccoStatusProvider).asData?.value;
     if (status != null && requiredCredits > status.smsBalance) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-          'SMS balance is too low. Required: $requiredCredits, '
-          'available: ${status.smsBalance}.',
-        ),
-      ));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'SMS balance is too low. Required: $requiredCredits, '
+            'available: ${status.smsBalance}.',
+          ),
+        ));
+      }
       return;
     }
+    if (!context.mounted) return;
     final confirmed = await confirmAction(
       context,
       title: 'Send SMS broadcast?',

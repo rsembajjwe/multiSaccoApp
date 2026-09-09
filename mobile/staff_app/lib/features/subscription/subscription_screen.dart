@@ -33,6 +33,7 @@ class _SubscriptionScreenState extends ConsumerState<SubscriptionScreen> {
       builder: (_) => const _PhoneDialog(title: 'Platform subscription payment'),
     );
     if (payment == null || payment.phone.trim().isEmpty) return;
+    if (!context.mounted) return;
     final confirmed = await confirmAction(
       context,
       title: 'Send platform payment prompt?',

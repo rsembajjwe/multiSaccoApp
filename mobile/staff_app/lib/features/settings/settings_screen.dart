@@ -204,6 +204,7 @@ class _SettingsBody extends ConsumerWidget {
     }
     final mime = _mimeFor(image.name);
     final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
+    if (!context.mounted) return;
     final confirmed = await confirmAction(
       context,
       title: 'Update SACCO logo?',

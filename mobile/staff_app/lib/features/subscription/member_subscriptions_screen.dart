@@ -163,6 +163,7 @@ class _MemberSubscriptionsScreenState
       builder: (_) => const _PhoneDialog(title: 'SACCO account mobile money'),
     );
     if (payment == null || payment.phone.trim().isEmpty) return;
+    if (!context.mounted) return;
     final confirmed = await confirmAction(
       context,
       title: 'Pay platform for selected members?',
@@ -244,6 +245,7 @@ class _MemberSubscriptionsScreenState
       builder: (_) => const _PhoneDialog(title: 'Member mobile money'),
     );
     if (payment == null || payment.phone.trim().isEmpty) return;
+    if (!context.mounted) return;
     final confirmed = await confirmAction(
       context,
       title: 'Send member dues prompt?',
