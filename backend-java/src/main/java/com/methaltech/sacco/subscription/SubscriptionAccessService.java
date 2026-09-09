@@ -59,6 +59,25 @@ public class SubscriptionAccessService {
     }
 
     private int memberPosition(Member member) {
+        // Not-active members never appear in the paid-capacity ordering.
+        if (!"active".equals(member.getStatus())) {
+            return Integer.MAX_VALUE;
+        }
+        String membershipNo = member.getMembershipNo();
+        // Membership numbers are unique per tenant, so a member's 1-based rank is
+        // exactly the number of active members ordered before it, plus one. This
+        // avoids loading and sorting every member on each deposit-access check.
+        // Null membership numbers sort last (Comparator.nullsLast); fall back to
+        // the exact scan for that rare case.
+        if (membershipNo == null) {
+            return memberPositionByScan(member);
+        }
+        long before = memberRepository.countActiveMembersOrderedBefore(member.getTenantId(), membershipNo);
+        long position = before + 1;
+        return position >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) position;
+    }
+
+    private int memberPositionByScan(Member member) {
         List<Member> members = memberRepository.findByTenantIdOrderByMembershipNoAsc(member.getTenantId()).stream()
                 .filter(candidate -> "active".equals(candidate.getStatus()))
                 .sorted(Comparator.comparing(Member::getMembershipNo, Comparator.nullsLast(String::compareToIgnoreCase)))

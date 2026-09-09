@@ -64,6 +64,10 @@ public interface MemberRepository extends JpaRepository<Member, String> {
     // Targeted duplicate checks for member updates (avoid scanning all members).
     boolean existsByTenantIdAndIdNotAndPhoneIgnoreCase(String tenantId, String id, String phone);
     boolean existsByTenantIdAndIdNotAndEmailIgnoreCase(String tenantId, String id, String email);
+    // Count of active members that sort before :membershipNo (case-insensitive),
+    // i.e. a member's 1-based rank minus one in the paid-capacity ordering.
+    @Query("SELECT COUNT(m) FROM Member m WHERE m.tenantId = :tenantId AND m.status = 'active' AND m.membershipNo IS NOT NULL AND LOWER(m.membershipNo) < LOWER(:membershipNo)")
+    long countActiveMembersOrderedBefore(@Param("tenantId") String tenantId, @Param("membershipNo") String membershipNo);
     Optional<Member> findFirstByTenantIdAndMembershipNoIgnoreCase(String tenantId, String membershipNo);
     Optional<Member> findFirstByTenantIdAndMembershipNoIgnoreCaseOrTenantIdAndPhoneIgnoreCaseOrTenantIdAndEmailIgnoreCase(
             String membershipTenantId,
