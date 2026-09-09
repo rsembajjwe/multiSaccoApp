@@ -93,6 +93,9 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
                         ?.value
                         .can('finance-source:view') ??
                     false,
+                onChanged: () {
+                  if (mounted) setState(() => _reloadTick++);
+                },
               ),
               emptyIcon: Icons.groups_outlined,
               emptyMessage: 'No members match your search.',
@@ -106,9 +109,11 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
 }
 
 class _MemberTile extends StatelessWidget {
-  const _MemberTile({required this.member, required this.showFinancials});
+  const _MemberTile(
+      {required this.member, required this.showFinancials, this.onChanged});
   final Member member;
   final bool showFinancials;
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -125,8 +130,11 @@ class _MemberTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => MemberDetailScreen(memberId: member.id))),
+        onTap: () async {
+          await Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => MemberDetailScreen(memberId: member.id)));
+          onChanged?.call();
+        },
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
