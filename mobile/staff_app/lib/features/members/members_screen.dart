@@ -149,7 +149,7 @@ class _MemberTile extends StatelessWidget {
                             fontSize: 13, fontWeight: FontWeight.w800)),
                     if (member.loanBalance > 0) ...[
                       const SizedBox(height: 2),
-                      Text('Loan ${Fmt.money(member.loanBalance)}',
+                      Text('Loan Balance ${Fmt.money(member.loanBalance)}',
                           style: const TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
