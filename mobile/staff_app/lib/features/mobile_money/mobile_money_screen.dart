@@ -66,7 +66,7 @@ class _MobileMoneyScreenState extends ConsumerState<MobileMoneyScreen> {
       builder: (ctx) => _CloseRequestDialog(status: status),
     );
     if (reason == null) return;
-    if (!context.mounted) return;
+    if (!mounted) return;
     final confirmed = await confirmAction(
       context,
       title: 'Mark request ${Fmt.label(status)}?',

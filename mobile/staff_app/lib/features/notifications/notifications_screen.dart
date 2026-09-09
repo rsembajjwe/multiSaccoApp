@@ -237,7 +237,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final requiredCredits = recipientCount * segments;
     final status = ref.read(saccoStatusProvider).asData?.value;
     if (status != null && requiredCredits > status.smsBalance) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
             'SMS balance is too low. Required: $requiredCredits, '
@@ -247,7 +247,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       }
       return;
     }
-    if (!context.mounted) return;
+    if (!mounted) return;
     final confirmed = await confirmAction(
       context,
       title: 'Send SMS broadcast?',

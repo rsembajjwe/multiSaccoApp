@@ -166,7 +166,7 @@ class _ReverseButtonState extends ConsumerState<_ReverseButton> {
       ),
     );
     if (reason == null || reason.isEmpty) return;
-    if (!context.mounted) return;
+    if (!mounted) return;
     final confirmed = await confirmAction(
       context,
       title: 'Reverse this transaction?',
