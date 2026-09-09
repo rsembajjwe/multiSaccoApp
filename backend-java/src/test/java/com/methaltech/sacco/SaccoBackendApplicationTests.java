@@ -2,6 +2,8 @@ package com.methaltech.sacco;
 
 import com.methaltech.sacco.accounting.MobileMoneyReconciliationJob;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -6274,6 +6276,86 @@ class SaccoBackendApplicationTests {
 			if (membershipId != null) {
 				jdbcTemplate.update("DELETE FROM member_subscriptions WHERE id = ?", membershipId);
 			}
+		}
+	}
+
+	@Test
+	void memberSubscriptionCapacityBlocksManualAndBulkActivationBypass() throws Exception {
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String originalStatus = jdbcTemplate.queryForObject(
+				"SELECT status FROM subscriptions WHERE tenant_id = 'tenant_green'", String.class);
+		java.math.BigDecimal originalPaid = jdbcTemplate.queryForObject(
+				"SELECT paid FROM subscriptions WHERE tenant_id = 'tenant_green'", java.math.BigDecimal.class);
+		java.math.BigDecimal originalUnitPrice = jdbcTemplate.queryForObject(
+				"SELECT unit_price FROM subscriptions WHERE tenant_id = 'tenant_green'", java.math.BigDecimal.class);
+		java.sql.Date originalExpiry = jdbcTemplate.queryForObject(
+				"SELECT expiry FROM subscriptions WHERE tenant_id = 'tenant_green'", java.sql.Date.class);
+		List<String> created = new ArrayList<>();
+		try {
+			int activeCount = jdbcTemplate.queryForObject(
+					"SELECT COUNT(*) FROM member_subscriptions WHERE tenant_id = 'tenant_green' AND status = 'active'",
+					Integer.class);
+			java.math.BigDecimal unitPrice = new java.math.BigDecimal("5000.00");
+			java.math.BigDecimal paidForCurrentActive = unitPrice.multiply(java.math.BigDecimal.valueOf(activeCount));
+			jdbcTemplate.update(
+					"UPDATE subscriptions SET status = 'active', paid = ?, unit_price = ? WHERE tenant_id = 'tenant_green'",
+					paidForCurrentActive,
+					unitPrice);
+
+			MvcResult single = mockMvc.perform(post("/api/v1/member-subscriptions")
+							.header("Authorization", "Bearer " + staffToken)
+							.contentType("application/json")
+							.content("{\"memberId\":\"member_green_amina\",\"planName\":\"Capacity single\",\"amount\":5000,\"billingPeriod\":\"annual\"}"))
+					.andExpect(status().isCreated())
+					.andReturn();
+			String singleId = objectMapper.readTree(single.getResponse().getContentAsString()).path("data").path("id").asText();
+			created.add(singleId);
+
+			mockMvc.perform(post("/api/v1/member-subscriptions/" + singleId + "/payments")
+							.header("Authorization", "Bearer " + staffToken)
+							.contentType("application/json")
+							.content("{\"amount\":5000}"))
+					.andExpect(status().isConflict())
+					.andExpect(jsonPath("$.error.code", is("MEMBER_SUBSCRIPTION_CAPACITY_EXCEEDED")));
+
+			jdbcTemplate.update(
+					"UPDATE subscriptions SET paid = ? WHERE tenant_id = 'tenant_green'",
+					unitPrice.multiply(java.math.BigDecimal.valueOf(activeCount + 1L)));
+			MvcResult firstBulk = mockMvc.perform(post("/api/v1/member-subscriptions")
+							.header("Authorization", "Bearer " + staffToken)
+							.contentType("application/json")
+							.content("{\"memberId\":\"member_green_amina\",\"planName\":\"Capacity bulk A\",\"amount\":5000,\"billingPeriod\":\"annual\"}"))
+					.andExpect(status().isCreated())
+					.andReturn();
+			MvcResult secondBulk = mockMvc.perform(post("/api/v1/member-subscriptions")
+							.header("Authorization", "Bearer " + staffToken)
+							.contentType("application/json")
+							.content("{\"memberId\":\"member_green_daniel\",\"planName\":\"Capacity bulk B\",\"amount\":5000,\"billingPeriod\":\"annual\"}"))
+					.andExpect(status().isCreated())
+					.andReturn();
+			String firstBulkId = objectMapper.readTree(firstBulk.getResponse().getContentAsString()).path("data").path("id").asText();
+			String secondBulkId = objectMapper.readTree(secondBulk.getResponse().getContentAsString()).path("data").path("id").asText();
+			created.add(firstBulkId);
+			created.add(secondBulkId);
+
+			mockMvc.perform(post("/api/v1/member-subscriptions/bulk-payments")
+							.header("Authorization", "Bearer " + staffToken)
+							.contentType("application/json")
+							.content("""
+									{"amount":10000,"subscriptionIds":["%s","%s"],"method":"cash"}
+									""".formatted(firstBulkId, secondBulkId)))
+					.andExpect(status().isConflict())
+					.andExpect(jsonPath("$.error.code", is("MEMBER_SUBSCRIPTION_CAPACITY_EXCEEDED")));
+		} finally {
+			for (String id : created) {
+				jdbcTemplate.update("DELETE FROM member_subscriptions WHERE id = ?", id);
+			}
+			jdbcTemplate.update(
+					"UPDATE subscriptions SET status = ?, paid = ?, unit_price = ?, expiry = ? WHERE tenant_id = 'tenant_green'",
+					originalStatus,
+					originalPaid,
+					originalUnitPrice,
+					originalExpiry);
 		}
 	}
 
