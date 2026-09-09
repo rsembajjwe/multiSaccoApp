@@ -48,6 +48,10 @@ public class MobileMoneyProviderRouter {
         return defaultProvider;
     }
 
+    boolean recognizesNetwork(String requestedNetwork) {
+        return canonicalId(requestedNetwork) != null;
+    }
+
     public List<PaymentProviderOption> availablePaymentOptions() {
         List<PaymentProviderOption> configured = providersById.values().stream()
                 .filter(MobileMoneyProvider::isConfigured)

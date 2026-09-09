@@ -6623,6 +6623,38 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void staffMobileMoneyPromptsRejectUnknownProvider() throws Exception {
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+
+		mockMvc.perform(post("/api/v1/integrations/mobile-money/payment-requests/staff")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{"memberId":"member_green_amina","purpose":"savings_deposit","amount":10000,"payerPhone":"+256700000001","provider":"orange"}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("MOBILE_MONEY_PROVIDER_INVALID")));
+
+		mockMvc.perform(post("/api/v1/integrations/mobile-money/subscription-payment-requests/staff")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{"amount":5000,"payerPhone":"+256700000001","provider":"orange"}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("MOBILE_MONEY_PROVIDER_INVALID")));
+
+		mockMvc.perform(post("/api/v1/integrations/mobile-money/sms-payment-requests/staff")
+						.header("Authorization", "Bearer " + staffToken)
+						.contentType("application/json")
+						.content("""
+								{"smsCount":10,"payerPhone":"+256700000001","provider":"orange"}
+								"""))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code", is("MOBILE_MONEY_PROVIDER_INVALID")));
+	}
+
+	@Test
 	void memberPaidPlatformFeeUpdatesSaccoSubscriptionCapacity() throws Exception {
 		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 		String reference = "MM-PLATFORM-FEE-" + System.currentTimeMillis();

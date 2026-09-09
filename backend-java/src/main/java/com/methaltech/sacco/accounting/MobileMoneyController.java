@@ -192,6 +192,8 @@ class MobileMoneyController {
                 || !authService.hasPermission(currentSession.user(), "member-subscription:manage"))) {
             return authService.permissionRequired(requiredPermission);
         }
+        ResponseEntity<?> providerValidation = validateStaffPaymentProvider(body.provider());
+        if (providerValidation != null) return providerValidation;
         Member member = memberRepository.findById(body.memberId().trim()).orElse(null);
         if (member == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -289,6 +291,20 @@ class MobileMoneyController {
         return Money.normalize(balanceDue.compareTo(BigDecimal.ZERO) > 0 ? balanceDue : subscription.getAmount());
     }
 
+    private ResponseEntity<?> validateStaffPaymentProvider(String provider) {
+        if (provider == null || provider.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "MOBILE_MONEY_PROVIDER_REQUIRED",
+                            "Choose the mobile-money network for this prompt."));
+        }
+        if (!mobileMoneyRouter.recognizesNetwork(provider)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "MOBILE_MONEY_PROVIDER_INVALID",
+                            "Choose a supported mobile-money network."));
+        }
+        return null;
+    }
+
     @PostMapping("/subscription-payment-requests/staff")
     ResponseEntity<?> requestSaccoSubscriptionPayment(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -299,6 +315,8 @@ class MobileMoneyController {
         if (!authService.hasPermission(currentSession.user(), "subscriptions:manage")) {
             return authService.permissionRequired("subscriptions:manage");
         }
+        ResponseEntity<?> providerValidation = validateStaffPaymentProvider(body.provider());
+        if (providerValidation != null) return providerValidation;
         String tenantId = authService.isPlatform(currentSession.user()) && body.tenantId() != null && !body.tenantId().isBlank()
                 ? body.tenantId().trim()
                 : currentSession.user().getTenantId();
@@ -393,6 +411,8 @@ class MobileMoneyController {
         if (!authService.hasPermission(currentSession.user(), "notifications:manage")) {
             return authService.permissionRequired("notifications:manage");
         }
+        ResponseEntity<?> providerValidation = validateStaffPaymentProvider(body.provider());
+        if (providerValidation != null) return providerValidation;
         String tenantId = authService.isPlatform(currentSession.user()) && body.tenantId() != null && !body.tenantId().isBlank()
                 ? body.tenantId().trim()
                 : currentSession.user().getTenantId();
