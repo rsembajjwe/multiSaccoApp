@@ -71,9 +71,12 @@ public class MemberSubscriptionService {
         List<Member> members = memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId).stream()
                 .filter(member -> !"exited".equals(member.getStatus()))
                 .toList();
+        // One query for everyone who already has a subscription, instead of a
+        // per-member existence check (N+1) on every list/summary load.
+        java.util.Set<String> covered = new java.util.HashSet<>(repository.findCoveredMemberIdsByTenantId(tenantId));
         int created = 0;
         for (Member member : members) {
-            if (repository.findFirstByMemberIdOrderByCreatedAtDesc(member.getId()).isEmpty()) {
+            if (!covered.contains(member.getId())) {
                 ensureMandatorySubscription(member);
                 created++;
             }

@@ -11,6 +11,10 @@ public interface MemberSubscriptionRepository extends JpaRepository<MemberSubscr
 
     List<MemberSubscription> findByTenantIdOrderByCreatedAtDesc(String tenantId);
 
+    // Member ids that already have at least one subscription (batch coverage check).
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT s.memberId FROM MemberSubscription s WHERE s.tenantId = :tenantId")
+    List<String> findCoveredMemberIdsByTenantId(@org.springframework.data.repository.query.Param("tenantId") String tenantId);
+
     Optional<MemberSubscription> findFirstByMemberIdOrderByCreatedAtDesc(String memberId);
     long countByTenantIdAndStatus(String tenantId, String status);
     long countByTenantId(String tenantId);
