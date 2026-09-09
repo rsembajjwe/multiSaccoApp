@@ -308,11 +308,16 @@ class MemberController {
         if (tenantId == null) return tenantAccessDenied();
 
         List<String> branchScope = branchScope(currentSession, tenantId);
-        Set<String> visibleMemberIds = branchScope.isEmpty()
-                ? memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId).stream().map(Member::getId).collect(Collectors.toSet())
-                : memberRepository.findByTenantIdAndBranchIdInOrderByMembershipNoAsc(tenantId, branchScope).stream().map(Member::getId).collect(Collectors.toSet());
-        List<MemberFundBalanceExportResponse> balances = memberFundBalanceRepository.findByTenantIdOrderByMemberIdAscFundCodeAsc(tenantId).stream()
-                .filter(balance -> visibleMemberIds.contains(balance.getMemberId()))
+        var balanceStream = memberFundBalanceRepository.findByTenantIdOrderByMemberIdAscFundCodeAsc(tenantId).stream();
+        if (!branchScope.isEmpty()) {
+            // Branch-scoped viewers only see their branches' members; full-tenant
+            // viewers see everything, so no member load is needed there.
+            Set<String> visibleMemberIds = memberRepository
+                    .findByTenantIdAndBranchIdInOrderByMembershipNoAsc(tenantId, branchScope)
+                    .stream().map(Member::getId).collect(Collectors.toSet());
+            balanceStream = balanceStream.filter(balance -> visibleMemberIds.contains(balance.getMemberId()));
+        }
+        List<MemberFundBalanceExportResponse> balances = balanceStream
                 .map(MemberFundBalanceExportResponse::from)
                 .toList();
         return ResponseEntity.ok(ApiResponse.of(balances));
