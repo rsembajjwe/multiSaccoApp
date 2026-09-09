@@ -76,7 +76,7 @@ class MobileMoneyPaymentRequestEntity {
         MobileMoneyPaymentRequestEntity request = new MobileMoneyPaymentRequestEntity();
         request.id = result.id();
         request.tenantId = result.tenantId();
-        request.memberId = result.memberId();
+        request.memberId = result.memberId() == null || result.memberId().isBlank() ? null : result.memberId().trim();
         request.loanId = loanId == null || loanId.isBlank() ? null : loanId.trim();
         request.purpose = result.purpose();
         request.amount = result.amount();

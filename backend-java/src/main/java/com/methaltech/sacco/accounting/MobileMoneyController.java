@@ -1054,6 +1054,12 @@ class MobileMoneyController {
         }
         subscriptionService.refreshBilling(subscription);
         List<MemberSubscription> selectedMemberships = selectedMemberSubscriptionsFromPayload(tenantId, matchingRequest.getProviderPayload());
+        int selectedIdCount = selectedMemberSubscriptionIdCountFromPayload(matchingRequest.getProviderPayload());
+        if (selectedIdCount > 0 && selectedMemberships.size() != selectedIdCount) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "INVALID_MEMBER_SUBSCRIPTION_SELECTION",
+                            "One or more selected member subscriptions can no longer be activated for this SACCO."));
+        }
         ResponseEntity<?> allocationCheck = validateSelectedMembershipAllocation(subscription, selectedMemberships, amount);
         if (allocationCheck != null) return allocationCheck;
 
@@ -1396,6 +1402,24 @@ class MobileMoneyController {
             return selectedMemberSubscriptions(tenantId, subscriptionIds);
         } catch (Exception ignored) {
             return List.of();
+        }
+    }
+
+    private int selectedMemberSubscriptionIdCountFromPayload(String storedPayload) {
+        if (storedPayload == null || storedPayload.isBlank()) return 0;
+        try {
+            JsonNode ids = objectMapper.readTree(storedPayload).path("memberSubscriptionIds");
+            if (!ids.isArray()) return 0;
+            java.util.HashSet<String> uniqueIds = new java.util.HashSet<>();
+            for (JsonNode id : ids) {
+                String value = id.asString();
+                if (value != null && !value.isBlank()) {
+                    uniqueIds.add(value.trim());
+                }
+            }
+            return uniqueIds.size();
+        } catch (Exception ignored) {
+            return 0;
         }
     }
 

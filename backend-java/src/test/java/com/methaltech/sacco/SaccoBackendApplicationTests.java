@@ -6655,6 +6655,49 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
+	void saccoPlatformFeeCallbackRejectsStaleSelectedMemberSubscriptions() throws Exception {
+		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
+		String membershipId = null;
+		String reference = "MM-SUB-STALE-" + System.currentTimeMillis();
+		try {
+			MvcResult assigned = mockMvc.perform(post("/api/v1/member-subscriptions")
+							.header("Authorization", "Bearer " + staffToken)
+							.contentType("application/json")
+							.content("{\"memberId\":\"member_green_amina\",\"planName\":\"Stale callback dues\",\"amount\":5000,\"billingPeriod\":\"annual\"}"))
+					.andExpect(status().isCreated())
+					.andReturn();
+			membershipId = objectMapper.readTree(assigned.getResponse().getContentAsString()).path("data").path("id").asText();
+
+			mockMvc.perform(post("/api/v1/integrations/mobile-money/subscription-payment-requests/staff")
+							.header("Authorization", "Bearer " + staffToken)
+							.contentType("application/json")
+							.content("""
+									{"amount":5000,"payerPhone":"+256700000001","externalReference":"%s","provider":"mtn","memberSubscriptionIds":["%s"]}
+									""".formatted(reference, membershipId)))
+					.andExpect(status().isAccepted());
+
+			jdbcTemplate.update("DELETE FROM member_subscriptions WHERE id = ?", membershipId);
+			membershipId = null;
+
+			mockMvc.perform(post("/api/v1/integrations/mobile-money/callback")
+							.contentType("application/json")
+							.content("""
+									{"tenantId":"tenant_green","purpose":"platform_fee","amount":5000,"externalReference":"%s","provider":"mtn","providerPayload":{"phone":"+256700000001"}}
+									""".formatted(reference)))
+					.andExpect(status().isConflict())
+					.andExpect(jsonPath("$.error.code", is("INVALID_MEMBER_SUBSCRIPTION_SELECTION")));
+		} finally {
+			jdbcTemplate.update("DELETE FROM statement_lines WHERE tenant_id = 'tenant_green' AND external_reference = ?", reference);
+			jdbcTemplate.update("DELETE FROM subscription_payments WHERE external_reference = ?", reference);
+			jdbcTemplate.update("DELETE FROM mobile_money_callbacks WHERE external_reference = ?", reference);
+			jdbcTemplate.update("DELETE FROM mobile_money_payment_requests WHERE external_reference = ?", reference);
+			if (membershipId != null) {
+				jdbcTemplate.update("DELETE FROM member_subscriptions WHERE id = ?", membershipId);
+			}
+		}
+	}
+
+	@Test
 	void memberPaidPlatformFeeUpdatesSaccoSubscriptionCapacity() throws Exception {
 		String memberToken = memberLoginAndReturnToken("GREE-0001", "Member@12345");
 		String reference = "MM-PLATFORM-FEE-" + System.currentTimeMillis();
