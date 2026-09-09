@@ -17,6 +17,7 @@ class PagedListView<T> extends StatefulWidget {
     required this.emptyMessage,
     required this.errorMessage,
     this.padding = const EdgeInsets.fromLTRB(16, 4, 16, 24),
+    this.onItemsChanged,
   });
 
   final String search;
@@ -26,6 +27,10 @@ class PagedListView<T> extends StatefulWidget {
   final String emptyMessage;
   final String errorMessage;
   final EdgeInsets padding;
+
+  /// Optional: called with the currently loaded items after each page load or
+  /// reset, so a caller can offer actions over what has been loaded so far.
+  final void Function(List<T> loaded)? onItemsChanged;
 
   @override
   State<PagedListView<T>> createState() => _PagedListViewState<T>();
@@ -91,6 +96,7 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
         _error = null;
         _firstDone = true;
       });
+      widget.onItemsChanged?.call(List<T>.unmodifiable(_items));
     } catch (e) {
       if (!mounted) return;
       setState(() {

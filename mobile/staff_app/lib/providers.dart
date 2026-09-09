@@ -150,6 +150,12 @@ final memberSubscriptionsProvider =
   (ref) => ref.watch(adminRepositoryProvider).memberSubscriptions(),
 );
 
+/// Paid/unpaid/total member-subscription counts for the summary cards.
+final memberSubscriptionSummaryProvider =
+    FutureProvider.autoDispose<MemberSubscriptionSummary>(
+  (ref) => ref.watch(adminRepositoryProvider).memberSubscriptionSummary(),
+);
+
 final interestByYearProvider = FutureProvider.autoDispose<List<InterestYear>>(
   (ref) => ref.watch(adminRepositoryProvider).interestByYear(),
 );

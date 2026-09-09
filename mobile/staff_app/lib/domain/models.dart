@@ -710,6 +710,26 @@ class SubscriptionPackage {
       );
 }
 
+/// Paid/unpaid/total member-subscription counts (GET /member-subscriptions/summary).
+class MemberSubscriptionSummary {
+  const MemberSubscriptionSummary({
+    required this.paid,
+    required this.unpaid,
+    required this.total,
+  });
+
+  final int paid;
+  final int unpaid;
+  final int total;
+
+  factory MemberSubscriptionSummary.fromJson(Map<String, dynamic> j) =>
+      MemberSubscriptionSummary(
+        paid: _int(j['paid']),
+        unpaid: _int(j['unpaid']),
+        total: _int(j['total']),
+      );
+}
+
 class MemberSubscription {
   const MemberSubscription({
     required this.id,

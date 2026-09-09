@@ -3,8 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
 import '../../core/widgets/confirm_action.dart';
-import '../../core/widgets/error_retry.dart';
-import '../../core/widgets/skeleton.dart';
+import '../../core/widgets/paged_list.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -27,43 +26,43 @@ class MemberSubscriptionsScreen extends ConsumerStatefulWidget {
 class _MemberSubscriptionsScreenState
     extends ConsumerState<MemberSubscriptionsScreen> {
   String _filter = 'unpaid';
-  final Set<String> _selected = {};
+  final Map<String, MemberSubscription> _selected = {};
+  List<MemberSubscription> _loaded = const [];
   bool _busy = false;
+  int _reloadTick = 0;
+
+  void _refreshList() {
+    setState(() => _reloadTick++);
+    ref.invalidate(memberSubscriptionSummaryProvider);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(memberSubscriptionsProvider);
+    final summaryAsync = ref.watch(memberSubscriptionSummaryProvider);
     final namesAsync = ref.watch(memberNamesProvider);
     final platformSubs = ref.watch(subscriptionsProvider).asData?.value;
     final platformSub = platformSubs == null || platformSubs.isEmpty
         ? null
         : platformSubs.first;
     final names = namesAsync.asData?.value ?? const <String, String>{};
+    final summary = summaryAsync.asData?.value;
+    final paid = summary?.paid ?? 0;
+    final unpaid = summary?.unpaid ?? 0;
+    final int? remainingSlots = platformSub == null
+        ? null
+        : (platformSub.paidMemberCapacity - paid).clamp(0, 1 << 30).toInt();
+    final selectedTotal = _selected.values
+        .fold<num>(0, (total, s) => total + s.balanceDue);
+    final selectableLoaded =
+        _loaded.where(_canSelect).where((s) => !_selected.containsKey(s.id));
+
     return Scaffold(
       appBar: AppBar(title: const Text('Member subscriptions')),
-      body: async.when(
-        loading: () => const ListSkeleton(),
-        error: (e, _) => ErrorRetry(
-          message: 'Could not load member subscriptions.',
-          detail: '$e',
-          onRetry: () => ref.invalidate(memberSubscriptionsProvider),
-        ),
-        data: (rows) {
-          final visible = rows.where(_matchesFilter).toList();
-          final unpaid = rows.where((s) => !s.isPaid).length;
-          final paid = rows.length - unpaid;
-          final int? remainingSlots = platformSub == null
-              ? null
-              : (platformSub.paidMemberCapacity - paid)
-                  .clamp(0, 1 << 30)
-                  .toInt();
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(memberSubscriptionsProvider);
-              ref.invalidate(memberNamesProvider);
-            },
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Column(
               children: [
                 _Summary(
                   paid: paid,
@@ -88,7 +87,7 @@ class _MemberSubscriptionsScreenState
                   const SizedBox(height: 12),
                   _SelectedMembersPanel(
                     selectedCount: _selected.length,
-                    selectedTotal: _selectedTotal(rows),
+                    selectedTotal: selectedTotal,
                     availableSlots: remainingSlots,
                     busy: _busy,
                     onActivatePaidSlots: _selected.isEmpty ||
@@ -96,63 +95,69 @@ class _MemberSubscriptionsScreenState
                             remainingSlots == null ||
                             _selected.length > remainingSlots
                         ? null
-                        : () => _activateSelectedUsingPaidSlots(rows),
+                        : _activateSelectedUsingPaidSlots,
                     onPayPlatform: _selected.isEmpty || _busy
                         ? null
-                        : () => _payPlatformForSelected(rows),
+                        : _payPlatformForSelected,
+                    onSelectAllLoaded: _busy || selectableLoaded.isEmpty
+                        ? null
+                        : () => setState(() {
+                              for (final s in selectableLoaded) {
+                                _selected[s.id] = s;
+                              }
+                            }),
+                    onClearSelection: _busy || _selected.isEmpty
+                        ? null
+                        : () => setState(_selected.clear),
                   ),
                 ],
                 const SizedBox(height: 12),
-                if (visible.isEmpty)
-                  const EmptyState(
-                    icon: Icons.workspace_premium_outlined,
-                    message: 'No member subscriptions found.',
-                  )
-                else
-                  ...visible.map((sub) => _SubscriptionTile(
-                        subscription: sub,
-                        memberName: names[sub.memberId] ?? sub.memberId,
-                        canManage: widget.canManage,
-                        canPrompt: widget.canPrompt,
-                        selected: _selected.contains(sub.id),
-                        selectionEnabled:
-                            _canSelect(sub) || _selected.contains(sub.id),
-                        onSelected: sub.isPaid
-                            ? null
-                            : (v) => setState(() {
-                                  if (v == true) {
-                                    _selected.add(sub.id);
-                                  } else {
-                                    _selected.remove(sub.id);
-                                  }
-                                }),
-                        onPrompt: () => _promptMember(sub),
-                      )),
               ],
             ),
-          );
-        },
+          ),
+          Expanded(
+            child: PagedListView<MemberSubscription>(
+              search: '$_filter|$_reloadTick',
+              onItemsChanged: (loaded) => setState(() => _loaded = loaded),
+              fetch: (page) => ref
+                  .read(adminRepositoryProvider)
+                  .memberSubscriptionsPage(status: _filter, page: page),
+              itemBuilder: (context, sub) => _SubscriptionTile(
+                subscription: sub,
+                memberName: names[sub.memberId] ?? sub.memberId,
+                canManage: widget.canManage,
+                canPrompt: widget.canPrompt,
+                selected: _selected.containsKey(sub.id),
+                selectionEnabled:
+                    _canSelect(sub) || _selected.containsKey(sub.id),
+                onSelected: sub.isPaid
+                    ? null
+                    : (v) => setState(() {
+                          if (v == true) {
+                            _selected[sub.id] = sub;
+                          } else {
+                            _selected.remove(sub.id);
+                          }
+                        }),
+                onPrompt: () => _promptMember(sub),
+              ),
+              emptyIcon: Icons.workspace_premium_outlined,
+              emptyMessage: 'No member subscriptions found.',
+              errorMessage: 'Could not load member subscriptions.',
+            ),
+          ),
+        ],
       ),
     );
   }
-
-  bool _matchesFilter(MemberSubscription sub) {
-    if (_filter == 'paid') return sub.isPaid;
-    if (_filter == 'unpaid') return !sub.isPaid;
-    return true;
-  }
-
-  num _selectedTotal(List<MemberSubscription> rows) => rows
-      .where((s) => _selected.contains(s.id))
-      .fold<num>(0, (total, s) => total + s.balanceDue);
 
   bool _canSelect(MemberSubscription sub) {
     if (!widget.canManage || sub.isPaid) return false;
     return true;
   }
 
-  Future<void> _payPlatformForSelected(List<MemberSubscription> rows) async {
-    final total = _selectedTotal(rows);
+  Future<void> _payPlatformForSelected() async {
+    final total = _selected.values.fold<num>(0, (t, s) => t + s.balanceDue);
     if (total <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Selected dues require ${Fmt.money(total)}.')));
@@ -181,11 +186,12 @@ class _MemberSubscriptionsScreenState
             amount: total,
             payerPhone: payment.phone,
             provider: payment.provider,
-            memberSubscriptionIds: _selected.toList(),
+            memberSubscriptionIds: _selected.keys.toList(),
           );
       ref.invalidate(subscriptionsProvider);
       ref.invalidate(mobileMoneyPaymentRequestsProvider);
       _selected.clear();
+      _refreshList();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(
@@ -193,16 +199,16 @@ class _MemberSubscriptionsScreenState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _activateSelectedUsingPaidSlots(
-      List<MemberSubscription> rows) async {
-    final total = _selectedTotal(rows);
+  Future<void> _activateSelectedUsingPaidSlots() async {
+    final total = _selected.values.fold<num>(0, (t, s) => t + s.balanceDue);
     if (total <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Selected dues require ${Fmt.money(total)}.')));
@@ -221,18 +227,19 @@ class _MemberSubscriptionsScreenState
     try {
       await ref.read(adminRepositoryProvider).recordBulkMemberSubscriptionPayment(
             amount: total,
-            subscriptionIds: _selected.toList(),
+            subscriptionIds: _selected.keys.toList(),
           );
-      ref.invalidate(memberSubscriptionsProvider);
       ref.invalidate(subscriptionsProvider);
       _selected.clear();
+      _refreshList();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Selected members activated using paid slots.')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -271,7 +278,8 @@ class _MemberSubscriptionsScreenState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -323,6 +331,8 @@ class _SelectedMembersPanel extends StatelessWidget {
     required this.busy,
     required this.onActivatePaidSlots,
     required this.onPayPlatform,
+    required this.onSelectAllLoaded,
+    required this.onClearSelection,
   });
 
   final int selectedCount;
@@ -331,6 +341,8 @@ class _SelectedMembersPanel extends StatelessWidget {
   final bool busy;
   final VoidCallback? onActivatePaidSlots;
   final VoidCallback? onPayPlatform;
+  final VoidCallback? onSelectAllLoaded;
+  final VoidCallback? onClearSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -342,6 +354,20 @@ class _SelectedMembersPanel extends StatelessWidget {
           Text(
             '$selectedCount selected - dues ${Fmt.money(selectedTotal)}',
             style: Theme.of(context).textTheme.bodySmall,
+          ),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: onSelectAllLoaded,
+                icon: const Icon(Icons.done_all, size: 18),
+                label: const Text('Select loaded'),
+              ),
+              TextButton.icon(
+                onPressed: onClearSelection,
+                icon: const Icon(Icons.clear, size: 18),
+                label: const Text('Clear'),
+              ),
+            ],
           ),
           if (availableSlots != null)
             Padding(

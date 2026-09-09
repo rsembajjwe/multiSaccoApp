@@ -345,6 +345,26 @@ class AdminRepository {
     return rows.map(MemberSubscription.fromJson).toList();
   }
 
+  /// One page of member subscriptions, filtered server-side by [status]
+  /// ('paid', 'unpaid', or null/'all'). Scales past loading every member.
+  Future<PageResult<MemberSubscription>> memberSubscriptionsPage({
+    String? status,
+    required int page,
+    int size = 20,
+  }) async {
+    final r = await _api.getPage('/member-subscriptions',
+        page: page,
+        size: size,
+        query: (status != null && status != 'all') ? {'status': status} : null);
+    return r.mapItems(MemberSubscription.fromJson);
+  }
+
+  /// Paid/unpaid/total member-subscription counts for the summary cards.
+  Future<MemberSubscriptionSummary> memberSubscriptionSummary() async {
+    final data = await _api.get('/member-subscriptions/summary');
+    return MemberSubscriptionSummary.fromJson(data);
+  }
+
   Future<MemberSubscription> recordMemberSubscriptionPayment(
     String subscriptionId, {
     required num amount,

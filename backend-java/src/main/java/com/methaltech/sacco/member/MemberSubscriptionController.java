@@ -2,6 +2,8 @@ package com.methaltech.sacco.member;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.api.PageParams;
+import com.methaltech.sacco.api.PagedResponse;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.subscription.Subscription;
@@ -12,6 +14,9 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,6 +49,47 @@ class MemberSubscriptionController {
     @GetMapping
     ResponseEntity<?> list(
             @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size) {
+        AuthService.CurrentSession session = authService.currentSession(authorization);
+        if (session == null) return authService.authRequired();
+        if (!authService.hasPermission(session.user(), "member-subscription:view")) {
+            return authService.permissionRequired("member-subscription:view");
+        }
+        String tenantId = resolveTenant(session, requestedTenantId);
+        if (tenantId == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "TENANT_REQUIRED", "Select a SACCO to view member memberships."));
+        }
+        memberSubscriptionService.ensureMandatorySubscriptions(tenantId);
+
+        if (PageParams.requested(page, size)) {
+            Pageable pageable = PageParams.toPageable(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+            String filter = status == null ? "" : status.trim().toLowerCase();
+            Page<MemberSubscription> result;
+            if ("paid".equals(filter)) {
+                result = repository.findByTenantIdAndStatus(tenantId, "active", pageable);
+            } else if ("unpaid".equals(filter)) {
+                result = repository.findByTenantIdAndStatusNot(tenantId, "active", pageable);
+            } else {
+                result = repository.findByTenantId(tenantId, pageable);
+            }
+            return ResponseEntity.ok(PagedResponse.of(
+                    result.getContent().stream().map(MemberSubscriptionResponse::from).toList(),
+                    result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages()));
+        }
+
+        return ResponseEntity.ok(ApiResponse.of(repository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
+                .map(MemberSubscriptionResponse::from)
+                .toList()));
+    }
+
+    /** Paid/unpaid/total member-subscription counts, so the screen can show the summary without the full list. */
+    @GetMapping("/summary")
+    ResponseEntity<?> summary(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
             @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
         AuthService.CurrentSession session = authService.currentSession(authorization);
         if (session == null) return authService.authRequired();
@@ -56,9 +102,13 @@ class MemberSubscriptionController {
                     .body(ApiErrorResponse.of(403, "TENANT_REQUIRED", "Select a SACCO to view member memberships."));
         }
         memberSubscriptionService.ensureMandatorySubscriptions(tenantId);
-        return ResponseEntity.ok(ApiResponse.of(repository.findByTenantIdOrderByCreatedAtDesc(tenantId).stream()
-                .map(MemberSubscriptionResponse::from)
-                .toList()));
+        long total = repository.countByTenantId(tenantId);
+        long paid = repository.countByTenantIdAndStatus(tenantId, "active");
+        long unpaid = Math.max(0, total - paid);
+        return ResponseEntity.ok(ApiResponse.of(new SubscriptionSummaryResponse(paid, unpaid, total)));
+    }
+
+    record SubscriptionSummaryResponse(long paid, long unpaid, long total) {
     }
 
     @PostMapping

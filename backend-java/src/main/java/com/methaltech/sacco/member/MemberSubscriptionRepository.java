@@ -3,6 +3,8 @@ package com.methaltech.sacco.member;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MemberSubscriptionRepository extends JpaRepository<MemberSubscription, String> {
@@ -11,6 +13,13 @@ public interface MemberSubscriptionRepository extends JpaRepository<MemberSubscr
 
     Optional<MemberSubscription> findFirstByMemberIdOrderByCreatedAtDesc(String memberId);
     long countByTenantIdAndStatus(String tenantId, String status);
+    long countByTenantId(String tenantId);
+
+    // Paginated finders for the staff member-subscriptions screen (status filter:
+    // paid == 'active', unpaid == everything else).
+    Page<MemberSubscription> findByTenantId(String tenantId, Pageable pageable);
+    Page<MemberSubscription> findByTenantIdAndStatus(String tenantId, String status, Pageable pageable);
+    Page<MemberSubscription> findByTenantIdAndStatusNot(String tenantId, String status, Pageable pageable);
 
     /** Active memberships lapsed past their grace window — candidates to expire. */
     List<MemberSubscription> findByStatusAndExpiryLessThan(String status, LocalDate date);
