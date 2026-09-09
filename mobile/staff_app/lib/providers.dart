@@ -114,6 +114,12 @@ final loansProvider = FutureProvider.autoDispose.family<List<Loan>, String>(
   (ref, search) => ref.watch(adminRepositoryProvider).loans(search: search),
 );
 
+/// Aggregate loan-portfolio figures for the Reports screen.
+final loanPortfolioSummaryProvider =
+    FutureProvider.autoDispose<LoanPortfolioSummary>(
+  (ref) => ref.watch(adminRepositoryProvider).loanPortfolioSummary(),
+);
+
 final loanRepaymentsProvider =
     FutureProvider.autoDispose.family<List<LoanRepayment>, String>(
   (ref, loanId) => ref.watch(adminRepositoryProvider).repayments(loanId),

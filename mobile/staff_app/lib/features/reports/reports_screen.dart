@@ -17,7 +17,7 @@ class ReportsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statusAsync = ref.watch(saccoStatusProvider);
-    final loansAsync = ref.watch(loansProvider(''));
+    final summaryAsync = ref.watch(loanPortfolioSummaryProvider);
     final interestAsync = ref.watch(interestByYearProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Reports')),
@@ -29,17 +29,14 @@ class ReportsScreen extends ConsumerWidget {
           onRetry: () => ref.invalidate(saccoStatusProvider),
         ),
         data: (st) {
-          final loans = loansAsync.asData?.value ?? const <Loan>[];
-          final open = loans.where((l) => l.isOpen).toList();
-          final disbursed = open.fold<num>(0, (s, l) => s + l.amount);
-          final arrears = loans.where((l) => l.isOpen && l.inArrears).toList();
-          final arrearsAmount =
-              arrears.fold<num>(0, (s, l) => s + l.arrearsAmount);
+          final summary = summaryAsync.asData?.value;
+          final openCount = summary?.openLoanCount ?? 0;
+          final disbursed = summary?.disbursedOpen ?? 0;
+          final arrearsCount = summary?.arrearsCount ?? 0;
+          final arrearsAmount = summary?.arrearsAmount ?? 0;
           final interestTotal = interestAsync.asData?.value
                   .fold<num>(0, (s, y) => s + y.interest) ??
-              loans
-                  .where((l) => l.status != 'rejected' && l.status != 'cancelled')
-                  .fold<num>(0, (s, l) => s + l.interestAmount);
+              (summary?.interestTotal ?? 0);
           final fundSegments = st.memberFunds.isEmpty
               ? [
                   _Seg('Savings', st.totalSavings, const Color(0xFF0F766E)),
@@ -58,7 +55,7 @@ class ReportsScreen extends ConsumerWidget {
           return RefreshIndicator(
             onRefresh: () async {
               ref.invalidate(saccoStatusProvider);
-              ref.invalidate(loansProvider(''));
+              ref.invalidate(loanPortfolioSummaryProvider);
               ref.invalidate(interestByYearProvider);
             },
             child: ListView(
@@ -121,12 +118,12 @@ class ReportsScreen extends ConsumerWidget {
                       KeyValueRow('Outstanding balance',
                           Fmt.money(st.loanPortfolio),
                           emphasize: true),
-                      KeyValueRow('Open loans', Fmt.number(open.length)),
+                      KeyValueRow('Open loans', Fmt.number(openCount)),
                       KeyValueRow('Principal disbursed (open)',
                           Fmt.money(disbursed)),
                       KeyValueRow('Loans in arrears',
-                          '${arrears.length} · ${Fmt.money(arrearsAmount)}'),
-                      if (loansAsync.isLoading)
+                          '$arrearsCount · ${Fmt.money(arrearsAmount)}'),
+                      if (summaryAsync.isLoading)
                         const Padding(
                           padding: EdgeInsets.only(top: 8),
                           child: Text('Loading loan details…',

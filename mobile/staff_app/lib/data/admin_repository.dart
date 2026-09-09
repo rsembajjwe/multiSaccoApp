@@ -115,6 +115,12 @@ class AdminRepository {
   Future<Member> member(String id) async =>
       Member.fromJson(await _api.get('/members/$id'));
 
+  /// Aggregate loan-portfolio figures for Reports (no full loan list).
+  Future<LoanPortfolioSummary> loanPortfolioSummary() async {
+    final data = await _api.get('/loans/portfolio-summary');
+    return LoanPortfolioSummary.fromJson(data);
+  }
+
   Future<List<Loan>> loans({String? search}) async {
     final rows = await _api.getList('/loans',
         query: (search != null && search.trim().isNotEmpty)

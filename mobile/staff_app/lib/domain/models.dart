@@ -510,6 +510,36 @@ class MemberLoanExposure {
       );
 }
 
+/// Aggregate loan-portfolio figures for the Reports screen
+/// (GET /loans/portfolio-summary), so Reports need not load every loan.
+class LoanPortfolioSummary {
+  const LoanPortfolioSummary({
+    required this.openLoanCount,
+    required this.disbursedOpen,
+    required this.outstandingOpen,
+    required this.arrearsCount,
+    required this.arrearsAmount,
+    required this.interestTotal,
+  });
+
+  final int openLoanCount;
+  final num disbursedOpen;
+  final num outstandingOpen;
+  final int arrearsCount;
+  final num arrearsAmount;
+  final num interestTotal;
+
+  factory LoanPortfolioSummary.fromJson(Map<String, dynamic> j) =>
+      LoanPortfolioSummary(
+        openLoanCount: _int(j['openLoanCount']),
+        disbursedOpen: _num(j['disbursedOpen']),
+        outstandingOpen: _num(j['outstandingOpen']),
+        arrearsCount: _int(j['arrearsCount']),
+        arrearsAmount: _num(j['arrearsAmount']),
+        interestTotal: _num(j['interestTotal']),
+      );
+}
+
 class LoanExtension {
   const LoanExtension({
     required this.id,

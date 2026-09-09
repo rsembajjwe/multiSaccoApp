@@ -206,6 +206,65 @@ class LoanController {
         return ResponseEntity.ok(ApiResponse.of(loans.stream().map(this::loanResponse).toList()));
     }
 
+    /**
+     * Aggregate loan-portfolio figures for the Reports screen. Enriches each
+     * loan the same way the loan list does and sums the results, so Reports no
+     * longer needs to pull every loan to the client to compute these totals.
+     */
+    @GetMapping("/portfolio-summary")
+    ResponseEntity<?> loanPortfolioSummary(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:view")) {
+            return authService.permissionRequired("loans:view");
+        }
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+        boolean platformAll = authService.isPlatform(currentSession.user()) && requestedTenantId == null;
+        List<String> branchScope = branchScope(currentSession, tenantId);
+
+        List<Loan> loans = platformAll
+                ? loanRepository.findAllByOrderByTenantIdAscCreatedAtDesc()
+                : (!branchScope.isEmpty()
+                        ? loanRepository.findByTenantIdAndMemberBranchIds(tenantId, branchScope)
+                        : loanRepository.findByTenantIdOrderByCreatedAtDesc(tenantId));
+
+        int openCount = 0;
+        int arrearsCount = 0;
+        BigDecimal disbursedOpen = BigDecimal.ZERO;
+        BigDecimal outstandingOpen = BigDecimal.ZERO;
+        BigDecimal arrearsAmount = BigDecimal.ZERO;
+        BigDecimal interestTotal = BigDecimal.ZERO;
+        for (Loan loan : loans) {
+            LoanResponse r = loanResponse(loan);
+            boolean open = OPEN_LOAN_STATUSES.contains(r.status());
+            if (open) {
+                openCount++;
+                disbursedOpen = disbursedOpen.add(zeroIfNull(r.amount()));
+                outstandingOpen = outstandingOpen.add(zeroIfNull(r.balance()));
+                boolean inArrears = zeroIfNull(r.arrearsAmount()).compareTo(BigDecimal.ZERO) > 0
+                        || r.arrearsInstallments() > 0;
+                if (inArrears) {
+                    arrearsCount++;
+                    arrearsAmount = arrearsAmount.add(zeroIfNull(r.arrearsAmount()));
+                }
+            }
+            if (!"rejected".equals(r.status()) && !"cancelled".equals(r.status())) {
+                interestTotal = interestTotal.add(zeroIfNull(r.interestAmount()));
+            }
+        }
+
+        LoanPortfolioSummaryResponse data = new LoanPortfolioSummaryResponse(
+                openCount, disbursedOpen, outstandingOpen, arrearsCount, arrearsAmount, interestTotal);
+        return ResponseEntity.ok(ApiResponse.of(data));
+    }
+
+    private static BigDecimal zeroIfNull(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
     @PostMapping
     ResponseEntity<?> createLoan(
             @RequestHeader(name = "Authorization", required = false) String authorization,
