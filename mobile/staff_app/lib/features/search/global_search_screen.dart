@@ -113,11 +113,11 @@ class _MemberResults extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(membersProvider(query));
+    final async = ref.watch(searchMembersProvider(query));
     return async.maybeWhen(
-      data: (members) => _Group(
-        title: 'Members (${members.length})',
-        children: members
+      data: (result) => _Group(
+        title: 'Members (${result.total})',
+        children: result.items
             .take(8)
             .map((m) => Card(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -145,12 +145,12 @@ class _LoanResults extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(loansProvider(query));
+    final async = ref.watch(searchLoansProvider(query));
     final names = ref.watch(memberNamesProvider).asData?.value ?? const {};
     return async.maybeWhen(
-      data: (loans) => _Group(
-        title: 'Loans (${loans.length})',
-        children: loans
+      data: (result) => _Group(
+        title: 'Loans (${result.total})',
+        children: result.items
             .take(8)
             .map((l) => Card(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -179,12 +179,12 @@ class _TxnResults extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(transactionsProvider(query));
+    final async = ref.watch(searchTransactionsProvider(query));
     final names = ref.watch(memberNamesProvider).asData?.value ?? const {};
     return async.maybeWhen(
-      data: (txns) => _Group(
-        title: 'Transactions (${txns.length})',
-        children: txns
+      data: (result) => _Group(
+        title: 'Transactions (${result.total})',
+        children: result.items
             .take(8)
             .map((t) => Card(
                   margin: const EdgeInsets.only(bottom: 8),

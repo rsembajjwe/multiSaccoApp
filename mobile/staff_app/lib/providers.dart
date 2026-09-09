@@ -184,6 +184,29 @@ final transactionsProvider =
   (ref, search) => ref.watch(adminRepositoryProvider).transactions(search: search),
 );
 
+/// Global-search result pages: only the first page per source, so a broad
+/// query never pulls the whole table. Each carries the total match count.
+final searchMembersProvider =
+    FutureProvider.autoDispose.family<PageResult<Member>, String>(
+  (ref, query) => ref
+      .watch(adminRepositoryProvider)
+      .membersPage(search: query, page: 0, size: 8),
+);
+
+final searchLoansProvider =
+    FutureProvider.autoDispose.family<PageResult<Loan>, String>(
+  (ref, query) => ref
+      .watch(adminRepositoryProvider)
+      .loansPage(search: query, page: 0, size: 8),
+);
+
+final searchTransactionsProvider =
+    FutureProvider.autoDispose.family<PageResult<FinancialTxn>, String>(
+  (ref, query) => ref
+      .watch(adminRepositoryProvider)
+      .transactionsPage(search: query, page: 0, size: 8),
+);
+
 /// Welfare claims across the SACCO.
 final welfareClaimsProvider = FutureProvider.autoDispose<List<WelfareClaim>>(
   (ref) => ref.watch(adminRepositoryProvider).welfareClaims(),
