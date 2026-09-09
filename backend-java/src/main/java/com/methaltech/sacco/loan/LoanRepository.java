@@ -1,5 +1,6 @@
 package com.methaltech.sacco.loan;
 
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 public interface LoanRepository extends JpaRepository<Loan, String> {
     List<Loan> findAllByOrderByTenantIdAscCreatedAtDesc();
     List<Loan> findByTenantIdOrderByCreatedAtDesc(String tenantId);
+
+    List<Loan> findByMemberIdInAndStatusIn(Collection<String> memberIds, Collection<String> statuses);
     Page<Loan> findByTenantId(String tenantId, Pageable pageable);
     @Query("""
             SELECT l FROM Loan l

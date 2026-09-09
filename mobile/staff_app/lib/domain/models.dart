@@ -224,6 +224,7 @@ class Member {
     required this.savings,
     required this.shares,
     required this.welfare,
+    this.loanBalance = 0,
   });
 
   final String id;
@@ -241,6 +242,7 @@ class Member {
   final num savings;
   final num shares;
   final num welfare;
+  final num loanBalance;
 
   num get totalWorth => savings + shares + welfare;
 
@@ -260,6 +262,7 @@ class Member {
         savings: _num(j['savingsBalance']),
         shares: _num(j['sharesBalance']),
         welfare: _num(j['welfareBalance']),
+        loanBalance: _num(j['loanBalance']),
       );
 }
 

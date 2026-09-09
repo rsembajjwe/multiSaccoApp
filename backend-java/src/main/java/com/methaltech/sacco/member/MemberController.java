@@ -4,6 +4,8 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.api.PageParams;
 import com.methaltech.sacco.api.PagedResponse;
+import com.methaltech.sacco.loan.Loan;
+import com.methaltech.sacco.loan.LoanRepository;
 import com.methaltech.sacco.finance.FinancialTransaction;
 import com.methaltech.sacco.finance.FinancialTransactionRepository;
 import com.methaltech.sacco.identity.AuditService;
@@ -121,6 +123,9 @@ class MemberController {
             "disposal_pending",
             "disposed");
 
+    // Loan statuses treated as outstanding for a member loan balance (mirrors the app).
+    private static final Set<String> OPEN_LOAN_STATUSES = Set.of("active", "overdue");
+
     private final MemberRepository memberRepository;
     private final MemberDocumentRepository memberDocumentRepository;
     private final MemberNextOfKinRepository memberNextOfKinRepository;
@@ -128,6 +133,7 @@ class MemberController {
     private final MemberPrivacyRequestRepository privacyRequestRepository;
     private final MemberFundBalanceRepository memberFundBalanceRepository;
     private final FinancialTransactionRepository financialTransactionRepository;
+    private final LoanRepository loanRepository;
     private final BranchLookup branchLookup;
     private final TenantService tenantService;
     private final AuthService authService;
@@ -185,6 +191,8 @@ class MemberController {
         boolean platformAll = authService.isPlatform(currentSession.user()) && requestedTenantId == null;
         String searchTerm = searchTerm(search);
         List<String> branchScope = branchScope(currentSession, tenantId);
+        boolean showFinancials = authService.isPlatform(currentSession.user())
+                || authService.hasPermission(currentSession.user(), "finance-source:view");
 
         if (PageParams.requested(page, size)) {
             Sort sort = sortBy(platformAll, sortBy, direction, Map.of(
@@ -207,7 +215,7 @@ class MemberController {
                                     ? memberRepository.findByTenantId(tenantId, pageable)
                                     : memberRepository.searchByTenantId(tenantId, searchTerm, pageable)));
             return ResponseEntity.ok(PagedResponse.of(
-                    result.getContent().stream().map(MemberResponse::fromSummary).toList(),
+                    toSummaries(result.getContent(), showFinancials),
                     result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages()));
         }
 
@@ -223,7 +231,26 @@ class MemberController {
                     .toList();
         }
 
-        return ResponseEntity.ok(ApiResponse.of(members.stream().map(MemberResponse::fromSummary).toList()));
+        return ResponseEntity.ok(ApiResponse.of(toSummaries(members, showFinancials)));
+    }
+
+    // Member summaries, adding each member outstanding loan balance (sum of active/overdue loans) in
+    // one query. Financial figures are withheld unless the viewer holds finance-source:view.
+    private List<MemberResponse> toSummaries(List<Member> members, boolean financialsVisible) {
+        if (members.isEmpty()) return List.of();
+        Map<String, BigDecimal> loanBalances = new HashMap<>();
+        if (financialsVisible) {
+            List<String> memberIds = members.stream().map(Member::getId).toList();
+            for (Loan loan : loanRepository.findByMemberIdInAndStatusIn(memberIds, OPEN_LOAN_STATUSES)) {
+                BigDecimal balance = loan.getBalance();
+                if (balance != null) {
+                    loanBalances.merge(loan.getMemberId(), balance, BigDecimal::add);
+                }
+            }
+        }
+        return members.stream()
+                .map(member -> MemberResponse.fromSummary(member, loanBalances.get(member.getId()), financialsVisible))
+                .toList();
     }
 
     @GetMapping("/fund-balances")

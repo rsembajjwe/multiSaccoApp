@@ -64,7 +64,15 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
               fetch: (page) => ref
                   .read(adminRepositoryProvider)
                   .membersPage(search: _query, page: page),
-              itemBuilder: (context, m) => _MemberTile(member: m),
+              itemBuilder: (context, m) => _MemberTile(
+                member: m,
+                showFinancials: ref
+                        .watch(sessionProvider)
+                        .asData
+                        ?.value
+                        .can('finance-source:view') ??
+                    false,
+              ),
               emptyIcon: Icons.groups_outlined,
               emptyMessage: 'No members match your search.',
               errorMessage: 'Could not load members.',
@@ -77,8 +85,9 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
 }
 
 class _MemberTile extends StatelessWidget {
-  const _MemberTile({required this.member});
+  const _MemberTile({required this.member, required this.showFinancials});
   final Member member;
+  final bool showFinancials;
 
   @override
   Widget build(BuildContext context) {
@@ -133,10 +142,20 @@ class _MemberTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   StatusChip(member.status),
-                  const SizedBox(height: 6),
-                  Text(Fmt.money(member.totalWorth),
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700)),
+                  if (showFinancials) ...[
+                    const SizedBox(height: 6),
+                    Text(Fmt.money(member.totalWorth),
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w800)),
+                    if (member.loanBalance > 0) ...[
+                      const SizedBox(height: 2),
+                      Text('Loan ${Fmt.money(member.loanBalance)}',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFB91C1C))),
+                    ],
+                  ],
                 ],
               ),
             ],
