@@ -19,6 +19,7 @@ class MembersScreen extends ConsumerStatefulWidget {
 class _MembersScreenState extends ConsumerState<MembersScreen> {
   final _controller = TextEditingController();
   String _query = '';
+  int _reloadTick = 0;
 
   @override
   void dispose() {
@@ -28,8 +29,28 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canCreate =
+        ref.watch(sessionProvider).asData?.value.can('members:create') ??
+            false;
     return Scaffold(
       appBar: AppBar(title: const Text('Members')),
+      floatingActionButton: canCreate
+          ? FloatingActionButton.extended(
+              icon: const Icon(Icons.person_add_alt_1),
+              label: const Text('Add member'),
+              onPressed: () async {
+                final created = await showModalBottomSheet<bool>(
+                  context: context,
+                  isScrollControlled: true,
+                  showDragHandle: true,
+                  builder: (_) => const _AddMemberSheet(),
+                );
+                if (created == true && mounted) {
+                  setState(() => _reloadTick++);
+                }
+              },
+            )
+          : null,
       body: Column(
         children: [
           Padding(
@@ -60,7 +81,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
           ),
           Expanded(
             child: PagedListView<Member>(
-              search: _query,
+              search: '$_query|$_reloadTick',
               fetch: (page) => ref
                   .read(adminRepositoryProvider)
                   .membersPage(search: _query, page: page),
@@ -158,6 +179,169 @@ class _MemberTile extends StatelessWidget {
                   ],
                 ],
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Create a new member. Gated on members:create (secretary, chairman, admin…).
+class _AddMemberSheet extends ConsumerStatefulWidget {
+  const _AddMemberSheet();
+
+  @override
+  ConsumerState<_AddMemberSheet> createState() => _AddMemberSheetState();
+}
+
+class _AddMemberSheetState extends ConsumerState<_AddMemberSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _fullName = TextEditingController();
+  final _phone = TextEditingController();
+  final _email = TextEditingController();
+  final _nationalId = TextEditingController();
+  String? _branchId;
+  String _memberType = 'individual';
+  bool _busy = false;
+
+  static const _types = ['individual', 'group', 'institutional', 'corporate'];
+
+  @override
+  void dispose() {
+    _fullName.dispose();
+    _phone.dispose();
+    _email.dispose();
+    _nationalId.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate() || _branchId == null) {
+      if (_branchId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Choose a branch.')));
+      }
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepositoryProvider).createMember(
+            branchId: _branchId!,
+            fullName: _fullName.text,
+            phone: _phone.text,
+            memberType: _memberType,
+            email: _email.text,
+            nationalId: _nationalId.text,
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Member created.')));
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final branches = ref.watch(branchesProvider).asData?.value ?? const [];
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('New member',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _branchId,
+                decoration: const InputDecoration(labelText: 'Branch'),
+                items: branches
+                    .map((b) => DropdownMenuItem(
+                          value: b.id,
+                          child: Text(b.name, overflow: TextOverflow.ellipsis),
+                        ))
+                    .toList(),
+                onChanged:
+                    _busy ? null : (v) => setState(() => _branchId = v),
+                validator: (v) => v == null ? 'Choose a branch.' : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _fullName,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'Full name'),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Enter a name.' : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _phone,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Phone'),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Enter a phone.' : null,
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _memberType,
+                decoration: const InputDecoration(labelText: 'Member type'),
+                items: _types
+                    .map((t) => DropdownMenuItem(
+                          value: t,
+                          child: Text(Fmt.label(t)),
+                        ))
+                    .toList(),
+                onChanged: _busy
+                    ? null
+                    : (v) => setState(() => _memberType = v ?? 'individual'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _nationalId,
+                decoration: const InputDecoration(
+                    labelText: 'National ID (optional)'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _email,
+                keyboardType: TextInputType.emailAddress,
+                decoration:
+                    const InputDecoration(labelText: 'Email (optional)'),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  icon: _busy
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.check),
+                  label: const Text('Create member'),
+                  onPressed: _busy ? null : _save,
+                ),
+              ),
+              if (ref.watch(branchesProvider).isLoading) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ],
             ],
           ),
         ),

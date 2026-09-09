@@ -59,6 +59,25 @@ class AdminRepository {
 
   /// Update a member's editable details (staff PATCH is a full update, so we
   /// resend the member's current fields with the contact overrides).
+  Future<Member> createMember({
+    required String branchId,
+    required String fullName,
+    required String phone,
+    String memberType = 'individual',
+    String email = '',
+    String nationalId = '',
+  }) async {
+    final data = await _api.post('/members', {
+      'branchId': branchId,
+      'fullName': fullName.trim(),
+      'memberType': memberType,
+      'phone': phone.trim(),
+      if (email.trim().isNotEmpty) 'email': email.trim(),
+      if (nationalId.trim().isNotEmpty) 'nationalId': nationalId.trim(),
+    });
+    return Member.fromJson(data);
+  }
+
   Future<Member> updateMember(Member m,
       {String? fullName, String? phone, String? email}) async {
     final body = <String, dynamic>{
