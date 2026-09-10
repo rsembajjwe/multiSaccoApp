@@ -546,9 +546,9 @@ class _ChatBubble extends StatelessWidget {
               : (staffNames[message.senderUserId] ?? 'Staff'));
     }
     final bubbleColor =
-        isMember ? scheme.surfaceContainerHighest : scheme.primaryContainer;
-    final textColor = isMember ? scheme.onSurface : scheme.onPrimaryContainer;
-    final nameColor = isMember ? scheme.primary : scheme.onPrimaryContainer;
+        isMember ? scheme.primaryContainer : scheme.surfaceContainerHighest;
+    final textColor = isMember ? scheme.onPrimaryContainer : scheme.onSurface;
+    final nameColor = isMember ? scheme.onPrimaryContainer : scheme.primary;
     final tag = _actionTag(message.action);
     const round = Radius.circular(14);
     const tail = Radius.circular(3);
@@ -557,7 +557,7 @@ class _ChatBubble extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment:
-            isMember ? MainAxisAlignment.start : MainAxisAlignment.end,
+            isMember ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
           Flexible(
             child: ConstrainedBox(
@@ -569,8 +569,8 @@ class _ChatBubble extends StatelessWidget {
                   borderRadius: BorderRadius.only(
                     topLeft: round,
                     topRight: round,
-                    bottomLeft: isMember ? tail : round,
-                    bottomRight: isMember ? round : tail,
+                    bottomLeft: isMember ? round : tail,
+                    bottomRight: isMember ? tail : round,
                   ),
                 ),
                 child: Column(
