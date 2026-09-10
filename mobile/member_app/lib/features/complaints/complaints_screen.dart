@@ -139,47 +139,128 @@ class _ComplaintThread extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Members only ever see the public conversation — never staff internal notes.
     final visible = messages
-        .where((message) => message.message.isNotEmpty)
+        .where((m) => m.visibility != 'internal' && m.message.trim().isNotEmpty)
         .toList();
     if (visible.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: visible.map((message) => _MessageTile(message)).toList(),
+    final scheme = Theme.of(context).colorScheme;
+    final rows = <Widget>[];
+    String lastDay = '';
+    for (final m in visible) {
+      final dt = m.createdAt?.toLocal();
+      final day = dt == null ? '' : DateFormat('EEE, d MMM y').format(dt);
+      if (day != lastDay) {
+        if (day.isNotEmpty) rows.add(_DayDivider(day));
+        lastDay = day;
+      }
+      rows.add(_ChatBubble(m));
+    }
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: rows,
+      ),
     );
   }
 }
 
-class _MessageTile extends StatelessWidget {
-  const _MessageTile(this.message);
+class _DayDivider extends StatelessWidget {
+  const _DayDivider(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurfaceVariant)),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatBubble extends StatelessWidget {
+  const _ChatBubble(this.message);
   final ComplaintMessage message;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final fromMember = message.senderType == 'member';
-    final when = message.createdAt == null
-        ? ''
-        : DateFormat('d MMM y, HH:mm').format(message.createdAt!);
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: fromMember
-            ? scheme.surfaceContainerHighest
-            : scheme.primaryContainer.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final bubbleColor =
+        fromMember ? scheme.primaryContainer : scheme.surfaceContainerHighest;
+    final textColor = fromMember ? scheme.onPrimaryContainer : scheme.onSurface;
+    final nameColor = fromMember ? scheme.onPrimaryContainer : scheme.primary;
+    final dt = message.createdAt?.toLocal();
+    final time = dt == null ? '' : DateFormat('HH:mm').format(dt);
+    const round = Radius.circular(14);
+    const tail = Radius.circular(3);
+    final maxWidth = MediaQuery.of(context).size.width * 0.76;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment:
+            fromMember ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-          Text(fromMember ? 'You' : 'SACCO response',
-              style: const TextStyle(fontWeight: FontWeight.w700)),
-          if (when.isNotEmpty)
-            Text(when, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: 4),
-          Text(message.message),
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
+                decoration: BoxDecoration(
+                  color: bubbleColor,
+                  borderRadius: BorderRadius.only(
+                    topLeft: round,
+                    topRight: round,
+                    bottomLeft: fromMember ? round : tail,
+                    bottomRight: fromMember ? tail : round,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(fromMember ? 'You' : 'SACCO',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: nameColor)),
+                    const SizedBox(height: 3),
+                    Text(message.message,
+                        style: TextStyle(color: textColor, height: 1.3)),
+                    if (time.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(time,
+                            style: TextStyle(
+                                fontSize: 10.5,
+                                color: textColor.withValues(alpha: 0.6))),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
