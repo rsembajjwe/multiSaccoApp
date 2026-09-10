@@ -143,6 +143,10 @@ class ComplaintController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_COMPLAINT_STATUS", "Unsupported complaint status."));
         }
+        if (List.of("resolved", "closed").contains(status)
+                && !authService.hasPermission(currentSession.user(), "complaints:route")) {
+            return authService.permissionRequired("complaints:route");
+        }
 
         return complaintRepository.findById(complaintId)
                 .<ResponseEntity<?>>map(complaint -> {
@@ -183,6 +187,12 @@ class ComplaintController {
         if (!List.of("reply_member", "internal_note", "refer_treasurer", "escalate_chairman", "resolve", "close").contains(action)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_COMPLAINT_ACTION", "Unsupported complaint workflow action."));
+        }
+        // Routing, resolution and closure are the Secretary's to drive; other
+        // staff with complaints:manage may only reply into the thread.
+        if (List.of("refer_treasurer", "escalate_chairman", "resolve", "close").contains(action)
+                && !authService.hasPermission(currentSession.user(), "complaints:route")) {
+            return authService.permissionRequired("complaints:route");
         }
         return complaintRepository.findById(complaintId)
                 .<ResponseEntity<?>>map(complaint -> {

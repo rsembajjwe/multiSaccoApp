@@ -249,6 +249,10 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
     final c = widget.complaint;
     final staffNames = ref.watch(staffNamesProvider).asData?.value ??
         const <String, String>{};
+    // Only the Secretary (complaints:route) may refer, escalate, resolve or close;
+    // other staff with complaints:manage can reply and view the thread.
+    final canRoute =
+        ref.watch(sessionProvider).asData?.value.can('complaints:route') ?? false;
     final assignedTo = c.assignedUserId.isEmpty
         ? 'Unassigned'
         : staffNames[c.assignedUserId] ?? c.assignedUserId;
@@ -332,37 +336,41 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
                         icon: const Icon(Icons.sticky_note_2_outlined),
                         label: const Text('Internal note'),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: _busy
-                            ? null
-                            : () => _runWorkflow('refer_treasurer',
-                                'Refer to treasurer'),
-                        icon: const Icon(Icons.account_balance_wallet_outlined),
-                        label: const Text('Refer treasurer'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _busy
-                            ? null
-                            : () => _runWorkflow('escalate_chairman',
-                                'Escalate to chairman'),
-                        icon: const Icon(Icons.escalator_warning_outlined),
-                        label: const Text('Escalate'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _busy
-                            ? null
-                            : () => _runWorkflow('resolve', 'Resolve complaint'),
-                        icon: const Icon(Icons.check_circle_outline),
-                        label: const Text('Resolve'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _busy
-                            ? null
-                            : () => _runWorkflow('close', 'Close complaint',
-                                messageRequired: false),
-                        icon: const Icon(Icons.archive_outlined),
-                        label: const Text('Close'),
-                      ),
+                      if (canRoute) ...[
+                        OutlinedButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () => _runWorkflow('refer_treasurer',
+                                  'Refer to treasurer'),
+                          icon:
+                              const Icon(Icons.account_balance_wallet_outlined),
+                          label: const Text('Refer treasurer'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () => _runWorkflow('escalate_chairman',
+                                  'Escalate to chairman'),
+                          icon: const Icon(Icons.escalator_warning_outlined),
+                          label: const Text('Escalate'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () =>
+                                  _runWorkflow('resolve', 'Resolve complaint'),
+                          icon: const Icon(Icons.check_circle_outline),
+                          label: const Text('Resolve'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () => _runWorkflow('close', 'Close complaint',
+                                  messageRequired: false),
+                          icon: const Icon(Icons.archive_outlined),
+                          label: const Text('Close'),
+                        ),
+                      ],
                     ],
                   ),
                   if (_busy) ...[
