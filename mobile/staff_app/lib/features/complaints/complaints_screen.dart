@@ -532,9 +532,19 @@ class _ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isMember = message.senderType == 'member';
-    final sender = isMember
-        ? (memberName ?? 'Member')
-        : (staffNames[message.senderUserId] ?? 'Staff');
+    final String sender;
+    if (isMember) {
+      final nm = message.senderName.isNotEmpty
+          ? message.senderName
+          : (memberName ?? 'Member');
+      sender = message.senderCode.isNotEmpty ? '$nm · ${message.senderCode}' : nm;
+    } else {
+      sender = message.senderRole.isNotEmpty
+          ? message.senderRole
+          : (message.senderName.isNotEmpty
+              ? message.senderName
+              : (staffNames[message.senderUserId] ?? 'Staff'));
+    }
     final bubbleColor =
         isMember ? scheme.surfaceContainerHighest : scheme.primaryContainer;
     final textColor = isMember ? scheme.onSurface : scheme.onPrimaryContainer;
@@ -642,7 +652,11 @@ class _InternalNote extends StatelessWidget {
     final border = dark ? const Color(0xFF7A5B12) : const Color(0xFFF59E0B);
     final head = dark ? const Color(0xFFE8C877) : const Color(0xFF92400E);
     final body = dark ? const Color(0xFFEADFC2) : const Color(0xFF5A4A1E);
-    final sender = staffNames[message.senderUserId] ?? 'Staff';
+    final sender = message.senderRole.isNotEmpty
+        ? message.senderRole
+        : (message.senderName.isNotEmpty
+            ? message.senderName
+            : (staffNames[message.senderUserId] ?? 'Staff'));
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Container(

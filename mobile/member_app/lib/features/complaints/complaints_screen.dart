@@ -238,7 +238,12 @@ class _ChatBubble extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(fromMember ? 'You' : 'SACCO',
+                    Text(
+                        fromMember
+                            ? 'You'
+                            : (message.senderRole.isNotEmpty
+                                ? message.senderRole
+                                : 'SACCO'),
                         style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,

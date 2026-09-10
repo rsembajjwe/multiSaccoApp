@@ -36,6 +36,7 @@ class ComplaintController {
     private final ComplaintRepository complaintRepository;
     private final ComplaintService complaintService;
     private final ComplaintMessageRepository complaintMessageRepository;
+    private final ComplaintMessageEnricher messageEnricher;
     private final MemberRepository memberRepository;
     private final BranchRepository branchRepository;
     private final AuthService authService;
@@ -313,9 +314,10 @@ class ComplaintController {
     }
 
     private ComplaintResponse staffComplaintResponse(Complaint complaint) {
-        return ComplaintResponse.from(
+        return ComplaintResponse.fromEnriched(
                 complaint,
-                complaintMessageRepository.findByComplaintIdOrderByCreatedAtAsc(complaint.getId()));
+                messageEnricher.enrich(
+                        complaintMessageRepository.findByComplaintIdOrderByCreatedAtAsc(complaint.getId())));
     }
 
     private ResponseEntity<ApiErrorResponse> validateComplaintBody(String category, String channel, String priority) {

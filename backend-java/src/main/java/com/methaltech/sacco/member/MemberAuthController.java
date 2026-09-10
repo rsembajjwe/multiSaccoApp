@@ -9,6 +9,7 @@ import com.methaltech.sacco.complaint.Complaint;
 import com.methaltech.sacco.complaint.ComplaintMessage;
 import com.methaltech.sacco.complaint.ComplaintMessageRepository;
 import com.methaltech.sacco.complaint.ComplaintMessageResponse;
+import com.methaltech.sacco.complaint.ComplaintMessageEnricher;
 import com.methaltech.sacco.complaint.ComplaintRepository;
 import com.methaltech.sacco.complaint.ComplaintResponse;
 import com.methaltech.sacco.complaint.ComplaintService;
@@ -96,6 +97,7 @@ class MemberAuthController {
     private final ComplaintRepository complaintRepository;
     private final ComplaintMessageRepository complaintMessageRepository;
     private final ComplaintService complaintService;
+    private final ComplaintMessageEnricher complaintMessageEnricher;
     private final NotificationRepository notificationRepository;
     private final NotificationService notificationService;
     private final MemberAuthService memberAuthService;
@@ -129,6 +131,7 @@ class MemberAuthController {
             ComplaintRepository complaintRepository,
             ComplaintMessageRepository complaintMessageRepository,
             ComplaintService complaintService,
+            ComplaintMessageEnricher complaintMessageEnricher,
             NotificationRepository notificationRepository,
             NotificationService notificationService,
             MemberAuthService memberAuthService,
@@ -160,6 +163,7 @@ class MemberAuthController {
         this.complaintRepository = complaintRepository;
         this.complaintMessageRepository = complaintMessageRepository;
         this.complaintService = complaintService;
+        this.complaintMessageEnricher = complaintMessageEnricher;
         this.notificationRepository = notificationRepository;
         this.notificationService = notificationService;
         this.memberAuthService = memberAuthService;
@@ -1141,7 +1145,7 @@ class MemberAuthController {
                 complaint.getStatus(),
                 memberVisibleComplaintNotes(messages),
                 complaint.getCreatedAt(),
-                messages.stream().map(ComplaintMessageResponse::from).toList());
+                complaintMessageEnricher.enrich(messages));
     }
 
     private String memberVisibleComplaintNotes(List<ComplaintMessage> messages) {

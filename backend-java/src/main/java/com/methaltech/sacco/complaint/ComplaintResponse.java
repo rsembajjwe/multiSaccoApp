@@ -28,6 +28,12 @@ public record ComplaintResponse(
     }
 
     public static ComplaintResponse from(Complaint complaint, List<ComplaintMessage> messages) {
+        return fromEnriched(complaint, messages.stream().map(ComplaintMessageResponse::from).toList());
+    }
+
+    /** Builds the response from already-enriched message responses (sender name/role/code filled). */
+    public static ComplaintResponse fromEnriched(
+            Complaint complaint, List<ComplaintMessageResponse> messages) {
         return new ComplaintResponse(
                 complaint.getId(),
                 complaint.getTenantId(),
@@ -46,6 +52,6 @@ public record ComplaintResponse(
                 complaint.getCreatedByMemberId(),
                 complaint.getCreatedAt(),
                 complaint.getUpdatedAt(),
-                messages.stream().map(ComplaintMessageResponse::from).toList());
+                messages);
     }
 }

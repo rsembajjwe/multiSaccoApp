@@ -1294,6 +1294,9 @@ class ComplaintMessage {
     required this.senderType,
     required this.senderUserId,
     required this.senderMemberId,
+    required this.senderName,
+    required this.senderRole,
+    required this.senderCode,
     required this.visibility,
     required this.action,
     required this.message,
@@ -1304,6 +1307,9 @@ class ComplaintMessage {
   final String senderType;
   final String senderUserId;
   final String senderMemberId;
+  final String senderName;
+  final String senderRole;
+  final String senderCode;
   final String visibility;
   final String action;
   final String message;
@@ -1315,6 +1321,9 @@ class ComplaintMessage {
         senderType: _str(j['senderType']),
         senderUserId: _str(j['senderUserId']),
         senderMemberId: _str(j['senderMemberId']),
+        senderName: _str(j['senderName']),
+        senderRole: _str(j['senderRole']),
+        senderCode: _str(j['senderCode']),
         visibility: _str(j['visibility']),
         action: _str(j['action']),
         message: _str(j['message']),

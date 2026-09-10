@@ -360,6 +360,9 @@ class ComplaintMessage {
   const ComplaintMessage({
     required this.id,
     required this.senderType,
+    required this.senderName,
+    required this.senderRole,
+    required this.senderCode,
     required this.visibility,
     required this.action,
     required this.message,
@@ -370,6 +373,9 @@ class ComplaintMessage {
       ComplaintMessage(
         id: '${j['id'] ?? ''}',
         senderType: '${j['senderType'] ?? ''}',
+        senderName: '${j['senderName'] ?? ''}',
+        senderRole: '${j['senderRole'] ?? ''}',
+        senderCode: '${j['senderCode'] ?? ''}',
         visibility: '${j['visibility'] ?? ''}',
         action: '${j['action'] ?? ''}',
         message: '${j['message'] ?? ''}',
@@ -378,6 +384,9 @@ class ComplaintMessage {
 
   final String id;
   final String senderType;
+  final String senderName;
+  final String senderRole;
+  final String senderCode;
   final String visibility;
   final String action;
   final String message;
