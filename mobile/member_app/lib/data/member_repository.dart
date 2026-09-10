@@ -120,4 +120,9 @@ class MemberRepository {
     final rows = await _api.getList(ApiPaths.complaints);
     return rows.map(Complaint.fromJson).toList();
   }
+
+  Future<List<Meeting>> meetings() async {
+    final rows = await _api.getList(ApiPaths.governanceMeetings);
+    return rows.map(Meeting.fromJson).toList();
+  }
 }

@@ -650,6 +650,43 @@ class AdminRepository {
     return rows.map(GovernanceMeeting.fromJson).toList();
   }
 
+  /// Create a governance meeting (secretary/governance:manage).
+  Future<GovernanceMeeting> createGovernanceMeeting({
+    required String title,
+    required String meetingType,
+    DateTime? scheduledAt,
+    required String status,
+    String? minutes,
+  }) async {
+    final data = await _api.post('/governance-meetings', {
+      'title': title.trim(),
+      'meetingType': meetingType,
+      if (scheduledAt != null) 'scheduledAt': scheduledAt.toUtc().toIso8601String(),
+      'status': status,
+      'minutes': minutes ?? '',
+    });
+    return GovernanceMeeting.fromJson(data);
+  }
+
+  /// Update a governance meeting (title, type, date, status, minutes).
+  Future<GovernanceMeeting> updateGovernanceMeeting(
+    String id, {
+    required String title,
+    required String meetingType,
+    DateTime? scheduledAt,
+    required String status,
+    String? minutes,
+  }) async {
+    final data = await _api.patch('/governance-meetings/$id', {
+      'title': title.trim(),
+      'meetingType': meetingType,
+      if (scheduledAt != null) 'scheduledAt': scheduledAt.toUtc().toIso8601String(),
+      'status': status,
+      'minutes': minutes ?? '',
+    });
+    return GovernanceMeeting.fromJson(data);
+  }
+
   Future<List<AuditEvent>> auditEvents({String? search}) async {
     final rows = await _api.getList('/audit-events',
         query: (search != null && search.trim().isNotEmpty)

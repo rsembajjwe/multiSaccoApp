@@ -39,6 +39,10 @@ final dashboardProvider = FutureProvider<DashboardSummary>(
   (ref) => ref.watch(memberRepositoryProvider).dashboard(),
 );
 
+final meetingsProvider = FutureProvider<List<Meeting>>(
+  (ref) => ref.watch(memberRepositoryProvider).meetings(),
+);
+
 final loansProvider =
     FutureProvider<List<Loan>>((ref) => ref.watch(loanRepositoryProvider).loans());
 

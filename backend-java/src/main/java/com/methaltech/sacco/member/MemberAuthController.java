@@ -10,6 +10,7 @@ import com.methaltech.sacco.complaint.ComplaintMessage;
 import com.methaltech.sacco.complaint.ComplaintMessageRepository;
 import com.methaltech.sacco.complaint.ComplaintMessageResponse;
 import com.methaltech.sacco.complaint.ComplaintMessageEnricher;
+import com.methaltech.sacco.governance.MemberGovernanceService;
 import com.methaltech.sacco.complaint.ComplaintRepository;
 import com.methaltech.sacco.complaint.ComplaintResponse;
 import com.methaltech.sacco.complaint.ComplaintService;
@@ -98,6 +99,7 @@ class MemberAuthController {
     private final ComplaintMessageRepository complaintMessageRepository;
     private final ComplaintService complaintService;
     private final ComplaintMessageEnricher complaintMessageEnricher;
+    private final MemberGovernanceService memberGovernanceService;
     private final NotificationRepository notificationRepository;
     private final NotificationService notificationService;
     private final MemberAuthService memberAuthService;
@@ -132,6 +134,7 @@ class MemberAuthController {
             ComplaintMessageRepository complaintMessageRepository,
             ComplaintService complaintService,
             ComplaintMessageEnricher complaintMessageEnricher,
+            MemberGovernanceService memberGovernanceService,
             NotificationRepository notificationRepository,
             NotificationService notificationService,
             MemberAuthService memberAuthService,
@@ -164,6 +167,7 @@ class MemberAuthController {
         this.complaintMessageRepository = complaintMessageRepository;
         this.complaintService = complaintService;
         this.complaintMessageEnricher = complaintMessageEnricher;
+        this.memberGovernanceService = memberGovernanceService;
         this.notificationRepository = notificationRepository;
         this.notificationService = notificationService;
         this.memberAuthService = memberAuthService;
@@ -1120,6 +1124,14 @@ class MemberAuthController {
                 complaint.getId(),
                 request.getRemoteAddr());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(ComplaintResponse.from(complaint)));
+    }
+
+    @GetMapping("/governance-meetings")
+    ResponseEntity<?> listMemberMeetings(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+        return ResponseEntity.ok(ApiResponse.of(
+                memberGovernanceService.memberVisibleMeetings(currentSession.member().getTenantId())));
     }
 
     @GetMapping("/complaints")

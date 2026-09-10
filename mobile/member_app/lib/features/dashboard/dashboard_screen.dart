@@ -8,6 +8,7 @@ import '../../core/widgets/skeleton.dart';
 import '../../domain/models.dart';
 import '../payments/payments_screen.dart';
 import '../transactions/transactions_screen.dart';
+import '../governance/meetings_screen.dart';
 
 final _money = NumberFormat.currency(symbol: 'UGX ', decimalDigits: 0);
 
@@ -340,6 +341,12 @@ class _QuickActions extends StatelessWidget {
               'Statement',
               () => Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => const TransactionsScreen()))),
+          _action(
+              context,
+              Icons.groups_2_outlined,
+              'Meetings',
+              () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const MeetingsScreen()))),
         ],
       ),
     );

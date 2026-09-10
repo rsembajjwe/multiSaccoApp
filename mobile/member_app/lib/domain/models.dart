@@ -431,3 +431,35 @@ class MemberSubscription {
   final int? daysToExpiry;
   final String lifecycleState;
 }
+
+/// A governance meeting a member is allowed to see (general meeting or AGM),
+/// with its minutes (GET /member-auth/governance-meetings).
+class Meeting {
+  const Meeting({
+    required this.id,
+    required this.title,
+    required this.meetingType,
+    required this.scheduledAt,
+    required this.status,
+    required this.minutes,
+  });
+
+  final String id;
+  final String title;
+  final String meetingType;
+  final DateTime? scheduledAt;
+  final String status;
+  final String minutes;
+
+  String get typeLabel =>
+      meetingType == 'agm' ? 'AGM' : meetingType.replaceAll('_', ' ');
+
+  factory Meeting.fromJson(Map<String, dynamic> j) => Meeting(
+        id: '${j['id'] ?? ''}',
+        title: '${j['title'] ?? ''}',
+        meetingType: '${j['meetingType'] ?? ''}',
+        scheduledAt: DateTime.tryParse('${j['scheduledAt'] ?? ''}'),
+        status: '${j['status'] ?? ''}',
+        minutes: '${j['minutes'] ?? ''}',
+      );
+}

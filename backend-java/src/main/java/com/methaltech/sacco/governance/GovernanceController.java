@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 class GovernanceController {
 
-    private static final Set<String> MEETING_TYPES = Set.of("board", "agm", "credit_committee", "audit_committee", "management");
+    private static final Set<String> MEETING_TYPES = Set.of("board", "agm", "general", "credit_committee", "audit_committee", "management");
     private static final Set<String> MEETING_STATUSES = Set.of("scheduled", "completed", "cancelled");
     private static final Set<String> RESOLUTION_STATUSES = Set.of("open", "in_progress", "closed");
 

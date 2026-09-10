@@ -14,6 +14,7 @@ class ApiPaths {
   static const passwordResetConfirm = '/member-auth/password-reset/confirm';
   static const mobileComplaints = '/member-auth/mobile-complaints';
   static const complaints = '/member-auth/complaints';
+  static const governanceMeetings = '/member-auth/governance-meetings';
   static const membership = '/member-auth/membership';
   static const profilePhoto = '/member-auth/profile-photo';
   static const profileUpdate = '/member-auth/profile';
