@@ -376,7 +376,7 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
           if (c.messages.isNotEmpty || c.resolutionNotes.isNotEmpty) ...[
             const SizedBox(height: 16),
             SectionCard(
-              title: 'Responses and notes',
+              title: 'Conversation',
               child: _ComplaintThread(
                 complaint: c,
                 staffNames: staffNames,
@@ -391,6 +391,10 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
   }
 }
 
+/// The complaint conversation, rendered as a WhatsApp-style thread: member
+/// messages sit on the left as incoming bubbles, staff replies on the right as
+/// outgoing bubbles, internal notes are set apart as staff-only, and workflow
+/// events (closures, referrals with no text) show as centred system pills.
 class _ComplaintThread extends StatelessWidget {
   const _ComplaintThread({
     required this.complaint,
@@ -404,23 +408,117 @@ class _ComplaintThread extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (complaint.messages.isEmpty) {
-      return Text(complaint.resolutionNotes);
+    final messages = complaint.messages;
+    if (messages.isEmpty) {
+      return complaint.resolutionNotes.isEmpty
+          ? const SizedBox.shrink()
+          : Text(complaint.resolutionNotes);
     }
-    return Column(
-      children: complaint.messages
-          .map((message) => _ComplaintMessageTile(
-                message: message,
-                staffNames: staffNames,
-                memberName: memberName,
-              ))
-          .toList(),
+    final scheme = Theme.of(context).colorScheme;
+    final rows = <Widget>[];
+    String lastDay = '';
+    for (final m in messages) {
+      final day = Fmt.date(m.createdAt);
+      if (day != lastDay) {
+        rows.add(_DayDivider(label: day));
+        lastDay = day;
+      }
+      if (m.visibility == 'internal') {
+        rows.add(_InternalNote(message: m, staffNames: staffNames));
+      } else if (m.message.trim().isEmpty) {
+        rows.add(_SystemEvent(message: m));
+      } else {
+        rows.add(_ChatBubble(
+          message: m,
+          staffNames: staffNames,
+          memberName: memberName,
+        ));
+      }
+    }
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: rows,
+      ),
     );
   }
 }
 
-class _ComplaintMessageTile extends StatelessWidget {
-  const _ComplaintMessageTile({
+String _msgTime(String iso) {
+  final d = DateTime.tryParse(iso)?.toLocal();
+  if (d == null) return '';
+  return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+}
+
+/// Non-reply workflow actions worth flagging on a staff bubble; a plain reply
+/// or an internal note returns null (handled elsewhere).
+String? _actionTag(String action) {
+  switch (action) {
+    case 'refer_treasurer':
+      return 'Referred to treasurer';
+    case 'escalate_chairman':
+      return 'Escalated to chairman';
+    case 'resolve':
+      return 'Marked resolved';
+    case 'reopen':
+      return 'Reopened';
+    default:
+      return null;
+  }
+}
+
+String _systemLabel(String action) {
+  switch (action) {
+    case 'close':
+      return 'Complaint closed';
+    case 'resolve':
+      return 'Marked resolved';
+    case 'refer_treasurer':
+      return 'Referred to treasurer';
+    case 'escalate_chairman':
+      return 'Escalated to chairman';
+    case 'reopen':
+      return 'Complaint reopened';
+    default:
+      return Fmt.label(action.isEmpty ? 'update' : action);
+  }
+}
+
+class _DayDivider extends StatelessWidget {
+  const _DayDivider({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurfaceVariant)),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatBubble extends StatelessWidget {
+  const _ChatBubble({
     required this.message,
     required this.staffNames,
     this.memberName,
@@ -433,47 +531,148 @@ class _ComplaintMessageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final internal = message.visibility == 'internal';
-    final sender = message.senderType == 'member'
+    final isMember = message.senderType == 'member';
+    final sender = isMember
         ? (memberName ?? 'Member')
-        : staffNames[message.senderUserId] ?? 'Staff';
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: internal
-            ? const Color(0xFFFFFBEB)
-            : scheme.surfaceContainerHighest.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: internal ? const Color(0xFFF59E0B) : scheme.outlineVariant,
+        : (staffNames[message.senderUserId] ?? 'Staff');
+    final bubbleColor =
+        isMember ? scheme.surfaceContainerHighest : scheme.primaryContainer;
+    final textColor = isMember ? scheme.onSurface : scheme.onPrimaryContainer;
+    final nameColor = isMember ? scheme.primary : scheme.onPrimaryContainer;
+    final tag = _actionTag(message.action);
+    const round = Radius.circular(14);
+    const tail = Radius.circular(3);
+    final maxWidth = MediaQuery.of(context).size.width * 0.74;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment:
+            isMember ? MainAxisAlignment.start : MainAxisAlignment.end,
+        children: [
+          Flexible(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxWidth),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
+                decoration: BoxDecoration(
+                  color: bubbleColor,
+                  borderRadius: BorderRadius.only(
+                    topLeft: round,
+                    topRight: round,
+                    bottomLeft: isMember ? tail : round,
+                    bottomRight: isMember ? round : tail,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(sender,
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: nameColor)),
+                    if (tag != null) ...[
+                      const SizedBox(height: 2),
+                      Text(tag,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontStyle: FontStyle.italic,
+                              color: textColor.withValues(alpha: 0.75))),
+                    ],
+                    const SizedBox(height: 3),
+                    Text(message.message,
+                        style: TextStyle(color: textColor, height: 1.3)),
+                    const SizedBox(height: 3),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(_msgTime(message.createdAt),
+                          style: TextStyle(
+                              fontSize: 10.5,
+                              color: textColor.withValues(alpha: 0.6))),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SystemEvent extends StatelessWidget {
+  const _SystemEvent({required this.message});
+  final ComplaintMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final time = _msgTime(message.createdAt);
+    final label = _systemLabel(message.action);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Text(
+            time.isEmpty ? label : '$label · $time',
+            style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant),
+          ),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(sender, style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text(Fmt.label(message.action),
-                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
-              if (internal)
-                const Text('Internal',
+    );
+  }
+}
+
+class _InternalNote extends StatelessWidget {
+  const _InternalNote({required this.message, required this.staffNames});
+  final ComplaintMessage message;
+  final Map<String, String> staffNames;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final bg = dark ? const Color(0xFF2A2312) : const Color(0xFFFFFBEB);
+    final border = dark ? const Color(0xFF7A5B12) : const Color(0xFFF59E0B);
+    final head = dark ? const Color(0xFFE8C877) : const Color(0xFF92400E);
+    final body = dark ? const Color(0xFFEADFC2) : const Color(0xFF5A4A1E);
+    final sender = staffNames[message.senderUserId] ?? 'Staff';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: border.withValues(alpha: 0.6)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.lock_outline, size: 13, color: head),
+                const SizedBox(width: 5),
+                Text('Internal note · staff only',
                     style: TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF92400E),
-                        fontWeight: FontWeight.w700)),
-              Text(Fmt.dateTime(message.createdAt),
-                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(message.message),
-        ],
+                        fontSize: 11, fontWeight: FontWeight.w700, color: head)),
+                const Spacer(),
+                Text(_msgTime(message.createdAt),
+                    style: TextStyle(
+                        fontSize: 10.5, color: head.withValues(alpha: 0.7))),
+              ],
+            ),
+            const SizedBox(height: 5),
+            Text('$sender: ${message.message}', style: TextStyle(color: body)),
+          ],
+        ),
       ),
     );
   }
