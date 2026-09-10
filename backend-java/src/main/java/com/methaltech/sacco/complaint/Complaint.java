@@ -91,4 +91,11 @@ public class Complaint {
         this.resolvedAt = this.resolvedByUserId == null ? null : Instant.now();
         this.updatedAt = Instant.now();
     }
+
+    void routeTo(String assignedUserId, String status, String notes) {
+        this.assignedUserId = assignedUserId;
+        this.status = status;
+        this.resolutionNotes = notes;
+        this.updatedAt = Instant.now();
+    }
 }

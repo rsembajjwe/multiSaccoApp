@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,11 +35,13 @@ class ComplaintController {
 
     private final ComplaintRepository complaintRepository;
     private final ComplaintService complaintService;
+    private final ComplaintMessageRepository complaintMessageRepository;
     private final MemberRepository memberRepository;
     private final BranchRepository branchRepository;
     private final AuthService authService;
     private final AuditService auditService;
     private final NotificationService notificationService;
+    private final JdbcTemplate jdbcTemplate;
 
     @GetMapping
     ResponseEntity<?> listComplaints(
@@ -66,7 +69,7 @@ class ComplaintController {
             String wanted = status.trim();
             complaints = complaints.stream().filter(complaint -> wanted.equals(complaint.getStatus())).toList();
         }
-        List<ComplaintResponse> responses = complaints.stream().map(ComplaintResponse::from).toList();
+        List<ComplaintResponse> responses = complaints.stream().map(this::staffComplaintResponse).toList();
         if (PageParams.requested(page, size)) {
             return ResponseEntity.ok(PageParams.paged(responses, page, size));
         }
@@ -119,7 +122,7 @@ class ComplaintController {
                 "complaint",
                 complaint.getId(),
                 request.getRemoteAddr());
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(ComplaintResponse.from(complaint)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(staffComplaintResponse(complaint)));
     }
 
     @PatchMapping("/{complaintId}/status")
@@ -147,6 +150,7 @@ class ComplaintController {
                     complaint.updateStatus(status, reply, currentSession.user().getId());
                     Complaint saved = complaintRepository.save(complaint);
                     if (saved.getMemberId() != null && !saved.getMemberId().isBlank() && !reply.isBlank()) {
+                        complaintService.addStaffMessage(saved, currentSession.user().getId(), "status_update", "member_visible", reply);
                         memberRepository.findById(saved.getMemberId())
                                 .ifPresent(member -> notificationService.notifyComplaintReply(member, saved.getId(), saved.getSubject(), reply));
                     }
@@ -157,10 +161,161 @@ class ComplaintController {
                             "complaint",
                             saved.getId(),
                             request.getRemoteAddr());
-                    return ResponseEntity.ok(ApiResponse.of(ComplaintResponse.from(saved)));
+                    return ResponseEntity.ok(ApiResponse.of(staffComplaintResponse(saved)));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "COMPLAINT_NOT_FOUND", "Complaint not found.")));
+    }
+
+    @PostMapping("/{complaintId}/workflow")
+    ResponseEntity<?> workflowAction(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String complaintId,
+            @Valid @RequestBody ComplaintWorkflowRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "complaints:manage")) {
+            return authService.permissionRequired("complaints:manage");
+        }
+        String action = body.action().trim();
+        if (!List.of("reply_member", "internal_note", "refer_treasurer", "escalate_chairman", "resolve", "close").contains(action)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_COMPLAINT_ACTION", "Unsupported complaint workflow action."));
+        }
+        return complaintRepository.findById(complaintId)
+                .<ResponseEntity<?>>map(complaint -> {
+                    if (!canAccessComplaint(currentSession, complaint)) return complaintAccessDenied(currentSession, complaint);
+                    String message = body.message() == null ? "" : body.message().trim();
+                    if (!"close".equals(action) && message.length() < 3) {
+                        return ResponseEntity.badRequest()
+                                .body(ApiErrorResponse.of(400, "COMPLAINT_MESSAGE_REQUIRED", "Enter a response or note."));
+                    }
+                    ResponseEntity<ApiErrorResponse> routeError = routeComplaint(complaint, currentSession, action, message);
+                    if (routeError != null) return routeError;
+                    Complaint saved = complaintRepository.save(complaint);
+                    String visibility = memberVisible(action) ? "member_visible" : "internal";
+                    complaintService.addStaffMessage(saved, currentSession.user().getId(), action, visibility, message);
+                    if (memberVisible(action) && saved.getMemberId() != null && !saved.getMemberId().isBlank() && !message.isBlank()) {
+                        memberRepository.findById(saved.getMemberId())
+                                .ifPresent(member -> notificationService.notifyComplaintReply(member, saved.getId(), saved.getSubject(), message));
+                    }
+                    auditService.record(
+                            complaint.getTenantId(),
+                            currentSession.user(),
+                            "Complaint workflow action " + action,
+                            "complaint",
+                            saved.getId(),
+                            request.getRemoteAddr());
+                    return ResponseEntity.ok(ApiResponse.of(staffComplaintResponse(saved)));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "COMPLAINT_NOT_FOUND", "Complaint not found.")));
+    }
+
+    private ResponseEntity<ApiErrorResponse> routeComplaint(
+            Complaint complaint,
+            AuthService.CurrentSession currentSession,
+            String action,
+            String message) {
+        String notes = appendComplaintNote(
+                complaint.getResolutionNotes(),
+                currentSession.user().getFullName(),
+                labelForAction(action),
+                message);
+        switch (action) {
+            case "reply_member", "internal_note" -> complaint.routeTo(complaint.getAssignedUserId(), "in_progress", notes);
+            case "refer_treasurer" -> {
+                String treasurerId = firstActiveRoleUser(complaint.getTenantId(), "Treasurer");
+                if (treasurerId == null) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT)
+                            .body(ApiErrorResponse.of(409, "TREASURER_NOT_CONFIGURED", "No active treasurer is configured for this SACCO."));
+                }
+                complaint.routeTo(treasurerId, "referred_to_treasurer", notes);
+            }
+            case "escalate_chairman" -> {
+                String chairmanId = firstActiveRoleUserLike(complaint.getTenantId(), "chairperson");
+                if (chairmanId == null) {
+                    chairmanId = firstActiveRoleUserLike(complaint.getTenantId(), "administrator");
+                }
+                if (chairmanId == null) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT)
+                            .body(ApiErrorResponse.of(409, "CHAIRMAN_NOT_CONFIGURED", "No active chairman or SACCO administrator is configured."));
+                }
+                complaint.routeTo(chairmanId, "escalated_to_chairman", notes);
+            }
+            case "resolve" -> complaint.updateStatus("resolved", notes, currentSession.user().getId());
+            case "close" -> complaint.updateStatus("closed", notes, currentSession.user().getId());
+            default -> {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "INVALID_COMPLAINT_ACTION", "Unsupported complaint workflow action."));
+            }
+        }
+        return null;
+    }
+
+    private String firstActiveRoleUser(String tenantId, String roleName) {
+        List<String> users = jdbcTemplate.queryForList(
+                """
+                SELECT u.id
+                FROM users u
+                JOIN user_roles ur ON ur.user_id = u.id AND ur.tenant_id = u.tenant_id
+                JOIN roles r ON r.id = ur.role_id AND r.tenant_id = u.tenant_id
+                WHERE u.tenant_id = ?
+                  AND u.status = 'active'
+                  AND LOWER(r.name) = LOWER(?)
+                ORDER BY u.full_name ASC
+                """,
+                String.class,
+                tenantId,
+                roleName);
+        return users.isEmpty() ? null : users.get(0);
+    }
+
+    private String firstActiveRoleUserLike(String tenantId, String roleNamePart) {
+        List<String> users = jdbcTemplate.queryForList(
+                """
+                SELECT u.id
+                FROM users u
+                JOIN user_roles ur ON ur.user_id = u.id AND ur.tenant_id = u.tenant_id
+                JOIN roles r ON r.id = ur.role_id AND r.tenant_id = u.tenant_id
+                WHERE u.tenant_id = ?
+                  AND u.status = 'active'
+                  AND LOWER(r.name) LIKE ?
+                ORDER BY u.full_name ASC
+                """,
+                String.class,
+                tenantId,
+                "%" + roleNamePart.toLowerCase(java.util.Locale.ROOT) + "%");
+        return users.isEmpty() ? null : users.get(0);
+    }
+
+    private String appendComplaintNote(String existing, String actor, String actionLabel, String message) {
+        String entry = java.time.Instant.now() + " - " + actor + " - " + actionLabel
+                + (message == null || message.isBlank() ? "" : ": " + message.trim());
+        return existing == null || existing.isBlank() ? entry : existing + "\n\n" + entry;
+    }
+
+    private String labelForAction(String action) {
+        return switch (action) {
+            case "reply_member" -> "Reply to member";
+            case "internal_note" -> "Internal note";
+            case "refer_treasurer" -> "Referred to treasurer";
+            case "escalate_chairman" -> "Escalated to chairman";
+            case "resolve" -> "Resolved";
+            case "close" -> "Closed";
+            default -> action;
+        };
+    }
+
+    private boolean memberVisible(String action) {
+        return List.of("reply_member", "resolve", "close").contains(action);
+    }
+
+    private ComplaintResponse staffComplaintResponse(Complaint complaint) {
+        return ComplaintResponse.from(
+                complaint,
+                complaintMessageRepository.findByComplaintIdOrderByCreatedAtAsc(complaint.getId()));
     }
 
     private ResponseEntity<ApiErrorResponse> validateComplaintBody(String category, String channel, String priority) {
@@ -241,5 +396,8 @@ class ComplaintController {
     }
 
     record UpdateComplaintStatusRequest(@NotBlank String status, String resolutionNotes) {
+    }
+
+    record ComplaintWorkflowRequest(@NotBlank String action, String message) {
     }
 }

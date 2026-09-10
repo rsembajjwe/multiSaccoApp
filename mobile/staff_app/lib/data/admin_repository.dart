@@ -608,6 +608,16 @@ class AdminRepository {
     });
   }
 
+  Future<Complaint> complaintWorkflow(String id,
+      {required String action, String? message}) async {
+    final data = await _api.post('/complaints/$id/workflow', {
+      'action': action,
+      if (message != null && message.trim().isNotEmpty)
+        'message': message.trim(),
+    });
+    return Complaint.fromJson(data);
+  }
+
   Future<List<WelfareClaim>> welfareClaims() async {
     final rows = await _api.getList('/welfare-claims');
     return rows.map(WelfareClaim.fromJson).toList();

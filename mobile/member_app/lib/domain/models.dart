@@ -327,6 +327,7 @@ class Complaint {
     required this.status,
     required this.resolutionNotes,
     required this.createdAt,
+    required this.messages,
   });
 
   factory Complaint.fromJson(Map<String, dynamic> j) => Complaint(
@@ -338,6 +339,10 @@ class Complaint {
         status: '${j['status'] ?? 'open'}',
         resolutionNotes: '${j['resolutionNotes'] ?? ''}',
         createdAt: DateTime.tryParse('${j['createdAt'] ?? ''}'),
+        messages: ((j['messages'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(ComplaintMessage.fromJson)
+            .toList(),
       );
 
   final String id;
@@ -347,6 +352,35 @@ class Complaint {
   final String priority;
   final String status;
   final String resolutionNotes;
+  final DateTime? createdAt;
+  final List<ComplaintMessage> messages;
+}
+
+class ComplaintMessage {
+  const ComplaintMessage({
+    required this.id,
+    required this.senderType,
+    required this.visibility,
+    required this.action,
+    required this.message,
+    required this.createdAt,
+  });
+
+  factory ComplaintMessage.fromJson(Map<String, dynamic> j) =>
+      ComplaintMessage(
+        id: '${j['id'] ?? ''}',
+        senderType: '${j['senderType'] ?? ''}',
+        visibility: '${j['visibility'] ?? ''}',
+        action: '${j['action'] ?? ''}',
+        message: '${j['message'] ?? ''}',
+        createdAt: DateTime.tryParse('${j['createdAt'] ?? ''}'),
+      );
+
+  final String id;
+  final String senderType;
+  final String visibility;
+  final String action;
+  final String message;
   final DateTime? createdAt;
 }
 

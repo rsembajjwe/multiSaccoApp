@@ -139,7 +139,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
   }
 
   bool get _canSetTerms =>
-      ref.read(sessionProvider).asData?.value?.can('loans:terms') ?? false;
+      ref.read(sessionProvider).asData?.value.can('loans:terms') ?? false;
 
   Future<void> _pickBorrower() async {
     final picked = await showMemberPicker(context, title: 'Select borrower');
@@ -322,7 +322,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final canSetTerms =
-        ref.watch(sessionProvider).asData?.value?.can('loans:terms') ?? false;
+        ref.watch(sessionProvider).asData?.value.can('loans:terms') ?? false;
     final borrower = _borrower;
     final exposure = _borrowerExposure;
     final unclearedLoan = exposure?.openLoan;
@@ -352,9 +352,9 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
                 borderRadius: BorderRadius.circular(8),
                 onTap: _busy ? null : _pickBorrower,
                 child: InputDecorator(
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Borrower',
-                    suffixIcon: const Icon(Icons.search),
+                    suffixIcon: Icon(Icons.search),
                   ),
                   child: Text(
                     borrower == null

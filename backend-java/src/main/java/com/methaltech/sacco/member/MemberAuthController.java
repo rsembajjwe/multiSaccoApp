@@ -6,6 +6,9 @@ import com.methaltech.sacco.api.PageParams;
 import com.methaltech.sacco.api.PagedResponse;
 import com.methaltech.sacco.accounting.MobileMoneyProviderRouter;
 import com.methaltech.sacco.complaint.Complaint;
+import com.methaltech.sacco.complaint.ComplaintMessage;
+import com.methaltech.sacco.complaint.ComplaintMessageRepository;
+import com.methaltech.sacco.complaint.ComplaintMessageResponse;
 import com.methaltech.sacco.complaint.ComplaintRepository;
 import com.methaltech.sacco.complaint.ComplaintResponse;
 import com.methaltech.sacco.complaint.ComplaintService;
@@ -91,6 +94,7 @@ class MemberAuthController {
     private final LoanGuarantorRepository guarantorRepository;
     private final FinancialTransactionRepository transactionRepository;
     private final ComplaintRepository complaintRepository;
+    private final ComplaintMessageRepository complaintMessageRepository;
     private final ComplaintService complaintService;
     private final NotificationRepository notificationRepository;
     private final NotificationService notificationService;
@@ -123,6 +127,7 @@ class MemberAuthController {
             LoanGuarantorRepository guarantorRepository,
             FinancialTransactionRepository transactionRepository,
             ComplaintRepository complaintRepository,
+            ComplaintMessageRepository complaintMessageRepository,
             ComplaintService complaintService,
             NotificationRepository notificationRepository,
             NotificationService notificationService,
@@ -153,6 +158,7 @@ class MemberAuthController {
         this.guarantorRepository = guarantorRepository;
         this.transactionRepository = transactionRepository;
         this.complaintRepository = complaintRepository;
+        this.complaintMessageRepository = complaintMessageRepository;
         this.complaintService = complaintService;
         this.notificationRepository = notificationRepository;
         this.notificationService = notificationService;
@@ -1119,8 +1125,31 @@ class MemberAuthController {
 
         return ResponseEntity.ok(ApiResponse.of(complaintRepository.findByMemberIdOrderByCreatedAtDesc(currentSession.member().getId())
                 .stream()
-                .map(ComplaintResponse::from)
+                .map(this::memberComplaintResponse)
                 .toList()));
+    }
+
+    private MemberComplaintResponse memberComplaintResponse(Complaint complaint) {
+        List<ComplaintMessage> messages = complaintMessageRepository
+                .findByComplaintIdAndVisibilityOrderByCreatedAtAsc(complaint.getId(), "member_visible");
+        return new MemberComplaintResponse(
+                complaint.getId(),
+                complaint.getCategory(),
+                complaint.getSubject(),
+                complaint.getDescription(),
+                complaint.getPriority(),
+                complaint.getStatus(),
+                memberVisibleComplaintNotes(messages),
+                complaint.getCreatedAt(),
+                messages.stream().map(ComplaintMessageResponse::from).toList());
+    }
+
+    private String memberVisibleComplaintNotes(List<ComplaintMessage> messages) {
+        return messages.stream()
+                .map(ComplaintMessage::getMessage)
+                .filter(message -> message != null && !message.isBlank())
+                .reduce((left, right) -> left + "\n\n" + right)
+                .orElse("");
     }
 
     @GetMapping("/guarantor-requests")
@@ -1420,6 +1449,18 @@ class MemberAuthController {
             @NotBlank String subject,
             String description,
             String priority) {
+    }
+
+    record MemberComplaintResponse(
+            String id,
+            String category,
+            String subject,
+            String description,
+            String priority,
+            String status,
+            String resolutionNotes,
+            Instant createdAt,
+            List<ComplaintMessageResponse> messages) {
     }
 
     record MobileLoanRequest(

@@ -7,8 +7,6 @@ import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
 
-const _statuses = ['open', 'in_progress', 'resolved', 'closed'];
-
 class _Filter {
   const _Filter(this.label, this.match);
   final String label;
@@ -166,7 +164,7 @@ class _ComplaintTile extends ConsumerWidget {
   }
 }
 
-/// Full complaint with a status-update action for authorised officers.
+/// Full complaint with response and routing actions for authorised officers.
 class ComplaintDetailScreen extends ConsumerStatefulWidget {
   const ComplaintDetailScreen({
     super.key,
@@ -184,31 +182,56 @@ class ComplaintDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
-  late String _status = widget.complaint.status.isEmpty
-      ? 'open'
-      : widget.complaint.status;
-  late final TextEditingController _notes =
-      TextEditingController(text: widget.complaint.resolutionNotes);
   bool _busy = false;
 
-  @override
-  void dispose() {
-    _notes.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
+  Future<void> _runWorkflow(String action, String title,
+      {bool messageRequired = true}) async {
+    final controller = TextEditingController();
+    final message = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 3,
+          maxLines: 6,
+          decoration: InputDecoration(
+            labelText: messageRequired ? 'Message' : 'Optional note',
+            alignLabelWithHint: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (message == null) return;
+    if (messageRequired && message.trim().length < 3) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Enter a response or note.')));
+      }
+      return;
+    }
     setState(() => _busy = true);
     try {
       await ref
           .read(adminRepositoryProvider)
-          .updateComplaint(widget.complaint.id, _status,
-              notes: _notes.text.trim());
+          .complaintWorkflow(widget.complaint.id,
+              action: action, message: message.trim());
       ref.invalidate(complaintsProvider);
       ref.invalidate(saccoStatusProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Complaint updated.')));
+            const SnackBar(content: Text('Complaint workflow updated.')));
         Navigator.of(context).pop();
       }
     } catch (e) {
@@ -224,6 +247,14 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final c = widget.complaint;
+    final staffNames = ref.watch(staffNamesProvider).asData?.value ??
+        const <String, String>{};
+    final assignedTo = c.assignedUserId.isEmpty
+        ? 'Unassigned'
+        : staffNames[c.assignedUserId] ?? c.assignedUserId;
+    final resolvedBy = c.resolvedByUserId.isEmpty
+        ? ''
+        : staffNames[c.resolvedByUserId] ?? c.resolvedByUserId;
     return Scaffold(
       appBar: AppBar(title: const Text('Complaint')),
       body: ListView(
@@ -260,6 +291,9 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
                   KeyValueRow('Category', Fmt.label(c.category)),
                   KeyValueRow('Priority', Fmt.label(c.priority)),
                   KeyValueRow('Channel', Fmt.label(c.channel)),
+                  KeyValueRow('Assigned to', assignedTo),
+                  if (resolvedBy.isNotEmpty)
+                    KeyValueRow('Resolved by', resolvedBy),
                   if (c.description.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Text('Description',
@@ -274,54 +308,171 @@ class _ComplaintDetailScreenState extends ConsumerState<ComplaintDetailScreen> {
           const SizedBox(height: 16),
           if (widget.canManage) ...[
             SectionCard(
-              title: 'Update status',
+              title: 'Respond and route',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Wrap(
                     spacing: 8,
-                    children: _statuses
-                        .map((s) => ChoiceChip(
-                              label: Text(Fmt.label(s)),
-                              selected: _status == s,
-                              onSelected: _busy
-                                  ? null
-                                  : (_) => setState(() => _status = s),
-                            ))
-                        .toList(),
+                    runSpacing: 8,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _runWorkflow(
+                                'reply_member', 'Reply to member'),
+                        icon: const Icon(Icons.reply_outlined),
+                        label: const Text('Reply'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _runWorkflow(
+                                'internal_note', 'Add internal note'),
+                        icon: const Icon(Icons.sticky_note_2_outlined),
+                        label: const Text('Internal note'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _runWorkflow('refer_treasurer',
+                                'Refer to treasurer'),
+                        icon: const Icon(Icons.account_balance_wallet_outlined),
+                        label: const Text('Refer treasurer'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _runWorkflow('escalate_chairman',
+                                'Escalate to chairman'),
+                        icon: const Icon(Icons.escalator_warning_outlined),
+                        label: const Text('Escalate'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _runWorkflow('resolve', 'Resolve complaint'),
+                        icon: const Icon(Icons.check_circle_outline),
+                        label: const Text('Resolve'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _runWorkflow('close', 'Close complaint',
+                                messageRequired: false),
+                        icon: const Icon(Icons.archive_outlined),
+                        label: const Text('Close'),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _notes,
-                    minLines: 2,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                        labelText: 'Resolution notes',
-                        alignLabelWithHint: true),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: _busy ? null : _save,
-                      child: _busy
-                          ? const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Save'),
-                    ),
-                  ),
+                  if (_busy) ...[
+                    const SizedBox(height: 12),
+                    const LinearProgressIndicator(),
+                  ],
                 ],
               ),
             ),
-          ] else if (c.resolutionNotes.isNotEmpty)
+          ],
+          if (c.messages.isNotEmpty || c.resolutionNotes.isNotEmpty) ...[
+            const SizedBox(height: 16),
             SectionCard(
-              title: 'Resolution',
-              child: Text(c.resolutionNotes),
+              title: 'Responses and notes',
+              child: _ComplaintThread(
+                complaint: c,
+                staffNames: staffNames,
+                memberName: widget.memberName,
+              ),
             ),
+          ],
           const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComplaintThread extends StatelessWidget {
+  const _ComplaintThread({
+    required this.complaint,
+    required this.staffNames,
+    this.memberName,
+  });
+
+  final Complaint complaint;
+  final Map<String, String> staffNames;
+  final String? memberName;
+
+  @override
+  Widget build(BuildContext context) {
+    if (complaint.messages.isEmpty) {
+      return Text(complaint.resolutionNotes);
+    }
+    return Column(
+      children: complaint.messages
+          .map((message) => _ComplaintMessageTile(
+                message: message,
+                staffNames: staffNames,
+                memberName: memberName,
+              ))
+          .toList(),
+    );
+  }
+}
+
+class _ComplaintMessageTile extends StatelessWidget {
+  const _ComplaintMessageTile({
+    required this.message,
+    required this.staffNames,
+    this.memberName,
+  });
+
+  final ComplaintMessage message;
+  final Map<String, String> staffNames;
+  final String? memberName;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final internal = message.visibility == 'internal';
+    final sender = message.senderType == 'member'
+        ? (memberName ?? 'Member')
+        : staffNames[message.senderUserId] ?? 'Staff';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: internal
+            ? const Color(0xFFFFFBEB)
+            : scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: internal ? const Color(0xFFF59E0B) : scheme.outlineVariant,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(sender, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(Fmt.label(message.action),
+                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+              if (internal)
+                const Text('Internal',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF92400E),
+                        fontWeight: FontWeight.w700)),
+              Text(Fmt.dateTime(message.createdAt),
+                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(message.message),
         ],
       ),
     );

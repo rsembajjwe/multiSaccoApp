@@ -77,7 +77,7 @@ const _sections = <_Section>[
       ['users:view', 'roles:view'], Color(0xFF7C3AED),
       'Staff directory & permissions'),
   _Section('Branches', Icons.account_tree_outlined,
-      ['members:view', 'transactions:view', 'loans:view'], Color(0xFF0E7490),
+      ['operations:view'], Color(0xFF0E7490),
       'SACCO branch directory'),
   _Section('Products', Icons.category_outlined, ['transactions:view'],
       Color(0xFF15803D), 'Savings & loan product setup'),
@@ -89,11 +89,11 @@ const _sections = <_Section>[
   _Section(
       'Subscriptions',
       Icons.workspace_premium_outlined,
-      ['subscriptions:view', 'member-subscription:view', 'notifications:manage'],
+      ['subscriptions:view', 'notifications:manage'],
       Color(0xFF0D9488),
       'Platform, member dues & SMS'),
   _Section('Interest income', Icons.trending_up,
-      ['loans:view', 'reports:view'], Color(0xFF16A34A),
+      ['accounting:view'], Color(0xFF16A34A),
       'Interest booked by year'),
 ];
 

@@ -1,6 +1,7 @@
 package com.methaltech.sacco.complaint;
 
 import java.time.Instant;
+import java.util.List;
 
 public record ComplaintResponse(
         String id,
@@ -19,9 +20,14 @@ public record ComplaintResponse(
         String createdByUserId,
         String createdByMemberId,
         Instant createdAt,
-        Instant updatedAt) {
+        Instant updatedAt,
+        List<ComplaintMessageResponse> messages) {
 
     public static ComplaintResponse from(Complaint complaint) {
+        return from(complaint, List.of());
+    }
+
+    public static ComplaintResponse from(Complaint complaint, List<ComplaintMessage> messages) {
         return new ComplaintResponse(
                 complaint.getId(),
                 complaint.getTenantId(),
@@ -39,6 +45,7 @@ public record ComplaintResponse(
                 complaint.getCreatedByUserId(),
                 complaint.getCreatedByMemberId(),
                 complaint.getCreatedAt(),
-                complaint.getUpdatedAt());
+                complaint.getUpdatedAt(),
+                messages.stream().map(ComplaintMessageResponse::from).toList());
     }
 }

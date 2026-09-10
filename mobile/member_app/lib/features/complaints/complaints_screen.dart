@@ -118,13 +118,69 @@ class _ComplaintCard extends StatelessWidget {
               ].join(' · '),
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            if (c.resolutionNotes.isNotEmpty) ...[
+            if (c.messages.isNotEmpty) ...[
               const SizedBox(height: 6),
-              Text('Response: ${c.resolutionNotes}',
+              _ComplaintThread(c.messages),
+            ] else if (c.resolutionNotes.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(c.resolutionNotes,
                   style: const TextStyle(fontStyle: FontStyle.italic)),
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ComplaintThread extends StatelessWidget {
+  const _ComplaintThread(this.messages);
+  final List<ComplaintMessage> messages;
+
+  @override
+  Widget build(BuildContext context) {
+    final visible = messages
+        .where((message) => message.message.isNotEmpty)
+        .toList();
+    if (visible.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: visible.map((message) => _MessageTile(message)).toList(),
+    );
+  }
+}
+
+class _MessageTile extends StatelessWidget {
+  const _MessageTile(this.message);
+  final ComplaintMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fromMember = message.senderType == 'member';
+    final when = message.createdAt == null
+        ? ''
+        : DateFormat('d MMM y, HH:mm').format(message.createdAt!);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: fromMember
+            ? scheme.surfaceContainerHighest
+            : scheme.primaryContainer.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(fromMember ? 'You' : 'SACCO response',
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          if (when.isNotEmpty)
+            Text(when, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 4),
+          Text(message.message),
+        ],
       ),
     );
   }

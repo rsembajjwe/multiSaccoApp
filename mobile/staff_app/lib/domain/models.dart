@@ -1245,8 +1245,11 @@ class Complaint {
     required this.priority,
     required this.status,
     required this.resolutionNotes,
+    required this.assignedUserId,
+    required this.resolvedByUserId,
     required this.resolvedAt,
     required this.createdAt,
+    required this.messages,
   });
 
   final String id;
@@ -1258,8 +1261,11 @@ class Complaint {
   final String priority;
   final String status;
   final String resolutionNotes;
+  final String assignedUserId;
+  final String resolvedByUserId;
   final String resolvedAt;
   final String createdAt;
+  final List<ComplaintMessage> messages;
 
   factory Complaint.fromJson(Map<String, dynamic> j) => Complaint(
         id: _str(j['id']),
@@ -1271,7 +1277,47 @@ class Complaint {
         priority: _str(j['priority']),
         status: _str(j['status']),
         resolutionNotes: _str(j['resolutionNotes']),
+        assignedUserId: _str(j['assignedUserId']),
+        resolvedByUserId: _str(j['resolvedByUserId']),
         resolvedAt: _str(j['resolvedAt']),
+        createdAt: _str(j['createdAt']),
+        messages: ((j['messages'] as List?) ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(ComplaintMessage.fromJson)
+            .toList(),
+      );
+}
+
+class ComplaintMessage {
+  const ComplaintMessage({
+    required this.id,
+    required this.senderType,
+    required this.senderUserId,
+    required this.senderMemberId,
+    required this.visibility,
+    required this.action,
+    required this.message,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String senderType;
+  final String senderUserId;
+  final String senderMemberId;
+  final String visibility;
+  final String action;
+  final String message;
+  final String createdAt;
+
+  factory ComplaintMessage.fromJson(Map<String, dynamic> j) =>
+      ComplaintMessage(
+        id: _str(j['id']),
+        senderType: _str(j['senderType']),
+        senderUserId: _str(j['senderUserId']),
+        senderMemberId: _str(j['senderMemberId']),
+        visibility: _str(j['visibility']),
+        action: _str(j['action']),
+        message: _str(j['message']),
         createdAt: _str(j['createdAt']),
       );
 }
