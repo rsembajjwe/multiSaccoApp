@@ -12,7 +12,6 @@ import '../governance/governance_screen.dart';
 import '../chat/chat_threads_screen.dart';
 import '../complaints/complaints_screen.dart';
 import '../funds/fund_sources_screen.dart';
-import '../interest/interest_screen.dart';
 import '../loans/loans_screen.dart';
 import '../members/members_screen.dart';
 import '../mobile_money/mobile_money_screen.dart';
@@ -32,69 +31,66 @@ import '../../providers.dart';
 /// A staff feature area, shown on the dashboard when the user holds any of
 /// [perms]. [route] will point to the real screen as each section is built.
 class _Section {
-  const _Section(this.label, this.icon, this.perms, this.color, this.description);
+  const _Section(this.label, this.icon, this.perms, this.color, this.description,
+      {required this.category});
   final String label;
   final IconData icon;
   final List<String> perms;
   final Color color;
   final String description;
+
+  /// Dashboard group this feature is filed under (see [_categoryOrder]).
+  final String category;
 }
 
 const _sections = <_Section>[
   _Section('Members', Icons.groups_outlined,
       ['members:view', 'members:create', 'members:approve'], Color(0xFF0F766E),
-      'Balances, statements & KYC'),
+      'Balances, statements & KYC', category: 'Members'),
   _Section('Transactions', Icons.swap_horiz,
       ['transactions:view', 'transactions:create', 'transactions:approve'],
-      Color(0xFFB45309), 'Deposits, withdrawals & shares'),
-  _Section('Mobile Money', Icons.phone_android_outlined,
-      ['accounting:view'], Color(0xFF0E7490), 'Requests, callbacks & status'),
-  _Section('Reconciliation', Icons.fact_check_outlined,
-      ['accounting:view'], Color(0xFF4338CA), 'Cash matches & exceptions'),
+      Color(0xFFB45309), 'Deposits, withdrawals & shares', category: 'Finance'),
+  _Section('Mobile Money', Icons.phone_android_outlined, ['accounting:view'],
+      Color(0xFF0E7490), 'Requests, callbacks & status', category: 'Finance'),
+  _Section('Reconciliation', Icons.fact_check_outlined, ['accounting:view'],
+      Color(0xFF4338CA), 'Cash matches & exceptions', category: 'Finance'),
   _Section('Loans', Icons.account_balance_outlined,
       ['loans:view', 'loans:approve', 'loans:disburse', 'loans:create'],
-      Color(0xFFB91C1C), 'Loan book, schedules & payments'),
-  _Section('Welfare', Icons.volunteer_activism_outlined,
-      ['welfare:view', 'welfare:manage'], Color(0xFF9333EA),
-      'Member welfare claims'),
-  _Section('Fund Sources', Icons.account_balance_wallet_outlined,
+      Color(0xFFB91C1C), 'Loan book, schedules & payments', category: 'Loans'),
+  _Section('Fund types', Icons.account_balance_wallet_outlined,
       ['fund-types:view', 'fund-types:manage'], Color(0xFF64748B),
-      'Savings, shares & custom funds'),
-  _Section('Complaints', Icons.forum_outlined,
-      ['complaints:view', 'complaints:manage'], Color(0xFFDB2777),
-      'Member complaints & responses'),
-  _Section('Support chat', Icons.support_agent,
-      ['complaints:view', 'complaints:manage'], Color(0xFF2563EB),
-      'Member support conversations'),
-  _Section('Reports', Icons.insights_outlined, ['reports:view'],
-      Color(0xFF0369A1), 'SACCO metrics & portfolio'),
-  _Section('Audit log', Icons.receipt_long_outlined, ['audit:view'],
-      Color(0xFF525252), 'Who did what, when'),
-  _Section('Notifications', Icons.notifications_outlined,
-      ['notifications:view'], Color(0xFF0891B2),
-      'SACCO alerts & messages sent'),
-  _Section('Users & Roles', Icons.manage_accounts_outlined,
-      ['users:view', 'roles:view'], Color(0xFF7C3AED),
-      'Staff directory & permissions'),
-  _Section('Branches', Icons.account_tree_outlined,
-      ['operations:view'], Color(0xFF0E7490),
-      'SACCO branch directory'),
+      'Savings, shares & custom fund buckets', category: 'Finance'),
   _Section('Products', Icons.category_outlined, ['transactions:view'],
-      Color(0xFF15803D), 'Savings & loan product setup'),
+      Color(0xFF15803D), 'Savings & loan product setup', category: 'Finance'),
   _Section('Savings transfers', Icons.swap_horiz_outlined,
       ['savings-transfer:view'], Color(0xFF9333EA),
-      'Chairperson transfers & group deductions'),
-  _Section('Governance', Icons.groups_outlined, ['governance:view'],
-      Color(0xFF0891B2), 'Board & AGM meetings and resolutions'),
-  _Section(
-      'Subscriptions',
-      Icons.workspace_premium_outlined,
-      ['subscriptions:view', 'notifications:manage'],
-      Color(0xFF0D9488),
-      'Platform, member dues & SMS'),
-  _Section('Interest income', Icons.trending_up,
-      ['accounting:view'], Color(0xFF16A34A),
-      'Interest booked by year'),
+      'Chairperson transfers & group deductions', category: 'Finance'),
+  _Section('Welfare', Icons.volunteer_activism_outlined,
+      ['welfare:view', 'welfare:manage'], Color(0xFF9333EA),
+      'Member welfare claims', category: 'Welfare & dues'),
+  _Section('Subscriptions', Icons.workspace_premium_outlined,
+      ['subscriptions:view', 'notifications:manage'], Color(0xFF0D9488),
+      'Platform, member dues & SMS', category: 'Welfare & dues'),
+  _Section('Complaints', Icons.forum_outlined,
+      ['complaints:view', 'complaints:manage'], Color(0xFFDB2777),
+      'Member complaints & responses', category: 'Member support'),
+  _Section('Support chat', Icons.support_agent,
+      ['complaints:view', 'complaints:manage'], Color(0xFF2563EB),
+      'Member support conversations', category: 'Member support'),
+  _Section('Governance', Icons.gavel_outlined, ['governance:view'],
+      Color(0xFF0891B2), 'Board & AGM meetings and resolutions',
+      category: 'Members'),
+  _Section('Reports', Icons.insights_outlined, ['reports:view'],
+      Color(0xFF0369A1), 'SACCO metrics & portfolio', category: 'Oversight'),
+  _Section('Audit log', Icons.receipt_long_outlined, ['audit:view'],
+      Color(0xFF525252), 'Who did what, when', category: 'Oversight'),
+  _Section('Notifications', Icons.notifications_outlined, ['notifications:view'],
+      Color(0xFF0891B2), 'SACCO alerts & messages sent', category: 'Oversight'),
+  _Section('Users & Roles', Icons.manage_accounts_outlined,
+      ['users:view', 'roles:view'], Color(0xFF7C3AED),
+      'Staff directory & permissions', category: 'Administration'),
+  _Section('Branches', Icons.account_tree_outlined, ['branches:view'],
+      Color(0xFF0E7490), 'SACCO branch directory', category: 'Administration'),
 ];
 
 class DashboardScreen extends ConsumerWidget {
@@ -293,6 +289,19 @@ class _Header extends StatelessWidget {
   }
 }
 
+/// Order in which dashboard groups render; finance-first for the roles that use
+/// this app most. A group appears only when the user can open at least one tile
+/// inside it, and each group is collapsible (all expanded by default).
+const _categoryOrder = <String>[
+  'Finance',
+  'Loans',
+  'Welfare & dues',
+  'Member support',
+  'Members',
+  'Oversight',
+  'Administration',
+];
+
 class _SectionGrid extends StatelessWidget {
   const _SectionGrid({required this.session});
   final StaffSession session;
@@ -309,57 +318,97 @@ class _SectionGrid extends StatelessWidget {
       );
     }
     final scheme = Theme.of(context).colorScheme;
-    return Column(
-      children: visible
-          .map((s) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Card(
-                  margin: EdgeInsets.zero,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => _screenFor(s, session))),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: s.color.withValues(alpha: 0.13),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(s.icon, color: s.color, size: 22),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(s.label,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w700)),
-                                const SizedBox(height: 2),
-                                Text(s.description,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: scheme.onSurfaceVariant)),
-                              ],
-                            ),
-                          ),
-                          Icon(Icons.chevron_right,
-                              color: scheme.onSurfaceVariant),
-                        ],
-                      ),
-                    ),
+    final ordered = <String>[
+      ..._categoryOrder,
+      ...visible
+          .map((s) => s.category)
+          .where((c) => !_categoryOrder.contains(c)),
+    ];
+    final groups = <Widget>[];
+    for (final category in ordered) {
+      final items = visible.where((s) => s.category == category).toList();
+      if (items.isEmpty) continue;
+      groups.add(
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: true,
+            tilePadding: const EdgeInsets.symmetric(horizontal: 4),
+            childrenPadding: EdgeInsets.zero,
+            title: Text(
+              category.toUpperCase(),
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            children: [
+              for (final s in items) _DashTile(section: s, session: session),
+            ],
+          ),
+        ),
+      );
+    }
+    return Column(children: groups);
+  }
+}
+
+class _DashTile extends StatelessWidget {
+  const _DashTile({required this.section, required this.session});
+  final _Section section;
+  final StaffSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final s = section;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Card(
+        margin: EdgeInsets.zero,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => _screenFor(s, session))),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: s.color.withValues(alpha: 0.13),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(s.icon, color: s.color, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(s.label,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 2),
+                      Text(s.description,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12, color: scheme.onSurfaceVariant)),
+                    ],
                   ),
                 ),
-              ))
-          .toList(),
+                Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -390,13 +439,11 @@ Widget _screenFor(_Section s, StaffSession session) {
       return ComplaintsScreen(canManage: session.can('complaints:manage'));
     case 'Support chat':
       return ChatThreadsScreen(canReply: session.can('complaints:manage'));
-    case 'Interest income':
-      return const InterestScreen();
     case 'Reports':
       return const ReportsScreen();
     case 'Welfare':
       return const WelfareScreen();
-    case 'Fund Sources':
+    case 'Fund types':
       return FundSourcesScreen(canManage: session.can('fund-types:manage'));
     case 'Audit log':
       return const AuditScreen();

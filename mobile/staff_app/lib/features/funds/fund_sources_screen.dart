@@ -16,7 +16,7 @@ class FundSourcesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(fundTypesProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Fund sources')),
+      appBar: AppBar(title: const Text('Fund types')),
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
               icon: const Icon(Icons.add),
@@ -124,7 +124,7 @@ class _FundTypeSheetState extends ConsumerState<_FundTypeSheet> {
       ref.invalidate(saccoStatusProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Fund source added.')),
+          const SnackBar(content: Text('Fund type added.')),
         );
         Navigator.of(context).pop();
       }
@@ -154,7 +154,7 @@ class _FundTypeSheetState extends ConsumerState<_FundTypeSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Add fund source',
+              'Add fund type',
               style: Theme.of(context)
                   .textTheme
                   .titleMedium

@@ -79,7 +79,7 @@ class _SettingsBody extends ConsumerWidget {
         ),
         _SettingsTile(
           icon: Icons.account_balance_wallet_outlined,
-          title: 'Fund sources',
+          title: 'Fund types',
           subtitle: 'Savings, shares, welfare and custom funds',
           enabled: canManageFunds,
           onTap: () => Navigator.of(context).push(MaterialPageRoute(
@@ -377,7 +377,7 @@ class _AccessSummaryCard extends StatelessWidget {
       'member-subscription:view',
     ]);
     add('SMS', ['notifications:manage']);
-    add('Fund sources', ['fund-types:view', 'fund-types:manage']);
+    add('Fund types', ['fund-types:view', 'fund-types:manage']);
     add('Reports', ['reports:view']);
     add('Audit', ['audit:view']);
     add('Users & roles', ['users:view', 'roles:view']);
