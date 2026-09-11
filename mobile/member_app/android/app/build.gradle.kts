@@ -9,17 +9,28 @@ android {
     namespace = "com.methaltech.sacco_member_app"
     packaging {
         resources {
-            pickFirsts += setOf(
-                "META-INF/androidx/annotation/annotation/LICENSE.txt",
-                "/META-INF/androidx/annotation/annotation/LICENSE.txt",
-            )
+            // androidx.annotation and androidx.annotation-jvm both ship identical
+            // META-INF license files, which breaks mergeDebugJavaResource. Drop the
+            // duplicates here. IMPORTANT: do not also list any of these in
+            // pickFirsts -- a path present in both excludes and pickFirsts is
+            // contradictory and AGP 9 then applies neither action, so the duplicate
+            // resurfaces as a "2 files found" merge failure.
             excludes += setOf(
-                "META-INF/androidx/annotation/annotation/LICENSE.txt",
-                "/META-INF/androidx/annotation/annotation/LICENSE.txt",
-                "META-INF/androidx/annotation/annotation/LICENSE-*.txt",
-                "/META-INF/androidx/annotation/annotation/LICENSE-*.txt",
-                "META-INF/androidx/annotation/**",
+                // Both leading-slash and no-slash forms, so the match is anchor-agnostic.
                 "/META-INF/androidx/annotation/**",
+                "META-INF/androidx/annotation/**",
+                "/META-INF/androidx/**/LICENSE.txt",
+                "META-INF/androidx/**/LICENSE.txt",
+                "/META-INF/androidx/**/LICENSE-*.txt",
+                "META-INF/androidx/**/LICENSE-*.txt",
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "/META-INF/DEPENDENCIES",
+                "/META-INF/LICENSE",
+                "/META-INF/LICENSE.txt",
+                "/META-INF/LICENSE.md",
+                "/META-INF/NOTICE",
+                "/META-INF/NOTICE.txt",
+                "/META-INF/NOTICE.md",
             )
         }
     }
