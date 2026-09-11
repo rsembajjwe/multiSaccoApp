@@ -893,6 +893,11 @@ class MemberController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())
+                && !authService.hasPermission(currentSession.user(), "members:create")
+                && !authService.hasPermission(currentSession.user(), "members:approve")) {
+            return authService.permissionRequired("members:create");
+        }
 
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
@@ -946,6 +951,11 @@ class MemberController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())
+                && !authService.hasPermission(currentSession.user(), "members:create")
+                && !authService.hasPermission(currentSession.user(), "members:approve")) {
+            return authService.permissionRequired("members:create");
+        }
 
         BigDecimal allocationPercent = body.allocationPercent().stripTrailingZeros();
         if (allocationPercent.compareTo(BigDecimal.ZERO) <= 0 || allocationPercent.compareTo(new BigDecimal("100")) > 0) {
@@ -1011,6 +1021,11 @@ class MemberController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())
+                && !authService.hasPermission(currentSession.user(), "members:create")
+                && !authService.hasPermission(currentSession.user(), "members:approve")) {
+            return authService.permissionRequired("members:create");
+        }
 
         String documentType = normalizedOrDefault(body.documentType(), "");
         if (!ALLOWED_DOCUMENT_TYPES.contains(documentType)) {
@@ -1057,6 +1072,11 @@ class MemberController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())
+                && !authService.hasPermission(currentSession.user(), "members:create")
+                && !authService.hasPermission(currentSession.user(), "members:approve")) {
+            return authService.permissionRequired("members:create");
+        }
         String normalizedDocumentType = normalizedOrDefault(documentType, "");
         if (!ALLOWED_DOCUMENT_TYPES.contains(normalizedDocumentType)) {
             return ResponseEntity.badRequest()
