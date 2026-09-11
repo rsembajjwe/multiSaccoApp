@@ -50,6 +50,42 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
   String get _effectiveSearch =>
       _query.isNotEmpty ? _query : (_filters[_filter].match ?? '');
 
+  Future<void> _showNewEntryMenu() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.savings_outlined),
+              title: const Text('Savings deposit'),
+              subtitle: const Text('Cash posts now, or send a mobile-money prompt'),
+              onTap: () => Navigator.pop(context, 'savings'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.payments_outlined),
+              title: const Text('Withdrawal'),
+              subtitle: const Text('Cash pays out now; bank goes for approval'),
+              onTap: () => Navigator.pop(context, 'withdrawal'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => choice == 'withdrawal'
+          ? const _WithdrawalSheet()
+          : const _SavingsDepositSheet(),
+    );
+    if (mounted) setState(() => _reloadTick++);
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider).asData?.value;
@@ -59,17 +95,9 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
       appBar: AppBar(title: const Text('Transactions')),
       floatingActionButton: canCreate
           ? FloatingActionButton.extended(
-              icon: const Icon(Icons.savings_outlined),
-              label: const Text('Savings'),
-              onPressed: () async {
-                await showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  showDragHandle: true,
-                  builder: (_) => const _SavingsDepositSheet(),
-                );
-                if (mounted) setState(() => _reloadTick++);
-              },
+              icon: const Icon(Icons.add),
+              label: const Text('New'),
+              onPressed: _showNewEntryMenu,
             )
           : null,
       body: Column(
@@ -452,6 +480,205 @@ class _TxnTile extends StatelessWidget {
             ),
           ],
         ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Records a member withdrawal. Cash pays out and posts immediately; bank goes
+/// to the approval queue for a second officer to post (transactions:approve).
+class _WithdrawalSheet extends ConsumerStatefulWidget {
+  const _WithdrawalSheet();
+
+  @override
+  ConsumerState<_WithdrawalSheet> createState() => _WithdrawalSheetState();
+}
+
+class _WithdrawalSheetState extends ConsumerState<_WithdrawalSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _amount = TextEditingController();
+  final _narration = TextEditingController();
+  String _channel = 'cash';
+  Member? _member;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _narration.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_member == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Choose a member.')));
+      return;
+    }
+    final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
+    final memberName = _member?.fullName ?? 'the selected member';
+    final isCash = _channel == 'cash';
+    final confirmed = await confirmAction(
+      context,
+      title: isCash ? 'Post cash withdrawal?' : 'Submit withdrawal for approval?',
+      message: isCash
+          ? 'Pay out ${Fmt.money(amount)} in cash to $memberName and reduce '
+              'their savings balance now.'
+          : 'Submit a ${Fmt.money(amount)} ${Fmt.label(_channel)} withdrawal for '
+              '$memberName. A second officer must post it before the balance '
+              'changes.',
+      confirmLabel: isCash ? 'Post withdrawal' : 'Submit',
+      icon: Icons.payments_outlined,
+    );
+    if (!confirmed || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepositoryProvider).createWithdrawal(
+            memberId: _member!.id,
+            amount: amount,
+            channel: _channel,
+            narration: _narration.text,
+          );
+      ref.invalidate(transactionsProvider(''));
+      ref.invalidate(memberProvider(_member!.id));
+      ref.invalidate(memberFundBalancesProvider);
+      ref.invalidate(saccoStatusProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(isCash
+                ? 'Cash withdrawal posted.'
+                : 'Withdrawal submitted for approval.'),
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        0,
+        20,
+        20 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Member withdrawal',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: 'cash',
+                    icon: Icon(Icons.payments_outlined),
+                    label: Text('Cash'),
+                  ),
+                  ButtonSegment(
+                    value: 'bank',
+                    icon: Icon(Icons.account_balance_outlined),
+                    label: Text('Bank'),
+                  ),
+                ],
+                selected: {_channel},
+                onSelectionChanged: _busy
+                    ? null
+                    : (value) => setState(() => _channel = value.first),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: _busy
+                    ? null
+                    : () async {
+                        final picked = await showMemberPicker(context);
+                        if (picked != null && mounted) {
+                          setState(() => _member = picked);
+                        }
+                      },
+                borderRadius: BorderRadius.circular(8),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Member',
+                    suffixIcon: Icon(Icons.search),
+                  ),
+                  child: Text(
+                    _member == null
+                        ? 'Tap to search & select a member'
+                        : '${_member!.fullName} - ${_member!.membershipNo}',
+                    overflow: TextOverflow.ellipsis,
+                    style: _member == null
+                        ? TextStyle(color: Theme.of(context).hintColor)
+                        : null,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _amount,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Amount'),
+                validator: (v) {
+                  final parsed =
+                      num.tryParse((v ?? '').trim().replaceAll(',', ''));
+                  return parsed == null || parsed <= 0 ? 'Enter amount.' : null;
+                },
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _narration,
+                minLines: 1,
+                maxLines: 3,
+                decoration:
+                    const InputDecoration(labelText: 'Narration (optional)'),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _channel == 'cash'
+                    ? 'Cash withdrawals post immediately.'
+                    : 'Bank withdrawals wait for a second officer to post.',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  icon: _busy
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.payments_outlined),
+                  label: Text(_channel == 'cash' ? 'Post withdrawal' : 'Submit'),
+                  onPressed: _busy ? null : _save,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

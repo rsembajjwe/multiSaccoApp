@@ -25,6 +25,10 @@ class TransactionDetailScreen extends ConsumerWidget {
                 false) &&
             txn.status == 'posted' &&
             txn.reversalReason.isEmpty;
+    final canDecide =
+        (ref.watch(sessionProvider).asData?.value.can('transactions:approve') ??
+                false) &&
+            txn.status == 'pending_approval';
     final out = txn.isOutflow;
     final color = out ? const Color(0xFFB91C1C) : const Color(0xFF15803D);
     String? nameFor(String id) =>
@@ -95,6 +99,10 @@ class TransactionDetailScreen extends ConsumerWidget {
               ],
             ),
           ),
+          if (canDecide) ...[
+            const SizedBox(height: 16),
+            _DecideButtons(txn: txn),
+          ],
           if (canReverse) ...[
             const SizedBox(height: 16),
             _ReverseButton(txn: txn),
@@ -214,6 +222,137 @@ class _ReverseButtonState extends ConsumerState<_ReverseButton> {
             : const Icon(Icons.undo),
         label: const Text('Reverse transaction'),
       ),
+    );
+  }
+}
+
+/// Post or reject a transaction sitting in pending_approval. Shown only to a
+/// checker (transactions:approve). Posting credits/debits the balance; rejecting
+/// records a reason and leaves balances untouched.
+class _DecideButtons extends ConsumerStatefulWidget {
+  const _DecideButtons({required this.txn});
+  final FinancialTxn txn;
+
+  @override
+  ConsumerState<_DecideButtons> createState() => _DecideButtonsState();
+}
+
+class _DecideButtonsState extends ConsumerState<_DecideButtons> {
+  bool _busy = false;
+
+  Future<String?> _askReason() async {
+    final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reject transaction'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            autofocus: true,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Reason',
+              hintText: 'Why is this being rejected?',
+            ),
+            validator: (v) => (v == null || v.trim().length < 4)
+                ? 'Give a short reason.'
+                : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          FilledButton(
+            style:
+                FilledButton.styleFrom(backgroundColor: const Color(0xFFB91C1C)),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(ctx, controller.text.trim());
+              }
+            },
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _decide(String status) async {
+    String? reason;
+    if (status == 'rejected') {
+      reason = await _askReason();
+      if (reason == null || reason.isEmpty) return;
+    }
+    if (!mounted) return;
+    final posting = status == 'posted';
+    final confirmed = await confirmAction(
+      context,
+      title: posting ? 'Post this transaction?' : 'Reject this transaction?',
+      message: posting
+          ? 'Post ${Fmt.money(widget.txn.amount)} to the member balance. This '
+              'creates an audit entry.'
+          : 'Reject ${Fmt.money(widget.txn.amount)}. No balance is affected.',
+      confirmLabel: posting ? 'Post' : 'Reject',
+      icon: posting ? Icons.check_circle_outline : Icons.cancel_outlined,
+    );
+    if (!confirmed || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(adminRepositoryProvider)
+          .decideTransaction(widget.txn.id, status, reason: reason);
+      ref.invalidate(transactionsProvider(''));
+      ref.invalidate(saccoStatusProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                posting ? 'Transaction posted.' : 'Transaction rejected.')));
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFB91C1C)),
+            onPressed: _busy ? null : () => _decide('rejected'),
+            icon: const Icon(Icons.cancel_outlined),
+            label: const Text('Reject'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton.icon(
+            style:
+                FilledButton.styleFrom(backgroundColor: const Color(0xFF15803D)),
+            onPressed: _busy ? null : () => _decide('posted'),
+            icon: _busy
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.check_circle_outline),
+            label: const Text('Post'),
+          ),
+        ),
+      ],
     );
   }
 }

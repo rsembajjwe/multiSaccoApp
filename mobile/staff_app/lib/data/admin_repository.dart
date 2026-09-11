@@ -271,6 +271,34 @@ class AdminRepository {
     return FinancialTxn.fromJson(data);
   }
 
+  /// Create a member withdrawal. Cash posts immediately; non-cash channels
+  /// (bank) are submitted for a second officer to post (transactions:approve).
+  Future<FinancialTxn> createWithdrawal({
+    required String memberId,
+    required num amount,
+    required String channel,
+    String? narration,
+  }) async {
+    final data = await _api.post('/financial-transactions', {
+      'memberId': memberId,
+      'type': 'withdrawal',
+      'channel': channel,
+      'amount': amount,
+      if (narration != null && narration.trim().isNotEmpty)
+        'narration': narration.trim(),
+    });
+    return FinancialTxn.fromJson(data);
+  }
+
+  /// Post or reject a pending_approval financial transaction (checker step).
+  Future<void> decideTransaction(String id, String status,
+      {String? reason}) async {
+    await _api.patch('/financial-transactions/$id/status', {
+      'status': status,
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
   Future<MobileMoneyPaymentRequest> requestMemberSavingsMobileMoney({
     required String memberId,
     required num amount,
