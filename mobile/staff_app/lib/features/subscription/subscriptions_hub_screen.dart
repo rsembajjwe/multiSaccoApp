@@ -32,39 +32,43 @@ class SubscriptionsHubScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _HubTile(
-            icon: Icons.workspace_premium_outlined,
-            title: 'SACCO platform subscription',
-            subtitle: 'Pay balance and top up member capacity',
-            enabled: canViewSubscription,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => SubscriptionScreen(canPay: canPaySubscription),
-            )),
-          ),
-          _HubTile(
-            icon: Icons.fact_check_outlined,
-            title: 'Member dues',
-            subtitle: 'Track paid members and pay platform for selected members',
-            enabled: canViewMemberSubscriptions,
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => MemberSubscriptionsScreen(
-                canManage: canManageMemberSubscriptions,
-                canPrompt: canPromptMemberSubscriptions,
-              ),
-            )),
-          ),
-          _HubTile(
-            icon: Icons.sms_outlined,
-            title: 'SMS credits',
-            subtitle: statusAsync?.maybeWhen(
-                  data: (s) =>
-                      '${s.smsBalance} SMS available at ${s.smsRate} each',
-                  orElse: () => 'Buy SMS credits by mobile money',
-                ) ??
-                'Buy SMS credits by mobile money',
-            enabled: canManageNotifications,
-            onTap: () => _showSmsTopUpDialog(context, ref),
-          ),
+          if (canViewSubscription)
+            _HubTile(
+              icon: Icons.workspace_premium_outlined,
+              title: 'SACCO platform subscription',
+              subtitle: 'Pay balance and top up member capacity',
+              enabled: true,
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => SubscriptionScreen(canPay: canPaySubscription),
+              )),
+            ),
+          if (canViewMemberSubscriptions || canManageMemberSubscriptions)
+            _HubTile(
+              icon: Icons.fact_check_outlined,
+              title: 'Member dues',
+              subtitle:
+                  'Track paid members and pay platform for selected members',
+              enabled: true,
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => MemberSubscriptionsScreen(
+                  canManage: canManageMemberSubscriptions,
+                  canPrompt: canPromptMemberSubscriptions,
+                ),
+              )),
+            ),
+          if (canManageNotifications)
+            _HubTile(
+              icon: Icons.sms_outlined,
+              title: 'SMS credits',
+              subtitle: statusAsync?.maybeWhen(
+                    data: (s) =>
+                        '${s.smsBalance} SMS available at ${s.smsRate} each',
+                    orElse: () => 'Buy SMS credits by mobile money',
+                  ) ??
+                  'Buy SMS credits by mobile money',
+              enabled: true,
+              onTap: () => _showSmsTopUpDialog(context, ref),
+            ),
         ],
       ),
     );
