@@ -62,7 +62,7 @@ const _sections = <_Section>[
       ['fund-types:view', 'fund-types:manage'], Color(0xFF64748B),
       'Savings, shares & custom fund buckets', category: 'Finance'),
   _Section('Finance sources', Icons.savings_outlined,
-      ['finance-source:manage'], Color(0xFF0D9488),
+      ['funding-source:view'], Color(0xFF0D9488),
       'SACCO capital & sources of funds', category: 'Finance'),
   _Section('Products', Icons.category_outlined, ['transactions:view'],
       Color(0xFF15803D), 'Savings & loan product setup', category: 'Finance'),

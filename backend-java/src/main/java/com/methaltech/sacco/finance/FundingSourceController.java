@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * SACCO sources-of-funds register. The Chairperson (and SACCO admin/treasurer) review the register
- * ({@code finance-source:view}) and add/edit entries ({@code finance-source:manage}). Entries are
+ * ({@code funding-source:view}) and add/edit entries ({@code finance-source:manage}). Entries are
  * strictly tenant-scoped and every change is written to the audit trail.
  */
 @RestController
@@ -52,8 +52,8 @@ class FundingSourceController {
             @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
-        if (!authService.hasPermission(currentSession.user(), "finance-source:view")) {
-            return authService.permissionRequired("finance-source:view");
+        if (!authService.hasPermission(currentSession.user(), "funding-source:view")) {
+            return authService.permissionRequired("funding-source:view");
         }
 
         List<FundingSource> sources;
