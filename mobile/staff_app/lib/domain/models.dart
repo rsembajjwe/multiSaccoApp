@@ -2034,3 +2034,45 @@ class GovernanceMeeting {
             const [],
       );
 }
+
+
+/// A SACCO source-of-funds register entry (capital): where the SACCO's money
+/// comes from. Distinct from [FundType], which are member account buckets.
+class FundingSource {
+  const FundingSource({
+    required this.id,
+    required this.sourceType,
+    required this.provider,
+    required this.amount,
+    required this.currencyCode,
+    required this.reference,
+    required this.dateReceived,
+    required this.status,
+    required this.notes,
+  });
+
+  final String id;
+  final String sourceType;
+  final String? provider;
+  final num amount;
+  final String currencyCode;
+  final String? reference;
+  final DateTime? dateReceived;
+  final String status;
+  final String? notes;
+
+  bool get isActive => status == 'active';
+
+  factory FundingSource.fromJson(Map<String, dynamic> j) => FundingSource(
+        id: _str(j['id']),
+        sourceType: _str(j['sourceType']),
+        provider: _strn(j['provider']),
+        amount: _num(j['amount']),
+        currencyCode:
+            _str(j['currencyCode']).isEmpty ? 'UGX' : _str(j['currencyCode']),
+        reference: _strn(j['reference']),
+        dateReceived: DateTime.tryParse('${j['dateReceived'] ?? ''}'),
+        status: _str(j['status']).isEmpty ? 'active' : _str(j['status']),
+        notes: _strn(j['notes']),
+      );
+}

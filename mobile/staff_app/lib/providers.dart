@@ -164,6 +164,12 @@ final fundTypesProvider = FutureProvider.autoDispose<List<FundType>>(
   (ref) => ref.watch(adminRepositoryProvider).fundTypes(),
 );
 
+/// SACCO capital sources-of-funds register (finance-source:view).
+final fundingSourcesProvider =
+    FutureProvider.autoDispose<List<FundingSource>>(
+  (ref) => ref.watch(adminRepositoryProvider).fundingSources(),
+);
+
 /// Map of member id -> display name, used to label loans (which carry only ids).
 final memberNamesProvider = FutureProvider.autoDispose<Map<String, String>>(
   (ref) => ref.watch(adminRepositoryProvider).memberNames(),

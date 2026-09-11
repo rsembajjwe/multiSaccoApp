@@ -335,6 +335,39 @@ class AdminRepository {
     return FundType.fromJson(data);
   }
 
+  /// SACCO sources-of-funds register (capital). Requires finance-source:view.
+  Future<List<FundingSource>> fundingSources() async {
+    final rows = await _api.getList('/funding-sources');
+    return rows.map(FundingSource.fromJson).toList();
+  }
+
+  Future<FundingSource> createFundingSource({
+    required String sourceType,
+    required num amount,
+    String? provider,
+    String? currencyCode,
+    String? reference,
+    DateTime? dateReceived,
+    String? notes,
+  }) async {
+    final data = await _api.post('/funding-sources', {
+      'sourceType': sourceType.trim(),
+      'amount': amount,
+      if (provider != null && provider.trim().isNotEmpty)
+        'provider': provider.trim(),
+      'currencyCode': (currencyCode == null || currencyCode.trim().isEmpty)
+          ? 'UGX'
+          : currencyCode.trim().toUpperCase(),
+      if (reference != null && reference.trim().isNotEmpty)
+        'reference': reference.trim(),
+      if (dateReceived != null)
+        'dateReceived': dateReceived.toIso8601String().split('T').first,
+      if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      'status': 'active',
+    });
+    return FundingSource.fromJson(data);
+  }
+
   Future<List<Subscription>> subscriptions() async {
     final rows = await _api.getList('/subscriptions');
     return rows.map(Subscription.fromJson).toList();

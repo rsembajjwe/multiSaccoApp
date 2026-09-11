@@ -32,7 +32,7 @@ class FundSourcesScreen extends ConsumerWidget {
       body: async.when(
         loading: () => const ListSkeleton(),
         error: (e, _) => ErrorRetry(
-          message: 'Could not load fund sources.',
+          message: 'Could not load fund types.',
           detail: '$e',
           onRetry: () => ref.invalidate(fundTypesProvider),
         ),
@@ -40,7 +40,7 @@ class FundSourcesScreen extends ConsumerWidget {
           if (funds.isEmpty) {
             return const EmptyState(
               icon: Icons.account_balance_wallet_outlined,
-              message: 'No fund sources configured.',
+              message: 'No fund types configured.',
             );
           }
           return RefreshIndicator(

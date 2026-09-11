@@ -12,6 +12,7 @@ import '../governance/governance_screen.dart';
 import '../chat/chat_threads_screen.dart';
 import '../complaints/complaints_screen.dart';
 import '../funds/fund_sources_screen.dart';
+import '../funds/finance_sources_screen.dart';
 import '../loans/loans_screen.dart';
 import '../members/members_screen.dart';
 import '../mobile_money/mobile_money_screen.dart';
@@ -60,6 +61,9 @@ const _sections = <_Section>[
   _Section('Fund types', Icons.account_balance_wallet_outlined,
       ['fund-types:view', 'fund-types:manage'], Color(0xFF64748B),
       'Savings, shares & custom fund buckets', category: 'Finance'),
+  _Section('Finance sources', Icons.savings_outlined,
+      ['finance-source:view'], Color(0xFF0D9488),
+      'SACCO capital & sources of funds', category: 'Finance'),
   _Section('Products', Icons.category_outlined, ['transactions:view'],
       Color(0xFF15803D), 'Savings & loan product setup', category: 'Finance'),
   _Section('Savings transfers', Icons.swap_horiz_outlined,
@@ -445,6 +449,9 @@ Widget _screenFor(_Section s, StaffSession session) {
       return const WelfareScreen();
     case 'Fund types':
       return FundSourcesScreen(canManage: session.can('fund-types:manage'));
+    case 'Finance sources':
+      return FinanceSourcesScreen(
+          canManage: session.can('finance-source:manage'));
     case 'Audit log':
       return const AuditScreen();
     case 'Notifications':
