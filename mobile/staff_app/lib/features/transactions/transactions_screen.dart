@@ -18,6 +18,7 @@ class _Filter {
 
 const _filters = <_Filter>[
   _Filter('All', null),
+  _Filter('Pending', 'pending_approval'),
   _Filter('Savings', 'savings_deposit'),
   _Filter('Withdrawals', 'withdrawal'),
   _Filter('Shares', 'share'),
