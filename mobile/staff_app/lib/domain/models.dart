@@ -2187,3 +2187,30 @@ class Expense {
         supplierId: _strn(j['supplierId']),
       );
 }
+
+
+/// A supplier / payee that expenses can be attributed to.
+class Supplier {
+  const Supplier({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.email,
+    required this.taxId,
+    required this.status,
+  });
+  final String id;
+  final String name;
+  final String? phone;
+  final String? email;
+  final String? taxId;
+  final String status;
+  factory Supplier.fromJson(Map<String, dynamic> j) => Supplier(
+        id: _str(j['id']),
+        name: _str(j['name']),
+        phone: _strn(j['phone']),
+        email: _strn(j['email']),
+        taxId: _strn(j['taxId']),
+        status: _str(j['status']).isEmpty ? 'active' : _str(j['status']),
+      );
+}

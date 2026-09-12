@@ -15,6 +15,7 @@ import '../funds/fund_sources_screen.dart';
 import '../funds/finance_sources_screen.dart';
 import '../treasury/cash_book_screen.dart';
 import '../accounting/expenses_screen.dart';
+import '../accounting/suppliers_screen.dart';
 import '../loans/loans_screen.dart';
 import '../members/members_screen.dart';
 import '../mobile_money/mobile_money_screen.dart';
@@ -72,6 +73,9 @@ const _sections = <_Section>[
   _Section('Expenses', Icons.receipt_long_outlined,
       ['accounting:view'], Color(0xFFB91C1C),
       'Rent, utilities, staff & other costs', category: 'Finance'),
+  _Section('Suppliers', Icons.storefront_outlined,
+      ['accounting:view'], Color(0xFF64748B),
+      'Payees for expenses', category: 'Finance'),
   _Section('Products', Icons.category_outlined, ['transactions:view'],
       Color(0xFF15803D), 'Savings & loan product setup', category: 'Finance'),
   _Section('Savings transfers', Icons.swap_horiz_outlined,
@@ -465,6 +469,8 @@ Widget _screenFor(_Section s, StaffSession session) {
       return CashBookScreen(canManage: session.can('accounting:post'));
     case 'Expenses':
       return ExpensesScreen(canManage: session.can('accounting:post'));
+    case 'Suppliers':
+      return SuppliersScreen(canManage: session.can('accounting:post'));
     case 'Audit log':
       return const AuditScreen();
     case 'Notifications':

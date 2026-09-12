@@ -115,6 +115,7 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
   final _reference = TextEditingController();
   final _description = TextEditingController();
   String? _accountCode;
+  String? _supplierId;
   String _channel = 'cash';
   bool _busy = false;
 
@@ -145,6 +146,7 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
             accountCode: _accountCode!,
             amount: amount,
             channel: _channel,
+            supplierId: _supplierId,
             reference: _reference.text,
             description: _description.text,
           );
@@ -216,6 +218,28 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
                     ? null
                     : (value) => setState(() => _channel = value.first),
               ),
+              const SizedBox(height: 10),
+              Builder(builder: (context) {
+                final suppliers =
+                    ref.watch(suppliersProvider).asData?.value ?? const [];
+                return DropdownButtonFormField<String>(
+                  initialValue: _supplierId,
+                  isExpanded: true,
+                  decoration:
+                      const InputDecoration(labelText: 'Supplier (optional)'),
+                  items: [
+                    const DropdownMenuItem<String>(
+                        value: null, child: Text('None')),
+                    for (final sup in suppliers)
+                      DropdownMenuItem(
+                          value: sup.id,
+                          child: Text(sup.name,
+                              overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged:
+                      _busy ? null : (v) => setState(() => _supplierId = v),
+                );
+              }),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _amount,

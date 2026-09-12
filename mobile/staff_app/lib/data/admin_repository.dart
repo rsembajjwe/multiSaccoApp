@@ -445,11 +445,14 @@ class AdminRepository {
     String? reference,
     String? description,
     DateTime? expenseDate,
+    String? supplierId,
   }) async {
     final data = await _api.post('/expenses', {
       'accountCode': accountCode,
       'amount': amount,
       'channel': channel,
+      if (supplierId != null && supplierId.trim().isNotEmpty)
+        'supplierId': supplierId.trim(),
       if (reference != null && reference.trim().isNotEmpty)
         'reference': reference.trim(),
       if (description != null && description.trim().isNotEmpty)
@@ -458,6 +461,26 @@ class AdminRepository {
         'expenseDate': expenseDate.toIso8601String().split('T').first,
     });
     return Expense.fromJson(data);
+  }
+
+  Future<List<Supplier>> suppliers() async {
+    final rows = await _api.getList('/suppliers');
+    return rows.map(Supplier.fromJson).toList();
+  }
+
+  Future<Supplier> createSupplier({
+    required String name,
+    String? phone,
+    String? email,
+    String? taxId,
+  }) async {
+    final data = await _api.post('/suppliers', {
+      'name': name.trim(),
+      if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+      if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+      if (taxId != null && taxId.trim().isNotEmpty) 'taxId': taxId.trim(),
+    });
+    return Supplier.fromJson(data);
   }
 
   Future<List<Subscription>> subscriptions() async {

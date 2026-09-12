@@ -184,6 +184,10 @@ final expenseAccountsProvider =
   (ref) => ref.watch(adminRepositoryProvider).expenseAccounts(),
 );
 
+final suppliersProvider = FutureProvider.autoDispose<List<Supplier>>(
+  (ref) => ref.watch(adminRepositoryProvider).suppliers(),
+);
+
 /// Map of member id -> display name, used to label loans (which carry only ids).
 final memberNamesProvider = FutureProvider.autoDispose<Map<String, String>>(
   (ref) => ref.watch(adminRepositoryProvider).memberNames(),
