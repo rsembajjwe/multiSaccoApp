@@ -13,6 +13,7 @@ import '../chat/chat_threads_screen.dart';
 import '../complaints/complaints_screen.dart';
 import '../funds/fund_sources_screen.dart';
 import '../funds/finance_sources_screen.dart';
+import '../treasury/cash_book_screen.dart';
 import '../loans/loans_screen.dart';
 import '../members/members_screen.dart';
 import '../mobile_money/mobile_money_screen.dart';
@@ -64,6 +65,9 @@ const _sections = <_Section>[
   _Section('Finance sources', Icons.savings_outlined,
       ['funding-source:view'], Color(0xFF0D9488),
       'SACCO capital & sources of funds', category: 'Finance'),
+  _Section('Cash book', Icons.local_atm_outlined,
+      ['accounting:view'], Color(0xFFB45309),
+      'Bank withdrawals & cash on hand', category: 'Finance'),
   _Section('Products', Icons.category_outlined, ['transactions:view'],
       Color(0xFF15803D), 'Savings & loan product setup', category: 'Finance'),
   _Section('Savings transfers', Icons.swap_horiz_outlined,
@@ -453,6 +457,8 @@ Widget _screenFor(_Section s, StaffSession session) {
     case 'Finance sources':
       return FinanceSourcesScreen(
           canManage: session.can('finance-source:manage'));
+    case 'Cash book':
+      return CashBookScreen(canManage: session.can('accounting:post'));
     case 'Audit log':
       return const AuditScreen();
     case 'Notifications':

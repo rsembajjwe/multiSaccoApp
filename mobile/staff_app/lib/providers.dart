@@ -170,6 +170,11 @@ final fundingSourcesProvider =
   (ref) => ref.watch(adminRepositoryProvider).fundingSources(),
 );
 
+/// Treasurer cash book (cash-on-hand + entries). accounting:view.
+final cashBookProvider = FutureProvider.autoDispose<CashBook>(
+  (ref) => ref.watch(adminRepositoryProvider).cashBook(),
+);
+
 /// Map of member id -> display name, used to label loans (which carry only ids).
 final memberNamesProvider = FutureProvider.autoDispose<Map<String, String>>(
   (ref) => ref.watch(adminRepositoryProvider).memberNames(),

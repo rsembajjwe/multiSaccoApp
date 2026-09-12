@@ -396,6 +396,37 @@ class AdminRepository {
     return FundingSource.fromJson(data);
   }
 
+  /// Treasurer cash book: running cash-on-hand and the entries behind it.
+  Future<CashBook> cashBook() async {
+    final data = await _api.get('/treasury/cash-entries');
+    return CashBook.fromJson(data);
+  }
+
+  /// Record a cash-book entry. Bank withdrawal brings cash in; the other
+  /// purposes pay cash out. Direction is decided server-side from the purpose.
+  Future<TreasuryCashEntry> createCashEntry({
+    required String purpose,
+    required num amount,
+    String? reference,
+    String? description,
+    String? memberId,
+    DateTime? entryDate,
+  }) async {
+    final data = await _api.post('/treasury/cash-entries', {
+      'purpose': purpose,
+      'amount': amount,
+      if (reference != null && reference.trim().isNotEmpty)
+        'reference': reference.trim(),
+      if (description != null && description.trim().isNotEmpty)
+        'description': description.trim(),
+      if (memberId != null && memberId.trim().isNotEmpty)
+        'memberId': memberId.trim(),
+      if (entryDate != null)
+        'entryDate': entryDate.toIso8601String().split('T').first,
+    });
+    return TreasuryCashEntry.fromJson(data);
+  }
+
   Future<List<Subscription>> subscriptions() async {
     final rows = await _api.getList('/subscriptions');
     return rows.map(Subscription.fromJson).toList();

@@ -2076,3 +2076,64 @@ class FundingSource {
         notes: _strn(j['notes']),
       );
 }
+
+
+/// One line in the Treasurer's cash book: cash in from the bank, or cash out to a use.
+class TreasuryCashEntry {
+  const TreasuryCashEntry({
+    required this.id,
+    required this.direction,
+    required this.purpose,
+    required this.amount,
+    required this.reference,
+    required this.description,
+    required this.memberId,
+    required this.entryDate,
+  });
+
+  final String id;
+  final String direction; // in | out
+  final String purpose;
+  final num amount;
+  final String? reference;
+  final String? description;
+  final String? memberId;
+  final DateTime? entryDate;
+
+  bool get isIn => direction == 'in';
+
+  factory TreasuryCashEntry.fromJson(Map<String, dynamic> j) => TreasuryCashEntry(
+        id: _str(j['id']),
+        direction: _str(j['direction']),
+        purpose: _str(j['purpose']),
+        amount: _num(j['amount']),
+        reference: _strn(j['reference']),
+        description: _strn(j['description']),
+        memberId: _strn(j['memberId']),
+        entryDate: DateTime.tryParse('${j['entryDate'] ?? ''}'),
+      );
+}
+
+/// The cash book: running cash-on-hand plus the entries behind it.
+class CashBook {
+  const CashBook({
+    required this.cashOnHand,
+    required this.totalIn,
+    required this.totalOut,
+    required this.entries,
+  });
+
+  final num cashOnHand;
+  final num totalIn;
+  final num totalOut;
+  final List<TreasuryCashEntry> entries;
+
+  factory CashBook.fromJson(Map<String, dynamic> j) => CashBook(
+        cashOnHand: _num(j['cashOnHand']),
+        totalIn: _num(j['totalIn']),
+        totalOut: _num(j['totalOut']),
+        entries: ((j['entries'] as List?) ?? const [])
+            .map((e) => TreasuryCashEntry.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
