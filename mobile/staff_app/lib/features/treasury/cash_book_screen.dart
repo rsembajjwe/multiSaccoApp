@@ -105,9 +105,7 @@ class CashBookScreen extends ConsumerWidget {
 String cashPurposeLabel(String p) {
   switch (p) {
     case 'bank_withdrawal':
-      return 'Bank withdrawal';
-    case 'bank_deposit':
-      return 'Bank deposit';
+      return 'Cash from bank';
     case 'loan_disbursement':
       return 'Loan disbursement';
     case 'expense':
@@ -184,11 +182,10 @@ class _EntryTile extends StatelessWidget {
 }
 
 const _purposes = <MapEntry<String, String>>[
-  MapEntry('bank_withdrawal', 'Bank withdrawal (cash in)'),
+  MapEntry('bank_withdrawal', 'Cash from bank (cash in)'),
   MapEntry('loan_disbursement', 'Loan disbursement'),
   MapEntry('expense', 'Expense'),
   MapEntry('member_payout', 'Member payout'),
-  MapEntry('bank_deposit', 'Bank deposit (cash out)'),
   MapEntry('other', 'Other cash'),
 ];
 
@@ -224,7 +221,7 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
     final isIn = _purpose == 'bank_withdrawal';
     final confirmed = await confirmAction(
       context,
-      title: isIn ? 'Record bank withdrawal?' : 'Record cash out?',
+      title: isIn ? 'Record cash from bank?' : 'Record cash out?',
       message: isIn
           ? 'Add ${Fmt.money(amount)} to cash on hand (drawn from the bank).'
           : 'Pay out ${Fmt.money(amount)} from cash on hand for '
