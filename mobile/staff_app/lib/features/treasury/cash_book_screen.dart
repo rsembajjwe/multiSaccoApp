@@ -9,6 +9,7 @@ import '../../core/widgets/skeleton.dart';
 import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
+import '../transactions/member_deposit_sheet.dart';
 
 /// Treasurer's cash book: cash drawn from the bank (bank withdrawal) and every
 /// use of that cash. The running balance is cash on hand.
@@ -26,12 +27,45 @@ class CashBookScreen extends ConsumerWidget {
           ? FloatingActionButton.extended(
               icon: const Icon(Icons.add),
               label: const Text('Record'),
-              onPressed: () => showModalBottomSheet<void>(
-                context: context,
-                isScrollControlled: true,
-                showDragHandle: true,
-                builder: (_) => const _CashEntrySheet(),
-              ),
+              onPressed: () async {
+                final choice = await showModalBottomSheet<String>(
+                  context: context,
+                  showDragHandle: true,
+                  builder: (_) => SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.groups_outlined),
+                          title: const Text('Member collection'),
+                          subtitle: const Text(
+                              'A member pays in - cash posts & adds to cash '
+                              'on hand, or send a mobile-money prompt'),
+                          onTap: () => Navigator.pop(context, 'collection'),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.local_atm_outlined),
+                          title: const Text('Cash movement'),
+                          subtitle: const Text(
+                              'Bank the cash, draw from bank, loan, expense '
+                              'or payout'),
+                          onTap: () => Navigator.pop(context, 'cash'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+                if (choice == null || !context.mounted) return;
+                await showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  showDragHandle: true,
+                  builder: (_) => choice == 'collection'
+                      ? const MemberDepositSheet(
+                          recordCashBook: true, title: 'Member collection')
+                      : const _CashEntrySheet(),
+                );
+              },
             )
           : null,
       body: async.when(
@@ -188,7 +222,6 @@ class _EntryTile extends StatelessWidget {
 const _inPurposes = {'collection', 'bank_withdrawal'};
 
 const _purposes = <MapEntry<String, String>>[
-  MapEntry('collection', 'Member collection (cash in)'),
   MapEntry('bank_withdrawal', 'Cash from bank (cash in)'),
   MapEntry('bank_deposit', 'Bank the cash (cash out)'),
   MapEntry('loan_disbursement', 'Loan disbursement'),

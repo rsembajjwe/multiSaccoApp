@@ -271,6 +271,27 @@ class AdminRepository {
     return FinancialTxn.fromJson(data);
   }
 
+  /// Post a cash member contribution to a chosen fund/product. [type] is the
+  /// transaction type the backend maps to a fund (savings_deposit,
+  /// share_purchase, welfare_contribution, or <code>_contribution for a custom
+  /// fund). Cash posts immediately and credits the member's fund balance.
+  Future<FinancialTxn> createMemberContribution({
+    required String memberId,
+    required String type,
+    required num amount,
+    String? narration,
+  }) async {
+    final data = await _api.post('/financial-transactions', {
+      'memberId': memberId,
+      'type': type,
+      'channel': 'cash',
+      'amount': amount,
+      if (narration != null && narration.trim().isNotEmpty)
+        'narration': narration.trim(),
+    });
+    return FinancialTxn.fromJson(data);
+  }
+
   /// Create a member withdrawal. Cash posts immediately; non-cash channels
   /// (bank) are submitted for a second officer to post (transactions:approve).
   Future<FinancialTxn> createWithdrawal({
