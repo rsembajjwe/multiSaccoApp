@@ -32,7 +32,9 @@ class TreasuryCashEntry {
 
     /** purpose -> true when it brings cash into the Treasurer's hand, false when it pays out. */
     static final Map<String, Boolean> PURPOSES = Map.of(
+            "collection", Boolean.TRUE,
             "bank_withdrawal", Boolean.TRUE,
+            "bank_deposit", Boolean.FALSE,
             "loan_disbursement", Boolean.FALSE,
             "expense", Boolean.FALSE,
             "member_payout", Boolean.FALSE,

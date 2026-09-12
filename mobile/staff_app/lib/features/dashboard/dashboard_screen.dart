@@ -14,6 +14,7 @@ import '../complaints/complaints_screen.dart';
 import '../funds/fund_sources_screen.dart';
 import '../funds/finance_sources_screen.dart';
 import '../treasury/cash_book_screen.dart';
+import '../treasury/cash_flow_screen.dart';
 import '../accounting/expenses_screen.dart';
 import '../accounting/suppliers_screen.dart';
 import '../loans/loans_screen.dart';
@@ -67,9 +68,12 @@ const _sections = <_Section>[
   _Section('Finance sources', Icons.savings_outlined,
       ['funding-source:view'], Color(0xFF0D9488),
       'SACCO capital & sources of funds', category: 'Finance'),
+  _Section('Cash flow', Icons.sync_alt_outlined,
+      ['accounting:view'], Color(0xFF0E7490),
+      'Collect → bank → withdraw → pay', category: 'Finance'),
   _Section('Cash book', Icons.local_atm_outlined,
       ['accounting:view'], Color(0xFFB45309),
-      'Bank withdrawals & cash on hand', category: 'Finance'),
+      'Record cash in & out', category: 'Finance'),
   _Section('Expenses', Icons.receipt_long_outlined,
       ['accounting:view'], Color(0xFFB91C1C),
       'Rent, utilities, staff & other costs', category: 'Finance'),
@@ -465,6 +469,8 @@ Widget _screenFor(_Section s, StaffSession session) {
     case 'Finance sources':
       return FinanceSourcesScreen(
           canManage: session.can('finance-source:manage'));
+    case 'Cash flow':
+      return const CashFlowScreen();
     case 'Cash book':
       return CashBookScreen(canManage: session.can('accounting:post'));
     case 'Expenses':

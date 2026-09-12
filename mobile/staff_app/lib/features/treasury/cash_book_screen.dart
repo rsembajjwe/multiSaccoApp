@@ -104,8 +104,12 @@ class CashBookScreen extends ConsumerWidget {
 
 String cashPurposeLabel(String p) {
   switch (p) {
+    case 'collection':
+      return 'Member collection';
     case 'bank_withdrawal':
       return 'Cash from bank';
+    case 'bank_deposit':
+      return 'Bank the cash';
     case 'loan_disbursement':
       return 'Loan disbursement';
     case 'expense':
@@ -181,8 +185,12 @@ class _EntryTile extends StatelessWidget {
   }
 }
 
+const _inPurposes = {'collection', 'bank_withdrawal'};
+
 const _purposes = <MapEntry<String, String>>[
+  MapEntry('collection', 'Member collection (cash in)'),
   MapEntry('bank_withdrawal', 'Cash from bank (cash in)'),
+  MapEntry('bank_deposit', 'Bank the cash (cash out)'),
   MapEntry('loan_disbursement', 'Loan disbursement'),
   MapEntry('expense', 'Expense'),
   MapEntry('member_payout', 'Member payout'),
@@ -190,7 +198,7 @@ const _purposes = <MapEntry<String, String>>[
 ];
 
 bool _wantsMember(String p) =>
-    p == 'member_payout' || p == 'loan_disbursement';
+    p == 'member_payout' || p == 'loan_disbursement' || p == 'collection';
 
 class _CashEntrySheet extends ConsumerStatefulWidget {
   const _CashEntrySheet();
@@ -218,13 +226,14 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
-    final isIn = _purpose == 'bank_withdrawal';
+    final isIn = _inPurposes.contains(_purpose);
     final confirmed = await confirmAction(
       context,
-      title: isIn ? 'Record cash from bank?' : 'Record cash out?',
+      title: isIn ? 'Record cash in?' : 'Record cash out?',
       message: isIn
-          ? 'Add ${Fmt.money(amount)} to cash on hand (drawn from the bank).'
-          : 'Pay out ${Fmt.money(amount)} from cash on hand for '
+          ? 'Add ${Fmt.money(amount)} to cash on hand — '
+              '${cashPurposeLabel(_purpose).toLowerCase()}.'
+          : 'Reduce cash on hand by ${Fmt.money(amount)} — '
               '${cashPurposeLabel(_purpose).toLowerCase()}.',
       confirmLabel: 'Record',
       icon: Icons.local_atm_outlined,
