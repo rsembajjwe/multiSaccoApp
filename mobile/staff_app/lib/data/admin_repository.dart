@@ -427,6 +427,39 @@ class AdminRepository {
     return TreasuryCashEntry.fromJson(data);
   }
 
+  /// Expense (operating-cost) accounts from the chart of accounts.
+  Future<List<ChartAccount>> expenseAccounts() async {
+    final rows = await _api.getList('/chart-of-accounts');
+    return rows.map(ChartAccount.fromJson).where((a) => a.isExpense).toList();
+  }
+
+  Future<List<Expense>> expenses() async {
+    final rows = await _api.getList('/expenses');
+    return rows.map(Expense.fromJson).toList();
+  }
+
+  Future<Expense> createExpense({
+    required String accountCode,
+    required num amount,
+    required String channel,
+    String? reference,
+    String? description,
+    DateTime? expenseDate,
+  }) async {
+    final data = await _api.post('/expenses', {
+      'accountCode': accountCode,
+      'amount': amount,
+      'channel': channel,
+      if (reference != null && reference.trim().isNotEmpty)
+        'reference': reference.trim(),
+      if (description != null && description.trim().isNotEmpty)
+        'description': description.trim(),
+      if (expenseDate != null)
+        'expenseDate': expenseDate.toIso8601String().split('T').first,
+    });
+    return Expense.fromJson(data);
+  }
+
   Future<List<Subscription>> subscriptions() async {
     final rows = await _api.getList('/subscriptions');
     return rows.map(Subscription.fromJson).toList();

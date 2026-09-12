@@ -2137,3 +2137,53 @@ class CashBook {
             .toList(),
       );
 }
+
+
+/// A chart-of-accounts line (used to pick an expense account).
+class ChartAccount {
+  const ChartAccount({required this.code, required this.name, required this.type});
+  final String code;
+  final String name;
+  final String type;
+  bool get isExpense => type == 'expense';
+  factory ChartAccount.fromJson(Map<String, dynamic> j) => ChartAccount(
+        code: _str(j['code']),
+        name: _str(j['name']),
+        type: _str(j['type']),
+      );
+}
+
+/// A recorded operating expense (rent, utilities, staff...).
+class Expense {
+  const Expense({
+    required this.id,
+    required this.accountCode,
+    required this.amount,
+    required this.channel,
+    required this.reference,
+    required this.description,
+    required this.expenseDate,
+    required this.status,
+    required this.supplierId,
+  });
+  final String id;
+  final String accountCode;
+  final num amount;
+  final String channel;
+  final String? reference;
+  final String? description;
+  final DateTime? expenseDate;
+  final String status;
+  final String? supplierId;
+  factory Expense.fromJson(Map<String, dynamic> j) => Expense(
+        id: _str(j['id']),
+        accountCode: _str(j['accountCode']),
+        amount: _num(j['amount']),
+        channel: _str(j['channel']),
+        reference: _strn(j['reference']),
+        description: _strn(j['description']),
+        expenseDate: DateTime.tryParse('${j['expenseDate'] ?? ''}'),
+        status: _str(j['status']),
+        supplierId: _strn(j['supplierId']),
+      );
+}
