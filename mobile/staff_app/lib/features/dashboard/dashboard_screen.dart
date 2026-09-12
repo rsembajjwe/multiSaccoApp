@@ -15,6 +15,7 @@ import '../funds/fund_sources_screen.dart';
 import '../funds/finance_sources_screen.dart';
 import '../treasury/cash_book_screen.dart';
 import '../treasury/cash_flow_screen.dart';
+import '../treasury/bank_statement_screen.dart';
 import '../accounting/expenses_screen.dart';
 import '../accounting/suppliers_screen.dart';
 import '../loans/loans_screen.dart';
@@ -74,6 +75,9 @@ const _sections = <_Section>[
   _Section('Cash book', Icons.local_atm_outlined,
       ['accounting:view'], Color(0xFFB45309),
       'Record cash in & out', category: 'Finance'),
+  _Section('Bank statement', Icons.account_balance_outlined,
+      ['accounting:view'], Color(0xFF0E7490),
+      'Banked & withdrawn, with balance', category: 'Finance'),
   _Section('Expenses', Icons.receipt_long_outlined,
       ['accounting:view'], Color(0xFFB91C1C),
       'Rent, utilities, staff & other costs', category: 'Finance'),
@@ -473,6 +477,8 @@ Widget _screenFor(_Section s, StaffSession session) {
       return const CashFlowScreen();
     case 'Cash book':
       return CashBookScreen(canManage: session.can('accounting:post'));
+    case 'Bank statement':
+      return const BankStatementScreen();
     case 'Expenses':
       return ExpensesScreen(canManage: session.can('accounting:post'));
     case 'Suppliers':
