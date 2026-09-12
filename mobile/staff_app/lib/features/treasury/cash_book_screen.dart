@@ -66,7 +66,7 @@ class CashBookScreen extends ConsumerWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _MiniStat(
-                        label: 'Cash used',
+                        label: 'Cash deposited',
                         value: Fmt.money(book.totalOut),
                         color: const Color(0xFFB91C1C),
                       ),
