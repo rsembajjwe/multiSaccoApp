@@ -1,5 +1,6 @@
 package com.methaltech.sacco.tenant;
 
+import java.sql.Savepoint;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -147,7 +148,7 @@ public class TenantPurgeService {
             while (it.hasNext()) {
                 String table = it.next();
                 try {
-                    purged += jdbcTemplate.update(
+                    purged += deleteWithSavepoint(
                             "DELETE FROM " + qualifiedName(schema, table) + " WHERE tenant_id IN (" + inClause + ")", args);
                     it.remove();
                     progressed = true;
@@ -168,6 +169,27 @@ public class TenantPurgeService {
                     targets, remaining);
         }
         return new PurgeResult(purged + tenantsRemoved, remaining.isEmpty(), List.copyOf(remaining));
+    }
+
+    private int deleteWithSavepoint(String sql, Object[] args) {
+        return jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Integer>) connection -> {
+            Savepoint savepoint = connection.getAutoCommit() ? null : connection.setSavepoint();
+            try (var statement = connection.prepareStatement(sql)) {
+                for (int index = 0; index < args.length; index++) {
+                    statement.setObject(index + 1, args[index]);
+                }
+                int deleted = statement.executeUpdate();
+                if (savepoint != null) {
+                    connection.releaseSavepoint(savepoint);
+                }
+                return deleted;
+            } catch (java.sql.SQLException exception) {
+                if (savepoint != null) {
+                    connection.rollback(savepoint);
+                }
+                throw exception;
+            }
+        });
     }
 
     /** Outcome of a purge sweep: rows removed, whether every target tenant was fully cleared, and any tables that blocked completion. */
