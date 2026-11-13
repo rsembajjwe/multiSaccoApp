@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 class TwoSaccoReseedRunner implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(TwoSaccoReseedRunner.class);
-    private static final String EVENT_ID = "retain_two_community_groups_2026_v2";
+    private static final String EVENT_ID = "retain_two_community_groups_2026_v3";
     private static final String AZ_NAME = "A-Z Community Group";
     private static final String MUTWE_NAME = "Mutwe Community Group";
 
@@ -80,10 +80,13 @@ class TwoSaccoReseedRunner implements ApplicationRunner {
                     .orElseThrow(() -> new IllegalStateException("Missing seeded official " + userId));
             onboardingService.reissueTemporaryPassword(user, "email");
         }
+        User proprietor = userRepository.findByTenantIdAndEmailIgnoreCase("tenant_platform", "rsembajjwe@gmail.com")
+                .orElseThrow(() -> new IllegalStateException("Missing proprietor account rsembajjwe@gmail.com"));
+        onboardingService.reissueTemporaryPassword(proprietor, "email");
 
         jdbcTemplate.update(
                 "UPDATE system_reseed_events SET status = 'complete', completed_at = CURRENT_TIMESTAMP, details = ? WHERE id = ?",
-                "Retained exactly two SACCOs, preserved their related baseline data, and delivered new temporary passwords to six official accounts.",
+                "Retained exactly two SACCOs and delivered temporary passwords to six officials and the proprietor account.",
                 EVENT_ID);
         log.info("Two-SACCO reseed completed; retained A-Z Community Group and Mutwe Community Group.");
     }

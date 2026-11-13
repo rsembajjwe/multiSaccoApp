@@ -36,17 +36,19 @@ class TwoSaccoReseedRunnerTest {
         when(jdbcTemplate.queryForList(contains("linked_user_id"), eq(String.class), any(), any()))
                 .thenReturn(List.of("u1", "u2", "u3", "u4", "u5", "u6"));
         when(userRepository.findById(anyString())).thenAnswer(invocation -> Optional.of(pendingUser(invocation.getArgument(0))));
+        when(userRepository.findByTenantIdAndEmailIgnoreCase("tenant_platform", "rsembajjwe@gmail.com"))
+                .thenReturn(Optional.of(pendingUser("user_platform_admin")));
         when(onboardingService.reissueTemporaryPassword(any(User.class), eq("email")))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         new TwoSaccoReseedRunner(jdbcTemplate, purgeService, userRepository, onboardingService).run(null);
 
         verify(purgeService).purgeTenantsForReseed(List.of("tenant_old"));
-        verify(onboardingService, times(6)).reissueTemporaryPassword(any(User.class), eq("email"));
+        verify(onboardingService, times(7)).reissueTemporaryPassword(any(User.class), eq("email"));
         verify(jdbcTemplate).update(
                 contains("status = 'complete'"),
-                eq("Retained exactly two SACCOs, preserved their related baseline data, and delivered new temporary passwords to six official accounts."),
-                eq("retain_two_community_groups_2026_v2"));
+                eq("Retained exactly two SACCOs and delivered temporary passwords to six officials and the proprietor account."),
+                eq("retain_two_community_groups_2026_v3"));
     }
 
     @Test
@@ -84,7 +86,7 @@ class TwoSaccoReseedRunnerTest {
         verify(jdbcTemplate).update(
                 contains("status = 'failed'"),
                 eq("Could not purge all non-retained SACCOs."),
-                eq("retain_two_community_groups_2026_v2"));
+                eq("retain_two_community_groups_2026_v3"));
         verify(onboardingService, never()).reissueTemporaryPassword(any(), anyString());
     }
 
