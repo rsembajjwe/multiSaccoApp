@@ -14,6 +14,7 @@ export interface TerekaNotificationDeliveryRow extends TerekaNotification, Terek
   deliveryStatus: string;
   event: string;
   memberName: string;
+  message: string;
   resource: string;
   tenantName: string;
 }
@@ -78,6 +79,7 @@ export function buildNotificationDeliveryRows(input: TerekaNotificationRowsInput
           ? input.userName(String(delivery.userId))
           : "SACCO broadcast",
       event: delivery.eventType ? input.labelize(delivery.eventType) : String(delivery.title || "Notification"),
+      message: String(delivery.message || delivery.body || delivery.title || ""),
       resource: delivery.resourceType ? `${input.labelize(delivery.resourceType)} ${delivery.resourceId || ""}`.trim() : "-",
       alertStatus: delivery.readAt ? "acknowledged" : delivery.notificationStatus || delivery.status,
       deliveryStatus: String(delivery.status || "pending"),

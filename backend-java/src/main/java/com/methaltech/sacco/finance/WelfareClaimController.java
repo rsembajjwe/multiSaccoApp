@@ -168,8 +168,8 @@ class WelfareClaimController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
-        if (!authService.hasPermission(currentSession.user(), "welfare:manage")) {
-            return authService.permissionRequired("welfare:manage");
+        if (!authService.hasPermission(currentSession.user(), "welfare:approve")) {
+            return authService.permissionRequired("welfare:approve");
         }
 
         String status = body.status().trim();

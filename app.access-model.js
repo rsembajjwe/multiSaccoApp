@@ -226,7 +226,6 @@ function platformRoleFunctionCatalog() {
       roleFunction("Reports", "View platform reporting."),
       roleFunction("Transactions", "Create, view and approve platform financial transactions."),
       roleFunction("Accounting", "View and post accounting-affecting records."),
-      roleFunction("Loans and Approvals", "View, create and decide platform-level loan and approval records."),
       roleFunction("Operations", "View operational health and exception indicators."),
       roleFunction("Notifications", "View and manage notification templates."),
       roleFunction("Governance", "View and manage governance records."),

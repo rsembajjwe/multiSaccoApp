@@ -29,9 +29,11 @@ const _filters = <_Filter>[
 /// The SACCO's notification activity: what members have been notified about,
 /// searchable and filterable by category.
 class NotificationsScreen extends ConsumerStatefulWidget {
-  const NotificationsScreen({super.key, required this.canManage});
+  const NotificationsScreen(
+      {super.key, required this.canManage, this.embedded = false});
 
   final bool canManage;
+  final bool embedded;
 
   @override
   ConsumerState<NotificationsScreen> createState() =>
@@ -72,25 +74,32 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final async = ref.watch(notificationsFeedProvider(_query));
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notifications'),
-        actions: [
-          if (widget.canManage)
-            IconButton(
-              tooltip: 'Send SMS',
-              icon: _busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.sms_outlined),
-              onPressed: _busy
-                  ? null
-                  : () => _composeSms(),
+      appBar: widget.embedded
+          ? null
+          : AppBar(
+              title: const Text('Notifications'),
+              actions: [
+                if (widget.canManage)
+                  IconButton(
+                    tooltip: 'Send SMS',
+                    icon: _busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.sms_outlined),
+                    onPressed: _busy ? null : () => _composeSms(),
+                  ),
+              ],
             ),
-        ],
-      ),
+      floatingActionButton: widget.embedded && widget.canManage
+          ? FloatingActionButton.extended(
+              icon: const Icon(Icons.sms_outlined),
+              label: const Text('Send SMS'),
+              onPressed: _busy ? null : () => _composeSms(),
+            )
+          : null,
       body: Column(
         children: [
           Padding(

@@ -151,7 +151,7 @@ function subscriptionPaymentDialog() {
           ${mini("Balance due", money.format(amount))}
           ${mini("Cycle", labelize(cycle))}
         </div>
-        <form id="subscriptionPaymentForm" class="form-grid">
+        <form id="memberSubscriptionPaymentForm" class="form-grid">
           <input type="hidden" id="subscriptionPaymentId" value="${escapeHtml(subscription?.id || "")}">
           <input type="hidden" id="subscriptionPaymentMemberId" value="${escapeHtml(member.id)}">
           <label><span>ISP / mobile-money provider</span><select id="subscriptionPaymentProvider">${providers.map((provider) => `<option value="${escapeHtml(provider.value)}">${escapeHtml(provider.label)}</option>`).join("")}</select></label>
@@ -451,9 +451,30 @@ function memberDuesApprovalRow(sub) {
   };
 }
 
+function memberImportPanel() {
+  const result = state.memberImportResult;
+  return `
+    <section class="panel member-import-panel">
+      <div class="panel-heading">
+        <div><h2>Import members</h2><p>Validate a CSV file, then create new member profiles in this SACCO.</p></div>
+        <button class="button secondary" type="button" data-action="download-member-template">Download template</button>
+      </div>
+      ${state.memberImportMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberImportMessage)}</strong></div>` : ""}
+      ${state.memberImportError ? `<div class="notice warning"><strong>Member import failed.</strong><span>${escapeHtml(state.memberImportError)}</span></div>` : ""}
+      <label class="member-import-input"><span>CSV data</span><textarea id="memberImportCsv" rows="14" placeholder="membershipNo,branchId,fullName,memberType,phone,email,nationalId,kycStatus,joiningDate,password">${escapeHtml(state.memberImportCsv || "")}</textarea></label>
+      <div class="form-actions inline"><button class="button secondary" type="button" data-action="validate-member-import">Validate</button><button class="button primary" type="button" data-action="import-members">Import members</button></div>
+      ${result ? `<section class="member-import-result"><strong>${result.valid ? "Validation passed" : "Validation needs attention"}</strong><span>${result.totalRows || 0} row(s), ${result.createdCount || 0} created, ${result.errors?.length || 0} error(s).</span>${result.errors?.length ? `<ul>${result.errors.map((error) => `<li>Row ${escapeHtml(String(error.row))}, ${escapeHtml(error.field)}: ${escapeHtml(error.message)}</li>`).join("")}</ul>` : ""}</section>` : ""}
+    </section>
+  `;
+}
+
 function memberRegistrationPanel() {
   const canCreate = hasPermission("members:create");
-  const branches = dataRows("branches");
+  const platformMode = isPlatform();
+  const selectedTenantId = platformMode
+    ? (state.memberFormTenantId || state.selectedTenantId || tenantRows()[0]?.id || "")
+    : (state.user?.tenantId || "");
+  const branches = dataRows("branches").filter((branch) => !selectedTenantId || branch.tenantId === selectedTenantId);
   const defaultBranch = branches[0]?.id || "";
   return `
     <section class="panel">
@@ -466,7 +487,7 @@ function memberRegistrationPanel() {
       ${state.memberFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberFormMessage)}</strong></div>` : ""}
       ${state.memberFormError ? `<div class="notice warning"><strong>Member registration failed.</strong><span>${escapeHtml(state.memberFormError)}</span></div>` : ""}
       <form id="memberRegistrationForm" class="form-grid">
-        <input type="hidden" id="newMemberTenantId" value="${escapeHtml(state.user?.tenantId || "")}">
+        ${platformMode ? `<label><span>SACCO</span><select id="newMemberTenantId" ${canCreate ? "" : "disabled"}>${tenantRows().map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${tenant.id === selectedTenantId ? "selected" : ""}>${escapeHtml(tenant.name || tenant.abbreviation || tenant.id)}</option>`).join("")}</select></label>` : `<input type="hidden" id="newMemberTenantId" value="${escapeHtml(selectedTenantId)}">`}
         <label><span>Membership number</span><input id="newMemberNo" placeholder="Auto if blank" ${canCreate ? "" : "disabled"}></label>
         <label><span>Branch</span><select id="newMemberBranchId" ${canCreate ? "" : "disabled"}>${branches.map((branch) => `<option value="${escapeHtml(branch.id)}" ${branch.id === defaultBranch ? "selected" : ""}>${escapeHtml(branch.name || branch.code)}</option>`).join("")}</select></label>
         <label><span>Full name</span><input id="newMemberFullName" required placeholder="Member full name" ${canCreate ? "" : "disabled"}></label>
@@ -474,7 +495,7 @@ function memberRegistrationPanel() {
         <label><span>Phone</span><input id="newMemberPhone" required placeholder="+256..." ${canCreate ? "" : "disabled"}></label>
         <label><span>Email</span><input id="newMemberEmail" type="email" placeholder="member@example.com" ${canCreate ? "" : "disabled"}></label>
         <label><span>National ID</span><input id="newMemberNationalId" placeholder="CM..." ${canCreate ? "" : "disabled"}></label>
-        <label><span>Temporary password</span><input id="newMemberPassword" type="password" value="Member@12345" ${canCreate ? "" : "disabled"}></label>
+        <label><span>Temporary password</span><input id="newMemberPassword" type="password" placeholder="Defaults to phone number" ${canCreate ? "" : "disabled"}></label>
         <label><span>Joining date</span><input id="newMemberJoiningDate" type="date" value="${new Date().toISOString().slice(0, 10)}" ${canCreate ? "" : "disabled"}></label>
         <div class="form-actions inline">${canCreate ? `<button class="button primary" type="submit">Create member</button>` : `<span class="status pending">View only</span>`}</div>
       </form>
@@ -536,6 +557,8 @@ function memberDetailPanel(mode = "kyc") {
                 ${canManage ? `
                   <button class="button primary" type="submit">Save member status</button>
                   <button class="button secondary" type="button" data-member-decision="approve">Approve member</button>
+                  <button class="button secondary" type="button" data-send-member-credentials="sms" data-member-id="${escapeHtml(member.id)}">Send login SMS</button>
+                  <button class="button secondary" type="button" data-send-member-credentials="email" data-member-id="${escapeHtml(member.id)}">Send login email</button>
                   <button class="button secondary" type="button" data-member-decision="changes">Request changes</button>
                   <button class="button ghost" type="button" data-member-decision="suspend">Suspend member</button>
                 ` : `<span class="status pending">View only</span>`}

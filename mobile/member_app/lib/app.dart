@@ -31,7 +31,6 @@ class _SaccoMemberAppState extends ConsumerState<SaccoMemberApp>
     redirect: (context, state) {
       if (sessionExpiredNotifier.value &&
           state.matchedLocation != '/login') {
-        sessionExpiredNotifier.value = false;
         return '/login';
       }
       return null;
@@ -101,7 +100,7 @@ class _SaccoMemberAppState extends ConsumerState<SaccoMemberApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'SACCO Member',
+      title: 'Tereka',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),

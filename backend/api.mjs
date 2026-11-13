@@ -131,7 +131,9 @@ export async function handleApi(request, response, url) {
     if (method === "GET" && path === "/auth/me") {
       return sendData(response, {
         user: publicUser(auth.user),
-        tenant: publicTenant(db.tenants.find((tenant) => tenant.id === auth.user.tenantId))
+        tenant: publicTenant(db.tenants.find((tenant) => tenant.id === auth.user.tenantId)),
+        roleNames: roleNamesForUser(auth.user.id),
+        permissionIds: permissionIdsForUser(auth.user.id)
       });
     }
 
@@ -148,14 +150,26 @@ export async function handleApi(request, response, url) {
     if (method === "PATCH" && path.startsWith("/tenants/") && path.endsWith("/profile")) {
       return updateSaccoProfile(request, response, auth, path.split("/")[2], correlationId);
     }
-    if (method === "GET" && path.startsWith("/tenants/")) return getTenant(response, auth, path.split("/")[2], correlationId);
+    if (method === "GET" && path.startsWith("/tenants/") && path.split("/").length === 3) return getTenant(response, auth, path.split("/")[2], correlationId);
     if (method === "POST" && path === "/tenants") return createTenant(request, response, auth, correlationId);
+    if (method === "DELETE" && path.startsWith("/tenants/") && path.split("/").length === 3) {
+      return deleteTenant(request, response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "GET" && path.startsWith("/tenants/") && path.endsWith("/officials")) {
+      return listTenantOfficials(response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "PATCH" && path.startsWith("/tenants/") && path.includes("/officials/")) {
+      return assignTenantOfficial(request, response, auth, path.split("/")[2], path.split("/")[4], correlationId);
+    }
     if (method === "PATCH" && path.startsWith("/tenants/") && path.endsWith("/status")) {
       return updateTenantStatus(request, response, auth, path.split("/")[2], correlationId);
     }
 
     if (method === "GET" && path === "/users") return listUsers(response, auth);
     if (method === "POST" && path === "/users") return createUser(request, response, auth, correlationId);
+    if (method === "POST" && path === "/users/official-staff-access") {
+      return grantOfficialStaffAccess(request, response, auth, correlationId);
+    }
     if (method === "GET" && path.startsWith("/users/") && path.endsWith("/roles")) {
       return listUserRoles(response, auth, path.split("/")[2], correlationId);
     }
@@ -219,6 +233,9 @@ export async function handleApi(request, response, url) {
     }
     if (method === "GET" && path === "/subscription-packages") return sendData(response, db.subscriptionPackages);
     if (method === "GET" && path === "/subscriptions") return listSubscriptions(response, auth, url);
+    if (method === "POST" && path.startsWith("/subscriptions/") && path.endsWith("/trial-extension")) {
+      return extendSubscriptionTrial(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "POST" && path.startsWith("/subscriptions/") && path.endsWith("/payments")) {
       return recordSubscriptionPayment(request, response, auth, path.split("/")[2], correlationId);
     }
@@ -301,9 +318,15 @@ export async function handleApi(request, response, url) {
     if (method === "POST" && path.startsWith("/members/") && path.endsWith("/beneficiaries")) {
       return createMemberBeneficiary(request, response, auth, path.split("/")[2], correlationId);
     }
+    if (method === "POST" && path.startsWith("/members/") && path.endsWith("/activation-credentials")) {
+      return sendMemberActivationCredentials(request, response, auth, path.split("/")[2], correlationId);
+    }
     if (method === "GET" && path.startsWith("/members/")) return getMember(response, auth, path.split("/")[2], correlationId);
     if (method === "PATCH" && path.startsWith("/members/") && path.endsWith("/status")) {
       return updateMemberStatus(request, response, auth, path.split("/")[2], correlationId);
+    }
+    if (method === "PATCH" && path.startsWith("/members/") && path.endsWith("/kyc-status")) {
+      return updateMemberKycStatus(request, response, auth, path.split("/")[2], correlationId);
     }
 
     return sendError(response, 404, "NOT_FOUND", "API route not found.", correlationId);
@@ -357,7 +380,13 @@ async function login(request, response, correlationId) {
     ipAddress: requestIp(request)
   });
 
-  return sendData(response, { token, user: publicUser(user), expiresAt: session.expiresAt });
+  return sendData(response, {
+    token,
+    user: publicUser(user),
+    roleNames: roleNamesForUser(user.id),
+    permissionIds: permissionIdsForUser(user.id),
+    expiresAt: session.expiresAt
+  });
 }
 
 async function memberLogin(request, response, correlationId) {
@@ -484,6 +513,23 @@ function isPlatform(auth) {
   return auth.user.tenantId === "tenant_platform";
 }
 
+function roleNamesForUser(userId) {
+  const roleIds = db.userRoles.filter((assignment) => assignment.userId === userId).map((assignment) => assignment.roleId);
+  return db.roles.filter((role) => roleIds.includes(role.id)).map((role) => role.name);
+}
+
+function permissionIdsForUser(userId) {
+  const roleIds = db.userRoles.filter((assignment) => assignment.userId === userId).map((assignment) => assignment.roleId);
+  return Array.from(new Set(db.rolePermissions
+    .filter((grant) => roleIds.includes(grant.roleId))
+    .map((grant) => grant.permissionId)))
+    .sort();
+}
+
+function hasPermission(auth, permissionId) {
+  return permissionIdsForUser(auth.user.id).includes(permissionId);
+}
+
 function visibleTenantId(auth, requestedTenantId) {
   if (isPlatform(auth)) return requestedTenantId;
   return auth.user.tenantId;
@@ -585,6 +631,9 @@ async function createTenant(request, response, auth, correlationId) {
     updatedAt: new Date().toISOString()
   };
   db.tenants.push(tenant);
+  db.branches.push(defaultTenantBranch(tenant));
+  provisionDefaultSaccoAdminRole(tenant.id, auth.user.id);
+  db.subscriptions.push(defaultTenantTrialSubscription(tenant));
   db.saccoProfiles.push({
     id: newId("profile"),
     tenantId: tenant.id,
@@ -635,6 +684,9 @@ async function createPublicSaccoRegistration(request, response, correlationId) {
     updatedAt: new Date().toISOString()
   };
   db.tenants.push(tenant);
+  db.branches.push(defaultTenantBranch(tenant));
+  provisionDefaultSaccoAdminRole(tenant.id, null);
+  db.subscriptions.push(defaultTenantTrialSubscription(tenant));
   db.saccoProfiles.push({
     id: newId("profile"),
     tenantId: tenant.id,
@@ -675,6 +727,9 @@ async function updateTenantStatus(request, response, auth, tenantId, correlation
   if (!allowedTenantStatuses.has(status)) return sendError(response, 400, "INVALID_TENANT_STATUS", "Unsupported tenant status.", correlationId);
   const tenant = db.tenants.find((item) => item.id === tenantId);
   if (!tenant) return sendError(response, 404, "TENANT_NOT_FOUND", "Tenant not found.", correlationId);
+  if (status === "active" && !hasRequiredTenantOfficials(tenantId)) {
+    return sendError(response, 409, "SACCO_OFFICIALS_REQUIRED", "Assign three SACCO member officials - chairperson, secretary, and treasurer - before activation.", correlationId);
+  }
   tenant.status = status;
   tenant.updatedAt = new Date().toISOString();
   createAuditEvent({
@@ -687,6 +742,125 @@ async function updateTenantStatus(request, response, auth, tenantId, correlation
     ipAddress: requestIp(request)
   });
   return sendData(response, tenant);
+}
+
+function listTenantOfficials(response, auth, tenantId, correlationId) {
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+  if (!db.tenants.some((tenant) => tenant.id === tenantId)) return sendError(response, 404, "TENANT_NOT_FOUND", "Tenant not found.", correlationId);
+  return sendData(response, tenantOfficialResponses(tenantId));
+}
+
+async function assignTenantOfficial(request, response, auth, tenantId, office, correlationId) {
+  if (!hasPermission(auth, "tenants:manage")) return sendError(response, 403, "PERMISSION_REQUIRED", "Permission tenants:manage is required.", correlationId);
+  if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
+  if (!db.tenants.some((tenant) => tenant.id === tenantId)) return sendError(response, 404, "TENANT_NOT_FOUND", "Tenant not found.", correlationId);
+  const normalizedOffice = normalizeSaccoOffice(office);
+  if (!normalizedOffice) return sendError(response, 400, "INVALID_SACCO_OFFICE", "Office must be chairperson, secretary, or treasurer.", correlationId);
+
+  const body = await readJson(request);
+  const member = db.members.find((item) => item.id === String(body.memberId || "").trim() && item.tenantId === tenantId);
+  if (!member) return sendError(response, 400, "OFFICIAL_MEMBER_REQUIRED", "The official must be a member of this SACCO.", correlationId);
+
+  const heldOffice = db.saccoOfficialAssignments.find((assignment) => assignment.tenantId === tenantId && assignment.memberId === member.id);
+  if (heldOffice && heldOffice.office !== normalizedOffice) {
+    return sendError(response, 409, "OFFICIAL_ALREADY_ASSIGNED", "That member already holds another SACCO official position.", correlationId);
+  }
+
+  const now = new Date().toISOString();
+  let assignment = db.saccoOfficialAssignments.find((item) => item.tenantId === tenantId && item.office === normalizedOffice);
+  if (!assignment) {
+    assignment = { id: newId("official"), tenantId, office: normalizedOffice, memberId: member.id, assignedByUserId: auth.user.id, assignedAt: now, updatedAt: now };
+    db.saccoOfficialAssignments.push(assignment);
+  } else {
+    assignment.memberId = member.id;
+    assignment.assignedByUserId = auth.user.id;
+    assignment.updatedAt = now;
+  }
+  createAuditEvent({
+    tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Assigned SACCO ${normalizedOffice} to ${member.membershipNo}`,
+    resourceType: "sacco_official",
+    resourceId: assignment.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, tenantOfficialResponses(tenantId));
+}
+
+function tenantOfficialResponses(tenantId) {
+  return ["chairperson", "secretary", "treasurer"].map((office) => {
+    const assignment = db.saccoOfficialAssignments.find((item) => item.tenantId === tenantId && item.office === office);
+    const member = assignment ? db.members.find((item) => item.id === assignment.memberId) : null;
+    return {
+      office,
+      memberId: assignment?.memberId || null,
+      membershipNo: member?.membershipNo || "",
+      fullName: member?.fullName || "",
+      assignedAt: assignment?.assignedAt || null,
+      updatedAt: assignment?.updatedAt || null,
+      validMember: Boolean(member && member.tenantId === tenantId)
+    };
+  });
+}
+
+function hasRequiredTenantOfficials(tenantId) {
+  const officials = tenantOfficialResponses(tenantId);
+  return officials.every((official) => official.validMember) && new Set(officials.map((official) => official.memberId)).size === 3;
+}
+
+function normalizeSaccoOffice(office) {
+  const normalized = String(office || "").trim().toLowerCase().replace(/_/g, "-");
+  if (normalized === "chairman" || normalized === "chairperson") return "chairperson";
+  if (["secretary", "treasurer"].includes(normalized)) return normalized;
+  return "";
+}
+
+async function deleteTenant(request, response, auth, tenantId, correlationId) {
+  if (!hasPermission(auth, "tenants:delete")) return sendError(response, 403, "PERMISSION_REQUIRED", "Permission tenants:delete is required.", correlationId);
+  if (!isPlatform(auth)) return sendError(response, 403, "PLATFORM_ADMIN_REQUIRED", "Only platform administrators can delete a SACCO.", correlationId);
+  if (tenantId === "tenant_platform") return sendError(response, 403, "PLATFORM_TENANT_PROTECTED", "The platform tenant cannot be deleted.", correlationId);
+
+  const tenant = db.tenants.find((item) => item.id === tenantId);
+  if (!tenant) return sendError(response, 404, "TENANT_NOT_FOUND", "Tenant not found.", correlationId);
+
+  const body = await readJson(request);
+  const typed = String(body.confirmCode || "").trim();
+  const expectedCode = String(tenant.abbreviation || "").trim();
+  if (!expectedCode || typed.toLowerCase() !== expectedCode.toLowerCase()) {
+    return sendError(response, 409, "DELETE_CONFIRMATION_MISMATCH", "Type the SACCO code exactly to confirm permanent deletion.", correlationId);
+  }
+
+  const tenantName = tenant.name;
+  const rowsRemoved = purgeTenantRows(tenantId);
+  createAuditEvent({
+    tenantId: "tenant_platform",
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Permanently deleted SACCO ${tenantName} (${tenantId}); rows removed: ${rowsRemoved}`,
+    resourceType: "tenant",
+    resourceId: tenantId,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, { tenantId, name: tenantName, rowsRemoved });
+}
+
+function purgeTenantRows(tenantId) {
+  const roleIds = db.roles.filter((role) => role.tenantId === tenantId).map((role) => role.id);
+  let removed = 0;
+  const removeWhere = (key, predicate) => {
+    const before = db[key].length;
+    db[key] = db[key].filter((row) => !predicate(row));
+    removed += before - db[key].length;
+  };
+
+  removeWhere("rolePermissions", (grant) => roleIds.includes(grant.roleId));
+  for (const [key, rows] of Object.entries(db)) {
+    if (!Array.isArray(rows) || key === "auditEvents") continue;
+    removeWhere(key, (row) => row && row.tenantId === tenantId);
+  }
+  removeWhere("tenants", (row) => row.id === tenantId);
+  return removed;
 }
 
 function getSaccoProfile(response, auth, tenantId, correlationId) {
@@ -794,6 +968,48 @@ async function createUser(request, response, auth, correlationId) {
     ipAddress: requestIp(request)
   });
   return sendData(response, publicUser(user), 201);
+}
+
+async function grantOfficialStaffAccess(request, response, auth, correlationId) {
+  if (!isPlatform(auth) || !hasPermission(auth, "users:create")) {
+    return sendError(response, 403, "PERMISSION_REQUIRED", "Permission users:create is required.", correlationId);
+  }
+  const body = await readJson(request);
+  const member = db.members.find((item) => item.id === String(body.memberId || "").trim());
+  const office = normalizeSaccoOffice(body.office);
+  if (!member || !office) return sendError(response, 400, "INVALID_OFFICIAL_MEMBER", "Select an assigned chairperson, secretary, or treasurer member.", correlationId);
+  const assignment = db.saccoOfficialAssignments.find((item) => item.tenantId === member.tenantId && item.office === office && item.memberId === member.id);
+  if (!assignment) return sendError(response, 409, "OFFICIAL_ASSIGNMENT_REQUIRED", "Assign this member to the SACCO office before granting staff access.", correlationId);
+  // Staff sign-in is email-based, so an email is required specifically for staff access (a phone alone cannot log a staff member in).
+  if (!String(member.email || "").trim()) return sendError(response, 400, "OFFICIAL_EMAIL_REQUIRED", "Add an email address to the member before granting staff access; staff sign-in uses the email address.", correlationId);
+
+  let user = member.linkedUserId ? db.users.find((item) => item.id === member.linkedUserId) : null;
+  if (!user) user = db.users.find((item) => item.tenantId === member.tenantId && String(item.email).toLowerCase() === String(member.email).toLowerCase());
+  if (!user) {
+    const password = hashPassword(String(member.phone || member.membershipNo));
+    user = {
+      id: newId("user"), tenantId: member.tenantId, fullName: member.fullName,
+      email: String(member.email).toLowerCase(), phone: member.phone,
+      passwordHash: password.hash, passwordSalt: password.salt,
+      status: "active", passwordResetRequired: true, createdAt: new Date().toISOString()
+    };
+    db.users.push(user);
+  }
+  const linkedElsewhere = db.members.some((item) => item.id !== member.id && item.linkedUserId === user.id);
+  if (linkedElsewhere) return sendError(response, 409, "STAFF_ALREADY_LINKED", "That staff account is linked to another member.", correlationId);
+
+  const role = provisionOfficialStaffRole(member.tenantId, office, auth.user.id);
+  if (!db.userRoles.some((item) => item.userId === user.id && item.roleId === role.id)) {
+    db.userRoles.push({ tenantId: member.tenantId, userId: user.id, roleId: role.id });
+  }
+  member.linkedUserId = user.id;
+  member.updatedAt = new Date().toISOString();
+  createAuditEvent({
+    tenantId: member.tenantId, actorUserId: auth.user.id, actorName: auth.user.fullName,
+    action: `Granted ${office} staff access to member ${member.membershipNo}`,
+    resourceType: "official_staff_access", resourceId: user.id, ipAddress: requestIp(request)
+  });
+  return sendData(response, { memberId: member.id, userId: user.id, office, email: user.email, linked: true });
 }
 
 function listRoles(response, auth, url, correlationId) {
@@ -2783,6 +2999,39 @@ async function recordSubscriptionPayment(request, response, auth, subscriptionId
   return sendData(response, { subscription, payment }, 201);
 }
 
+async function extendSubscriptionTrial(request, response, auth, subscriptionId, correlationId) {
+  if (!isPlatform(auth) || !hasPermission(auth, "subscriptions:manage")) {
+    return sendError(response, 403, "PERMISSION_REQUIRED", "Permission subscriptions:manage is required.", correlationId);
+  }
+  const subscription = db.subscriptions.find((item) => item.id === subscriptionId);
+  if (!subscription) return sendError(response, 404, "SUBSCRIPTION_NOT_FOUND", "Subscription not found.", correlationId);
+  const body = await readJson(request);
+  const days = Number(body.days || 0);
+  const reason = String(body.reason || "").trim();
+  if (!Number.isInteger(days) || days < 1 || days > 31) return sendError(response, 400, "INVALID_TRIAL_EXTENSION", "Trial extension must be between 1 and 31 days.", correlationId);
+  if (!reason) return sendError(response, 400, "VALIDATION_ERROR", "Trial extension reason is required.", correlationId);
+  if (!["trial", "expired"].includes(subscription.status)) return sendError(response, 409, "TRIAL_EXTENSION_NOT_ALLOWED", "Only trial or expired trial subscriptions can be extended.", correlationId);
+  const currentExpiry = new Date(`${subscription.expiry || new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+  const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+  const base = currentExpiry > today ? currentExpiry : today;
+  base.setUTCDate(base.getUTCDate() + days);
+  subscription.status = "trial";
+  subscription.expiry = base.toISOString().slice(0, 10);
+  subscription.updatedAt = new Date().toISOString();
+  const tenant = db.tenants.find((item) => item.id === subscription.tenantId);
+  if (tenant?.status === "suspended") tenant.status = "pending_review";
+  createAuditEvent({
+    tenantId: subscription.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Extended SACCO trial by ${days} day(s): ${reason}`,
+    resourceType: "subscription_trial_extension",
+    resourceId: subscription.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, subscription);
+}
+
 function listBranches(response, auth, url) {
   const tenantId = requestedTenant(auth, url);
   const branches = isPlatform(auth) && !url.searchParams.get("tenantId")
@@ -2884,13 +3133,48 @@ function csvCell(value) {
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+// Generates the next `${prefix}NNNN` code from a list of existing codes. Uses the
+// highest existing numeric suffix (not the record count) so gaps or out-of-order
+// numbering cannot produce a colliding code, then guarantees uniqueness defensively
+// against every existing code (including those that don't follow the prefix scheme).
+function nextSequentialCode(existingCodes, prefix, padding = 4) {
+  const upperPrefix = prefix.toUpperCase();
+  const taken = new Set(existingCodes.map((code) => String(code || "").toUpperCase()));
+  let maxSuffix = 0;
+  for (const code of existingCodes) {
+    const value = String(code || "");
+    if (!value.toUpperCase().startsWith(upperPrefix)) continue;
+    const parsed = parseInt(value.slice(prefix.length), 10);
+    if (Number.isFinite(parsed) && parsed > maxSuffix) maxSuffix = parsed;
+  }
+  let next = maxSuffix + 1;
+  while (taken.has(`${prefix}${String(next).padStart(padding, "0")}`.toUpperCase())) next += 1;
+  return `${prefix}${String(next).padStart(padding, "0")}`;
+}
+
+// Next membership number for a tenant (collision-free even with gapped seed numbering).
+function nextMembershipNo(tenantId, abbreviation) {
+  const codes = db.members.filter((member) => member.tenantId === tenantId).map((member) => member.membershipNo);
+  return nextSequentialCode(codes, `${abbreviation}-`);
+}
+
+// Next unique financial-transaction reference for a tenant. Scans every existing
+// transaction reference (generated, provider externalReference and reversal codes)
+// so the `${abbr}-TX-NNNN` series can never collide with an existing reference.
+function nextTransactionReference(tenantId, abbreviation) {
+  const codes = db.financialTransactions.filter((transaction) => transaction.tenantId === tenantId).map((transaction) => transaction.reference);
+  return nextSequentialCode(codes, `${abbreviation}-TX-`);
+}
+
 async function createMember(request, response, auth, correlationId) {
   const body = await readJson(request);
   const tenantId = visibleTenantId(auth, String(body.tenantId || auth.user.tenantId));
   if (!assertTenantAccess(auth, tenantId, response, correlationId)) return;
 
-  if (!body.branchId || !body.fullName || !body.phone) {
-    return sendError(response, 400, "VALIDATION_ERROR", "Branch, full name, and phone are required.", correlationId);
+  const contactPhone = String(body.phone || "").trim();
+  const contactEmail = String(body.email || "").trim();
+  if (!body.branchId || !body.fullName || (!contactPhone && !contactEmail)) {
+    return sendError(response, 400, "VALIDATION_ERROR", "Branch, full name, and at least one contact (phone or email) are required.", correlationId);
   }
   const branch = db.branches.find((item) => item.id === String(body.branchId) && item.tenantId === tenantId);
   if (!branch) return sendError(response, 400, "INVALID_BRANCH", "Branch does not exist for this tenant.", correlationId);
@@ -2901,14 +3185,13 @@ async function createMember(request, response, auth, correlationId) {
   if (!allowedKycStatuses.has(kycStatus)) return sendError(response, 400, "INVALID_KYC_STATUS", "Unsupported KYC status.", correlationId);
 
   const tenant = db.tenants.find((item) => item.id === tenantId);
-  const count = db.members.filter((member) => member.tenantId === tenantId).length + 1;
-  const membershipNo = String(body.membershipNo || `${tenant?.abbreviation || "SACCO"}-${String(count).padStart(4, "0")}`);
+  const membershipNo = String(body.membershipNo || "").trim() || nextMembershipNo(tenantId, tenant?.abbreviation || "SACCO");
 
   if (db.members.some((member) => member.tenantId === tenantId && member.membershipNo.toUpperCase() === membershipNo.toUpperCase())) {
     return sendError(response, 409, "MEMBER_EXISTS", "A member with that membership number already exists.", correlationId);
   }
 
-  const password = hashPassword(String(body.password || "Member@12345"));
+  const password = hashPassword(String(body.password || contactPhone || contactEmail || membershipNo));
   const member = {
     id: newId("member"),
     tenantId,
@@ -2916,8 +3199,8 @@ async function createMember(request, response, auth, correlationId) {
     membershipNo,
     fullName: String(body.fullName),
     memberType,
-    phone: String(body.phone),
-    email: String(body.email || ""),
+    phone: contactPhone,
+    email: contactEmail,
     nationalId: String(body.nationalId || ""),
     passwordHash: password.hash,
     passwordSalt: password.salt,
@@ -2949,12 +3232,13 @@ async function updateMember(request, response, auth, memberId, correlationId) {
   const branchId = body.branchId === undefined ? member.branchId : String(body.branchId || "").trim();
   const fullName = body.fullName === undefined ? member.fullName : String(body.fullName || "").trim();
   const phone = body.phone === undefined ? member.phone : String(body.phone || "").trim();
+  const email = body.email === undefined ? member.email : String(body.email || "").trim();
   const memberType = body.memberType === undefined ? member.memberType : String(body.memberType || "").trim();
   const kycStatus = body.kycStatus === undefined ? member.kycStatus : String(body.kycStatus || "").trim();
   const status = body.status === undefined ? member.status : String(body.status || "").trim();
 
-  if (!branchId || !fullName || !phone) {
-    return sendError(response, 400, "VALIDATION_ERROR", "Branch, full name, and phone are required.", correlationId);
+  if (!branchId || !fullName || (!phone && !email)) {
+    return sendError(response, 400, "VALIDATION_ERROR", "Branch, full name, and at least one contact (phone or email) are required.", correlationId);
   }
   if (!db.branches.some((branch) => branch.id === branchId && branch.tenantId === member.tenantId)) {
     return sendError(response, 400, "INVALID_BRANCH", "Branch does not exist for this SACCO.", correlationId);
@@ -2963,7 +3247,6 @@ async function updateMember(request, response, auth, memberId, correlationId) {
   if (!allowedKycStatuses.has(kycStatus)) return sendError(response, 400, "INVALID_KYC_STATUS", "Unsupported KYC status.", correlationId);
   if (!allowedMemberStatuses.has(status)) return sendError(response, 400, "INVALID_MEMBER_STATUS", "Unsupported member status.", correlationId);
 
-  const email = body.email === undefined ? member.email : String(body.email || "").trim();
   const nationalId = body.nationalId === undefined ? member.nationalId : String(body.nationalId || "").trim();
   const joiningDate = body.joiningDate === undefined ? member.joiningDate : String(body.joiningDate || "").trim();
   if (joiningDate && Number.isNaN(Date.parse(joiningDate))) {
@@ -3014,18 +3297,108 @@ async function updateMemberStatus(request, response, auth, memberId, correlation
   const member = db.members.find((item) => item.id === memberId);
   if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
   if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+  if (!hasPermission(auth, "members:approve")) {
+    return sendError(response, 403, "PERMISSION_REQUIRED", "Permission members:approve is required to change a member's status.", correlationId);
+  }
+  const previousStatus = member.status;
   member.status = status;
   member.updatedAt = new Date().toISOString();
   createAuditEvent({
     tenantId: member.tenantId,
     actorUserId: auth.user.id,
     actorName: auth.user.fullName,
-    action: `Updated member ${member.membershipNo} status to ${status}`,
+    action: `Updated member ${member.membershipNo} status from ${previousStatus} to ${status}`,
     resourceType: "member",
     resourceId: member.id,
     ipAddress: requestIp(request)
   });
   return sendData(response, publicMember(member));
+}
+
+async function updateMemberKycStatus(request, response, auth, memberId, correlationId) {
+  const body = await readJson(request);
+  const kycStatus = String(body.kycStatus || body.status || "");
+  if (!allowedKycStatuses.has(kycStatus)) return sendError(response, 400, "INVALID_KYC_STATUS", "Unsupported KYC status.", correlationId);
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+  if (!hasPermission(auth, "members:approve")) {
+    return sendError(response, 403, "PERMISSION_REQUIRED", "Permission members:approve is required to change a member's KYC status.", correlationId);
+  }
+  const previousKyc = member.kycStatus;
+  member.kycStatus = kycStatus;
+  member.updatedAt = new Date().toISOString();
+  createAuditEvent({
+    tenantId: member.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Updated member ${member.membershipNo} KYC status from ${previousKyc} to ${kycStatus}`,
+    resourceType: "member",
+    resourceId: member.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, publicMember(member));
+}
+
+async function sendMemberActivationCredentials(request, response, auth, memberId, correlationId) {
+  const body = await readJson(request);
+  const channel = String(body.channel || "email").trim().toLowerCase() === "sms" ? "sms" : "email";
+  const member = db.members.find((item) => item.id === memberId);
+  if (!member) return sendError(response, 404, "MEMBER_NOT_FOUND", "Member not found.", correlationId);
+  if (!assertTenantAccess(auth, member.tenantId, response, correlationId)) return;
+  if (channel === "sms" && !String(member.phone || "").trim()) return sendError(response, 400, "MEMBER_PHONE_REQUIRED", "Member phone is required before sending SMS credentials.", correlationId);
+  if (channel === "email" && !String(member.email || "").trim()) return sendError(response, 400, "MEMBER_EMAIL_REQUIRED", "Member email is required before sending email credentials.", correlationId);
+
+  const tenant = db.tenants.find((item) => item.id === member.tenantId);
+  const loginPassword = String(member.phone || "").trim();
+  const password = hashPassword(loginPassword);
+  member.passwordHash = password.hash;
+  member.passwordSalt = password.salt;
+  member.status = "active";
+  member.updatedAt = new Date().toISOString();
+  const title = "Member account activated";
+  const message = `Your SACCO member login is active. SACCO code: ${tenant?.abbreviation || member.tenantId}. Membership no: ${member.membershipNo}. Password: ${loginPassword}. Change it after login.`;
+  const notification = createNotificationRecord(member.tenantId, member.id, "member_activation_credentials", title, message, "member", member.id);
+  db.notificationDeliveries.unshift({
+    id: newId("delivery"),
+    tenantId: member.tenantId,
+    notificationId: notification.id,
+    memberId: member.id,
+    channel,
+    provider: channel === "sms" ? "demo_sms" : "demo_email",
+    recipient: channel === "sms" ? member.phone : member.email,
+    status: "sent",
+    message: channel === "email" ? `${title}: ${message}` : message,
+    sentAt: new Date().toISOString(),
+    createdAt: new Date().toISOString()
+  });
+  createAuditEvent({
+    tenantId: member.tenantId,
+    actorUserId: auth.user.id,
+    actorName: auth.user.fullName,
+    action: `Activated member ${member.membershipNo} and sent credentials by ${channel}`,
+    resourceType: "member_activation_credentials",
+    resourceId: member.id,
+    ipAddress: requestIp(request)
+  });
+  return sendData(response, { memberId: member.id, membershipNo: member.membershipNo, status: member.status, channel, sent: true });
+}
+
+function createNotificationRecord(tenantId, memberId, eventType, title, body, resourceType, resourceId) {
+  const notification = {
+    id: newId("notification"),
+    tenantId,
+    memberId,
+    eventType,
+    title,
+    body,
+    status: "unread",
+    resourceType,
+    resourceId,
+    createdAt: new Date().toISOString()
+  };
+  db.notifications.unshift(notification);
+  return notification;
 }
 
 function listMemberDocuments(response, auth, memberId, correlationId) {
@@ -3183,9 +3556,22 @@ async function createFinancialTransaction(request, response, auth, correlationId
   if (!allowedTransactionChannels.has(channel)) return sendError(response, 400, "INVALID_PAYMENT_CHANNEL", "Unsupported payment channel.", correlationId);
   if (!Number.isFinite(amount) || amount <= 0) return sendError(response, 400, "INVALID_TRANSACTION_AMOUNT", "Amount must be greater than zero.", correlationId);
 
+  // A withdrawal must never drive savings negative. Checked here (covers cash, which posts
+  // immediately) and re-checked at post time for non-cash withdrawals in updateFinancialTransactionStatus.
+  if (type === "withdrawal" && memberBalances(member.id).savings < amount) {
+    return sendError(response, 409, "INSUFFICIENT_SAVINGS_BALANCE", "Withdrawal exceeds the member's available savings balance.", correlationId);
+  }
+
   const tenant = db.tenants.find((item) => item.id === tenantId);
-  const count = db.financialTransactions.filter((transaction) => transaction.tenantId === tenantId).length + 1;
-  const reference = `${tenant?.abbreviation || "SACCO"}-TX-${String(count).padStart(4, "0")}`;
+  const reference = nextTransactionReference(tenantId, tenant?.abbreviation || "SACCO");
+  const now = new Date().toISOString();
+
+  // Cash is physically received at the counter, so it is recorded as posted immediately with the
+  // receiving staff member recorded as the checker. Non-cash channels (bank, mobile money) still
+  // require a second-person approval / reconciliation before they affect balances.
+  const postImmediately = channel === "cash";
+  if (postImmediately && !assertAccountingPeriodOpen(tenantId, now, response, correlationId)) return;
+
   const transaction = {
     id: newId("txn"),
     tenantId,
@@ -3194,21 +3580,23 @@ async function createFinancialTransaction(request, response, auth, correlationId
     type,
     channel,
     amount,
-    status: "pending_approval",
+    status: postImmediately ? "posted" : "pending_approval",
     reference,
     narration: String(body.narration || ""),
     makerUserId: auth.user.id,
-    checkerUserId: null,
-    postedAt: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    checkerUserId: postImmediately ? auth.user.id : null,
+    postedAt: postImmediately ? now : null,
+    createdAt: now,
+    updatedAt: now
   };
   db.financialTransactions.push(transaction);
   createAuditEvent({
     tenantId,
     actorUserId: auth.user.id,
     actorName: auth.user.fullName,
-    action: `Submitted financial transaction ${reference}`,
+    action: postImmediately
+      ? `Posted cash financial transaction ${reference}`
+      : `Submitted financial transaction ${reference}`,
     resourceType: "financial_transaction",
     resourceId: transaction.id,
     ipAddress: requestIp(request)
@@ -3235,6 +3623,10 @@ async function updateFinancialTransactionStatus(request, response, auth, transac
 
   const now = new Date().toISOString();
   if (status === "posted" && !assertAccountingPeriodOpen(transaction.tenantId, now, response, correlationId)) return;
+  // Re-check balance at post time: a pending withdrawal must still be covered when it is finally posted.
+  if (status === "posted" && transaction.type === "withdrawal" && memberBalances(transaction.memberId).savings < transaction.amount) {
+    return sendError(response, 409, "INSUFFICIENT_SAVINGS_BALANCE", "Withdrawal exceeds the member's available savings balance.", correlationId);
+  }
   transaction.status = status;
   transaction.checkerUserId = auth.user.id;
   transaction.updatedAt = now;
@@ -4331,6 +4723,68 @@ async function updateMemberGuarantorRequest(request, response, auth, guarantorId
 
 function cleanSaccoCode(value) {
   return String(value || "").replace(/[^A-Za-z]/g, "").toUpperCase().slice(0, 4);
+}
+
+function defaultTenantBranch(tenant) {
+  return {
+    id: newId("branch"),
+    tenantId: tenant.id,
+    code: `${tenant.abbreviation || "SACCO"}-MAIN`,
+    name: "Main Branch",
+    address: tenant.district || "",
+    managerUserId: null,
+    status: "active",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function provisionDefaultSaccoAdminRole(tenantId, createdByUserId) {
+  if (db.roles.some((role) => role.tenantId === tenantId && String(role.name).toLowerCase() === "sacco administrator")) return;
+  const roleId = newId("role");
+  db.roles.push({ id: roleId, tenantId, name: "SACCO Administrator", protected: true, createdByUserId });
+  const templatePermissions = db.rolePermissions
+    .filter((grant) => grant.roleId === "role_green_admin")
+    .map((grant) => grant.permissionId);
+  db.rolePermissions.push(...templatePermissions.map((permissionId) => ({ roleId, permissionId })));
+}
+
+function provisionOfficialStaffRole(tenantId, office, createdByUserId) {
+  const roleName = office.charAt(0).toUpperCase() + office.slice(1);
+  let role = db.roles.find((item) => item.tenantId === tenantId && String(item.name).toLowerCase() === roleName.toLowerCase());
+  if (role) return role;
+  role = { id: newId("role"), tenantId, name: roleName, protected: true, createdByUserId };
+  db.roles.push(role);
+  const template = db.roles.find((item) => item.tenantId === "tenant_green" && String(item.name).toLowerCase() === roleName.toLowerCase());
+  const permissionIds = template
+    ? db.rolePermissions.filter((grant) => grant.roleId === template.id).map((grant) => grant.permissionId)
+    : ["dashboard:view", "members:view", "reports:view"];
+  db.rolePermissions.push(...permissionIds.map((permissionId) => ({ roleId: role.id, permissionId })));
+  return role;
+}
+
+function defaultTenantTrialSubscription(tenant) {
+  const billing = calculateSubscriptionBilling(0);
+  const expiry = new Date();
+  expiry.setUTCMonth(expiry.getUTCMonth() + 1);
+  return {
+    id: newId("subscription"),
+    tenantId: tenant.id,
+    packageId: tenant.packageId || "starter",
+    status: "trial",
+    invoice: `INV-${newId("trial").slice(-12).toUpperCase()}`,
+    memberCount: billing.memberCount,
+    billableMembers: billing.billableMembers,
+    unitPrice: billing.unitPrice,
+    tierId: billing.tierId,
+    tierLabel: billing.tierLabel,
+    billingDescription: billing.billingDescription,
+    amount: billing.amount,
+    paid: 0,
+    expiry: expiry.toISOString().slice(0, 10),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
 }
 
 function generatedSaccoCode(name) {

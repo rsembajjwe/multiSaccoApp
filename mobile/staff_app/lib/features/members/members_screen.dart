@@ -36,19 +36,10 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
       appBar: AppBar(title: const Text('Members')),
       floatingActionButton: canCreate
           ? FloatingActionButton.extended(
+              heroTag: 'add-member',
               icon: const Icon(Icons.person_add_alt_1),
               label: const Text('Add member'),
-              onPressed: () async {
-                final created = await showModalBottomSheet<bool>(
-                  context: context,
-                  isScrollControlled: true,
-                  showDragHandle: true,
-                  builder: (_) => const _AddMemberSheet(),
-                );
-                if (created == true && mounted) {
-                  setState(() => _reloadTick++);
-                }
-              },
+              onPressed: () => _openCreateSheet(const _AddMemberSheet()),
             )
           : null,
       body: Column(
@@ -105,6 +96,18 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _openCreateSheet(Widget sheet) async {
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => sheet,
+    );
+    if (created == true && mounted) {
+      setState(() => _reloadTick++);
+    }
   }
 }
 
@@ -208,6 +211,7 @@ class _AddMemberSheetState extends ConsumerState<_AddMemberSheet> {
   final _fullName = TextEditingController();
   final _phone = TextEditingController();
   final _email = TextEditingController();
+  final _address = TextEditingController();
   final _nationalId = TextEditingController();
   String? _branchId;
   String _memberType = 'individual';
@@ -220,6 +224,7 @@ class _AddMemberSheetState extends ConsumerState<_AddMemberSheet> {
     _fullName.dispose();
     _phone.dispose();
     _email.dispose();
+    _address.dispose();
     _nationalId.dispose();
     super.dispose();
   }
@@ -240,6 +245,7 @@ class _AddMemberSheetState extends ConsumerState<_AddMemberSheet> {
             phone: _phone.text,
             memberType: _memberType,
             email: _email.text,
+            address: _address.text,
             nationalId: _nationalId.text,
           );
       if (mounted) {
@@ -324,6 +330,13 @@ class _AddMemberSheetState extends ConsumerState<_AddMemberSheet> {
                 controller: _nationalId,
                 decoration: const InputDecoration(
                     labelText: 'National ID (optional)'),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _address,
+                textCapitalization: TextCapitalization.words,
+                decoration:
+                    const InputDecoration(labelText: 'Address (optional)'),
               ),
               const SizedBox(height: 10),
               TextFormField(

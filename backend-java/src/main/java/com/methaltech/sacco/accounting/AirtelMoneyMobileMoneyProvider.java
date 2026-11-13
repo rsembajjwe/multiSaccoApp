@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import com.methaltech.sacco.config.ProviderCredentialService;
 import com.methaltech.sacco.config.ProviderResilience;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -20,6 +21,7 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
 
     private final RestClient restClient;
     private final ProviderResilience resilience;
+    private final ProviderCredentialService credentialService;
     private final String baseUrl;
     private final String clientId;
     private final String clientSecret;
@@ -31,6 +33,7 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
     AirtelMoneyMobileMoneyProvider(
             RestClient.Builder restClientBuilder,
             ProviderResilience resilience,
+            ProviderCredentialService credentialService,
             @Value("${sacco.integrations.mobile-money.airtel.base-url:https://openapi.airtel.africa}") String baseUrl,
             @Value("${sacco.integrations.mobile-money.airtel.client-id:}") String clientId,
             @Value("${sacco.integrations.mobile-money.airtel.client-secret:}") String clientSecret,
@@ -39,6 +42,7 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
             @Value("${sacco.integrations.mobile-money.airtel.payment-path:/merchant/v1/payments/}") String paymentPath,
             @Value("${sacco.integrations.mobile-money.airtel.status-path:/standard/v1/payments/{transactionId}}") String statusPath) {
         this.resilience = resilience;
+        this.credentialService = credentialService;
         this.baseUrl = trimTrailingSlash(baseUrl);
         this.clientId = clientId;
         this.clientSecret = clientSecret;
@@ -62,12 +66,13 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
     @Override
     @SuppressWarnings("unchecked")
     public MobileMoneyBalanceResult queryBalance() {
-        String token = accessToken();
+        Credentials credentials = credentials(ProviderCredentialService.PLATFORM_SCOPE);
+        String token = accessToken(credentials);
         try {
             Map<String, Object> body = resilience.protectIdempotent(CIRCUIT, () -> restClient.get()
                     .uri("/standard/v1/users/balance")
                     .header("Authorization", "Bearer " + token)
-                    .header("X-Country", country())
+                    .header("X-Country", country(credentials))
                     .header("X-Currency", currency(null))
                     .retrieve()
                     .body(Map.class));
@@ -89,33 +94,32 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
 
     @Override
     public boolean isConfigured() {
-        return clientId != null && !clientId.isBlank()
-                && clientSecret != null && !clientSecret.isBlank()
-                && countryCode != null && !countryCode.isBlank();
+        return credentials(ProviderCredentialService.PLATFORM_SCOPE).configured();
     }
 
     @Override
     public MobileMoneyPaymentResult requestPayment(MobileMoneyPaymentRequest request) {
-        assertConfigured();
+        Credentials credentials = credentials(request.tenantId());
+        assertConfigured(credentials);
         String providerReference = UUID.randomUUID().toString();
-        String token = accessToken();
+        String token = accessToken(credentials);
         try {
             // Payment initiation is not idempotent: circuit-break only (never retry).
             resilience.protect(CIRCUIT, () -> restClient.post()
                     .uri(paymentPath)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Authorization", "Bearer " + token)
-                    .header("X-Country", country())
+                    .header("X-Country", country(credentials))
                     .header("X-Currency", currency(request.currencyCode()))
                     .body(Map.of(
                             "reference", request.externalReference(),
                             "subscriber", Map.of(
-                                    "country", country(),
+                                    "country", country(credentials),
                                     "currency", currency(request.currencyCode()),
                                     "msisdn", msisdn(request.payerPhone())),
                             "transaction", Map.of(
                                     "amount", request.amount().toPlainString(),
-                                    "country", country(),
+                                    "country", country(credentials),
                                     "currency", currency(request.currencyCode()),
                                     "id", providerReference)))
                     .retrieve()
@@ -144,17 +148,18 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
 
     @Override
     public MobileMoneyProviderStatusResult queryPaymentStatus(MobileMoneyPaymentRequestEntity request) {
-        assertConfigured();
+        Credentials credentials = credentials(request.getTenantId());
+        assertConfigured(credentials);
         if (request.getProviderReference() == null || request.getProviderReference().isBlank()) {
             throw new MobileMoneyProviderException("Airtel Money payment request has no provider reference.");
         }
-        String token = accessToken();
+        String token = accessToken(credentials);
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> body = resilience.protectIdempotent(CIRCUIT, () -> restClient.get()
                     .uri(statusPath, request.getProviderReference())
                     .header("Authorization", "Bearer " + token)
-                    .header("X-Country", country())
+                    .header("X-Country", country(credentials))
                     .header("X-Currency", currency(request.getCurrencyCode()))
                     .retrieve()
                     .body(Map.class));
@@ -166,8 +171,8 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
         }
     }
 
-    private String accessToken() {
-        assertConfigured();
+    private String accessToken(Credentials credentials) {
+        assertConfigured(credentials);
         Map<String, Object> body;
         try {
             @SuppressWarnings("unchecked")
@@ -175,8 +180,8 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
                     .uri(tokenPath)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of(
-                            "client_id", clientId,
-                            "client_secret", clientSecret,
+                            "client_id", credentials.clientId(),
+                            "client_secret", credentials.clientSecret(),
                             "grant_type", "client_credentials"))
                     .retrieve()
                     .body(Map.class));
@@ -242,16 +247,26 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
         return status == null || status.toString().isBlank() ? "UNKNOWN" : status.toString();
     }
 
-    private void assertConfigured() {
-        if (clientId == null || clientId.isBlank()
-                || clientSecret == null || clientSecret.isBlank()
-                || countryCode == null || countryCode.isBlank()) {
+    private void assertConfigured(Credentials credentials) {
+        if (!credentials.configured()) {
             throw new MobileMoneyProviderException("Airtel Money provider is not fully configured.");
         }
     }
 
-    private String country() {
-        return countryCode.trim().toUpperCase(Locale.ROOT);
+    private Credentials credentials(String scopeId) {
+        return new Credentials(
+                setting(scopeId, "client_id", clientId),
+                setting(scopeId, "client_secret", clientSecret),
+                setting(scopeId, "country_code", countryCode));
+    }
+
+    private String setting(String scopeId, String key, String envValue) {
+        String stored = credentialService.resolve(scopeId, providerId(), key);
+        return stored != null ? stored : envValue;
+    }
+
+    private String country(Credentials credentials) {
+        return credentials.countryCode().trim().toUpperCase(Locale.ROOT);
     }
 
     private String currency(String value) {
@@ -270,5 +285,13 @@ class AirtelMoneyMobileMoneyProvider implements MobileMoneyProvider {
     private String ensureLeadingSlash(String value) {
         if (value == null || value.isBlank()) return "/";
         return value.startsWith("/") ? value : "/" + value;
+    }
+
+    private record Credentials(String clientId, String clientSecret, String countryCode) {
+        boolean configured() {
+            return clientId != null && !clientId.isBlank()
+                    && clientSecret != null && !clientSecret.isBlank()
+                    && countryCode != null && !countryCode.isBlank();
+        }
     }
 }

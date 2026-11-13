@@ -44,6 +44,70 @@ function openMemberFundDetail(fundCode) {
   renderShell();
 }
 
+async function saveMemberContact(event) {
+  event.preventDefault();
+  state.memberProfileMessage = "";
+  state.memberProfileError = "";
+  if (blockOfflineMemberAction("memberProfileError")) return;
+  try {
+    const member = await api("/member-auth/profile", {
+      method: "PATCH",
+      body: JSON.stringify({
+        phone: value("memberProfilePhone"),
+        whatsapp: value("memberProfileWhatsapp"),
+        email: value("memberProfileEmail")
+      })
+    });
+    state.member = member;
+    state.memberProfileMessage = "Contact details updated.";
+    await refreshMember();
+    state.currentView = "profile";
+    state.moduleTabs.profile = "contacts";
+    state.memberProfileMessage = "Contact details updated.";
+  } catch (error) {
+    state.memberProfileError = error.message || "Could not update contact details.";
+  }
+  renderShell();
+}
+
+async function uploadMemberProfilePhoto(event) {
+  event.preventDefault();
+  state.memberProfileMessage = "";
+  state.memberProfileError = "";
+  if (blockOfflineMemberAction("memberProfileError")) return;
+  const photoInput = /** @type {HTMLInputElement | null} */ (document.querySelector("#memberProfilePhoto"));
+  const file = photoInput?.files?.[0];
+  if (!file) {
+    state.memberProfileError = "Choose an image first.";
+    renderShell();
+    return;
+  }
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    await api("/member-auth/profile-photo", { method: "POST", body: form });
+    state.memberProfilePhotoLoaded = false;
+    state.memberProfileMessage = "Profile photo updated.";
+    await loadMemberProfilePhoto(true);
+  } catch (error) {
+    state.memberProfileError = error.message || "Could not upload profile photo.";
+  }
+  renderShell();
+}
+
+async function loadMemberProfilePhoto(force = false) {
+  if (state.auth !== "member" || (state.memberProfilePhotoLoaded && !force)) return;
+  state.memberProfilePhotoLoaded = true;
+  try {
+    const blob = await fetchApiBlob("/member-auth/profile-photo");
+    if (state.memberProfilePhotoUrl) URL.revokeObjectURL(state.memberProfilePhotoUrl);
+    state.memberProfilePhotoUrl = URL.createObjectURL(blob);
+    renderShell();
+  } catch (error) {
+    if (error.status !== 404) state.memberProfileError = error.message || "Could not load profile photo.";
+  }
+}
+
 function closeMemberFundDetail() {
   state.memberSelectedFund = null;
   renderShell();
@@ -265,7 +329,13 @@ async function postMemberPayment(event) {
     await refreshMember();
     state.memberPaymentMessage = `Payment request sent: ${request.externalReference || request.providerReference || request.id}. ${request.checkoutPrompt || ""}`.trim();
     renderShell();
+    startMemberPaymentStatusPolling(request.id);
   } catch (error) {
+    if (error.status) {
+      state.memberPaymentError = error.message || "Could not start the payment.";
+      renderShell();
+      return;
+    }
     const payload = memberPaymentPayload();
     const request = {
       ...payload,
@@ -467,6 +537,45 @@ async function refreshPaymentRequestProviderStatus(requestId) {
     renderShell();
   } catch (error) {
     state.paymentRequestStatusError = error.message;
+    renderShell();
+  }
+}
+
+function startMemberPaymentStatusPolling(requestId) {
+  if (!requestId || state.auth !== "member") return;
+  state.memberPaymentPollingId = requestId;
+  state.paymentRequestStatusMessage = "Checking provider status...";
+  state.paymentRequestStatusError = "";
+  renderShell();
+  pollMemberPaymentStatus(requestId, 0);
+}
+
+async function pollMemberPaymentStatus(requestId, attempt) {
+  const terminalStatuses = new Set(["posted", "completed", "failed", "cancelled", "rejected"]);
+  if (state.memberPaymentPollingId !== requestId || state.auth !== "member" || !state.networkOnline) return;
+  try {
+    const request = await api(`/integrations/mobile-money/payment-requests/${encodeURIComponent(requestId)}/provider-status`);
+    const rows = state.memberData.paymentRequests || [];
+    state.memberData.paymentRequests = [request, ...rows.filter((row) => row.id !== request.id)];
+    const status = normal(request.status);
+    if (terminalStatuses.has(status) || attempt >= 19) {
+      state.memberPaymentPollingId = "";
+      state.paymentRequestStatusMessage = terminalStatuses.has(status)
+        ? `Payment ${request.externalReference || request.id} is ${labelize(request.status)}.`
+        : "Payment status is still pending. Use Check status to refresh it later.";
+      await refreshMember();
+      state.paymentRequestStatusMessage = terminalStatuses.has(status)
+        ? `Payment ${request.externalReference || request.id} is ${labelize(request.status)}.`
+        : "Payment status is still pending. Use Check status to refresh it later.";
+      renderShell();
+      return;
+    }
+    state.paymentRequestStatusMessage = `Checking provider status... ${attempt + 1}/20`;
+    renderShell();
+    setTimeout(() => pollMemberPaymentStatus(requestId, attempt + 1), 3000);
+  } catch (error) {
+    state.memberPaymentPollingId = "";
+    state.paymentRequestStatusError = `Automatic status check stopped: ${error.message}`;
     renderShell();
   }
 }

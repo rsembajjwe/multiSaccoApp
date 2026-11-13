@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/auth_events.dart';
 import '../../providers.dart';
 import 'forgot_password_screen.dart';
+import 'group_registration_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -24,6 +26,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.initState();
     // If a session already exists, skip straight to the dashboard.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (sessionExpiredNotifier.value) return;
       final has = await ref.read(memberRepositoryProvider).hasSession();
       if (!has || !mounted) return;
       final locked = await ref.read(sessionStoreProvider).biometricLockEnabled() &&
@@ -51,6 +54,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             identifier: _identifier.text.trim(),
             password: _password.text,
           );
+      sessionExpiredNotifier.value = false;
       if (mounted) context.go('/home');
     } catch (e) {
       setState(() => _error = e.toString());
@@ -102,7 +106,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   TextField(
                     controller: _sacco,
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(labelText: 'SACCO code'),
+                    decoration:
+                        const InputDecoration(labelText: 'Organization code'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -145,6 +150,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                             ),
                     child: const Text('Forgot password?'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const GroupRegistrationScreen(),
+                              ),
+                            ),
+                    icon: const Icon(Icons.group_add_outlined),
+                    label: const Text('Register an organization'),
                   ),
                 ],
               ),

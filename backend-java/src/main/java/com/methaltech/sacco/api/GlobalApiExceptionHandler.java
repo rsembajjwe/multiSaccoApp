@@ -1,5 +1,6 @@
 package com.methaltech.sacco.api;
 
+import com.methaltech.sacco.notification.OnboardingNotificationService.OnboardingDeliveryException;
 import jakarta.persistence.OptimisticLockException;
 import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -28,12 +29,19 @@ class GlobalApiExceptionHandler {
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
-    ResponseEntity<ApiErrorResponse> dataIntegrityConflict() {
+    ResponseEntity<ApiErrorResponse> dataIntegrityConflict(DataIntegrityViolationException error) {
+        log.warn("Database integrity conflict: {}", mostSpecificMessage(error));
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiErrorResponse.of(
                         409,
                         "DATA_INTEGRITY_CONFLICT",
                         "This request conflicts with an existing record or database rule."));
+    }
+
+    private String mostSpecificMessage(Throwable error) {
+        Throwable cause = error;
+        while (cause.getCause() != null) cause = cause.getCause();
+        return cause.getMessage() == null ? error.getClass().getSimpleName() : cause.getMessage();
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -57,6 +65,13 @@ class GlobalApiExceptionHandler {
                         400,
                         "MALFORMED_REQUEST_BODY",
                         "Request body is missing or malformed."));
+    }
+
+    @ExceptionHandler(OnboardingDeliveryException.class)
+    ResponseEntity<ApiErrorResponse> onboardingDeliveryUnavailable(OnboardingDeliveryException error) {
+        log.warn("Staff onboarding delivery failed: {}", error.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiErrorResponse.of(503, "ONBOARDING_DELIVERY_FAILED", error.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

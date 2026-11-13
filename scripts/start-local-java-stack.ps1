@@ -2,7 +2,8 @@ param(
   [int]$BackendPort = 18084,
   [int]$UiPort = 5174,
   [switch]$DisableDemoLogins,
-  [switch]$ClearFinanceData
+  [switch]$ClearFinanceData,
+  [switch]$UseWindowsTrustStore
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +11,9 @@ $root = Split-Path -Parent $PSScriptRoot
 $backendDir = Join-Path $root "backend-java"
 $logsDir = Join-Path $root "logs"
 $pidsDir = Join-Path $root ".local-pids"
+$envFile = Join-Path $root ".env"
+
+& (Join-Path $PSScriptRoot "Import-DotEnv.ps1") -Path $envFile
 
 New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
 New-Item -ItemType Directory -Force -Path $pidsDir | Out-Null
@@ -87,11 +91,17 @@ if (Test-PortOpen $BackendPort) {
   $backendErr = Join-Path $logsDir "java-backend-$BackendPort.err.log"
   $demoValue = if ($DisableDemoLogins) { "false" } else { "true" }
   $clearFinanceValue = if ($ClearFinanceData) { "true" } else { "false" }
+  $windowsTrustLine = if ($UseWindowsTrustStore) {
+    "`$env:JAVA_TOOL_OPTIONS = ((`$env:JAVA_TOOL_OPTIONS + ' -Djavax.net.ssl.trustStoreType=Windows-ROOT').Trim())"
+  } else {
+    ""
+  }
   $backendCommand = @"
 `$env:SERVER_PORT='$BackendPort'
 `$env:SACCO_DEMO_LOGINS_ENABLED='$demoValue'
 `$env:SACCO_DEV_CLEAR_FINANCE_DATA='$clearFinanceValue'
 `$env:SACCO_PUSH_PROVIDER='fcm'
+$windowsTrustLine
 Set-Location '$backendDir'
 .\mvnw.cmd spring-boot:run
 "@
@@ -135,3 +145,4 @@ Write-Host "UI:      http://127.0.0.1:$UiPort/"
 Write-Host "Backend: http://127.0.0.1:$BackendPort/api/v1"
 Write-Host "Demo logins enabled: $(-not $DisableDemoLogins)"
 Write-Host "Finance data cleared on startup: $ClearFinanceData"
+Write-Host "Java Windows trust store: $UseWindowsTrustStore"

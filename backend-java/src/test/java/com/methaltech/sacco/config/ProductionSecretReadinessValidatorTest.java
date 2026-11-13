@@ -12,6 +12,20 @@ class ProductionSecretReadinessValidatorTest {
     void demoModeAllowsLocalSecrets() {
         ProductionSecretReadinessValidator validator = new ProductionSecretReadinessValidator(
                 true,
+                true,
+                "sacco_dev_password",
+                "",
+                false,
+                "");
+
+        assertDoesNotThrow(validator::validate);
+    }
+
+    @Test
+    void localReadinessOffAllowsLocalSecretsWhenDemoLoginsAreDisabled() {
+        ProductionSecretReadinessValidator validator = new ProductionSecretReadinessValidator(
+                false,
+                false,
                 "sacco_dev_password",
                 "",
                 false,
@@ -23,6 +37,7 @@ class ProductionSecretReadinessValidatorTest {
     @Test
     void productionRejectsPlaceholderDatabasePassword() {
         ProductionSecretReadinessValidator validator = new ProductionSecretReadinessValidator(
+                true,
                 false,
                 "change_this_password",
                 "strong_pii_encryption_key_2026_value",
@@ -37,6 +52,7 @@ class ProductionSecretReadinessValidatorTest {
     @Test
     void productionRejectsUnsignedCallbacksAndWeakSecret() {
         ProductionSecretReadinessValidator validator = new ProductionSecretReadinessValidator(
+                true,
                 false,
                 "strong_database_password_2026",
                 "short",
@@ -53,6 +69,7 @@ class ProductionSecretReadinessValidatorTest {
     @Test
     void productionAllowsStrongSecrets() {
         ProductionSecretReadinessValidator validator = new ProductionSecretReadinessValidator(
+                true,
                 false,
                 "strong_database_password_2026",
                 "strong_pii_encryption_key_2026_value",

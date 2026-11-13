@@ -2,27 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/mobile_money.dart';
 import '../../core/widgets/confirm_action.dart';
 import '../../core/widgets/member_picker.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
+import 'cash_receipt_dialog.dart';
 
 /// Record a member paying money into the SACCO, against a chosen product
 /// (fund type). Cash posts immediately and credits the member's fund balance;
 /// mobile money fires an MTN / Airtel prompt to the member's phone.
 ///
-/// When [recordCashBook] is true (opened from the Treasurer's Cash book), a
-/// successful *cash* deposit also records a cash-in entry in the cash book so
-/// cash-on-hand and the Cash-flow tracker stay in step. Mobile money never
+/// Cash-book posting is performed atomically by the backend with the financial
+/// transaction. Mobile money never
 /// writes a cash entry — it is not cash in hand.
 class MemberDepositSheet extends ConsumerStatefulWidget {
   const MemberDepositSheet({
     super.key,
-    this.recordCashBook = false,
     this.title = 'Member deposit',
   });
 
-  final bool recordCashBook;
   final String title;
 
   @override
@@ -82,16 +81,21 @@ class _MemberDepositSheetState extends ConsumerState<MemberDepositSheet> {
     }
     final fund = _fund!;
     final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
+    final normalizedPhone = _mode == 'mobile_money'
+        ? normalizeUgandanMobileNumber(_phone.text)!
+        : null;
     final memberName = _member?.fullName ?? 'the selected member';
     final isCash = _mode == 'cash';
     final confirmed = await confirmAction(
       context,
-      title: isCash ? 'Post cash ${fund.name.toLowerCase()}?' : 'Send payment prompt?',
+      title: isCash
+          ? 'Post cash ${fund.name.toLowerCase()}?'
+          : 'Send payment prompt?',
       message: isCash
           ? 'Post ${Fmt.money(amount)} to $memberName\'s ${fund.name} '
-              '(cash)${widget.recordCashBook ? ' and add it to cash on hand.' : '.'}'
+              '(cash) and add it to cash on hand.'
           : 'Send a ${Fmt.money(amount)} ${_provider.toUpperCase()} mobile '
-              'money prompt to ${_phone.text.trim()} for $memberName '
+              'money prompt to $normalizedPhone for $memberName '
               '(${fund.name}).',
       confirmLabel: isCash ? 'Post deposit' : 'Send prompt',
       icon: isCash ? Icons.savings_outlined : Icons.send_to_mobile_outlined,
@@ -100,38 +104,36 @@ class _MemberDepositSheetState extends ConsumerState<MemberDepositSheet> {
     setState(() => _busy = true);
     try {
       if (isCash) {
-        await ref.read(adminRepositoryProvider).createMemberContribution(
-              memberId: _member!.id,
-              type: transactionTypeForFund(fund),
-              amount: amount,
-              narration: _narration.text,
-            );
-        if (widget.recordCashBook) {
-          await ref.read(adminRepositoryProvider).createCashEntry(
-                purpose: 'collection',
-                amount: amount,
-                description: '${fund.name} collection - $memberName',
-                memberId: _member!.id,
-              );
-          ref.invalidate(cashBookProvider);
-        }
+        final transaction =
+            await ref.read(adminRepositoryProvider).createMemberContribution(
+                  memberId: _member!.id,
+                  type: transactionTypeForFund(fund),
+                  amount: amount,
+                  narration: _narration.text,
+                );
+        ref.invalidate(cashBookProvider);
         ref.invalidate(transactionsProvider(''));
         ref.invalidate(memberProvider(_member!.id));
         ref.invalidate(memberFundBalancesProvider);
         ref.invalidate(saccoStatusProvider);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${fund.name} deposit posted.')),
-          );
-          Navigator.of(context).pop();
-        }
+        if (!mounted) return;
+        await showCashReceipt(
+          context,
+          title: 'Deposit receipt',
+          memberName: memberName,
+          item: fund.name,
+          amount: amount,
+          reference: transaction.reference,
+          status: transaction.status,
+        );
+        if (mounted) Navigator.of(context).pop();
       } else {
         final request = await ref
             .read(adminRepositoryProvider)
             .requestMemberSavingsMobileMoney(
               memberId: _member!.id,
               amount: amount,
-              payerPhone: _phone.text,
+              payerPhone: normalizedPhone!,
               provider: _provider,
             );
         ref.invalidate(mobileMoneyPaymentRequestsProvider);
@@ -298,8 +300,8 @@ class _MemberDepositSheetState extends ConsumerState<MemberDepositSheet> {
                 controller: _amount,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
-                decoration:
-                    const InputDecoration(labelText: 'Amount', prefixText: 'UGX '),
+                decoration: const InputDecoration(
+                    labelText: 'Amount', prefixText: 'UGX '),
                 validator: (v) {
                   final parsed =
                       num.tryParse((v ?? '').trim().replaceAll(',', ''));
@@ -323,9 +325,8 @@ class _MemberDepositSheetState extends ConsumerState<MemberDepositSheet> {
                   controller: _phone,
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(labelText: 'Member phone'),
-                  validator: (v) => v == null || v.trim().isEmpty
-                      ? 'Enter member phone.'
-                      : null,
+                  validator: (v) =>
+                      validateUgandanMobileMoneyPhone(v, _provider),
                 ),
               ] else ...[
                 const SizedBox(height: 10),

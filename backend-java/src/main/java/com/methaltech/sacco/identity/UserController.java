@@ -2,8 +2,12 @@ package com.methaltech.sacco.identity;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.member.Member;
+import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.security.PasswordHasher;
 import com.methaltech.sacco.security.TokenGenerator;
+import com.methaltech.sacco.tenant.SaccoOfficialAssignment;
+import com.methaltech.sacco.tenant.SaccoOfficialAssignmentRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
@@ -45,6 +49,10 @@ class UserController {
     private final TokenGenerator tokenGenerator;
     private final DemoCredentialPolicy demoCredentialPolicy;
     private final PlatformSecurityPolicyService platformSecurityPolicyService;
+    private final MemberRepository memberRepository;
+    private final SaccoOfficialAssignmentRepository officialAssignmentRepository;
+    private final DefaultSaccoRoleProvisioningService defaultSaccoRoleProvisioningService;
+    private final StaffOnboardingService staffOnboardingService;
 
     UserController(
             UserRepository userRepository,
@@ -57,7 +65,11 @@ class UserController {
             PasswordResetRequestRepository passwordResetRequestRepository,
             TokenGenerator tokenGenerator,
             DemoCredentialPolicy demoCredentialPolicy,
-            PlatformSecurityPolicyService platformSecurityPolicyService) {
+            PlatformSecurityPolicyService platformSecurityPolicyService,
+            MemberRepository memberRepository,
+            SaccoOfficialAssignmentRepository officialAssignmentRepository,
+            DefaultSaccoRoleProvisioningService defaultSaccoRoleProvisioningService,
+            StaffOnboardingService staffOnboardingService) {
         this.userRepository = userRepository;
         this.authService = authService;
         this.passwordHasher = passwordHasher;
@@ -69,6 +81,10 @@ class UserController {
         this.tokenGenerator = tokenGenerator;
         this.demoCredentialPolicy = demoCredentialPolicy;
         this.platformSecurityPolicyService = platformSecurityPolicyService;
+        this.memberRepository = memberRepository;
+        this.officialAssignmentRepository = officialAssignmentRepository;
+        this.defaultSaccoRoleProvisioningService = defaultSaccoRoleProvisioningService;
+        this.staffOnboardingService = staffOnboardingService;
     }
 
     @GetMapping
@@ -117,34 +133,53 @@ class UserController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot create a user in another tenant."));
         }
-        if (tenantId.equals("tenant_platform") && !hasRole(currentSession.user(), "Platform Super Admin")) {
+        if (tenantId.equals("tenant_platform")
+                && !hasRole(currentSession.user(), "Platform Admin")
+                && !hasRole(currentSession.user(), "Platform Super Admin")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "PLATFORM_SUPER_ADMIN_REQUIRED", "Only the Platform Super Admin can create platform users."));
         }
 
-        String email = request.email().trim().toLowerCase();
-        if (userRepository.existsByTenantIdAndEmailIgnoreCase(tenantId, email)) {
+        String normalizedEmail = request.email() == null ? "" : request.email().trim().toLowerCase();
+        String email = normalizedEmail.isBlank() ? null : normalizedEmail;
+        String phone = request.phone() == null ? "" : request.phone().trim();
+        String channel = request.deliveryChannel() == null || request.deliveryChannel().isBlank()
+                ? "email"
+                : request.deliveryChannel().trim().toLowerCase();
+        if (!Set.of("email", "sms").contains(channel)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_DELIVERY_CHANNEL", "Choose email or SMS for temporary-password delivery."));
+        }
+        if ("email".equals(channel) && email == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "EMAIL_REQUIRED", "An active email address is required for email delivery."));
+        }
+        if ("sms".equals(channel) && !phone.matches("^\\+[1-9]\\d{7,14}$")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "PHONE_REQUIRED", "A valid international phone number is required for SMS delivery."));
+        }
+        if (email != null && userRepository.existsByTenantIdAndEmailIgnoreCase(tenantId, email)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "USER_EXISTS", "A user with that email already exists in this tenant."));
         }
-        List<String> passwordViolations = platformSecurityPolicyService.passwordViolations(request.password());
-        if (!passwordViolations.isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "WEAK_PASSWORD", platformSecurityPolicyService.passwordPolicyMessage(passwordViolations)));
+        if (!phone.isBlank() && userRepository.existsByTenantIdAndPhone(tenantId, phone)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "USER_EXISTS", "A user with that phone number already exists in this tenant."));
         }
 
-        PasswordHasher.PasswordHash password = passwordHasher.hash(request.password());
-        User user = new User(
-                "user_" + UUID.randomUUID(),
-                tenantId,
-                request.fullName().trim(),
-                email,
-                request.phone() == null ? "" : request.phone().trim(),
-                password.hash(),
-                password.salt(),
-                "active");
-
-        User savedUser = userRepository.save(user);
+        User savedUser;
+        if (demoCredentialPolicy.demoLoginsEnabled() && request.password() != null && !request.password().isBlank()) {
+            List<String> passwordViolations = platformSecurityPolicyService.passwordViolations(request.password());
+            if (!passwordViolations.isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "WEAK_PASSWORD", platformSecurityPolicyService.passwordPolicyMessage(passwordViolations)));
+            }
+            savedUser = staffOnboardingService.createDemoUser(
+                    tenantId, request.fullName().trim(), email, phone, request.password());
+        } else {
+            savedUser = staffOnboardingService.createUser(
+                    tenantId, request.fullName().trim(), email, phone, channel);
+        }
         auditService.record(
                 tenantId,
                 currentSession.user(),
@@ -154,6 +189,74 @@ class UserController {
                 httpRequest.getRemoteAddr());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(UserResponse.from(savedUser)));
+    }
+
+    @PostMapping("/official-staff-access")
+    @Transactional
+    ResponseEntity<?> grantOfficialStaffAccess(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody OfficialStaffAccessRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user()) || !authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
+
+        String office = normalizeOfficialOffice(body.office());
+        Member member = memberRepository.findById(body.memberId().trim()).orElse(null);
+        if (office == null || member == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_OFFICIAL_MEMBER", "Select an assigned chairperson, secretary, or treasurer member."));
+        }
+        SaccoOfficialAssignment assignment = officialAssignmentRepository
+                .findByTenantIdAndOffice(member.getTenantId(), office)
+                .filter(candidate -> candidate.getMemberId().equals(member.getId()))
+                .orElse(null);
+        if (assignment == null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "OFFICIAL_ASSIGNMENT_REQUIRED", "Assign this member to the SACCO office before granting staff access."));
+        }
+        if (member.getEmail() == null || member.getEmail().isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "OFFICIAL_EMAIL_REQUIRED", "Add an email address to the member before granting staff access."));
+        }
+        User user = member.getLinkedUserId() == null ? null : userRepository.findById(member.getLinkedUserId()).orElse(null);
+        if (user == null) {
+            user = userRepository.findByTenantIdAndEmailIgnoreCase(member.getTenantId(), member.getEmail()).orElse(null);
+        }
+        if (user == null) {
+            user = staffOnboardingService.createUser(
+                    member.getTenantId(),
+                    member.getFullName(),
+                    member.getEmail().trim().toLowerCase(),
+                    member.getPhone() == null ? "" : member.getPhone().trim(),
+                    "email");
+        }
+        boolean linkedElsewhere = memberRepository.findFirstByLinkedUserId(user.getId())
+                .map(existing -> !existing.getId().equals(member.getId()))
+                .orElse(false);
+        if (linkedElsewhere) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "STAFF_ALREADY_LINKED", "That staff account is linked to another member."));
+        }
+
+        String roleId = defaultSaccoRoleProvisioningService.ensureOfficialRole(
+                member.getTenantId(), office, currentSession.user().getId());
+        if (!userRoleRepository.existsByIdUserIdAndIdRoleId(user.getId(), roleId)) {
+            userRoleRepository.save(new UserRole(user.getId(), roleId, member.getTenantId()));
+        }
+        member.linkStaffUser(user.getId());
+        memberRepository.save(member);
+        auditService.record(
+                member.getTenantId(),
+                currentSession.user(),
+                "Granted " + office + " staff access to member " + member.getMembershipNo(),
+                "official_staff_access",
+                user.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(new OfficialStaffAccessResponse(
+                member.getId(), user.getId(), office, user.getEmail(), true)));
     }
 
     @PutMapping("/{userId}")
@@ -301,7 +404,9 @@ class UserController {
             return userNotFound();
         }
         if (!canAccessUser(currentSession, targetUser)) return tenantAccessDenied();
-        if (targetUser.getTenantId().equals("tenant_platform") && !hasRole(currentSession.user(), "Platform Super Admin")) {
+        if (targetUser.getTenantId().equals("tenant_platform")
+                && !hasRole(currentSession.user(), "Platform Admin")
+                && !hasRole(currentSession.user(), "Platform Super Admin")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "PLATFORM_SUPER_ADMIN_REQUIRED", "Only the Platform Super Admin can update platform user roles."));
         }
@@ -623,15 +728,22 @@ class UserController {
     }
 
     private boolean canManagePlatformUser(AuthService.CurrentSession currentSession, User targetUser) {
-        return !targetUser.getTenantId().equals("tenant_platform") || hasRole(currentSession.user(), "Platform Super Admin");
+        return !targetUser.getTenantId().equals("tenant_platform")
+                || hasRole(currentSession.user(), "Platform Admin")
+                || hasRole(currentSession.user(), "Platform Super Admin");
     }
 
     private ResponseEntity<ApiErrorResponse> requireSaccoAdministratorForUserManagement(AuthService.CurrentSession currentSession) {
-        if (authService.isPlatform(currentSession.user()) || hasRole(currentSession.user(), "SACCO Administrator")) {
+        // The Chairperson is the SACCO administrator, so the Chairperson role (and the merged
+        // "SACCO Administrator / Chairperson" name) can manage staff alongside a legacy SACCO Administrator.
+        if (authService.isPlatform(currentSession.user())
+                || hasRole(currentSession.user(), "SACCO Administrator")
+                || hasRole(currentSession.user(), "Chairperson")
+                || hasRole(currentSession.user(), "SACCO Administrator / Chairperson")) {
             return null;
         }
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiErrorResponse.of(403, "SACCO_ADMIN_REQUIRED", "Only the SACCO Administrator can manage SACCO staff access."));
+                .body(ApiErrorResponse.of(403, "SACCO_ADMIN_REQUIRED", "Only the SACCO Administrator (Chairperson) can manage SACCO staff access."));
     }
 
     private long activeSessionCount(String userId, Instant now) {
@@ -676,9 +788,23 @@ class UserController {
     record CreateUserRequest(
             String tenantId,
             @NotBlank String fullName,
-            @Email @NotBlank String email,
+            @Email String email,
             String phone,
-            @NotBlank String password) {
+            String deliveryChannel,
+            String password) {
+    }
+
+    record OfficialStaffAccessRequest(@NotBlank String memberId, @NotBlank String office) {
+    }
+
+    record OfficialStaffAccessResponse(String memberId, String userId, String office, String email, boolean linked) {
+    }
+
+    private String normalizeOfficialOffice(String office) {
+        String normalized = office == null ? "" : office.trim().toLowerCase();
+        if ("chairman".equals(normalized)) return SaccoOfficialAssignment.CHAIRPERSON;
+        if (Set.of(SaccoOfficialAssignment.CHAIRPERSON, SaccoOfficialAssignment.SECRETARY, SaccoOfficialAssignment.TREASURER).contains(normalized)) return normalized;
+        return null;
     }
 
     record UpdateUserRequest(

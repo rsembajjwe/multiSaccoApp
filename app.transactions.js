@@ -5,7 +5,7 @@
   const overview = buildTransactionOverviewSummary(rows);
   const receiptingQueue = buildTransactionReceiptingQueue(rows);
   const receiptRegister = buildTransactionReceiptRegister(rows);
-  const tabs = [["overview", "Overview"], ["capture", t("newTransactionScreen")], ["receipting", "Receipting queue"], ["receipts", "Receipt register"], ["list", t("transactionList")], ["detail", t("transactionDetail")]];
+  const tabs = [["overview", "Overview"], ["capture", t("newTransactionScreen")], ["savings-import", "Savings import"], ["receipting", "Receipting queue"], ["receipts", "Receipt register"], ["list", t("transactionList")], ["detail", t("transactionDetail")]];
   const tab = activeModuleTab("transactions", tabs);
   return `
     ${saccoCyclePanel(cycle, { title: "Transaction cycle" })}
@@ -17,6 +17,7 @@
     ${moduleTabs("transactions", tabs, tab)}
     ${tab === "overview" ? transactionControlFocusPanel(overview, receiptingQueue, receiptRegister) : ""}
     ${tab === "capture" ? transactionFormPanel() : ""}
+    ${tab === "savings-import" ? savingsImportPanel() : ""}
     ${tab === "receipting" ? transactionReceiptingPanel(receiptingQueue) : ""}
     ${tab === "receipts" ? transactionReceiptRegisterPanel(receiptRegister) : ""}
     ${tab === "detail" ? (transactionDetailPanel(rows) || emptyState("Transaction detail and reversal", "Select a transaction from the list to review receipt, approval and reversal actions.")) : ""}
@@ -31,26 +32,201 @@ function paymentsView() {
   return transactionFormPanel({ paymentOnly: true });
 }
 
-function platformTransactionsView() {
-  const rows = platformSubscriptionTransactionRows();
-  const tabs = [["capture", t("newTransactionScreen")], ["list", t("transactionList")], ["detail", t("transactionDetail")]];
-  const tab = activeModuleTab("transactions", tabs);
-  const paidTotal = rows.reduce((total, row) => total + Number(row.paid || 0), 0);
-  const dueTotal = rows.reduce((total, row) => total + Number(row.balanceDue || 0), 0);
+function savingsImportPanel() {
+  const result = state.savingsImportResult;
   return `
-    <div class="dashboard-grid">
-      ${summary("Platform-SACCO transactions", rows.length, "Subscription and platform payments", t("review"))}
+    <section class="panel savings-import-panel">
+      <div class="panel-heading">
+        <div><h2>Bulk savings deposits</h2><p>Validate a CSV file, then create pending savings transactions for checker approval.</p></div>
+        <button class="button secondary" type="button" data-action="download-savings-template">Download template</button>
+      </div>
+      ${state.savingsImportMessage ? `<div class="notice compact"><strong>${escapeHtml(state.savingsImportMessage)}</strong></div>` : ""}
+      ${state.savingsImportError ? `<div class="notice warning"><strong>Import validation failed.</strong><span>${escapeHtml(state.savingsImportError)}</span></div>` : ""}
+      <label class="savings-import-input"><span>CSV data</span><textarea id="savingsImportCsv" rows="12" placeholder="membershipNo,amount,postingDate,reference,channel,narration\nGREE-0001,50000,2026-09-15,SAV-0001,cash,September savings">${escapeHtml(state.savingsImportCsv || "")}</textarea></label>
+      <div class="form-actions inline"><button class="button secondary" type="button" data-action="validate-savings-import">Validate</button><button class="button primary" type="button" data-action="import-savings-deposits">Import pending deposits</button></div>
+      ${result ? `<section class="savings-import-result"><strong>${result.valid ? "Validation passed" : "Validation needs attention"}</strong><span>${result.totalRows || 0} row(s), ${result.createdCount || 0} created, ${result.errors?.length || 0} error(s).</span>${result.errors?.length ? `<ul>${result.errors.map((error) => `<li>Row ${escapeHtml(String(error.row))}, ${escapeHtml(error.field)}: ${escapeHtml(error.message)}</li>`).join("")}</ul>` : ""}</section>` : ""}
+    </section>
+  `;
+}
+
+function platformTransactionsView() {
+  const subscriptions = platformSubscriptionTransactionRows();
+  const payments = platformSubscriptionPaymentRows();
+  const rows = filterPlatformSubscriptionPayments(payments);
+  const tabs = [["capture", "New Transaction"], ["list", "Transaction List"], ["detail", "Transaction Details"]];
+  const tab = activeModuleTab("transactions", tabs);
+  const paidTotal = payments.reduce((total, row) => total + Number(row.amount || 0), 0);
+  const dueTotal = subscriptions.reduce((total, row) => total + Number(row.balanceDue || 0), 0);
+  return `
+    <section class="module-intro platform-transactions-hero"><div class="platform-transactions-icon" aria-hidden="true">⇄</div><div><p class="eyebrow">Platform billing</p><h2>Transactions</h2><p>Capture payments, track platform–SACCO transactions and monitor balances.</p></div></section>
+    <div class="dashboard-grid platform-transaction-kpis">
+      ${summary("Platform-SACCO transactions", payments.length, "Total recorded payments", t("review"))}
       ${summary("Outstanding", money.format(dueTotal), "Due from SACCOs", "Follow up")}
       ${summary("Confirmed", money.format(paidTotal), "Received from SACCOs", t("receipts"))}
     </div>
     ${moduleTabs("transactions", tabs, tab)}
-    ${tab === "capture" ? platformTransactionFormPanel(rows) : ""}
-    ${tab === "detail" ? (platformTransactionDetailPanel(rows) || emptyState("Platform-SACCO transaction detail", "Select a SACCO transaction from the list to review or record payment.")) : ""}
+    ${tab === "capture" ? platformTransactionFormPanel(subscriptions) : ""}
+    ${tab === "detail" ? (platformTransactionDetailPanel(payments) || emptyState("Transaction details", "Select a platform-SACCO payment from the transaction list to review its evidence.")) : ""}
     ${tab === "list" ? `
-      ${filterToolbar("Search by SACCO, code, invoice, package, status or amount", "New platform-SACCO transaction", "Export")}
-      ${recordTable("Platform-SACCO transaction list", rows, ["saccoCode", "tenantName", "invoice", "packageName", "billingDescription", "amount", "paid", "balanceDue", "paymentStage", "operatingAccess", "expiry"])}
+      ${platformTransactionListFilters()}
+      ${recordTable("Platform-SACCO transaction list", rows, ["receivedAt", "tenantName", "invoice", "packageName", "channel", "amount", "externalReference", "verificationStatus", "recordedBy"])}
     ` : ""}
   `;
+}
+
+function platformSubscriptionPaymentRows() {
+  const subscriptions = dataRows("subscriptions");
+  const tenants = tenantRows();
+  const users = dataRows("users");
+  return dataRows("subscriptionPayments").map((payment) => {
+    const subscription = subscriptions.find((item) => item.id === payment.subscriptionId) || {};
+    const tenant = tenants.find((item) => item.id === payment.tenantId) || {};
+    const recorder = users.find((item) => item.id === payment.recordedByUserId) || {};
+    const channel = normal(payment.channel || "manual");
+    return {
+      ...payment,
+      tenantName: tenant.name || payment.tenantId,
+      saccoCode: tenant.abbreviation || tenant.code || payment.tenantId,
+      invoice: subscription.invoice || subscription.id || payment.subscriptionId,
+      packageName: subscription.tierLabel || subscription.packageName || subscription.packageId || "Standard",
+      status: "confirmed",
+      verificationStatus: channel === "mobile_money" ? "Provider confirmed" : channel === "bank" ? "Reference recorded" : "Officer recorded",
+      receiptNo: `SUB-RCT-${String(payment.id || "").slice(-8).toUpperCase()}`,
+      recordedBy: recorder.fullName || recorder.name || recorder.email || payment.recordedByUserId || "System",
+      action: "platform-transaction-detail",
+      actionLabel: "View",
+      actionId: payment.id
+    };
+  }).sort((a, b) => String(b.receivedAt || b.createdAt || "").localeCompare(String(a.receivedAt || a.createdAt || "")));
+}
+
+function filterPlatformSubscriptionPayments(rows) {
+  const search = normal(state.platformTransactionSearch || "");
+  const from = state.platformTransactionDateFrom ? new Date(`${state.platformTransactionDateFrom}T00:00:00`).getTime() : null;
+  const to = state.platformTransactionDateTo ? new Date(`${state.platformTransactionDateTo}T23:59:59`).getTime() : null;
+  return rows.filter((row) => {
+    const timestamp = new Date(row.receivedAt || row.createdAt || "").getTime();
+    const searchMatch = !search || normal(`${row.tenantName} ${row.saccoCode} ${row.invoice} ${row.externalReference} ${row.packageName} ${row.recordedBy}`).includes(search);
+    return searchMatch
+      && (!state.platformTransactionTenant || row.tenantId === state.platformTransactionTenant)
+      && (!state.platformTransactionChannel || normal(row.channel) === state.platformTransactionChannel)
+      && (!state.platformTransactionStatus || normal(row.status) === state.platformTransactionStatus)
+      && (from === null || timestamp >= from)
+      && (to === null || timestamp <= to);
+  });
+}
+
+function platformTransactionListFilters() {
+  return `<section class="panel compact-panel"><form id="platformTransactionFilters" class="platform-transaction-filters">
+    <label><span>Search</span><input id="platformTransactionSearch" value="${escapeHtml(state.platformTransactionSearch || "")}" placeholder="SACCO, invoice or reference"></label>
+    <label><span>From</span><input id="platformTransactionDateFrom" type="date" value="${escapeHtml(state.platformTransactionDateFrom || "")}"></label><label><span>To</span><input id="platformTransactionDateTo" type="date" value="${escapeHtml(state.platformTransactionDateTo || "")}"></label>
+    <label><span>SACCO</span><select id="platformTransactionTenant"><option value="">All SACCOs</option>${tenantRows().map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${state.platformTransactionTenant === tenant.id ? "selected" : ""}>${escapeHtml(tenant.name || tenant.id)}</option>`).join("")}</select></label>
+    <label><span>Channel</span><select id="platformTransactionChannel"><option value="">All channels</option>${["manual","cash","bank","mobile_money"].map((channel) => `<option value="${channel}" ${state.platformTransactionChannel === channel ? "selected" : ""}>${escapeHtml(labelize(channel))}</option>`).join("")}</select></label>
+    <label><span>Status</span><select id="platformTransactionStatus"><option value="">All statuses</option><option value="confirmed" ${state.platformTransactionStatus === "confirmed" ? "selected" : ""}>Confirmed</option></select></label>
+    <div class="filter-toolbar-actions"><button class="button primary" type="submit">Apply</button><button class="button ghost" type="button" data-action="clear-platform-transaction-filters">Clear</button><button class="button secondary" type="button" data-action="export-platform-transactions">Export</button></div>
+  </form></section>`;
+}
+
+function exportPlatformTransactions() {
+  const rows = filterPlatformSubscriptionPayments(platformSubscriptionPaymentRows());
+  const headers = ["Received", "SACCO", "Invoice", "Package", "Channel", "Amount", "External Reference", "Verification", "Recorded By"];
+  const csvRows = rows.map((row) => [row.receivedAt || row.createdAt, row.tenantName, row.invoice, row.packageName, row.channel, row.amount, row.externalReference, row.verificationStatus, row.recordedBy]);
+  const csv = [headers, ...csvRows].map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  downloadClientFile(`platform-sacco-transactions-${new Date().toISOString().slice(0, 10)}.csv`, csv, "text/csv;charset=utf-8");
+}
+
+function platformPaymentApprovalsView() {
+  const tab = state.platformPaymentApprovalTab || "pending";
+  const sourceRows = tab === "processed" ? dataRows("platformPaymentApprovalProcessed") : dataRows("platformPaymentApprovalQueue");
+  const summaryData = state.data.platformPaymentApprovalSummary || {};
+  const page = state.pageMeta.platformPaymentApprovalQueue || {};
+  const pageNumber = Number(page.number || 0);
+  const totalPages = Number(page.totalPages || 0);
+  const canDecide = Boolean(summaryData.canDecide) && hasPermission("transactions:approve");
+  const oldest = summaryData.oldestCreatedAt
+    ? platformPaymentApprovalAge(summaryData.oldestCreatedAt)
+    : "Queue clear";
+  const tenants = tenantRows();
+  const tenantMap = new Map(tenants.map((tenant) => [String(tenant.id), tenant]));
+  const rows = sourceRows.filter((transaction) => {
+    const amount = Number(transaction.amount || 0);
+    const amountMatch = !state.platformPaymentApprovalAmount
+      || (state.platformPaymentApprovalAmount === "under_100000" && amount < 100000)
+      || (state.platformPaymentApprovalAmount === "100000_500000" && amount >= 100000 && amount <= 500000)
+      || (state.platformPaymentApprovalAmount === "over_500000" && amount > 500000);
+    return amountMatch && (!state.platformPaymentApprovalTenant || transaction.tenantId === state.platformPaymentApprovalTenant);
+  });
+  const selected = sourceRows.find((transaction) => transaction.id === state.selectedPaymentApprovalId);
+  return `
+    <section class="module-intro payment-approvals-hero">
+      <div class="payment-approvals-hero-icon" aria-hidden="true">▤</div>
+      <div><p class="eyebrow">Financial operations</p><h2>Payment Approvals</h2><p>Manage and authorize member and non-cash payments across all SACCOs.</p></div>
+    </section>
+    <div class="dashboard-grid fleet-approval-kpis payment-approval-kpis">
+      ${summary("Pending Approvals", Number(summaryData.pendingCount || 0).toLocaleString(), "Awaiting your action", "Queue")}
+      ${summary("Mobile Money", Number(summaryData.mobileMoneyCount || 0).toLocaleString(), "Provider-confirmed payments", "Reconcile")}
+      ${summary("Ready for me", Number(summaryData.readyForCurrentUserCount || 0).toLocaleString(), "Excludes transactions you created", "Decide")}
+      ${summary("Pending value", money.format(summaryData.pendingAmount || 0), "Not yet credited", "Control")}
+      ${summary("Oldest item", oldest, "Oldest-first processing", "Priority")}
+    </div>
+    ${state.platformPaymentApprovalMessage ? `<div class="notice compact"><strong>${escapeHtml(state.platformPaymentApprovalMessage)}</strong></div>` : ""}
+    ${state.platformPaymentApprovalError ? `<div class="notice warning"><strong>Payment decision failed.</strong><span>${escapeHtml(state.platformPaymentApprovalError)}</span></div>` : ""}
+    <section class="panel fleet-approval-inbox payment-approval-inbox">
+      <div class="payment-approval-tabs" role="tablist">
+        <button type="button" class="${tab === "pending" ? "active" : ""}" data-payment-approval-tab="pending">Pending <span>${Number(summaryData.pendingCount || 0)}</span></button>
+        <button type="button" class="${tab === "processed" ? "active" : ""}" data-payment-approval-tab="processed">Processed</button>
+      </div>
+      <form id="platformPaymentApprovalFilters" class="approval-inbox-toolbar payment-approval-toolbar">
+        <label><span>Search</span><input id="platformPaymentApprovalSearch" value="${escapeHtml(state.platformPaymentApprovalSearch || "")}" placeholder="SACCO, member, payment or reference" autocomplete="off"></label>
+        <label><span>Channel</span><select id="platformPaymentApprovalChannel"><option value="">All channels</option>${[["mobile_money", "Mobile money"], ["bank", "Bank"], ["cash", "Cash"], ["payroll_deduction", "Payroll deduction"]].map(([value, label]) => `<option value="${value}" ${state.platformPaymentApprovalChannel === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+        <label><span>Amount</span><select id="platformPaymentApprovalAmount"><option value="">All amounts</option><option value="under_100000" ${state.platformPaymentApprovalAmount === "under_100000" ? "selected" : ""}>Under UGX 100,000</option><option value="100000_500000" ${state.platformPaymentApprovalAmount === "100000_500000" ? "selected" : ""}>UGX 100,000–500,000</option><option value="over_500000" ${state.platformPaymentApprovalAmount === "over_500000" ? "selected" : ""}>Over UGX 500,000</option></select></label>
+        <label><span>SACCO</span><select id="platformPaymentApprovalTenant"><option value="">All SACCOs</option>${tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}" ${state.platformPaymentApprovalTenant === tenant.id ? "selected" : ""}>${escapeHtml(tenant.name || tenant.id)}</option>`).join("")}</select></label>
+        <div class="filter-toolbar-actions"><button class="button ghost" type="button" data-action="clear-payment-approval-filters">Clear</button><button class="button primary" type="submit">Apply filters</button></div>
+      </form>
+      <div class="table-wrap"><table class="fleet-approval-table payment-approval-table"><thead><tr><th>#</th><th>Organization (SACCO)</th><th>Member</th><th>Payment</th><th>Amount</th><th>Reference</th><th>${tab === "pending" ? "Requested on" : "Processed on"}</th><th>${tab === "pending" ? "Waiting" : "Status"}</th><th>Actions</th></tr></thead><tbody>
+        ${rows.map((transaction) => {
+          const ownTransaction = String(transaction.makerUserId || "") === String(state.user?.id || "");
+          const tenant = tenantMap.get(String(transaction.tenantId)) || {};
+          return `<tr><td>${rows.indexOf(transaction) + 1}</td><td><strong>${escapeHtml(transaction.tenantName || tenant.name || transaction.tenantId || "-")}</strong><small>${escapeHtml(transaction.tenantCode || tenant.abbreviation || transaction.tenantId || "")}</small></td><td><strong>${escapeHtml(transaction.memberName || transaction.memberId || "-")}</strong><small>${escapeHtml(transaction.membershipNo || transaction.memberId || "")}</small></td><td><strong>${escapeHtml(labelize(transaction.type || "payment"))}</strong><small>${escapeHtml(labelize(transaction.channel || "-"))}</small></td><td><strong>${money.format(transaction.amount || 0)}</strong></td><td><strong>${escapeHtml(transaction.reference || "-")}</strong><small>${escapeHtml(transaction.narration || "")}</small></td><td>${escapeHtml(formatDateTime(tab === "pending" ? transaction.createdAt : transaction.updatedAt))}</td><td>${tab === "pending" ? `<span class="approval-sla ${platformPaymentApprovalAgeClass(transaction.createdAt)}"><strong>${escapeHtml(platformPaymentApprovalAge(transaction.createdAt))}</strong></span>` : `<span class="status ${normal(transaction.status) === "posted" ? "active" : "suspended"}">${escapeHtml(labelize(transaction.status))}</span>`}</td><td>${tab === "pending" ? `<button class="table-action primary" type="button" data-review-payment-approval="${escapeHtml(transaction.id)}">Review</button>${ownTransaction ? `<small>Maker-checker required</small>` : ""}` : `<button class="table-action" type="button" data-review-payment-approval="${escapeHtml(transaction.id)}">View</button>`}</td></tr>`;
+        }).join("") || `<tr><td colspan="9"><div class="empty-state compact"><strong>No payments in this view</strong><span>${tab === "pending" ? "The approval queue is clear" : "No processed payments match"} the selected filters.</span></div></td></tr>`}
+      </tbody></table></div>
+      <footer class="approval-inbox-pager"><span>Page ${pageNumber + 1}${totalPages ? ` of ${totalPages}` : ""} · ${Number(page.totalElements || rows.length).toLocaleString()} matching</span><div><button class="table-action" type="button" data-payment-approval-page="${pageNumber - 1}" ${pageNumber <= 0 ? "disabled" : ""}>Previous</button><button class="table-action" type="button" data-payment-approval-page="${pageNumber + 1}" ${!totalPages || pageNumber + 1 >= totalPages ? "disabled" : ""}>Next</button></div></footer>
+    </section>
+    ${selected ? platformPaymentApprovalReview(selected, canDecide) : ""}`;
+}
+
+function platformPaymentApprovalReview(transaction, canDecide) {
+  const pending = normal(transaction.status) === "pending_approval";
+  const ownTransaction = String(transaction.makerUserId || "") === String(state.user?.id || "");
+  const mobileMoney = normal(transaction.channel) === "mobile_money";
+  const referencePresent = Boolean(String(transaction.reference || "").trim());
+  const decisionAllowed = pending && canDecide && !ownTransaction;
+  return `<section class="panel payment-approval-review" aria-label="Payment approval review">
+    <div class="panel-heading"><div><p class="eyebrow">Payment evidence</p><h2>${escapeHtml(transaction.reference || transaction.id)}</h2><p>Verify the request, supporting reference and control checks before recording a decision.</p></div><button class="table-action" type="button" data-action="close-payment-approval-review">Close</button></div>
+    <div class="payment-review-grid">
+      <div class="payment-review-summary">${mini("SACCO", transaction.tenantName || transaction.tenantId || "-")}${mini("Member", transaction.memberName || transaction.memberId || "-")}${mini("Payment", labelize(transaction.type || "payment"))}${mini("Amount", money.format(transaction.amount || 0))}${mini("Channel", labelize(transaction.channel || "-"))}${mini("Submitted", formatDateTime(transaction.createdAt))}</div>
+      <div class="payment-control-checks"><h3>Control checks</h3><p class="${pending ? "passed" : "recorded"}"><strong>Status:</strong> ${pending ? "Pending decision" : labelize(transaction.status)}</p><p class="${ownTransaction ? "blocked" : "passed"}"><strong>Maker-checker:</strong> ${ownTransaction ? "A different authorized operator must decide" : "Decision maker is independent"}</p><p class="${referencePresent ? "passed" : "blocked"}"><strong>Supporting reference:</strong> ${referencePresent ? escapeHtml(transaction.reference) : "Missing"}</p><p class="${mobileMoney ? "passed" : "recorded"}"><strong>Provider reconciliation:</strong> ${mobileMoney ? "Submitted through the provider-confirmed approval queue" : "Not required for this channel"}</p></div>
+    </div>
+    <div class="payment-review-narration"><strong>Purpose / evidence note</strong><p>${escapeHtml(transaction.narration || "No additional narration supplied.")}</p></div>
+    ${transaction.rejectionReason ? `<div class="notice warning"><strong>Decision reason</strong><span>${escapeHtml(transaction.rejectionReason)}</span></div>` : ""}
+    <div class="form-actions inline">${decisionAllowed ? `<button class="button primary" type="button" data-payment-decision="posted" data-transaction-id="${escapeHtml(transaction.id)}">Approve and post</button><button class="button danger" type="button" data-payment-decision="rejected" data-transaction-id="${escapeHtml(transaction.id)}">Reject payment</button>` : `<span class="status ${pending ? "pending" : "active"}">${pending ? (ownTransaction ? "Maker-checker separation enforced" : "Read-only review") : "Decision recorded in audit trail"}</span>`}</div>
+  </section>`;
+}
+
+function platformPaymentApprovalAge(createdAt) {
+  const created = new Date(createdAt || "").getTime();
+  if (!Number.isFinite(created)) return "Age unavailable";
+  const hours = Math.max(0, (Date.now() - created) / 3600000);
+  if (hours < 1) return `${Math.max(1, Math.floor(hours * 60))} min`;
+  if (hours < 24) return `${Math.floor(hours)}h`;
+  return `${Math.floor(hours / 24)}d ${Math.floor(hours % 24)}h`;
+}
+
+function platformPaymentApprovalAgeClass(createdAt) {
+  const created = new Date(createdAt || "").getTime();
+  if (!Number.isFinite(created)) return "within_sla";
+  const hours = (Date.now() - created) / 3600000;
+  return hours >= 24 ? "breached" : hours >= 4 ? "due_soon" : "within_sla";
 }
 
 function platformSubscriptionTransactionRows() {
@@ -72,18 +248,18 @@ function platformTransactionFormPanel(rows) {
   const due = Math.max(0, Number(selected.amount || 0) - Number(selected.paid || 0));
   const searchValue = platformTransactionSearchLabel(selected);
   return `
-    <section class="panel">
+    <section class="panel platform-transaction-form-panel">
       <div class="panel-heading">
         <div>
           <h2>Record platform-SACCO transaction</h2>
           <p>Capture subscription, renewal or service payments between the platform and a SACCO. These are not SACCO member transactions.</p>
         </div>
       </div>
-      ${state.selectedSubscriptionMessage ? `<div class="notice compact"><strong>${escapeHtml(state.selectedSubscriptionMessage)}</strong></div>` : ""}
-      ${state.selectedSubscriptionError ? `<div class="notice warning"><strong>Transaction failed.</strong><span>${escapeHtml(state.selectedSubscriptionError)}</span></div>` : ""}
-      <form id="subscriptionPaymentForm" class="form-grid">
+      ${state.platformTransactionMessage ? `<div class="notice compact"><strong>${escapeHtml(state.platformTransactionMessage)}</strong></div>` : ""}
+      ${state.platformTransactionError ? `<div class="notice warning"><strong>Transaction failed.</strong><span>${escapeHtml(state.platformTransactionError)}</span></div>` : ""}
+      <form id="subscriptionPaymentForm" class="form-grid platform-transaction-form">
         <label>
-          <span>Search SACCO</span>
+          <span>SACCO</span>
           <input id="platformTransactionSaccoSearch" list="platformTransactionSaccoOptions" value="${escapeHtml(searchValue)}" placeholder="Type SACCO name, 4-letter code or invoice" autocomplete="off" ${canManage ? "" : "disabled"}>
           <datalist id="platformTransactionSaccoOptions">
             ${platformTransactionSearchOptions(rows).map((option) => `<option value="${escapeHtml(option.label)}"></option>`).join("")}
@@ -96,16 +272,18 @@ function platformTransactionFormPanel(rows) {
         <label><span>Transaction type</span><select id="platformTransactionType" ${canManage ? "" : "disabled"}><option value="subscription_payment">Subscription payment</option><option value="subscription_renewal">Subscription renewal</option><option value="platform_service_fee">Platform service fee</option></select></label>
         <label><span>Payment amount</span><input id="subscriptionPaymentAmount" type="number" min="1" step="1" value="${due || selected.amount || 0}" ${canManage ? "" : "disabled"}></label>
         <label><span>Payment channel</span><select id="subscriptionPaymentChannel" ${canManage ? "" : "disabled"}><option value="manual">Manual</option><option value="cash">Cash</option><option value="bank">Bank</option><option value="mobile_money">Mobile money</option></select></label>
+        <label id="subscriptionPaymentProviderWrap" class="hidden"><span>Mobile-money network</span><select id="subscriptionPaymentProvider" ${canManage ? "" : "disabled"}><option value="mtn">MTN MoMo</option><option value="airtel">Airtel Money</option></select></label>
+        <label id="subscriptionPaymentPhoneWrap" class="hidden"><span>Mobile number</span><input id="subscriptionPaymentPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="0772 123 456" ${canManage ? "" : "disabled"}></label>
         <label><span>External reference</span><input id="subscriptionPaymentReference" placeholder="Bank slip, mobile money or manual reference" ${canManage ? "" : "disabled"}></label>
         <input id="subscriptionPaymentMode" type="hidden" value="group">
         <input id="subscriptionPaymentMemberSlots" type="hidden" value="">
-        <div class="source-grid wide">
+        <div class="source-grid wide platform-invoice-summary">
           ${mini("SACCO", selected.tenantName || selected.tenantId)}
           ${mini("Invoice", selected.invoice || selected.id)}
           ${mini("Package", selected.packageName || selected.packageId)}
           ${mini("Balance due", money.format(due))}
         </div>
-        <div class="form-actions inline">${canManage ? `<button class="button primary" type="submit">Record platform-SACCO payment</button>` : `<span class="status pending">View only</span>`}</div>
+        <div class="form-actions inline"><button class="button ghost" type="reset" data-action="clear-platform-transaction-form">Clear</button>${canManage ? `<button class="button primary" type="submit">Record payment</button>` : `<span class="status pending">View only</span>`}</div>
       </form>
     </section>
   `;
@@ -136,8 +314,7 @@ function resolvePlatformTransactionSearch(value, rows = platformSubscriptionTran
 }
 
 function openPlatformTransactionDetail(subscriptionId) {
-  state.selectedSubscriptionId = subscriptionId;
-  state.platformTransactionSubscriptionId = subscriptionId;
+  state.selectedPlatformTransactionId = subscriptionId;
   state.moduleTabs.transactions = "detail";
   state.selectedSubscriptionMessage = "";
   state.selectedSubscriptionError = "";
@@ -145,10 +322,13 @@ function openPlatformTransactionDetail(subscriptionId) {
 }
 
 function platformTransactionDetailPanel(rows) {
-  const row = platformSelectedSubscription(rows);
+  const row = rows.find((item) => item.id === state.selectedPlatformTransactionId);
   if (!row) return "";
-  state.selectedSubscriptionId = row.id;
-  return subscriptionDetailPanel(rows);
+  const related = rows.filter((item) => item.subscriptionId === row.subscriptionId);
+  return `<section class="panel platform-transaction-detail-panel"><div class="panel-heading"><div><p class="eyebrow">Payment evidence</p><h2>${escapeHtml(row.externalReference || row.receiptNo)}</h2><p>${escapeHtml(row.tenantName)} · ${escapeHtml(row.invoice)}</p></div><span class="status active">${escapeHtml(row.verificationStatus)}</span></div>
+    <div class="source-grid">${mini("SACCO", row.tenantName)}${mini("Package", row.packageName)}${mini("Amount", money.format(row.amount || 0))}${mini("Channel", labelize(row.channel))}${mini("Received", formatDateTime(row.receivedAt || row.createdAt))}${mini("Recorded by", row.recordedBy)}</div>
+    <div class="transaction-evidence-grid"><div><h3>Verification and receipt</h3><p><strong>Status:</strong> ${escapeHtml(row.verificationStatus)}</p><p><strong>External reference:</strong> ${escapeHtml(row.externalReference || "Not supplied")}</p><p><strong>Receipt:</strong> ${escapeHtml(row.receiptNo)}</p><p><strong>Approval:</strong> Authorized platform recorder</p></div><div><h3>Payment history</h3><ul class="activity-list">${related.map((payment) => `<li><strong>${escapeHtml(money.format(payment.amount || 0))} · ${escapeHtml(labelize(payment.channel))}</strong><span>${escapeHtml(payment.externalReference || payment.receiptNo)}</span><em>${escapeHtml(formatDateTime(payment.receivedAt || payment.createdAt))}</em></li>`).join("")}</ul></div></div>
+  </section>`;
 }
 
 function transactionControlFocusPanel(overview, receiptingQueue, receiptRegister) {

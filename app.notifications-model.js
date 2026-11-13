@@ -7,6 +7,7 @@ function buildNotificationDeliveryRows(input) {
       tenantName: input.tenantName(String(delivery.tenantId || "")),
       memberName: delivery.memberId ? input.memberName(String(delivery.memberId)) : delivery.userId ? input.userName(String(delivery.userId)) : "SACCO broadcast",
       event: delivery.eventType ? input.labelize(delivery.eventType) : String(delivery.title || "Notification"),
+      message: String(delivery.message || delivery.body || delivery.title || ""),
       resource: delivery.resourceType ? `${input.labelize(delivery.resourceType)} ${delivery.resourceId || ""}`.trim() : "-",
       alertStatus: delivery.readAt ? "acknowledged" : delivery.notificationStatus || delivery.status,
       deliveryStatus: String(delivery.status || "pending"),
@@ -88,7 +89,7 @@ function uniqueUnreadNotificationIds(deliveries) {
 function notificationDeliveryActionFor(delivery, canManageNotifications) {
   if (normalizeNotificationModelText(delivery.status).includes("failed") && canManageNotifications) return "notification-retry";
   if (delivery.notificationId && !delivery.readAt) return "notification-acknowledge";
-  return "none";
+  return "notification-detail";
 }
 
 function notificationEventOptions(extra = "") {

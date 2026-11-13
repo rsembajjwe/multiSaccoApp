@@ -5,6 +5,7 @@ import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.api.PageParams;
 import com.methaltech.sacco.api.PagedResponse;
 import com.methaltech.sacco.accounting.AccountingPeriodService;
+import com.methaltech.sacco.accounting.MobileMoneyFinancialDecisionService;
 import com.methaltech.sacco.branch.Branch;
 import com.methaltech.sacco.branch.BranchRepository;
 import com.methaltech.sacco.identity.AuditService;
@@ -34,6 +35,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -79,6 +81,8 @@ class FinancialTransactionController {
             "reference",
             "postingDate",
             "narration");
+    private static final List<String> SAVINGS_IMPORT_HEADERS = List.of(
+            "membershipNo", "amount", "postingDate", "reference", "channel", "narration");
 
     private final FinancialTransactionRepository transactionRepository;
     private final MemberRepository memberRepository;
@@ -94,6 +98,8 @@ class FinancialTransactionController {
     private final FundTypeRepository fundTypeRepository;
     private final NotificationService notificationService;
     private final SubscriptionAccessService subscriptionAccessService;
+    private final MobileMoneyFinancialDecisionService mobileMoneyFinancialDecisionService;
+    private final TreasuryCashPostingService treasuryCashPostingService;
 
     FinancialTransactionController(
             FinancialTransactionRepository transactionRepository,
@@ -109,7 +115,9 @@ class FinancialTransactionController {
             com.methaltech.sacco.member.MemberFundBalanceService memberFundBalanceService,
             FundTypeRepository fundTypeRepository,
             NotificationService notificationService,
-            SubscriptionAccessService subscriptionAccessService) {
+            SubscriptionAccessService subscriptionAccessService,
+            MobileMoneyFinancialDecisionService mobileMoneyFinancialDecisionService,
+            TreasuryCashPostingService treasuryCashPostingService) {
         this.transactionRepository = transactionRepository;
         this.memberRepository = memberRepository;
         this.branchRepository = branchRepository;
@@ -124,6 +132,8 @@ class FinancialTransactionController {
         this.fundTypeRepository = fundTypeRepository;
         this.notificationService = notificationService;
         this.subscriptionAccessService = subscriptionAccessService;
+        this.mobileMoneyFinancialDecisionService = mobileMoneyFinancialDecisionService;
+        this.treasuryCashPostingService = treasuryCashPostingService;
     }
 
     /** A custom contribution type ({@code <fundCode>_contribution}) whose fund is configured and active. */
@@ -279,6 +289,27 @@ class FinancialTransactionController {
             if (postingCheck != null) return postingCheck;
         }
         transaction = transactionRepository.save(transaction);
+        if (cashTransaction) {
+            if ("withdrawal".equals(type)) {
+                treasuryCashPostingService.recordMemberPayout(
+                        tenantId,
+                        member.getId(),
+                        amount,
+                        reference,
+                        "Member withdrawal - " + member.getFullName(),
+                        currentSession.user(),
+                        request.getRemoteAddr());
+            } else {
+                treasuryCashPostingService.recordCollection(
+                        tenantId,
+                        member.getId(),
+                        amount,
+                        reference,
+                        type.replace('_', ' ') + " - " + member.getFullName(),
+                        currentSession.user(),
+                        request.getRemoteAddr());
+            }
+        }
 
         auditService.record(
                 tenantId,
@@ -289,6 +320,76 @@ class FinancialTransactionController {
                 request.getRemoteAddr());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(FinancialTransactionResponse.from(transaction)));
+    }
+
+    @GetMapping("/approval-queue")
+    ResponseEntity<?> platformApprovalQueue(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String tenantId,
+            @RequestParam(name = "channel", required = false) String channel,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())) return tenantAccessDenied();
+        if (!authService.hasPermission(currentSession.user(), "transactions:view")) {
+            return authService.permissionRequired("transactions:view");
+        }
+
+        String channelFilter = searchTerm(channel);
+        if (channelFilter != null && !ALLOWED_CHANNELS.contains(channelFilter)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_CHANNEL", "Unsupported payment channel."));
+        }
+        String tenantFilter = searchTerm(tenantId);
+        if (tenantFilter != null && tenantService.findById(tenantFilter).isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_TENANT", "Organization does not exist."));
+        }
+
+        Pageable pageable = PageParams.toPageable(
+                page,
+                size,
+                Sort.by(Sort.Direction.ASC, "createdAt").and(Sort.by(Sort.Direction.ASC, "id")));
+        Page<FinancialTransaction> result = transactionRepository.findPlatformApprovalQueue(
+                tenantFilter,
+                channelFilter,
+                approvalSearchTerm(search),
+                pageable);
+        Set<String> tenantIds = result.getContent().stream().map(FinancialTransaction::getTenantId).collect(java.util.stream.Collectors.toSet());
+        Map<String, TenantResponse> tenants = tenantService.findByIds(tenantIds);
+        Map<String, Member> members = new HashMap<>();
+        memberRepository.findAllById(result.getContent().stream().map(FinancialTransaction::getMemberId).toList())
+                .forEach(member -> members.put(member.getId(), member));
+        List<PlatformFinancialApprovalResponse> items = result.getContent().stream()
+                .map(transaction -> PlatformFinancialApprovalResponse.from(
+                        transaction,
+                        tenants.get(transaction.getTenantId()),
+                        members.get(transaction.getMemberId())))
+                .toList();
+        return ResponseEntity.ok(PagedResponse.of(
+                items, result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages()));
+    }
+
+    @GetMapping("/approval-summary")
+    ResponseEntity<?> platformApprovalSummary(
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())) return tenantAccessDenied();
+        if (!authService.hasPermission(currentSession.user(), "transactions:view")) {
+            return authService.permissionRequired("transactions:view");
+        }
+
+        String pending = "pending_approval";
+        return ResponseEntity.ok(ApiResponse.of(new PlatformFinancialApprovalSummary(
+                transactionRepository.countByStatus(pending),
+                transactionRepository.countByStatusAndChannel(pending, "mobile_money"),
+                transactionRepository.countByStatusAndMakerUserIdNot(pending, currentSession.user().getId()),
+                transactionRepository.sumAmountByStatus(pending),
+                transactionRepository.oldestCreatedAtByStatus(pending),
+                authService.hasPermission(currentSession.user(), "transactions:approve"))));
     }
 
     private ResponseEntity<?> memberDepositAccessCheck(Member member) {
@@ -400,6 +501,64 @@ class FinancialTransactionController {
                 created.stream().map(FinancialTransactionResponse::from).toList())));
     }
 
+    @GetMapping("/savings/import-template")
+    ResponseEntity<?> savingsImportTemplate(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiErrorResponse.of(401, "AUTH_REQUIRED", "A valid bearer token is required."));
+        if (!authService.hasPermission(currentSession.user(), "transactions:create")) {
+            return authService.permissionRequired("transactions:create");
+        }
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+        Member sampleMember = memberRepository.findFirstByTenantIdOrderByMembershipNoAsc(tenantId).orElse(null);
+        SavingsImportRow sample = new SavingsImportRow(
+                sampleMember == null ? "" : sampleMember.getMembershipNo(),
+                "50000", LocalDate.now().toString(), sampleMember == null ? "SAV-SAMPLE-001" : "SAV-" + sampleMember.getMembershipNo(),
+                "cash", "Bulk savings deposit import");
+        return ResponseEntity.ok(ApiResponse.of(new SavingsImportTemplateResponse(
+                tenantId, "savings-import-template-" + tenantId + ".csv", "text/csv", SAVINGS_IMPORT_HEADERS,
+                List.of(sample), savingsCsvTemplate(List.of(sample)))));
+    }
+
+    @PostMapping("/savings/import")
+    @Transactional
+    ResponseEntity<?> importSavingsDeposits(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody SavingsImportRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "transactions:create")) {
+            return authService.permissionRequired("transactions:create");
+        }
+        String tenantId = tenantScope(currentSession, body.tenantId());
+        if (tenantId == null) return tenantAccessDenied();
+        List<SavingsImportRow> rows = body.rows() == null ? List.of() : body.rows();
+        boolean dryRun = body.dryRun() == null || body.dryRun();
+        List<SavingsImportError> errors = validateSavingsRows(currentSession, tenantId, rows);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.ok(ApiResponse.of(new SavingsImportResult(tenantId, dryRun, false, rows.size(), 0, rows.size(), errors, List.of())));
+        }
+        if (dryRun) {
+            return ResponseEntity.ok(ApiResponse.of(new SavingsImportResult(tenantId, true, true, rows.size(), 0, 0, List.of(), List.of())));
+        }
+        List<FinancialTransaction> created = new ArrayList<>();
+        for (SavingsImportRow row : rows) {
+            Member member = memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCase(tenantId, row.membershipNo().trim()).orElseThrow();
+            created.add(transactionRepository.save(new FinancialTransaction(
+                    "txn_" + UUID.randomUUID(), tenantId, member.getBranchId(), member.getId(), "savings_deposit",
+                    row.channel().trim(), Money.parse(row.amount()), row.reference().trim(),
+                    row.narration() == null ? "Bulk savings deposit import" : row.narration().trim(), currentSession.user().getId())));
+        }
+        auditService.record(tenantId, currentSession.user(), "Imported " + rows.size() + " bulk savings deposits", "savings_import", tenantId, request.getRemoteAddr());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(new SavingsImportResult(
+                tenantId, false, true, rows.size(), created.size(), 0, List.of(),
+                created.stream().map(FinancialTransactionResponse::from).toList())));
+    }
+
     @GetMapping("/{transactionId}/receipt")
     ResponseEntity<?> getReceipt(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -507,6 +666,10 @@ class FinancialTransactionController {
         }
 
         FinancialTransaction saved = transactionRepository.save(transaction);
+        if ("mobile_money".equals(saved.getChannel())) {
+            mobileMoneyFinancialDecisionService.synchronize(
+                    saved.getTenantId(), saved.getId(), saved.getStatus(), saved.getRejectionReason());
+        }
         auditService.record(
                 saved.getTenantId(),
                 currentSession.user(),
@@ -930,6 +1093,76 @@ class FinancialTransactionController {
         return "\"" + value.replace("\"", "\"\"") + "\"";
     }
 
+    private List<SavingsImportError> validateSavingsRows(
+            AuthService.CurrentSession currentSession, String tenantId, List<SavingsImportRow> rows) {
+        List<SavingsImportError> errors = new ArrayList<>();
+        if (rows.isEmpty()) {
+            errors.add(new SavingsImportError(0, "rows", "IMPORT_EMPTY", "At least one savings row is required."));
+            return errors;
+        }
+        if (rows.size() > 500) {
+            errors.add(new SavingsImportError(0, "rows", "IMPORT_TOO_LARGE", "A single savings import cannot exceed 500 rows."));
+            return errors;
+        }
+        Set<String> references = new HashSet<>();
+        for (int index = 0; index < rows.size(); index++) {
+            int rowNumber = index + 1;
+            SavingsImportRow row = rows.get(index);
+            Member member = row.membershipNo() == null ? null
+                    : memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCase(tenantId, row.membershipNo().trim()).orElse(null);
+            if (member == null) {
+                errors.add(new SavingsImportError(rowNumber, "membershipNo", "INVALID_MEMBER", "Member does not exist for this tenant."));
+                continue;
+            }
+            if (!canAccessBranch(currentSession, tenantId, member.getBranchId())) {
+                errors.add(new SavingsImportError(rowNumber, "membershipNo", "BRANCH_ACCESS_DENIED", "Member is outside your branch scope."));
+            }
+            ResponseEntity<?> depositAccess = memberDepositAccessCheck(member);
+            if (depositAccess != null) {
+                errors.add(new SavingsImportError(rowNumber, "membershipNo", "DEPOSIT_ACCESS_DENIED", "Member is not allowed to receive deposits."));
+            }
+            BigDecimal amount;
+            try {
+                amount = Money.parse(row.amount());
+                if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new NumberFormatException();
+            } catch (NumberFormatException error) {
+                errors.add(new SavingsImportError(rowNumber, "amount", "INVALID_AMOUNT", "Savings amount must be greater than zero."));
+                amount = BigDecimal.ZERO;
+            }
+            if (row.reference() == null || row.reference().isBlank()) {
+                errors.add(new SavingsImportError(rowNumber, "reference", "REQUIRED", "A unique transaction reference is required."));
+            } else {
+                String reference = row.reference().trim();
+                if (!references.add(reference.toUpperCase(Locale.ROOT))) {
+                    errors.add(new SavingsImportError(rowNumber, "reference", "DUPLICATE_REFERENCE_IN_FILE", "Reference is repeated in this import."));
+                }
+                if (transactionRepository.existsByTenantIdAndReferenceIgnoreCase(tenantId, reference)) {
+                    errors.add(new SavingsImportError(rowNumber, "reference", "REFERENCE_EXISTS", "Reference already exists."));
+                }
+            }
+            if (row.channel() == null || !ALLOWED_CHANNELS.contains(row.channel().trim())) {
+                errors.add(new SavingsImportError(rowNumber, "channel", "INVALID_PAYMENT_CHANNEL", "Use mobile_money, cash, bank, or payroll_deduction."));
+            }
+            if (row.postingDate() != null && !row.postingDate().isBlank()) {
+                try {
+                    Instant postingDate = LocalDate.parse(row.postingDate().trim()).atStartOfDay(ZoneOffset.UTC).toInstant();
+                    if (periodService.isClosed(tenantId, postingDate)) {
+                        errors.add(new SavingsImportError(rowNumber, "postingDate", "ACCOUNTING_PERIOD_CLOSED", "Posting date falls in a closed accounting period."));
+                    }
+                } catch (DateTimeParseException error) {
+                    errors.add(new SavingsImportError(rowNumber, "postingDate", "INVALID_DATE", "Posting date must use YYYY-MM-DD format."));
+                }
+            }
+        }
+        return errors;
+    }
+
+    private String savingsCsvTemplate(List<SavingsImportRow> rows) {
+        return String.join(",", SAVINGS_IMPORT_HEADERS) + "\n" + rows.stream()
+                .map(row -> String.join(",", csv(row.membershipNo()), csv(row.amount()), csv(row.postingDate()), csv(row.reference()), csv(row.channel()), csv(row.narration())))
+                .collect(java.util.stream.Collectors.joining("\n")) + "\n";
+    }
+
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
         String tenantId = requestedTenantId == null || requestedTenantId.isBlank()
                 ? currentSession.user().getTenantId()
@@ -980,6 +1213,11 @@ class FinancialTransactionController {
         return value.trim();
     }
 
+    static String approvalSearchTerm(String value) {
+        if (value == null || value.isBlank()) return "";
+        return value.trim();
+    }
+
     private String searchable(String... values) {
         return String.join(" ", java.util.Arrays.stream(values)
                 .map(value -> value == null ? "" : value)
@@ -1006,6 +1244,15 @@ class FinancialTransactionController {
     }
 
     record UpdateTransactionStatusRequest(@NotBlank String status, String reason) {
+    }
+
+    record PlatformFinancialApprovalSummary(
+            long pendingCount,
+            long mobileMoneyCount,
+            long readyForCurrentUserCount,
+            BigDecimal pendingAmount,
+            Instant oldestCreatedAt,
+            boolean canDecide) {
     }
 
     record ReverseTransactionRequest(@NotBlank @Size(min = 8, max = 240) String reason) {
@@ -1052,5 +1299,20 @@ class FinancialTransactionController {
             int skippedCount,
             List<OpeningBalanceImportError> errors,
             List<FinancialTransactionResponse> createdTransactions) {
+    }
+
+    record SavingsImportTemplateResponse(String tenantId, String filename, String contentType, List<String> headers, List<SavingsImportRow> sampleRows, String csv) {
+    }
+
+    record SavingsImportRequest(String tenantId, Boolean dryRun, List<SavingsImportRow> rows) {
+    }
+
+    record SavingsImportRow(String membershipNo, String amount, String postingDate, String reference, String channel, String narration) {
+    }
+
+    record SavingsImportError(int row, String field, String code, String message) {
+    }
+
+    record SavingsImportResult(String tenantId, boolean dryRun, boolean valid, int totalRows, int createdCount, int skippedCount, List<SavingsImportError> errors, List<FinancialTransactionResponse> createdTransactions) {
     }
 }

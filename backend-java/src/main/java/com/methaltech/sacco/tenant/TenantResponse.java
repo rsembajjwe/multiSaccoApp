@@ -1,5 +1,6 @@
 package com.methaltech.sacco.tenant;
 
+import java.time.Instant;
 import java.time.LocalDate;
 
 public record TenantResponse(
@@ -20,7 +21,11 @@ public record TenantResponse(
         boolean mobileMoneyCollectionActive,
         boolean bankCollectionActive,
         boolean mobileMoneyCollectionAvailable,
-        boolean bankCollectionAvailable) {
+        boolean bankCollectionAvailable,
+        Instant createdAt,
+        Instant updatedAt,
+        String accountManagerUserId,
+        String accountManagerName) {
 
     public static TenantResponse from(Tenant tenant) {
         return new TenantResponse(
@@ -41,6 +46,10 @@ public record TenantResponse(
                 tenant.isMobileMoneyCollectionActive(),
                 tenant.isBankCollectionActive(),
                 tenant.mobileMoneyCollectionAvailable(),
-                tenant.bankCollectionAvailable());
+                tenant.bankCollectionAvailable(),
+                tenant.getCreatedAt(),
+                tenant.getUpdatedAt(),
+                tenant.getAccountManagerUserId(),
+                tenant.getAccountManagerName());
     }
 }

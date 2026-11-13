@@ -134,6 +134,7 @@ for (const file of [
   "app.core.js",
   "app.api.js",
   "app.ui.js",
+  "app.charts.js",
   "app.table-model.js",
   "app.tables.js",
   "app.auth.js",
@@ -143,6 +144,7 @@ for (const file of [
   "app.shell.js",
   "app.navigation.js",
   "app.registration.js",
+  "app.billing.js",
   "app.transactions.js",
   "app.loans.js",
   "app.sacco-finance.js",
@@ -151,6 +153,7 @@ for (const file of [
   "app.governance.js",
   "app.operations.js",
   "app.reporting.js",
+  "app.platform.js",
   "app.settings.js",
   "app.session.js",
   "app.users.js",
@@ -159,11 +162,107 @@ for (const file of [
   vm.runInContext(await readFile(file, "utf8"), sandbox, { filename: file });
 }
 
+assert.deepEqual(
+  Array.from(sandbox.platformSubscriptionRenewalMonthlyCounts([
+    { renewedAt: "2026-02-03T10:00:00.000Z" },
+    { renewalDate: "2026-02-28" },
+    { lastRenewedAt: "2026-11-01T08:00:00.000Z" },
+    { renewedAt: "2025-02-03T10:00:00.000Z" },
+    {}
+  ], 2026)),
+  [0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0]
+);
+const approvalInboxHtml = sandbox.platformFleetApprovalsView();
+assert.match(approvalInboxHtml, /Approval Inbox/);
+assert.match(approvalInboxHtml, /Ready for me/);
+assert.match(approvalInboxHtml, /Search approvals/);
+assert.match(approvalInboxHtml, /Request type/);
+const approvalReviewHtml = sandbox.fleetApprovalReviewPanel({
+  id: "fleet_job_review",
+  requestedBy: "another_user",
+  requestedByName: "Operations Officer",
+  requestedCount: 2,
+  requestType: "Portfolio change",
+  requestReason: "Reassign portfolio ownership",
+  createdAt: "2026-11-06T08:00:00.000Z",
+  ageHours: 1,
+  sla: "within_sla"
+}, "platform_admin", true);
+assert.match(approvalReviewHtml, /Return for correction/);
+assert.match(approvalReviewHtml, /Supporting documents/);
+assert.match(approvalReviewHtml, /Approval history/);
+
+sandbox.state.data.platformPaymentApprovalQueue = [{
+  id: "payment_review_1", tenantId: "tenant_green", tenantName: "Green Valley SACCO",
+  memberId: "member_1", memberName: "Amina Nakitende", type: "welfare_contribution",
+  channel: "bank", amount: 60000, status: "pending_approval", reference: "GREE-TX-0003",
+  narration: "Welfare contribution awaiting approval", makerUserId: "another_user",
+  createdAt: "2026-11-06T08:00:00.000Z"
+}];
+sandbox.state.data.platformPaymentApprovalSummary = { pendingCount: 1, readyForCurrentUserCount: 1, pendingAmount: 60000, canDecide: true };
+const paymentApprovalsHtml = sandbox.platformPaymentApprovalsView();
+assert.match(paymentApprovalsHtml, /Payment Approvals/);
+assert.match(paymentApprovalsHtml, /Pending Approvals/);
+assert.match(paymentApprovalsHtml, /data-review-payment-approval/);
+const paymentReviewHtml = sandbox.platformPaymentApprovalReview(sandbox.state.data.platformPaymentApprovalQueue[0], true);
+assert.match(paymentReviewHtml, /Maker-checker/);
+assert.match(paymentReviewHtml, /Approve and post/);
+assert.match(paymentReviewHtml, /Supporting reference/);
+
+sandbox.state.data.subscriptions = [{ id: "sub_renew_1", tenantId: "tenant_green", packageName: "Starter", status: "expiring", daysToExpiry: 9, expiry: "2026-11-15", amount: 100000, paid: 0 }];
+sandbox.state.data.tenants = [{ id: "tenant_green", name: "Green Valley SACCO", abbreviation: "GREE", status: "active" }];
+const subscriptionControlHtml = sandbox.subscriptionsView();
+assert.match(subscriptionControlHtml, /Subscription control/);
+assert.match(subscriptionControlHtml, /Revenue overview/);
+assert.match(subscriptionControlHtml, /SACCOs Expiring Soon/);
+assert.match(subscriptionControlHtml, /subscription-renewal/);
+assert.equal(sandbox.subscriptionRenewalDialog(sandbox.state.data.subscriptions), "");
+sandbox.state.selectedSubscriptionRenewalId = "sub_renew_1";
+const selectedSubscriptionRenewalHtml = sandbox.subscriptionRenewalDialog(sandbox.state.data.subscriptions);
+assert.match(selectedSubscriptionRenewalHtml, /subscriptionRenewalForm/);
+assert.match(selectedSubscriptionRenewalHtml, /payment evidence and amount/);
+assert.match(selectedSubscriptionRenewalHtml, /Administrative override reason/);
+sandbox.state.selectedSubscriptionRenewalId = "";
+
+sandbox.state.data.subscriptionPayments = [{ id: "subpay_1", subscriptionId: "sub_renew_1", tenantId: "tenant_green", amount: 100000, channel: "bank", externalReference: "BANK-001", recordedByUserId: "user_admin", receivedAt: "2026-11-06T12:00:00.000Z" }];
+sandbox.state.data.users = [{ id: "user_admin", fullName: "Platform Administrator" }];
+const platformPaymentRows = sandbox.platformSubscriptionPaymentRows();
+assert.equal(platformPaymentRows.length, 1);
+assert.equal(platformPaymentRows[0].tenantName, "Green Valley SACCO");
+assert.equal(platformPaymentRows[0].verificationStatus, "Reference recorded");
+assert.equal(platformPaymentRows[0].recordedBy, "Platform Administrator");
+const redesignedPlatformTransactionsHtml = sandbox.platformTransactionsView();
+assert.match(redesignedPlatformTransactionsHtml, /Platform-SACCO transactions/);
+assert.match(redesignedPlatformTransactionsHtml, /Total recorded payments/);
+assert.match(redesignedPlatformTransactionsHtml, /subscriptionPaymentForm/);
+assert.match(redesignedPlatformTransactionsHtml, /External reference/);
+sandbox.state.selectedPlatformTransactionId = "subpay_1";
+const platformTransactionDetailHtml = sandbox.platformTransactionDetailPanel(platformPaymentRows);
+assert.match(platformTransactionDetailHtml, /Verification and receipt/);
+assert.match(platformTransactionDetailHtml, /Payment history/);
+assert.match(platformTransactionDetailHtml, /Platform Administrator/);
+sandbox.state.selectedPlatformTransactionId = "";
+
 const rows = [
   { id: "row_1", fullName: "Amina Naki", membershipNo: "GREE-0001", savings: 10000, action: "member-detail", actionLabel: "Open", actionId: "row_1" },
   { id: "row_2", fullName: "Brian Kato", membershipNo: "GREE-0002", savings: 20000 },
   { id: "row_3", fullName: "Charles & Sons", membershipNo: "GREE-0003", savings: 30000 }
 ];
+
+assert.match(sandbox.fleetJobRecoveryStatus({ recoveryCount: 0 }), /Not required/);
+assert.match(sandbox.fleetJobRecoveryStatus({ recoveryCount: 1, lastRecoveredAt: "2026-08-08T10:00:00.000Z" }), /Recovered 1 time/);
+assert.match(sandbox.fleetJobRecoveryStatus({ recoveryCount: 2, lastRecoveredAt: "2026-08-08T10:00:00.000Z" }), /Recovered 2 times/);
+const recoveredJobMonitorHtml = sandbox.fleetBulkJobMonitor([{
+  id: "job_recovered",
+  status: "completed",
+  recoveryCount: 1,
+  lastRecoveredAt: "2026-08-08T10:00:00.000Z",
+  requestedCount: 2,
+  succeededCount: 2,
+  failedCount: 0
+}]);
+assert.match(recoveredJobMonitorHtml, /<th>Recovery<\/th>/);
+assert.match(recoveredJobMonitorHtml, /Recovered 1 time/);
 
 assert.equal(sandbox.tableStateKey("Member Directory / Active"), "member-directory-active");
 assert.equal(sandbox.filterRecordRows(rows, "kato").length, 1);
@@ -220,6 +319,7 @@ sandbox.refreshMember = async () => {
 const response = (ok, status, payload) => ({
   ok,
   status,
+  headers: { get: () => null },
   json: async () => payload
 });
 
@@ -397,7 +497,7 @@ assertVisibleModulesForRole({
     roleNames: ["Platform Billing Officer"],
     permissionIds: ["dashboard:view", "tenants:view", "subscriptions:view", "reports:view", "operations:view"]
   },
-  expected: ["dashboard", "sacco-applications", "subscriptions", "sacco-accounts"],
+  expected: ["dashboard", "sacco-applications", "subscriptions"],
   forbidden: ["transactions", "users", "settings"]
 });
 
@@ -409,7 +509,7 @@ assertVisibleModulesForRole({
     roleNames: ["Platform Compliance Officer"],
     permissionIds: ["dashboard:view", "tenants:view", "transactions:view", "accounting:view", "reports:view", "operations:view", "approvals:view"]
   },
-  expected: ["dashboard", "sacco-applications", "sacco-accounts", "audit"],
+  expected: ["dashboard", "sacco-applications", "audit"],
   forbidden: ["subscriptions", "transactions", "users", "settings"]
 });
 
@@ -464,7 +564,7 @@ assert.match(superAdminAddUserHtml, /Platform Super Admin/);
 
 sandbox.state.userAdminTab = "list";
 const superAdminUserListHtml = sandbox.usersView();
-assert.match(superAdminUserListHtml, /Platform administrator list/);
+assert.match(superAdminUserListHtml, /Administrator list/);
 assert.match(superAdminUserListHtml, /2 record\(s\)/);
 assert.match(superAdminUserListHtml, /admin@platform.local/);
 assert.match(superAdminUserListHtml, /billing@platform.local/);
@@ -525,7 +625,7 @@ sandbox.state.data.subscriptionPackages = [
 ];
 sandbox.state.saccoRegistrationTab = "platform";
 const platformRegistrationHtml = sandbox.saccoApplications();
-assert.match(platformRegistrationHtml, /Register SACCO inside platform/);
+assert.match(platformRegistrationHtml, /Register SACCO/);
 assert.match(platformRegistrationHtml, /id="platformSaccoForm"/);
 assert.match(platformRegistrationHtml, /id="newTenantCode" readonly/);
 assert.match(platformRegistrationHtml, /id="newTenantDistrict"/);
@@ -536,9 +636,25 @@ assert.match(platformRegistrationHtml, /id="newTenantMemberRange"/);
 assert.match(platformRegistrationHtml, /20 to 250 members/);
 assert.match(platformRegistrationHtml, /251 to 500 members/);
 assert.match(platformRegistrationHtml, /id="newTenantPaymentStatus"/);
-assert.match(platformRegistrationHtml, /Paid - activate SACCO/);
-assert.match(platformRegistrationHtml, /Not paid - activate one-month setup trial/);
+assert.match(platformRegistrationHtml, /SACCO Information/);
+assert.match(platformRegistrationHtml, /Administrator Details/);
+assert.match(platformRegistrationHtml, /Subscription &amp; Activation|Subscription & Activation/);
+assert.match(platformRegistrationHtml, /30 days/);
+assert.match(platformRegistrationHtml, /id="newTenantStaffFullName"/);
+assert.match(platformRegistrationHtml, /id="newTenantStaffEmail"/);
+assert.match(platformRegistrationHtml, /id="newTenantStaffPhone"/);
+assert.match(platformRegistrationHtml, /id="newTenantStaffPassword"/);
+assert.match(platformRegistrationHtml, /id="newTenantTrialAccepted"/);
+assert.match(platformRegistrationHtml, /Subscription required for continued access/);
 assert.doesNotMatch(platformRegistrationHtml, /Creation mode/);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(sandbox.saccoApplicationEvidence({ registrationNo: "REG-001", district: "Kampala", abbreviation: "TEST" }))),
+  { complete: 2, required: 2, ready: true, missing: [] }
+);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(sandbox.saccoApplicationEvidence({ registrationNo: "", district: "Kampala", abbreviation: "" }))),
+  { complete: 1, required: 2, ready: false, missing: ["organization code"] }
+);
 assert.doesNotMatch(platformRegistrationHtml, /SACCO registration readiness/);
 assert.doesNotMatch(platformRegistrationHtml, /Track payment confirmation, self-registration approval and activation before a SACCO starts operating/);
 assert.match(sandbox.generatedSaccoCode("Green Valley SACCO"), /^[A-Z]{4}$/);
@@ -548,14 +664,18 @@ assert.equal(sandbox.saccoLocationAddress("Kampala", "Central", "Market Zone", "
 
 sandbox.state.saccoRegistrationTab = "applications";
 const applicationListHtml = sandbox.saccoApplications();
-assert.match(applicationListHtml, /SACCO application list/);
-assert.match(applicationListHtml, /Green Valley SACCO/);
-assert.match(applicationListHtml, /Market Women SACCO/);
-assert.match(applicationListHtml, /Callback received/);
-assert.match(applicationListHtml, /Payment initiated/);
-assert.match(applicationListHtml, /Active/);
-assert.match(applicationListHtml, /Awaiting payment/);
+assert.match(applicationListHtml, /All SACCOs/);
+assert.doesNotMatch(applicationListHtml, /SACCO application list/);
+assert.match(applicationListHtml, /Operational status/);
+assert.match(applicationListHtml, /Subscription/);
+assert.match(applicationListHtml, /Register SACCO/);
 assert.doesNotMatch(applicationListHtml, /SACCO registration readiness/);
+
+sandbox.state.saccoRegistrationTab = "accounts";
+const legacyAccountTabHtml = sandbox.saccoApplications();
+assert.equal(sandbox.state.saccoRegistrationTab, "applications");
+assert.match(legacyAccountTabHtml, /All SACCOs/);
+assert.doesNotMatch(legacyAccountTabHtml, /SACCO application list/);
 
 sandbox.state.authTab = "register";
 const publicRegistrationHtml = sandbox.publicSaccoRegistrationPanel();
@@ -692,13 +812,17 @@ assert.match(platformTransactionsHtml, /These are not SACCO member transactions/
 assert.match(platformTransactionsHtml, /id="platformTransactionSaccoSearch"/);
 assert.match(platformTransactionsHtml, /id="platformTransactionSaccoOptions"/);
 assert.match(platformTransactionsHtml, /id="platformTransactionSubscriptionId"/);
+assert.match(platformTransactionsHtml, /id="subscriptionPaymentProvider"/);
+assert.match(platformTransactionsHtml, /id="subscriptionPaymentPhone"/);
+assert.match(platformTransactionsHtml, /Mobile-money network/);
+assert.doesNotMatch(platformTransactionsHtml, /id="memberSubscriptionPaymentForm"/);
 assert.doesNotMatch(platformTransactionsHtml, /<select id="platformTransactionSubscriptionId"/);
 
 sandbox.state.moduleTabs.transactions = "list";
 const platformTransactionListHtml = sandbox.transactionsView();
 assert.match(platformTransactionListHtml, /Platform-SACCO transaction list/);
 assert.match(platformTransactionListHtml, /Green Valley SACCO/);
-assert.match(platformTransactionListHtml, /GREE/);
+assert.match(platformTransactionListHtml, /All SACCOs/);
 
 sandbox.applyStaffSession({
   token: "staff-treasurer-token",
@@ -1325,7 +1449,7 @@ sandbox.state.auth = "staff";
 sandbox.state.user = { id: "user_platform_super", tenantId: "tenant_platform", email: "admin@platform.local" };
 sandbox.state.roleNames = ["Platform Super Admin"];
 sandbox.state.permissionIds = ["notifications:view", "notifications:manage"];
-sandbox.state.moduleTabs.notifications = "payment-exceptions";
+sandbox.state.moduleTabs.notifications = "system-alerts";
 sandbox.state.data.tenants = [{ id: "tenant_green", name: "Green Valley SACCO", abbreviation: "GREE" }];
 sandbox.state.data.users = [{ id: "user_green_admin", fullName: "Grace Admin", email: "admin@greenvalley.local" }];
 sandbox.state.data.members = [{ id: "member_green_amina", membershipNo: "GREE-0001", fullName: "Amina Naki" }];
@@ -1369,12 +1493,60 @@ sandbox.state.providerOperationalEvidence = {
   mobileMoney: { paymentRequests: 1, pendingPaymentRequests: 0, failedPaymentRequests: 1, callbacksReceived: 1 }
 };
 const notificationHtml = sandbox.notificationsView();
+assert.match(notificationHtml, /Delivered Notifications/);
+assert.match(notificationHtml, /Delivery Exceptions/);
+assert.match(notificationHtml, /Pending Deliveries/);
+assert.match(notificationHtml, /Login Risk Alerts/);
+assert.match(notificationHtml, /Compose Notification/);
+assert.match(notificationHtml, /System Alerts/);
 assert.match(notificationHtml, /Payment exceptions/);
 assert.match(notificationHtml, /Payment exception alerts/);
 assert.match(notificationHtml, /1 unread/);
 assert.match(notificationHtml, /Provider prompt expired before member approval/);
 assert.match(notificationHtml, /Payment request MMREQ-001/);
 assert.doesNotMatch(notificationHtml, /Deposit posted/);
+
+sandbox.state.moduleTabs.notifications = "delivery-log";
+sandbox.state.selectedNotificationDeliveryId = "delivery_2";
+const notificationDeliveryHtml = sandbox.notificationsView();
+assert.match(notificationDeliveryHtml, /Notification delivery monitor/);
+assert.match(notificationDeliveryHtml, /Delivery evidence/);
+assert.match(notificationDeliveryHtml, /AfroSMS/);
+assert.match(notificationDeliveryHtml, /Deposit posted/);
+
+sandbox.state.moduleTabs.notifications = "compose";
+const notificationComposerHtml = sandbox.notificationsView();
+assert.match(notificationComposerHtml, /Create Notification/);
+assert.match(notificationComposerHtml, /Delivery channels/);
+assert.match(notificationComposerHtml, /SACCO \/ recipients/);
+assert.match(notificationComposerHtml, /Send Notification/);
 assert.ok(sandbox.notificationEventOptions().some((option) => option.value === "payment_request_closed"));
+
+sandbox.state.moduleTabs.settings = "profile";
+const platformSettingsProfileHtml = sandbox.platformSettingsView();
+assert.match(platformSettingsProfileHtml, /System Settings/);
+assert.match(platformSettingsProfileHtml, /Platform Profile/);
+assert.match(platformSettingsProfileHtml, /Access &amp; Roles|Access & Roles/);
+assert.match(platformSettingsProfileHtml, /Billing &amp; Packages|Billing & Packages/);
+assert.match(platformSettingsProfileHtml, /Backup &amp; Recovery|Backup & Recovery/);
+assert.match(platformSettingsProfileHtml, /Platform Overview/);
+assert.match(platformSettingsProfileHtml, /System Health/);
+assert.match(platformSettingsProfileHtml, /Quick Configuration/);
+assert.match(platformSettingsProfileHtml, /id="platformProfileForm"/);
+assert.match(platformSettingsProfileHtml, /Save platform profile/);
+assert.doesNotMatch(platformSettingsProfileHtml, /Profile persistence endpoint pending/);
+
+sandbox.state.moduleTabs.settings = "billing";
+const platformSettingsBillingHtml = sandbox.platformSettingsView();
+assert.match(platformSettingsBillingHtml, /Subscription and billing settings/);
+assert.match(platformSettingsBillingHtml, /Mobile money integrations/);
+assert.match(platformSettingsBillingHtml, /Platform mobile-money receiving accounts/);
+assert.match(platformSettingsBillingHtml, /SACCO payment accounts/);
+
+sandbox.state.moduleTabs.settings = "security";
+const platformSettingsSecurityHtml = sandbox.platformSettingsView();
+assert.match(platformSettingsSecurityHtml, /Password and lockout policy/);
+assert.match(platformSettingsSecurityHtml, /Compliance and audit settings/);
+assert.match(platformSettingsSecurityHtml, /System health and operations settings/);
 
 console.log("Frontend helper tests passed (tables, login fields, role routing, session labels, platform user management, SACCO registration, SACCO member management, SACCO finance/payment workflows, SACCO loan workflows, shares, welfare, accounting, settings, governance, chat, notifications, audit evidence, member payment routes, payment exception alerts).");

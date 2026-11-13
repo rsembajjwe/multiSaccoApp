@@ -97,7 +97,7 @@ function runNodeScript(script, env) {
 async function platformAdminUat(page) {
   await staffLogin(page, "admin@platform.local", "Admin@12345", "Platform admin");
   await assertScreen(page, "dashboard", "Dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
-  await assertScreen(page, "sacco-applications", "SACCO Registration", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
+  await assertScreen(page, "sacco-applications", "SACCOs", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
   await assertScreen(page, "subscriptions", "Subscriptions", ["Subscription list", "Package Setup", "Manage package"]);
   await assertScreen(page, "reports", "Reports", ["Super admin reporting control", "Super Admin SACCO report", "Platform administrator access report"]);
   await assertScreen(page, "complaints", "Complaints", ["Complaints from SACCO admins", "Open platform support cases"]);

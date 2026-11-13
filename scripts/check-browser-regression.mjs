@@ -65,12 +65,19 @@ try {
   await assertSaccoApplicationReview(page);
   await assertScreen(page, "subscriptions", ["Subscription list", "Package Setup", "Manage package", "Payment initiated", "Callback received"]);
   await assertSubscriptionControl(page);
-  await assertScreen(page, "sacco-accounts", ["SACCO account health", "Active accounts", "Without subscription"]);
+  // SACCO Accounts is now a tab within the merged SACCOs section (was a separate nav item).
+  await navigateTo(page, "sacco-applications");
+  await page.locator("[data-sacco-registration-tab='accounts']").click();
+  await expectText(page, "SACCO account health", "SACCO account health tab");
+  await expectText(page, "Active accounts", "SACCO accounts active summary");
+  await expectText(page, "Without subscription", "SACCO accounts subscription summary");
+  console.log("PASS sacco-accounts (merged tab)");
   await expectNoVisibleText(page, "Platform approval queues", "Platform Approvals navigation hidden");
   await expectNoVisibleText(page, "Health, callbacks, jobs, support access", "Platform Operations navigation hidden");
   await assertScreen(page, "reports", ["Super admin reporting control", "Super Admin SACCO report", "Platform administrator access report"]);
   await assertScreen(page, "audit", ["Audit evidence control", "Platform audit evidence", "Sensitive audit queue", "Platform audit trail"]);
   await assertScreen(page, "settings", ["Platform settings control", "Protected platform configuration", "Platform subscription packages", "Platform role catalogue"]);
+  await assertPlatformMobileMoneyIntegrations(page);
   await assertScreen(page, "users", ["Add platform user", "User detail and role assignment", "Platform role coverage", "Platform administrator list", "Permission matrix"]);
   await assertPlatformUserCreation(page);
   await assertScreen(page, "complaints", ["Complaints from SACCO admins", "Open platform support cases", "Export complaints"]);
@@ -281,7 +288,8 @@ async function clearSession(page) {
 
 async function assertPublicSaccoRegistration(page) {
   const stamp = Date.now();
-  const saccoName = `Browser Farmers ${stamp} SACCO`;
+  const codePrefix = uniqueLetterPrefix(stamp);
+  const saccoName = `${codePrefix} Browser Farmers ${stamp} SACCO`;
   await page.locator("[data-auth-tab='register']").click();
   await expectText(page, "Complete SACCO details", "public SACCO registration form");
   await page.locator("#publicTenantName").fill(saccoName);
@@ -292,13 +300,18 @@ async function assertPublicSaccoRegistration(page) {
   await page.locator("#publicTenantParish").fill("Nansana");
   await page.locator("#publicTenantVillage").fill("Central");
   await page.locator("#publicTenantContactNumber").fill("+256700123456");
-  await page.locator("#publicTenantPaymentPhone").fill("+256700123456");
+  const paymentPhone = page.locator("#publicTenantPaymentPhone");
+  if (await paymentPhone.count()) await paymentPhone.fill("+256700123456");
   await page.locator("#publicSaccoRegistrationForm button[type='submit']").click();
   await expectText(page, "Registration received", "public SACCO registration submitted");
   await expectText(page, "Mobile-money payment prompt initiated", "public SACCO payment initiated");
   await page.getByRole("button", { name: "Login", exact: true }).click();
   await expectText(page, "Login to Tereka Online", "public SACCO registration returns to login");
   console.log("PASS public SACCO registration");
+}
+
+function uniqueLetterPrefix(value) {
+  return Number(value).toString(26).slice(-4).padStart(4, "a").replace(/[0-9]/g, (digit) => String.fromCharCode(97 + Number(digit))).toUpperCase();
 }
 
 async function assertLoginLocaleSwitch(page) {
@@ -548,6 +561,32 @@ async function assertModuleTabs(page, viewId, tabAssertions) {
   console.log(`PASS ${viewId} tabs`);
 }
 
+async function assertPlatformMobileMoneyIntegrations(page) {
+  await navigateTo(page, "settings");
+  await page.locator("[data-module-tab-view='settings'][data-module-tab='mobile-money']").click();
+  await expectText(page, "Mobile money integrations", "platform mobile-money integrations panel");
+  await expectText(page, "MTN subscription key", "platform MTN key field");
+  await expectText(page, "Airtel client ID", "platform Airtel key field");
+  await expectText(page, "Stored mobile-money key status", "platform mobile-money key status table");
+  await page.locator("#mobileMoneyActiveProvider").selectOption("demo_mobile_money");
+  const signedCallbacks = page.locator("#mobileMoneyRequireSignedCallbacks");
+  if (await signedCallbacks.isChecked()) await signedCallbacks.uncheck();
+  await page.locator("#platformMobileMoneyConfigForm button[type='submit']").click();
+  await expectText(page, "Platform mobile-money keys saved", "platform mobile-money demo save");
+  const activeProviderSummary = await page
+    .locator("section.panel", { hasText: "Mobile money integrations" })
+    .locator(".mini-fact", { hasText: "Active provider" })
+    .locator("strong")
+    .first()
+    .innerText();
+  if (activeProviderSummary.trim() !== "Demo / disabled") {
+    throw new Error(`platform mobile-money demo provider summary expected Demo / disabled, got ${activeProviderSummary}`);
+  }
+  console.log("PASS platform mobile-money demo provider summary");
+  await expectText(page, "demo_mobile_money", "platform mobile-money stored provider value");
+  console.log("PASS platform mobile-money integrations");
+}
+
 async function assertSaccoMonthlyPerformanceDrilldown(page) {
   await navigateTo(page, "dashboard");
   const reviewButton = page.locator("[data-row-action='monthly-performance-detail']").first();
@@ -633,6 +672,8 @@ async function assertSaccoRegistrationTabs(page) {
   await expectText(page, "Approval Stage", "SACCO application approval stage column");
   await page.locator("[data-sacco-registration-tab='self']").click();
   await expectText(page, "Self-registration approval path", "self-registration approval tab");
+  await page.locator("[data-sacco-registration-tab='accounts']").click();
+  await expectText(page, "SACCO account health", "SACCO account health tab");
   await page.locator("[data-sacco-registration-tab='applications']").click();
   console.log("PASS SACCO registration tabs");
 }

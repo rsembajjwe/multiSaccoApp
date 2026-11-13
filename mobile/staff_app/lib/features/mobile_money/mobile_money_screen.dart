@@ -26,8 +26,10 @@ const _filters = <_Filter>[
 
 /// Staff view of mobile-money requests and provider status.
 class MobileMoneyScreen extends ConsumerStatefulWidget {
-  const MobileMoneyScreen({super.key, required this.canManage});
+  const MobileMoneyScreen(
+      {super.key, required this.canManage, this.embedded = false});
   final bool canManage;
+  final bool embedded;
 
   @override
   ConsumerState<MobileMoneyScreen> createState() => _MobileMoneyScreenState();
@@ -104,21 +106,14 @@ class _MobileMoneyScreenState extends ConsumerState<MobileMoneyScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(mobileMoneyPaymentRequestsProvider);
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Mobile Money'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Requests'),
-              Tab(text: 'Callbacks'),
-              Tab(text: 'Balances'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
+    const tabs = TabBar(
+      tabs: [
+        Tab(text: 'Requests'),
+        Tab(text: 'Callbacks'),
+        Tab(text: 'Balances'),
+      ],
+    );
+    final views = <Widget>[
             Column(
               children: [
                 SizedBox(
@@ -188,8 +183,26 @@ class _MobileMoneyScreenState extends ConsumerState<MobileMoneyScreen> {
             ),
             const _CallbacksTab(),
             const _BalancesTab(),
+    ];
+    if (widget.embedded) {
+      return DefaultTabController(
+        length: 3,
+        child: Column(
+          children: [
+            tabs,
+            Expanded(child: TabBarView(children: views)),
           ],
         ),
+      );
+    }
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Mobile Money'),
+          bottom: tabs,
+        ),
+        body: TabBarView(children: views),
       ),
     );
   }
@@ -749,20 +762,41 @@ class _BalancesTab extends ConsumerWidget {
         onRetry: () => ref.invalidate(mobileMoneyBalancesProvider),
       ),
       data: (balances) {
-        if (balances.isEmpty) {
-          return const EmptyState(
-            icon: Icons.account_balance_wallet_outlined,
-            message:
-                'No mobile-money provider is configured for balance lookup.',
-          );
+        // Always surface both networks (MTN & Airtel), even before a provider
+        // is configured, so the treasurer sees them here.
+        const known = <MapEntry<String, String>>[
+          MapEntry('mtn_momo', 'MTN MoMo'),
+          MapEntry('airtel_money', 'Airtel Money'),
+        ];
+        final display = <MobileMoneyBalance>[];
+        for (final k in known) {
+          MobileMoneyBalance? match;
+          for (final b in balances) {
+            if (b.providerId == k.key) {
+              match = b;
+              break;
+            }
+          }
+          display.add(match ??
+              MobileMoneyBalance(
+                providerId: k.key,
+                label: k.value,
+                available: false,
+                message: 'Not configured for this SACCO yet.',
+              ));
+        }
+        for (final b in balances) {
+          if (b.providerId != 'mtn_momo' && b.providerId != 'airtel_money') {
+            display.add(b);
+          }
         }
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(mobileMoneyBalancesProvider),
           child: ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            itemCount: balances.length,
+            itemCount: display.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (_, i) => _BalanceCard(balance: balances[i]),
+            itemBuilder: (_, i) => _BalanceCard(balance: display[i]),
           ),
         );
       },

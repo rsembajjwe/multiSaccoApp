@@ -90,6 +90,7 @@ class PlatformAdminBootstrapperTest {
         assertEquals(1, count("audit_events"));
         assertEquals("owner@tereka.online", jdbcTemplate.queryForObject("SELECT email FROM users", String.class));
         assertNotEquals("OwnerPass123", jdbcTemplate.queryForObject("SELECT password_hash FROM users", String.class));
+        assertEquals(true, jdbcTemplate.queryForObject("SELECT password_reset_required FROM users", Boolean.class));
     }
 
     @Test

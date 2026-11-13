@@ -11,14 +11,17 @@ import 'chat_thread_screen.dart';
 
 /// Support chat threads members have opened with the SACCO.
 class ChatThreadsScreen extends ConsumerWidget {
-  const ChatThreadsScreen({super.key, required this.canReply});
+  const ChatThreadsScreen(
+      {super.key, required this.canReply, this.embedded = false});
   final bool canReply;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(chatThreadsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Support chat')),
+      appBar:
+          embedded ? null : AppBar(title: const Text('Support chat')),
       body: async.when(
         loading: () => const ListSkeleton(),
         error: (e, _) => ErrorRetry(

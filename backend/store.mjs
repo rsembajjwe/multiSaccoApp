@@ -433,6 +433,7 @@ export const db = {
     { id: "tenants:view", module: "Tenant Management", action: "view", description: "View tenants" },
     { id: "tenants:approve", module: "Tenant Management", action: "approve", description: "Approve or update tenant status" },
     { id: "tenants:manage", module: "Tenant Management", action: "manage", description: "Manage SACCO accounts" },
+    { id: "tenants:delete", module: "Tenant Management", action: "delete", description: "Permanently delete SACCO accounts" },
     { id: "dashboard:view", module: "Dashboard", action: "view", description: "View role dashboard" },
     { id: "users:create", module: "Identity", action: "create", description: "Create users" },
     { id: "users:view", module: "Identity", action: "view", description: "View users" },
@@ -491,6 +492,10 @@ export const db = {
     { roleId: "role_platform_admin", permissionId: "tenants:view" },
     { roleId: "role_platform_admin", permissionId: "tenants:approve" },
     { roleId: "role_platform_admin", permissionId: "tenants:manage" },
+    { roleId: "role_platform_admin", permissionId: "tenants:delete" },
+    { roleId: "role_platform_admin", permissionId: "members:view" },
+    { roleId: "role_platform_admin", permissionId: "members:create" },
+    { roleId: "role_platform_admin", permissionId: "members:approve" },
     { roleId: "role_platform_admin", permissionId: "users:create" },
     { roleId: "role_platform_admin", permissionId: "users:view" },
     { roleId: "role_platform_admin", permissionId: "roles:create" },
@@ -591,6 +596,11 @@ export const db = {
     { roleId: "role_green_loans_officer", permissionId: "loans:approve" },
     { roleId: "role_green_loans_officer", permissionId: "members:view" },
     { roleId: "role_green_loans_officer", permissionId: "reports:view" }
+  ],
+  saccoOfficialAssignments: [
+    { id: "official_green_chairperson", tenantId: "tenant_green", office: "chairperson", memberId: "member_green_amina", assignedByUserId: "user_platform_admin", assignedAt: now(), updatedAt: now() },
+    { id: "official_green_secretary", tenantId: "tenant_green", office: "secretary", memberId: "member_green_daniel", assignedByUserId: "user_platform_admin", assignedAt: now(), updatedAt: now() },
+    { id: "official_green_treasurer", tenantId: "tenant_green", office: "treasurer", memberId: "member_green_grace", assignedByUserId: "user_platform_admin", assignedAt: now(), updatedAt: now() }
   ],
   approvalWorkflows: [
     {
@@ -938,6 +948,61 @@ export const db = {
       status: "active",
       createdAt: now(),
       updatedAt: now()
+    },
+    {
+      id: "branch_kigezi_main",
+      tenantId: "tenant_kigezi",
+      code: "KABA-MAIN",
+      name: "Main Branch",
+      address: "Kabale",
+      managerUserId: null,
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "branch_masaka_main",
+      tenantId: "tenant_masaka",
+      code: "MASA-MAIN",
+      name: "Main Branch",
+      address: "Masaka",
+      managerUserId: null,
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "branch_gulu_main",
+      tenantId: "tenant_gulu",
+      code: "GULU-MAIN",
+      name: "Main Branch",
+      address: "Gulu",
+      managerUserId: null,
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "branch_mbale_main",
+      tenantId: "tenant_mbale",
+      code: "MBAL-MAIN",
+      name: "Main Branch",
+      address: "Mbale",
+      managerUserId: null,
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
+    },
+    {
+      id: "branch_hoima_main",
+      tenantId: "tenant_hoima",
+      code: "HOIM-MAIN",
+      name: "Main Branch",
+      address: "Hoima",
+      managerUserId: null,
+      status: "active",
+      createdAt: now(),
+      updatedAt: now()
     }
   ],
   members: [
@@ -953,6 +1018,7 @@ export const db = {
       nationalId: "CM9000012K4PA",
       passwordHash: memberPassword.hash,
       passwordSalt: memberPassword.salt,
+      linkedUserId: "user_green_chairperson",
       status: "active",
       kycStatus: "verified",
       joiningDate: "2024-04-12",
@@ -971,6 +1037,7 @@ export const db = {
       nationalId: "CM9000455K8AB",
       passwordHash: memberPassword.hash,
       passwordSalt: memberPassword.salt,
+      linkedUserId: "user_green_secretary",
       status: "active",
       kycStatus: "pending_verification",
       joiningDate: "2024-08-03",
@@ -1007,6 +1074,7 @@ export const db = {
       nationalId: "CM9000005K3AC",
       passwordHash: memberPassword.hash,
       passwordSalt: memberPassword.salt,
+      linkedUserId: "user_green_treasurer",
       status: "active",
       kycStatus: "verified",
       joiningDate: "2024-07-01",

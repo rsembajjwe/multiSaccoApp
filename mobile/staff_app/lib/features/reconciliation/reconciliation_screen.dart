@@ -10,25 +10,21 @@ import '../../providers.dart';
 
 /// Read-only SACCO cash reconciliation: matched and unmatched statement/ledger lines.
 class ReconciliationScreen extends ConsumerWidget {
-  const ReconciliationScreen({super.key});
+  const ReconciliationScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(reconciliationProvider);
-    return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Reconciliation'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Summary'),
-              Tab(text: 'Matches'),
-              Tab(text: 'Exceptions'),
-            ],
-          ),
-        ),
-        body: async.when(
+    const tabs = TabBar(
+      tabs: [
+        Tab(text: 'Summary'),
+        Tab(text: 'Matches'),
+        Tab(text: 'Exceptions'),
+      ],
+    );
+    final body = async.when(
           loading: () => const ListSkeleton(),
           error: (e, _) => ErrorRetry(
             message: 'Could not load reconciliation.',
@@ -45,7 +41,26 @@ class ReconciliationScreen extends ConsumerWidget {
               ],
             ),
           ),
+    );
+    if (embedded) {
+      return DefaultTabController(
+        length: 3,
+        child: Column(
+          children: [
+            tabs,
+            Expanded(child: body),
+          ],
         ),
+      );
+    }
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Reconciliation'),
+          bottom: tabs,
+        ),
+        body: body,
       ),
     );
   }

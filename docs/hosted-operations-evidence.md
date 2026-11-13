@@ -20,7 +20,7 @@ restore within the agreed targets.
 
 The hosted alert set must cover:
 
-- API down or `/actuator/health` not healthy.
+- API down or `/actuator/health/readiness` not healthy.
 - API 5xx error rate above threshold.
 - API p95 latency above threshold.
 - PostgreSQL unreachable or database pool pressure.

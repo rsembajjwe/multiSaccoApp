@@ -1,6 +1,45 @@
 ﻿// SACCO member administration action handlers for Tereka Online.
 // Covers member creation, profile detail loading, statements, KYC decisions and profile updates.
 
+function parseMemberImportCsv(text) {
+  const headers = ["membershipNo", "branchId", "fullName", "memberType", "phone", "email", "nationalId", "kycStatus", "joiningDate", "password"];
+  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 2) throw new Error("Paste a CSV header and at least one member row.");
+  if (lines[0].split(",").map((value) => value.trim()).join(",") !== headers.join(",")) throw new Error(`CSV headers must be: ${headers.join(",")}`);
+  return lines.slice(1).map((line) => {
+    const values = line.split(",").map((value) => value.trim());
+    return Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
+  });
+}
+
+async function downloadMemberImportTemplate() {
+  try {
+    const template = await api(`/members/import-template?tenantId=${encodeURIComponent(state.user?.tenantId || "")}`);
+    downloadClientFile(template.filename || "members-import-template.csv", template.csv || "", "text/csv;charset=utf-8");
+  } catch (error) {
+    state.memberImportError = error.message || "Could not download member template.";
+    renderShell();
+  }
+}
+
+async function importMembersFromCsv(dryRun) {
+  state.memberImportMessage = "";
+  state.memberImportError = "";
+  try {
+    const rows = parseMemberImportCsv(state.memberImportCsv);
+    const result = await api("/members/import", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: state.user?.tenantId || "", dryRun, rows })
+    });
+    state.memberImportResult = result;
+    state.memberImportMessage = dryRun ? "Member file validated. Review errors before importing." : `${result.createdCount || 0} member(s) imported.`;
+    if (!dryRun) state.memberImportCsv = "";
+  } catch (error) {
+    state.memberImportError = error.message || "Could not process member import.";
+  }
+  renderShell();
+}
+
 async function recordMemberDuesPayment() {
   if (!hasPermission("transactions:create")) {
     state.memberDuesError = "Transaction capture permission is required to collect member subscription payments.";
@@ -208,6 +247,7 @@ async function createMemberFromForm(event) {
     return;
   }
   try {
+    if (isPlatform()) state.memberFormTenantId = value("newMemberTenantId");
     const created = await api("/members", {
       method: "POST",
       body: JSON.stringify({
@@ -219,13 +259,14 @@ async function createMemberFromForm(event) {
         phone: value("newMemberPhone"),
         email: value("newMemberEmail"),
         nationalId: value("newMemberNationalId"),
-        password: value("newMemberPassword") || "Member@12345",
+        password: value("newMemberPassword") || value("newMemberPhone"),
         kycStatus: value("newMemberKycStatus"),
         joiningDate: value("newMemberJoiningDate")
       })
     });
     state.memberFormMessage = `Created member ${created.membershipNo} - ${created.fullName}.`;
     await refreshAll();
+    if (isPlatform()) state.memberFormTenantId = created.tenantId || state.memberFormTenantId;
   } catch (error) {
     state.memberFormError = error.message;
     renderShell();
@@ -1090,6 +1131,43 @@ async function saveMemberDecision(memberId, memberStatus, kycStatus) {
     renderShell();
   } catch (error) {
     state.selectedMemberError = error.message;
+    renderShell();
+  }
+}
+
+async function sendMemberActivationCredentials(memberId, channel) {
+  if (!memberId || !channel) return;
+  state.selectedMemberMessage = "";
+  state.selectedMemberError = "";
+  state.selectedTenantMessage = "";
+  state.selectedTenantError = "";
+  try {
+    const result = await api(`/members/${encodeURIComponent(memberId)}/activation-credentials`, {
+      method: "POST",
+      body: JSON.stringify({ channel })
+    });
+    await refreshAll();
+    const updatedMember = dataRows("members").find((member) => member.id === memberId) || state.selectedMember;
+    const message = `Activation credentials sent by ${labelize(result.channel || channel)} to ${updatedMember?.membershipNo || result.membershipNo || "member"}.`;
+    if (state.selectedMemberId === memberId) {
+      state.selectedMember = updatedMember;
+      state.selectedMemberMessage = message;
+    }
+    if (state.selectedTenantId) {
+      state.selectedTenant = dataRows("tenants").find((tenant) => tenant.id === state.selectedTenantId) || state.selectedTenant;
+      state.selectedTenantMessage = message;
+      try {
+        const officials = await api(`/tenants/${encodeURIComponent(state.selectedTenantId)}/officials`);
+        state.selectedTenantOfficials = Array.isArray(officials) ? officials : state.selectedTenantOfficials;
+      } catch {
+        // Keep the refreshed member/status message even if official reload is unavailable.
+      }
+    }
+    renderShell();
+  } catch (error) {
+    const message = friendlyUserError(error, isPlatform());
+    if (state.selectedMemberId === memberId) state.selectedMemberError = message;
+    if (state.selectedTenantId) state.selectedTenantError = message;
     renderShell();
   }
 }

@@ -19,7 +19,7 @@ class MemberBalanceUnitTest {
     private Member newMember() {
         return new Member(
                 "member_1", "tenant_green", "branch_main", "GREE-0001", "Amina Nakato",
-                "individual", "+256700000001", "amina@example.com", "CM123",
+                "individual", "+256700000001", "amina@example.com", "", "CM123",
                 "hash", "salt", "active", "verified", LocalDate.of(2026, 1, 1));
     }
 

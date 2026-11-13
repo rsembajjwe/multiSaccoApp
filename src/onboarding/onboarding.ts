@@ -84,7 +84,7 @@ export function buildSaccoApplicationRows(input: {
       approvalStage: saccoApprovalStageFor(tenant, subscription),
       operatingAccess: subscriptionAccessLabelFor(subscription || {}, tenant),
       action: "tenant-detail",
-      actionLabel: "Review",
+      actionLabel: "Manage payment accounts",
       actionId: tenant.id,
     };
   });
@@ -128,7 +128,7 @@ export function buildSubscriptionRows(input: {
 
 export function buildSubscriptionSummary(rows: Array<TerekaSubscription & TerekaRecord>, tableRows: TerekaSubscriptionRow[]): TerekaSubscriptionSummary {
   return {
-    activeSubscriptions: rows.filter((row) => normalizeOnboardingText(row.status) === "active").length,
+    activeSubscriptions: rows.filter((row) => ["active", "expiring", "grace"].includes(subscriptionLifecycleStateFor(row))).length,
     callbackReceived: tableRows.filter((row) => normalizeOnboardingText(row.paymentStage).includes("callback")).length,
     expiredOrSuspended: tableRows.filter((row) => normalizeOnboardingText(row.operatingAccess).includes("expired") || normalizeOnboardingText(row.operatingAccess).includes("suspended")).length,
     outstandingInvoices: rows.reduce((total, row) => total + balanceDueFor(row), 0),
@@ -138,6 +138,22 @@ export function buildSubscriptionSummary(rows: Array<TerekaSubscription & Tereka
     revenueThisMonth: sumOnboardingValues(rows, "amount"),
     suspendedAccess: tableRows.filter((row) => normalizeOnboardingText(row.operatingAccess).includes("suspended")).length,
   };
+}
+
+export function subscriptionLifecycleStateFor(
+  subscription: Partial<TerekaSubscription & TerekaRecord>,
+  now: Date = new Date(),
+): string {
+  const rawState = normalizeOnboardingText(subscription.lifecycleState || subscription.status || "unknown");
+  if (rawState.includes("pending")) return "pending_payment";
+  if (rawState.includes("expired")) return "expired";
+
+  const expiry = new Date(String(subscription.expiry || subscription.expiryDate || subscription.expiresAt || ""));
+  if (!Number.isFinite(expiry.getTime())) return rawState;
+  const daysToExpiry = Math.ceil((expiry.getTime() - now.getTime()) / 86_400_000);
+  if (daysToExpiry < 0) return "expired";
+  if (daysToExpiry <= 90 && rawState === "active") return "expiring";
+  return rawState;
 }
 
 export function buildPackageCardRows(packages: Array<TerekaSubscriptionPackage & TerekaRecord>): TerekaPackageCardRow[] {

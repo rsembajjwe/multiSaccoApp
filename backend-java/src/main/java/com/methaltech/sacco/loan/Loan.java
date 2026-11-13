@@ -208,7 +208,44 @@ public class Loan {
             String purpose,
             String channel,
             String submittedByMemberId) {
-        return new Loan(id, tenantId, memberId, product, amount, dsr, repaymentMonths, purpose, channel, submittedByMemberId);
+        Loan loan = new Loan(id, tenantId, memberId, product, amount, dsr, repaymentMonths, purpose, channel, submittedByMemberId);
+        // A submitted application owes nothing until it is disbursed; disburse() sets the balance to the
+        // total payable. applyTerms() seeds balance with the total payable for the active/migrated paths,
+        // so reset it here.
+        loan.balance = BigDecimal.ZERO;
+        loan.status = "submitted";
+        loan.stage = "Credit Appraisal";
+        loan.updatedAt = Instant.now();
+        return loan;
+    }
+
+    /**
+     * A staff-captured loan application that carries an explicit interest rate and charge fee. Like
+     * {@link #submitted}, it starts in the "submitted"/"Credit Appraisal" state so it flows through the
+     * normal appraisal, guarantor and approval steps rather than the bare constructor's active default.
+     */
+    public static Loan submitted(
+            String id,
+            String tenantId,
+            String memberId,
+            String product,
+            BigDecimal amount,
+            BigDecimal interestRate,
+            BigDecimal chargeFee,
+            int dsr,
+            int repaymentMonths,
+            String purpose,
+            String channel,
+            String submittedByMemberId) {
+        Loan loan = new Loan(id, tenantId, memberId, product, amount, interestRate, chargeFee, dsr,
+                repaymentMonths, purpose, channel, submittedByMemberId);
+        // A submitted application owes nothing until disbursement (see disburse()); clear the balance that
+        // applyTerms() seeds with the total payable for the active path.
+        loan.balance = BigDecimal.ZERO;
+        loan.status = "submitted";
+        loan.stage = "Credit Appraisal";
+        loan.updatedAt = Instant.now();
+        return loan;
     }
 
     public static Loan importedBookLoan(

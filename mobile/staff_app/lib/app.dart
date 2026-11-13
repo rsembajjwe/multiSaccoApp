@@ -25,6 +25,7 @@ class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
 
   bool _wasBackgrounded = false;
   Timer? _idleLockTimer;
+  StreamSubscription<String>? _pushTokenSubscription;
 
   late final GoRouter _router = GoRouter(
     initialLocation: '/login',
@@ -58,6 +59,10 @@ class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
       await push.requestPermission();
       final code = await ref.read(sessionStoreProvider).readSacco();
       if (code != null && code.isNotEmpty) await push.subscribeStaff(code);
+      await ref.read(authRepositoryProvider).registerPushDevice();
+      _pushTokenSubscription = push.tokenRefresh.listen((token) {
+        ref.read(authRepositoryProvider).registerPushDevice(token: token);
+      });
       FirebaseMessaging.onMessage.listen((_) {
         ref.invalidate(saccoStatusProvider);
       });
@@ -69,6 +74,7 @@ class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
   @override
   void dispose() {
     _idleLockTimer?.cancel();
+    _pushTokenSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -104,7 +110,7 @@ class _SaccoStaffAppState extends ConsumerState<SaccoStaffApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'SACCO Administrator',
+      title: 'Staff_Tereka',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),

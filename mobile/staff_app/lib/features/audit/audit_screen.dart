@@ -10,7 +10,9 @@ import '../../providers.dart';
 
 /// Recent audit events — who did what, when — with search.
 class AuditScreen extends ConsumerStatefulWidget {
-  const AuditScreen({super.key});
+  const AuditScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<AuditScreen> createState() => _AuditScreenState();
@@ -30,7 +32,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(auditEventsProvider(_query));
     return Scaffold(
-      appBar: AppBar(title: const Text('Audit log')),
+      appBar: widget.embedded ? null : AppBar(title: const Text('Audit log')),
       body: Column(
         children: [
           Padding(

@@ -65,16 +65,17 @@ var TerekaFormatters = Object.freeze({
     if (normalizedColumn.includes("amount") || normalizedColumn.includes("balance") || moneyColumns.includes(column)) return this.formatMoneyValue(Number(value || 0), region);
     if (normalizedColumn.includes("status") || normalizedColumn.includes("severity")) return `<span class="status ${this.statusClassValue(value)}">${this.escapeHtmlValue(this.labelizeValue(value || "Pending"))}</span>`;
     if (this.isDateColumnValue(column)) return this.escapeHtmlValue(this.formatTableDateValue(value, column, region));
+    if (["approvalstage", "operatingaccess", "paymentstage"].includes(normalizedColumn)) return this.escapeHtmlValue(this.labelizeValue(value || "Pending"));
     return this.escapeHtmlValue(String(value || "-"));
   },
   isDateColumnValue(column) {
     const text = column.toLowerCase();
-    return text === "date" || text.endsWith("date") || text.endsWith("at") || ["appliedon", "createdat", "updatedat", "postedat", "sentat", "readat", "expiresat", "usedat"].includes(text);
+    return text === "date" || text.endsWith("date") || text.endsWith("at") || ["appliedon", "createdat", "registeredon", "updatedat", "postedat", "sentat", "readat", "expiresat", "usedat"].includes(text);
   },
   formatTableDateValue(value, column, region) {
     if (!value) return "-";
     const text = String(value);
-    const isDateOnly = column.toLowerCase() === "date" || column.toLowerCase().endsWith("date") || /^\d{4}-\d{2}-\d{2}$/.test(text);
+    const isDateOnly = column.toLowerCase() === "date" || column.toLowerCase().endsWith("date") || column.toLowerCase() === "registeredon" || /^\d{4}-\d{2}-\d{2}$/.test(text);
     return isDateOnly ? this.formatDateValue(value, region) : this.formatDateTimeValue(value, region);
   },
   snakeColumn(column) {

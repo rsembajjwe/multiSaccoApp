@@ -41,7 +41,7 @@ function recordTable(title, rows, columns, options = {}) {
     ? `${t("showingRange")} ${start + 1}-${Math.min(start + pageSize, filtered.length)} ${t("of")} ${filtered.length}${backendLoaded && !searching ? ` ${t("loaded")}` : ""}`
     : t("noRowsToShow");
   return `
-    <section class="panel">
+    <section class="panel ${escapeHtml(options.panelClass || "")} ">
       <div class="panel-heading">
         <h2>${escapeHtml(translatedTitle)}</h2>
         <div class="table-count">
@@ -62,10 +62,10 @@ function recordTable(title, rows, columns, options = {}) {
         </label>
       </div>`}
       ${filtered.length ? `
-        <div class="table-wrap">
+        <div class="table-wrap record-table-wrap ${hasRowActions ? "has-row-actions" : ""}">
           <table>
             <thead><tr>${headerCells}${hasRowActions ? `<th>${t("actions")}</th>` : ""}</tr></thead>
-            <tbody>${pagedRows.map((row) => `<tr class="${escapeHtml(row.rowClass || "")}">${columns.map((column) => `<td>${formatValue(row, column)}</td>`).join("")}${hasRowActions ? `<td>${rowAction(row)}</td>` : ""}</tr>`).join("")}</tbody>
+            <tbody>${pagedRows.map((row) => `<tr class="${escapeHtml(row.rowClass || "")}">${columns.map((column) => `<td data-label="${escapeHtml(tableColumnLabel(column))}">${formatValue(row, column)}</td>`).join("")}${hasRowActions ? `<td data-label="${escapeHtml(t("actions"))}">${rowAction(row)}</td>` : ""}</tr>`).join("")}</tbody>
           </table>
         </div>
         <div class="pagination">

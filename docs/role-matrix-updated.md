@@ -13,9 +13,9 @@ This reflects the permission catalog **after migrations V109–V112**. Where a r
 | Role | Added | Removed |
 |------|-------|---------|
 | **SACCO Administrator** | `audit:view`, `welfare:view/manage`, `member-subscription:view/manage`, `loans:disburse` | `savings-transfer:manage` (dead) |
-| **Treasurer** | `savings-transfer:approve`, `loans:disburse`, `welfare:view`, `member-subscription:view/manage` | `savings-transfer:manage` (dead) |
+| **Treasurer** | `members:view`, `savings-transfer:approve`, `loans:disburse`, `welfare:view`, `member-subscription:view/manage` | `savings-transfer:manage` (dead) |
 | **Secretary** | `welfare:view/manage`, `member-subscription:view/manage`, `savings-transfer:approve`, `savings-transfer:view` | — |
-| **Chairperson** | — | `savings-transfer:approve`, `savings-transfer:manage`, `savings-transfer:view`; **loan disbursement** (disbursement now needs `loans:disburse`, which the Chairperson does not hold) |
+| **Chairperson** | `fund-types:manage` | `members:create`, `members:approve`, `transactions:create`, `transactions:approve`, `accounting:post`, `savings-transfer:approve/manage/view`, `loans:disburse` |
 | **Accountant** | `welfare:view` | — |
 | **Auditor** | `audit:view` | — |
 | **Teller / Cashier** | — | — |
@@ -32,6 +32,7 @@ New permissions introduced: `audit:view`, `welfare:view`, `welfare:manage`, `mem
 - **Welfare** is now its own permission. Claim lifecycle (submit/decide) = `welfare:manage` → **Admin + Secretary**. Viewing = `welfare:view` → Admin, Secretary, **Treasurer, Accountant** (so the officers who *disburse* welfare — payment still on `accounting:post` — can see the queue).
 - **Audit logs** are now gated by `audit:view` → **Admin + Auditor** (SACCO side).
 - **Member Subscriptions** now their own permission → **Admin + Treasurer + Secretary** (previously the Treasurer could see the menu but got no data).
+- **Chairperson is read-only for member accounts.** The role keeps `members:view` and `transactions:view`, manages fund types/products, and cannot create or approve members or post/approve financial transactions. Treasurer remains the posting official among the three elected SACCO officials.
 
 ---
 
@@ -41,14 +42,16 @@ New permissions introduced: `audit:view`, `welfare:view`, `welfare:manage`, `mem
 `audit:view` · `accounting:post/view` · `approvals:decide/view` · `complaints:manage/view` · `dashboard:view` · `finance-source:manage/view` · `fund-types:manage/view` · `governance:manage/view` · `loans:approve/create/view/`**`disburse`** · `member-subscription:view/manage` · `members:approve/create/view` · `notifications:manage/view` · `operations:view` · `reports:view` · `roles:create/view` · `sacco-profile:manage` · `savings-transfer:approve/create/view` · `subscriptions:view` · `tenants:manage/view` · `transactions:approve/create/view` · `users:create/view` · `welfare:view/manage`
 
 ### Treasurer  *(finance; transfer maker, disbursing officer)*  **[changed]**
-`accounting:post/view` · `approvals:view` · `complaints:view` · `dashboard:view` · `finance-source:manage/view` · `fund-types:view` · `loans:disburse` · `member-subscription:view/manage` · `operations:view` · `reports:view` · `savings-transfer:approve/create/view` · `transactions:approve/create/view` · `welfare:view`
+`accounting:post/view` · `approvals:view` · `complaints:view` · `dashboard:view` · `finance-source:manage/view` · `fund-types:view` · `loans:disburse` · `member-subscription:view/manage` · `members:view` · `operations:view` · `reports:view` · `savings-transfer:approve/create/view` · `transactions:approve/create/view` · `welfare:view`
 
 ### Secretary  *(governance; welfare & member-subs manager, transfer co-approver)*  **[changed]**
-`approvals:view` · `complaints:manage/view` · `dashboard:view` · `finance-source:view` · `governance:manage/view` · `member-subscription:view/manage` · `members:approve/create/view` · `reports:view` · `savings-transfer:approve/view` · `welfare:view/manage`
+`approvals:view` · `complaints:manage/view` · `dashboard:view` · `finance-source:view` · `fund-types:view` · `governance:manage/view` · `member-subscription:view/manage` · `members:approve/create/view` · `reports:view` · `savings-transfer:approve/view` · `welfare:view/manage`
 
 ### Chairperson  *(oversight + loan approval + settings)*  **[changed]**
-`approvals:decide/view` · `complaints:view` · `dashboard:view` · `finance-source:manage/view` · `fund-types:view` · `governance:view` · `loans:approve/view` · `members:view` · `notifications:view` · `operations:view` · `reports:view` · `sacco-profile:manage` · `subscriptions:view` · `transactions:view`
-*No savings-transfer authority; no `loans:disburse`.*
+`approvals:decide/view` · `complaints:view` · `dashboard:view` · `finance-source:manage/view` · `fund-types:manage/view` · `governance:view` · `loans:approve/view` · `members:view` · `notifications:view` · `operations:view` · `reports:view` · `sacco-profile:manage` · `subscriptions:view` · `transactions:view`
+*Member accounts are read-only. No `members:create`, `members:approve`, `transactions:create`, `transactions:approve`, `accounting:post`, savings-transfer authority, or `loans:disburse`.*
+
+Fund types and financial products use the same access boundary: the Chairperson manages them with `fund-types:manage`; Secretary, Treasurer, and other granted staff can only read them with `fund-types:view`.
 
 ### Accountant  *(finance postings)*  **[changed]**
 `accounting:post/view` · `dashboard:view` · `fund-types:view` · `operations:view` · `reports:view` · `transactions:create/view` · `welfare:view`

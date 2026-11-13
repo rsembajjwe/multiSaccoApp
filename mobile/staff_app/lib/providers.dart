@@ -45,18 +45,16 @@ class ThemeModeController extends StateNotifier<ThemeMode> {
       };
 }
 
-final themeModeProvider =
-    StateNotifierProvider<ThemeModeController, ThemeMode>(
+final themeModeProvider = StateNotifierProvider<ThemeModeController, ThemeMode>(
   (ref) => ThemeModeController(ref.watch(sessionStoreProvider)),
 );
 
-final pushServiceProvider = Provider<PushService>((ref) => PushService());
+final pushServiceProvider = Provider<StaffPushTopics>((ref) => PushService());
 
-final apiClientProvider =
-    Provider<ApiClient>((ref) => ApiClient(
-          ref.watch(sessionStoreProvider),
-          ref.watch(pushServiceProvider),
-        ));
+final apiClientProvider = Provider<ApiClient>((ref) => ApiClient(
+      ref.watch(sessionStoreProvider),
+      ref.watch(pushServiceProvider),
+    ));
 
 final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => AuthRepository(
@@ -81,12 +79,11 @@ final saccoStatusProvider = FutureProvider<SaccoStatus>((ref) async {
   return SaccoStatus.fromJson(data);
 });
 
-final adminRepositoryProvider =
-    Provider<AdminRepository>((ref) => AdminRepository(ref.watch(apiClientProvider)));
+final adminRepositoryProvider = Provider<AdminRepository>(
+    (ref) => AdminRepository(ref.watch(apiClientProvider)));
 
 /// Members list, optionally filtered by a search term.
-final membersProvider =
-    FutureProvider.autoDispose.family<List<Member>, String>(
+final membersProvider = FutureProvider.autoDispose.family<List<Member>, String>(
   (ref, search) => ref.watch(adminRepositoryProvider).members(search: search),
 );
 
@@ -125,6 +122,11 @@ final loanRepaymentsProvider =
   (ref, loanId) => ref.watch(adminRepositoryProvider).repayments(loanId),
 );
 
+final loanRecoveriesProvider =
+    FutureProvider.autoDispose.family<List<LoanRecoveryCase>, String>(
+  (ref, loanId) => ref.watch(adminRepositoryProvider).loanRecoveries(loanId),
+);
+
 final loanExtensionsProvider =
     FutureProvider.autoDispose.family<List<LoanExtension>, String>(
   (ref, loanId) => ref.watch(adminRepositoryProvider).loanExtensions(loanId),
@@ -135,8 +137,7 @@ final guarantorRequestsProvider =
   (ref) => ref.watch(adminRepositoryProvider).guarantorRequests(),
 );
 
-final subscriptionsProvider =
-    FutureProvider.autoDispose<List<Subscription>>(
+final subscriptionsProvider = FutureProvider.autoDispose<List<Subscription>>(
   (ref) => ref.watch(adminRepositoryProvider).subscriptions(),
 );
 
@@ -165,8 +166,7 @@ final fundTypesProvider = FutureProvider.autoDispose<List<FundType>>(
 );
 
 /// SACCO capital sources-of-funds register (finance-source:view).
-final fundingSourcesProvider =
-    FutureProvider.autoDispose<List<FundingSource>>(
+final fundingSourcesProvider = FutureProvider.autoDispose<List<FundingSource>>(
   (ref) => ref.watch(adminRepositoryProvider).fundingSources(),
 );
 
@@ -179,8 +179,7 @@ final expensesProvider = FutureProvider.autoDispose<List<Expense>>(
   (ref) => ref.watch(adminRepositoryProvider).expenses(),
 );
 
-final expenseAccountsProvider =
-    FutureProvider.autoDispose<List<ChartAccount>>(
+final expenseAccountsProvider = FutureProvider.autoDispose<List<ChartAccount>>(
   (ref) => ref.watch(adminRepositoryProvider).expenseAccounts(),
 );
 
@@ -217,7 +216,8 @@ final memberLoanLedgerProvider =
 /// SACCO-wide financial transactions, optionally filtered by a search term.
 final transactionsProvider =
     FutureProvider.autoDispose.family<List<FinancialTxn>, String>(
-  (ref, search) => ref.watch(adminRepositoryProvider).transactions(search: search),
+  (ref, search) =>
+      ref.watch(adminRepositoryProvider).transactions(search: search),
 );
 
 /// Global-search result pages: only the first page per source, so a broad
@@ -261,7 +261,8 @@ final governanceMeetingsProvider =
 /// Audit events, optionally filtered by a search term.
 final auditEventsProvider =
     FutureProvider.autoDispose.family<List<AuditEvent>, String>(
-  (ref, search) => ref.watch(adminRepositoryProvider).auditEvents(search: search),
+  (ref, search) =>
+      ref.watch(adminRepositoryProvider).auditEvents(search: search),
 );
 
 /// Staff users.
@@ -272,6 +273,11 @@ final usersProvider = FutureProvider.autoDispose<List<AppUser>>(
 /// Roles with their permissions.
 final rolesProvider = FutureProvider.autoDispose<List<AppRole>>(
   (ref) => ref.watch(adminRepositoryProvider).roles(),
+);
+
+final permissionsCatalogProvider =
+    FutureProvider.autoDispose<List<AppPermission>>(
+  (ref) => ref.watch(adminRepositoryProvider).permissions(),
 );
 
 /// Role ids assigned to a specific user.
@@ -315,6 +321,10 @@ final memberNextOfKinProvider =
     FutureProvider.autoDispose.family<List<NextOfKin>, String>(
   (ref, id) => ref.watch(adminRepositoryProvider).memberNextOfKin(id),
 );
+final groupOfficialsProvider =
+    FutureProvider.autoDispose.family<List<GroupOfficial>, String>(
+  (ref, id) => ref.watch(adminRepositoryProvider).groupOfficials(id),
+);
 final memberBeneficiariesProvider =
     FutureProvider.autoDispose.family<List<Beneficiary>, String>(
   (ref, id) => ref.watch(adminRepositoryProvider).memberBeneficiaries(id),
@@ -334,8 +344,7 @@ final staffNamesProvider = FutureProvider.autoDispose<Map<String, String>>(
   (ref) async {
     final users = await ref.watch(adminRepositoryProvider).users();
     return {
-      for (final u in users)
-        u.id: u.fullName.isEmpty ? u.email : u.fullName
+      for (final u in users) u.id: u.fullName.isEmpty ? u.email : u.fullName
     };
   },
 );
@@ -381,6 +390,10 @@ final mobileMoneyBalancesProvider =
 /// SACCO-wide cash reconciliation.
 final reconciliationProvider = FutureProvider.autoDispose<ReconciliationReport>(
   (ref) => ref.watch(adminRepositoryProvider).reconciliation(),
+);
+
+final regulatoryReportProvider = FutureProvider.autoDispose<RegulatoryReport>(
+  (ref) => ref.watch(adminRepositoryProvider).regulatoryReport(),
 );
 
 /// Support chat threads.

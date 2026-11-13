@@ -45,82 +45,58 @@ class _SettingsBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final canManageProfile =
-        session.can('sacco-profile:manage') || session.can('tenants:manage');
-    final canManageFunds = session.can('fund-types:manage');
-    final canManageTerms = session.can('loans:terms');
-    final canPaySubscription = session.can('subscriptions:manage');
-    final canManageMemberSubscriptions = session.can('member-subscription:manage');
-    final canPromptMemberSubscriptions = canManageMemberSubscriptions ||
-        session.can('member-subscription:prompt');
     final profileAsync = session.tenantId.isEmpty
         ? null
         : ref.watch(saccoProfileProvider(session.tenantId));
+    final canOpenSaccoSetup = session.canAny([
+      'sacco-profile:manage',
+      'tenants:manage',
+      'fund-types:manage',
+      'loans:terms',
+      'subscriptions:view',
+      'subscriptions:manage',
+      'member-subscription:view',
+      'member-subscription:manage',
+      'member-subscription:prompt',
+      'notifications:manage',
+    ]);
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _ProfileCard(session: session, profileAsync: profileAsync),
         const SizedBox(height: 16),
-        _AccessSummaryCard(session: session),
+        Text('Manage', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        if (canOpenSaccoSetup)
+          _SettingsTile(
+            icon: Icons.account_balance_outlined,
+            title: 'SACCO setup',
+            subtitle: 'Loan terms, fund types, logo and subscriptions',
+            enabled: true,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => _SaccoControlsScreen(session: session),
+            )),
+          ),
+        _SettingsTile(
+          icon: Icons.tune_outlined,
+          title: 'App preferences',
+          subtitle: 'Theme and biometric app lock',
+          enabled: true,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => const _AppPreferencesScreen(),
+          )),
+        ),
+        _SettingsTile(
+          icon: Icons.admin_panel_settings_outlined,
+          title: 'My access',
+          subtitle: 'Roles, permissions and available staff functions',
+          enabled: true,
+          onTap: () => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => _AccessSummaryScreen(session: session),
+          )),
+        ),
         const SizedBox(height: 16),
-        Text('SACCO controls', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        _SettingsTile(
-          icon: Icons.percent,
-          title: 'Loan interest rate',
-          subtitle: profileAsync?.maybeWhen(
-                data: (p) => '${p.loanInterestRate.toStringAsFixed(2)}% monthly default',
-                orElse: () => 'Set default rate for new loans and top-ups',
-              ) ??
-              'Set default rate for new loans and top-ups',
-          enabled: canManageTerms && session.tenantId.isNotEmpty,
-          onTap: () => _showInterestDialog(context, ref, session, profileAsync),
-        ),
-        _SettingsTile(
-          icon: Icons.account_balance_wallet_outlined,
-          title: 'Fund types',
-          subtitle: 'Savings, shares, welfare and custom funds',
-          enabled: canManageFunds,
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => FundSourcesScreen(canManage: canManageFunds),
-          )),
-        ),
-        _SettingsTile(
-          icon: Icons.workspace_premium_outlined,
-          title: 'Subscriptions',
-          subtitle: 'Platform subscription, member dues and SMS credits',
-          enabled: session.can('subscriptions:view') ||
-              session.can('member-subscription:view') ||
-              session.can('notifications:manage'),
-          onTap: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => SubscriptionsHubScreen(
-              canViewSubscription: session.can('subscriptions:view'),
-              canPaySubscription: canPaySubscription,
-              canViewMemberSubscriptions:
-                  session.can('member-subscription:view'),
-              canManageMemberSubscriptions: canManageMemberSubscriptions,
-              canPromptMemberSubscriptions: canPromptMemberSubscriptions,
-              canManageNotifications: session.can('notifications:manage'),
-            ),
-          )),
-        ),
-        _SettingsTile(
-          icon: Icons.image_outlined,
-          title: 'SACCO logo',
-          subtitle: 'Upload or replace the SACCO logo',
-          enabled: canManageProfile && session.tenantId.isNotEmpty,
-          onTap: () => _pickLogo(context, ref, session),
-        ),
-        const SizedBox(height: 24),
-        Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        const _ThemeModeControl(),
-        const SizedBox(height: 24),
-        Text('Security', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        const _BiometricToggle(),
-        const SizedBox(height: 24),
         Card(
           child: ListTile(
             leading: const Icon(Icons.logout, color: Color(0xFFB91C1C)),
@@ -147,6 +123,90 @@ class _SettingsBody extends ConsumerWidget {
         ),
         const SizedBox(height: 24),
       ],
+    );
+  }
+}
+
+class _SaccoControlsScreen extends ConsumerWidget {
+  const _SaccoControlsScreen({required this.session});
+
+  final StaffSession session;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final canManageProfile =
+        session.can('sacco-profile:manage') || session.can('tenants:manage');
+    final canManageFunds = session.can('fund-types:manage');
+    final canManageTerms = session.can('loans:terms');
+    final canPaySubscription = session.can('subscriptions:manage');
+    final canManageMemberSubscriptions =
+        session.can('member-subscription:manage');
+    final canPromptMemberSubscriptions = canManageMemberSubscriptions ||
+        session.can('member-subscription:prompt');
+    final profileAsync = session.tenantId.isEmpty
+        ? null
+        : ref.watch(saccoProfileProvider(session.tenantId));
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('SACCO setup')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Configuration shared by all staff and members.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 12),
+          _SettingsTile(
+            icon: Icons.percent,
+            title: 'Loan interest rate',
+            subtitle: profileAsync?.maybeWhen(
+                  data: (profile) =>
+                      '${profile.loanInterestRate.toStringAsFixed(2)}% monthly default',
+                  orElse: () => 'Set default rate for new loans and top-ups',
+                ) ??
+                'Set default rate for new loans and top-ups',
+            enabled: canManageTerms && session.tenantId.isNotEmpty,
+            onTap: () =>
+                _showInterestDialog(context, ref, session, profileAsync),
+          ),
+          _SettingsTile(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'Fund types',
+            subtitle: 'Savings, shares, welfare and custom funds',
+            enabled: canManageFunds,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => FundSourcesScreen(canManage: canManageFunds),
+            )),
+          ),
+          _SettingsTile(
+            icon: Icons.workspace_premium_outlined,
+            title: 'Subscriptions',
+            subtitle: 'Platform subscription, member dues and SMS credits',
+            enabled: session.can('subscriptions:view') ||
+                session.can('member-subscription:view') ||
+                session.can('notifications:manage'),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => SubscriptionsHubScreen(
+                canViewSubscription: session.can('subscriptions:view'),
+                canPaySubscription: canPaySubscription,
+                canViewMemberSubscriptions:
+                    session.can('member-subscription:view'),
+                canManageMemberSubscriptions: canManageMemberSubscriptions,
+                canPromptMemberSubscriptions: canPromptMemberSubscriptions,
+                canManageNotifications: session.can('notifications:manage'),
+              ),
+            )),
+          ),
+          _SettingsTile(
+            icon: Icons.image_outlined,
+            title: 'SACCO logo',
+            subtitle: 'Upload or replace the SACCO logo',
+            enabled: canManageProfile && session.tenantId.isNotEmpty,
+            onTap: () => _pickLogo(context, ref, session),
+          ),
+        ],
+      ),
     );
   }
 
@@ -180,7 +240,8 @@ class _SettingsBody extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -225,7 +286,8 @@ class _SettingsBody extends ConsumerWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -235,6 +297,53 @@ class _SettingsBody extends ConsumerWidget {
     if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
     if (lower.endsWith('.webp')) return 'image/webp';
     return 'image/png';
+  }
+}
+
+class _AppPreferencesScreen extends StatelessWidget {
+  const _AppPreferencesScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('App preferences')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: const [
+          Text('Appearance'),
+          SizedBox(height: 8),
+          _ThemeModeControl(),
+          SizedBox(height: 24),
+          Text('Security'),
+          SizedBox(height: 8),
+          _BiometricToggle(),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccessSummaryScreen extends StatelessWidget {
+  const _AccessSummaryScreen({required this.session});
+
+  final StaffSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('My access')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text(
+            'Your access is assigned by your SACCO administrator.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 12),
+          _AccessSummaryCard(session: session),
+        ],
+      ),
+    );
   }
 }
 
@@ -286,8 +395,7 @@ class _InterestRateDialogState extends State<_InterestRateDialog> {
             prefixIcon: Icon(Icons.percent),
           ),
           validator: (v) {
-            final parsed =
-                num.tryParse((v ?? '').trim().replaceAll(',', ''));
+            final parsed = num.tryParse((v ?? '').trim().replaceAll(',', ''));
             return parsed == null || parsed < 0 || parsed > 100
                 ? 'Enter a rate from 0 to 100.'
                 : null;
@@ -416,7 +524,9 @@ class _ProfileCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    session.userName.isEmpty ? 'Administrator' : session.userName,
+                    session.userName.isEmpty
+                        ? 'Administrator'
+                        : session.userName,
                     style: Theme.of(context)
                         .textTheme
                         .titleMedium
@@ -438,8 +548,9 @@ class _ProfileCard extends StatelessWidget {
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
-                      children:
-                          session.roleNames.map((r) => Chip(label: Text(r))).toList(),
+                      children: session.roleNames
+                          .map((r) => Chip(label: Text(r)))
+                          .toList(),
                     ),
                   ],
                 ],
@@ -520,8 +631,7 @@ class _ThemeModeControl extends ConsumerWidget {
               child: SegmentedButton<ThemeMode>(
                 showSelectedIcon: false,
                 segments: const [
-                  ButtonSegment(
-                      value: ThemeMode.system, label: Text('System')),
+                  ButtonSegment(value: ThemeMode.system, label: Text('System')),
                   ButtonSegment(value: ThemeMode.light, label: Text('Light')),
                   ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
                 ],

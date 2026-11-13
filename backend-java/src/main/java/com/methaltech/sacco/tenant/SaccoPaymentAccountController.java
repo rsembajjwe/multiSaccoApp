@@ -23,9 +23,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * SACCO-admin management of a SACCO's own collection accounts (its mobile-money numbers/merchant codes
- * and bank accounts). Members pay into these directly. A channel can only be configured if the
- * platform's allowed collection mode permits it.
+ * Management of payment/collection accounts. SACCO staff manage their own collection accounts;
+ * platform administrators can manage accounts for a selected SACCO, and platform-owned receiving
+ * accounts under the platform tenant. A SACCO channel can only be configured if the platform's
+ * allowed collection mode permits it.
  */
 @RestController
 @RequestMapping("/api/v1/sacco-payment-accounts")
@@ -77,9 +78,6 @@ class SaccoPaymentAccountController {
         if (!authService.hasPermission(currentSession.user(), "tenants:manage")) {
             return authService.permissionRequired("tenants:manage");
         }
-        if (authService.isPlatform(currentSession.user())) {
-            return saccoStaffRequired();
-        }
         String tenantId = resolveTenant(currentSession, requestedTenantId);
         if (tenantId == null) return tenantRequired();
 
@@ -118,9 +116,6 @@ class SaccoPaymentAccountController {
         if (currentSession == null) return authService.authRequired();
         if (!authService.hasPermission(currentSession.user(), "tenants:manage")) {
             return authService.permissionRequired("tenants:manage");
-        }
-        if (authService.isPlatform(currentSession.user())) {
-            return saccoStaffRequired();
         }
         String tenantId = resolveTenant(currentSession, requestedTenantId);
         if (tenantId == null) return tenantRequired();
@@ -163,9 +158,6 @@ class SaccoPaymentAccountController {
         if (!authService.hasPermission(currentSession.user(), "tenants:manage")) {
             return authService.permissionRequired("tenants:manage");
         }
-        if (authService.isPlatform(currentSession.user())) {
-            return saccoStaffRequired();
-        }
         String tenantId = resolveTenant(currentSession, requestedTenantId);
         if (tenantId == null) return tenantRequired();
 
@@ -181,6 +173,19 @@ class SaccoPaymentAccountController {
     private ResponseEntity<?> validate(Tenant tenant, String channel, PaymentAccountRequest body) {
         if (!CHANNELS.contains(channel)) {
             return badRequest("INVALID_COLLECTION_CHANNEL", "Channel must be 'mobile_money' or 'bank'.");
+        }
+        if ("tenant_platform".equals(tenant.getId())) {
+            if (!SaccoPaymentAccount.CHANNEL_MOBILE_MONEY.equals(channel)) {
+                return badRequest("INVALID_COLLECTION_CHANNEL", "Platform receiving accounts must be mobile-money accounts.");
+            }
+            if (!Set.of("mtn", "airtel").contains(normalize(body.network()))) {
+                return badRequest("INVALID_COLLECTION_ACCOUNT", "Platform mobile-money accounts must be MTN or Airtel.");
+            }
+            if (body.accountName() == null || body.accountName().isBlank()
+                    || body.accountNumber() == null || body.accountNumber().isBlank()) {
+                return badRequest("INVALID_COLLECTION_ACCOUNT", "Account name and account number are required.");
+            }
+            return null;
         }
         CollectionMode allowed = tenant.getAllowedCollectionMode();
         if (SaccoPaymentAccount.CHANNEL_MOBILE_MONEY.equals(channel) && !allowed.allowsMobileMoney()) {
@@ -217,11 +222,6 @@ class SaccoPaymentAccountController {
     private ResponseEntity<ApiErrorResponse> tenantRequired() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_REQUIRED", "A SACCO must be selected to manage its collection accounts."));
-    }
-
-    private ResponseEntity<ApiErrorResponse> saccoStaffRequired() {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiErrorResponse.of(403, "SACCO_STAFF_REQUIRED", "Only SACCO staff can manage the SACCO's own collection accounts."));
     }
 
     private ResponseEntity<ApiErrorResponse> notFound(String code, String message) {

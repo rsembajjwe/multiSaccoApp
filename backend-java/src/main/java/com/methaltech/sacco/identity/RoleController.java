@@ -5,6 +5,7 @@ import com.methaltech.sacco.api.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.transaction.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -42,7 +45,10 @@ class RoleController {
             return authService.permissionRequired("roles:view");
         }
 
+        Set<String> assignablePermissionIds = authService.permissionIds(currentSession.user());
         return ResponseEntity.ok(ApiResponse.of(permissionRepository.findAllByOrderByModuleAscActionAsc().stream()
+                .filter(permission -> authService.isPlatform(currentSession.user())
+                        || assignablePermissionIds.contains(permission.getId()))
                 .map(PermissionResponse::from)
                 .toList()));
     }
@@ -101,6 +107,17 @@ class RoleController {
                         .body(ApiErrorResponse.of(400, "UNKNOWN_PERMISSION", "One or more permissions are unknown."));
             }
         }
+        if (!authService.isPlatform(currentSession.user())) {
+            Set<String> assignablePermissionIds = authService.permissionIds(currentSession.user());
+            List<String> elevatedPermissionIds = permissionIds.stream()
+                    .filter(permissionId -> !assignablePermissionIds.contains(permissionId))
+                    .toList();
+            if (!elevatedPermissionIds.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiErrorResponse.of(403, "ROLE_PRIVILEGE_ESCALATION",
+                                "A SACCO administrator cannot assign permissions they do not hold."));
+            }
+        }
 
         Role role = roleRepository.save(new Role(
                 "role_" + UUID.randomUUID(),
@@ -121,6 +138,84 @@ class RoleController {
                 role.getId(),
                 request.getRemoteAddr());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(RoleResponse.from(role, permissionIds)));
+    }
+
+    @PatchMapping("/roles/{roleId}")
+    @Transactional
+    ResponseEntity<?> updateRole(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String roleId,
+            @Valid @RequestBody UpdateRoleRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "roles:create")) {
+            return authService.permissionRequired("roles:create");
+        }
+        ResponseEntity<ApiErrorResponse> saccoAdminRequired = requireSaccoAdministratorForRoleManagement(currentSession);
+        if (saccoAdminRequired != null) return saccoAdminRequired;
+
+        Role role = roleRepository.findById(roleId).orElse(null);
+        if (role == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "ROLE_NOT_FOUND", "Role not found."));
+        }
+        if (!authService.isPlatform(currentSession.user())
+                && !role.getTenantId().equals(currentSession.user().getTenantId())) {
+            return tenantAccessDenied();
+        }
+        if (role.isProtectedRole()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "PROTECTED_ROLE", "Protected roles cannot be edited."));
+        }
+
+        String name = body.name().trim();
+        Role duplicate = roleRepository.findByTenantIdAndNameIgnoreCase(role.getTenantId(), name).orElse(null);
+        if (duplicate != null && !duplicate.getId().equals(role.getId())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "ROLE_EXISTS", "A role with that name already exists in this tenant."));
+        }
+
+        List<String> permissionIds = sanitizedPermissionIds(body.permissionIds());
+        ResponseEntity<ApiErrorResponse> permissionError = validateAssignablePermissions(currentSession, permissionIds);
+        if (permissionError != null) return permissionError;
+
+        role.rename(name);
+        roleRepository.save(role);
+        rolePermissionRepository.deleteAll(rolePermissionRepository.findByIdRoleId(role.getId()));
+        if (!permissionIds.isEmpty()) {
+            rolePermissionRepository.saveAll(permissionIds.stream()
+                    .map(permissionId -> new RolePermission(role.getId(), permissionId))
+                    .toList());
+        }
+        auditService.record(
+                role.getTenantId(),
+                currentSession.user(),
+                "Updated role " + role.getName(),
+                "role",
+                role.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(RoleResponse.from(role, permissionIds)));
+    }
+
+    private ResponseEntity<ApiErrorResponse> validateAssignablePermissions(
+            AuthService.CurrentSession currentSession, List<String> permissionIds) {
+        if (!authService.isPlatform(currentSession.user())) {
+            Set<String> assignablePermissionIds = authService.permissionIds(currentSession.user());
+            if (permissionIds.stream().anyMatch(permissionId -> !assignablePermissionIds.contains(permissionId))) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiErrorResponse.of(403, "ROLE_PRIVILEGE_ESCALATION",
+                                "A SACCO administrator cannot assign permissions they do not hold."));
+            }
+        }
+        Set<String> knownPermissionIds = permissionRepository.findAllById(permissionIds).stream()
+                .map(Permission::getId)
+                .collect(Collectors.toSet());
+        if (permissionIds.stream().anyMatch(permissionId -> !knownPermissionIds.contains(permissionId))) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "UNKNOWN_PERMISSION", "One or more permissions are unknown."));
+        }
+        return null;
     }
 
     private List<RoleResponse> roleResponses(List<Role> roles) {
@@ -163,11 +258,16 @@ class RoleController {
     }
 
     private ResponseEntity<ApiErrorResponse> requireSaccoAdministratorForRoleManagement(AuthService.CurrentSession currentSession) {
-        if (authService.isPlatform(currentSession.user()) || hasRole(currentSession.user(), "SACCO Administrator")) {
+        // The Chairperson is the SACCO administrator, so the Chairperson role (and the merged
+        // "SACCO Administrator / Chairperson" name) can manage roles alongside a legacy SACCO Administrator.
+        if (authService.isPlatform(currentSession.user())
+                || hasRole(currentSession.user(), "SACCO Administrator")
+                || hasRole(currentSession.user(), "Chairperson")
+                || hasRole(currentSession.user(), "SACCO Administrator / Chairperson")) {
             return null;
         }
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiErrorResponse.of(403, "SACCO_ADMIN_REQUIRED", "Only the SACCO Administrator can manage SACCO roles."));
+                .body(ApiErrorResponse.of(403, "SACCO_ADMIN_REQUIRED", "Only the SACCO Administrator (Chairperson) can manage SACCO roles."));
     }
 
     private boolean hasRole(User user, String roleName) {
@@ -180,5 +280,8 @@ class RoleController {
     }
 
     record CreateRoleRequest(String tenantId, @NotBlank String name, List<String> permissionIds) {
+    }
+
+    record UpdateRoleRequest(@NotBlank String name, List<String> permissionIds) {
     }
 }

@@ -136,6 +136,32 @@ public class NotificationService {
         return notification;
     }
 
+            public Notification sendMemberActivationCredentials(Member member, String saccoCode, String password, String channel) {
+            String title = "Member account activated";
+            String message = "Your SACCO member login is active. SACCO code: " + saccoCode
+                + ". Membership no: " + member.getMembershipNo()
+                        + ". Password: " + password
+                + ". Change it after login.";
+            Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                member.getTenantId(),
+                member.getId(),
+                "member_activation_credentials",
+                title,
+                message,
+                "member",
+                member.getId()));
+            NotificationProvider provider = providers.stream()
+                .filter(candidate -> channel != null && channel.equals(candidate.channel()))
+                .filter(candidate -> candidate.enabledFor(member))
+                .findFirst()
+                .orElseThrow(() -> new NotificationProviderException("No " + channel + " recipient or provider is available for this member."));
+            String deliveryMessage = "email".equals(provider.channel()) ? title + ": " + message : message;
+            NotificationSendResult result = send(provider, member, title, deliveryMessage);
+            createDelivery(notification, member, provider.channel(), provider.providerId(), provider.recipient(member), result, deliveryMessage);
+            return notification;
+            }
+
     /** Notifies a member (across their enabled channels) that their savings were moved by a transfer. */
     public Notification notifySavingsMovement(Member member, BigDecimal amount, boolean debit, String description) {
         String title = debit ? "Savings transferred out" : "Savings credited";
@@ -153,6 +179,31 @@ public class NotificationService {
                 message,
                 "savings_transfer",
                 null));
+        createDeliveries(notification, member, title, message);
+        return notification;
+    }
+
+    public Notification notifyLoanRecoveryNotice(Member member, String reference, BigDecimal recoveryAmount) {
+        String title = "Loan recovery notice";
+        String message = "Recovery case " + reference + " applied "
+                + formattedAmount(member.getTenantId(), recoveryAmount)
+                + " from savings to your overdue loan under the signed loan terms. Contact the SACCO for details.";
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(), member.getTenantId(), member.getId(),
+                "loan_recovery_notice", title, message, "loan_recovery", reference));
+        createDeliveries(notification, member, title, message);
+        return notification;
+    }
+
+    public Notification notifyLoanRecoveryPosted(
+            Member member, BigDecimal amount, String reference, String sourceType) {
+        String title = "Loan recovery posted";
+        String role = "guarantor".equals(sourceType) ? "guarantee obligation" : "loan obligation";
+        String message = formattedAmount(member.getTenantId(), amount) + " was applied from your savings toward a "
+                + role + " under recovery case " + reference + ".";
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(), member.getTenantId(), member.getId(),
+                "loan_recovery_posted", title, message, "loan_recovery", reference));
         createDeliveries(notification, member, title, message);
         return notification;
     }
@@ -234,14 +285,7 @@ public class NotificationService {
             createStaffDeliveries(notification, recipient, title, message);
         }
 
-        // Best-effort push to the SACCO's staff topic.
-        String saccoCode = tenantService.findById(tenantId)
-                .map(TenantResponse::abbreviation)
-                .orElse(null);
-        if (saccoCode == null || saccoCode.isBlank()) {
-            return;
-        }
-        staffPushNotifier.notifyStaff(saccoCode, title, message);
+        staffPushNotifier.notifyStaff(tenantId, title, message);
     }
 
     /**
@@ -463,6 +507,70 @@ public class NotificationService {
                 recipient == null || recipient.isBlank() ? userId : recipient,
                 message));
         return notification;
+    }
+
+    public int notifyFleetApprovalRequested(String jobId, String action, int organizationCount,
+            String requesterUserId, String requesterName) {
+        String title = "Fleet update awaiting approval";
+        String message = safe(requesterName) + " requested " + safe(action) + " for "
+                + organizationCount + " organization" + (organizationCount == 1 ? "" : "s")
+                + ". Review it in the Approval Inbox.";
+        return notifyFleetApprovers("fleet_approval_requested", title, message, jobId, requesterUserId);
+    }
+
+    public int notifyFleetApprovalEscalation(String jobId, String action, int organizationCount,
+            String requesterUserId, boolean overdue) {
+        String eventType = overdue ? "fleet_approval_overdue" : "fleet_approval_due_soon";
+        String title = overdue ? "Fleet approval SLA breached" : "Fleet approval due soon";
+        String message = safe(action) + " for " + organizationCount + " organization"
+                + (organizationCount == 1 ? "" : "s")
+                + (overdue ? " has exceeded the eight-hour decision SLA." : " has been waiting for more than four hours.")
+                + " Review it in the Approval Inbox.";
+        return notifyFleetApprovers(eventType, title, message, jobId, requesterUserId);
+    }
+
+    public Notification notifyFleetApprovalDecision(String jobId, String requesterUserId,
+            String decision, String checkerName, String reason) {
+        String eventType = "approve".equals(decision) ? "fleet_approval_approved" : "fleet_approval_rejected";
+        String deduplicationKey = fleetApprovalDeduplicationKey(eventType, jobId, requesterUserId);
+        if (notificationRepository.existsByDeduplicationKey(deduplicationKey)) return null;
+        return staffNotificationRecipientService.platformRecipient(requesterUserId)
+                .map(recipient -> {
+                    String title = "approve".equals(decision) ? "Fleet update approved" : "Fleet update rejected";
+                    String message = safe(checkerName) + " " + ("approve".equals(decision) ? "approved" : "rejected")
+                            + " your fleet update request. Reason: " + safe(reason) + ".";
+                    Notification notification = new Notification(
+                            "notification_" + UUID.randomUUID(), "tenant_platform", null, recipient.userId(),
+                            eventType, title, message, "fleet_bulk_job", jobId);
+                    notification.assignDeduplicationKey(deduplicationKey);
+                    notification = notificationRepository.save(notification);
+                    createStaffDeliveries(notification, recipient, title, message);
+                    return notification;
+                })
+                .orElse(null);
+    }
+
+    private int notifyFleetApprovers(String eventType, String title, String message,
+            String jobId, String excludedUserId) {
+        int sent = 0;
+        for (com.methaltech.sacco.identity.StaffNotificationRecipient recipient
+                : staffNotificationRecipientService.platformFleetApproverRecipients()) {
+            String deduplicationKey = fleetApprovalDeduplicationKey(eventType, jobId, recipient.userId());
+            if (recipient.userId().equals(excludedUserId)
+                    || notificationRepository.existsByDeduplicationKey(deduplicationKey)) continue;
+            Notification notification = new Notification(
+                    "notification_" + UUID.randomUUID(), "tenant_platform", null, recipient.userId(),
+                    eventType, title, message, "fleet_bulk_job", jobId);
+            notification.assignDeduplicationKey(deduplicationKey);
+            notification = notificationRepository.save(notification);
+            createStaffDeliveries(notification, recipient, title, message);
+            sent++;
+        }
+        return sent;
+    }
+
+    private String fleetApprovalDeduplicationKey(String eventType, String jobId, String userId) {
+        return eventType + ":" + jobId + ":" + userId;
     }
 
     public List<Notification> notifyPaymentRequestManuallyClosed(

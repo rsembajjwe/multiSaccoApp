@@ -64,7 +64,7 @@ void main() {
       expect(await store.readSacco(), isNull);
     });
 
-    test('logout unsubscribes from the stored SACCO topic', () async {
+    test('logout unregisters the device and clears the stored SACCO', () async {
       final store = SessionStore();
       final push = _RecordingPushTopics();
       final api = _LogoutApiClient(store, push);
@@ -75,6 +75,7 @@ void main() {
       await auth.logout();
 
       expect(api.postedPaths, contains('/auth/logout'));
+      expect(api.deletedPaths, contains('/auth/push-devices'));
       expect(push.unsubscribed, ['GREE']);
       expect(await store.readSacco(), isNull);
     });
@@ -102,6 +103,15 @@ class _RecordingPushTopics implements StaffPushTopics {
   final unsubscribed = <String>[];
 
   @override
+  Future<String?> deviceToken() async => 'device-token';
+
+  @override
+  String get platform => 'android';
+
+  @override
+  Stream<String> get tokenRefresh => const Stream.empty();
+
+  @override
   Future<void> requestPermission() async {}
 
   @override
@@ -121,6 +131,7 @@ class _LogoutApiClient extends ApiClient {
       : super(store, push, dio: Dio());
 
   final postedPaths = <String>[];
+  final deletedPaths = <String>[];
 
   @override
   Future<Map<String, dynamic>> post(
@@ -128,6 +139,15 @@ class _LogoutApiClient extends ApiClient {
     Map<String, dynamic> body,
   ) async {
     postedPaths.add(path);
+    return <String, dynamic>{};
+  }
+
+  @override
+  Future<Map<String, dynamic>> delete(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    deletedPaths.add(path);
     return <String, dynamic>{};
   }
 }

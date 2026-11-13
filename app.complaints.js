@@ -240,7 +240,7 @@ function chatConversationPanel(selected, mode) {
         : `<div class="chat-window"><div class="empty-state compact"><strong>No messages yet</strong><span>Start the conversation below.</span></div></div>`);
   return `
     <section class="panel detail-panel">
-      ${state.chatError ? `<div class="notice warning"><strong>Chat error.</strong><span>${escapeHtml(state.chatError)}</span></div>` : ""}
+      ${state.chatError ? `<div class="notice warning"><strong>Chat error.</strong><span>${escapeHtml(state.chatError)}</span><button class="button secondary" type="button" data-chat-retry="${escapeHtml(selected.id)}">Retry</button></div>` : ""}
       <section class="panel compact-panel chat-panel">
         ${windowHtml}
       </section>
@@ -546,7 +546,7 @@ function memberChatWorkspace() {
           <p>Send a new message to your SACCO admin office.</p>
         </div>
       </div>
-      ${state.chatError ? `<div class="notice warning"><strong>Chat error.</strong><span>${escapeHtml(state.chatError)}</span></div>` : ""}
+      ${state.chatError ? `<div class="notice warning"><strong>Chat error.</strong><span>${escapeHtml(state.chatError)}</span><button class="button secondary" type="button" data-chat-retry="">Retry</button></div>` : ""}
       <form id="memberNewChatForm" class="form-grid single">
         <label><span>Subject</span><input id="memberNewChatSubject" placeholder="What is this about?" ${state.chatSending ? "disabled" : ""}></label>
         <label><span>Message</span><textarea id="memberNewChatMessage" class="chat-reply-input" placeholder="Type your message..." ${state.chatSending ? "disabled" : ""}></textarea></label>

@@ -24,7 +24,9 @@ const _filters = <_Filter>[
 /// Chairperson-driven savings transfers, under maker-checker control.
 /// A different officer posts or rejects a pending transfer.
 class SavingsTransfersScreen extends ConsumerStatefulWidget {
-  const SavingsTransfersScreen({super.key});
+  const SavingsTransfersScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<SavingsTransfersScreen> createState() =>
@@ -43,7 +45,8 @@ class _SavingsTransfersScreenState
         ref.watch(sessionProvider).asData?.value.can('savings-transfer:approve') ??
             false;
     return Scaffold(
-      appBar: AppBar(title: const Text('Savings transfers')),
+      appBar:
+          widget.embedded ? null : AppBar(title: const Text('Savings transfers')),
       body: Column(
         children: [
           SizedBox(

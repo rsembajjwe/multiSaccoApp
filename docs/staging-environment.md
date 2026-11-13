@@ -79,7 +79,7 @@ docker compose up --build -d postgres backend
 Verify health:
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8080/actuator/health
+Invoke-RestMethod http://127.0.0.1:8080/actuator/health/readiness
 Invoke-RestMethod http://127.0.0.1:8080/api/v1/health
 ```
 

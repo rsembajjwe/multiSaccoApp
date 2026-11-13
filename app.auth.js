@@ -19,6 +19,7 @@ const demoAccounts = [
 ];
 
 function renderLogin() {
+  applyTheme(state.theme);
   document.body.className = "login-page";
   setHtml(`
     <a class="skip-link" href="#login-main">Skip to login form</a>
@@ -33,6 +34,7 @@ function renderLogin() {
             </div>
           </div>
           <div class="login-locale-row">
+            ${themeToggleButton()}
             <label class="sr-only" for="loginLocale">Language</label>
             <select id="loginLocale" class="locale-select" aria-label="Language">
               ${supportedLocales.map((locale) => `<option value="${escapeHtml(locale.code)}" ${locale.code === state.locale ? "selected" : ""}>${escapeHtml(locale.label)}</option>`).join("")}
@@ -81,11 +83,29 @@ function authTabButton(tab, label) {
 }
 
 function authPanelContent() {
+  if (state.firstLoginTemporaryPassword) return firstLoginPasswordPanel();
   if (state.mfaChallengeId) return mfaVerificationPanel();
   if (state.authTab === "register") return publicSaccoRegistrationPanel();
   if (state.authTab === "forgot") return passwordRecoveryPanel();
   if (state.authTab === "support") return authInfoPanel("Support", "For onboarding, payment, login or member-access support, share your SACCO code, role, phone number and the error shown on this screen.", "Open support request");
   return loginPanel();
+}
+
+function firstLoginPasswordPanel() {
+  return `
+    <div class="form-heading">
+      <p class="eyebrow">First login</p>
+      <h2>Secure your account</h2>
+      <p>Your temporary password verified access to ${escapeHtml(labelize(state.firstLoginVerificationChannel || "your contact"))}. Choose a permanent password before continuing.</p>
+    </div>
+    ${state.firstLoginError ? `<div class="notice warning" role="alert"><strong>Password change failed.</strong><span>${escapeHtml(state.firstLoginError)}</span></div>` : ""}
+    <form id="firstLoginPasswordForm" class="form-grid single">
+      <label><span>New password</span><input id="firstLoginNewPassword" type="password" minlength="12" autocomplete="new-password" required></label>
+      <label><span>Confirm new password</span><input id="firstLoginConfirmPassword" type="password" minlength="12" autocomplete="new-password" required></label>
+      <button id="firstLoginPasswordButton" class="button primary" type="submit">Change password</button>
+    </form>
+    <button class="button ghost" type="button" data-action="cancel-first-login">Cancel login</button>
+  `;
 }
 
 function mfaVerificationPanel() {
@@ -147,7 +167,7 @@ function publicSaccoRegistrationPanel() {
     <form id="publicSaccoRegistrationForm" class="form-grid">
       <label><span>${t("saccoName")}</span><input id="publicTenantName" required placeholder="e.g. Tereka Farmers SACCO"></label>
       <label><span>${t("saccoCode")}</span><input id="publicTenantCode" readonly maxlength="4" placeholder="${escapeHtml(t("saccoCodeGenerated"))}"></label>
-      <label><span>${t("registrationNumber")}</span><input id="publicTenantRegistrationNo" required placeholder="${escapeHtml(t("registrationNumberPlaceholder"))}"></label>
+      <label><span>${t("registrationNumber")} (optional)</span><input id="publicTenantRegistrationNo" placeholder="${escapeHtml(t("registrationNumberPlaceholder"))}"></label>
       <label><span>Country</span><select id="publicTenantCountry">${countryRegionOptions(COUNTRY_REGIONS, "uganda").map((option) => `<option value="${escapeHtml(option.value)}" data-country-label="${escapeHtml(option.label.split(" - ")[0])}" data-locale="${escapeHtml(option.locale)}" data-currency="${escapeHtml(option.currency)}" data-digits="${option.currencyDigits}" ${option.selected ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}</select></label>
       <label><span>Currency</span><input id="publicTenantCurrencyCode" readonly value="UGX"></label>
       <label><span>${t("district")}</span><input id="publicTenantDistrict" required></label>

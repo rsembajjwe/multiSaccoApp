@@ -7,5 +7,6 @@ interface UserRoleRepository extends JpaRepository<UserRole, UserRoleId> {
     List<UserRole> findByIdUserId(String userId);
     List<UserRole> findByIdUserIdAndTenantId(String userId, String tenantId);
     List<UserRole> findByIdUserIdIn(List<String> userIds);
+    boolean existsByIdUserIdAndIdRoleId(String userId, String roleId);
     void deleteByIdUserId(String userId);
 }

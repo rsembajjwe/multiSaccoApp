@@ -53,6 +53,28 @@ SACCO_MTN_MOMO_API_KEY=...
 SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS=false   # sandbox
 ```
 
+### MTN request-field mapping
+
+Only provider credentials and deployment settings belong in `.env`. The backend maps them to each
+MTN request as follows:
+
+| MTN field | Source | Lifecycle |
+| --- | --- | --- |
+| `Ocp-Apim-Subscription-Key` | `SACCO_MTN_MOMO_SUBSCRIPTION_KEY` | Static secret |
+| `X-Target-Environment` | `SACCO_MTN_MOMO_TARGET_ENVIRONMENT` | Static deployment setting |
+| Basic-auth API user | `SACCO_MTN_MOMO_API_USER_ID` | Static credential |
+| Basic-auth API key | `SACCO_MTN_MOMO_API_KEY` | Static secret |
+| `payer.partyIdType` | Backend constant `MSISDN` | Static request value |
+| `currency` | `EUR` in sandbox; tenant currency in production | Environment/tenant derived |
+| `payerMessage` / `payeeNote` | Payment purpose, tenant, and member | Generated per payment |
+| `X-Reference-Id` | New UUID v4 | Unique per MTN request |
+| `amount` | Member-entered payment amount | Dynamic per payment |
+| `externalId` | Internal payment reference | Dynamic and traceable |
+| `payer.partyId` | Normalized payer phone number | Dynamic per payment |
+
+`X-Reference-Id`, `externalId`, and `payer.partyId` must not be stored as shared `.env` values.
+Doing so would reuse transaction identifiers or charge the wrong payer.
+
 **Restart the backend.** Then, as a platform admin, open the platform **Integrations / operations
 readiness** view — MTN MoMo should show as configured and active. (Green Valley already has
 mobile-money allowed + active from the collection-mode migration.)

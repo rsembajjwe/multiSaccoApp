@@ -55,7 +55,7 @@ Use emergency rotation if a secret appears in a chat, email, screenshot, ticket,
 
 ## Verification
 
-- `ProductionSecretReadinessValidator` blocks weak database passwords, PII encryption keys, and callback secrets when demo logins are disabled.
+- `ProductionSecretReadinessValidator` blocks weak database passwords, PII encryption keys, and callback secrets when production readiness is enabled.
 - `IntegrationProviderReadinessValidator` blocks production startup when real provider settings are missing.
 - `DocumentStorageReadinessValidator` blocks production startup unless KYC document storage disposal is configured.
 - `npm.cmd run check` includes `scripts/check-secrets-management.mjs`, which ensures deployment example files use placeholders and this runbook remains present.

@@ -84,4 +84,9 @@ class MobileMoneyCallback {
     void assignCollectionAccount(String collectionAccountId) {
         this.collectionAccountId = collectionAccountId;
     }
+
+    void recordFinancialDecision(String status) {
+        if (!"financial_transaction".equals(resourceType)) return;
+        this.status = status;
+    }
 }

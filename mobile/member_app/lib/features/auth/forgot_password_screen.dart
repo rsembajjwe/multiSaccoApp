@@ -100,7 +100,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             children: [
               TextField(
                 controller: _sacco,
-                decoration: const InputDecoration(labelText: 'SACCO code'),
+                decoration:
+                    const InputDecoration(labelText: 'Organization code'),
               ),
               const SizedBox(height: 12),
               TextField(

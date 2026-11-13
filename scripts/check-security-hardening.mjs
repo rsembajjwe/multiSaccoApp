@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs";
 
-const baseUrl = (process.env.API_BASE_URL || "http://127.0.0.1:8080/api/v1").replace(/\/$/, "");
+// Use the secured frontend proxy by default; CI/direct-backend checks can override API_BASE_URL.
+const baseUrl = (process.env.API_BASE_URL || "http://127.0.0.1:5173/api/v1").replace(/\/$/, "");
 const checks = [];
 
 await check("prod profile disables demo logins by default", () => {
   const prodProperties = readFileSync("backend-java/src/main/resources/application-prod.properties", "utf8");
   assert(prodProperties.includes("sacco.demo-logins.enabled=${SACCO_DEMO_LOGINS_ENABLED:false}"));
+  assert(prodProperties.includes("sacco.production-readiness.enabled=${SACCO_PRODUCTION_READINESS_ENABLED:true}"));
   assert(prodProperties.includes("sacco.providers.sms=${SACCO_SMS_PROVIDER:}"), "prod SMS provider must not default to demo");
   assert(prodProperties.includes("sacco.providers.email=${SACCO_EMAIL_PROVIDER:}"), "prod email provider must not default to demo");
   assert(prodProperties.includes("sacco.providers.mobile-money=${SACCO_MOBILE_MONEY_PROVIDER:}"), "prod mobile-money provider must not default to demo");
@@ -16,8 +18,10 @@ await check("prod profile disables demo logins by default", () => {
   assert(demoPolicy.includes("MEMBER_DEMO_NUMBER"), "demo member number guard is missing");
   const providerValidator = readFileSync("backend-java/src/main/java/com/methaltech/sacco/config/IntegrationProviderReadinessValidator.java", "utf8");
   assert(providerValidator.includes("Production startup requires real integration provider configuration"), "provider readiness guard is missing");
+  assert(providerValidator.includes("sacco.production-readiness.enabled:false"), "provider readiness guard is not tied to the production-readiness flag");
   const secretValidator = readFileSync("backend-java/src/main/java/com/methaltech/sacco/config/ProductionSecretReadinessValidator.java", "utf8");
   assert(secretValidator.includes("Production startup requires strong non-placeholder secrets"), "production secret readiness guard is missing");
+  assert(secretValidator.includes("sacco.production-readiness.enabled:false"), "secret readiness guard is not tied to the production-readiness flag");
   assert(secretValidator.includes("SACCO_MOBILE_MONEY_CALLBACK_SECRET"), "callback secret guard is missing");
   assert(secretValidator.includes("POSTGRES_PASSWORD"), "database password guard is missing");
   const bootstrapper = readFileSync("backend-java/src/main/java/com/methaltech/sacco/identity/PlatformAdminBootstrapper.java", "utf8");

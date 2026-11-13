@@ -32,6 +32,11 @@ class AdminRepository {
           .map(NextOfKin.fromJson)
           .toList();
 
+  Future<List<GroupOfficial>> groupOfficials(String id) async =>
+      (await _api.getList('/members/$id/group-officials'))
+          .map(GroupOfficial.fromJson)
+          .toList();
+
   Future<List<Beneficiary>> memberBeneficiaries(String id) async =>
       (await _api.getList('/members/$id/beneficiaries'))
           .map(Beneficiary.fromJson)
@@ -76,6 +81,7 @@ class AdminRepository {
     required String phone,
     String memberType = 'individual',
     String email = '',
+    String address = '',
     String nationalId = '',
   }) async {
     final data = await _api.post('/members', {
@@ -84,9 +90,28 @@ class AdminRepository {
       'memberType': memberType,
       'phone': phone.trim(),
       if (email.trim().isNotEmpty) 'email': email.trim(),
+      if (address.trim().isNotEmpty) 'address': address.trim(),
       if (nationalId.trim().isNotEmpty) 'nationalId': nationalId.trim(),
     });
     return Member.fromJson(data);
+  }
+
+  Future<NextOfKin> createNextOfKin({
+    required String memberId,
+    required String fullName,
+    required String relationship,
+    required String phone,
+    String address = '',
+    bool primaryContact = false,
+  }) async {
+    final data = await _api.post('/members/$memberId/next-of-kin', {
+      'fullName': fullName.trim(),
+      'relationship': relationship.trim(),
+      'phone': phone.trim(),
+      if (address.trim().isNotEmpty) 'address': address.trim(),
+      'primaryContact': primaryContact,
+    });
+    return NextOfKin.fromJson(data);
   }
 
   Future<Member> updateMember(Member m,
@@ -97,6 +122,7 @@ class AdminRepository {
       'memberType': m.memberType.isEmpty ? 'individual' : m.memberType,
       'phone': (phone ?? m.phone).trim(),
       'email': (email ?? m.email).trim(),
+      'address': m.address.trim(),
       'nationalId': m.nationalId,
       'status': m.status,
       'kycStatus': m.kycStatus,
@@ -149,6 +175,32 @@ class AdminRepository {
       'purpose': purpose.trim(),
       'applicationSource': 'staff_captured_signed_form',
       'signedFormReference': signedFormReference.trim(),
+    });
+    return Loan.fromJson(data);
+  }
+
+  Future<Loan> decideLoan({
+    required String loanId,
+    required String status,
+    required String reason,
+    String paperApprovalReference = '',
+    String paperApprovalApprovers = '',
+    bool paperApprovedByChairperson = false,
+    bool paperApprovedBySecretary = false,
+    bool paperApprovedByTreasurer = false,
+    bool paperApprovedByCommittee = false,
+  }) async {
+    final data = await _api.patch('/loans/$loanId/status', {
+      'status': status,
+      'reason': reason.trim(),
+      if (paperApprovalReference.trim().isNotEmpty)
+        'paperApprovalReference': paperApprovalReference.trim(),
+      if (paperApprovalApprovers.trim().isNotEmpty)
+        'paperApprovalApprovers': paperApprovalApprovers.trim(),
+      'paperApprovedByChairperson': paperApprovedByChairperson,
+      'paperApprovedBySecretary': paperApprovedBySecretary,
+      'paperApprovedByTreasurer': paperApprovedByTreasurer,
+      'paperApprovedByCommittee': paperApprovedByCommittee,
     });
     return Loan.fromJson(data);
   }
@@ -229,6 +281,47 @@ class AdminRepository {
   Future<List<LoanRepayment>> repayments(String loanId) async {
     final rows = await _api.getList('/loans/$loanId/repayments');
     return rows.map(LoanRepayment.fromJson).toList();
+  }
+
+  Future<LoanRepayment> createLoanRepayment({
+    required String loanId,
+    required num amount,
+    String channel = 'cash',
+    String? reference,
+    String? narration,
+  }) async {
+    final data = await _api.post('/loans/$loanId/repayments', {
+      'amount': amount,
+      'channel': channel,
+      if (reference != null && reference.trim().isNotEmpty)
+        'reference': reference.trim(),
+      if (narration != null && narration.trim().isNotEmpty)
+        'narration': narration.trim(),
+    });
+    return LoanRepayment.fromJson(data);
+  }
+
+  Future<List<LoanRecoveryCase>> loanRecoveries(String loanId) async {
+    final rows = await _api.getList('/loans/$loanId/recoveries');
+    return rows.map(LoanRecoveryCase.fromJson).toList();
+  }
+
+  Future<LoanRecoveryCase> openLoanRecovery({
+    required String loanId,
+    required String reason,
+    required String recoveryMethod,
+    String? noticeReference,
+    String? noticeServedAt,
+    bool sendNotice = false,
+  }) async {
+    final data = await _api.post('/loans/$loanId/recoveries', {
+      'reason': reason.trim(),
+      'recoveryMethod': recoveryMethod,
+      'sendNotice': sendNotice,
+      if (noticeReference != null) 'noticeReference': noticeReference.trim(),
+      if (noticeServedAt != null) 'noticeServedAt': noticeServedAt,
+    });
+    return LoanRecoveryCase.fromJson(data);
   }
 
   /// Reverse a posted financial transaction (transactions:approve).
@@ -369,17 +462,35 @@ class AdminRepository {
 
   Future<FundType> createFundType({
     required String name,
-    required String code,
+    String? code,
     required String basis,
     String? description,
   }) async {
     final data = await _api.post('/fund-types', {
       'name': name.trim(),
-      'code': code.trim().toLowerCase(),
+      if (code != null && code.trim().isNotEmpty) 'code': code.trim(),
       'basis': basis.trim().toLowerCase(),
       if (description != null && description.trim().isNotEmpty)
         'description': description.trim(),
       'active': true,
+    });
+    return FundType.fromJson(data);
+  }
+
+  Future<FundType> updateFundType(
+    String id, {
+    required String name,
+    required String basis,
+    required String description,
+    required bool active,
+    required int displayOrder,
+  }) async {
+    final data = await _api.patch('/fund-types/$id', {
+      'name': name.trim(),
+      'basis': basis.trim().toLowerCase(),
+      'description': description.trim(),
+      'active': active,
+      'displayOrder': displayOrder,
     });
     return FundType.fromJson(data);
   }
@@ -538,7 +649,8 @@ class AdminRepository {
     String subscriptionId, {
     required num amount,
   }) async {
-    final data = await _api.post('/member-subscriptions/$subscriptionId/payments', {
+    final data =
+        await _api.post('/member-subscriptions/$subscriptionId/payments', {
       'amount': amount,
       'method': 'cash',
     });
@@ -691,7 +803,8 @@ class AdminRepository {
   }
 
   Future<List<MobileMoneyPaymentRequest>> mobileMoneyPaymentRequests() async {
-    final rows = await _api.getList('/integrations/mobile-money/payment-requests');
+    final rows =
+        await _api.getList('/integrations/mobile-money/payment-requests');
     return rows.map(MobileMoneyPaymentRequest.fromJson).toList();
   }
 
@@ -708,8 +821,8 @@ class AdminRepository {
 
   Future<MobileMoneyPaymentRequest> refreshMobileMoneyProviderStatus(
       String requestId) async {
-    final data = await _api
-        .get('/integrations/mobile-money/payment-requests/$requestId/provider-status');
+    final data = await _api.get(
+        '/integrations/mobile-money/payment-requests/$requestId/provider-status');
     return MobileMoneyPaymentRequest.fromJson(data);
   }
 
@@ -722,8 +835,7 @@ class AdminRepository {
       '/integrations/mobile-money/payment-requests/$requestId/status',
       {
         'status': status,
-        if (reason != null && reason.trim().isNotEmpty)
-          'reason': reason.trim(),
+        if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
       },
     );
     return MobileMoneyPaymentRequest.fromJson(data);
@@ -732,6 +844,11 @@ class AdminRepository {
   Future<ReconciliationReport> reconciliation() async {
     final data = await _api.get('/reconciliation');
     return ReconciliationReport.fromJson(data);
+  }
+
+  Future<RegulatoryReport> regulatoryReport() async {
+    final data = await _api.get('/regulatory-report');
+    return RegulatoryReport.fromJson(data);
   }
 
   Future<List<ChatThread>> chatThreads() async {
@@ -764,7 +881,8 @@ class AdminRepository {
     final r = await _api.getPage('/complaints',
         page: page,
         size: size,
-        query: (status != null && status.isNotEmpty) ? {'status': status} : null);
+        query:
+            (status != null && status.isNotEmpty) ? {'status': status} : null);
     return r.mapItems(Complaint.fromJson);
   }
 
@@ -792,12 +910,45 @@ class AdminRepository {
     return rows.map(WelfareClaim.fromJson).toList();
   }
 
+  /// Submit a new welfare claim for a member (welfare:manage).
+  Future<WelfareClaim> submitWelfareClaim({
+    required String memberId,
+    required String claimType,
+    required num amount,
+    String? reference,
+    String? description,
+  }) async {
+    final data = await _api.post('/welfare-claims', {
+      'memberId': memberId,
+      'claimType': claimType,
+      'amount': amount,
+      if (reference != null && reference.trim().isNotEmpty)
+        'reference': reference.trim(),
+      if (description != null && description.trim().isNotEmpty)
+        'description': description.trim(),
+    });
+    return WelfareClaim.fromJson(data);
+  }
+
+  /// Approve or reject a submitted welfare claim (welfare:approve).
+  Future<void> decideWelfareClaim({
+    required String id,
+    required String status,
+    String? reason,
+  }) async {
+    await _api.patch('/welfare-claims/$id/status', {
+      'status': status,
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+  }
+
   Future<PageResult<WelfareClaim>> welfareClaimsPage(
       {String? status, required int page, int size = 25}) async {
     final r = await _api.getPage('/welfare-claims',
         page: page,
         size: size,
-        query: (status != null && status.isNotEmpty) ? {'status': status} : null);
+        query:
+            (status != null && status.isNotEmpty) ? {'status': status} : null);
     return r.mapItems(WelfareClaim.fromJson);
   }
 
@@ -830,7 +981,8 @@ class AdminRepository {
     final data = await _api.post('/governance-meetings', {
       'title': title.trim(),
       'meetingType': meetingType,
-      if (scheduledAt != null) 'scheduledAt': scheduledAt.toUtc().toIso8601String(),
+      if (scheduledAt != null)
+        'scheduledAt': scheduledAt.toUtc().toIso8601String(),
       'status': status,
       'minutes': minutes ?? '',
     });
@@ -849,7 +1001,8 @@ class AdminRepository {
     final data = await _api.patch('/governance-meetings/$id', {
       'title': title.trim(),
       'meetingType': meetingType,
-      if (scheduledAt != null) 'scheduledAt': scheduledAt.toUtc().toIso8601String(),
+      if (scheduledAt != null)
+        'scheduledAt': scheduledAt.toUtc().toIso8601String(),
       'status': status,
       'minutes': minutes ?? '',
     });
@@ -869,6 +1022,46 @@ class AdminRepository {
     return rows.map(FinancialProduct.fromJson).toList();
   }
 
+  /// Create a savings/loan product against a configured fund type.
+  /// [productType] is the fund code (savings, shares, welfare or a custom fund).
+  Future<FinancialProduct> createFinancialProduct({
+    required String productType,
+    required String code,
+    required String name,
+    required num contributionAmount,
+    required num minimumBalance,
+    num? interestRate,
+  }) async {
+    final data = await _api.post('/financial-products', {
+      'productType': productType,
+      'code': code.trim(),
+      'name': name.trim(),
+      'contributionAmount': contributionAmount,
+      'minimumBalance': minimumBalance,
+      if (interestRate != null) 'interestRate': interestRate,
+    });
+    return FinancialProduct.fromJson(data);
+  }
+
+  /// Update an existing product's name, amounts, interest and status.
+  Future<FinancialProduct> updateFinancialProduct(
+    String id, {
+    String? name,
+    num? contributionAmount,
+    num? minimumBalance,
+    num? interestRate,
+    String? status,
+  }) async {
+    final data = await _api.patch('/financial-products/$id', {
+      if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+      if (contributionAmount != null) 'contributionAmount': contributionAmount,
+      if (minimumBalance != null) 'minimumBalance': minimumBalance,
+      if (interestRate != null) 'interestRate': interestRate,
+      if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+    });
+    return FinancialProduct.fromJson(data);
+  }
+
   Future<List<Branch>> branches() async {
     final rows = await _api.getList('/branches');
     return rows.map(Branch.fromJson).toList();
@@ -879,9 +1072,111 @@ class AdminRepository {
     return rows.map(AppUser.fromJson).toList();
   }
 
+  Future<AppUser> createUser({
+    required String fullName,
+    required String email,
+    required String phone,
+    required String deliveryChannel,
+  }) async {
+    final data = await _api.post('/users', {
+      'fullName': fullName.trim(),
+      'email': email.trim(),
+      'phone': phone.trim(),
+      'deliveryChannel': deliveryChannel,
+    });
+    return AppUser.fromJson(data);
+  }
+
+  Future<void> replaceUserRoles(String userId, List<String> roleIds) async {
+    await _api.put('/users/$userId/roles', {'roleIds': roleIds});
+  }
+
+  Future<AppUser> updateUserStatus(String userId, String status) async {
+    final data = await _api.patch('/users/$userId/status', {'status': status});
+    return AppUser.fromJson(data);
+  }
+
+  Future<AppUser> updateUserMfa(String userId, bool enabled) async {
+    final data = await _api.patch('/users/$userId/mfa', {'enabled': enabled});
+    return AppUser.fromJson(data);
+  }
+
+  Future<int> revokeUserSessions(String userId) async {
+    final data = await _api.post('/users/$userId/sessions/revoke', const {});
+    return (data['revokedSessions'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<String> requestUserPasswordReset(String userId) async {
+    final data = await _api.post('/users/$userId/password-reset', const {});
+    return '${data['resetToken'] ?? ''}';
+  }
+
   Future<List<AppRole>> roles() async {
     final rows = await _api.getList('/roles');
     return rows.map(AppRole.fromJson).toList();
+  }
+
+  Future<List<AppPermission>> permissions() async {
+    final rows = await _api.getList('/permissions');
+    return rows.map(AppPermission.fromJson).toList();
+  }
+
+  Future<AppRole> createRole({
+    required String name,
+    required List<String> permissionIds,
+  }) async {
+    final data = await _api.post('/roles', {
+      'name': name.trim(),
+      'permissionIds': permissionIds,
+    });
+    return AppRole.fromJson(data);
+  }
+
+  Future<AppRole> updateRole({
+    required String roleId,
+    required String name,
+    required List<String> permissionIds,
+  }) async {
+    final data = await _api.patch('/roles/$roleId', {
+      'name': name.trim(),
+      'permissionIds': permissionIds,
+    });
+    return AppRole.fromJson(data);
+  }
+
+  Future<Branch> createBranch({
+    required String code,
+    required String name,
+    required String address,
+    String? managerUserId,
+  }) async {
+    final data = await _api.post('/branches', {
+      'code': code.trim(),
+      'name': name.trim(),
+      'address': address.trim(),
+      if (managerUserId != null && managerUserId.isNotEmpty)
+        'managerUserId': managerUserId,
+      'status': 'active',
+    });
+    return Branch.fromJson(data);
+  }
+
+  Future<Branch> updateBranch({
+    required String branchId,
+    required String code,
+    required String name,
+    required String address,
+    String? managerUserId,
+    required String status,
+  }) async {
+    final data = await _api.patch('/branches/$branchId', {
+      'code': code.trim(),
+      'name': name.trim(),
+      'address': address.trim(),
+      'managerUserId': managerUserId,
+      'status': status,
+    });
+    return Branch.fromJson(data);
   }
 
   /// The role ids assigned to a user (names resolved via [roles] in the UI).
@@ -901,7 +1196,8 @@ class AdminRepository {
     final query = <String, dynamic>{};
     if (from != null) query['from'] = _isoDate(from);
     if (to != null) query['to'] = _isoDate(to);
-    final data = await _api.get(_withQuery('/members/$memberId/statement', query));
+    final data =
+        await _api.get(_withQuery('/members/$memberId/statement', query));
     return MemberStatement.fromJson(data);
   }
 
@@ -942,7 +1238,9 @@ class AdminRepository {
 
   String _withQuery(String path, Map<String, dynamic> query) {
     if (query.isEmpty) return path;
-    final qs = query.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent('${e.value}')}').join('&');
+    final qs = query.entries
+        .map((e) => '${e.key}=${Uri.encodeQueryComponent('${e.value}')}')
+        .join('&');
     return '$path?$qs';
   }
 
@@ -972,7 +1270,8 @@ class AdminRepository {
   }
 
   int? _yearOf(Loan l) {
-    final d = DateTime.tryParse(l.disbursedAt) ?? DateTime.tryParse(l.createdAt);
+    final d =
+        DateTime.tryParse(l.disbursedAt) ?? DateTime.tryParse(l.createdAt);
     return d?.toLocal().year;
   }
 }

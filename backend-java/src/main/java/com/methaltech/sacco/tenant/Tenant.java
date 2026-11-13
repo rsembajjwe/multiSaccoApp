@@ -62,6 +62,12 @@ public class Tenant {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    @Column(name = "account_manager_user_id")
+    private String accountManagerUserId;
+
+    @Column(name = "account_manager_name")
+    private String accountManagerName;
+
     protected Tenant() {
     }
 
@@ -111,6 +117,20 @@ public class Tenant {
 
     public void updateStatus(String status) {
         this.status = status;
+        this.updatedAt = Instant.now();
+    }
+
+    public void updateDetails(String name, String registrationNo, String district, String country) {
+        this.name = name;
+        this.registrationNo = registrationNo;
+        this.district = district;
+        this.country = country;
+        this.updatedAt = Instant.now();
+    }
+
+    public void assignAccountManager(String userId, String name) {
+        this.accountManagerUserId = userId == null || userId.isBlank() ? null : userId.trim();
+        this.accountManagerName = name == null || name.isBlank() ? null : name.trim();
         this.updatedAt = Instant.now();
     }
 
@@ -216,5 +236,13 @@ public class Tenant {
 
     Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    String getAccountManagerUserId() {
+        return accountManagerUserId;
+    }
+
+    String getAccountManagerName() {
+        return accountManagerName;
     }
 }

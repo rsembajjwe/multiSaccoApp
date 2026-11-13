@@ -12,7 +12,9 @@
 	# Only health and info are public. Metrics/prometheus stay internal to the deployment network
 	# (scraped directly from backend:8080), so operational metrics are never exposed on the domain.
 	@api path /api/v1* /actuator/health* /actuator/info
-	reverse_proxy @api backend:8080
+	handle @api {
+		reverse_proxy backend:8080
+	}
 
 	header {
 		X-Content-Type-Options nosniff
@@ -32,6 +34,12 @@
 	@html path / /index.html
 	header @html Cache-Control "no-cache, max-age=0"
 
-	file_server
-	try_files {path} /index.html
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
 }

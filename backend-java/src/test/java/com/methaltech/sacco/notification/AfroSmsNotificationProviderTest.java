@@ -156,6 +156,7 @@ class AfroSmsNotificationProviderTest {
                     String.class,
                     String.class,
                     String.class,
+                    String.class,
                     LocalDate.class);
             constructor.setAccessible(true);
             return constructor.newInstance(
@@ -167,6 +168,7 @@ class AfroSmsNotificationProviderTest {
                     "individual",
                     "+256700000001",
                     "amina@example.com",
+                    "Kampala",
                     "CM0001",
                     "hash",
                     "salt",

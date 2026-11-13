@@ -1,7 +1,7 @@
 package com.methaltech.sacco.notification;
 
-class NotificationProviderException extends RuntimeException {
-    NotificationProviderException(String message) {
+public class NotificationProviderException extends RuntimeException {
+    public NotificationProviderException(String message) {
         super(message);
     }
 }

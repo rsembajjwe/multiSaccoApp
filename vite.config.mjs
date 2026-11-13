@@ -10,6 +10,16 @@ const outDir = "dist-vite";
 export default defineConfig({
   root,
   publicDir: false,
+  server: {
+    host: "127.0.0.1",
+    port: 5173,
+    proxy: {
+      "/api/v1": {
+        target: process.env.JAVA_API_BASE || "http://127.0.0.1:18084",
+        changeOrigin: true
+      }
+    }
+  },
   build: {
     outDir,
     emptyOutDir: true,

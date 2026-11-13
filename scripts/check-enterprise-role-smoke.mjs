@@ -55,7 +55,7 @@ async function assertLoginGateway(page) {
 async function assertPlatformSuperAdminFlow(page) {
   await staffLogin(page, "PLATFORM", "admin@platform.local", "Admin@12345", "platform super admin");
   await expectText(page, "Platform Administration Portal", "platform shell");
-  await assertNavigation(page, ["Dashboard", "SACCO Registration", "Subscriptions", "SACCO Accounts", "Reports", "Complaints", "Users and Roles", "Audit Logs"]);
+  await assertNavigation(page, ["Dashboard", "SACCOs", "Subscriptions", "Reports", "Complaints", "Users and Roles", "Audit Logs"]);
   await expectNoText(page, "Loan portfolio monitoring", "platform loan menu hidden");
   await expectNoText(page, "Read-only SACCO member support", "platform member menu hidden");
   await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);

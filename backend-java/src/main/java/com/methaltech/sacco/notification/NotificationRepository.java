@@ -15,4 +15,6 @@ public interface NotificationRepository extends JpaRepository<Notification, Stri
     List<Notification> findAllByOrderByTenantIdAscCreatedAtDesc();
 
     Page<Notification> findByTenantId(String tenantId, Pageable pageable);
+
+    boolean existsByDeduplicationKey(String deduplicationKey);
 }

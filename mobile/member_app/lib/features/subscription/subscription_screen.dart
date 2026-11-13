@@ -6,6 +6,7 @@ import '../../domain/models.dart';
 import '../../providers.dart';
 import '../../core/widgets/error_retry.dart';
 import '../payments/payment_status_sheet.dart';
+import '../payments/mobile_money_network_selector.dart';
 
 final _money = NumberFormat.currency(symbol: 'UGX ', decimalDigits: 0);
 
@@ -20,9 +21,9 @@ class SubscriptionScreen extends ConsumerWidget {
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorRetry(
-            message: 'Could not load your subscription.',
-            detail: '$e',
-            onRetry: () => ref.invalidate(membershipProvider),
+          message: 'Could not load your subscription.',
+          detail: '$e',
+          onRetry: () => ref.invalidate(membershipProvider),
         ),
         data: (sub) {
           if (sub == null) {
@@ -110,7 +111,12 @@ class SubscriptionScreen extends ConsumerWidget {
     );
     if (payment != null && context.mounted) {
       ref.invalidate(membershipProvider);
-      await showPaymentStatus(context, payment.id, payment.amount);
+      await showPaymentStatus(
+        context,
+        payment.id,
+        payment.amount,
+        provider: payment.provider,
+      );
     }
   }
 }
@@ -124,6 +130,7 @@ class _PayDuesForm extends ConsumerStatefulWidget {
 }
 
 class _PayDuesFormState extends ConsumerState<_PayDuesForm> {
+  MobileMoneyNetwork _network = MobileMoneyNetwork.mtn;
   late final TextEditingController _amount =
       TextEditingController(text: widget.balanceDue.toStringAsFixed(0));
   final TextEditingController _phone = TextEditingController();
@@ -151,6 +158,7 @@ class _PayDuesFormState extends ConsumerState<_PayDuesForm> {
       final payment = await ref.read(paymentRepositoryProvider).request(
             purpose: PaymentPurpose.membershipDues,
             amount: amount,
+            network: _network,
             payerPhone: _phone.text.trim(),
           );
       if (!mounted) return;
@@ -173,6 +181,11 @@ class _PayDuesFormState extends ConsumerState<_PayDuesForm> {
           Text('Pay subscription dues',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 16),
+          MobileMoneyNetworkSelector(
+            value: _network,
+            onChanged: (network) => setState(() => _network = network),
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: _amount,
             keyboardType: TextInputType.number,

@@ -30,6 +30,7 @@ class AuthenticationGuardFilter extends OncePerRequestFilter {
     private static final Set<String> PUBLIC_ENDPOINTS = Set.of(
             "GET /api/v1/health",
             "POST /api/v1/auth/login",
+            "POST /api/v1/auth/first-login-password",
             "POST /api/v1/auth/mfa/verify",
             "POST /api/v1/auth/password-reset/request",
             "POST /api/v1/auth/password-reset/confirm",

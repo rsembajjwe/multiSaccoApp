@@ -19,10 +19,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       TextEditingController(text: AppConfig.isProduction ? '' : 'GREE');
   final _username = TextEditingController();
   final _password = TextEditingController();
+  final _newPassword = TextEditingController();
+  final _confirmPassword = TextEditingController();
   final _code = TextEditingController();
   bool _busy = false;
   String? _error;
   MfaChallenge? _mfa;
+  FirstLoginRequirement? _firstLogin;
 
   @override
   void initState() {
@@ -52,6 +55,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _sacco.dispose();
     _username.dispose();
     _password.dispose();
+    _newPassword.dispose();
+    _confirmPassword.dispose();
     _code.dispose();
     super.dispose();
   }
@@ -70,6 +75,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
       if (outcome.needsMfa) {
         setState(() => _mfa = outcome.mfa);
+      } else if (outcome.needsPasswordChange) {
+        setState(() => _firstLogin = outcome.firstLogin);
       } else {
         ref.invalidate(sessionProvider);
         ref.invalidate(saccoStatusProvider);
@@ -77,6 +84,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } catch (e) {
       setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _changePassword() async {
+    if (_newPassword.text != _confirmPassword.text) {
+      setState(() => _error = 'The new passwords do not match.');
+      return;
+    }
+    if (_newPassword.text.length < 12) {
+      setState(() => _error = 'Use a new password with at least 12 characters.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(authRepositoryProvider).completeFirstLogin(
+            saccoCode: _sacco.text.trim(),
+            username: _username.text.trim(),
+            temporaryPassword: _password.text,
+            newPassword: _newPassword.text,
+          );
+      if (!mounted) return;
+      setState(() {
+        _firstLogin = null;
+        _password.clear();
+        _newPassword.clear();
+        _confirmPassword.clear();
+        _error = 'Password changed. Sign in with your new password.';
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -149,11 +191,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           .headlineSmall
                           ?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 4),
-                  Text(_mfa == null ? 'Staff sign in' : 'Two-factor verification',
+                  Text(_firstLogin != null
+                      ? 'Secure your account'
+                      : _mfa == null
+                          ? 'Staff sign in'
+                          : 'Two-factor verification',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: scheme.onSurfaceVariant)),
                   const SizedBox(height: 28),
-                  if (_mfa == null) ...[
+                  if (_firstLogin != null) ...[
+                    Text(
+                      'Your temporary password verified access to ${_firstLogin!.verificationChannel}. Choose a permanent password to continue.',
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _newPassword,
+                      obscureText: true,
+                      textInputAction: TextInputAction.next,
+                      decoration:
+                          const InputDecoration(labelText: 'New password'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _confirmPassword,
+                      obscureText: true,
+                      onSubmitted: (_) => _changePassword(),
+                      decoration: const InputDecoration(
+                          labelText: 'Confirm new password'),
+                    ),
+                  ] else if (_mfa == null) ...[
                     TextField(
                       controller: _sacco,
                       textInputAction: TextInputAction.next,
@@ -193,13 +260,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Text(_error!, style: TextStyle(color: scheme.error)),
                   const SizedBox(height: 16),
                   FilledButton(
-                    onPressed: _busy ? null : (_mfa == null ? _submit : _verify),
+                    onPressed: _busy
+                        ? null
+                        : _firstLogin != null
+                            ? _changePassword
+                            : (_mfa == null ? _submit : _verify),
                     child: _busy
                         ? const SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text(_mfa == null ? 'Sign in' : 'Verify'),
+                        : Text(_firstLogin != null
+                            ? 'Change password'
+                            : _mfa == null
+                                ? 'Sign in'
+                                : 'Verify'),
                   ),
                   if (_mfa != null)
                     TextButton(

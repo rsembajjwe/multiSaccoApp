@@ -4,19 +4,45 @@ services:
     restart: unless-stopped
 
   backend:
+    # Inject the full production configuration (PII key, provider credentials, document storage,
+    # bootstrap admin, etc.) into the container. The base environment: block still overrides the
+    # datasource/profile values it sets explicitly.
+    env_file:
+      - ./deploy/hetzner.env
     ports: !reset []
     expose:
       - "8080"
     restart: unless-stopped
+    volumes:
+      - document_data:/var/lib/sacco/documents
+
+  backup:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:?Set POSTGRES_DB}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    volumes:
+      - ./deploy/backup.sh:/backup.sh:ro
+      - ./backups:/backups
 
   caddy:
     image: caddy:2-alpine
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
     environment:
-      DOMAIN: ${DOMAIN:-tereka.online}
-      ACME_EMAIL: ${ACME_EMAIL:-admin@tereka.online}
+      DOMAIN: ${DOMAIN:-globalntereka.com}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@globalntereka.com}
     ports:
       - "80:80"
       - "443:443"
@@ -26,6 +52,68 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+    expose:
+      - "9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus-alerts.yml:/etc/prometheus/rules/prometheus-alerts.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      backend:
+        condition: service_started
+      alertmanager:
+        condition: service_started
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    expose:
+      - "9093"
+    secrets:
+      - alertmanager_webhook_url
+    volumes:
+      - ./deploy/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    depends_on:
+      prometheus:
+        condition: service_started
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    expose:
+      - "3000"
+    secrets:
+      - grafana_admin_password
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+
 volumes:
   caddy_data:
   caddy_config:
+  document_data:
+  prometheus_data:
+  alertmanager_data:
+  grafana_data:
+
+secrets:
+  alertmanager_webhook_url:
+    file: ${ALERTMANAGER_WEBHOOK_URL_FILE:?Set ALERTMANAGER_WEBHOOK_URL_FILE to a protected file containing the operations webhook URL}
+  grafana_admin_password:
+    file: ${GRAFANA_ADMIN_PASSWORD_FILE:?Set GRAFANA_ADMIN_PASSWORD_FILE to a protected file containing the Grafana admin password}

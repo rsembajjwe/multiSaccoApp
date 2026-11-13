@@ -48,6 +48,9 @@ public class Notification {
     @Column(name = "read_at")
     private Instant readAt;
 
+    @Column(name = "deduplication_key")
+    private String deduplicationKey;
+
     Notification(
             String id,
             String tenantId,
@@ -98,5 +101,9 @@ public class Notification {
     public void markRead() {
         this.status = "read";
         this.readAt = Instant.now();
+    }
+
+    void assignDeduplicationKey(String deduplicationKey) {
+        this.deduplicationKey = deduplicationKey;
     }
 }

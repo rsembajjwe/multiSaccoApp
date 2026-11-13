@@ -33,7 +33,7 @@ Create `android/app/src/main/res/xml/network_security_config.xml`:
     <domain includeSubdomains="true">10.0.2.2</domain>
     <domain includeSubdomains="true">localhost</domain>
   </domain-config>
-  <!-- Everything else (prod https://tereka.online) stays TLS-only. -->
+  <!-- Everything else (prod https://globalntereka.com) stays TLS-only. -->
 </network-security-config>
 ```
 
@@ -48,13 +48,26 @@ Reference it on the `<application>` tag in `android/app/src/main/AndroidManifest
 `flutter create` adds `<uses-permission android:name="android.permission.INTERNET"/>`
 for debug; confirm it's present for release builds too.
 
-> Production points at `https://tereka.online` (`--dart-define=SACCO_ENV=prod`),
+> Production points at `https://globalntereka.com/api/v1`
+
+## Proprietor application
+
+The platform-owner application is in `mobile/proprietor_app`. It uses the same environment defines as the staff and member applications:
+
+```powershell
+cd mobile/proprietor_app
+flutter run --dart-define=SACCO_ENV=local
+flutter build apk --release --dart-define=SACCO_ENV=prod
+```
+
+Only users belonging to `tenant_platform` can open this application. Backend permissions continue to govern SACCO management, billing, approvals, support and employee administration.
+> (`--dart-define=SACCO_ENV=prod`),
 > which needs **no** cleartext exception — keep the config dev-scoped as above so
 > release builds stay strict.
 
 ## 4. iOS — allow the dev API over HTTP (simulator)
 On the iOS simulator the host is `localhost`, so pass
-`--dart-define=SACCO_LOCAL_URL=http://localhost:5173/api/v1`. Permit cleartext to
+`--dart-define=SACCO_API_BASE_URL=http://localhost:18084/api/v1`. Permit cleartext to
 localhost for dev by adding to `ios/Runner/Info.plist`:
 
 ```xml
@@ -70,14 +83,20 @@ also add `NSFaceIDUsageDescription`.)
 
 ## 5. Run
 ```bash
-# Android emulator (default local env → 10.0.2.2)
-flutter run
+# Android emulator (local env → 10.0.2.2)
+flutter run --dart-define=SACCO_ENV=local
 
 # iOS simulator (localhost)
-flutter run --dart-define=SACCO_LOCAL_URL=http://localhost:5173/api/v1
+flutter run --dart-define=SACCO_ENV=local --dart-define=SACCO_API_BASE_URL=http://localhost:18084/api/v1
 
 # Against staging
 flutter run --dart-define=SACCO_ENV=staging
+
+# Physical Android or iOS phone against the hosted backend
+flutter run --release --dart-define=SACCO_ENV=prod
+
+# Custom hosted API endpoint
+flutter run --release --dart-define=SACCO_API_BASE_URL=https://example.com/api/v1
 ```
 
 Seed demo login (dev/demo profile only): SACCO **GVS**, identifier **GVS-0001**,

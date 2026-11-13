@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
@@ -31,7 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/fund-types")
 class FundTypeController {
 
-    private static final Pattern CODE_PATTERN = Pattern.compile("^[a-z][a-z0-9_]{1,39}$");
+    private static final Pattern NON_CODE_CHARACTERS = Pattern.compile("[^a-z0-9]+");
 
     private final FundTypeRepository fundTypeRepository;
     private final AuthService authService;
@@ -79,10 +80,10 @@ class FundTypeController {
         String tenantId = tenantScope(currentSession, body.tenantId());
         if (tenantId == null) return tenantAccessDenied();
 
-        String code = body.code() == null ? "" : body.code().trim().toLowerCase();
-        if (!CODE_PATTERN.matcher(code).matches()) {
+        String code = normalizeCode(body.code(), body.name());
+        if (code == null) {
             return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "INVALID_FUND_CODE", "Fund code must be lowercase letters, digits or underscores, starting with a letter."));
+                    .body(ApiErrorResponse.of(400, "INVALID_FUND_CODE", "Fund name or code must contain at least one letter or number."));
         }
         String basis = body.basis() == null ? "" : body.basis().trim().toLowerCase();
         if (!FundType.BASES.contains(basis)) {
@@ -167,6 +168,17 @@ class FundTypeController {
 
     private static String trimOrNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String normalizeCode(String requestedCode, String fundName) {
+        String source = requestedCode == null || requestedCode.isBlank() ? fundName : requestedCode;
+        String code = NON_CODE_CHARACTERS.matcher(source.trim().toLowerCase(Locale.ROOT)).replaceAll("_");
+        code = code.replaceAll("^_+|_+$", "");
+        if (code.endsWith("_fund") && code.length() > 5) code = code.substring(0, code.length() - 5);
+        if (code.isBlank()) return null;
+        if (Character.isDigit(code.charAt(0))) code = "fund_" + code;
+        if (code.length() > 40) code = code.substring(0, 40).replaceAll("_+$", "");
+        return code.isBlank() ? null : code;
     }
 
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {

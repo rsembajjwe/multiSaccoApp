@@ -71,12 +71,24 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local-java-stack.ps1
 # 2) app on an Android emulator (reaches host via 10.0.2.2)
 cd mobile\member_app
 flutter pub get
-flutter run
+flutter run --dart-define=SACCO_ENV=local
 ```
 
-Environments (via `--dart-define`): `SACCO_ENV=local` (default → `10.0.2.2:18084`),
-`staging`, `prod` (`https://tereka.online`). iOS simulator uses localhost:
-`--dart-define=SACCO_LOCAL_URL=http://localhost:18084/api/v1`.
+Environments (via `--dart-define`): `SACCO_ENV=prod` is the default and uses
+`https://globalntereka.com/api/v1`; pass `SACCO_ENV=local` explicitly for
+`10.0.2.2:18084`, or select `staging`. A custom endpoint can be
+selected with `--dart-define=SACCO_API_BASE_URL=https://example.com/api/v1`.
+
+To run or install the app on a physical phone against the hosted backend:
+
+```powershell
+flutter run --release --dart-define=SACCO_ENV=prod
+# Or create an installable Android package:
+flutter build apk --release --dart-define=SACCO_ENV=prod
+```
+
+The production endpoint uses HTTPS, so the phone can connect over mobile data or
+Wi-Fi without being on the development computer's network.
 
 Demo login (dev/demo profile only): SACCO **GREE**, identifier **GREE-0001**,
 password **Member@12345**.

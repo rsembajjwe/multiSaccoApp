@@ -83,4 +83,13 @@ public class Branch {
     public Instant getUpdatedAt() {
         return updatedAt;
     }
+
+    void update(String code, String name, String address, String managerUserId, String status) {
+        this.code = code;
+        this.name = name;
+        this.address = address;
+        this.managerUserId = managerUserId;
+        this.status = status;
+        this.updatedAt = Instant.now();
+    }
 }

@@ -4,7 +4,11 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 /// `member_<id>`; the backend sends pushes to that topic (no device-token
 /// storage needed server-side).
 class PushService {
-  final FirebaseMessaging _fm = FirebaseMessaging.instance;
+  PushService({FirebaseMessaging? messaging}) : _firebaseMessaging = messaging;
+
+  final FirebaseMessaging? _firebaseMessaging;
+
+  FirebaseMessaging get _fm => _firebaseMessaging ?? FirebaseMessaging.instance;
 
   Future<void> requestPermission() async {
     try {

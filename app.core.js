@@ -3,6 +3,7 @@
 
 const MEMBER_DRAFTS_KEY = "tereka-member-offline-drafts-v1";
 const LOCALE_KEY = "tereka-locale";
+const THEME_KEY = "tereka-theme";
 const DEMO_TOOLS_REQUESTED = new URLSearchParams(window.location.search).has("demo");
 const uiContractAliases = [
   "Complaint service control",
@@ -66,11 +67,38 @@ const supportedLocales = [
 ];
 
 const serverTableSearchTimers = {};
+let platformQuickSearchTimer = 0;
+let platformQuickSearchSequence = 0;
+
+function preferredTheme() {
+  const storedTheme = localStorage.getItem(THEME_KEY);
+  if (storedTheme === "dark" || storedTheme === "light") return storedTheme;
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+function applyTheme(theme) {
+  const selectedTheme = theme === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = selectedTheme;
+  document.documentElement.style.colorScheme = selectedTheme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", selectedTheme === "dark" ? "#0b1512" : "#0f4638");
+}
+
+function themeToggleButton() {
+  const dark = state.theme === "dark";
+  const label = dark ? "Use light theme" : "Use dark theme";
+  const icon = dark
+    ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/>'
+    : '<path d="M20.4 15.3A8.5 8.5 0 0 1 8.7 3.6 8.5 8.5 0 1 0 20.4 15.3Z"/>';
+  return `<button class="icon-button theme-toggle" type="button" data-action="toggle-theme" title="${label}" aria-label="${label}" aria-pressed="${dark}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg></button>`;
+}
 
 function emptyData() {
   return {
     tenants: [],
     subscriptions: [],
+    subscriptionPayments: [],
     subscriptionPackages: [],
     members: [],
     memberFundBalances: [],
@@ -92,6 +120,7 @@ function emptyData() {
     assets: [],
     saccoProfile: null,
     saccoPaymentAccounts: [],
+    platformPaymentAccounts: [],
     governanceMeetings: [],
     statementLines: [],
     reconciliation: null,
@@ -105,7 +134,12 @@ function emptyData() {
     securitySummary: null,
     platformSecurityPolicy: null,
     notificationIntegrationConfig: null,
-    mobileMoneyIntegrationConfig: null
+    mobileMoneyIntegrationConfig: null,
+    fleetApprovalQueue: [],
+    fleetApprovalSummary: null,
+    platformPaymentApprovalQueue: [],
+    platformPaymentApprovalProcessed: [],
+    platformPaymentApprovalSummary: null
   };
 }
 
@@ -356,11 +390,15 @@ function displayName() {
 
 function roleLabel() {
   if (state.auth === "member") return "Member";
-  return state.roleNames.map((role) => role === "SACCO Administrator" ? "SACCO Admin" : role).join(", ") || "Staff";
+  return state.roleNames.map((role) => {
+    if (role === "SACCO Administrator") return "SACCO Admin";
+    if (role === "Platform Super Admin" || role === "Platform Administrator") return "Administrator";
+    return role;
+  }).join(", ") || "Staff";
 }
 
 function contextName() {
-  return state.tenant?.name || (isPlatform() ? "Platform Administration" : state.user?.tenantName) || "Tereka Online";
+  return state.tenant?.name || (isPlatform() ? "Administration" : state.user?.tenantName) || "Tereka Online";
 }
 
 function contextCode() {

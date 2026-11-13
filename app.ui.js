@@ -135,6 +135,26 @@ function rowAction(row) {
   if (row.action === "member-dues-details" && row.actionId) {
     return `<button class="table-action" type="button" data-member-dues-details="${escapeHtml(row.actionId)}">${escapeHtml(row.actionLabel || "View payment details")}</button>`;
   }
+  if (row.action === "tenant-member" && row.actionId) {
+    const id = escapeHtml(row.actionId);
+    const buttons = [];
+    if (row.canApprove) {
+      buttons.push(`<button class="table-action" type="button" data-approve-tenant-member="${id}">Approve</button>`);
+    }
+    if (row.canReject) {
+      buttons.push(`<button class="table-action danger" type="button" data-reject-tenant-member="${id}">Reject</button>`);
+    }
+    if (row.canReactivate) {
+      buttons.push(`<button class="table-action" type="button" data-reactivate-tenant-member="${id}">Reactivate</button>`);
+    }
+    if (row.canVerifyKyc) {
+      buttons.push(`<button class="table-action" type="button" data-verify-member-kyc="${id}">Verify KYC</button>`);
+    }
+    if (row.canRejectKyc) {
+      buttons.push(`<button class="table-action danger" type="button" data-reject-member-kyc="${id}">Reject KYC</button>`);
+    }
+    return buttons.length ? `<div class="table-actions">${buttons.join("")}</div>` : `<span class="muted">-</span>`;
+  }
   if (row.action === "none") {
     return `<span class="muted">-</span>`;
   }

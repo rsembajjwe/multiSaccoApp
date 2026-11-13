@@ -1,8 +1,8 @@
-const CACHE_VERSION = "tereka-shell-v20260825-real-expiring-subscriptions-1";
+const CACHE_VERSION = "tereka-shell-v20261110-sacco-management-2";
 const APP_SHELL = [
   "/",
   "/index.html",
-  "/styles.css?v=complaint-reply-clean-20260822",
+  "/styles.css?v=sacco-management-redesign-20261110-2",
   "/app.i18n.js?v=member-subscriptions-20260821",
   "/app.js?v=20260807-bootstrap-1",
   "/favicon.svg?v=20260719-tereka-2",

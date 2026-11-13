@@ -32,9 +32,12 @@ class DemoCredentialPolicyTest {
 
         assertFalse(policy.memberLoginAllowed("GREE-0001"));
         assertFalse(policy.memberLoginAllowed("GREE-0009"));
+        assertFalse(policy.memberLoginAllowed("GREE-0012"));
+        assertFalse(policy.memberLoginAllowed("LAKE-0001"));
         assertFalse(policy.memberLoginAllowed("amina@example.local"));
         assertFalse(policy.memberLoginAllowed("future-member@example.local"));
         assertTrue(policy.memberLoginAllowed("GREE-8244"));
+        assertTrue(policy.memberLoginAllowed("LAKE-8244"));
         assertTrue(policy.memberLoginAllowed("+256700555111"));
     }
 

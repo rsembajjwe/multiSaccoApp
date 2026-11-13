@@ -15,41 +15,36 @@
   const notificationContractMarker = "payment_request_closed";
   const paymentExceptions = paymentExceptionDeliveries(deliveries);
   const jobRuns = buildProviderJobRunRows({ jobRuns: isPlatform() ? dataRows("providerJobRuns") : rowsInSaccoCycle(dataRows("providerJobRuns"), cycle, ["startedAt", "finishedAt", "createdAt"]), labelize, formatDateTime });
-  const tabs = [["delivery-log", "Delivery log"], ["messages", "Message repository"], ["payment-exceptions", "Payment exceptions"], ["failed", "Failed"], ["unread", "Unread"], ["login-risk", "Login risk"], ["templates", "Templates"], ["job-history", "Job history"]];
+  const tabs = [["delivery-log", "Delivery Log"], ["compose", "Compose Notification"], ["templates", "Templates"], ["system-alerts", "System Alerts"]];
   const tab = activeModuleTab("notifications", tabs);
-  const deliveryTabs = ["delivery-log", "payment-exceptions", "failed", "unread", "login-risk"];
-  const tabDeliveries = tab === "login-risk"
-    ? securityAlerts
-    : tab === "payment-exceptions"
-      ? paymentExceptions
-      : tab === "failed"
-        ? failedDeliveries
-        : tab === "unread"
-          ? unreadAlerts
-          : deliveries;
+  const deliveryTabs = ["delivery-log"];
+  const tabDeliveries = deliveries;
   const visibleDeliveries = deliveryTabs.includes(tab) ? filterNotificationDeliveryRows(tabDeliveries, state.notificationFilters || {}) : [];
   const bulkAcknowledgeIds = uniqueUnreadNotificationIds(visibleDeliveries);
   const templates = buildNotificationTemplateRows({ templates: dataRows("notificationTemplates"), tenantName });
   const notificationSummary = buildNotificationSummary(deliveries, templates);
+  const deliveredCount = deliveries.filter((row) => ["sent", "delivered"].some((status) => normal(row.status).includes(status))).length;
+  const pendingCount = deliveries.filter((row) => normal(row.status).includes("pending") || normal(row.status).includes("queued")).length;
   return `
     ${saccoCyclePanel(cycle, { title: "Notification cycle" })}
-    <div class="dashboard-grid">
-      ${summary(t("deliveries"), notificationSummary.deliveryCount, "SMS, email and in-app events", "Monitor")}
-      ${summary("Payment exceptions", notificationSummary.paymentExceptions, "Manually closed mobile-money requests", notificationSummary.paymentExceptions ? "Review" : "Clear")}
-      ${summary(t("failedDeliveries"), notificationSummary.failedDeliveries, "Provider exceptions", "Investigate")}
-      ${summary(t("loginRiskAlerts"), notificationSummary.loginRiskAlerts, "In-app admin security alerts", t("review"))}
-      ${summary(t("unreadAlerts"), notificationSummary.unreadAlerts, "Need acknowledgement", "Clear")}
-      ${summary(t("activeTemplates"), notificationSummary.activeTemplates, "Reusable message rules", "Edit")}
-      ${summary(t("globalTemplates"), notificationSummary.globalTemplates, "Platform defaults", t("review"))}
+    <div class="notifications-workspace">
+    <section class="notifications-command-header">
+      <div class="notifications-command-icon" aria-hidden="true">✉</div><div><p class="eyebrow">Communication control</p><h2>Notifications</h2><p>Create, send and monitor system and payment notifications across SACCOs.</p></div>
+      <div class="notifications-command-meta"><span class="status ${notificationSummary.failedDeliveries || notificationSummary.paymentExceptions ? "pending" : "active"}">${notificationSummary.failedDeliveries || notificationSummary.paymentExceptions ? "Needs review" : "Operational"}</span><span>${notificationSummary.deliveryCount} delivery event(s)</span></div>
+    </section>
+    <div class="dashboard-grid notifications-kpi-grid">
+      ${summary("Delivered Notifications", deliveredCount, notificationSummary.deliveryCount ? `${Math.round(deliveredCount / notificationSummary.deliveryCount * 100)}% delivery rate` : "No deliveries yet", "Monitor")}
+      ${summary("Delivery Exceptions", notificationSummary.failedDeliveries, notificationSummary.failedDeliveries ? "Provider follow-up required" : "No failed deliveries", "Investigate")}
+      ${summary("Pending Deliveries", pendingCount, pendingCount ? "Awaiting provider receipt" : "All delivered", "Monitor")}
+      ${summary("Login Risk Alerts", notificationSummary.loginRiskAlerts, notificationSummary.loginRiskAlerts ? "Security review required" : "No active security alerts", t("review"))}
     </div>
     ${state.notificationMessage ? `<div class="notice compact"><strong>${escapeHtml(state.notificationMessage)}</strong></div>` : ""}
     ${state.notificationError ? `<div class="notice warning"><strong>Notification action failed.</strong><span>${escapeHtml(state.notificationError)}</span></div>` : ""}
-    ${notificationDeliveryControlPanel(deliveries, templates)}
-    ${notificationTemplateReadinessPanel(templates)}
-    ${providerOperationalEvidencePanel(deliveries)}
-    ${notificationProviderStatusPanel()}
-    ${platformSmsCreditUsagePanel(deliveries)}
-    ${moduleTabs("notifications", tabs, tab)}
+    <section class="panel compact-panel notifications-tabs-panel">${moduleTabs("notifications", tabs, tab)}</section>
+    ${tab === "delivery-log" ? notificationDeliveryControlPanel(deliveries, templates) : ""}
+    ${tab === "compose" ? notificationComposerPanel() : ""}
+    ${tab === "templates" ? notificationTemplateReadinessPanel(templates) : ""}
+    ${tab === "system-alerts" ? notificationSystemAlertsPanel(deliveries, paymentExceptions, failedDeliveries, securityAlerts, jobRuns) : ""}
     ${deliveryTabs.includes(tab) ? `<section class="panel compact-panel">
       <div class="panel-heading">
         <div>
@@ -60,12 +55,25 @@
       </div>
     </section>` : ""}
     ${deliveryTabs.includes(tab) ? notificationDeliveryFilters(deliveries) : ""}
-    ${tab === "payment-exceptions" ? paymentExceptionGuide(visibleDeliveries) : ""}
-    ${deliveryTabs.includes(tab) ? recordTable(`Notification delivery monitor - ${tabs.find(([id]) => id === tab)?.[1] || "Delivery log"}${cycle ? ` - ${cycle.label}` : ""}`, visibleDeliveries, ["tenantName", "event", "channel", "provider", "recipient", "deliveryStatus", "alertStatus", "message", "resource", "sentAt", "createdAt"]) : ""}
-    ${tab === "messages" ? messageRepositoryPanel() : ""}
+    ${deliveryTabs.includes(tab) ? `${recordTable(`Notification delivery monitor - ${tabs.find(([id]) => id === tab)?.[1] || "Delivery log"}${cycle ? ` - ${cycle.label}` : ""}`, visibleDeliveries, ["tenantName", "event", "message", "channel", "provider", "recipient", "deliveryStatus", "sentAt"], { panelClass: "notification-delivery-table" })}${notificationDeliveryDetailPanel(deliveries)}` : ""}
     ${tab === "templates" ? `${notificationTemplatePanel()}${notificationTemplateDetailPanel(templates)}${recordTable("Notification templates", templates, ["tenantName", "eventType", "channel", "title", "status", "updatedAt"])}` : ""}
-    ${tab === "job-history" ? `${providerJobHistoryPanel(jobRuns)}${recordTable("Provider job run history", jobRuns, ["jobLabel", "runStatus", "scanned", "updated", "failed", "message", "startedAtDisplay", "finishedAtDisplay"])}` : ""}
+    </div>
   `;
+}
+
+function notificationComposerPanel() {
+  const canManage = hasPermission("notifications:manage");
+  return `<section class="panel notification-composer-panel"><div class="panel-heading"><div><p class="eyebrow">Platform communication</p><h2>Create Notification</h2><p>Compose an announcement for a selected SACCO. Member-level recipients remain tenant-scoped by the server.</p></div><button class="button secondary" type="button" data-module-tab-view="notifications" data-module-tab="templates">Use Template</button></div><form id="broadcastForm" class="form-grid notification-composer-form"><label><span>Notification type</span><select id="broadcastType" ${canManage ? "" : "disabled"}><option>General notice</option><option>Subscription reminder</option><option>Payment confirmation</option><option>Approval update</option><option>System announcement</option></select></label><label><span>SACCO / recipients</span><select id="broadcastTenant" ${canManage ? "" : "disabled"}><option value="">Select a SACCO</option>${tenantRows().map((tenant) => `<option value="${escapeHtml(tenant.id)}">${escapeHtml(tenant.name || tenant.id)}</option>`).join("")}</select><small>Broadcasts are restricted to members of the selected SACCO.</small></label><fieldset class="notification-channel-choice"><legend>Delivery channels</legend><label><input type="checkbox" checked disabled> Email</label><label><input type="checkbox" checked disabled> SMS</label><label><input type="checkbox" checked disabled> In-app</label><small>Delivery follows the SACCO's enabled channels and available contacts.</small></fieldset><label class="wide"><span>Subject</span><input id="broadcastTitle" maxlength="160" placeholder="e.g. Scheduled platform maintenance" ${canManage ? "" : "disabled"}></label><label class="wide"><span>Message</span><textarea id="broadcastBody" maxlength="500" rows="5" placeholder="Type your notification message here" ${canManage ? "" : "disabled"}></textarea></label><div class="form-actions inline"><button class="button ghost" type="reset">Clear</button>${canManage ? `<button class="button primary" type="button" data-send-sacco-message="1">Send Notification</button>` : `<span class="status pending">View only</span>`}</div></form></section>`;
+}
+
+function notificationDeliveryDetailPanel(deliveries) {
+  const delivery = deliveries.find((item) => item.id === state.selectedNotificationDeliveryId);
+  if (!delivery) return "";
+  return `<section class="panel notification-delivery-detail"><div class="panel-heading"><div><p class="eyebrow">Delivery evidence</p><h2>${escapeHtml(delivery.event || "Notification")}</h2><p>${escapeHtml(delivery.tenantName)} · ${escapeHtml(labelize(delivery.channel || "in_app"))}</p></div><button class="button ghost" type="button" data-action="close-notification-delivery-detail">Close</button></div><div class="source-grid">${mini("Recipient", delivery.recipient || delivery.memberName || "SACCO broadcast")}${mini("Provider", delivery.provider || "In-app")}${mini("Status", labelize(delivery.status || "pending"))}${mini("Sent at", formatDateTime(delivery.sentAt || delivery.createdAt))}${mini("Acknowledged", delivery.acknowledgedAt || "-")}${mini("Reference", delivery.resource || delivery.notificationId || delivery.id)}</div><div class="notification-message-preview"><strong>Message</strong><p>${escapeHtml(delivery.message || "No message body available.")}</p></div></section>`;
+}
+
+function notificationSystemAlertsPanel(deliveries, paymentExceptions, failedDeliveries, securityAlerts, jobRuns) {
+  return `<section class="panel notification-system-alerts"><div class="panel-heading"><div><h2>System Alerts</h2><p>Operational delivery failures, payment exceptions and login risks.</p></div><span class="status ${failedDeliveries.length || paymentExceptions.length || securityAlerts.length ? "pending" : "active"}">${failedDeliveries.length + paymentExceptions.length + securityAlerts.length} active alert(s)</span></div><div class="notification-alert-grid">${mini("Payment exceptions", paymentExceptions.length)}${mini("Delivery failures", failedDeliveries.length)}${mini("Login risks", securityAlerts.length)}${mini("Pending deliveries", deliveries.filter((row) => normal(row.status).includes("pending")).length)}</div>${paymentExceptionGuide(paymentExceptions)}${recordTable("Payment exception details", paymentExceptions, ["tenantName", "event", "message", "resource", "deliveryStatus", "sentAt"])}${providerOperationalEvidencePanel(deliveries)}${notificationProviderStatusPanel()}${isPlatform() ? platformSmsCreditUsagePanel(deliveries) : ""}${providerJobHistoryPanel(jobRuns)}${recordTable("Provider job run history", jobRuns, ["jobLabel", "runStatus", "scanned", "updated", "failed", "message", "startedAtDisplay", "finishedAtDisplay"])}</section>`;
 }
 
 const NOTIFICATION_CHANNEL_LABELS = { sms: "SMS (charged)", email: "Email", whatsapp: "WhatsApp (charged)", push: "Mobile app push" };
@@ -97,6 +105,7 @@ function channelEnablementPanel() {
 function messageRepositoryPanel() {
   const categories = [["all", "All"], ["transaction", "Transactions"], ["sacco_message", "SACCO messages"], ["loan", "Loans"], ["support", "Support"], ["security", "Security"], ["system", "System"]];
   const activeCategory = state.messageCategoryFilter || "all";
+  const activeRepositoryTab = state.messageRepositoryTab === "compose" ? "compose" : "list";
   const cycle = isPlatform() ? null : currentSaccoCycleContext();
   const messages = isPlatform() ? dataRows("messages") : filterNotificationsBySaccoCycle(dataRows("messages"), cycle);
   const filtered = activeCategory === "all" ? messages : messages.filter((row) => (row.category || "system") === activeCategory);
@@ -132,20 +141,23 @@ function messageRepositoryPanel() {
       </section>`
     : "";
   return `
-    ${channelEnablementPanel()}
-    ${composer}
-    <section class="panel compact-panel">
+    <section class="panel compact-panel message-repository-tabs-panel">
+      <div class="tabs management-tabs message-repository-tabs">
+        <button class="${activeRepositoryTab === "list" ? "active" : ""}" type="button" data-message-repository-tab="list">Message list</button>
+        ${hasPermission("notifications:manage") ? `<button class="${activeRepositoryTab === "compose" ? "active" : ""}" type="button" data-message-repository-tab="compose">Compose message</button>` : ""}
+      </div>
+    </section>
+    ${activeRepositoryTab === "compose" ? `${channelEnablementPanel()}${composer}` : ""}
+    ${activeRepositoryTab === "list" ? `<section class="panel compact-panel">
       <div class="panel-heading">
         <div>
           <h2>Message repository</h2>
-          <p>Transaction messages and SACCO announcements in one place, separate from support chat. Showing the latest ${rows.length} message(s); filters apply to those loaded.</p>
         </div>
       </div>
       <div class="tabs">
         ${categories.map(([id, label]) => `<button class="tab ${id === activeCategory ? "active" : ""}" type="button" data-message-category="${id}">${escapeHtml(label)}</button>`).join("")}
       </div>
-    </section>
-    ${recordTable(`Messages${cycle ? ` - ${cycle.label}` : ""}`, rows, ["category", "title", "body", "recipient", "channel", "status", "createdAt"])}
+    </section>${recordTable(`Messages${cycle ? ` - ${cycle.label}` : ""}`, rows, ["category", "title", "body", "recipient", "channel", "status", "createdAt"])} ` : ""}
   `;
 }
 
@@ -178,6 +190,7 @@ function providerJobHistoryPanel(jobRuns) {
     <section class="panel compact-panel">
       <div class="panel-heading">
         <div>
+          <p class="eyebrow">Job history</p>
           <h2>Provider job history</h2>
           <p>Manual and scheduled provider reconciliation runs for operations review.</p>
         </div>
@@ -251,7 +264,6 @@ function notificationDeliveryControlPanel(deliveries, templates) {
       <div class="panel-heading">
         <div>
           <h2>${escapeHtml(t("notificationDeliveryControl"))}</h2>
-          <p>Review delivery failures, template coverage and channels before retrying member or SACCO messages.</p>
         </div>
         <span class="status ${failed.length || missingChannels.length ? "pending" : "active"}">${failed.length || missingChannels.length ? "Needs review" : "Ready"}</span>
       </div>

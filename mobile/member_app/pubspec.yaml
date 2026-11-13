@@ -1,7 +1,7 @@
 name: sacco_member_app
 description: SACCO member app (Android + iOS) — Phase 0 foundation.
 publish_to: "none"
-version: 0.1.0+1
+version: 0.1.1+2
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

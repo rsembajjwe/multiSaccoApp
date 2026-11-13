@@ -43,6 +43,26 @@ class MemberRepository {
     );
   }
 
+  Future<({String reference, String organizationCode})> registerGroup({
+    required String groupName,
+    required String address,
+    required Map<String, String> chairman,
+    required Map<String, String> secretary,
+    required Map<String, String> treasurer,
+  }) async {
+    final data = await _api.post(ApiPaths.groupRegistrations, {
+      'groupName': groupName,
+      'address': address,
+      'chairman': chairman,
+      'secretary': secretary,
+      'treasurer': treasurer,
+    });
+    return (
+      reference: '${data['reference'] ?? ''}',
+      organizationCode: '${data['organizationCode'] ?? ''}',
+    );
+  }
+
   Future<DashboardSummary> dashboard() async {
     final data = await _api.get(ApiPaths.dashboard);
     return DashboardSummary.fromJson(data);

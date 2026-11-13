@@ -12,6 +12,8 @@ import 'session_store.dart';
 /// Thin Dio wrapper: injects the bearer token, clears a stale session on 401,
 /// and maps transport failures to readable [ApiException]s.
 class ApiClient {
+  static const _requestTokenKey = 'staffSessionToken';
+
   ApiClient(this._session, this._push, {Dio? dio}) : _dio = dio ?? Dio() {
     _dio.options
       ..baseUrl = AppConfig.baseUrl
@@ -22,7 +24,10 @@ class ApiClient {
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final token = await _session.readToken();
-          if (token != null) options.headers['Authorization'] = 'Bearer $token';
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+            options.extra[_requestTokenKey] = token;
+          }
           if (_isMutating(options.method) &&
               !_isAuthPath(options.path) &&
               !options.headers.containsKey('Idempotency-Key')) {
@@ -32,13 +37,19 @@ class ApiClient {
           handler.next(options);
         },
         onError: (e, handler) async {
-          if (e.response?.statusCode == 401) {
-            final saccoCode = await _session.readSacco();
-            if (saccoCode != null && saccoCode.isNotEmpty) {
-              await _push.unsubscribeStaff(saccoCode);
+          if (e.response?.statusCode == 401 &&
+              !_isAuthPath(e.requestOptions.path)) {
+            final rejectedToken =
+                e.requestOptions.extra[_requestTokenKey] as String?;
+            final currentToken = await _session.readToken();
+            if (rejectedToken != null && rejectedToken == currentToken) {
+              final saccoCode = await _session.readSacco();
+              if (saccoCode != null && saccoCode.isNotEmpty) {
+                await _push.unsubscribeStaff(saccoCode);
+              }
+              await _session.clear();
+              sessionExpiredNotifier.value = true;
             }
-            await _session.clear();
-            sessionExpiredNotifier.value = true;
           }
           handler.next(e);
         },
@@ -72,8 +83,8 @@ class ApiClient {
 
   Future<List<Map<String, dynamic>>> getList(String path,
       {Map<String, dynamic>? query}) async {
-    final r = await _guard(
-        () => _dio.get<dynamic>(path, queryParameters: query));
+    final r =
+        await _guard(() => _dio.get<dynamic>(path, queryParameters: query));
     final d = r.data;
     final list = d is Map<String, dynamic> ? d['data'] : d;
     return list is List
@@ -110,6 +121,12 @@ class ApiClient {
     return _envelope(r.data);
   }
 
+  Future<Map<String, dynamic>> delete(
+      String path, Map<String, dynamic> body) async {
+    final r = await _guard(() => _dio.delete<dynamic>(path, data: body));
+    return _envelope(r.data);
+  }
+
   Future<Response<dynamic>> _guard(
       Future<Response<dynamic>> Function() call) async {
     try {
@@ -135,10 +152,12 @@ class ApiClient {
           'Cannot reach the server at ${AppConfig.baseUrl}. Check that the backend is running and reachable.');
     }
     if (code == 401) {
-      return ApiException(serverMsg ?? 'Session expired. Please sign in again.');
+      return ApiException(
+          serverMsg ?? 'Session expired. Please sign in again.');
     }
     if (code == 403) {
-      return ApiException(serverMsg ?? 'You do not have permission to do that.');
+      return ApiException(
+          serverMsg ?? 'You do not have permission to do that.');
     }
     return ApiException(serverMsg ?? 'Request failed (${code ?? 'network'}).');
   }

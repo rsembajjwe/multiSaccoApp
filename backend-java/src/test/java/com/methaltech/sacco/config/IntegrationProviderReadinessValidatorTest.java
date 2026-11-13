@@ -16,6 +16,39 @@ class IntegrationProviderReadinessValidatorTest {
     }
 
     @Test
+    void localReadinessOffAllowsDemoProvidersWhenDemoLoginsAreDisabled() {
+        IntegrationProviderReadinessValidator validator = new IntegrationProviderReadinessValidator(
+                false,
+                false,
+                "demo_sms",
+                "demo_email",
+                "demo_mobile_money",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "");
+
+        assertDoesNotThrow(validator::validate);
+    }
+
+    @Test
     void productionRejectsDemoProviders() {
         IntegrationProviderReadinessValidator validator = validator(false, "demo_sms", "real_email_gateway", "demo_mobile_money");
 
@@ -142,6 +175,9 @@ class IntegrationProviderReadinessValidatorTest {
                 "",
                 "",
                 "",
+                "",
+                "",
+                "",
                 "");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
@@ -181,6 +217,9 @@ class IntegrationProviderReadinessValidatorTest {
                 "",
                 "174379",
                 "",
+                "",
+                "",
+                "",
                 "");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
@@ -207,6 +246,9 @@ class IntegrationProviderReadinessValidatorTest {
                 "api_user_id",
                 "",
                 "mtnuganda",
+                "",
+                "",
+                "",
                 "",
                 "",
                 "",
@@ -269,6 +311,46 @@ class IntegrationProviderReadinessValidatorTest {
                 "daraja-consumer-secret",
                 "174379",
                 "daraja-passkey",
-                "https://example.com/mpesa/callback");
+                "https://example.com/mpesa/callback",
+                "https://proxy.momoapi.mtn.com",
+                "https://openapi.airtel.africa",
+                "https://api.safaricom.co.ke");
+    }
+
+    @Test
+    void productionRejectsMpesaSandboxEndpoint() {
+        IntegrationProviderReadinessValidator validator = new IntegrationProviderReadinessValidator(
+                false, "afrosms", "gmail_smtp", "mpesa_daraja",
+                "sms@example.com", "sms-password", "Tereka",
+                "tereka.online@gmail.com", "gmail-password", "no-reply@tereka.online",
+                "subscription_key", "api_user_id", "api_key", "mtnuganda",
+                "airtel-client-id", "airtel-client-secret", "UG",
+                "daraja-consumer-key", "daraja-consumer-secret", "174379", "daraja-passkey",
+                "https://example.com/mpesa/callback",
+                "https://proxy.momoapi.mtn.com", "https://openapi.airtel.africa",
+                "https://sandbox.safaricom.co.ke");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
+
+        assertTrue(error.getMessage().contains("SACCO_MPESA_DARAJA_BASE_URL"));
+        assertTrue(error.getMessage().contains("sandbox"));
+    }
+
+    @Test
+    void productionRejectsMtnSandboxTargetEnvironment() {
+        IntegrationProviderReadinessValidator validator = new IntegrationProviderReadinessValidator(
+                false, "afrosms", "gmail_smtp", "mtn_momo",
+                "sms@example.com", "sms-password", "Tereka",
+                "tereka.online@gmail.com", "gmail-password", "no-reply@tereka.online",
+                "subscription_key", "api_user_id", "api_key", "sandbox",
+                "airtel-client-id", "airtel-client-secret", "UG",
+                "daraja-consumer-key", "daraja-consumer-secret", "174379", "daraja-passkey",
+                "https://example.com/mpesa/callback",
+                "https://proxy.momoapi.mtn.com", "https://openapi.airtel.africa",
+                "https://api.safaricom.co.ke");
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, validator::validate);
+
+        assertTrue(error.getMessage().contains("SACCO_MTN_MOMO_TARGET_ENVIRONMENT"));
     }
 }

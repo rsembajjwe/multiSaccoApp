@@ -1,0 +1,51 @@
+rule_files:
+  - prometheus-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: fleet alerts fire after sustained threshold
+    interval: 1m
+    input_series:
+      - series: 'sacco_fleet_bulk_job_recoveries_total{job="tereka-backend",source="system-watchdog-recovery"}'
+        values: '0 1 2 2 2 2 2 2 2 2'
+      - series: 'sacco_fleet_bulk_job_organizations_total{job="tereka-backend",outcome="failed"}'
+        values: '0 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: TerekaFleetBulkJobRepeatedRecovery
+        exp_alerts:
+          - exp_labels:
+              alertname: TerekaFleetBulkJobRepeatedRecovery
+              severity: critical
+              service: fleet-operations
+            exp_annotations:
+              summary: Fleet bulk jobs are repeatedly being recovered
+              description: At least two automatic fleet-job recovery claims occurred within 15 minutes. Processing may be stalled or an application node may be unstable.
+              runbook: docs/monitoring.md#fleet-bulk-job-recovery-runbook
+      - eval_time: 8m
+        alertname: TerekaFleetBulkJobOrganizationFailures
+        exp_alerts:
+          - exp_labels:
+              alertname: TerekaFleetBulkJobOrganizationFailures
+              severity: warning
+              service: fleet-operations
+            exp_annotations:
+              summary: Fleet bulk job completed with organization failures
+              description: One or more organizations failed during a fleet bulk job in the last 15 minutes.
+              runbook: docs/monitoring.md#fleet-bulk-job-recovery-runbook
+
+  - name: one recovery and no failures remain quiet
+    interval: 1m
+    input_series:
+      - series: 'sacco_fleet_bulk_job_recoveries_total{job="tereka-backend",source="system-watchdog-recovery"}'
+        values: '0 1 1 1 1 1 1 1 1 1'
+      - series: 'sacco_fleet_bulk_job_organizations_total{job="tereka-backend",outcome="failed"}'
+        values: '0 0 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: TerekaFleetBulkJobRepeatedRecovery
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: TerekaFleetBulkJobOrganizationFailures
+        exp_alerts: []

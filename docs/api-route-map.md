@@ -9,9 +9,25 @@ Java-backed routes currently implemented:
 
 - `GET /api/v1/health`
 - `GET /api/v1/tenants`
+- `GET /api/v1/tenants/fleet` (platform fleet search, health, ownership, and server pagination)
+- `GET /api/v1/tenants/fleet/summary` (fleet-wide health, lifecycle, owner and district workloads, incident/SLA queue, six-month renewal forecast, billing, and onboarding metrics)
+  - Platform UI supports non-mutating renewal-rate and price-adjustment scenarios with conservative, expected, and growth presets.
+- `GET|POST /api/v1/tenants/fleet/forecast-scenarios` and `DELETE /api/v1/tenants/fleet/forecast-scenarios/{scenarioId}` (personal, audited renewal scenario library and comparison)
+- `GET|POST /api/v1/tenants/fleet/views` and `DELETE /api/v1/tenants/fleet/views/{viewId}` (personal, audited saved fleet filters)
+- `GET|POST /api/v1/tenants/fleet/jobs`, `POST /api/v1/tenants/fleet/jobs/{jobId}/decision`, and `GET /api/v1/tenants/fleet/jobs/{jobId}/results` (maker-checker approval and durable asynchronous bulk updates with per-organization outcomes)
+  - Submissions require a business justification and remain `pending_approval` until a different platform operator approves or rejects them with a recorded reason.
+  - `GET /api/v1/tenants/fleet/jobs/approval-queue` provides oldest-first server pagination; `GET /api/v1/tenants/fleet/jobs/approval-summary` supplies navigation badges and four/eight-hour SLA metrics.
+  - Eligible checkers receive deduplicated request, due-soon, and overdue inbox notifications; the requester receives the final decision and reason.
+  - Platform UI exposes an organization-level result report and formula-safe CSV export for remediation workflows.
+  - Startup recovery resumes only queued organization rows for jobs interrupted in `queued` or `running` state and preserves completed outcomes.
+- `GET /api/v1/tenants/fleet/incidents` and `PATCH /api/v1/tenants/fleet/incidents/{incidentKey}` (audited incident assignment, acknowledgement, escalation, resolution notes, and reopening)
+- `PATCH /api/v1/tenants/fleet/bulk` (guarded portfolio assignment and lifecycle actions, maximum 100 SACCOs)
 - `GET /api/v1/tenants/:id`
 - `POST /api/v1/tenants`
+- `DELETE /api/v1/tenants/:id`
 - `PATCH /api/v1/tenants/:id/status`
+- `GET /api/v1/tenants/:id/officials`
+- `PATCH /api/v1/tenants/:id/officials/:office`
 - `GET /api/v1/tenants/:id/profile`
 - `PATCH /api/v1/tenants/:id/profile`
 - `POST /api/v1/auth/login`
@@ -26,6 +42,8 @@ Java-backed routes currently implemented:
 - `GET /api/v1/permissions`
 - `GET /api/v1/audit-events`
 - `POST /api/v1/audit-events`
+- `GET /api/v1/subscription-payments` (tenant-scoped payment history; platform users may view all SACCOs with `subscriptions:view`)
+- `POST /api/v1/subscriptions/:subscriptionId/payments` (platform subscription payment recording; requires `subscriptions:manage`)
 - `GET /api/v1/branches`
 - `POST /api/v1/branches`
 - `GET /api/v1/members`
@@ -37,6 +55,7 @@ Java-backed routes currently implemented:
 - `GET /api/v1/members/:id`
 - `GET /api/v1/members/:id/statement`
 - `PATCH /api/v1/members/:id/status`
+- `POST /api/v1/members/:id/activation-credentials`
 - `GET /api/v1/members/:id/next-of-kin`
 - `POST /api/v1/members/:id/next-of-kin`
 - `GET /api/v1/members/:id/beneficiaries`
@@ -57,6 +76,8 @@ Java-backed routes currently implemented:
 - `PATCH /api/v1/welfare-claims/:id/status`
 - `POST /api/v1/welfare-claims/:id/payment`
 - `GET /api/v1/financial-transactions`
+- `GET /api/v1/financial-transactions/approval-queue`
+- `GET /api/v1/financial-transactions/approval-summary`
 - `POST /api/v1/financial-transactions`
 - `GET /api/v1/financial-transactions/:id/receipt`
 - `POST /api/v1/financial-transactions/:id/reversal`
@@ -100,6 +121,11 @@ Java-backed routes currently implemented:
 - `POST /api/v1/loans/:id/guarantors`
 - `GET /api/v1/loans/:id/repayments`
 - `POST /api/v1/loans/:id/repayments`
+- `GET|POST /api/v1/loans/:id/recoveries`
+- `POST /api/v1/loans/:id/recoveries/:caseId/submit`
+- `POST /api/v1/loans/:id/recoveries/:caseId/decision`
+
+Loan recovery methods are independent and post immediately for an authorized SACCO administrator or treasurer. `borrower_savings` deducts only available borrower savings. `guarantor_shortfall` uses borrower savings first and allocates only the remaining shortfall across accepted signed guarantees. A borrower notice is optional and never introduces a grace period or approval step; affected guarantors receive posting notifications.
 - `GET /api/v1/member-auth/guarantor-requests`
 - `PATCH /api/v1/member-auth/guarantor-requests/:id/status`
 - `GET /api/v1/approval-workflows`
@@ -136,11 +162,15 @@ All JSON responses should follow one of these shapes:
 | GET | `/tenants` | List tenants visible to current user. | Required |
 | GET | `/tenants/:id` | Get one tenant. | Required |
 | POST | `/tenants` | Submit/create tenant. | Platform admin or public registration flow |
+| DELETE | `/tenants/:id` | Permanently delete a SACCO and all tenant-owned records after typed SACCO-code confirmation. | Platform admin with `tenants:delete` |
 | PATCH | `/tenants/:id/status` | Approve, activate, suspend, or terminate tenant. | Platform admin |
+| GET | `/tenants/:id/officials` | List chairperson, secretary and treasurer assignments for a SACCO. | Required |
+| PATCH | `/tenants/:id/officials/:office` | Assign or transfer one SACCO official office to a registered member. | Tenant manager |
 | GET | `/tenants/:id/profile` | Get SACCO legal/contact profile. | Required |
 | PATCH | `/tenants/:id/profile` | Update SACCO legal/contact profile. | SACCO admin or platform admin |
 | GET | `/users` | List users in current tenant. | Required |
 | POST | `/users` | Create a user with hashed password. | Admin |
+| POST | `/users/official-staff-access` | Create or reuse a staff login for an assigned SACCO official, grant the matching role and link it to the member. | Platform admin |
 | GET | `/users/:id/roles` | List assigned roles for a staff user. | Admin |
 | PUT | `/users/:id/roles` | Replace assigned roles for a staff user. | Admin |
 | POST | `/auth/login` | Authenticate staff with `saccoCode`, `username`, and `password`; legacy `email` plus `password` remains accepted for automation. | Public |
@@ -162,6 +192,7 @@ All JSON responses should follow one of these shapes:
 | GET | `/subscription-packages` | List platform subscription packages. | Required |
 | GET | `/subscriptions` | List visible subscriptions. | Required |
 | POST | `/subscriptions/:id/payments` | Record a subscription payment. | Platform admin |
+| POST | `/subscriptions/:id/trial-extension` | Extend a trial by 1-31 days with a required audited reason. | Platform admin with subscription management |
 
 ## Onboarding and Membership Routes
 
@@ -178,14 +209,15 @@ All JSON responses should follow one of these shapes:
 | GET | `/members/:id` | Get member profile. | Required |
 | GET | `/members/:id/statement` | Get posted member movements with running savings/share/welfare balances and CSV export text. | Required |
 | PATCH | `/members/:id/status` | Approve, suspend, activate, or exit member. | Authorized approver |
+| POST | `/members/:id/activation-credentials` | Activate a member, set their password to their phone number, and send SACCO code plus password by SMS or email. | Authorized approver |
 | GET | `/members/:id/next-of-kin` | List member next-of-kin contacts. | Required |
 | POST | `/members/:id/next-of-kin` | Add a member next-of-kin contact. | SACCO staff |
 | GET | `/members/:id/beneficiaries` | List member beneficiaries and allocations. | Required |
 | POST | `/members/:id/beneficiaries` | Add a member beneficiary allocation. | SACCO staff |
 | GET | `/members/:id/documents` | List member documents. | Required |
 | POST | `/members/:id/documents` | Upload/register member document metadata. | SACCO staff |
-| GET | `/financial-products` | List tenant savings, shares, and welfare product definitions. | Required |
-| POST | `/financial-products` | Create a tenant financial product definition. | SACCO staff |
+| GET | `/financial-products` | List tenant fund product definitions. | `fund-types:view` |
+| POST | `/financial-products` | Create a tenant financial product definition. | `fund-types:manage` (Chairperson) |
 | GET | `/financial-accounts` | List member accounts linked to savings, shares, and welfare products. | Required |
 | POST | `/financial-accounts` | Open a financial account for an active member and product. | SACCO staff |
 | GET | `/welfare-claims` | List tenant welfare claims. | Required |
@@ -193,12 +225,16 @@ All JSON responses should follow one of these shapes:
 | PATCH | `/welfare-claims/:id/status` | Approve or reject a submitted welfare claim. | Authorized approver |
 | POST | `/welfare-claims/:id/payment` | Pay an approved welfare claim and reduce member welfare balance. | SACCO staff |
 | GET | `/financial-transactions` | List tenant financial transactions. | Required |
+| GET | `/financial-transactions/approval-queue` | List the oldest platform-wide pending financial decisions with organization and member context. | Platform transaction viewer |
+| GET | `/financial-transactions/approval-summary` | Return platform queue counts, pending value, oldest item and decision capability. | Platform transaction viewer |
 | POST | `/financial-transactions` | Submit a pending financial transaction. | SACCO staff |
 | GET | `/financial-transactions/:id/receipt` | Generate a receipt projection for a posted financial transaction. | Required |
 | POST | `/financial-transactions/:id/reversal` | Create a posted reversal that references the original transaction. | Authorized staff |
 | PATCH | `/financial-transactions/:id/status` | Post or reject a pending financial transaction. | Authorized checker |
 | GET | `/financial-transactions/opening-balances/import-template` | Return CSV headers, sample rows, and content for opening balance imports. | Required |
 | POST | `/financial-transactions/opening-balances/import` | Validate or post all-or-nothing opening balance ledger transactions. | Authorized checker |
+| GET | `/financial-transactions/savings/import-template` | Return the tenant-scoped CSV template for bulk savings deposits. | Required |
+| POST | `/financial-transactions/savings/import` | Dry-run or create tenant-scoped pending savings deposit transactions in bulk. | Transactions create |
 | GET | `/accounting-periods` | List tenant accounting periods. | Required |
 | PATCH | `/accounting-periods/:id/status` | Open or close an accounting period. | SACCO staff |
 | GET | `/chart-of-accounts` | List the accounting chart used for journal lines. | Required |
@@ -335,6 +371,9 @@ Implemented in the no-dependency development server:
 - `POST /api/v1/loans/:id/repayments`
 - `GET /api/v1/loans/:id/guarantors`
 - `POST /api/v1/loans/:id/guarantors`
+- `GET|POST /api/v1/loans/:id/recoveries`
+- `POST /api/v1/loans/:id/recoveries/:caseId/submit`
+- `POST /api/v1/loans/:id/recoveries/:caseId/decision`
 - `GET /api/v1/member-auth/guarantor-requests`
 - `PATCH /api/v1/member-auth/guarantor-requests/:id/status`
 - `GET /api/v1/approval-workflows`

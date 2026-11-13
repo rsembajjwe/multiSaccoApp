@@ -163,6 +163,26 @@ public class FinancialTransaction {
         return transaction;
     }
 
+    public static FinancialTransaction postedRecoveryDebit(
+            String id,
+            String tenantId,
+            String branchId,
+            String memberId,
+            BigDecimal amount,
+            String reference,
+            String narration,
+            String makerUserId,
+            String checkerUserId) {
+        FinancialTransaction transaction = new FinancialTransaction(
+                id, tenantId, branchId, memberId, "withdrawal", "internal_transfer",
+                amount, reference, narration, makerUserId);
+        transaction.status = "posted";
+        transaction.checkerUserId = checkerUserId;
+        transaction.postedAt = Instant.now();
+        transaction.updatedAt = transaction.postedAt;
+        return transaction;
+    }
+
     static FinancialTransaction reversalOf(
             FinancialTransaction original,
             String id,

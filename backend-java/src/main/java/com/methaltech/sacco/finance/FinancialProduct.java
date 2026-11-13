@@ -71,4 +71,18 @@ class FinancialProduct {
         this.createdAt = Instant.now();
         this.updatedAt = this.createdAt;
     }
+
+    void update(
+            String name,
+            BigDecimal contributionAmount,
+            BigDecimal minimumBalance,
+            BigDecimal interestRate,
+            String status) {
+        if (name != null && !name.isBlank()) this.name = name.trim();
+        if (contributionAmount != null) this.contributionAmount = contributionAmount;
+        if (minimumBalance != null) this.minimumBalance = minimumBalance;
+        if (interestRate != null) this.interestRate = interestRate;
+        if (status != null && !status.isBlank()) this.status = status.trim();
+        this.updatedAt = Instant.now();
+    }
 }

@@ -12,9 +12,11 @@ import '../../providers.dart';
 /// Operating expenses (rent, utilities, staff, technology...). Posts to the
 /// expense account picked from the chart of accounts.
 class ExpensesScreen extends ConsumerWidget {
-  const ExpensesScreen({super.key, required this.canManage});
+  const ExpensesScreen(
+      {super.key, required this.canManage, this.embedded = false});
 
   final bool canManage;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -23,7 +25,7 @@ class ExpensesScreen extends ConsumerWidget {
         ref.watch(expenseAccountsProvider).asData?.value ?? const [];
     final names = {for (final a in accounts) a.code: a.name};
     return Scaffold(
-      appBar: AppBar(title: const Text('Expenses')),
+      appBar: embedded ? null : AppBar(title: const Text('Expenses')),
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
               icon: const Icon(Icons.add),

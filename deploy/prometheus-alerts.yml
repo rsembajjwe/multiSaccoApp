@@ -62,3 +62,29 @@ groups:
           summary: "Tereka Online JVM heap usage is high"
           description: "Heap usage has remained above 85% for 15 minutes."
           runbook: "docs/monitoring.md#operations-runbook"
+
+  - name: tereka-online-fleet-jobs
+    rules:
+      - alert: TerekaFleetBulkJobRepeatedRecovery
+        expr: |
+          sum(increase(sacco_fleet_bulk_job_recoveries_total{job="tereka-backend"}[15m])) >= 2
+        for: 5m
+        labels:
+          severity: critical
+          service: fleet-operations
+        annotations:
+          summary: "Fleet bulk jobs are repeatedly being recovered"
+          description: "At least two automatic fleet-job recovery claims occurred within 15 minutes. Processing may be stalled or an application node may be unstable."
+          runbook: "docs/monitoring.md#fleet-bulk-job-recovery-runbook"
+
+      - alert: TerekaFleetBulkJobOrganizationFailures
+        expr: |
+          sum(increase(sacco_fleet_bulk_job_organizations_total{job="tereka-backend",outcome="failed"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: fleet-operations
+        annotations:
+          summary: "Fleet bulk job completed with organization failures"
+          description: "One or more organizations failed during a fleet bulk job in the last 15 minutes."
+          runbook: "docs/monitoring.md#fleet-bulk-job-recovery-runbook"

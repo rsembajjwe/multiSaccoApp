@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/mobile_money.dart';
 import '../../providers.dart';
 import 'member_subscriptions_screen.dart';
 import 'subscription_screen.dart';
@@ -154,6 +155,7 @@ class _SmsTopUpDialog extends StatefulWidget {
 }
 
 class _SmsTopUpDialogState extends State<_SmsTopUpDialog> {
+  final _formKey = GlobalKey<FormState>();
   final _count = TextEditingController(text: '100');
   final _phone = TextEditingController(text: '+256');
   String _provider = 'mtn';
@@ -166,11 +168,11 @@ class _SmsTopUpDialogState extends State<_SmsTopUpDialog> {
   }
 
   void _submit() {
+    if (!_formKey.currentState!.validate()) return;
     final smsCount = int.tryParse(_count.text.trim().replaceAll(',', '')) ?? 0;
-    if (smsCount <= 0 || _phone.text.trim().isEmpty) return;
     Navigator.of(context).pop(_SmsTopUpRequest(
       smsCount: smsCount,
-      phone: _phone.text.trim(),
+      phone: normalizeUgandanMobileNumber(_phone.text)!,
       provider: _provider,
     ));
   }
@@ -178,10 +180,13 @@ class _SmsTopUpDialogState extends State<_SmsTopUpDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       title: const Text('Buy SMS credits'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           SegmentedButton<String>(
             segments: const [
               ButtonSegment(value: 'mtn', label: Text('MTN')),
@@ -192,24 +197,34 @@ class _SmsTopUpDialogState extends State<_SmsTopUpDialog> {
                 setState(() => _provider = value.first),
           ),
           const SizedBox(height: 10),
-          TextField(
+          TextFormField(
             controller: _count,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
               labelText: 'SMS credits',
               prefixIcon: Icon(Icons.sms_outlined),
             ),
+            validator: (value) {
+              final count = int.tryParse(
+                  (value ?? '').trim().replaceAll(',', ''));
+              return count == null || count <= 0
+                  ? 'Enter the number of SMS credits.'
+                  : null;
+            },
           ),
           const SizedBox(height: 10),
-          TextField(
+          TextFormField(
             controller: _phone,
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(
               labelText: 'SACCO mobile money phone',
               prefixIcon: Icon(Icons.phone_android_outlined),
             ),
+            validator: (value) =>
+                validateUgandanMobileMoneyPhone(value, _provider),
           ),
-        ],
+          ],
+        ),
       ),
       actions: [
         TextButton(

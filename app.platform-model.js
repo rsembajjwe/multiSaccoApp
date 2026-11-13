@@ -54,7 +54,7 @@ function buildRecentSaccoApplicationRows(tenants, pendingLabel) {
   return tenants.slice(0, 5).map((tenant) => [
     tenant.name || tenant.legalName,
     tenant.district || "Uganda",
-    tenant.status || pendingLabel
+    labelize(tenant.status || pendingLabel)
   ]);
 }
 

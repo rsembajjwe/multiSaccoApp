@@ -61,6 +61,22 @@ export const TEMPLATE_DEFINITIONS = [
     ]
   },
   {
+    id: "savings-deposits",
+    title: "Savings Deposits",
+    filename: "savings-deposits-import-template.xlsx",
+    javaConstant: "SAVINGS_IMPORT_HEADERS",
+    javaFile: "backend-java/src/main/java/com/methaltech/sacco/finance/FinancialTransactionController.java",
+    headers: ["membershipNo", "amount", "postingDate", "reference", "channel", "narration"],
+    sampleRows: [["GREE-0100", "50000", "2026-09-15", "SAV-GREE-0100-001", "cash", "September savings deposit"]],
+    guidance: [
+      ["membershipNo", "Required, must already exist in the selected SACCO tenant."],
+      ["amount", "Required positive amount."],
+      ["reference", "Required and unique in the SACCO transaction history."],
+      ["channel", "Allowed: cash, mobile_money, bank, payroll_deduction."],
+      ["postingDate", "Optional YYYY-MM-DD; rejected when the accounting period is closed."]
+    ]
+  },
+  {
     id: "loan-book",
     title: "Loan Book",
     filename: "loan-book-import-template.xlsx",

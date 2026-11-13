@@ -66,10 +66,17 @@ Copy-Item deploy\backend.env.example .env
 npm.cmd run deploy:backend
 ```
 
+The local Java stack launcher automatically imports the ignored root `.env` file. Variables already
+set in the launching process take precedence, so CI and explicit shell configuration remain stable.
+
+On Windows networks where antivirus or an enterprise proxy inspects HTTPS, use
+`npm.cmd run dev:connected:windows-trust`. Java will still validate TLS, using the Windows trusted-root
+store. Do not use an insecure trust-all SSL configuration.
+
 Then open:
 
 ```text
-http://127.0.0.1:8080/actuator/health
+http://127.0.0.1:8080/actuator/health/readiness
 ```
 
 ## Developer checks
@@ -93,7 +100,9 @@ This starts an isolated Docker Compose stack on PostgreSQL, applies Flyway migra
 
 For hosted staging setup, use [docs/staging-environment.md](docs/staging-environment.md) and keep real `.env` values outside git.
 
-SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`. SMS can run through `afrosms`, email through `gmail_smtp`, and mobile-money collections through `mtn_momo`, `airtel_money`, or `mpesa_daraja` when the matching provider credentials are configured; demo values remain the default for local development.
+SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`. SMS can run through `afrosms`, email through `gmail_smtp`, and mobile-money collections through `mtn_momo`, `airtel_money`, or `mpesa_daraja` when the matching provider credentials are configured; demo values remain the default for local development. The production profile enables `SACCO_PRODUCTION_READINESS_ENABLED=true` by default so startup fails fast if real provider settings are missing.
+
+Staff onboarding is provider-backed. The administrator selects email or SMS, the backend generates and sends a temporary password, and no full session is issued until the recipient replaces it. Successful use of the delivered credential verifies the selected contact. To execute the one-time two-SACCO reseed, start the backend once with `SACCO_TWO_SACCO_RESEED_ENABLED=true`; the reseed is database-tracked and will not repeat after completion.
 
 Secrets and provider credentials must stay outside Git. Use [docs/secrets-management.md](docs/secrets-management.md) for the storage and rotation runbook. `npm.cmd run check` includes a secrets-management contract check that scans deployment example files for real-looking secret values.
 
@@ -265,7 +274,7 @@ Members can submit a mobile loan application from the Member Portal and see the 
 
 Members can save offline complaint drafts locally and sync them later from the Member Portal.
 
-Android member app foundation lives in `mobile/member_app`, with a Flutter-ready API contract for emulator base URL `http://10.0.2.2:5173/api/v1`.
+The Flutter clients live under `mobile/member_app`, `mobile/staff_app`, and `mobile/proprietor_app`. They provide member self-service, SACCO operations, and platform-owner administration respectively, with production API access defaulting to `https://globalntereka.com/api/v1`.
 
 All API and static responses now include baseline security headers, and public login/callback endpoints include in-memory rate limiting for the development build.
 
@@ -273,7 +282,7 @@ After API login, the Approvals screen reads pending financial postings and posts
 
 Approvals also shows a backend-backed control center for pending queue size, pending value, workflow coverage, decision history, corrections, and checker-clear status.
 
-The first screen is a single login form requiring `code`, `username`, and `password`. Use `PLATFORM` for platform administration, or the SACCO's assigned code such as `GREE` for Green Valley SACCO. The code selects the platform/SACCO context, while the username and password identify the account role, such as member, treasurer, secretary, chairperson, SACCO admin, or platform admin. Backend staff and member logins are both scoped to the submitted code.
+The first screen is a single login form requiring `code`, `username`, and `password`. Use `PLATFORM` for platform administration, `GREE` for A-Z Community Group, or `LAKE` for Mutwe Community Group. The code selects the tenant context, allowing the same official email to be used safely in both SACCOs. A delivered temporary password opens only the mandatory password-change step.
 
 Members can login from **Member portal** using their issued membership number, phone, or email plus password to view their savings, shares, and welfare balances. Seeded demo member credentials work only in development/demo mode when `SACCO_DEMO_LOGINS_ENABLED=true`.
 
@@ -324,7 +333,7 @@ This is now the first build foundation. A production build should add:
 - Additional mobile-money rails, bank integrations, SMS, and email adapters.
 - Immutable financial ledgers and balanced journal entries.
 - File uploads, malware scanning, and object storage.
-- Android app, preferably Flutter as recommended in the requirements.
+- Store signing, device acceptance testing, and managed Android/iOS release publication for all Flutter clients.
 - Automated tests for tenant isolation, permissions, financial calculations, and callbacks.
 
 ## Planning
@@ -340,15 +349,18 @@ This is now the first build foundation. A production build should add:
 - [Administrator manual](docs/administrator-manual.md)
 - [Technical manual](docs/technical-manual.md)
 - [Security review checklist](docs/security-review.md)
-- [Android member app foundation](mobile/member_app/README.md)
+- [Member mobile app](mobile/member_app/README.md)
+- [Staff mobile app](mobile/staff_app/README.md)
+- [Proprietor mobile app](mobile/proprietor_app/README.md)
 
-## Development/demo seed API accounts
+## Seeded API accounts
 
+- Production proprietor: `rsembajjwe@gmail.com` / configured bootstrap password, changed on first login
 - Platform admin: `admin@platform.local` / `Admin@12345`
 - SACCO admin: `admin@greenvalley.local` / `Sacco@12345`
-- Treasurer: `treasurer@greenvalley.local` / `Treasurer@12345`
-- Secretary: `secretary@greenvalley.local` / `Secretary@12345`
-- Chairperson: `chairperson@greenvalley.local` / `Chair@12345`
+- Treasurer: `rsembajjwe1@gmail.com` / temporary password delivered by email
+- Secretary: `rsembajjwe2@gmail.com` / temporary password delivered by email
+- Chairperson: `rsembajjwe@gmail.com` / temporary password delivered by email
 - Member: `GREE-0001` / `Member@12345`
 
 Seeded staff and member accounts are disabled outside development/demo mode by keeping `SACCO_DEMO_LOGINS_ENABLED=false`.
@@ -356,4 +368,5 @@ Seeded staff and member accounts are disabled outside development/demo mode by k
 Development/demo staff login codes:
 
 - Platform admin code: `PLATFORM`
-- Green Valley SACCO code: `GREE`
+- A-Z Community Group code: `GREE`
+- Mutwe Community Group code: `LAKE`

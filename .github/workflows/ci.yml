@@ -35,10 +35,133 @@ jobs:
       - name: Run project checks
         run: npm.cmd run check
 
+      # Build the actual deployed artifact. Caddy serves dist-vite in production, so a broken
+      # production bundle must fail the gate here rather than be discovered at deploy time.
+      - name: Build production frontend bundle (dist-vite)
+        run: npm.cmd run build:vite
+
+      - name: Fail if production bundle is empty
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'dist-vite/index.html')) {
+            Write-Error 'dist-vite/index.html missing - production bundle did not build'
+            exit 1
+          }
+          $js = Get-ChildItem 'dist-vite' -Filter '*.js' -Recurse
+          if ($js.Count -lt 1) {
+            Write-Error 'dist-vite has no JS bundle - production build produced no output'
+            exit 1
+          }
+          Write-Host "dist-vite built: $($js.Count) JS file(s)"
+
+  backend-tests:
+    name: Backend tests (Spring Boot)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+
+      # Mirrors the known-green local command (jacoco coverage gate skipped). Drop -Djacoco.skip=true
+      # if/when you want the coverage threshold enforced in CI.
+      - name: Run backend test suite
+        working-directory: backend-java
+        run: |
+          chmod +x mvnw
+          ./mvnw -B -ntp test -Djacoco.skip=true
+
+      - name: Upload Surefire reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: backend-java/target/surefire-reports/
+          if-no-files-found: ignore
+
+  node-api-tests:
+    name: Node API regression (member lifecycle)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The Node API (server.mjs + backend/*) has no runtime dependencies, so these
+      # regression tests can run without `npm ci`. Each spawns the server itself.
+      - name: Run member lifecycle regression suite
+        run: node scripts/test-member-lifecycle.mjs
+
+      - name: Run tenant isolation regression suite
+        run: node scripts/test-tenant-isolation.mjs
+
+      - name: Run API smoke test
+        run: node scripts/api-smoke-test.mjs
+
+  monitoring-tests:
+    name: Monitoring rules and routing
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Evaluate Prometheus alert fixtures
+        run: npm run alerts:test
+
+      - name: Verify Alertmanager webhook routing
+        run: npm run alert-routing:test
+
+  mobile-tests:
+    name: Flutter checks (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [member_app, staff_app, proprietor_app]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        working-directory: mobile/${{ matrix.app }}
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: mobile/${{ matrix.app }}
+        run: flutter analyze
+
+      - name: Test
+        working-directory: mobile/${{ matrix.app }}
+        run: flutter test
+
   release-gate:
     name: PostgreSQL and browser readiness
     runs-on: ubuntu-latest
-    needs: verify
+    needs: [verify, backend-tests, node-api-tests, monitoring-tests, mobile-tests]
 
     steps:
       - name: Checkout

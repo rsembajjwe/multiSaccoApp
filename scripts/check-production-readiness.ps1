@@ -92,7 +92,13 @@ try {
   $env:SKIP_RATE_LIMIT_TEST = "1"
 
   Write-Host "Running Java/PostgreSQL API smoke test"
-  Invoke-Checked node @("scripts/api-smoke-test.mjs")
+  try {
+    Invoke-Checked node @("scripts/api-smoke-test.mjs")
+  } catch {
+    Write-Host "API smoke failed. Backend logs follow:" -ForegroundColor Yellow
+    docker compose -p $ProjectName logs --no-color --tail=200 backend
+    throw
+  }
 
   Write-Host "Running static UI source/sync contract checks"
   Invoke-Checked node @("scripts/check-ui-panel-contracts.mjs")

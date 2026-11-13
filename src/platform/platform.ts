@@ -7,6 +7,7 @@ import type {
   TerekaSubscription,
   TerekaTenantSummary,
 } from "../types/domain";
+import { labelizeValue } from "../formatting/formatters";
 
 export interface TerekaPlatformDashboardSummary {
   activePlatformUsers: number;
@@ -48,6 +49,28 @@ export interface TerekaPlatformSupportSummary {
   pendingOnboarding: number;
   saccoSupportTickets: number;
   visibleSaccos: number;
+}
+
+export interface TerekaRenewalScenario {
+  expectedOrganizations: number;
+  expectedValue: number;
+  downsideValue: number;
+}
+
+export function calculateRenewalScenario(
+  organizations: number,
+  baseValue: number,
+  renewalRatePercent: number,
+  priceAdjustmentPercent: number,
+): TerekaRenewalScenario {
+  const renewalRate = Math.min(100, Math.max(0, renewalRatePercent)) / 100;
+  const priceMultiplier = Math.max(0, 1 + priceAdjustmentPercent / 100);
+  const expectedValue = Math.round(Math.max(0, baseValue) * renewalRate * priceMultiplier);
+  return {
+    expectedOrganizations: Math.round(Math.max(0, organizations) * renewalRate),
+    expectedValue,
+    downsideValue: Math.max(0, Math.round(Math.max(0, baseValue) * priceMultiplier - expectedValue)),
+  };
 }
 
 export type TerekaPlatformActivityRow = [string | undefined, string | undefined, string | undefined];
@@ -138,7 +161,7 @@ export function buildRecentSaccoApplicationRows(
   return tenants.slice(0, 5).map((tenant) => [
     String(tenant.name || tenant.legalName || ""),
     String(tenant.district || "Uganda"),
-    String(tenant.status || pendingLabel),
+    labelizeValue(tenant.status || pendingLabel),
   ]);
 }
 

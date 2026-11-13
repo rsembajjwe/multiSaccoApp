@@ -103,6 +103,13 @@ class MobileMoneyPaymentRequestEntity {
         this.updatedAt = this.completedAt;
     }
 
+    void markPendingApproval(String resourceType, String resourceId) {
+        this.status = "pending_approval";
+        this.statusMessage = "Payment received; awaiting approval of " + resourceType + " " + resourceId + ".";
+        this.completedAt = null;
+        this.updatedAt = Instant.now();
+    }
+
     void updateStatus(String status, String reason) {
         this.status = status;
         this.statusMessage = reason == null || reason.isBlank() ? "Payment request marked " + status + "." : reason.trim();
@@ -113,6 +120,9 @@ class MobileMoneyPaymentRequestEntity {
     }
 
     void syncProviderStatus(MobileMoneyProviderStatusResult result) {
+        if (!MobileMoneyPaymentRules.providerStatusRefreshable(this.status)) {
+            return;
+        }
         this.status = result.status();
         this.statusMessage = result.statusMessage();
         this.providerReference = result.providerReference();

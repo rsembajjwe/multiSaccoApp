@@ -33,9 +33,20 @@ reports/tools/*
 !reports/tools/.gitkeep
 .env
 .env.*
+deploy/hetzner.env
+deploy/secrets/
+.release/
 *.log
+*.apk
 tmp-*.log
 .idea/
+.vscode/
 .local-pids/
+.runtime/
+.tmp/
+.tmp-*
+outputs/
+Claude outputs/
+test-output.txt
 Thumbs.db
 .DS_Store

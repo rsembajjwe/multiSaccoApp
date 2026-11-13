@@ -39,6 +39,8 @@ public class Member {
 
     private String whatsapp;
 
+    private String address;
+
     @Column(name = "national_id")
     @Convert(converter = EncryptedNationalIdConverter.class)
     private String nationalId;
@@ -117,6 +119,7 @@ public class Member {
             String memberType,
             String phone,
             String email,
+            String address,
             String nationalId,
             String passwordHash,
             String passwordSalt,
@@ -131,6 +134,7 @@ public class Member {
         this.memberType = memberType;
         this.phone = phone;
         this.email = email;
+        this.address = address;
         this.nationalId = nationalId;
         this.passwordHash = passwordHash;
         this.passwordSalt = passwordSalt;
@@ -182,6 +186,7 @@ public class Member {
             String memberType,
             String phone,
             String email,
+            String address,
             String nationalId,
             String status,
             String kycStatus,
@@ -191,6 +196,7 @@ public class Member {
         this.memberType = memberType;
         this.phone = phone;
         this.email = email;
+        this.address = address;
         this.nationalId = nationalId;
         this.status = status;
         this.kycStatus = kycStatus;
@@ -246,6 +252,7 @@ public class Member {
         this.fullName = "Former member " + membershipNo;
         this.phone = "";
         this.email = "";
+        this.address = "";
         this.nationalId = "";
         this.passwordHash = "";
         this.passwordSalt = "";
@@ -364,6 +371,10 @@ public class Member {
 
     public String getEmail() {
         return email;
+    }
+
+    public String getAddress() {
+        return address;
     }
 
     String getNationalId() {

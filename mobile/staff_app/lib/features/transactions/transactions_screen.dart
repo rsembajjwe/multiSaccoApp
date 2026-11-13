@@ -10,6 +10,7 @@ import '../../domain/models.dart';
 import '../../providers.dart';
 import 'transaction_detail_screen.dart';
 import 'member_deposit_sheet.dart';
+import 'loan_repayment_sheet.dart';
 
 class _Filter {
   const _Filter(this.label, this.match);
@@ -62,9 +63,15 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.savings_outlined),
-              title: const Text('Savings deposit'),
-              subtitle: const Text('Cash posts now, or send a mobile-money prompt'),
+              title: const Text('Member contribution'),
+              subtitle: const Text('Savings, shares, welfare or another fund'),
               onTap: () => Navigator.pop(context, 'savings'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.request_quote_outlined),
+              title: const Text('Loan repayment'),
+              subtitle: const Text('Post cash against an active loan'),
+              onTap: () => Navigator.pop(context, 'repayment'),
             ),
             ListTile(
               leading: const Icon(Icons.payments_outlined),
@@ -81,9 +88,13 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => choice == 'withdrawal'
-          ? const _WithdrawalSheet()
-          : const MemberDepositSheet(),
+      builder: (_) {
+        if (choice == 'withdrawal') return const _WithdrawalSheet();
+        if (choice == 'repayment') {
+          return const LoanRepaymentSheet();
+        }
+        return const MemberDepositSheet();
+      },
     );
     if (mounted) setState(() => _reloadTick++);
   }
@@ -180,58 +191,60 @@ class _TxnTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final out = txn.isOutflow;
     final color = out ? const Color(0xFFB91C1C) : const Color(0xFF15803D);
-    final title = txn.narration.isNotEmpty ? txn.narration : Fmt.label(txn.type);
+    final title =
+        txn.narration.isNotEmpty ? txn.narration : Fmt.label(txn.type);
     return Card(
       margin: EdgeInsets.zero,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => TransactionDetailScreen(
-                txn: txn, memberName: memberName))),
+            builder: (_) =>
+                TransactionDetailScreen(txn: txn, memberName: memberName))),
         child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.13),
-                borderRadius: BorderRadius.circular(10),
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(out ? Icons.north_east : Icons.south_west,
+                    color: color, size: 18),
               ),
-              child: Icon(out ? Icons.north_east : Icons.south_west,
-                  color: color, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(
+                        '${memberName ?? txn.memberId}${memberName == null && txn.memberId.isEmpty ? '' : ' · '}${Fmt.dateTime(txn.date)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12, color: scheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 2),
-                  Text(
-                      '${memberName ?? txn.memberId}${memberName == null && txn.memberId.isEmpty ? '' : ' · '}${Fmt.dateTime(txn.date)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 12, color: scheme.onSurfaceVariant)),
+                  Text('${out ? '-' : '+'}${Fmt.money(txn.amount)}',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w800, color: color)),
+                  const SizedBox(height: 4),
+                  StatusChip(txn.status),
                 ],
               ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('${out ? '-' : '+'}${Fmt.money(txn.amount)}',
-                    style: TextStyle(fontWeight: FontWeight.w800, color: color)),
-                const SizedBox(height: 4),
-                StatusChip(txn.status),
-              ],
-            ),
-          ],
-        ),
+            ],
+          ),
         ),
       ),
     );
@@ -265,8 +278,8 @@ class _WithdrawalSheetState extends ConsumerState<_WithdrawalSheet> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_member == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Choose a member.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Choose a member.')));
       return;
     }
     final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
@@ -274,7 +287,8 @@ class _WithdrawalSheetState extends ConsumerState<_WithdrawalSheet> {
     final isCash = _channel == 'cash';
     final confirmed = await confirmAction(
       context,
-      title: isCash ? 'Post cash withdrawal?' : 'Submit withdrawal for approval?',
+      title:
+          isCash ? 'Post cash withdrawal?' : 'Submit withdrawal for approval?',
       message: isCash
           ? 'Pay out ${Fmt.money(amount)} in cash to $memberName and reduce '
               'their savings balance now.'
@@ -425,7 +439,8 @@ class _WithdrawalSheetState extends ConsumerState<_WithdrawalSheet> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.payments_outlined),
-                  label: Text(_channel == 'cash' ? 'Post withdrawal' : 'Submit'),
+                  label:
+                      Text(_channel == 'cash' ? 'Post withdrawal' : 'Submit'),
                   onPressed: _busy ? null : _save,
                 ),
               ),

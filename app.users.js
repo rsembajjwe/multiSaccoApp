@@ -5,7 +5,7 @@
   const roles = userRoleOptions(platformOnly);
   const rows = buildAccessUserRows({ platformOnly, roles, users });
   const accessSummary = buildAccessSummary(users, roles);
-  const listPanel = recordTable(platformOnly ? "Platform administrator list" : "SACCO staff access list", rows, ["fullName", "email", "phone", "role", "mfa", "activeSessions", "accessPurpose", "moduleScope", "lastLogin", "status"]);
+  const listPanel = recordTable(platformOnly ? "Administrator list" : "SACCO staff access list", rows, ["fullName", "email", "phone", "role", "mfa", "activeSessions", "accessPurpose", "moduleScope", "lastLogin", "status"]);
   const detailPanel = userDetailPanel(users, canCreate) || emptyState("User detail and role assignment", "Select Manage access from the administrator list to review roles and module access.");
   if (platformOnly) {
     return `
@@ -19,7 +19,7 @@
       ${platformUserTabContent({
         activeTab: state.userAdminTab,
         canCreate,
-        addPanel: canCreate ? addUserPanel(true) : emptyState(t("addPlatformUser"), "Only Platform Super Admin users can add platform administrators."),
+        addPanel: canCreate ? addUserPanel(true) : emptyState(t("addPlatformUser"), "Only administrators can add administrator accounts."),
         detailPanel,
         coveragePanel: roleCoveragePanel(users, roles, true),
         listPanel,
@@ -118,7 +118,7 @@ function addUserPanel(platformOnly) {
       <div class="panel-heading">
         <div>
           <h2>${platformOnly ? "Add platform user" : "Add SACCO staff user"}</h2>
-          <p>${platformOnly ? "Create a platform administrator and assign the role that controls their views." : "Create a SACCO staff login for Treasurer, Secretary, Chairperson or another staff role. Members are managed in the Members screen."}</p>
+          <p>${platformOnly ? "Create an administrator and assign the role that controls their views." : "Create a SACCO staff login for Treasurer, Secretary, Chairperson or another staff role. Members are managed in the Members screen."}</p>
         </div>
       </div>
       ${state.userFormMessage ? `<div class="notice compact"><strong>${escapeHtml(state.userFormMessage)}</strong></div>` : ""}
@@ -126,9 +126,10 @@ function addUserPanel(platformOnly) {
       <form id="addUserForm" class="form-grid">
         <input type="hidden" id="newUserTenantId" value="${platformOnly ? "tenant_platform" : escapeHtml(state.user?.tenantId || "")}">
         <label><span>Full name</span><input id="newUserFullName" required placeholder="${platformOnly ? "e.g. Platform Support Officer" : "e.g. Branch Teller"}"></label>
-        <label><span>Email / username</span><input id="newUserEmail" type="email" required placeholder="name@tereka.online"></label>
+        <label><span>Email / username</span><input id="newUserEmail" type="email" placeholder="name@tereka.online"></label>
         <label><span>Phone</span><input id="newUserPhone" placeholder="+256..."></label>
-        <label><span>Temporary password</span><input id="newUserPassword" type="password" required minlength="10" placeholder="At least 10 characters"></label>
+        <label><span>Temporary password delivery</span><select id="newUserDeliveryChannel"><option value="email">Email</option><option value="sms">SMS</option></select></label>
+        <div class="mini-fact wide"><span>Secure onboarding</span><strong>The system generates and sends a temporary password. The selected contact is verified when that password is used for the mandatory first-login change.</strong></div>
         <div class="wide">
           <span class="field-label">Roles</span>
           <div class="role-checkbox-grid">
@@ -199,11 +200,13 @@ function userDetailPanel(users, canManageRoles) {
         ${mini("Current roles", roleModel.assignedRoleNamesText)}
         ${mini("MFA", selected.mfaEnabled ? "Enabled" : "Not enabled")}
         ${mini("Login reset required", selected.passwordResetRequired ? "Yes" : "No")}
+        ${mini("Onboarding delivery", selected.onboardingDeliveryStatus ? `${labelize(selected.onboardingChannel)} - ${labelize(selected.onboardingDeliveryStatus)}` : "Not applicable")}
+        ${mini("Verified contact", selected.emailVerified ? "Email" : selected.phoneVerified ? "Phone" : "Pending first login")}
         ${mini("Password reset", latestReset ? `${latestReset.status} until ${latestReset.expiresAt}` : "No pending reset")}
         ${mini("Active sessions", selected.activeSessionCount || 0)}
         ${mini("Access purpose", rolePurposeFor(roleModel.primaryRole.name || selected.role || "", platformUser))}
         ${mini("Module scope", roleModuleScopeFor(roleModel.primaryRole.name || selected.role || "", platformUser))}
-        ${mini("User type", platformUser ? "Platform administrator" : "SACCO staff")}
+        ${mini("User type", platformUser ? "Administrator" : "SACCO staff")}
       </div>
       <form id="userProfileForm" class="form-grid">
         <input type="hidden" id="profileUserId" value="${escapeHtml(selected.id)}">
@@ -238,7 +241,7 @@ function userDetailPanel(users, canManageRoles) {
       <div class="danger-zone">
         <div>
           <strong>Administrator status</strong>
-          <span>${canManageUser ? "Suspend, reactivate or delete this login while preserving audit history." : "Only Platform Super Admin can manage platform administrator status."}</span>
+          <span>${canManageUser ? "Suspend, reactivate or delete this login while preserving audit history." : "Only administrators can manage administrator status."}</span>
         </div>
         <div class="table-actions">
           ${canManageUser ? `

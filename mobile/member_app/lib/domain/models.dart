@@ -219,13 +219,22 @@ class MobileMoneyPayment {
 /// NOTE: the exact accepted strings should be confirmed against the backend
 /// (MobileMoneyPaymentRules) during the verify pass.
 enum PaymentPurpose {
-  savings('savings', 'Deposit to savings'),
-  shares('shares', 'Buy shares'),
-  welfare('welfare', 'Welfare contribution'),
+  savings('savings_deposit', 'Deposit to savings'),
+  shares('share_purchase', 'Buy shares'),
+  welfare('welfare_contribution', 'Welfare contribution'),
   membershipDues('membership_dues', 'Membership dues'),
   loanRepayment('loan_repayment', 'Loan repayment');
 
   const PaymentPurpose(this.value, this.label);
+  final String value;
+  final String label;
+}
+
+enum MobileMoneyNetwork {
+  mtn('mtn', 'MTN'),
+  airtel('airtel', 'Airtel');
+
+  const MobileMoneyNetwork(this.value, this.label);
   final String value;
   final String label;
 }

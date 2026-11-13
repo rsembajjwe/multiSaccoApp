@@ -11,15 +11,21 @@
   const tab = activeModuleTab("reports", tabs);
   return `
     ${saccoCyclePanel(cycle, { title: "Report cycle" })}
-    <div class="dashboard-grid">
+    <div class="reports-workspace">
+    <section class="reports-command-header">
+      <div>
+        <p class="eyebrow">Reporting workspace</p>
+        <h2>Reports and evidence</h2>
+      </div>
+      <div class="reports-command-meta"><span class="status ${exceptions ? "pending" : "active"}">${exceptions ? `${exceptions} exception(s)` : "Ready to export"}</span><span>${escapeHtml(cycle.label)}</span></div>
+    </section>
+    <div class="dashboard-grid reports-kpi-grid">
       ${summary("Members in report", consolidated.memberCount, "Active and inactive members", "Review")}
       ${summary("Savings reported", money.format(consolidated.savings || 0), "Member deposit balances", "Export")}
       ${summary("Loan portfolio", money.format(consolidated.loanPortfolio || 0), "Credit exposure", "Open")}
       ${summary("Compliance exceptions", exceptions, "Reconciliation and journal checks", "Investigate")}
-      ${summary("Privacy requests", dataProtection.privacyRequests || 0, "Member data rights", "Review")}
-      ${summary("Document disposals", dataProtection.kycDocumentsDisposed || 0, "Document retention actions", "Trace")}
     </div>
-    ${moduleTabs("reports", tabs, tab)}
+    <section class="panel compact-panel reports-tabs-panel">${moduleTabs("reports", tabs, tab)}</section>
     ${tab === "overview" ? `${secretaryReportCommandPanel(rows, consolidated, cycle)}${reportEvidenceControlPanel(consolidated, exceptions)}` : ""}
     ${tab === "catalogue" ? `
       ${filterToolbar("Search reports by module, member group, product or compliance status", "Export report", "Schedule report")}
@@ -49,6 +55,7 @@
     ${tab === "readiness" ? reportReadinessPanel(consolidated) : ""}
     ${tab === "regulatory" ? recordTable(`SACCO regulatory report - ${cycle.label}`, rows, ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "loanPortfolio", "activeLoans", "privacyRequests", "openPrivacyRequests", "kycReviewDue", "kycDisposed", "kycStorageActions", "dataProtectionStatus", "complianceStatus"]) : ""}
     ${tab === "member-form" ? memberRegistrationFormExportPanel() : ""}
+    </div>
   `;
 }
 
@@ -143,23 +150,25 @@ function platformSuperAdminReportsView(rows, exceptions) {
     transactions: dataRows("transactions"),
     users
   });
+  const tabs = [["overview", "Overview"], ["sacco", "SACCO reports"], ["access", "Administrator access"]];
+  const tab = activeModuleTab("platformReports", tabs);
   return `
-    <div class="dashboard-grid">
+    <div class="reports-workspace">
+    <section class="reports-command-header">
+      <div><p class="eyebrow">Platform reporting</p><h2>Reports and evidence</h2></div>
+      <div class="reports-command-meta"><span class="status ${exceptions ? "pending" : "active"}">${exceptions ? `${exceptions} exception(s)` : "Ready to export"}</span><span>${platformSummary.registeredSaccos} SACCOs</span></div>
+    </section>
+    <div class="dashboard-grid reports-kpi-grid">
       ${summary(t("registeredSaccos"), platformSummary.registeredSaccos, "All SACCO accounts", t("review"))}
       ${summary(t("activeSaccos"), platformSummary.activeSaccos, "Allowed to operate", t("open"))}
       ${summary(t("subscriptionRevenue"), money.format(platformSummary.subscriptionRevenue), "Platform billing", t("export"))}
-      ${summary(t("platformAdministrators"), platformSummary.platformAdministrators, "Users and roles", "Audit")}
-      ${summary(t("pendingRegistrations"), platformSummary.pendingRegistrations, "Onboarding decisions", t("review"))}
-      ${summary(t("openSaccoComplaints"), platformSummary.openSaccoComplaints, "Escalations from SACCO admins", t("review"))}
-      ${summary(t("failedPayments"), platformSummary.failedPayments, "Provider exceptions", t("review"))}
       ${summary(t("complianceExceptions"), exceptions, "Reconciliation and journal checks", "Investigate")}
-      ${summary("Privacy requests", dataProtection.privacyRequests || 0, "Across SACCOs", "Review")}
-      ${summary("Document disposals", dataProtection.kycDocumentsDisposed || 0, "File-store evidence", "Trace")}
     </div>
-    ${platformSuperAdminReportingControlPanel(platformSummary, subscriptions)}
-    ${filterToolbar("Search Super Admin reports by SACCO, billing status, administrator, compliance status or export type", "Export report", "Schedule report")}
-    ${recordTable("Super Admin SACCO report", rows, ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "privacyRequests", "openPrivacyRequests", "kycReviewDue", "kycDisposed", "dataProtectionStatus", "complianceStatus"])}
-    ${recordTable("Platform administrator access report", users, ["fullName", "email", "rolesLabel", "moduleScope", "status", "lastLogin"])}
+    <section class="panel compact-panel reports-tabs-panel">${moduleTabs("platformReports", tabs, tab)}</section>
+    ${tab === "overview" ? platformSuperAdminReportingControlPanel(platformSummary, subscriptions) : ""}
+    ${tab === "sacco" ? `${filterToolbar("Search SACCO reports by name, members, savings, loans, privacy or compliance", "Export report", "Schedule report")}${recordTable("Super Admin SACCO report", rows, ["tenantName", "memberCount", "activeMembers", "savings", "shares", "welfare", "loanPortfolio", "privacyRequests", "dataProtectionStatus", "complianceStatus"], { panelClass: "reports-data-panel sacco-report-table" })}` : ""}
+    ${tab === "access" ? `${filterToolbar("Search administrator access by name, role, scope or status", "Export report", "Review roles")}${recordTable("Platform administrator access report", users, ["fullName", "email", "rolesLabel", "moduleScope", "status", "lastLogin"], { panelClass: "reports-data-panel" })}` : ""}
+    </div>
   `;
 }
 
@@ -816,14 +825,14 @@ function platformSuperAdminReportingControlPanel(platformSummary, subscriptions)
       <div class="panel-heading">
         <div>
           <h2>${escapeHtml(t("superAdminReportingControl"))}</h2>
-          <p>Super Admin reports focus on SACCO account status, billing, administrator access and compliance risk.</p>
+          <p>Reports focus on SACCO account status, billing, administrator access and compliance risk.</p>
         </div>
         <span class="status ${platformSummary.pendingRegistrations || platformSummary.expiredSubscriptions ? "pending" : "active"}">${platformSummary.pendingRegistrations || platformSummary.expiredSubscriptions ? "Review" : "Current"}</span>
       </div>
       <div class="mini-grid">
         ${mini("SACCO account status", `${platformSummary.registeredSaccos} SACCO account(s) tracked`)}
         ${mini("Billing control", `${subscriptions.length} subscription record(s)`)}
-        ${mini("Access governance", `${platformSummary.platformAdministrators} platform administrator account(s)`)}
+        ${mini("Access governance", `${platformSummary.platformAdministrators} administrator account(s)`)}
         ${mini("Compliance focus", `${platformSummary.openSaccoComplaints || 0} SACCO admin complaint(s)`)}
       </div>
     </section>

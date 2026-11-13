@@ -2,13 +2,19 @@ package com.methaltech.sacco.config;
 
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,7 +23,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/platform-integrations")
 class NotificationIntegrationConfigController {
 
+    private static final String MOBILE_MONEY_PROVIDER_GROUP = "mobile_money";
+    private static final String MTN_PROVIDER = "mtn_momo";
+    private static final String AIRTEL_PROVIDER = "airtel_money";
+    private static final String DEMO_PROVIDER = "demo_mobile_money";
+    private static final Set<String> SUPPORTED_MOBILE_MONEY_PROVIDERS = Set.of(
+            MTN_PROVIDER,
+            AIRTEL_PROVIDER,
+            DEMO_PROVIDER);
+
     private final AuthService authService;
+    private final ProviderCredentialService credentialService;
+    private final AuditService auditService;
     private final String smsProvider;
     private final String emailProvider;
     private final String afroSmsEmail;
@@ -40,6 +57,8 @@ class NotificationIntegrationConfigController {
 
     NotificationIntegrationConfigController(
             AuthService authService,
+            ProviderCredentialService credentialService,
+            AuditService auditService,
             @Value("${sacco.providers.sms:}") String smsProvider,
             @Value("${sacco.providers.email:}") String emailProvider,
             @Value("${sacco.integrations.sms.afrosms.email:}") String afroSmsEmail,
@@ -60,6 +79,8 @@ class NotificationIntegrationConfigController {
             @Value("${sacco.integrations.mobile-money.airtel.client-secret:}") String airtelClientSecret,
             @Value("${sacco.integrations.mobile-money.airtel.country-code:}") String airtelCountryCode) {
         this.authService = authService;
+        this.credentialService = credentialService;
+        this.auditService = auditService;
         this.smsProvider = smsProvider;
         this.emailProvider = emailProvider;
         this.afroSmsEmail = afroSmsEmail;
@@ -133,36 +154,8 @@ class NotificationIntegrationConfigController {
             return authService.permissionRequired("roles:create");
         }
 
-        NotificationIntegrationConfigResponse response = new NotificationIntegrationConfigResponse(
-                List.of(
-                        new ProviderConfig(
-                                "Mobile money",
-                                "MTN MoMo",
-                                valueOrMissing(mobileMoneyProvider),
-                                "mtn_momo".equalsIgnoreCase(mobileMoneyProvider),
-                                settings(
-                                        setting("SACCO_MOBILE_MONEY_PROVIDER", mobileMoneyProvider, false),
-                                        setting("SACCO_MTN_MOMO_SUBSCRIPTION_KEY", mtnSubscriptionKey, true),
-                                        setting("SACCO_MTN_MOMO_API_USER_ID", mtnApiUserId, false),
-                                        setting("SACCO_MTN_MOMO_API_KEY", mtnApiKey, true),
-                                        setting("SACCO_MTN_MOMO_TARGET_ENVIRONMENT", mtnTargetEnvironment, false),
-                                        setting("SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS", String.valueOf(signedCallbacksRequired), false),
-                                        setting("SACCO_MOBILE_MONEY_CALLBACK_SECRET", callbackSecret, true))),
-                        new ProviderConfig(
-                                "Mobile money",
-                                "Airtel Money",
-                                valueOrMissing(mobileMoneyProvider),
-                                "airtel_money".equalsIgnoreCase(mobileMoneyProvider),
-                                settings(
-                                        setting("SACCO_MOBILE_MONEY_PROVIDER", mobileMoneyProvider, false),
-                                        setting("SACCO_AIRTEL_MONEY_CLIENT_ID", airtelClientId, false),
-                                        setting("SACCO_AIRTEL_MONEY_CLIENT_SECRET", airtelClientSecret, true),
-                                        setting("SACCO_AIRTEL_MONEY_COUNTRY_CODE", airtelCountryCode, false),
-                                        setting("SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS", String.valueOf(signedCallbacksRequired), false),
-                                        setting("SACCO_MOBILE_MONEY_CALLBACK_SECRET", callbackSecret, true)))),
-                Instant.now(),
-                "Mobile-money credentials are environment-backed. Use MTN MoMo or Airtel Money provider variables, require signed callbacks, then restart the backend.");
-        return ResponseEntity.ok(ApiResponse.of(response));
+        return ResponseEntity.ok(ApiResponse.of(
+                mobileMoneyConfigResponse(ProviderCredentialService.PLATFORM_SCOPE)));
     }
 
     private List<ProviderSetting> settings(ProviderSetting... settings) {
@@ -176,6 +169,210 @@ class NotificationIntegrationConfigController {
 
     private String valueOrMissing(String value) {
         return value == null || value.isBlank() ? "Not configured" : value;
+    }
+
+    /** Store value at [scope], else platform, else the environment default. */
+    private String effective(String scopeId, String provider, String key, String envDefault) {
+        String stored = credentialService.resolve(scopeId, provider, key);
+        return stored != null ? stored : envDefault;
+    }
+
+    private NotificationIntegrationConfigResponse mobileMoneyConfigResponse(String scopeId) {
+        String provider = effective(scopeId, MOBILE_MONEY_PROVIDER_GROUP, "active_provider", mobileMoneyProvider);
+        String cbSecret = effective(scopeId, MOBILE_MONEY_PROVIDER_GROUP, "callback_secret", callbackSecret);
+        String signed = effective(scopeId, MOBILE_MONEY_PROVIDER_GROUP, "require_signed_callbacks",
+                String.valueOf(signedCallbacksRequired));
+        String mtnSub = effective(scopeId, MTN_PROVIDER, "subscription_key", mtnSubscriptionKey);
+        String mtnUser = effective(scopeId, MTN_PROVIDER, "api_user_id", mtnApiUserId);
+        String mtnKey = effective(scopeId, MTN_PROVIDER, "api_key", mtnApiKey);
+        String mtnEnv = effective(scopeId, MTN_PROVIDER, "target_environment", mtnTargetEnvironment);
+        String airId = effective(scopeId, AIRTEL_PROVIDER, "client_id", airtelClientId);
+        String airSecret = effective(scopeId, AIRTEL_PROVIDER, "client_secret", airtelClientSecret);
+        String airCountry = effective(scopeId, AIRTEL_PROVIDER, "country_code", airtelCountryCode);
+        return new NotificationIntegrationConfigResponse(
+                List.of(
+                        new ProviderConfig(
+                                "Mobile money",
+                                "MTN MoMo",
+                                valueOrMissing(provider),
+                                MTN_PROVIDER.equalsIgnoreCase(provider),
+                                settings(
+                                        setting("SACCO_MOBILE_MONEY_PROVIDER", provider, false),
+                                        setting("SACCO_MTN_MOMO_SUBSCRIPTION_KEY", mtnSub, true),
+                                        setting("SACCO_MTN_MOMO_API_USER_ID", mtnUser, false),
+                                        setting("SACCO_MTN_MOMO_API_KEY", mtnKey, true),
+                                        setting("SACCO_MTN_MOMO_TARGET_ENVIRONMENT", mtnEnv, false),
+                                        setting("SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS", signed, false),
+                                        setting("SACCO_MOBILE_MONEY_CALLBACK_SECRET", cbSecret, true))),
+                        new ProviderConfig(
+                                "Mobile money",
+                                "Airtel Money",
+                                valueOrMissing(provider),
+                                AIRTEL_PROVIDER.equalsIgnoreCase(provider),
+                                settings(
+                                        setting("SACCO_MOBILE_MONEY_PROVIDER", provider, false),
+                                        setting("SACCO_AIRTEL_MONEY_CLIENT_ID", airId, false),
+                                        setting("SACCO_AIRTEL_MONEY_CLIENT_SECRET", airSecret, true),
+                                        setting("SACCO_AIRTEL_MONEY_COUNTRY_CODE", airCountry, false),
+                                        setting("SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS", signed, false),
+                                        setting("SACCO_MOBILE_MONEY_CALLBACK_SECRET", cbSecret, true)))),
+                Instant.now(),
+                "Mobile-money credentials are stored securely (secrets encrypted). "
+                        + "Platform keys apply to every SACCO unless a SACCO sets its own.");
+    }
+
+    void applyMobileMoneyConfig(String scope, SaveMobileMoneyConfigRequest body, String uid) {
+        String activeProvider = normalizedProvider(body.activeProvider());
+        if (activeProvider != null) {
+            credentialService.save(scope, MOBILE_MONEY_PROVIDER_GROUP, "active_provider",
+                    activeProvider, false, uid);
+        }
+        if (body.requireSignedCallbacks() != null) {
+            credentialService.save(scope, MOBILE_MONEY_PROVIDER_GROUP, "require_signed_callbacks",
+                    String.valueOf(body.requireSignedCallbacks()), false, uid);
+        }
+        saveSecret(scope, MOBILE_MONEY_PROVIDER_GROUP, "callback_secret", body.callbackSecret(), uid);
+        saveSecret(scope, MTN_PROVIDER, "subscription_key", body.mtnSubscriptionKey(), uid);
+        savePlain(scope, MTN_PROVIDER, "api_user_id", body.mtnApiUserId(), uid);
+        saveSecret(scope, MTN_PROVIDER, "api_key", body.mtnApiKey(), uid);
+        savePlain(scope, MTN_PROVIDER, "target_environment", normalizedOptional(body.mtnTargetEnvironment()), uid);
+        savePlain(scope, AIRTEL_PROVIDER, "client_id", body.airtelClientId(), uid);
+        saveSecret(scope, AIRTEL_PROVIDER, "client_secret", body.airtelClientSecret(), uid);
+        savePlain(scope, AIRTEL_PROVIDER, "country_code", normalizedCountryCode(body.airtelCountryCode()), uid);
+    }
+
+    private void saveSecret(String scope, String provider, String key, String value, String uid) {
+        if (value != null && !value.isBlank()) {
+            credentialService.save(scope, provider, key, value.trim(), true, uid);
+        }
+    }
+
+    private void savePlain(String scope, String provider, String key, String value, String uid) {
+        if (value != null) {
+            credentialService.save(scope, provider, key, value.trim(), false, uid);
+        }
+    }
+
+    @PutMapping("/mobile-money-config")
+    ResponseEntity<?> saveMobileMoneyConfig(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestBody SaveMobileMoneyConfigRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "PLATFORM_ONLY",
+                            "Only platform administrators can update mobile-money integration configuration."));
+        }
+        if (!authService.hasPermission(currentSession.user(), "roles:create")) {
+            return authService.permissionRequired("roles:create");
+        }
+        if (body == null) {
+            return invalidMobileMoneyConfig("Mobile-money configuration body is required.");
+        }
+        String scope = ProviderCredentialService.PLATFORM_SCOPE;
+        ResponseEntity<ApiErrorResponse> validation = validateMobileMoneyConfig(scope, body);
+        if (validation != null) {
+            return validation;
+        }
+        applyMobileMoneyConfig(scope, body, currentSession.user().getId());
+        auditService.record(
+                currentSession.user().getTenantId(),
+                currentSession.user(),
+                "Updated platform mobile-money integration keys",
+                "provider_credentials",
+                scope,
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(mobileMoneyConfigResponse(scope)));
+    }
+
+    record SaveMobileMoneyConfigRequest(
+            String activeProvider,
+            Boolean requireSignedCallbacks,
+            String callbackSecret,
+            String mtnSubscriptionKey,
+            String mtnApiUserId,
+            String mtnApiKey,
+            String mtnTargetEnvironment,
+            String airtelClientId,
+            String airtelClientSecret,
+            String airtelCountryCode) {
+    }
+
+    private ResponseEntity<ApiErrorResponse> validateMobileMoneyConfig(String scope, SaveMobileMoneyConfigRequest body) {
+        String activeProvider = normalizedProvider(body.activeProvider());
+        if (body.activeProvider() != null && activeProvider == null) {
+            return invalidMobileMoneyConfig("Active provider must be one of mtn_momo, airtel_money or demo_mobile_money.");
+        }
+        String mtnEnvironment = normalizedOptional(body.mtnTargetEnvironment());
+        if (mtnEnvironment != null && !mtnEnvironment.matches("[a-z0-9_-]{2,40}")) {
+            return invalidMobileMoneyConfig("MTN target environment must use 2-40 lowercase letters, digits, underscores or hyphens.");
+        }
+        String country = normalizedCountryCode(body.airtelCountryCode());
+        if (body.airtelCountryCode() != null && country == null) {
+            return invalidMobileMoneyConfig("Airtel country code must be a two-letter ISO country code.");
+        }
+        boolean signedCallbacks = body.requireSignedCallbacks() != null
+                ? body.requireSignedCallbacks()
+                : Boolean.parseBoolean(effective(scope, MOBILE_MONEY_PROVIDER_GROUP, "require_signed_callbacks",
+                        String.valueOf(signedCallbacksRequired)));
+        if (signedCallbacks && isBlank(candidateSecret(scope, MOBILE_MONEY_PROVIDER_GROUP, "callback_secret",
+                callbackSecret, body.callbackSecret()))) {
+            return invalidMobileMoneyConfig("Callback signing cannot be required until a callback secret is configured.");
+        }
+        if (MTN_PROVIDER.equals(activeProvider)) {
+            if (isBlank(candidateSecret(scope, MTN_PROVIDER, "subscription_key", mtnSubscriptionKey, body.mtnSubscriptionKey()))
+                    || isBlank(candidatePlain(scope, MTN_PROVIDER, "api_user_id", mtnApiUserId, body.mtnApiUserId()))
+                    || isBlank(candidateSecret(scope, MTN_PROVIDER, "api_key", mtnApiKey, body.mtnApiKey()))
+                    || isBlank(candidatePlain(scope, MTN_PROVIDER, "target_environment", mtnTargetEnvironment, body.mtnTargetEnvironment()))) {
+                return invalidMobileMoneyConfig("MTN MoMo requires subscription key, API user ID, API key and target environment before activation.");
+            }
+        }
+        if (AIRTEL_PROVIDER.equals(activeProvider)) {
+            if (isBlank(candidatePlain(scope, AIRTEL_PROVIDER, "client_id", airtelClientId, body.airtelClientId()))
+                    || isBlank(candidateSecret(scope, AIRTEL_PROVIDER, "client_secret", airtelClientSecret, body.airtelClientSecret()))
+                    || isBlank(candidatePlain(scope, AIRTEL_PROVIDER, "country_code", airtelCountryCode, body.airtelCountryCode()))) {
+                return invalidMobileMoneyConfig("Airtel Money requires client ID, client secret and country code before activation.");
+            }
+        }
+        return null;
+    }
+
+    private String candidateSecret(String scope, String provider, String key, String envDefault, String requestValue) {
+        return isBlank(requestValue) ? effective(scope, provider, key, envDefault) : requestValue.trim();
+    }
+
+    private String candidatePlain(String scope, String provider, String key, String envDefault, String requestValue) {
+        return requestValue == null ? effective(scope, provider, key, envDefault) : requestValue.trim();
+    }
+
+    private ResponseEntity<ApiErrorResponse> invalidMobileMoneyConfig(String message) {
+        return ResponseEntity.badRequest()
+                .body(ApiErrorResponse.of(400, "INVALID_MOBILE_MONEY_CONFIG", message));
+    }
+
+    private String normalizedProvider(String value) {
+        String normalized = normalizedOptional(value);
+        if (normalized == null) return null;
+        return SUPPORTED_MOBILE_MONEY_PROVIDERS.contains(normalized) ? normalized : null;
+    }
+
+    private String normalizedCountryCode(String value) {
+        String normalized = normalizedOptional(value);
+        if (normalized == null) return null;
+        normalized = normalized.toUpperCase(Locale.ROOT);
+        return normalized.matches("[A-Z]{2}") ? normalized : null;
+    }
+
+    private String normalizedOptional(String value) {
+        if (value == null) return null;
+        String normalized = value.trim();
+        return normalized.isBlank() ? "" : normalized.toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     record NotificationIntegrationConfigResponse(

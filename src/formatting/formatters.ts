@@ -123,9 +123,12 @@ export function formatTableValue(row: TerekaRecord, column: string, region: Tere
     return formatMoneyValue(Number(value || 0), region);
   }
   if (normalizedColumn.includes("status") || normalizedColumn.includes("severity")) {
-    return `<span class="status ${statusClassValue(value)}">${escapeHtmlValue(String(value || "Pending"))}</span>`;
+    return `<span class="status ${statusClassValue(value)}">${escapeHtmlValue(labelizeValue(value || "Pending"))}</span>`;
   }
   if (isDateColumnValue(column)) return escapeHtmlValue(formatTableDateValue(value, column, region));
+  if (["approvalstage", "operatingaccess", "paymentstage"].includes(normalizedColumn)) {
+    return escapeHtmlValue(labelizeValue(value || "Pending"));
+  }
   return escapeHtmlValue(String(value || "-"));
 }
 
@@ -134,7 +137,7 @@ export function isDateColumnValue(column: string): boolean {
   return text === "date"
     || text.endsWith("date")
     || text.endsWith("at")
-    || ["createdat", "updatedat", "postedat", "sentat", "readat", "expiresat", "usedat"].includes(text);
+    || ["createdat", "registeredon", "updatedat", "postedat", "sentat", "readat", "expiresat", "usedat"].includes(text);
 }
 
 export function formatTableDateValue(value: unknown, column: string, region: TerekaRegion): string {
@@ -142,6 +145,7 @@ export function formatTableDateValue(value: unknown, column: string, region: Ter
   const text = String(value);
   const isDateOnly = column.toLowerCase() === "date"
     || column.toLowerCase().endsWith("date")
+    || column.toLowerCase() === "registeredon"
     || /^\d{4}-\d{2}-\d{2}$/.test(text);
   return isDateOnly ? formatDateValue(text, region) : formatDateTimeValue(text, region);
 }

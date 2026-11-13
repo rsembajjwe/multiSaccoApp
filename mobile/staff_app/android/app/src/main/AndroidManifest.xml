@@ -1,10 +1,11 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.methaltech.sacco_staff_app">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <application
         android:networkSecurityConfig="${networkSecurityConfig}"
         android:usesCleartextTraffic="${usesCleartextTraffic}"
-        android:label="sacco_staff_app"
+        android:label="Staff_Tereka"
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:name="${applicationName}"

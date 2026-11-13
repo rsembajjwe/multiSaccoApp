@@ -11,15 +11,18 @@ import '../../providers.dart';
 /// (share capital, savings mobilised, grants, borrowings, retained earnings...).
 /// Distinct from "Fund types", which are the member account buckets.
 class FinanceSourcesScreen extends ConsumerWidget {
-  const FinanceSourcesScreen({super.key, required this.canManage});
+  const FinanceSourcesScreen(
+      {super.key, required this.canManage, this.embedded = false});
 
   final bool canManage;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(fundingSourcesProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Finance sources')),
+      appBar:
+          embedded ? null : AppBar(title: const Text('Finance sources')),
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
               icon: const Icon(Icons.add),

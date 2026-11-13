@@ -9,6 +9,7 @@ Excel-ready `.xlsx` templates are available in `docs/import-templates`:
 - `members-import-template.xlsx`
 - `member-metadata-import-template.xlsx`
 - `opening-balances-import-template.xlsx`
+- `savings-deposits-import-template.xlsx`
 - `loan-book-import-template.xlsx`
 - `repayment-history-import-template.xlsx`
 
@@ -90,6 +91,32 @@ Content-Type: application/json
 ```
 
 ## Member Profile Metadata Import Flow
+
+## Bulk Savings Deposit Import
+
+Use the savings import for historical or recurring deposits. It creates `pending_approval`
+financial transactions; it does not directly change member balances. A checker must approve the
+transactions through the normal maker-checker workflow.
+
+```http
+GET /api/v1/financial-transactions/savings/import-template?tenantId={tenantId}
+POST /api/v1/financial-transactions/savings/import
+```
+
+Columns:
+
+| Column | Rule |
+| --- | --- |
+| `membershipNo` | Required and must belong to the selected SACCO and staff branch scope. |
+| `amount` | Required positive numeric amount. |
+| `postingDate` | Optional `YYYY-MM-DD`; rejected when the accounting period is closed. |
+| `reference` | Required and unique in the file and tenant transaction history. |
+| `channel` | `cash`, `mobile_money`, `bank`, or `payroll_deduction`. |
+| `narration` | Optional audit/member-facing description. |
+
+The request supports `dryRun: true` for row-level validation before posting. A batch is limited to
+500 rows, is tenant-scoped, and produces one audit event. Use an idempotent reference per row when
+retrying a file.
 
 Use profile metadata import after member records exist. One CSV supports four `recordType` values:
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/mobile_money.dart';
 import '../../core/widgets/confirm_action.dart';
 import '../../core/widgets/paged_list.dart';
 import '../../core/widgets/ui.dart';
@@ -478,6 +479,7 @@ class _PhoneDialog extends StatefulWidget {
 }
 
 class _PhoneDialogState extends State<_PhoneDialog> {
+  final _formKey = GlobalKey<FormState>();
   final _controller = TextEditingController(text: '+256');
   String _provider = 'mtn';
 
@@ -491,9 +493,11 @@ class _PhoneDialogState extends State<_PhoneDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(widget.title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
           SegmentedButton<String>(
             segments: const [
               ButtonSegment(value: 'mtn', label: Text('MTN')),
@@ -504,7 +508,7 @@ class _PhoneDialogState extends State<_PhoneDialog> {
                 setState(() => _provider = value.first),
           ),
           const SizedBox(height: 10),
-          TextField(
+          TextFormField(
             controller: _controller,
             keyboardType: TextInputType.phone,
             autofocus: true,
@@ -512,18 +516,24 @@ class _PhoneDialogState extends State<_PhoneDialog> {
               labelText: 'Payer phone number',
               prefixIcon: Icon(Icons.phone_android_outlined),
             ),
+            validator: (value) =>
+                validateUgandanMobileMoneyPhone(value, _provider),
           ),
-        ],
+          ],
+        ),
       ),
       actions: [
         TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Cancel')),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(_MobileMoneyDetails(
-            phone: _controller.text.trim(),
-            provider: _provider,
-          )),
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            Navigator.of(context).pop(_MobileMoneyDetails(
+              phone: normalizeUgandanMobileNumber(_controller.text)!,
+              provider: _provider,
+            ));
+          },
           child: const Text('Send prompt'),
         ),
       ],

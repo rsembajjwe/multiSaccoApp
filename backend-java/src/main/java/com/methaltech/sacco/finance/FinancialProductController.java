@@ -15,6 +15,8 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -52,8 +54,8 @@ class FinancialProductController {
             @RequestParam(name = "type", required = false) String requestedType) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
-        if (!authService.hasPermission(currentSession.user(), "transactions:view")) {
-            return authService.permissionRequired("transactions:view");
+        if (!authService.hasPermission(currentSession.user(), "fund-types:view")) {
+            return authService.permissionRequired("fund-types:view");
         }
 
         String tenantId = tenantScope(currentSession, requestedTenantId);
@@ -84,8 +86,8 @@ class FinancialProductController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
-        if (!authService.hasPermission(currentSession.user(), "transactions:create")) {
-            return authService.permissionRequired("transactions:create");
+        if (!authService.hasPermission(currentSession.user(), "fund-types:manage")) {
+            return authService.permissionRequired("fund-types:manage");
         }
 
         String tenantId = tenantScope(currentSession, body.tenantId());
@@ -133,6 +135,64 @@ class FinancialProductController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(FinancialProductResponse.from(product)));
     }
 
+    @PatchMapping("/{productId}")
+    ResponseEntity<?> updateProduct(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String productId,
+            @Valid @RequestBody UpdateFinancialProductRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "fund-types:manage")) {
+            return authService.permissionRequired("fund-types:manage");
+        }
+
+        FinancialProduct product = productRepository.findById(productId).orElse(null);
+        if (product == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "FINANCIAL_PRODUCT_NOT_FOUND", "Product was not found."));
+        }
+        String tenantId = tenantScope(currentSession, product.getTenantId());
+        if (tenantId == null || !tenantId.equals(product.getTenantId())) {
+            return tenantAccessDenied();
+        }
+
+        BigDecimal contributionAmount = body.contributionAmount();
+        BigDecimal minimumBalance = body.minimumBalance();
+        BigDecimal interestRate = body.interestRate();
+        if ((contributionAmount != null && contributionAmount.compareTo(BigDecimal.ZERO) < 0)
+                || (minimumBalance != null && minimumBalance.compareTo(BigDecimal.ZERO) < 0)
+                || (interestRate != null && interestRate.compareTo(BigDecimal.ZERO) < 0)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_PRODUCT_AMOUNT", "Product amounts and rates cannot be negative."));
+        }
+        String status = body.status();
+        if (status != null && !status.isBlank()
+                && !status.trim().equalsIgnoreCase("active")
+                && !status.trim().equalsIgnoreCase("inactive")) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_PRODUCT_STATUS", "Status must be active or inactive."));
+        }
+
+        product.update(
+                body.name(),
+                contributionAmount,
+                minimumBalance,
+                interestRate,
+                status == null ? null : status.trim().toLowerCase());
+        product = productRepository.save(product);
+
+        auditService.record(
+                product.getTenantId(),
+                currentSession.user(),
+                "Updated product " + product.getCode(),
+                "financial_product",
+                product.getId(),
+                request.getRemoteAddr());
+
+        return ResponseEntity.ok(ApiResponse.of(FinancialProductResponse.from(product)));
+    }
+
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
         if (authService.isPlatform(currentSession.user())) {
             return requestedTenantId == null || requestedTenantId.isBlank() ? null : requestedTenantId.trim();
@@ -169,6 +229,14 @@ class FinancialProductController {
     private ResponseEntity<ApiErrorResponse> tenantAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Cannot access financial products for another tenant."));
+    }
+
+    record UpdateFinancialProductRequest(
+            String name,
+            BigDecimal contributionAmount,
+            BigDecimal minimumBalance,
+            BigDecimal interestRate,
+            String status) {
     }
 
     record CreateFinancialProductRequest(

@@ -17,10 +17,12 @@ class PaymentStatusSheet extends ConsumerStatefulWidget {
     super.key,
     required this.paymentId,
     required this.amount,
+    this.provider,
   });
 
   final String paymentId;
   final num amount;
+  final String? provider;
 
   @override
   ConsumerState<PaymentStatusSheet> createState() => _PaymentStatusSheetState();
@@ -30,7 +32,7 @@ class _PaymentStatusSheetState extends ConsumerState<PaymentStatusSheet> {
   Timer? _timer;
   String _status = 'pending';
   int _ticks = 0;
-  static const _maxTicks = 20; // ~60s at 3s intervals
+  static const _maxTicks = 40; // ~2 minutes at 3-second intervals
 
   @override
   void initState() {
@@ -47,11 +49,14 @@ class _PaymentStatusSheetState extends ConsumerState<PaymentStatusSheet> {
 
   bool _isSuccess(String s) {
     final v = s.toLowerCase();
-    return v.contains('post') ||
-        v.contains('paid') ||
-        v.contains('complet') ||
-        v.contains('success');
+    return v == 'posted' || v == 'completed' || v == 'successful';
   }
+
+  bool _isProviderConfirmed(String s) =>
+      s.toLowerCase() == 'paid_pending_callback';
+
+  bool _isAwaitingApproval(String s) =>
+      s.toLowerCase() == 'pending_approval';
 
   bool _isFailure(String s) {
     final v = s.toLowerCase();
@@ -62,7 +67,11 @@ class _PaymentStatusSheetState extends ConsumerState<PaymentStatusSheet> {
         v.contains('declin');
   }
 
-  bool get _terminal => _isSuccess(_status) || _isFailure(_status);
+  bool get _terminal =>
+      _isSuccess(_status) ||
+      _isFailure(_status) ||
+      _isProviderConfirmed(_status) ||
+      _isAwaitingApproval(_status);
   bool get _timedOut => !_terminal && _ticks >= _maxTicks;
 
   Future<void> _poll() async {
@@ -96,12 +105,26 @@ class _PaymentStatusSheetState extends ConsumerState<PaymentStatusSheet> {
     late Color color;
     late String title;
     late String subtitle;
+    final provider = _providerLabel(widget.provider);
 
     if (_isSuccess(_status)) {
       icon = Icons.check_circle;
       color = Colors.green;
       title = 'Payment confirmed';
-      subtitle = '${_money.format(widget.amount)} received. Your balance is updated.';
+      subtitle =
+          '${_money.format(widget.amount)} received. Your balance is updated.';
+    } else if (_isProviderConfirmed(_status)) {
+      icon = Icons.verified_outlined;
+      color = scheme.primary;
+      title = '$provider confirmed payment';
+      subtitle =
+          'Your payment is confirmed and is waiting to be credited to your account.';
+    } else if (_isAwaitingApproval(_status)) {
+      icon = Icons.fact_check_outlined;
+      color = scheme.primary;
+      title = 'Payment received';
+      subtitle =
+          'Your payment is waiting for approval by an authorized group official.';
     } else if (_isFailure(_status)) {
       icon = Icons.cancel;
       color = scheme.error;
@@ -112,12 +135,12 @@ class _PaymentStatusSheetState extends ConsumerState<PaymentStatusSheet> {
       color = Colors.orange;
       title = 'Still processing';
       subtitle =
-          'This is taking longer than usual. Check Payments shortly for the final status.';
+          '$provider has not confirmed the payment yet. Check Payments for the final status.';
     } else {
       icon = Icons.hourglass_top;
       color = scheme.primary;
-      title = 'Waiting for confirmation';
-      subtitle = 'Approve the prompt on your phone to complete '
+      title = 'Waiting for $provider';
+      subtitle = 'Approve the $provider prompt on your phone to complete '
           '${_money.format(widget.amount)}.';
     }
 
@@ -162,11 +185,26 @@ class _PaymentStatusSheetState extends ConsumerState<PaymentStatusSheet> {
 
 /// Shows the status sheet for a created payment.
 Future<void> showPaymentStatus(
-    BuildContext context, String paymentId, num amount) {
+  BuildContext context,
+  String paymentId,
+  num amount, {
+  String? provider,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     isDismissible: true,
-    builder: (_) => PaymentStatusSheet(paymentId: paymentId, amount: amount),
+    builder: (_) => PaymentStatusSheet(
+      paymentId: paymentId,
+      amount: amount,
+      provider: provider,
+    ),
   );
+}
+
+String _providerLabel(String? provider) {
+  final normalized = provider?.toLowerCase() ?? '';
+  if (normalized.contains('airtel')) return 'Airtel';
+  if (normalized.contains('mtn') || normalized.contains('momo')) return 'MTN';
+  return 'mobile money provider';
 }

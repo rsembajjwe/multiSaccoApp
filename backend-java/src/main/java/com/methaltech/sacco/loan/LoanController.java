@@ -18,6 +18,7 @@ import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.notification.NotificationService;
+import com.methaltech.sacco.finance.TreasuryCashPostingService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -110,6 +111,7 @@ class LoanController {
     private final TenantService tenantService;
     private final SaccoSettingsService saccoSettingsService;
     private final NotificationService notificationService;
+    private final TreasuryCashPostingService treasuryCashPostingService;
 
     LoanController(
             LoanRepository loanRepository,
@@ -125,7 +127,8 @@ class LoanController {
             AccountingPeriodService periodService,
             TenantService tenantService,
             SaccoSettingsService saccoSettingsService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            TreasuryCashPostingService treasuryCashPostingService) {
         this.loanRepository = loanRepository;
         this.guarantorRepository = guarantorRepository;
         this.repaymentRepository = repaymentRepository;
@@ -140,6 +143,7 @@ class LoanController {
         this.tenantService = tenantService;
         this.saccoSettingsService = saccoSettingsService;
         this.notificationService = notificationService;
+        this.treasuryCashPostingService = treasuryCashPostingService;
     }
 
     @GetMapping
@@ -293,14 +297,8 @@ class LoanController {
         if (!canAccessMemberBranch(currentSession, tenantId, member)) {
             return branchAccessDenied();
         }
-        List<Loan> unclearedLoans = loanRepository.findByTenantIdAndMemberIdOrderByCreatedAtAsc(tenantId, member.getId())
-                .stream()
-                .filter(loan -> loan.getBalance().compareTo(BigDecimal.ZERO) > 0)
-                .toList();
-        if (!unclearedLoans.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "UNCLEARED_LOAN_EXISTS", "Member has an uncleared loan. Top up the existing loan instead."));
-        }
+        // Validate the payload (product, amount, repayment period) before applying business-state rules so
+        // callers receive the most specific error for malformed requests rather than a generic conflict.
         if (!ALLOWED_PRODUCTS.contains(body.product())) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_LOAN_PRODUCT", "Unsupported loan product."));
@@ -313,6 +311,16 @@ class LoanController {
         if (body.repaymentMonths() == null || body.repaymentMonths() < 1 || body.repaymentMonths() > 60) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_REPAYMENT_PERIOD", "Repayment period must be between 1 and 60 months."));
+        }
+        // A member may only carry one uncleared loan at a time; require the existing balance to be settled
+        // (or topped up) before a new application is accepted.
+        List<Loan> unclearedLoans = loanRepository.findByTenantIdAndMemberIdOrderByCreatedAtAsc(tenantId, member.getId())
+                .stream()
+                .filter(loan -> loan.getBalance().compareTo(BigDecimal.ZERO) > 0)
+                .toList();
+        if (!unclearedLoans.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "UNCLEARED_LOAN_EXISTS", "Member has an uncleared loan. Top up the existing loan instead."));
         }
         BigDecimal chargeFee = Money.normalize(body.chargeFee() == null ? BigDecimal.ZERO : body.chargeFee());
         if (chargeFee.compareTo(BigDecimal.ZERO) < 0) {
@@ -343,7 +351,7 @@ class LoanController {
                     .body(ApiErrorResponse.of(400, "SIGNED_FORM_REQUIRED", "Enter a signed form reference or attach the signed loan form."));
         }
 
-        Loan loan = loanRepository.save(new Loan(
+        Loan loan = loanRepository.save(Loan.submitted(
                 "loan_" + UUID.randomUUID(),
                 tenantId,
                 member.getId(),
@@ -1299,8 +1307,8 @@ class LoanController {
             HttpServletRequest request) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
         if (currentSession == null) return authService.authRequired();
-        if (!authService.hasPermission(currentSession.user(), "loans:approve")) {
-            return authService.permissionRequired("loans:approve");
+        if (!authService.hasPermission(currentSession.user(), "transactions:create")) {
+            return authService.permissionRequired("transactions:create");
         }
 
         return loanRepository.findById(loanId)
@@ -1842,6 +1850,19 @@ class LoanController {
                 reference,
                 body.narration() == null ? "" : body.narration().trim(),
                 currentSession.user().getId()));
+        if ("cash".equals(channel)) {
+            String memberName = memberRepository.findById(loan.getMemberId())
+                    .map(Member::getFullName)
+                    .orElse(loan.getMemberId());
+            treasuryCashPostingService.recordCollection(
+                    loan.getTenantId(),
+                    loan.getMemberId(),
+                    repayment.getAmount(),
+                    repayment.getReference(),
+                    "Loan repayment - " + memberName,
+                    currentSession.user(),
+                    request.getRemoteAddr());
+        }
         loan.recordRepayment(repayment.getAmount());
         releaseSecuredHoldForRepayment(loan, repayment.getAmount());
         releaseGuaranteesIfLoanCleared(loan);

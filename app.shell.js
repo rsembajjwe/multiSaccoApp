@@ -109,9 +109,10 @@ function localizeModule(item) {
   const titleKeys = {
     platform: {
       dashboard: "navDashboard",
-      "sacco-applications": "navSaccoRegistration",
+      "sacco-applications": "SACCOs Management",
+      "fleet-approvals": "Approval Inbox",
+      "payment-approvals": "Payment Approvals",
       subscriptions: "navSubscriptions",
-      "sacco-accounts": "navSaccoAccounts",
       transactions: "navTransactions",
       reports: "navReports",
       complaints: "navComplaints",
@@ -156,9 +157,10 @@ function localizeModule(item) {
   const descriptionKeys = {
     platform: {
       dashboard: "navDashboardPlatformDesc",
-      "sacco-applications": "navSaccoRegistrationDesc",
+      "sacco-applications": "Applications, approvals & account health",
+      "fleet-approvals": "Fleet lifecycle decisions",
+      "payment-approvals": "Provider-confirmed member payments awaiting financial review",
       subscriptions: "navSubscriptionsDesc",
-      "sacco-accounts": "navSaccoAccountsDesc",
       transactions: "navPlatformTransactionsDesc",
       reports: "navPlatformReportsDesc",
       complaints: "navPlatformComplaintsDesc",
@@ -233,6 +235,8 @@ const NAV_ICON_PATHS = {
   'loan-approvals': '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/><path d="M7 19l10-14"/>',
   guarantors: '<path d="M12 3l7 3v5c0 4-3 7-7 9-4-2-7-5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
   approvals: '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+  'fleet-approvals': '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/><path d="M12 7v1"/>',
+  'payment-approvals': '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M8 15l2 2 5-5"/>',
   accounting: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/>',
   reconciliation: '<path d="M4 8a8 8 0 0 1 13-3M17 2v4h-4"/><path d="M20 16a8 8 0 0 1-13 3M7 22v-4h4"/>',
   reports: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
@@ -244,7 +248,6 @@ const NAV_ICON_PATHS = {
   audit: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M8 13l2 2 4-4"/>',
   subscriptions: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>',
   'sacco-applications': '<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4"/><path d="M12 11v6M9 14h6"/>',
-  'sacco-accounts': '<path d="M3 10l9-5 9 5"/><path d="M5 10v8M12 10v8M19 10v8"/><path d="M3 20h18"/>',
   home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/>',
   money: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>'
 };
@@ -255,7 +258,8 @@ function navIcon(view) {
 }
 
 function renderShell() {
-  document.body.className = "";
+  applyTheme(state.theme);
+  document.body.className = state.auth === "member" ? "member-portal-page" : isPlatform() ? "platform-portal-page" : "staff-portal-page";
   const module = currentModule();
   const modules = visibleModules();
   const portal = state.auth === "member" ? t("memberSelfServicePortal") : isPlatform() ? t("platformAdministrationPortal") : t("saccoAdministrationPortal");
@@ -273,26 +277,17 @@ function renderShell() {
           <div class="logo-lockup compact">${logo("", menuLogo)}<div><strong>Tereka Online</strong><span>${portal}</span></div></div>
           <button class="icon-button menu-button" type="button" data-action="toggle-sidebar" aria-label="Toggle sidebar"><span class="menu-bars" aria-hidden="true"></span></button>
         </div>
-        <div class="context-card">
-          <small>${state.auth === "member" ? "SACCO" : isPlatform() ? "Context" : "SACCO"}</small>
-          <strong>${contextName()}</strong>
-          <span>${roleLabel()}</span>
-        </div>
         <nav class="nav-list" aria-label="${escapeHtml(portal)} navigation">
-          ${modules.map((item) => `
-            <button class="nav-link ${item[0] === module[0] ? "active" : ""}" type="button" data-view="${item[0]}" ${item[0] === module[0] ? `aria-current="page"` : ""}>
-              ${navIcon(item[0])}
-              <span class="nav-text"><span>${item[1]}</span><small>${item[2]}</small></span>
-            </button>
-          `).join("")}
+          ${shellNavigationItems(modules, module[0])}
         </nav>
         <button class="logout-button" type="button" data-action="logout">${t("logout")}</button>
       </aside>
       <main class="main" id="main-content" tabindex="-1">
         <header class="topbar">
           <button class="icon-button mobile-only menu-button" type="button" data-action="toggle-sidebar" aria-label="Open menu"><span class="menu-bars" aria-hidden="true"></span></button>
-          <div class="breadcrumbs">${t("home")} / ${portal} / <strong>${module[1]}</strong></div>
+          <div class="breadcrumbs"><strong>${module[1]}</strong></div>
           <div class="topbar-actions">
+            ${themeToggleButton()}
             <label class="topbar-locale">
               <span class="sr-only">Language</span>
               <select id="shellLocale" aria-label="Language">
@@ -325,13 +320,13 @@ function renderShell() {
         </header>
         <section class="page-header">
           <div>
-            <p class="eyebrow">${portal}</p>
+            <p class="eyebrow">${module[0] === "sacco-applications" && isPlatform() ? "Home  ›  SACCOs" : portal}</p>
             <h1>${module[1]}</h1>
-            <p>${module[2]}</p>
+            ${module[0] === "sacco-applications" && isPlatform() ? `<p class="page-subtitle">Manage registered SACCOs, their subscriptions and operational status.</p>` : ""}
           </div>
           <div class="page-actions">
             ${state.auth === "member" ? `<button class="button secondary" data-action="refresh-member" type="button" ${state.networkOnline ? "" : "disabled"} title="${state.networkOnline ? "" : t("refreshUnavailableOffline")}">${t("refresh")}</button>` : `<button class="button secondary" data-action="refresh" type="button" ${state.networkOnline ? "" : "disabled"} title="${state.networkOnline ? "" : t("refreshUnavailableOffline")}">${t("refresh")}</button>`}
-            <button class="button ghost" type="button" data-action="export-summary">${t("exportSummary")}</button>
+            <button class="button ghost" type="button" data-action="export-summary">${state.auth === "member" && state.currentView === "loans" && state.memberLoanHistoryLoanId ? "Export loan history" : t("exportSummary")}</button>
           </div>
         </section>
         <section class="content-area">
@@ -343,6 +338,38 @@ function renderShell() {
     </div>
     ${printableSummarySection(module, portal)}
   `);
+}
+
+function shellNavigationItems(modules, activeView) {
+  const platformGroups = {
+    dashboard: "Overview",
+    "sacco-applications": "SACCO management",
+    "fleet-approvals": "SACCO management",
+    "payment-approvals": "Service operations",
+    subscriptions: "SACCO management",
+    transactions: "SACCO management",
+    reports: "Intelligence",
+    complaints: "Service operations",
+    notifications: "Service operations",
+    users: "Governance",
+    audit: "Governance",
+    settings: "Governance"
+  };
+  let currentGroup = "";
+  return modules.map((item) => {
+    const group = isPlatform() ? (platformGroups[item[0]] || "Workspace") : "";
+    const heading = group && group !== currentGroup
+      ? `<span class="nav-section-label">${escapeHtml(group)}</span>`
+      : "";
+    currentGroup = group;
+    return `${heading}
+      <button class="nav-link ${item[0] === activeView ? "active" : ""}" type="button" data-view="${item[0]}" ${item[0] === activeView ? `aria-current="page"` : ""}>
+        ${navIcon(item[0])}
+        <span class="nav-text"><span>${item[1]}</span></span>
+        ${item[0] === "fleet-approvals" && Number(state.data.fleetApprovalSummary?.readyForMyDecision || 0) > 0 ? `<span class="nav-count" aria-label="${Number(state.data.fleetApprovalSummary.readyForMyDecision)} approvals ready">${Number(state.data.fleetApprovalSummary.readyForMyDecision) > 99 ? "99+" : Number(state.data.fleetApprovalSummary.readyForMyDecision)}</span>` : ""}
+        ${item[0] === "payment-approvals" && Number(state.data.platformPaymentApprovalSummary?.pendingCount || 0) > 0 ? `<span class="nav-count" aria-label="${Number(state.data.platformPaymentApprovalSummary.pendingCount)} payments awaiting approval">${Number(state.data.platformPaymentApprovalSummary.pendingCount) > 99 ? "99+" : Number(state.data.platformPaymentApprovalSummary.pendingCount)}</span>` : ""}
+      </button>`;
+  }).join("");
 }
 
 function printableSummarySection(module, portal) {
@@ -380,6 +407,56 @@ function printableSummarySection(module, portal) {
       <footer class="print-foot"><span>${sacco}</span><span>Powered by Tereka Online · Confidential member statement</span></footer>
     </section>`;
   }
+  if (state.auth === "member" && state.currentView === "loans" && state.memberLoanHistoryLoanId) {
+    const loan = (state.memberData.loans || []).find((item) => item.id === state.memberLoanHistoryLoanId);
+    const repayments = (state.memberLoanHistory || []).map((row) => ({
+      paidAt: row.paidAt || row.createdAt || "-",
+      reference: row.reference || "-",
+      amount: Number(row.amount || 0),
+      channel: labelize(row.channel || "-"),
+      narration: row.narration || "-"
+    }));
+    const title = loan?.product || loanApplicationCode(loan) || "Member loan";
+    const totalPaid = repayments.reduce((sum, row) => sum + row.amount, 0);
+    const outstanding = memberLoanOutstandingBalance(loan);
+    return `
+    <section class="print-summary" role="document" aria-hidden="true">
+      <header class="print-head">
+        <div class="print-brand"><strong>${sacco}</strong><span>Powered by Tereka Online</span></div>
+        <div class="print-title"><h1>Loan history report</h1><span>Generated ${escapeHtml(generatedAt)}</span></div>
+      </header>
+      <section class="print-identity">
+        <div><small>Member</small><strong>${escapeHtml(displayName())}</strong></div>
+        <div><small>Member number</small><strong>${escapeHtml(state.member?.membershipNo || "-")}</strong></div>
+        <div><small>Loan</small><strong>${escapeHtml(title)}</strong></div>
+      </section>
+      <section class="print-block">
+        <h2>Loan summary</h2>
+        <table class="print-table">
+          <tbody>
+            <tr><th>Principal</th><td class="num">${money.format(loan?.amount || loan?.requestedAmount || 0)}</td></tr>
+            <tr><th>Total payable</th><td class="num">${money.format(memberLoanTotalPayable(loan))}</td></tr>
+            <tr><th>Total repayments</th><td class="num">${money.format(totalPaid)}</td></tr>
+            <tr class="print-total"><th>Outstanding</th><td class="num">${money.format(outstanding)}</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="print-block">
+        <h2>Repayment history</h2>
+        ${repayments.length ? `<table class="print-table print-ledger">
+          <thead><tr><th>Date</th><th>Reference</th><th class="num">Amount</th><th>Channel</th><th>Narration</th></tr></thead>
+          <tbody>${repayments.map((row) => `<tr>
+            <td>${escapeHtml(String(row.paidAt))}</td>
+            <td>${escapeHtml(String(row.reference))}</td>
+            <td class="num">${money.format(row.amount)}</td>
+            <td>${escapeHtml(String(row.channel))}</td>
+            <td>${escapeHtml(String(row.narration))}</td>
+          </tr>`).join("")}</tbody>
+        </table>` : "<p>No repayments recorded.</p>"}
+      </section>
+      <footer class="print-foot"><span>${sacco}</span><span>Powered by Tereka Online · Confidential loan history</span></footer>
+    </section>`;
+  }
   if (state.auth === "member") {
     const balances = state.memberData.balances || {};
     const savings = Number(balances.savings || 0);
@@ -387,7 +464,27 @@ function printableSummarySection(module, portal) {
     const welfare = Number(balances.welfare || 0);
     const loanBalance = (state.memberData.loans || [])
       .reduce((sum, loan) => sum + Number(loan.outstandingBalance || 0), 0);
-    const recent = (state.memberData.dashboard?.recentTransactions || []).slice(0, 12);
+    const statementLines = memberLinesWithFundRunningBalances(buildMemberStatementLines(state.memberData.dashboard || {}));
+    const fundLines = {
+      savings: statementLines.filter((line) => memberFundCodeForType(line.type || line.source) === "savings"),
+      shares: statementLines.filter((line) => memberFundCodeForType(line.type || line.source) === "shares"),
+      welfare: statementLines.filter((line) => memberFundCodeForType(line.type || line.source) === "welfare")
+    };
+    const renderFundTable = (title, lines) => `
+      <section class="print-block">
+        <h2>${title} transactions</h2>
+        ${lines.length ? `<table class="print-table print-ledger">
+          <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+          <tbody>${lines.map((row) => `<tr>
+            <td>${escapeHtml(String(row.postedAt || row.createdAt || "-"))}</td>
+            <td>${escapeHtml(String(row.reference || "-"))}</td>
+            <td>${escapeHtml(String(row.description || "-"))}</td>
+            <td class="num">${Number(row.debit || 0) ? money.format(row.debit) : "-"}</td>
+            <td class="num">${Number(row.credit || 0) ? money.format(row.credit) : "-"}</td>
+            <td class="num">${row.runningBalance != null ? money.format(row.runningBalance) : "-"}</td>
+          </tr>`).join("")}</tbody>
+        </table>` : "<p>No transactions.</p>"}
+      </section>`;
     return `
     <section class="print-summary" role="document" aria-hidden="true">
       <header class="print-head">
@@ -417,20 +514,9 @@ function printableSummarySection(module, portal) {
           </tbody>
         </table>
       </section>
-      ${recent.length ? `<section class="print-block">
-        <h2>Recent activity</h2>
-        <table class="print-table print-ledger">
-          <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
-          <tbody>${recent.map((row) => `<tr>
-            <td>${escapeHtml(String(row.postedAt || "-"))}</td>
-            <td>${escapeHtml(String(row.reference || "-"))}</td>
-            <td>${escapeHtml(String(row.description || "-"))}</td>
-            <td class="num">${Number(row.debit || 0) ? money.format(row.debit) : "-"}</td>
-            <td class="num">${Number(row.credit || 0) ? money.format(row.credit) : "-"}</td>
-            <td class="num">${row.runningBalance != null ? money.format(row.runningBalance) : "-"}</td>
-          </tr>`).join("")}</tbody>
-        </table>
-      </section>` : ""}
+      ${renderFundTable("Savings", fundLines.savings)}
+      ${renderFundTable("Shares", fundLines.shares)}
+      ${renderFundTable("Welfare", fundLines.welfare)}
       <footer class="print-foot"><span>${sacco}</span><span>Powered by Tereka Online · Confidential member statement</span></footer>
     </section>`;
   }
@@ -454,6 +540,7 @@ function quickSearchPanel(results) {
   const groups = groupQuickSearchResults(results);
   return `
     <div class="quick-search-panel" id="quickSearchResults" role="listbox" aria-label="Quick search results">
+      ${state.platformQuickSearchLoading ? `<div class="quick-search-progress" role="status">Searching all SACCOs...</div>` : ""}
       ${results.length ? groups.map(({ group, rows }) => `
         <div class="quick-search-group">
           <strong>${escapeHtml(group)}</strong>
@@ -464,13 +551,29 @@ function quickSearchPanel(results) {
             </button>
           `).join("")}
         </div>
-      `).join("") : `<div class="quick-search-empty">No quick results. Tables below still filter by this search.</div>`}
+      `).join("") : state.platformQuickSearchLoading ? "" : `<div class="quick-search-empty">${state.platformQuickSearchError ? escapeHtml(state.platformQuickSearchError) : "No matching records found."}</div>`}
     </div>
   `;
 }
 
 function networkStatusChip() {
-  return `<span class="network-chip ${state.networkOnline ? "online" : "offline"}">${state.networkOnline ? t("online") : t("offlineMode")}</span>`;
+  let statusClass = "online";
+  let label = t("online");
+  let detail = "Connected and records are synchronized.";
+  if (!state.networkOnline) {
+    statusClass = "offline";
+    label = t("offlineMode");
+    detail = "This device has no network connection.";
+  } else if (state.loading || (state.auth !== "none" && !state.lastSync)) {
+    statusClass = "pending";
+    label = "Connecting";
+    detail = "Connecting to the server and loading records.";
+  } else if (state.lastError) {
+    statusClass = "degraded";
+    label = "Data issue";
+    detail = "Connected, but some records could not be loaded.";
+  }
+  return `<span class="network-chip ${statusClass}" role="status" title="${escapeHtml(detail)}"><span class="network-chip-dot" aria-hidden="true"></span><span>${escapeHtml(label)}</span></span>`;
 }
 
 function quickSearchResults() {
@@ -496,7 +599,10 @@ function quickSearchIndex() {
   const visible = new Set(visibleModules().map((module) => module[0]));
   const results = [];
   if (visible.has("sacco-applications")) {
-    results.push(...tenantRows().map((tenant) => buildQuickSearchResult("SACCOs", tenant.id, "sacco-applications", tenant.name, `${tenant.saccoCode || tenant.abbreviation || ""} ${tenant.status || ""}`, { selectedTenantId: tenant.id, saccoRegistrationTab: "applications" })));
+    const tenantResults = isPlatform() && state.search.trim().length >= 2
+      ? state.platformQuickSearchResults
+      : tenantRows().map((tenant) => buildQuickSearchResult("SACCOs", tenant.id, "sacco-applications", tenant.name, `${tenant.saccoCode || tenant.abbreviation || ""} ${tenant.status || ""}`, { selectedTenantId: tenant.id, saccoRegistrationTab: "applications" }));
+    results.push(...tenantResults);
   }
   if (visible.has("subscriptions")) {
     results.push(...dataRows("subscriptions").map((subscription) => buildQuickSearchResult("Subscriptions", subscription.id, "subscriptions", subscription.tenantName || tenantName(subscription.tenantId), `${subscription.packageName || ""} ${subscription.status || ""}`, { selectedSubscriptionId: subscription.id })));
@@ -657,10 +763,11 @@ function renderView(view) {
   if (view === "finance") return treasurerFinanceView();
   if (view === "expenses") return treasurerExpensesView();
   if (view === "sacco-applications") return saccoApplications();
+  if (view === "fleet-approvals") return platformFleetApprovalsView();
+  if (view === "payment-approvals") return platformPaymentApprovalsView();
   if (view === "subscriptions") return isPlatform() ? subscriptionsView() : saccoSubscriptionsView();
   if (view === "member-dues") return memberDuesView();
   if (view === "savings-transfers") return savingsTransfersView();
-  if (view === "sacco-accounts") return saccoAccounts();
   if (view === "members") return membersView();
   if (view === "payments") return paymentsView();
   if (view === "transactions") return transactionsView();

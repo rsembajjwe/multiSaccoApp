@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildCollectionAccountDisplayRows } from "./settings";
-import type { TerekaCollectionAccount, TerekaRecord } from "../types/domain";
+import { buildCollectionAccountDisplayRows, buildMobileMoneyIntegrationSummary } from "./settings";
+import type { TerekaCollectionAccount, TerekaProviderConfig, TerekaRecord } from "../types/domain";
 
 const labelize = (value: unknown): string => String(value ?? "").replace(/_/g, " ");
 
@@ -37,5 +37,54 @@ describe("collection account display rows", () => {
     );
     expect(row.title).toBe("MOBILE MONEY");
     expect(row.active).toBe(false);
+  });
+});
+
+describe("mobile money integration summary", () => {
+  it("recognizes configured platform keys without exposing secret values", () => {
+    const providers: Array<TerekaProviderConfig & TerekaRecord> = [
+      {
+        provider: "MTN MoMo",
+        active: true,
+        settings: [
+          { key: "SACCO_MOBILE_MONEY_CALLBACK_SECRET", configured: true, secret: true },
+          { key: "SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS", configured: true, secret: false, value: "true" },
+        ],
+      },
+      {
+        provider: "Airtel Money",
+        active: false,
+        settings: [{ key: "SACCO_AIRTEL_MONEY_CLIENT_SECRET", configured: true, secret: true }],
+      },
+    ];
+
+    expect(buildMobileMoneyIntegrationSummary({ providers, callbacks: [{ status: "failed" }], requests: [{ id: "p1" }] })).toEqual({
+      activeProvider: "MTN MoMo",
+      callbackSecret: "Configured",
+      failedCallbacks: 1,
+      paymentRequests: 1,
+      providerCallbacks: 1,
+      providerSelected: true,
+      signedCallbacks: "Required",
+    });
+  });
+
+  it("shows the stored demo provider instead of treating it as missing", () => {
+    const providers: Array<TerekaProviderConfig & TerekaRecord> = [
+      {
+        provider: "MTN MoMo",
+        active: false,
+        settings: [
+          { key: "SACCO_MOBILE_MONEY_PROVIDER", configured: true, secret: false, value: "demo_mobile_money" },
+          { key: "SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS", configured: true, secret: false, value: "false" },
+        ],
+      },
+    ];
+
+    expect(buildMobileMoneyIntegrationSummary({ providers, callbacks: [], requests: [] })).toMatchObject({
+      activeProvider: "Demo / disabled",
+      providerSelected: true,
+      signedCallbacks: "Not required",
+    });
   });
 });

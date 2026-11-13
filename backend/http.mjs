@@ -23,14 +23,25 @@ export async function readJson(request) {
 }
 
 export function securityHeaders(headers = {}) {
+  const protectedHeaderNames = new Set([
+    "content-security-policy",
+    "cross-origin-resource-policy",
+    "permissions-policy",
+    "referrer-policy",
+    "x-content-type-options",
+    "x-frame-options"
+  ]);
+  const passthroughHeaders = Object.fromEntries(
+    Object.entries(headers).filter(([name]) => !protectedHeaderNames.has(name.toLowerCase()))
+  );
   return {
+    ...passthroughHeaders,
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Cross-Origin-Resource-Policy": "same-origin",
     "Content-Security-Policy": contentSecurityPolicy,
-    ...headers
   };
 }
 

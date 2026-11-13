@@ -8,4 +8,8 @@ interface MobileMoneyCallbackRepository extends JpaRepository<MobileMoneyCallbac
     List<MobileMoneyCallback> findAllByOrderByTenantIdAscReceivedAtDesc();
     List<MobileMoneyCallback> findByTenantIdOrderByReceivedAtDesc(String tenantId);
     Optional<MobileMoneyCallback> findByTenantIdAndExternalReferenceIgnoreCase(String tenantId, String externalReference);
+    Optional<MobileMoneyCallback> findByTenantIdAndResourceTypeAndResourceId(
+            String tenantId,
+            String resourceType,
+            String resourceId);
 }

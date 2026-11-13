@@ -172,8 +172,12 @@ public record LoanResponse(
     }
 
     private static String normalizedStatus(Loan loan, int arrearsInstallments) {
+        String status = loan.getStatus();
+        if ("submitted".equals(status) || "under_review".equals(status) || "approved".equals(status) || "rejected".equals(status)) {
+            return status;
+        }
         if (loan.getBalance().compareTo(BigDecimal.ZERO) == 0) return "paid";
         if (arrearsInstallments > 0) return "overdue";
-        return "active";
+        return status == null || status.isBlank() ? "active" : status;
     }
 }

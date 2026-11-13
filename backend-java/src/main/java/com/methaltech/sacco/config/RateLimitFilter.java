@@ -40,6 +40,7 @@ class RateLimitFilter extends OncePerRequestFilter {
     private final int paymentCapacity;
     private final int callbackCapacity;
     private final int searchCapacity;
+    private final int accountCapacity;
 
     RateLimitFilter(
             RateLimiter rateLimiter,
@@ -49,7 +50,8 @@ class RateLimitFilter extends OncePerRequestFilter {
             @Value("${sacco.rate-limit.auth-per-window:30}") int authCapacity,
             @Value("${sacco.rate-limit.payment-per-window:20}") int paymentCapacity,
             @Value("${sacco.rate-limit.callback-per-window:600}") int callbackCapacity,
-            @Value("${sacco.rate-limit.search-per-window:40}") int searchCapacity) {
+            @Value("${sacco.rate-limit.search-per-window:40}") int searchCapacity,
+            @Value("${sacco.rate-limit.account-per-window:10}") int accountCapacity) {
         this.rateLimiter = rateLimiter;
         this.objectMapper = objectMapper;
         this.enabled = enabled;
@@ -58,6 +60,7 @@ class RateLimitFilter extends OncePerRequestFilter {
         this.paymentCapacity = paymentCapacity;
         this.callbackCapacity = callbackCapacity;
         this.searchCapacity = searchCapacity;
+        this.accountCapacity = accountCapacity;
     }
 
     @Override
@@ -95,6 +98,9 @@ class RateLimitFilter extends OncePerRequestFilter {
         }
         if (!HttpMethod.POST.matches(request.getMethod())) {
             return null;
+        }
+        if (uri.endsWith("/api/v1/users") || uri.endsWith("/api/v1/roles")) {
+            return new Policy("account_write", accountCapacity);
         }
         // NB: /auth/login and /member-auth/login are deliberately NOT rate limited here — they already
         // have precise, failure-based lockout via LoginAttemptService. Adding a coarse per-IP limit on

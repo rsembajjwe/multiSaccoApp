@@ -5,6 +5,10 @@ import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.notification.SmsWalletService;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,6 +60,16 @@ class OperationsController {
         counts.put("callbackExceptions", count("SELECT COUNT(*) FROM mobile_money_callbacks WHERE status <> 'posted'", tenantId));
         counts.put("deliveryExceptions", count("SELECT COUNT(*) FROM notification_deliveries WHERE status <> 'sent'", tenantId));
         counts.put("closedAccountingPeriods", count("SELECT COUNT(*) FROM accounting_periods WHERE status = 'closed'", tenantId));
+        Instant fleetAlertCutoff = Instant.now().minus(24, ChronoUnit.HOURS);
+        counts.put("repeatedFleetJobRecoveries", platformWide
+                ? countUnscoped("SELECT COUNT(*) FROM fleet_bulk_jobs WHERE recovery_count >= 2 AND last_recovered_at >= ?", fleetAlertCutoff)
+                : 0L);
+        counts.put("fleetJobsWithFailures", platformWide
+                ? countUnscoped("SELECT COUNT(*) FROM fleet_bulk_jobs WHERE failed_count > 0 AND finished_at >= ?", fleetAlertCutoff)
+                : 0L);
+        counts.put("overdueFleetApprovals", platformWide
+                ? countUnscoped("SELECT COUNT(*) FROM fleet_bulk_jobs WHERE status = 'pending_approval' AND created_at < ?", Instant.now().minus(8, ChronoUnit.HOURS))
+                : 0L);
 
         java.util.Map<String, Object> financials = new java.util.LinkedHashMap<>();
         financials.put("totalSavings", sum("SELECT COALESCE(SUM(savings_balance), 0) FROM members", tenantId));
@@ -101,7 +115,23 @@ class OperationsController {
         addAlert(alerts, "open_complaints", (long) counts.get("openComplaints"), "warning", "Member or service complaints are still open.");
         addAlert(alerts, "callback_exceptions", (long) counts.get("callbackExceptions"), "critical", "Mobile-money callbacks need operational review.");
         addAlert(alerts, "delivery_exceptions", (long) counts.get("deliveryExceptions"), "warning", "Notification deliveries need provider follow-up.");
+        addAlert(alerts, "fleet_job_repeated_recovery", (long) counts.get("repeatedFleetJobRecoveries"), "critical", "Fleet bulk jobs required repeated automatic recovery in the last 24 hours.");
+        addAlert(alerts, "fleet_job_failures", (long) counts.get("fleetJobsWithFailures"), "warning", "Fleet bulk jobs completed with organization failures in the last 24 hours.");
+        addAlert(alerts, "overdue_fleet_approvals", (long) counts.get("overdueFleetApprovals"), "critical", "Fleet bulk approvals have exceeded the eight-hour decision SLA.");
         return alerts;
+    }
+
+    private long countUnscoped(String sql, Object... args) {
+        Object[] jdbcArgs = Arrays.stream(args).map(OperationsController::jdbcArgument).toArray();
+        Long value = jdbcTemplate.queryForObject(sql, Long.class, jdbcArgs);
+        return value == null ? 0 : value;
+    }
+
+    static Object jdbcArgument(Object argument) {
+        if (argument instanceof Instant instant) {
+            return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
+        }
+        return argument;
     }
 
     private void addAlert(List<Map<String, Object>> alerts, String code, long count, String severity, String message) {
@@ -124,7 +154,7 @@ class OperationsController {
                 WHERE ft.active = TRUE
                 """;
         if (tenantId != null) {
-            sql += " AND ft.tenant_id = ?";
+                    sql += " AND ft.tenant_id = ? ";
         }
         sql += """
                 GROUP BY ft.display_order, ft.code, ft.name, ft.basis, ft.is_system

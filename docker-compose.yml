@@ -40,6 +40,12 @@ services:
       SACCO_MOBILE_MONEY_CALLBACK_TIMESTAMP_TOLERANCE_SECONDS: ${SACCO_MOBILE_MONEY_CALLBACK_TIMESTAMP_TOLERANCE_SECONDS:-300}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
 
 volumes:
   postgres_data:

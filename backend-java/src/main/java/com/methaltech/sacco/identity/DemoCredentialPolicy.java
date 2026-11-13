@@ -34,7 +34,10 @@ public class DemoCredentialPolicy {
             "amina@example.local",
             "daniel@example.local");
     private static final Set<String> MEMBER_DEMO_DOMAINS = Set.of("@example.local");
-    private static final Pattern MEMBER_DEMO_NUMBER = Pattern.compile("gree-000\\d+");
+    // Low-numbered GREE-/LAKE- memberships (0000-0019) are demo seed accounts; real members are
+    // numbered far higher (e.g. GREE-8244) and are never blocked. Kept in step with the demo seed
+    // range so newer demo members (GREE-0010..0012, LAKE-0001) are covered too.
+    private static final Pattern MEMBER_DEMO_NUMBER = Pattern.compile("(gree|lake)-00[01]\\d");
 
     private final boolean demoLoginsEnabled;
 

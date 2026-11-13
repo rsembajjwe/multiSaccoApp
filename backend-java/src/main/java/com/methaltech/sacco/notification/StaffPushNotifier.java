@@ -4,8 +4,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
- * Best-effort push to a SACCO's staff topic ({@code staff_<saccoCode>}), which the staff app
- * subscribes to at sign-in. Delegates to the FCM provider when it is active
+ * Best-effort push to authenticated staff devices registered for a tenant. Delegates to the FCM provider when it is active
  * ({@code sacco.providers.push=fcm}); otherwise this is a no-op, so callers never need to know
  * whether push is configured.
  */
@@ -13,15 +12,19 @@ import org.springframework.stereotype.Component;
 public class StaffPushNotifier {
 
     private final ObjectProvider<FcmPushNotificationProvider> fcm;
+    private final PushDeviceRegistrationService registrations;
 
-    StaffPushNotifier(ObjectProvider<FcmPushNotificationProvider> fcm) {
+    StaffPushNotifier(ObjectProvider<FcmPushNotificationProvider> fcm,
+            PushDeviceRegistrationService registrations) {
         this.fcm = fcm;
+        this.registrations = registrations;
     }
 
-    public void notifyStaff(String saccoCode, String title, String message) {
-        if (saccoCode == null || saccoCode.isBlank()) {
+    public void notifyStaff(String tenantId, String title, String message) {
+        if (tenantId == null || tenantId.isBlank()) {
             return;
         }
-        fcm.ifAvailable(provider -> provider.sendToTopic("staff_" + saccoCode, title, message));
+        fcm.ifAvailable(provider -> registrations.staffTokens(tenantId)
+                .forEach(token -> provider.sendToToken(token, title, message)));
     }
 }

@@ -8,4 +8,5 @@ public interface BranchRepository extends JpaRepository<Branch, String> {
     List<Branch> findByTenantIdOrderByCodeAsc(String tenantId);
     List<Branch> findByTenantIdAndManagerUserIdOrderByCodeAsc(String tenantId, String managerUserId);
     boolean existsByTenantIdAndCodeIgnoreCase(String tenantId, String code);
+    boolean existsByTenantIdAndCodeIgnoreCaseAndIdNot(String tenantId, String code, String id);
 }

@@ -6,6 +6,46 @@ function stValue(id) {
   return el ? el.value : "";
 }
 
+function parseSavingsImportCsv(text) {
+  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 2) throw new Error("Paste a CSV header and at least one savings row.");
+  const headers = ["membershipNo", "amount", "postingDate", "reference", "channel", "narration"];
+  const actual = lines[0].split(",").map((value) => value.trim());
+  if (actual.join(",") !== headers.join(",")) throw new Error(`CSV headers must be: ${headers.join(",")}`);
+  return lines.slice(1).map((line) => {
+    const values = line.split(",").map((value) => value.trim());
+    return Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
+  });
+}
+
+async function downloadSavingsImportTemplate() {
+  try {
+    const template = await api(`/financial-transactions/savings/import-template?tenantId=${encodeURIComponent(state.user?.tenantId || "")}`);
+    downloadClientFile(template.csv ? template.filename : "savings-import-template.csv", template.csv || "", "text/csv;charset=utf-8");
+  } catch (error) {
+    state.savingsImportError = error.message || "Could not download savings template.";
+    renderShell();
+  }
+}
+
+async function importSavingsDeposits(dryRun) {
+  state.savingsImportMessage = "";
+  state.savingsImportError = "";
+  try {
+    const rows = parseSavingsImportCsv(state.savingsImportCsv);
+    const result = await api("/financial-transactions/savings/import", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: state.user?.tenantId || "", dryRun, rows })
+    });
+    state.savingsImportResult = result;
+    state.savingsImportMessage = dryRun ? "Savings file validated. Review errors before importing." : `${result.createdCount || 0} savings deposit(s) imported into the approval queue.`;
+    if (!dryRun) state.savingsImportCsv = "";
+  } catch (error) {
+    state.savingsImportError = error.message || "Could not process savings import.";
+  }
+  renderShell();
+}
+
 async function createSavingsTransfer() {
   if (!hasPermission("savings-transfer:create") && !hasPermission("savings-transfer:manage")) {
     state.savingsTransferError = "Savings transfer creation permission is required.";
@@ -135,7 +175,7 @@ async function saveFundType(fundTypeId) {
   }
   const payload = {
     name: (document.getElementById("ftName")?.value || "").trim(),
-    code: (document.getElementById("ftCode")?.value || "").trim().toLowerCase(),
+    code: (document.getElementById("ftCode")?.value || "").trim(),
     basis: document.getElementById("ftBasis")?.value || "welfare",
     active: (document.getElementById("ftActive")?.value || "true") === "true",
     description: (document.getElementById("ftDescription")?.value || "").trim()
@@ -143,7 +183,6 @@ async function saveFundType(fundTypeId) {
   state.fundTypeMessage = "";
   state.fundTypeError = "";
   if (!payload.name) { state.fundTypeError = "Enter a fund name."; renderShell(); return; }
-  if (!fundTypeId && !payload.code) { state.fundTypeError = "Enter a fund code."; renderShell(); return; }
   if (!state.networkOnline) { state.fundTypeError = t("offlineActionBlocked"); renderShell(); return; }
   try {
     if (fundTypeId) {
@@ -241,6 +280,60 @@ function openTransactionDetail(transactionId) {
   renderShell();
 }
 
+async function loadPlatformPaymentApprovals(pageNumber = 0) {
+  const page = Math.max(0, Number(pageNumber || 0));
+  const params = new URLSearchParams({ page: String(page), size: "50" });
+  if (state.platformPaymentApprovalSearch) params.set("search", state.platformPaymentApprovalSearch);
+  if (state.platformPaymentApprovalChannel) params.set("channel", state.platformPaymentApprovalChannel);
+  state.platformPaymentApprovalPage = page;
+  state.loading = true;
+  state.platformPaymentApprovalError = "";
+  renderShell();
+  try {
+    const [queue, summaryData, processed] = await Promise.all([
+      api(`/financial-transactions/approval-queue?${params.toString()}`),
+      api("/financial-transactions/approval-summary"),
+      api("/financial-transactions?page=0&size=100&sort=updatedAt&direction=desc")
+    ]);
+    state.data.platformPaymentApprovalQueue = queue;
+    state.pageMeta.platformPaymentApprovalQueue = pageEnvelope(queue);
+    state.data.platformPaymentApprovalSummary = summaryData;
+    state.data.platformPaymentApprovalProcessed = (Array.isArray(processed) ? processed : []).filter((item) => ["posted", "rejected"].includes(normal(item.status)));
+    state.lastSync = new Date().toISOString();
+  } catch (error) {
+    state.platformPaymentApprovalError = friendlyUserError(error, true);
+  } finally {
+    state.loading = false;
+    renderShell();
+  }
+}
+
+async function decidePlatformPayment(transactionId, status) {
+  if (!transactionId || !["posted", "rejected"].includes(status)) return;
+  if (!hasPermission("transactions:approve")) {
+    state.platformPaymentApprovalError = "Transaction approval permission is required.";
+    renderShell();
+    return;
+  }
+  const verb = status === "posted" ? "approval" : "rejection";
+  const reason = window.prompt(`Enter the reason for this ${verb}. It will be retained in the audit record.`, "")?.trim() || "";
+  if (!reason) return;
+  state.platformPaymentApprovalMessage = "";
+  state.platformPaymentApprovalError = "";
+  try {
+    const transaction = await api(`/financial-transactions/${encodeURIComponent(transactionId)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, reason })
+    });
+    state.platformPaymentApprovalMessage = `Payment ${transaction.reference || transaction.id} ${status === "posted" ? "approved and posted" : "rejected"}.`;
+    state.selectedPaymentApprovalId = "";
+    await loadPlatformPaymentApprovals(state.platformPaymentApprovalPage);
+  } catch (error) {
+    state.platformPaymentApprovalError = friendlyUserError(error, true);
+    renderShell();
+  }
+}
+
 function openSubscriptionDetail(subscriptionId) {
   state.selectedSubscriptionId = subscriptionId;
   state.platformTransactionSubscriptionId = subscriptionId;
@@ -250,9 +343,9 @@ function openSubscriptionDetail(subscriptionId) {
   renderShell();
 }
 
-async function recordSubscriptionPayment() {
+async function recordPlatformSubscriptionPayment() {
   if (!hasPermission("subscriptions:manage") && roleKind() !== "super" && roleKind() !== "billing") {
-    state.selectedSubscriptionError = "Subscription management permission is required to record platform-SACCO payments.";
+    state.platformTransactionError = "Subscription management permission is required to record platform-SACCO payments.";
     renderShell();
     return;
   }
@@ -265,12 +358,49 @@ async function recordSubscriptionPayment() {
   }
   const subscriptionId = searchedSubscription?.id || value("selectedSubscriptionId") || state.selectedSubscriptionId || value("platformTransactionSubscriptionId");
   if (!subscriptionId) return;
-  state.selectedSubscriptionMessage = "";
-  state.selectedSubscriptionError = "";
+  const subscription = dataRows("subscriptions").find((item) => item.id === subscriptionId);
+  if (!subscription) return;
+  state.platformTransactionMessage = "";
+  state.platformTransactionError = "";
   try {
+    const amount = Number(value("subscriptionPaymentAmount") || 0);
+    const channel = value("subscriptionPaymentChannel") || "manual";
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a payment amount greater than zero.");
+    if (channel === "mobile_money") {
+      const provider = value("subscriptionPaymentProvider");
+      const payerPhone = normalizeUgandanMobileMoneyPhone(value("subscriptionPaymentPhone"));
+      if (!provider) throw new Error("Choose MTN MoMo or Airtel Money.");
+      if (!payerPhone) throw new Error("Enter a valid Ugandan mobile number, for example 0772123456.");
+      const networkError = ugandanMobileMoneyNetworkError(payerPhone, provider);
+      if (networkError) throw new Error(networkError);
+      const externalReference = value("subscriptionPaymentReference")
+        || `SUB-${subscription.invoice || subscription.id}-${Date.now()}`;
+      const request = await api("/integrations/mobile-money/subscription-payment-requests/staff", {
+        method: "POST",
+        body: JSON.stringify({
+          tenantId: subscription.tenantId,
+          amount,
+          payerPhone,
+          externalReference,
+          provider,
+          providerPayload: {
+            source: "platform_subscription_transaction",
+            provider,
+            initiatedBy: state.user?.email || state.user?.id || "",
+            subscriptionId
+          }
+        })
+      });
+      state.selectedSubscriptionId = subscriptionId;
+      state.platformTransactionSubscriptionId = subscriptionId;
+      state.platformTransactionMessage = `Payment prompt initialized for ${payerPhone}${request.externalReference ? `: ${request.externalReference}` : ""}.`;
+      await refreshAll();
+      renderShell();
+      return;
+    }
     const payload = {
-      amount: Number(value("subscriptionPaymentAmount") || 0),
-      channel: value("subscriptionPaymentChannel") || "manual",
+      amount,
+      channel,
       paymentMode: value("subscriptionPaymentMode") || "group",
       memberSlots: value("subscriptionPaymentMemberSlots") ? Number(value("subscriptionPaymentMemberSlots")) : null,
       externalReference: value("subscriptionPaymentReference") || undefined
@@ -280,16 +410,34 @@ async function recordSubscriptionPayment() {
       body: JSON.stringify(payload)
     });
     const payment = result.payment || {};
-    const subscription = result.subscription || {};
-    state.selectedSubscriptionId = subscription.id || subscriptionId;
+    const updatedSubscription = result.subscription || {};
+    state.selectedSubscriptionId = updatedSubscription.id || subscriptionId;
     state.platformTransactionSubscriptionId = state.selectedSubscriptionId;
-    state.selectedSubscriptionMessage = `Recorded platform-SACCO payment ${payment.externalReference || ""}`.trim() + ".";
+    state.platformTransactionMessage = `Recorded platform-SACCO payment ${payment.externalReference || ""}`.trim() + ".";
     await refreshAll();
     renderShell();
   } catch (error) {
-    state.selectedSubscriptionError = error.message;
+    state.platformTransactionError = error.message;
     renderShell();
   }
+}
+
+function normalizeUgandanMobileMoneyPhone(rawPhone) {
+  let phone = String(rawPhone || "").replace(/[\s()-]/g, "");
+  if (/^0\d{9}$/.test(phone)) phone = `+256${phone.slice(1)}`;
+  else if (/^256\d{9}$/.test(phone)) phone = `+${phone}`;
+  return /^\+256\d{9}$/.test(phone) ? phone : "";
+}
+
+function ugandanMobileMoneyNetworkError(phone, provider) {
+  const prefix = phone.slice(4, 6);
+  if (provider === "mtn" && ["70", "74", "75"].includes(prefix)) {
+    return "This number appears to be Airtel. Select Airtel or enter an MTN number.";
+  }
+  if (provider === "airtel" && ["76", "77", "78"].includes(prefix)) {
+    return "This number appears to be MTN. Select MTN or enter an Airtel number.";
+  }
+  return "";
 }
 
 function syncSubscriptionPaymentMode() {
@@ -307,7 +455,7 @@ function syncSubscriptionPaymentMode() {
 }
 
 async function runSubscriptionAction(action) {
-  if (action === "renew") return recordSubscriptionPayment();
+  if (action === "renew") return recordPlatformSubscriptionPayment();
   state.selectedSubscriptionMessage = "Use SACCO Registration to update SACCO operating access.";
   renderShell();
 }

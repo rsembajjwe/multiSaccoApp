@@ -70,7 +70,7 @@ class PlatformAdminBootstrapper implements ApplicationRunner {
                     password_salt,
                     status,
                     password_reset_required
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', FALSE)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', TRUE)
                 """,
                 userId,
                 PLATFORM_TENANT_ID,

@@ -94,15 +94,27 @@ function buildMobileMoneyIntegrationSummary(input) {
   const allSettings = input.providers.flatMap((provider) => provider.settings || []);
   const callbackSecret = allSettings.find((setting) => setting.key === "SACCO_MOBILE_MONEY_CALLBACK_SECRET");
   const signedCallbacks = allSettings.find((setting) => setting.key === "SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS");
+  const configuredProvider = allSettings.find((setting) => setting.key === "SACCO_MOBILE_MONEY_PROVIDER" && !setting.secret)?.value;
+  const activeProvider = input.providers.find((provider) => provider.active)?.provider
+    || mobileMoneyProviderModelLabel(configuredProvider)
+    || "Not configured";
   return {
-    activeProvider: input.providers.find((provider) => provider.active)?.provider || "Not configured",
+    activeProvider,
     callbackSecret: callbackSecret?.configured ? "Configured" : "Missing",
     failedCallbacks: input.callbacks.filter((row) => normalizeSettingsModelText(row.status).includes("failed")).length,
     paymentRequests: input.requests.length,
     providerCallbacks: input.callbacks.length,
-    providerSelected: input.providers.some((provider) => provider.active),
+    providerSelected: activeProvider !== "Not configured",
     signedCallbacks: signedCallbacks?.value === "true" ? "Required" : "Not required"
   };
+}
+
+function mobileMoneyProviderModelLabel(value) {
+  const normalized = normalizeSettingsModelText(value);
+  if (normalized === "mtn_momo") return "MTN MoMo";
+  if (normalized === "airtel_money") return "Airtel Money";
+  if (normalized === "demo_mobile_money") return "Demo / disabled";
+  return "";
 }
 
 function notificationProviderNameFor(config, channel) {

@@ -29,6 +29,7 @@ void main() {
     await tester.pump();
     expect(find.text('SACCO Member'), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);
+    expect(find.text('Register an organization'), findsOneWidget);
     expect(find.byType(TextField), findsNWidgets(3));
   });
 }

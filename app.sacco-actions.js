@@ -6,8 +6,8 @@ async function createFinancialProduct(event) {
   const form = event.currentTarget;
   state.productFormMessage = "";
   state.productFormError = "";
-  if (!hasPermission("sacco-profile:manage")) {
-    state.productFormError = "SACCO settings permission is required to create financial products.";
+  if (!hasPermission("fund-types:manage")) {
+    state.productFormError = "Chairperson fund-management permission is required to create financial products.";
     renderShell();
     return;
   }

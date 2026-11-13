@@ -100,7 +100,7 @@ function buildSubscriptionRows(input) {
 
 function buildSubscriptionSummary(rows, tableRows) {
   return {
-    activeSubscriptions: rows.filter((row) => normalizeOnboardingModelText(row.status) === "active").length,
+    activeSubscriptions: rows.filter((row) => ["active", "expiring", "grace"].includes(subscriptionLifecycleStateFor(row))).length,
     callbackReceived: tableRows.filter((row) => normalizeOnboardingModelText(row.paymentStage).includes("callback")).length,
     expiredOrSuspended: tableRows.filter((row) => normalizeOnboardingModelText(row.operatingAccess).includes("expired") || normalizeOnboardingModelText(row.operatingAccess).includes("suspended")).length,
     outstandingInvoices: rows.reduce((total, row) => total + balanceDueFor(row), 0),
@@ -110,6 +110,19 @@ function buildSubscriptionSummary(rows, tableRows) {
     revenueThisMonth: sumOnboardingModelValues(rows, "amount"),
     suspendedAccess: tableRows.filter((row) => normalizeOnboardingModelText(row.operatingAccess).includes("suspended")).length
   };
+}
+
+function subscriptionLifecycleStateFor(subscription, now = new Date()) {
+  const rawState = normalizeOnboardingModelText(subscription.lifecycleState || subscription.status || "unknown");
+  if (rawState.includes("pending")) return "pending_payment";
+  if (rawState.includes("expired")) return "expired";
+
+  const expiry = new Date(String(subscription.expiry || subscription.expiryDate || subscription.expiresAt || ""));
+  if (!Number.isFinite(expiry.getTime())) return rawState;
+  const daysToExpiry = Math.ceil((expiry.getTime() - now.getTime()) / 86400000);
+  if (daysToExpiry < 0) return "expired";
+  if (daysToExpiry <= 90 && rawState === "active") return "expiring";
+  return rawState;
 }
 
 function buildPackageCardRows(packages) {

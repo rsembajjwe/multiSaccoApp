@@ -4,6 +4,7 @@ class ApiPaths {
   const ApiPaths._();
 
   static const login = '/member-auth/login';
+  static const groupRegistrations = '/public/group-registrations';
   static const logout = '/member-auth/logout';
   static const me = '/member-auth/me';
   static const dashboard = '/member-auth/mobile-dashboard';
@@ -25,4 +26,6 @@ class ApiPaths {
   static const guarantorRequests = '/member-auth/guarantor-requests';
   static const mobileMoneyPaymentRequests =
       '/integrations/mobile-money/payment-requests';
+  static String mobileMoneyProviderStatus(String requestId) =>
+      '$mobileMoneyPaymentRequests/$requestId/provider-status';
 }

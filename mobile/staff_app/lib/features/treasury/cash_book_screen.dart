@@ -10,24 +10,28 @@ import '../../core/widgets/ui.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
 import '../transactions/member_deposit_sheet.dart';
+import '../transactions/loan_repayment_sheet.dart';
 
 /// Treasurer's cash book: cash drawn from the bank (bank withdrawal) and every
 /// use of that cash. The running balance is cash on hand.
 class CashBookScreen extends ConsumerWidget {
-  const CashBookScreen({super.key, required this.canManage});
+  const CashBookScreen(
+      {super.key, required this.canManage, this.embedded = false});
 
   final bool canManage;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(cashBookProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Cash book')),
+      appBar: embedded ? null : AppBar(title: const Text('Cash book')),
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
               icon: const Icon(Icons.add),
               label: const Text('Record'),
               onPressed: () async {
+                FocusManager.instance.primaryFocus?.unfocus();
                 final choice = await showModalBottomSheet<String>(
                   context: context,
                   showDragHandle: true,
@@ -42,6 +46,13 @@ class CashBookScreen extends ConsumerWidget {
                               'A member pays in - cash posts & adds to cash '
                               'on hand, or send a mobile-money prompt'),
                           onTap: () => Navigator.pop(context, 'collection'),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.request_quote_outlined),
+                          title: const Text('Loan repayment'),
+                          subtitle: const Text(
+                              'Post cash to an active member loan and issue a receipt'),
+                          onTap: () => Navigator.pop(context, 'repayment'),
                         ),
                         ListTile(
                           leading: const Icon(Icons.local_atm_outlined),
@@ -60,10 +71,17 @@ class CashBookScreen extends ConsumerWidget {
                   context: context,
                   isScrollControlled: true,
                   showDragHandle: true,
-                  builder: (_) => choice == 'collection'
-                      ? const MemberDepositSheet(
-                          recordCashBook: true, title: 'Member collection')
-                      : const _CashEntrySheet(),
+                  builder: (_) {
+                    if (choice == 'collection') {
+                      return const MemberDepositSheet(
+                        title: 'Member collection',
+                      );
+                    }
+                    if (choice == 'repayment') {
+                      return const LoanRepaymentSheet();
+                    }
+                    return const _CashEntrySheet();
+                  },
                 );
               },
             )
@@ -76,6 +94,21 @@ class CashBookScreen extends ConsumerWidget {
           onRetry: () => ref.invalidate(cashBookProvider),
         ),
         data: (book) {
+          num sumOf(String p) => book.entries
+              .where((e) => e.purpose == p)
+              .fold<num>(0, (s, e) => s + e.amount);
+          final collections = sumOf('collection');
+          final banked = sumOf('bank_deposit');
+          final drawnUsed = sumOf('bank_withdrawal');
+          // Cash physically held: collected cash not yet banked. Cash drawn from
+          // the bank is always drawn for a use, so it nets out here.
+          final cashOnHand = collections - banked;
+          // Money still sitting in the bank: total banked less what has been
+          // drawn from the bank and used (loans, expenses, member withdrawals...).
+          final cashDeposited = banked - drawnUsed;
+          // Total funds the SACCO holds now: on hand plus in the bank.
+          // Invariant: cash on hand + cash deposited = total deposits.
+          final totalDeposits = cashOnHand + cashDeposited;
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(cashBookProvider),
             child: ListView(
@@ -83,7 +116,7 @@ class CashBookScreen extends ConsumerWidget {
               children: [
                 BalanceCard(
                   label: 'Cash on hand',
-                  value: Fmt.money(book.cashOnHand),
+                  value: Fmt.money(cashOnHand),
                   icon: Icons.local_atm_outlined,
                   color: const Color(0xFF0F766E),
                 ),
@@ -92,8 +125,8 @@ class CashBookScreen extends ConsumerWidget {
                   children: [
                     Expanded(
                       child: _MiniStat(
-                        label: 'Drawn from bank',
-                        value: Fmt.money(book.totalIn),
+                        label: 'Total deposits',
+                        value: Fmt.money(totalDeposits),
                         color: const Color(0xFF15803D),
                       ),
                     ),
@@ -101,8 +134,8 @@ class CashBookScreen extends ConsumerWidget {
                     Expanded(
                       child: _MiniStat(
                         label: 'Cash deposited',
-                        value: Fmt.money(book.totalOut),
-                        color: const Color(0xFFB91C1C),
+                        value: Fmt.money(cashDeposited),
+                        color: const Color(0xFF0E7490),
                       ),
                     ),
                   ],
@@ -156,7 +189,8 @@ String cashPurposeLabel(String p) {
 }
 
 class _MiniStat extends StatelessWidget {
-  const _MiniStat({required this.label, required this.value, required this.color});
+  const _MiniStat(
+      {required this.label, required this.value, required this.color});
   final String label;
   final String value;
   final Color color;
@@ -191,9 +225,12 @@ class _EntryTile extends StatelessWidget {
   final TreasuryCashEntry entry;
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final color =
-        entry.isIn ? const Color(0xFF15803D) : const Color(0xFFB91C1C);
+    final isFromBank = entry.purpose == 'bank_withdrawal';
+    final color = isFromBank
+        ? const Color(0xFF7C3AED)
+        : entry.isIn
+            ? const Color(0xFF15803D)
+            : const Color(0xFFB91C1C);
     final meta = <String>[
       if (entry.entryDate != null) Fmt.date(entry.entryDate),
       if ((entry.reference ?? '').isNotEmpty) 'Ref ${entry.reference}',
@@ -203,7 +240,9 @@ class _EntryTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: ListTile(
         leading: Icon(
-          entry.isIn ? Icons.south_west : Icons.north_east,
+          isFromBank
+              ? Icons.account_balance_outlined
+              : (entry.isIn ? Icons.south_west : Icons.north_east),
           color: color,
         ),
         title: Text(cashPurposeLabel(entry.purpose)),
@@ -222,16 +261,26 @@ class _EntryTile extends StatelessWidget {
 const _inPurposes = {'collection', 'bank_withdrawal'};
 
 const _purposes = <MapEntry<String, String>>[
-  MapEntry('bank_withdrawal', 'Cash from bank (cash in)'),
-  MapEntry('bank_deposit', 'Bank the cash (cash out)'),
-  MapEntry('loan_disbursement', 'Loan disbursement'),
-  MapEntry('expense', 'Expense'),
-  MapEntry('member_payout', 'Member payout'),
-  MapEntry('other', 'Other cash'),
+  MapEntry('bank_withdrawal', 'Cash from bank'),
+  MapEntry('bank_deposit', 'Bank the cash'),
 ];
 
-bool _wantsMember(String p) =>
-    p == 'member_payout' || p == 'loan_disbursement' || p == 'collection';
+const _withdrawalReasons = <MapEntry<String, String>>[
+  MapEntry('loan_disbursement', 'Loan disbursement'),
+  MapEntry('expense', 'Expense'),
+  MapEntry('member_withdraw', 'Member withdraw'),
+  MapEntry('other', 'Other'),
+];
+
+String _reasonLabel(String r) {
+  for (final e in _withdrawalReasons) {
+    if (e.key == r) return e.value;
+  }
+  return 'Other';
+}
+
+bool _reasonWantsMember(String r) =>
+    r == 'loan_disbursement' || r == 'member_withdraw';
 
 class _CashEntrySheet extends ConsumerStatefulWidget {
   const _CashEntrySheet();
@@ -245,6 +294,7 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
   final _reference = TextEditingController();
   final _description = TextEditingController();
   String _purpose = 'bank_withdrawal';
+  String _reason = 'loan_disbursement';
   Member? _member;
   bool _busy = false;
 
@@ -260,26 +310,35 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
     if (!_formKey.currentState!.validate()) return;
     final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
     final isIn = _inPurposes.contains(_purpose);
+    final action = _purpose == 'bank_withdrawal'
+        ? 'cash from bank for ${_reasonLabel(_reason).toLowerCase()}'
+        : cashPurposeLabel(_purpose).toLowerCase();
     final confirmed = await confirmAction(
       context,
       title: isIn ? 'Record cash in?' : 'Record cash out?',
       message: isIn
-          ? 'Add ${Fmt.money(amount)} to cash on hand — '
-              '${cashPurposeLabel(_purpose).toLowerCase()}.'
-          : 'Reduce cash on hand by ${Fmt.money(amount)} — '
-              '${cashPurposeLabel(_purpose).toLowerCase()}.',
+          ? 'Add ${Fmt.money(amount)} to cash on hand — $action.'
+          : 'Reduce cash on hand by ${Fmt.money(amount)} — $action.',
       confirmLabel: 'Record',
       icon: Icons.local_atm_outlined,
     );
     if (!confirmed || !mounted) return;
     setState(() => _busy = true);
     try {
+      final note = _description.text.trim();
+      final wantsMember =
+          _purpose == 'bank_withdrawal' && _reasonWantsMember(_reason);
+      final description = _purpose == 'bank_withdrawal'
+          ? (note.isEmpty
+              ? _reasonLabel(_reason)
+              : '${_reasonLabel(_reason)} - $note')
+          : note;
       await ref.read(adminRepositoryProvider).createCashEntry(
             purpose: _purpose,
             amount: amount,
             reference: _reference.text,
-            description: _description.text,
-            memberId: _wantsMember(_purpose) ? _member?.id : null,
+            description: description,
+            memberId: wantsMember ? _member?.id : null,
           );
       ref.invalidate(cashBookProvider);
       if (mounted) {
@@ -300,7 +359,8 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
 
   @override
   Widget build(BuildContext context) {
-    final showMember = _wantsMember(_purpose);
+    final showMember =
+        _purpose == 'bank_withdrawal' && _reasonWantsMember(_reason);
     return Padding(
       padding: EdgeInsets.fromLTRB(
           20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
@@ -319,14 +379,25 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 initialValue: _purpose,
-                decoration: const InputDecoration(labelText: 'Purpose'),
+                decoration: const InputDecoration(labelText: 'Movement'),
                 items: [
                   for (final e in _purposes)
                     DropdownMenuItem(value: e.key, child: Text(e.value)),
                 ],
-                onChanged:
-                    _busy ? null : (v) => setState(() => _purpose = v!),
+                onChanged: _busy ? null : (v) => setState(() => _purpose = v!),
               ),
+              if (_purpose == 'bank_withdrawal') ...[
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: _reason,
+                  decoration: const InputDecoration(labelText: 'Reason'),
+                  items: [
+                    for (final e in _withdrawalReasons)
+                      DropdownMenuItem(value: e.key, child: Text(e.value)),
+                  ],
+                  onChanged: _busy ? null : (v) => setState(() => _reason = v!),
+                ),
+              ],
               const SizedBox(height: 10),
               TextFormField(
                 controller: _amount,
@@ -371,16 +442,15 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
               const SizedBox(height: 10),
               TextFormField(
                 controller: _reference,
-                decoration: const InputDecoration(
-                    labelText: 'Reference (optional)'),
+                decoration:
+                    const InputDecoration(labelText: 'Reference (optional)'),
               ),
               const SizedBox(height: 10),
               TextFormField(
                 controller: _description,
                 minLines: 1,
                 maxLines: 3,
-                decoration:
-                    const InputDecoration(labelText: 'Note (optional)'),
+                decoration: const InputDecoration(labelText: 'Note (optional)'),
               ),
               const SizedBox(height: 16),
               SizedBox(

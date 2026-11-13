@@ -13,7 +13,9 @@ import '../../providers.dart';
 /// Read-only; the movements themselves are recorded in the Cash book
 /// ("Bank the cash" = banked, "Cash from bank" = withdrawn).
 class BankStatementScreen extends ConsumerWidget {
-  const BankStatementScreen({super.key});
+  const BankStatementScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   static const _bankedColor = Color(0xFF0E7490);
   static const _withdrawnColor = Color(0xFFB91C1C);
@@ -22,7 +24,7 @@ class BankStatementScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(cashBookProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Bank statement')),
+      appBar: embedded ? null : AppBar(title: const Text('Bank statement')),
       body: async.when(
         loading: () => const ListSkeleton(),
         error: (e, _) => ErrorRetry(

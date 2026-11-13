@@ -8,15 +8,17 @@ import '../../providers.dart';
 
 /// Suppliers / payees that operating expenses can be attributed to.
 class SuppliersScreen extends ConsumerWidget {
-  const SuppliersScreen({super.key, required this.canManage});
+  const SuppliersScreen(
+      {super.key, required this.canManage, this.embedded = false});
 
   final bool canManage;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(suppliersProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Suppliers')),
+      appBar: embedded ? null : AppBar(title: const Text('Suppliers')),
       floatingActionButton: canManage
           ? FloatingActionButton.extended(
               icon: const Icon(Icons.add),

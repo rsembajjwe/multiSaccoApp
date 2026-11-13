@@ -3,6 +3,7 @@ package com.methaltech.sacco.identity;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -81,6 +82,9 @@ class AuthServiceUnitTest {
         assertTrue(service.hasPermission(user, "subscriptions.manage"));
         assertTrue(service.hasPermission(user, "complaints.view"));
         assertFalse(service.hasPermission(user, "platform.users.manage"));
+        assertEquals(
+                java.util.Set.of("subscriptions.manage", "complaints.view"),
+                service.permissionIds(user));
     }
 
     @Test

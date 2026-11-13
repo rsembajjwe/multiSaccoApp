@@ -40,4 +40,8 @@ class Role {
         this.createdByUserId = createdByUserId;
         this.createdAt = Instant.now();
     }
+
+    void rename(String name) {
+        this.name = name;
+    }
 }

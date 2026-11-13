@@ -99,7 +99,7 @@ class LoanRepaymentUnitTest {
         loan.recordRepayment(new BigDecimal("100000"));
 
         assertEquals(0, loan.getBalance().compareTo(BigDecimal.ZERO));
-        assertEquals("closed", loan.getStatus());
+        assertEquals("paid", loan.getStatus());
     }
 
     @Test
@@ -109,8 +109,8 @@ class LoanRepaymentUnitTest {
         loan.recordRepayment(new BigDecimal("120000"));
 
         assertEquals(0, loan.getBalance().compareTo(BigDecimal.ZERO));
-        assertEquals("closed", loan.getStatus());
-        assertEquals("Closed", loan.getStage());
+        assertEquals("paid", loan.getStatus());
+        assertEquals("Paid", loan.getStage());
     }
 
     @Test

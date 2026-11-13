@@ -136,7 +136,8 @@ Use `docs/security-review.md` as the production security release gate. Critical 
 Public health:
 
 ```text
-GET /actuator/health
+GET /actuator/health/liveness
+GET /actuator/health/readiness
 GET /api/v1/health
 ```
 
@@ -177,7 +178,7 @@ Before a production release:
 4. Build the Docker backend image.
 5. Confirm `.env` values are production safe.
 6. Run database backup before migration.
-7. Start the stack and confirm `/actuator/health`.
+7. Start the stack and confirm `/actuator/health/readiness`.
 8. Check `/api/v1/operations/status`.
 9. Run `npm.cmd run load:test` against the target environment or staging clone.
 10. Verify staff login, member login, transaction approval, loan repayment, and reporting workflows.

@@ -24,9 +24,27 @@ class AuthRepository {
         (data['challengeId'] != null && data['token'] == null)) {
       return LoginOutcome(mfa: MfaChallenge.fromJson(data));
     }
+    if (data['passwordChangeRequired'] == true) {
+      return LoginOutcome(
+          firstLogin: FirstLoginRequirement.fromJson(data));
+    }
     final session = StaffSession.fromLogin(data);
     await _persist(session, saccoCode);
     return LoginOutcome(session: session);
+  }
+
+  Future<void> completeFirstLogin({
+    required String saccoCode,
+    required String username,
+    required String temporaryPassword,
+    required String newPassword,
+  }) async {
+    await _api.post('/auth/first-login-password', {
+      'saccoCode': saccoCode,
+      'username': username,
+      'temporaryPassword': temporaryPassword,
+      'newPassword': newPassword,
+    });
   }
 
   Future<StaffSession> verifyMfa({
@@ -55,6 +73,7 @@ class AuthRepository {
 
   Future<void> logout() async {
     final saccoCode = await _session.readSacco();
+    await unregisterPushDevice();
     try {
       await _api.post('/auth/logout', const {});
     } catch (_) {}
@@ -66,6 +85,28 @@ class AuthRepository {
 
   Future<bool> hasSession() async => (await _session.readToken()) != null;
 
+  Future<void> registerPushDevice({String? token}) async {
+    final deviceToken = token ?? await _push.deviceToken();
+    if (deviceToken == null || deviceToken.isEmpty) return;
+    try {
+      await _api.post('/auth/push-devices', {
+        'token': deviceToken,
+        'platform': _push.platform,
+      });
+    } catch (_) {}
+  }
+
+  Future<void> unregisterPushDevice() async {
+    final deviceToken = await _push.deviceToken();
+    if (deviceToken == null || deviceToken.isEmpty) return;
+    try {
+      await _api.delete('/auth/push-devices', {
+        'token': deviceToken,
+        'platform': _push.platform,
+      });
+    } catch (_) {}
+  }
+
   Future<void> _persist(StaffSession s, String saccoCode) async {
     if (s.token.isNotEmpty) await _session.writeToken(s.token);
     await _session.writePermissions(s.permissions);
@@ -74,5 +115,6 @@ class AuthRepository {
       await _session.writeSacco(saccoCode);
       await _push.subscribeStaff(saccoCode);
     }
+    await registerPushDevice();
   }
 }

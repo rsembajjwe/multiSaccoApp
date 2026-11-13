@@ -83,6 +83,24 @@ class SubscriptionController {
                 .toList()));
     }
 
+    @GetMapping("/api/v1/subscription-payments")
+    ResponseEntity<?> listSubscriptionPayments(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "subscriptions:view")) {
+            return authService.permissionRequired("subscriptions:view");
+        }
+
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null && !authService.isPlatform(currentSession.user())) return tenantAccessDenied();
+        List<SubscriptionPayment> payments = authService.isPlatform(currentSession.user()) && requestedTenantId == null
+                ? paymentRepository.findAllByOrderByTenantIdAscReceivedAtDesc()
+                : paymentRepository.findByTenantIdOrderByReceivedAtDesc(tenantId);
+        return ResponseEntity.ok(ApiResponse.of(payments.stream().map(SubscriptionPaymentResponse::from).toList()));
+    }
+
     @PostMapping("/api/v1/subscriptions/{subscriptionId}/payments")
     ResponseEntity<?> recordPayment(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -95,12 +113,59 @@ class SubscriptionController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "PLATFORM_ADMIN_REQUIRED", "Only platform administrators can record subscription payments."));
         }
+        if (!authService.hasPermission(currentSession.user(), "subscriptions:manage")) {
+            return authService.permissionRequired("subscriptions:manage");
+        }
 
         return subscriptionRepository.findById(subscriptionId)
                 .<ResponseEntity<?>>map(subscription -> createPayment(subscription, body, currentSession, request))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "SUBSCRIPTION_NOT_FOUND", "Subscription not found.")));
     }
+
+        @PostMapping("/api/v1/subscriptions/{subscriptionId}/trial-extension")
+        ResponseEntity<?> extendTrial(
+                        @RequestHeader(name = "Authorization", required = false) String authorization,
+                        @PathVariable String subscriptionId,
+                        @Valid @RequestBody ExtendTrialRequest body,
+                        HttpServletRequest request) {
+                AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+                if (currentSession == null) return authService.authRequired();
+                if (!authService.isPlatform(currentSession.user()) || !authService.hasPermission(currentSession.user(), "subscriptions:manage")) {
+                        return authService.permissionRequired("subscriptions:manage");
+                }
+                if (body.days() < 1 || body.days() > 31) {
+                        return ResponseEntity.badRequest()
+                                        .body(ApiErrorResponse.of(400, "INVALID_TRIAL_EXTENSION", "Trial extension must be between 1 and 31 days."));
+                }
+
+                Subscription subscription = subscriptionRepository.findById(subscriptionId).orElse(null);
+                if (subscription == null) {
+                        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                        .body(ApiErrorResponse.of(404, "SUBSCRIPTION_NOT_FOUND", "Subscription not found."));
+                }
+                if (!"trial".equals(subscription.getStatus()) && !"expired".equals(subscription.getStatus())) {
+                        return ResponseEntity.status(HttpStatus.CONFLICT)
+                                        .body(ApiErrorResponse.of(409, "TRIAL_EXTENSION_NOT_ALLOWED", "Only trial or expired trial subscriptions can be extended."));
+                }
+
+                subscription.extendTrial(body.days());
+                Subscription saved = subscriptionRepository.save(subscription);
+                tenantRepository.findById(saved.getTenantId())
+                                .filter(tenant -> "suspended".equalsIgnoreCase(tenant.getStatus()))
+                                .ifPresent(tenant -> {
+                                        tenant.updateStatus("pending_review");
+                                        tenantRepository.save(tenant);
+                                });
+                auditService.record(
+                                saved.getTenantId(),
+                                currentSession.user(),
+                                "Extended SACCO trial by " + body.days() + " day(s): " + body.reason().trim(),
+                                "subscription_trial_extension",
+                                saved.getId(),
+                                request.getRemoteAddr());
+                return ResponseEntity.ok(ApiResponse.of(SubscriptionResponse.from(saved)));
+        }
 
     /**
      * Tenant-facing subscription payment. Lets a SACCO administrator pay their own subscription
@@ -261,6 +326,9 @@ class SubscriptionController {
                 SubscriptionPaymentResponse.from(payment),
                 false)));
     }
+
+        record ExtendTrialRequest(@NotNull Integer days, @NotBlank String reason) {
+        }
 
     private BigDecimal paymentAmountFor(Subscription subscription, RecordSubscriptionPaymentRequest body, BigDecimal due) {
         String paymentMode = body.paymentMode() == null || body.paymentMode().isBlank()

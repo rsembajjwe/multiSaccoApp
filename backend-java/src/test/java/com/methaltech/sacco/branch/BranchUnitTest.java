@@ -2,6 +2,7 @@ package com.methaltech.sacco.branch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -50,5 +51,27 @@ class BranchUnitTest {
         assertEquals("active", response.status());
         assertNotNull(response.createdAt());
         assertNotNull(response.updatedAt());
+    }
+
+    @Test
+    void branchUpdateChangesEditableFieldsAndTimestamp() {
+        Branch branch = new Branch(
+                "branch_green_seeta",
+                "tenant_green",
+                "SEE",
+                "Seeta Branch",
+                "Seeta trading center",
+                "user_old_manager",
+                "active");
+        var originalUpdatedAt = branch.getUpdatedAt();
+
+        branch.update("NSE", "New Seeta Branch", "New address", "user_new_manager", "inactive");
+
+        assertEquals("NSE", branch.getCode());
+        assertEquals("New Seeta Branch", branch.getName());
+        assertEquals("New address", branch.getAddress());
+        assertEquals("user_new_manager", branch.getManagerUserId());
+        assertEquals("inactive", branch.getStatus());
+        assertTrue(!branch.getUpdatedAt().isBefore(originalUpdatedAt));
     }
 }

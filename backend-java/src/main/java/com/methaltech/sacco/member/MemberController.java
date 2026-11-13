@@ -11,6 +11,8 @@ import com.methaltech.sacco.finance.FinancialTransactionRepository;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.money.Money;
+import com.methaltech.sacco.notification.NotificationProviderException;
+import com.methaltech.sacco.notification.NotificationService;
 import com.methaltech.sacco.security.PasswordHasher;
 import com.methaltech.sacco.tenant.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -129,6 +131,7 @@ class MemberController {
     private final MemberRepository memberRepository;
     private final MemberDocumentRepository memberDocumentRepository;
     private final MemberNextOfKinRepository memberNextOfKinRepository;
+    private final GroupOfficialRepository groupOfficialRepository;
     private final MemberBeneficiaryRepository memberBeneficiaryRepository;
     private final MemberPrivacyRequestRepository privacyRequestRepository;
     private final MemberFundBalanceRepository memberFundBalanceRepository;
@@ -138,6 +141,7 @@ class MemberController {
     private final TenantService tenantService;
     private final AuthService authService;
     private final AuditService auditService;
+    private final NotificationService notificationService;
     private final PasswordHasher passwordHasher;
     private final DocumentStorageService documentStorageService;
     private final MemberSubscriptionService memberSubscriptionService;
@@ -146,6 +150,7 @@ class MemberController {
             MemberRepository memberRepository,
             MemberDocumentRepository memberDocumentRepository,
             MemberNextOfKinRepository memberNextOfKinRepository,
+            GroupOfficialRepository groupOfficialRepository,
             MemberBeneficiaryRepository memberBeneficiaryRepository,
             MemberPrivacyRequestRepository privacyRequestRepository,
             MemberFundBalanceRepository memberFundBalanceRepository,
@@ -155,12 +160,14 @@ class MemberController {
             TenantService tenantService,
             AuthService authService,
             AuditService auditService,
+            NotificationService notificationService,
             PasswordHasher passwordHasher,
             DocumentStorageService documentStorageService,
             MemberSubscriptionService memberSubscriptionService) {
         this.memberRepository = memberRepository;
         this.memberDocumentRepository = memberDocumentRepository;
         this.memberNextOfKinRepository = memberNextOfKinRepository;
+        this.groupOfficialRepository = groupOfficialRepository;
         this.memberBeneficiaryRepository = memberBeneficiaryRepository;
         this.privacyRequestRepository = privacyRequestRepository;
         this.memberFundBalanceRepository = memberFundBalanceRepository;
@@ -170,6 +177,7 @@ class MemberController {
         this.tenantService = tenantService;
         this.authService = authService;
         this.auditService = auditService;
+        this.notificationService = notificationService;
         this.passwordHasher = passwordHasher;
         this.documentStorageService = documentStorageService;
         this.memberSubscriptionService = memberSubscriptionService;
@@ -278,22 +286,23 @@ class MemberController {
     record SmsRecipientCountResponse(long count) {
     }
 
-        // Member summaries, adding each member outstanding loan balance (sum of active/overdue loans) in
+    // Member summaries, adding each member outstanding loan balance (sum of active/overdue loans) in
     // one query. Financial figures are withheld unless the viewer holds finance-source:view.
     private List<MemberResponse> toSummaries(List<Member> members, boolean financialsVisible) {
         if (members.isEmpty()) return List.of();
+        if (!financialsVisible) {
+            return members.stream().map(MemberResponse::fromSummary).toList();
+        }
         Map<String, BigDecimal> loanBalances = new HashMap<>();
-        if (financialsVisible) {
-            List<String> memberIds = members.stream().map(Member::getId).toList();
-            for (Loan loan : loanRepository.findByMemberIdInAndStatusIn(memberIds, OPEN_LOAN_STATUSES)) {
-                BigDecimal balance = loan.getBalance();
-                if (balance != null) {
-                    loanBalances.merge(loan.getMemberId(), balance, BigDecimal::add);
-                }
+        List<String> memberIds = members.stream().map(Member::getId).toList();
+        for (Loan loan : loanRepository.findByMemberIdInAndStatusIn(memberIds, OPEN_LOAN_STATUSES)) {
+            BigDecimal balance = loan.getBalance();
+            if (balance != null) {
+                loanBalances.merge(loan.getMemberId(), balance, BigDecimal::add);
             }
         }
         return members.stream()
-                .map(member -> MemberResponse.fromSummary(member, loanBalances.get(member.getId()), financialsVisible))
+                .map(member -> MemberResponse.fromSummary(member, loanBalances.get(member.getId()), true))
                 .toList();
     }
 
@@ -345,7 +354,7 @@ class MemberController {
                 "CM0000000SAMP",
                 "pending_verification",
                 LocalDate.now(),
-                "Member@12345"));
+                "+256700000000"));
 
         return ResponseEntity.ok(ApiResponse.of(new MemberImportTemplateResponse(
                 tenantId,
@@ -408,7 +417,7 @@ class MemberController {
 
         List<Member> createdMembers = new ArrayList<>();
         for (MemberImportRow row : rows) {
-            PasswordHasher.PasswordHash password = passwordHasher.hash(row.password().trim());
+            PasswordHasher.PasswordHash password = passwordHasher.hash(memberPassword(row.password(), row.phone()));
             createdMembers.add(memberRepository.save(new Member(
                     "member_" + UUID.randomUUID(),
                     tenantId,
@@ -418,6 +427,7 @@ class MemberController {
                     normalizedOrDefault(row.memberType(), "individual"),
                     row.phone().trim(),
                     blankToDefault(row.email()),
+                    "",
                     blankToDefault(row.nationalId()),
                     password.hash(),
                     password.salt(),
@@ -615,8 +625,7 @@ class MemberController {
                     .body(ApiErrorResponse.of(409, "MEMBER_EXISTS", "A member with that membership number already exists."));
         }
 
-        PasswordHasher.PasswordHash password = passwordHasher.hash(
-                body.password() == null || body.password().isBlank() ? "Member@12345" : body.password());
+        PasswordHasher.PasswordHash password = passwordHasher.hash(memberPassword(body.password(), body.phone()));
         Member member = memberRepository.save(new Member(
                 "member_" + UUID.randomUUID(),
                 tenantId,
@@ -626,6 +635,7 @@ class MemberController {
                 memberType,
                 body.phone().trim(),
                 blankToDefault(body.email()),
+                blankToDefault(body.address()),
                 blankToDefault(body.nationalId()),
                 password.hash(),
                 password.salt(),
@@ -727,6 +737,7 @@ class MemberController {
                             memberType,
                             phone,
                             email,
+                            blankToDefault(body.address()),
                             blankToDefault(body.nationalId()),
                             status,
                             kycStatus,
@@ -817,6 +828,63 @@ class MemberController {
     record StaffDirectoryEntry(String id, String tenantId, String fullName, String email) {
     }
 
+    @PostMapping("/{memberId}/activation-credentials")
+    ResponseEntity<?> sendActivationCredentials(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId,
+            @Valid @RequestBody SendActivationCredentialsRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user()) && !authService.hasPermission(currentSession.user(), "members:approve")) {
+            return authService.permissionRequired("members:approve");
+        }
+
+        String channel = normalizeCredentialChannel(body.channel());
+        Member member = memberRepository.findById(memberId).orElse(null);
+        if (member == null || !canAccessMember(currentSession, member)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found."));
+        }
+        if ("sms".equals(channel) && (member.getPhone() == null || member.getPhone().isBlank())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "MEMBER_PHONE_REQUIRED", "Member phone is required before sending SMS credentials."));
+        }
+        if ("email".equals(channel) && (member.getEmail() == null || member.getEmail().isBlank())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "MEMBER_EMAIL_REQUIRED", "Member email is required before sending email credentials."));
+        }
+
+        String password = member.getPhone().trim();
+        PasswordHasher.PasswordHash hash = passwordHasher.hash(password);
+        member.changePassword(hash.hash(), hash.salt());
+        member.updateStatus("active");
+        Member saved = memberRepository.save(member);
+        String saccoCode = tenantService.findById(saved.getTenantId())
+                .map(tenant -> tenant.abbreviation())
+                .orElse(saved.getTenantId());
+        try {
+            notificationService.sendMemberActivationCredentials(saved, saccoCode, password, channel);
+        } catch (NotificationProviderException exception) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "CREDENTIAL_DELIVERY_UNAVAILABLE", exception.getMessage()));
+        }
+        auditService.record(
+                saved.getTenantId(),
+                currentSession.user(),
+                "Activated member " + saved.getMembershipNo() + " and sent credentials by " + channel,
+                "member_activation_credentials",
+                saved.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(new ActivationCredentialsResponse(saved.getId(), saved.getMembershipNo(), saved.getStatus(), channel, true)));
+    }
+
+    record SendActivationCredentialsRequest(@NotBlank String channel) {
+    }
+
+    record ActivationCredentialsResponse(String memberId, String membershipNo, String status, String channel, boolean sent) {
+    }
+
     @GetMapping("/{memberId}/statement")
     ResponseEntity<?> getMemberStatement(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -883,6 +951,38 @@ class MemberController {
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    @GetMapping("/{memberId}/group-officials")
+    ResponseEntity<?> listGroupOfficials(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String memberId) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        return memberRepository.findById(memberId)
+                .<ResponseEntity<?>>map(member -> {
+                    if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
+                    if (!"group".equals(member.getMemberType())) {
+                        return ResponseEntity.badRequest().body(ApiErrorResponse.of(
+                                400, "NOT_GROUP_MEMBER", "Group officials are only available for group members."));
+                    }
+                    return ResponseEntity.ok(ApiResponse.of(groupOfficialRepository
+                            .findByTenantIdAndMemberIdOrderByRoleAsc(member.getTenantId(), member.getId())
+                            .stream()
+                            .map(GroupOfficialResponse::from)
+                            .toList()));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));
+    }
+
+    record GroupOfficialResponse(String id, String role, String fullName, String phone, String email) {
+        static GroupOfficialResponse from(GroupOfficial official) {
+            return new GroupOfficialResponse(
+                    official.getId(), official.getRole(), official.getFullName(),
+                    official.getPhone(), official.getEmail());
+        }
     }
 
     @PostMapping("/{memberId}/next-of-kin")
@@ -1381,8 +1481,24 @@ class MemberController {
         String abbreviation = tenantService.findById(tenantId)
                 .map(tenant -> tenant.abbreviation())
                 .orElse("SACCO");
-        long next = memberRepository.countByTenantId(tenantId) + 1;
-        return abbreviation + "-" + String.format("%04d", next);
+        return nextMembershipNo(tenantId, abbreviation);
+    }
+
+    private String nextMembershipNo(String tenantId, String abbreviation) {
+        String prefix = abbreviation + "-";
+        long next = memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId).stream()
+                .map(Member::getMembershipNo)
+                .filter(membershipNo -> membershipNo != null && membershipNo.toUpperCase(Locale.ROOT).startsWith(prefix))
+                .map(membershipNo -> membershipNo.substring(prefix.length()))
+                .filter(suffix -> suffix.matches("\\d+"))
+                .mapToLong(Long::parseLong)
+                .max()
+                .orElse(0L) + 1;
+        String membershipNo;
+        do {
+            membershipNo = prefix + String.format("%04d", next++);
+        } while (memberRepository.existsByTenantIdAndMembershipNoIgnoreCase(tenantId, membershipNo));
+        return membershipNo;
     }
 
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
@@ -1437,6 +1553,15 @@ class MemberController {
         return String.join(" ", java.util.Arrays.stream(values)
                 .map(value -> value == null ? "" : value)
                 .toList()).toLowerCase(Locale.ROOT);
+    }
+
+    private String memberPassword(String requestedPassword, String phone) {
+        return requestedPassword == null || requestedPassword.isBlank() ? phone.trim() : requestedPassword.trim();
+    }
+
+    private String normalizeCredentialChannel(String channel) {
+        String value = channel == null ? "" : channel.trim().toLowerCase(Locale.ROOT);
+        return "sms".equals(value) ? "sms" : "email";
     }
 
     private Sort sortBy(boolean platformAll, String requestedSort, String requestedDirection, Map<String, String> allowed, String fallback) {
@@ -1545,9 +1670,7 @@ class MemberController {
             if (row.phone() == null || row.phone().isBlank()) {
                 errors.add(new MemberImportError(rowNumber, "phone", "REQUIRED", "Phone is required."));
             }
-            if (row.password() == null || row.password().isBlank()) {
-                errors.add(new MemberImportError(rowNumber, "password", "REQUIRED", "Temporary member portal password is required."));
-            } else if (row.password().trim().length() < 8) {
+            if (row.password() != null && !row.password().isBlank() && row.password().trim().length() < 8) {
                 errors.add(new MemberImportError(rowNumber, "password", "PASSWORD_TOO_SHORT", "Password must be at least 8 characters."));
             }
             if (row.joiningDate() != null && !row.joiningDate().isBlank()) {
@@ -1863,6 +1986,7 @@ class MemberController {
             String memberType,
             @NotBlank String phone,
             String email,
+            String address,
             String nationalId,
             String password,
             String kycStatus,
@@ -1875,6 +1999,7 @@ class MemberController {
             String memberType,
             @NotBlank String phone,
             String email,
+            String address,
             String nationalId,
             String status,
             String kycStatus,

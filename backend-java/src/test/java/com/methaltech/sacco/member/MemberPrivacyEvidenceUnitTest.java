@@ -173,6 +173,7 @@ class MemberPrivacyEvidenceUnitTest {
                 "individual",
                 "+256700000001",
                 membershipNo.toLowerCase() + "@example.test",
+                "",
                 "CM123",
                 "hash",
                 "salt",

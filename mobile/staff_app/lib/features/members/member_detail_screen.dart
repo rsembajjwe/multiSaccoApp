@@ -43,6 +43,9 @@ class MemberDetailScreen extends ConsumerWidget {
         data: (m) => RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(memberProvider(memberId));
+            if (m.memberType == 'group') {
+              ref.invalidate(groupOfficialsProvider(memberId));
+            }
             ref.invalidate(memberLoansProvider(memberId));
             ref.invalidate(memberFundBalancesProvider);
             ref.invalidate(fundTypesProvider);
@@ -51,13 +54,19 @@ class MemberDetailScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             children: [
               _Identity(member: m),
+              if (m.memberType == 'group') ...[
+                const SizedBox(height: 16),
+                _GroupOfficials(memberId: memberId),
+              ],
               if (canChangeStatus) ...[
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.manage_accounts_outlined),
-                    label: const Text('Change status'),
+                    label: Text(m.memberType == 'group' && m.status == 'applicant'
+                        ? 'Review application'
+                        : 'Change status'),
                     onPressed: () => showModalBottomSheet<void>(
                       context: context,
                       showDragHandle: true,
@@ -125,6 +134,54 @@ class MemberDetailScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _GroupOfficials extends ConsumerWidget {
+  const _GroupOfficials({required this.memberId});
+
+  final String memberId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(groupOfficialsProvider(memberId));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Group officials', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        async.when(
+          loading: () => const LinearProgressIndicator(),
+          error: (error, _) => Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Could not load group officials. $error'),
+            ),
+          ),
+          data: (officials) => officials.isEmpty
+              ? const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('No group officials were submitted.'),
+                  ),
+                )
+              : Column(
+                  children: officials
+                      .map((official) => Card(
+                            child: ListTile(
+                              leading: const Icon(Icons.badge_outlined),
+                              title: Text(official.fullName),
+                              subtitle: Text(
+                                '${Fmt.label(official.role)}\n${official.phone}\n${official.email}',
+                              ),
+                              isThreeLine: true,
+                            ),
+                          ))
+                      .toList(),
+                ),
+        ),
+      ],
     );
   }
 }
@@ -281,6 +338,7 @@ class _Identity extends StatelessWidget {
             KeyValueRow(
                 'WhatsApp', member.whatsapp.isEmpty ? '—' : member.whatsapp),
             KeyValueRow('Email', member.email.isEmpty ? '—' : member.email),
+            if (member.address.isNotEmpty) KeyValueRow('Address', member.address),
             KeyValueRow('KYC status', Fmt.label(member.kycStatus)),
             KeyValueRow('Joined', Fmt.date(member.joiningDate)),
             KeyValueRow('Total worth', Fmt.money(member.totalWorth),

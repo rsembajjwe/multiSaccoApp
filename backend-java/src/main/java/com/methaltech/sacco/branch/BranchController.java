@@ -13,6 +13,8 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -44,6 +46,7 @@ class BranchController {
         if (currentSession == null) return authService.authRequired();
 
         if (!(authService.isPlatform(currentSession.user())
+                || authService.hasPermission(currentSession.user(), "branches:view")
                 || authService.hasPermission(currentSession.user(), "members:view")
                 || authService.hasPermission(currentSession.user(), "sacco-profile:manage")
                 || authService.hasPermission(currentSession.user(), "transactions:view")
@@ -104,6 +107,57 @@ class BranchController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(BranchResponse.from(branch)));
     }
 
+    @PatchMapping("/{branchId}")
+    ResponseEntity<?> updateBranch(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String branchId,
+            @Valid @RequestBody UpdateBranchRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!(authService.isPlatform(currentSession.user())
+                || authService.hasPermission(currentSession.user(), "sacco-profile:manage"))) {
+            return authService.permissionRequired("sacco-profile:manage");
+        }
+
+        Branch branch = branchRepository.findById(branchId).orElse(null);
+        if (branch == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "BRANCH_NOT_FOUND", "Branch not found."));
+        }
+        if (!authService.isPlatform(currentSession.user())
+                && !branch.getTenantId().equals(currentSession.user().getTenantId())) {
+            return tenantAccessDenied();
+        }
+
+        String code = body.code().trim().toUpperCase();
+        if (branchRepository.existsByTenantIdAndCodeIgnoreCaseAndIdNot(branch.getTenantId(), code, branch.getId())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "BRANCH_EXISTS", "A branch with that code already exists in this tenant."));
+        }
+        String status = body.status() == null ? branch.getStatus() : body.status().trim().toLowerCase();
+        if (!ALLOWED_STATUSES.contains(status)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_BRANCH_STATUS", "Branch status must be active or inactive."));
+        }
+
+        branch.update(
+                code,
+                body.name().trim(),
+                blankToDefault(body.address()),
+                blankToNull(body.managerUserId()),
+                status);
+        branchRepository.save(branch);
+        auditService.record(
+                branch.getTenantId(),
+                currentSession.user(),
+                "Updated branch " + branch.getCode(),
+                "branch",
+                branch.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(BranchResponse.from(branch)));
+    }
+
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
         String tenantId = requestedTenantId == null || requestedTenantId.isBlank()
                 ? currentSession.user().getTenantId()
@@ -129,6 +183,14 @@ class BranchController {
 
     record CreateBranchRequest(
             String tenantId,
+            @NotBlank String code,
+            @NotBlank String name,
+            String address,
+            String managerUserId,
+            String status) {
+    }
+
+    record UpdateBranchRequest(
             @NotBlank String code,
             @NotBlank String name,
             String address,

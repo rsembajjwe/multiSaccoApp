@@ -5,8 +5,14 @@ const API_BASE = "/api/v1";
 const STAFF_TOKEN_KEY = "tereka-staff-token";
 const MEMBER_TOKEN_KEY = "tereka-member-token";
 const HIGH_VOLUME_PAGE_SIZE = 200;
-const HIGH_VOLUME_ENDPOINTS = new Set(["members", "transactions", "loans", "notifications", "auditEvents", "messages"]);
+const HIGH_VOLUME_ENDPOINTS = new Set(["tenants", "fleetTenants", "members", "transactions", "loans", "notifications", "auditEvents", "messages"]);
 const HIGH_VOLUME_TABLES = [
+  {
+    key: "fleetTenants",
+    path: "/tenants/fleet",
+    titles: ["sacco-fleet-directory"],
+    sortColumns: { saccoCode: "name", name: "name", status: "status", district: "district", accountManagerName: "accountManagerName" }
+  },
   {
     key: "members",
     path: "/members",
@@ -60,6 +66,12 @@ function serverTablePagePath(config, page, search, sort, direction) {
   if (search && String(search).trim()) params.set("search", String(search).trim());
   if (sort && String(sort).trim()) params.set("sort", String(sort).trim());
   if (direction && String(direction).trim()) params.set("direction", String(direction).trim());
+  if (config.key === "fleetTenants") {
+    if (state.fleetStatusFilter) params.set("status", state.fleetStatusFilter);
+    if (state.fleetHealthFilter) params.set("health", state.fleetHealthFilter);
+    if (state.fleetDistrictFilter) params.set("district", state.fleetDistrictFilter);
+    if (state.fleetManagerFilter) params.set("accountManager", state.fleetManagerFilter);
+  }
   return `${config.path}?${params.toString()}`;
 }
 
@@ -91,7 +103,9 @@ async function api(path, options = {}, token = state.token) {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(payload.error?.message || payload.message || `Request failed: ${response.status}`);
+    const correlationId = response.headers.get("X-Correlation-Id") || response.headers.get("X-Request-Id") || "";
+    const baseMessage = payload.error?.message || payload.message || `Request failed: ${response.status}`;
+    const error = new Error(response.status >= 500 && correlationId ? `${baseMessage} Reference: ${correlationId}.` : baseMessage);
     error.status = response.status;
     error.code = payload.error?.code || payload.code || "";
     if (response.status === 401 && token && token === state.token && state.auth !== "none") {
@@ -128,4 +142,19 @@ async function downloadApiFile(path, filename, token = state.token) {
   link.click();
   link.remove();
   URL.revokeObjectURL(link.href);
+}
+
+async function fetchApiBlob(path, token = state.token) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const error = new Error(payload.error?.message || payload.message || `Request failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+  return response.blob();
 }

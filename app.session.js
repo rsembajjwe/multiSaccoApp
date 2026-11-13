@@ -91,6 +91,15 @@ async function login(code, username, password) {
     state.lastError = "";
     const staff = await tryStaffLogin(code, username, password);
     if (staff) {
+      if (staff.passwordChangeRequired) {
+        state.firstLoginCode = code;
+        state.firstLoginUsername = username;
+        state.firstLoginTemporaryPassword = password;
+        state.firstLoginVerificationChannel = staff.verificationChannel || "";
+        state.firstLoginError = "";
+        renderLogin();
+        return;
+      }
       if (staff.mfaRequired) {
         state.mfaChallengeId = staff.challengeId || "";
         state.mfaDeliveryChannel = staff.deliveryChannel || "";
@@ -126,6 +135,47 @@ async function login(code, username, password) {
   } finally {
     state.loading = false;
   }
+}
+
+async function changeFirstLoginPasswordFromForm(event) {
+  event.preventDefault();
+  const newPassword = value("firstLoginNewPassword");
+  const confirmPassword = value("firstLoginConfirmPassword");
+  if (newPassword !== confirmPassword) {
+    state.firstLoginError = "The new passwords do not match.";
+    renderLogin();
+    return;
+  }
+  const button = document.getElementById("firstLoginPasswordButton");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Changing...";
+  }
+  try {
+    await api("/auth/first-login-password", {
+      method: "POST",
+      body: JSON.stringify({
+        saccoCode: state.firstLoginCode,
+        username: state.firstLoginUsername,
+        temporaryPassword: state.firstLoginTemporaryPassword,
+        newPassword
+      })
+    }, "");
+    clearFirstLoginState();
+    state.lastError = "Password changed. Sign in with your new password.";
+    renderLogin();
+  } catch (error) {
+    state.firstLoginError = error.message;
+    renderLogin();
+  }
+}
+
+function clearFirstLoginState() {
+  state.firstLoginCode = "";
+  state.firstLoginUsername = "";
+  state.firstLoginTemporaryPassword = "";
+  state.firstLoginVerificationChannel = "";
+  state.firstLoginError = "";
 }
 
 async function verifyMfaFromForm(event) {
@@ -329,19 +379,28 @@ async function refreshAll() {
   state.loading = true;
   state.lastError = "";
   renderShell();
-  const endpoints = [
+  const sharedEndpoints = [
     ["tenants", "/tenants"],
     ["subscriptions", "/subscriptions"],
+    ["subscriptionPayments", "/subscription-payments"],
     ["subscriptionPackages", "/subscription-packages"],
-    ["members", "/members"],
-    ["transactions", "/financial-transactions"],
-    ["loans", "/loans"],
-    ["pendingLoanRepayments", "/loans/repayments/pending"],
     ["operations", "/operations/status"],
     ["notifications", "/notifications/deliveries"],
     ["complaints", "/complaints"],
     ["chatThreads", "/chat/threads"],
     ["users", "/users"],
+    ["notificationTemplates", "/notification-templates"],
+    ["roles", "/roles"],
+    ["permissions", "/permissions"],
+    ["auditEvents", "/audit-events"],
+    ["regulatoryReport", "/regulatory-report"],
+    ["securitySummary", "/auth/security-summary"]
+  ];
+  const tenantOperationalEndpoints = [
+    ["members", "/members"],
+    ["transactions", "/financial-transactions"],
+    ["loans", "/loans"],
+    ["pendingLoanRepayments", "/loans/repayments/pending"],
     ["branches", "/branches"],
     ["financialProducts", "/financial-products"],
     ["financialAccounts", "/financial-accounts"],
@@ -356,17 +415,30 @@ async function refreshAll() {
     ["statementLines", "/statement-lines"],
     ["reconciliation", "/reconciliation"],
     ["mobileMoneyCallbacks", "/integrations/mobile-money/callbacks"],
-    ["mobileMoneyPaymentRequests", "/integrations/mobile-money/payment-requests"],
-    ["notificationTemplates", "/notification-templates"],
-    ["roles", "/roles"],
-    ["permissions", "/permissions"],
-    ["auditEvents", "/audit-events"],
-    ["regulatoryReport", "/regulatory-report"],
-    ["securitySummary", "/auth/security-summary"]
+    ["mobileMoneyPaymentRequests", "/integrations/mobile-money/payment-requests"]
   ];
+  const endpoints = isPlatform() ? [...sharedEndpoints] : [...sharedEndpoints, ...tenantOperationalEndpoints];
+  if (isPlatform() && hasPermission("transactions:view")) endpoints.push(["transactions", "/financial-transactions"]);
+  if (isPlatform() && hasPermission("transactions:view")) {
+    endpoints.push(["platformPaymentApprovalQueue", "/financial-transactions/approval-queue?page=0&size=50"]);
+    endpoints.push(["platformPaymentApprovalSummary", "/financial-transactions/approval-summary"]);
+  }
+  if (isPlatform() && hasPermission("tenants:view")) {
+    endpoints.push(["fleetTenants", "/tenants/fleet"]);
+    endpoints.push(["fleetSummary", "/tenants/fleet/summary"]);
+    endpoints.push(["fleetSavedViews", "/tenants/fleet/views"]);
+    endpoints.push(["fleetBulkJobs", "/tenants/fleet/jobs"]);
+    endpoints.push(["fleetApprovalQueue", "/tenants/fleet/jobs/approval-queue?page=0&size=50"]);
+    endpoints.push(["fleetApprovalSummary", "/tenants/fleet/jobs/approval-summary"]);
+    endpoints.push(["fleetIncidentStates", "/tenants/fleet/incidents"]);
+    if (hasPermission("subscriptions:view")) endpoints.push(["fleetForecastScenarios", "/tenants/fleet/forecast-scenarios"]);
+  }
   if (isPlatform()) endpoints.push(["platformSecurityPolicy", "/platform-security-policy"]);
   if (isPlatform() && hasPermission("subscriptions:view")) endpoints.push(["billingCatalog", "/platform-billing/catalog"]);
-  if (!isPlatform() && state.user?.tenantId) endpoints.push(["saccoProfile", `/tenants/${encodeURIComponent(state.user.tenantId)}/profile`]);
+  if (isPlatform() && hasPermission("tenants:view")) endpoints.push(["platformPaymentAccounts", "/sacco-payment-accounts?tenantId=tenant_platform"]);
+  if (state.user?.tenantId && (hasPermission("tenants:view") || hasPermission("tenants:manage") || hasPermission("sacco-profile:manage"))) {
+    endpoints.push(["saccoProfile", `/tenants/${encodeURIComponent(state.user.tenantId)}/profile`]);
+  }
   if (!isPlatform()) endpoints.push(["saccoPaymentAccounts", "/sacco-payment-accounts"]);
   if (hasPermission("finance-source:view")) endpoints.push(["fundingSources", "/funding-sources"]);
   if (hasPermission("fund-types:view")) endpoints.push(["fundTypes", "/fund-types"]);
@@ -382,7 +454,7 @@ async function refreshAll() {
   if (canAccessView("notifications")) endpoints.push(["providerJobRuns", "/notifications/provider-job-runs"]);
   if (canAccessView("notifications")) endpoints.push(["messages", "/notifications/messages"]);
   if (canAccessView("notifications")) endpoints.push(["notificationChannels", "/notification-channels"]);
-  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy", "notificationIntegrationConfig", "mobileMoneyIntegrationConfig", "providerOperationalEvidence", "notificationChannels", "saccoProfile"]);
+  const objectKeys = new Set(["operations", "regulatoryReport", "reconciliation", "securitySummary", "platformSecurityPolicy", "notificationIntegrationConfig", "mobileMoneyIntegrationConfig", "providerOperationalEvidence", "notificationChannels", "saccoProfile", "fleetSummary", "platformPaymentApprovalSummary"]);
   const results = await Promise.all(endpoints.map(async ([key, path]) => {
     const resolvedPath = pagedEndpointPath(key, path);
     return [key, await optionalApi(resolvedPath, objectKeys.has(key) ? null : [])];
@@ -514,7 +586,7 @@ async function logout() {
     selectedTenantError: "",
     tenantFormMessage: "",
     tenantFormError: "",
-    saccoRegistrationTab: "platform",
+    saccoRegistrationTab: "applications",
     saccoApplicationApprovalFilter: "",
     saccoApplicationAccessFilter: "",
     saccoApplicationYearFilter: "",

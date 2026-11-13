@@ -96,6 +96,26 @@ class FcmPushNotificationProvider implements NotificationProvider {
         }
     }
 
+    NotificationSendResult sendToToken(String token, String title, String message) {
+        if (token == null || token.isBlank()) {
+            return NotificationSendResult.failed("No device token for push delivery.");
+        }
+        try {
+            ensureInitialised();
+            Message push = Message.builder()
+                    .setToken(token)
+                    .setNotification(Notification.builder()
+                            .setTitle(title == null || title.isBlank() ? "SACCO" : title)
+                            .setBody(message == null ? "" : message)
+                            .build())
+                    .build();
+            String id = FirebaseMessaging.getInstance().send(push);
+            return NotificationSendResult.sent(id, "FCM push sent to registered device");
+        } catch (Exception exception) {
+            return NotificationSendResult.failed("FCM push failed: " + exception.getMessage());
+        }
+    }
+
     @Override
     public NotificationProviderStatusResponse status() {
         try {

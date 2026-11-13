@@ -27,6 +27,7 @@ class ProductionSecretReadinessValidator implements ApplicationRunner {
             "change_me",
             "secret");
 
+    private final boolean productionReadinessEnabled;
     private final boolean demoLoginsEnabled;
     private final String databasePassword;
     private final String piiEncryptionKey;
@@ -34,11 +35,13 @@ class ProductionSecretReadinessValidator implements ApplicationRunner {
     private final String callbackSecret;
 
     ProductionSecretReadinessValidator(
+            @Value("${sacco.production-readiness.enabled:false}") boolean productionReadinessEnabled,
             @Value("${sacco.demo-logins.enabled:true}") boolean demoLoginsEnabled,
             @Value("${spring.datasource.password:}") String databasePassword,
             @Value("${sacco.pii.encryption-key:}") String piiEncryptionKey,
             @Value("${sacco.integrations.mobile-money.require-signed-callbacks:false}") boolean signedCallbacksRequired,
             @Value("${sacco.integrations.mobile-money.callback-secret:}") String callbackSecret) {
+        this.productionReadinessEnabled = productionReadinessEnabled;
         this.demoLoginsEnabled = demoLoginsEnabled;
         this.databasePassword = databasePassword;
         this.piiEncryptionKey = piiEncryptionKey;
@@ -52,7 +55,7 @@ class ProductionSecretReadinessValidator implements ApplicationRunner {
     }
 
     void validate() {
-        if (demoLoginsEnabled) {
+        if (!productionReadinessEnabled || demoLoginsEnabled) {
             return;
         }
         List<String> failures = new ArrayList<>();

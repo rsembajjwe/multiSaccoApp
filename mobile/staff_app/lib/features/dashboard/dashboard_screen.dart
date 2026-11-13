@@ -4,31 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
 import '../../core/widgets/error_retry.dart';
 import '../../core/widgets/skeleton.dart';
-import '../audit/audit_screen.dart';
 import '../branches/branches_screen.dart';
-import '../finance/financial_products_screen.dart';
-import '../savings/savings_transfers_screen.dart';
 import '../governance/governance_screen.dart';
-import '../chat/chat_threads_screen.dart';
-import '../complaints/complaints_screen.dart';
-import '../funds/fund_sources_screen.dart';
-import '../funds/finance_sources_screen.dart';
-import '../treasury/cash_book_screen.dart';
-import '../treasury/cash_flow_screen.dart';
-import '../treasury/bank_statement_screen.dart';
-import '../accounting/expenses_screen.dart';
-import '../accounting/suppliers_screen.dart';
+import '../complaints/member_support_hub_screen.dart';
+import '../audit/audit_screen.dart';
+import '../oversight/oversight_hub_screen.dart';
+import '../funds/funds_hub_screen.dart';
+import '../finance/payments_hub_screen.dart';
+import '../treasury/cash_hub_screen.dart';
 import '../loans/loans_screen.dart';
 import '../members/members_screen.dart';
-import '../mobile_money/mobile_money_screen.dart';
-import '../notifications/notifications_screen.dart';
 import '../notifications/inbox_screen.dart';
-import '../reconciliation/reconciliation_screen.dart';
 import '../search/global_search_screen.dart';
-import '../reports/reports_screen.dart';
 import '../settings/settings_screen.dart';
 import '../subscription/subscriptions_hub_screen.dart';
-import '../transactions/transactions_screen.dart';
 import '../users/users_screen.dart';
 import '../welfare/welfare_screen.dart';
 import '../../domain/models.dart';
@@ -37,7 +26,8 @@ import '../../providers.dart';
 /// A staff feature area, shown on the dashboard when the user holds any of
 /// [perms]. [route] will point to the real screen as each section is built.
 class _Section {
-  const _Section(this.label, this.icon, this.perms, this.color, this.description,
+  const _Section(
+      this.label, this.icon, this.perms, this.color, this.description,
       {required this.category});
   final String label;
   final IconData icon;
@@ -50,72 +40,83 @@ class _Section {
 }
 
 const _sections = <_Section>[
-  _Section('Members', Icons.groups_outlined,
-      ['members:view', 'members:create', 'members:approve'], Color(0xFF0F766E),
-      'Balances, statements & KYC', category: 'Members'),
-  _Section('Transactions', Icons.swap_horiz,
-      ['transactions:view', 'transactions:create', 'transactions:approve'],
-      Color(0xFFB45309), 'Deposits, withdrawals & shares', category: 'Finance'),
-  _Section('Mobile Money', Icons.phone_android_outlined, ['accounting:view'],
-      Color(0xFF0E7490), 'Requests, callbacks & status', category: 'Finance'),
-  _Section('Reconciliation', Icons.fact_check_outlined, ['accounting:view'],
-      Color(0xFF4338CA), 'Cash matches & exceptions', category: 'Finance'),
-  _Section('Loans', Icons.account_balance_outlined,
+  _Section(
+      'Members',
+      Icons.groups_outlined,
+      ['members:view', 'members:create', 'members:approve'],
+      Color(0xFF0F766E),
+      'Balances, statements & KYC',
+      category: 'Members'),
+  _Section('Payments', Icons.account_balance_outlined, ['accounting:view'],
+      Color(0xFF0E7490), 'Mobile money, reconciliation & bank statement',
+      category: 'Finance'),
+  _Section(
+      'Loans',
+      Icons.account_balance_outlined,
       ['loans:view', 'loans:approve', 'loans:disburse', 'loans:create'],
-      Color(0xFFB91C1C), 'Loan book, schedules & payments', category: 'Loans'),
-  _Section('Fund types', Icons.account_balance_wallet_outlined,
-      ['fund-types:view', 'fund-types:manage'], Color(0xFF64748B),
-      'Savings, shares & custom fund buckets', category: 'Finance'),
-  _Section('Finance sources', Icons.savings_outlined,
-      ['funding-source:view'], Color(0xFF0D9488),
-      'SACCO capital & sources of funds', category: 'Finance'),
-  _Section('Cash flow', Icons.sync_alt_outlined,
-      ['accounting:view'], Color(0xFF0E7490),
-      'Collect → bank → withdraw → pay', category: 'Finance'),
-  _Section('Cash book', Icons.local_atm_outlined,
-      ['accounting:view'], Color(0xFFB45309),
-      'Record cash in & out', category: 'Finance'),
-  _Section('Bank statement', Icons.account_balance_outlined,
-      ['accounting:view'], Color(0xFF0E7490),
-      'Banked & withdrawn, with balance', category: 'Finance'),
-  _Section('Expenses', Icons.receipt_long_outlined,
-      ['accounting:view'], Color(0xFFB91C1C),
-      'Rent, utilities, staff & other costs', category: 'Finance'),
-  _Section('Suppliers', Icons.storefront_outlined,
-      ['accounting:view'], Color(0xFF64748B),
-      'Payees for expenses', category: 'Finance'),
-  _Section('Products', Icons.category_outlined, ['transactions:view'],
-      Color(0xFF15803D), 'Savings & loan product setup', category: 'Finance'),
-  _Section('Savings transfers', Icons.swap_horiz_outlined,
-      ['savings-transfer:view'], Color(0xFF9333EA),
-      'Chairperson transfers & group deductions', category: 'Finance'),
-  _Section('Welfare', Icons.volunteer_activism_outlined,
-      ['welfare:view', 'welfare:manage'], Color(0xFF9333EA),
-      'Member welfare claims', category: 'Welfare & dues'),
-  _Section('Subscriptions', Icons.workspace_premium_outlined,
-      ['subscriptions:view', 'notifications:manage', 'member-subscription:view',
-       'member-subscription:manage'], Color(0xFF0D9488),
-      'Platform, member dues & SMS', category: 'Welfare & dues'),
-  _Section('Complaints', Icons.forum_outlined,
-      ['complaints:view', 'complaints:manage'], Color(0xFFDB2777),
-      'Member complaints & responses', category: 'Member support'),
-  _Section('Support chat', Icons.support_agent,
-      ['complaints:view', 'complaints:manage'], Color(0xFF2563EB),
-      'Member support conversations', category: 'Member support'),
+      Color(0xFFB91C1C),
+      'Loan book, schedules & payments',
+      category: 'Loans'),
+  _Section(
+      'Funds & products',
+      Icons.account_balance_wallet_outlined,
+      ['fund-types:view'],
+      Color(0xFF0D9488),
+      'Fund types & savings/loan products',
+      category: 'Finance'),
+  _Section(
+      'Cash & expenses',
+      Icons.local_atm_outlined,
+      ['accounting:view', 'savings-transfer:view'],
+      Color(0xFFB45309),
+      'Cash book, expenses, suppliers & transfers',
+      category: 'Finance'),
+  _Section(
+      'Welfare',
+      Icons.volunteer_activism_outlined,
+      ['welfare:view', 'welfare:manage'],
+      Color(0xFF9333EA),
+      'Member welfare claims',
+      category: 'Welfare & dues'),
+  _Section(
+      'Subscriptions',
+      Icons.workspace_premium_outlined,
+      [
+        'subscriptions:view',
+        'notifications:manage',
+        'member-subscription:view',
+        'member-subscription:manage'
+      ],
+      Color(0xFF0D9488),
+      'Platform, member dues & SMS',
+      category: 'Welfare & dues'),
+  _Section(
+      'Member support',
+      Icons.forum_outlined,
+      ['complaints:view', 'complaints:manage'],
+      Color(0xFFDB2777),
+      'Complaints & support chat',
+      category: 'Member support'),
   _Section('Governance', Icons.gavel_outlined, ['governance:view'],
       Color(0xFF0891B2), 'Board & AGM meetings and resolutions',
       category: 'Members'),
-  _Section('Reports', Icons.insights_outlined, ['reports:view'],
-      Color(0xFF0369A1), 'SACCO metrics & portfolio', category: 'Oversight'),
-  _Section('Audit log', Icons.receipt_long_outlined, ['audit:view'],
-      Color(0xFF525252), 'Who did what, when', category: 'Oversight'),
-  _Section('Notifications', Icons.notifications_outlined, ['notifications:view'],
-      Color(0xFF0891B2), 'SACCO alerts & messages sent', category: 'Oversight'),
-  _Section('Users & Roles', Icons.manage_accounts_outlined,
-      ['users:view', 'roles:view'], Color(0xFF7C3AED),
-      'Staff directory & permissions', category: 'Administration'),
+  _Section(
+      'Oversight',
+      Icons.insights_outlined,
+      ['reports:view', 'audit:view', 'notifications:view'],
+      Color(0xFF0369A1),
+      'Reports, audit log & notifications',
+      category: 'Oversight'),
+  _Section(
+      'Users & Roles',
+      Icons.manage_accounts_outlined,
+      ['users:view', 'roles:view'],
+      Color(0xFF7C3AED),
+      'Staff directory & permissions',
+      category: 'Administration'),
   _Section('Branches', Icons.account_tree_outlined, ['branches:view'],
-      Color(0xFF0E7490), 'SACCO branch directory', category: 'Administration'),
+      Color(0xFF0E7490), 'SACCO branch directory',
+      category: 'Administration'),
 ];
 
 class DashboardScreen extends ConsumerWidget {
@@ -143,20 +144,20 @@ class DashboardScreen extends ConsumerWidget {
                     child: const Icon(Icons.notifications_none_outlined),
                   )
                 : const Icon(Icons.notifications_none_outlined),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const InboxScreen())),
+            onPressed: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const InboxScreen())),
           ),
           IconButton(
             tooltip: 'Search',
             icon: const Icon(Icons.search),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const GlobalSearchScreen())),
+            onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const GlobalSearchScreen())),
           ),
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => const SettingsScreen())),
+            onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SettingsScreen())),
           ),
         ],
       ),
@@ -230,93 +231,95 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final name = session.userName.isEmpty ? 'Welcome' : session.userName;
+    final roles = session.roleNames;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
             scheme.primary,
-            Color.alphaBlend(Colors.black.withValues(alpha: 0.28), scheme.primary),
+            Color.alphaBlend(
+                Colors.black.withValues(alpha: 0.28), scheme.primary),
           ],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: scheme.onPrimary.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Image.asset('assets/icon/splash_logo.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Icon(
-                        Icons.account_balance,
-                        color: scheme.onPrimary, size: 22)),
-              ),
-              const SizedBox(width: 10),
-              Text('Administration',
-                  style: TextStyle(
-                      color: scheme.onPrimary.withValues(alpha: 0.9),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600)),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(_greeting(),
-              style: TextStyle(
-                  color: scheme.onPrimary.withValues(alpha: 0.85),
-                  fontSize: 12)),
-          Text(name,
-              style: TextStyle(
-                  color: scheme.onPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800)),
-          if (session.saccoName.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(session.saccoName,
-                style: TextStyle(
-                    color: scheme.onPrimary.withValues(alpha: 0.85),
-                    fontSize: 13)),
-          ],
-          if (session.roleNames.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: session.roleNames
-                  .map((r) => Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: scheme.onPrimary.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(r,
-                            style: TextStyle(
-                                color: scheme.onPrimary, fontSize: 11)),
-                      ))
-                  .toList(),
+          Container(
+            width: 40,
+            height: 40,
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: scheme.onPrimary.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(11),
             ),
-          ],
+            child: Image.asset('assets/icon/splash_logo.png',
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Icon(Icons.account_balance,
+                    color: scheme.onPrimary, size: 22)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_greeting(),
+                    style: TextStyle(
+                        color: scheme.onPrimary.withValues(alpha: 0.85),
+                        fontSize: 11.5)),
+                Text(name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: scheme.onPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        height: 1.15)),
+                if (session.saccoName.isNotEmpty)
+                  Text(session.saccoName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: scheme.onPrimary.withValues(alpha: 0.85),
+                          fontSize: 12)),
+                if (roles.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: scheme.onPrimary.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        roles.length == 1
+                            ? roles.first
+                            : '${roles.first} +${roles.length - 1}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            TextStyle(color: scheme.onPrimary, fontSize: 11.5),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-/// Order in which dashboard groups render; finance-first for the roles that use
-/// this app most. A group appears only when the user can open at least one tile
-/// inside it, and each group is collapsible (all expanded by default).
 const _categoryOrder = <String>[
   'Finance',
   'Loans',
@@ -333,8 +336,7 @@ class _SectionGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visible =
-        _sections.where((s) => session.canAny(s.perms)).toList();
+    final visible = _sections.where((s) => session.canAny(s.perms)).toList();
     if (visible.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
@@ -395,8 +397,8 @@ class _DashTile extends StatelessWidget {
         margin: EdgeInsets.zero,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => _screenFor(s, session))),
+          onTap: () => Navigator.of(context)
+              .push(MaterialPageRoute(builder: (_) => _screenFor(s, session))),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
@@ -444,57 +446,58 @@ Widget _screenFor(_Section s, StaffSession session) {
       return const MembersScreen();
     case 'Loans':
       return const LoansScreen();
-    case 'Transactions':
-      return const TransactionsScreen();
-    case 'Mobile Money':
-      return MobileMoneyScreen(canManage: session.can('accounting:post'));
-    case 'Reconciliation':
-      return const ReconciliationScreen();
+    case 'Payments':
+      return PaymentsHubScreen(canManage: session.can('accounting:post'));
     case 'Subscriptions':
       return SubscriptionsHubScreen(
         canViewSubscription: session.can('subscriptions:view'),
         canPaySubscription: session.can('subscriptions:manage'),
         canViewMemberSubscriptions: session.can('member-subscription:view'),
         canManageMemberSubscriptions: session.can('member-subscription:manage'),
-        canPromptMemberSubscriptions: session.can('member-subscription:manage') ||
-            session.can('member-subscription:prompt'),
+        canPromptMemberSubscriptions:
+            session.can('member-subscription:manage') ||
+                session.can('member-subscription:prompt'),
         canManageNotifications: session.can('notifications:manage'),
       );
-    case 'Complaints':
-      return ComplaintsScreen(canManage: session.can('complaints:manage'));
-    case 'Support chat':
-      return ChatThreadsScreen(canReply: session.can('complaints:manage'));
-    case 'Reports':
-      return const ReportsScreen();
+    case 'Member support':
+      return MemberSupportHubScreen(
+          canManage: session.can('complaints:manage'));
+    case 'Oversight':
+      return OversightHubScreen(
+        canViewReports: session.can('reports:view'),
+        canViewAudit: session.can('audit:view'),
+        canViewNotifications: session.can('notifications:view'),
+        canManageNotifications: session.can('notifications:manage'),
+      );
     case 'Welfare':
-      return const WelfareScreen();
-    case 'Fund types':
-      return FundSourcesScreen(canManage: session.can('fund-types:manage'));
-    case 'Finance sources':
-      return FinanceSourcesScreen(
-          canManage: session.can('finance-source:manage'));
-    case 'Cash flow':
-      return const CashFlowScreen();
-    case 'Cash book':
-      return CashBookScreen(canManage: session.can('accounting:post'));
-    case 'Bank statement':
-      return const BankStatementScreen();
-    case 'Expenses':
-      return ExpensesScreen(canManage: session.can('accounting:post'));
-    case 'Suppliers':
-      return SuppliersScreen(canManage: session.can('accounting:post'));
-    case 'Audit log':
-      return const AuditScreen();
-    case 'Notifications':
-      return NotificationsScreen(canManage: session.can('notifications:manage'));
+      return WelfareScreen(
+        canManage: session.can('welfare:manage'),
+        canApprove: session.can('welfare:approve'),
+      );
+    case 'Funds & products':
+      return FundsHubScreen(
+        canViewFundTypes: session.can('fund-types:view'),
+        canManageFundTypes: session.can('fund-types:manage'),
+        canViewProducts: session.can('fund-types:view'),
+        canManageProducts: session.can('fund-types:manage'),
+      );
+    case 'Cash & expenses':
+      return CashHubScreen(
+        canViewCash: session.can('accounting:view'),
+        canManage: session.can('accounting:post'),
+        canViewTransfers: session.can('savings-transfer:view'),
+      );
     case 'Users & Roles':
-      return const UsersScreen();
+      return UsersScreen(
+        canViewUsers: session.can('users:view'),
+        canManageUsers: session.can('users:create'),
+        canViewRoles: session.can('roles:view'),
+        canCreateRoles: session.can('roles:create'),
+      );
     case 'Branches':
-      return const BranchesScreen();
-    case 'Products':
-      return const FinancialProductsScreen();
-    case 'Savings transfers':
-      return const SavingsTransfersScreen();
+      return BranchesScreen(
+        canManage: session.can('sacco-profile:manage'),
+      );
     case 'Governance':
       return const GovernanceScreen();
     default:
@@ -509,8 +512,7 @@ class _RecentActivity extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(auditEventsProvider(''));
     return async.when(
-      loading: () =>
-          const Shimmer(child: SkeletonBox(height: 120, radius: 14)),
+      loading: () => const Shimmer(child: SkeletonBox(height: 120, radius: 14)),
       error: (e, _) => const SizedBox.shrink(),
       data: (events) {
         if (events.isEmpty) {
@@ -532,8 +534,8 @@ class _RecentActivity extends ConsumerWidget {
                   if (i > 0) const Divider(height: 1),
                   ListTile(
                     dense: true,
-                    leading: Icon(Icons.history,
-                        size: 18, color: scheme.primary),
+                    leading:
+                        Icon(Icons.history, size: 18, color: scheme.primary),
                     title: Text(Fmt.label(recent[i].action),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     subtitle: Text(
@@ -567,30 +569,70 @@ class _StatusSummary extends ConsumerWidget {
               style: TextStyle(color: Theme.of(context).colorScheme.error)),
         ),
       ),
-      data: (st) => Column(
-        children: [
-          _FundSummaryGrid(status: st),
-          const SizedBox(height: 12),
-          GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.05,
-            children: [
-              _StatTile('Members', '${st.members}', Icons.groups_outlined),
-              _StatTile('Active', '${st.activeMembers}', Icons.person_outline),
-              _StatTile('Pending postings', '${st.pendingPostings}',
-                  Icons.pending_actions_outlined),
-              _StatTile('Open loans', '${st.openLoans}',
-                  Icons.request_quote_outlined),
-              _StatTile('Complaints', '${st.openComplaints}',
-                  Icons.report_gmailerrorred_outlined),
-            ],
-          ),
-        ],
-      ),
+      data: (st) {
+        final funds = st.memberFunds.isEmpty
+            ? <FundBalanceSummary>[
+                FundBalanceSummary(
+                    code: 'savings',
+                    name: 'Savings',
+                    basis: 'savings',
+                    system: true,
+                    balance: st.totalSavings),
+                FundBalanceSummary(
+                    code: 'shares',
+                    name: 'Shares',
+                    basis: 'shares',
+                    system: true,
+                    balance: st.totalShares),
+                FundBalanceSummary(
+                    code: 'welfare',
+                    name: 'Welfare',
+                    basis: 'welfare',
+                    system: true,
+                    balance: st.totalWelfare),
+              ]
+            : st.memberFunds;
+        final money = <Widget>[
+          for (final f in funds)
+            _MoneyStripCard(f.name, Fmt.money(f.balance),
+                _fundIcon(f.code, f.basis), _fundColor(f.code, f.basis)),
+          _MoneyStripCard('Loans', Fmt.money(st.loanPortfolio),
+              Icons.account_balance_outlined, const Color(0xFFB91C1C)),
+          _MoneyStripCard('SMS', '${st.smsBalance}', Icons.sms_outlined,
+              const Color(0xFF0E7490)),
+        ];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 74,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: EdgeInsets.zero,
+                itemCount: money.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (_, i) => money[i],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _CountChip('Members', '${st.members}', Icons.groups_outlined),
+                _CountChip(
+                    'Active', '${st.activeMembers}', Icons.person_outline),
+                _CountChip('Pending', '${st.pendingPostings}',
+                    Icons.pending_actions_outlined),
+                _CountChip(
+                    'Loans', '${st.openLoans}', Icons.request_quote_outlined),
+                _CountChip('Complaints', '${st.openComplaints}',
+                    Icons.report_gmailerrorred_outlined),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -650,7 +692,8 @@ class _OperationsAlerts extends ConsumerWidget {
         alerts.add(_AlertItem(
           icon: Icons.workspace_premium_outlined,
           title: 'Subscription renewal due',
-          detail: 'Platform subscription expires in ${sub.daysToExpiry} day(s).',
+          detail:
+              'Platform subscription expires in ${sub.daysToExpiry} day(s).',
           color: const Color(0xFFB45309),
         ));
       }
@@ -751,70 +794,6 @@ class _AlertTile extends StatelessWidget {
   }
 }
 
-class _FundSummaryGrid extends StatelessWidget {
-  const _FundSummaryGrid({required this.status});
-
-  final SaccoStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final funds = status.memberFunds.isEmpty
-        ? [
-            FundBalanceSummary(
-              code: 'savings',
-              name: 'Savings',
-              basis: 'savings',
-              system: true,
-              balance: status.totalSavings,
-            ),
-            FundBalanceSummary(
-              code: 'shares',
-              name: 'Shares',
-              basis: 'shares',
-              system: true,
-              balance: status.totalShares,
-            ),
-            FundBalanceSummary(
-              code: 'welfare',
-              name: 'Welfare',
-              basis: 'welfare',
-              system: true,
-              balance: status.totalWelfare,
-            ),
-          ]
-        : status.memberFunds;
-    final cards = [
-      ...funds.map((f) => _MoneyCard(
-            f.name,
-            Fmt.money(f.balance),
-            _fundIcon(f.code, f.basis),
-            _fundColor(f.code, f.basis),
-          )),
-      _MoneyCard(
-        'Loan portfolio',
-        Fmt.money(status.loanPortfolio),
-        Icons.account_balance_outlined,
-        const Color(0xFFB91C1C),
-      ),
-      _MoneyCard(
-        'SMS balance',
-        '${status.smsBalance} SMS',
-        Icons.sms_outlined,
-        const Color(0xFF0E7490),
-      ),
-    ];
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 10,
-      crossAxisSpacing: 10,
-      childAspectRatio: 1.35,
-      children: cards,
-    );
-  }
-}
-
 IconData _fundIcon(String code, String basis) {
   switch (code) {
     case 'savings':
@@ -853,46 +832,57 @@ Color _fundColor(String code, String basis) {
   }
 }
 
-class _MoneyCard extends StatelessWidget {
-  const _MoneyCard(this.label, this.value, this.icon, this.color);
+class _MoneyStripCard extends StatelessWidget {
+  const _MoneyStripCard(this.label, this.value, this.icon, this.color);
   final String label;
   final String value;
   final IconData icon;
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 150,
+      child: Card(
+        margin: EdgeInsets.zero,
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Row(
                 children: [
-                  Icon(icon, color: color, size: 18),
-                  const SizedBox(width: 6),
+                  Icon(icon, color: color, size: 15),
+                  const SizedBox(width: 5),
                   Expanded(
                     child: Text(label,
-                        style: Theme.of(context).textTheme.labelMedium),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: scheme.onSurfaceVariant)),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w800)),
+                  style: const TextStyle(
+                      fontSize: 15.5, fontWeight: FontWeight.w800)),
             ],
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
-class _StatTile extends StatelessWidget {
-  const _StatTile(this.label, this.value, this.icon);
+class _CountChip extends StatelessWidget {
+  const _CountChip(this.label, this.value, this.icon);
   final String label;
   final String value;
   final IconData icon;
@@ -900,25 +890,24 @@ class _StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: scheme.primary),
-            const SizedBox(height: 6),
-            Text(value,
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 2),
-            Text(label,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: scheme.primary),
+          const SizedBox(width: 6),
+          Text(value,
+              style:
+                  const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+          const SizedBox(width: 4),
+          Text(label,
+              style: TextStyle(fontSize: 11.5, color: scheme.onSurfaceVariant)),
+        ],
       ),
     );
   }
@@ -939,7 +928,8 @@ class _ComingSoon extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.construction_outlined,
-                  size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  size: 48,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(height: 12),
               Text('$title is coming next',
                   style: Theme.of(context).textTheme.titleMedium),

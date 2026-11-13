@@ -2,6 +2,7 @@ package com.methaltech.sacco.config;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 class IntegrationProviderReadinessValidator implements ApplicationRunner {
 
+    private final boolean productionReadinessEnabled;
     private final boolean demoLoginsEnabled;
     private final Map<String, String> providers;
     private final Map<String, String> afroSmsSettings;
@@ -17,8 +19,46 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
     private final Map<String, String> mtnMomoSettings;
     private final Map<String, String> airtelMoneySettings;
     private final Map<String, String> mpesaDarajaSettings;
+    private final String mtnBaseUrl;
+    private final String airtelBaseUrl;
+    private final String mpesaBaseUrl;
 
     IntegrationProviderReadinessValidator(
+            boolean demoLoginsEnabled,
+            String smsProvider,
+            String emailProvider,
+            String mobileMoneyProvider,
+            String afroSmsEmail,
+            String afroSmsPassword,
+            String afroSmsSource,
+            String gmailUsername,
+            String gmailPassword,
+            String gmailFromAddress,
+            String mtnSubscriptionKey,
+            String mtnApiUserId,
+            String mtnApiKey,
+            String mtnTargetEnvironment,
+            String airtelClientId,
+            String airtelClientSecret,
+            String airtelCountryCode,
+            String mpesaConsumerKey,
+            String mpesaConsumerSecret,
+            String mpesaBusinessShortCode,
+            String mpesaPasskey,
+            String mpesaCallbackUrl,
+            String mtnBaseUrl,
+            String airtelBaseUrl,
+            String mpesaBaseUrl) {
+        this(true, demoLoginsEnabled, smsProvider, emailProvider, mobileMoneyProvider, afroSmsEmail, afroSmsPassword,
+                afroSmsSource, gmailUsername, gmailPassword, gmailFromAddress, mtnSubscriptionKey, mtnApiUserId,
+                mtnApiKey, mtnTargetEnvironment, airtelClientId, airtelClientSecret, airtelCountryCode,
+                mpesaConsumerKey, mpesaConsumerSecret, mpesaBusinessShortCode, mpesaPasskey, mpesaCallbackUrl,
+                mtnBaseUrl, airtelBaseUrl, mpesaBaseUrl);
+    }
+
+    @Autowired
+    IntegrationProviderReadinessValidator(
+            @Value("${sacco.production-readiness.enabled:false}") boolean productionReadinessEnabled,
             @Value("${sacco.demo-logins.enabled:true}") boolean demoLoginsEnabled,
             @Value("${sacco.providers.sms:}") String smsProvider,
             @Value("${sacco.providers.email:}") String emailProvider,
@@ -40,7 +80,11 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
             @Value("${sacco.integrations.mobile-money.mpesa.consumer-secret:}") String mpesaConsumerSecret,
             @Value("${sacco.integrations.mobile-money.mpesa.business-short-code:}") String mpesaBusinessShortCode,
             @Value("${sacco.integrations.mobile-money.mpesa.passkey:}") String mpesaPasskey,
-            @Value("${sacco.integrations.mobile-money.mpesa.callback-url:}") String mpesaCallbackUrl) {
+            @Value("${sacco.integrations.mobile-money.mpesa.callback-url:}") String mpesaCallbackUrl,
+            @Value("${sacco.integrations.mobile-money.mtn.base-url:}") String mtnBaseUrl,
+            @Value("${sacco.integrations.mobile-money.airtel.base-url:}") String airtelBaseUrl,
+            @Value("${sacco.integrations.mobile-money.mpesa.base-url:}") String mpesaBaseUrl) {
+        this.productionReadinessEnabled = productionReadinessEnabled;
         this.demoLoginsEnabled = demoLoginsEnabled;
         this.providers = new LinkedHashMap<>();
         this.providers.put("SACCO_SMS_PROVIDER", smsProvider);
@@ -69,6 +113,9 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
         this.mpesaDarajaSettings.put("SACCO_MPESA_DARAJA_BUSINESS_SHORT_CODE", mpesaBusinessShortCode);
         this.mpesaDarajaSettings.put("SACCO_MPESA_DARAJA_PASSKEY", mpesaPasskey);
         this.mpesaDarajaSettings.put("SACCO_MPESA_DARAJA_CALLBACK_URL", mpesaCallbackUrl);
+        this.mtnBaseUrl = mtnBaseUrl;
+        this.airtelBaseUrl = airtelBaseUrl;
+        this.mpesaBaseUrl = mpesaBaseUrl;
     }
 
     @Override
@@ -77,7 +124,7 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
     }
 
     void validate() {
-        if (demoLoginsEnabled) {
+        if (!productionReadinessEnabled || demoLoginsEnabled) {
             return;
         }
         String invalidProviders = providers.entrySet().stream()
@@ -112,13 +159,37 @@ class IntegrationProviderReadinessValidator implements ApplicationRunner {
         }
         if ("mtn_momo".equalsIgnoreCase(mobileMoneyProvider)) {
             requireSettings("MTN MoMo", mtnMomoSettings);
+            rejectSandboxEndpoint("MTN MoMo", "SACCO_MTN_MOMO_BASE_URL", mtnBaseUrl);
+            if ("sandbox".equalsIgnoreCase(trimToEmpty(mtnMomoSettings.get("SACCO_MTN_MOMO_TARGET_ENVIRONMENT")))) {
+                throw new IllegalStateException(
+                        "Production startup rejects the MTN MoMo sandbox target environment; set SACCO_MTN_MOMO_TARGET_ENVIRONMENT to your live environment.");
+            }
         }
         if ("airtel_money".equalsIgnoreCase(mobileMoneyProvider)) {
             requireSettings("Airtel Money", airtelMoneySettings);
+            rejectSandboxEndpoint("Airtel Money", "SACCO_AIRTEL_MONEY_BASE_URL", airtelBaseUrl);
         }
         if ("mpesa_daraja".equalsIgnoreCase(mobileMoneyProvider)) {
             requireSettings("M-PESA Daraja", mpesaDarajaSettings);
+            rejectSandboxEndpoint("M-PESA Daraja", "SACCO_MPESA_DARAJA_BASE_URL", mpesaBaseUrl);
         }
+    }
+
+    /**
+     * Real credentials pointed at a provider sandbox would silently fail to move money, so a live
+     * deployment must not run against a sandbox host.
+     */
+    private void rejectSandboxEndpoint(String providerName, String settingName, String baseUrl) {
+        String host = trimToEmpty(baseUrl).toLowerCase(java.util.Locale.ROOT);
+        if (host.contains("sandbox") || host.contains("sbx") || host.contains("mtn.com/sandbox")) {
+            throw new IllegalStateException(
+                    "Production startup rejects the " + providerName + " sandbox endpoint; set " + settingName
+                            + " to the live provider URL (currently: " + baseUrl + ").");
+        }
+    }
+
+    private String trimToEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private void requireSettings(String providerName, Map<String, String> settings) {

@@ -11,7 +11,9 @@ import '../interest/interest_screen.dart';
 /// A reporting overview of the SACCO: membership, member funds, the loan
 /// portfolio (with arrears), income from interest, and operations.
 class ReportsScreen extends ConsumerWidget {
-  const ReportsScreen({super.key});
+  const ReportsScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -19,7 +21,7 @@ class ReportsScreen extends ConsumerWidget {
     final summaryAsync = ref.watch(loanPortfolioSummaryProvider);
     final interestAsync = ref.watch(interestByYearProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Reports')),
+      appBar: embedded ? null : AppBar(title: const Text('Reports')),
       body: statusAsync.when(
         loading: () => const ListSkeleton(),
         error: (e, _) => ErrorRetry(

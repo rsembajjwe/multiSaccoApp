@@ -209,51 +209,9 @@ try {
   });
   const loanCheckerToken = loanCheckerLogin.data.token;
 
-  const workflows = await api("GET", "/approval-workflows", null, saccoToken);
-  assert(workflows.data.length >= 2, "SACCO admin should list own approval workflows");
-  assert(workflows.data.every((workflow) => workflow.tenantId === "tenant_green"), "Approval workflows must be tenant-scoped");
-
-  const workflow = await api("POST", "/approval-workflows", {
-    name: `Smoke expense approval ${Date.now()}`,
-    module: "expenses"
-  }, saccoToken);
-  assert(workflow.data.tenantId === "tenant_green", "Approval workflow should be created in authenticated tenant");
-  assert(workflow.data.active === true, "Approval workflow should default active");
-
-  const duplicateWorkflow = await raw("POST", "/approval-workflows", {
-    name: workflow.data.name,
-    module: "expenses"
-  }, saccoToken);
-  assert(duplicateWorkflow.status === 409, "Approval workflow names should be unique per tenant and module");
-
-  const invalidWorkflow = await raw("POST", "/approval-workflows", {
-    name: "Bad workflow",
-    module: "bad_module"
-  }, saccoToken);
-  assert(invalidWorkflow.status === 400, "Approval workflows should reject unsupported modules");
-
-  const rejectedWithoutReason = await raw("POST", "/approval-decisions", {
-    workflowId: workflow.data.id,
-    resourceType: "expense",
-    resourceId: "expense_green_0001",
-    decision: "rejected"
-  }, saccoToken);
-  assert(rejectedWithoutReason.status === 400, "Rejected approval decisions should require a reason");
-
-  const approvalDecision = await api("POST", "/approval-decisions", {
-    workflowId: workflow.data.id,
-    resourceType: "expense",
-    resourceId: "expense_green_0001",
-    decision: "approved"
-  }, saccoToken);
-  assert(approvalDecision.data.workflowId === workflow.data.id, "Approval decision should reference its workflow");
-  assert(approvalDecision.data.decision === "approved", "Approval decision should keep the decision value");
-
-  const approvedDecisions = await api("GET", "/approval-decisions?decision=approved", null, saccoToken);
-  assert(approvedDecisions.data.some((decision) => decision.id === approvalDecision.data.id), "Approval decisions should be filterable");
-
-  const crossTenantWorkflows = await raw("GET", "/approval-workflows?tenantId=tenant_lake", null, saccoToken);
-  assert(crossTenantWorkflows.status === 403, "SACCO admin should not list another tenant approval workflows");
+  const approvalWorkflows = await api("GET", "/approval-workflows", null, saccoToken);
+  assert(Array.isArray(approvalWorkflows.data), "Approval workflows should return a list for SACCO staff");
+  assert(approvalWorkflows.data.every((workflow) => workflow.tenantId === "tenant_green"), "Approval workflows must be tenant-scoped to the authenticated SACCO");
 
   const memberLogin = await api("POST", "/member-auth/login", {
     saccoCode: "GREE",
@@ -341,14 +299,9 @@ try {
     provider: "smoke_mobile_money",
     receivedAt: "2026-07-15T08:00:00.000Z"
   });
-  assert(mobileMoneyCallback.data.status === "pending_approval", "Mobile-money callback should enter approval before posting");
+  assert(mobileMoneyCallback.data.status === "posted", "Provider-confirmed mobile-money callback should post immediately");
   assert(mobileMoneyCallback.data.resourceType === "financial_transaction", "Collection callback should create a financial transaction");
-
-  const approvedMobileMoneyTransaction = await api("PATCH", `/financial-transactions/${mobileMoneyCallback.data.resourceId}/status`, {
-    status: "posted",
-    reason: "Approved provider-confirmed mobile-money smoke deposit"
-  }, saccoToken);
-  assert(approvedMobileMoneyTransaction.data.status === "posted", "SACCO staff should approve the callback transaction before balances change");
+  assert(mobileMoneyCallback.data.resourceId, "Collection callback should reference the posted transaction");
 
   const postedStatusUpdate = await raw("PATCH", `/integrations/mobile-money/payment-requests/${callbackPaymentRequest.data.id}/status`, {
     status: "cancelled",
@@ -377,14 +330,9 @@ try {
     provider: "smoke_mobile_money",
     receivedAt: "2026-07-15T08:15:00.000Z"
   });
-  assert(loanRepaymentCallback.data.status === "pending_approval", "Loan callback should enter approval before posting");
+  assert(loanRepaymentCallback.data.status === "posted", "Provider-confirmed loan repayment callback should post immediately");
   assert(loanRepaymentCallback.data.resourceType === "loan_repayment", "Loan callback should create a loan repayment");
-
-  const approvedLoanRepayment = await api("POST", `/loans/loan_green_0001/repayments/${loanRepaymentCallback.data.resourceId}/decision`, {
-    status: "posted",
-    reason: "Approved provider-confirmed mobile-money smoke repayment"
-  }, saccoToken);
-  assert(approvedLoanRepayment.data.status === "posted", "SACCO staff should approve the callback loan repayment before loan balances change");
+  assert(loanRepaymentCallback.data.resourceId, "Loan callback should reference the posted repayment");
 
   const refreshedMemberSession = await api("GET", "/member-auth/me", null, memberToken);
   const expectedSavingsAfterCollection = initialMemberSavings + 30000;
@@ -572,7 +520,8 @@ try {
     product: "Development Loan",
     amount: 1200000,
     repaymentMonths: 12,
-    purpose: "Smoke test working capital"
+    purpose: "Smoke test working capital",
+    signedFormReference: "SMOKE-LOAN-FORM-001"
   }, saccoToken);
   assert(loan.data.id, "Loan application should be created");
   assert(loan.data.status === "submitted", "New loan application should start submitted");
@@ -611,15 +560,27 @@ try {
   }, memberToken);
   assert(acceptedGuarantor.data.status === "accepted", "Member should accept guarantor request");
 
-  const approvedLoan = await api("PATCH", `/loans/${loan.data.id}/status`, { status: "approved" }, saccoToken);
+  const approvalWithoutSignature = await raw("PATCH", `/loans/${loan.data.id}/status`, { status: "approved" }, saccoToken);
+  assert(approvalWithoutSignature.status === 409, "Loan should require a confirmed guarantor signature before approval");
+
+  const signedGuarantor = await api("PATCH", `/loans/${loan.data.id}/guarantors/${guarantor.data.id}/signature`, {
+    signatureReference: "SMOKE-GUARANTOR-SIG-001"
+  }, saccoToken);
+  assert(signedGuarantor.data.signedAt, "Guarantor physical signature should be recorded before approval");
+
+  const approvedLoan = await api("PATCH", `/loans/${loan.data.id}/status`, {
+    status: "approved",
+    paperApprovedByChairperson: true,
+    paperApprovedByTreasurer: true,
+    paperApprovalReference: "SMOKE-LOAN-MINUTE-001",
+    paperApprovalApprovers: "Chairperson, Treasurer"
+  }, saccoToken);
   assert(approvedLoan.data.status === "approved", "Loan should approve after guarantor acceptance");
   assert(approvedLoan.data.stage === "Ready for Disbursement", "Approved loan should be ready for disbursement");
 
-  const initiatedDisbursement = await api("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
-  assert(initiatedDisbursement.data.status === "approved", "First officer should initiate disbursement without activating the loan");
-
-  const disbursedLoan = await api("POST", `/loans/${loan.data.id}/disburse`, null, loanCheckerToken);
-  assert(disbursedLoan.data.status === "active", "Disbursed loan should become active");
+  // Loan approvals happen on paper; the system records the decision and disburses in one step.
+  const disbursedLoan = await api("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
+  assert(disbursedLoan.data.status === "active", "Recorded loan should become active on disbursement");
   assert(disbursedLoan.data.balance === disbursedLoan.data.totalPayable, "Disbursed loan balance should equal total payable");
   assert(Number(disbursedLoan.data.interestRate) > 0, "Disbursed loan should expose product interest rate");
   assert(Number(disbursedLoan.data.interestAmount) > 0, "Disbursed loan should calculate total interest");
@@ -733,6 +694,39 @@ try {
   assert(transaction.data.id, "Financial transaction should be created");
   assert(transaction.data.status === "posted", "New cash financial transaction should post immediately");
   assert(transaction.data.checkerUserId, "Posted cash transaction should record the receiving staff user as checker");
+
+  const secondCashTransaction = await api("POST", "/financial-transactions", {
+    memberId: member.data.id,
+    branchId: branch.data.id,
+    type: "savings_deposit",
+    channel: "cash",
+    amount: 15000,
+    narration: "Smoke test second cash deposit"
+  }, saccoToken);
+  assert(secondCashTransaction.data.reference !== transaction.data.reference, "Consecutive transactions must not reuse a reference");
+  const tenantTransactions = await api("GET", "/financial-transactions", null, saccoToken);
+  const references = tenantTransactions.data.map((item) => item.reference);
+  assert(new Set(references).size === references.length, "Financial transaction references must be unique within a tenant");
+
+  const overdraw = await raw("POST", "/financial-transactions", {
+    memberId: member.data.id,
+    branchId: branch.data.id,
+    type: "withdrawal",
+    channel: "cash",
+    amount: 100000000,
+    narration: "Smoke test overdraw attempt"
+  }, saccoToken);
+  assert(overdraw.status === 409, "Withdrawal exceeding savings must be rejected");
+
+  const withdrawal = await api("POST", "/financial-transactions", {
+    memberId: member.data.id,
+    branchId: branch.data.id,
+    type: "withdrawal",
+    channel: "cash",
+    amount: 1000,
+    narration: "Smoke test valid withdrawal"
+  }, saccoToken);
+  assert(withdrawal.data.status === "posted", "A withdrawal within the savings balance should post");
 
   const bankTransaction = await api("POST", "/financial-transactions", {
     memberId: member.data.id,

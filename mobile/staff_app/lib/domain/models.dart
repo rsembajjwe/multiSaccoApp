@@ -4,6 +4,7 @@ int _int(dynamic v) => _num(v).toInt();
 class StaffSession {
   const StaffSession({
     required this.token,
+    required this.userId,
     required this.userName,
     required this.email,
     required this.roleNames,
@@ -16,6 +17,7 @@ class StaffSession {
   });
 
   final String token;
+  final String userId;
   final String userName;
   final String email;
   final List<String> roleNames;
@@ -38,7 +40,9 @@ class StaffSession {
     final tenant = j['tenant'] as Map<String, dynamic>?;
     return StaffSession(
       token: '${j['token'] ?? ''}',
-      userName: '${user?['fullName'] ?? user?['name'] ?? user?['username'] ?? ''}',
+      userId: '${user?['id'] ?? ''}',
+      userName:
+          '${user?['fullName'] ?? user?['name'] ?? user?['username'] ?? ''}',
       email: '${user?['email'] ?? ''}',
       roleNames: _strList(j['roleNames']),
       permissions: _strList(j['permissionIds']),
@@ -110,12 +114,24 @@ class MfaChallenge {
       );
 }
 
-/// Result of a login attempt: either an established session or an MFA challenge.
+class FirstLoginRequirement {
+  const FirstLoginRequirement({required this.verificationChannel});
+  final String verificationChannel;
+
+  factory FirstLoginRequirement.fromJson(Map<String, dynamic> j) =>
+      FirstLoginRequirement(
+        verificationChannel: '${j['verificationChannel'] ?? ''}',
+      );
+}
+
+/// Result of a login attempt: a session, MFA challenge, or password change.
 class LoginOutcome {
-  const LoginOutcome({this.session, this.mfa});
+  const LoginOutcome({this.session, this.mfa, this.firstLogin});
   final StaffSession? session;
   final MfaChallenge? mfa;
+  final FirstLoginRequirement? firstLogin;
   bool get needsMfa => mfa != null;
+  bool get needsPasswordChange => firstLogin != null;
 }
 
 class SaccoStatus {
@@ -218,6 +234,7 @@ class Member {
     required this.phone,
     required this.whatsapp,
     required this.email,
+    required this.address,
     required this.status,
     required this.kycStatus,
     required this.joiningDate,
@@ -236,6 +253,7 @@ class Member {
   final String phone;
   final String whatsapp;
   final String email;
+  final String address;
   final String status;
   final String kycStatus;
   final String joiningDate;
@@ -256,6 +274,7 @@ class Member {
         phone: _str(j['phone']),
         whatsapp: _str(j['whatsapp']),
         email: _str(j['email']),
+        address: _str(j['address']),
         status: _str(j['status']),
         kycStatus: _str(j['kycStatus']),
         joiningDate: _str(j['joiningDate']),
@@ -342,6 +361,8 @@ class Loan {
 
   bool get isOpen => status == 'active' || status == 'overdue';
   bool get inArrears => arrearsAmount > 0 || arrearsInstallments > 0;
+  bool get isRecoveryEligible =>
+      balance > 0 && (status == 'overdue' || inArrears);
 
   factory Loan.fromJson(Map<String, dynamic> j) => Loan(
         id: _str(j['id']),
@@ -616,6 +637,118 @@ class LoanRepayment {
       );
 }
 
+class LoanRecoveryAllocation {
+  const LoanRecoveryAllocation({
+    required this.id,
+    required this.sourceMemberId,
+    required this.sourceMemberName,
+    required this.sourceMembershipNo,
+    required this.sourceType,
+    required this.guarantorId,
+    required this.amount,
+    required this.availableSavingsAtProposal,
+    required this.guaranteeLimitAtProposal,
+    required this.status,
+    required this.financialTransactionId,
+    required this.loanRepaymentId,
+  });
+
+  final String id;
+  final String sourceMemberId;
+  final String sourceMemberName;
+  final String sourceMembershipNo;
+  final String sourceType;
+  final String guarantorId;
+  final num amount;
+  final num availableSavingsAtProposal;
+  final num guaranteeLimitAtProposal;
+  final String status;
+  final String financialTransactionId;
+  final String loanRepaymentId;
+
+  factory LoanRecoveryAllocation.fromJson(Map<String, dynamic> j) =>
+      LoanRecoveryAllocation(
+        id: _str(j['id']),
+        sourceMemberId: _str(j['sourceMemberId']),
+        sourceMemberName: _str(j['sourceMemberName']),
+        sourceMembershipNo: _str(j['sourceMembershipNo']),
+        sourceType: _str(j['sourceType']),
+        guarantorId: _str(j['guarantorId']),
+        amount: _num(j['amount']),
+        availableSavingsAtProposal: _num(j['availableSavingsAtProposal']),
+        guaranteeLimitAtProposal: _num(j['guaranteeLimitAtProposal']),
+        status: _str(j['status']),
+        financialTransactionId: _str(j['financialTransactionId']),
+        loanRepaymentId: _str(j['loanRepaymentId']),
+      );
+}
+
+class LoanRecoveryCase {
+  const LoanRecoveryCase({
+    required this.id,
+    required this.loanId,
+    required this.reference,
+    required this.status,
+    required this.reason,
+    required this.recoveryMethod,
+    required this.noticeReference,
+    required this.noticeServedAt,
+    required this.graceEndsAt,
+    required this.outstandingAtProposal,
+    required this.borrowerSavingsProposed,
+    required this.guarantorSavingsProposed,
+    required this.totalProposed,
+    required this.remainingAfterProposal,
+    required this.makerUserId,
+    required this.checkerUserId,
+    required this.createdAt,
+    required this.allocations,
+  });
+
+  final String id;
+  final String loanId;
+  final String reference;
+  final String status;
+  final String reason;
+  final String recoveryMethod;
+  final String noticeReference;
+  final String noticeServedAt;
+  final String graceEndsAt;
+  final num outstandingAtProposal;
+  final num borrowerSavingsProposed;
+  final num guarantorSavingsProposed;
+  final num totalProposed;
+  final num remainingAfterProposal;
+  final String makerUserId;
+  final String checkerUserId;
+  final String createdAt;
+  final List<LoanRecoveryAllocation> allocations;
+
+  factory LoanRecoveryCase.fromJson(Map<String, dynamic> j) => LoanRecoveryCase(
+        id: _str(j['id']),
+        loanId: _str(j['loanId']),
+        reference: _str(j['reference']),
+        status: _str(j['status']),
+        reason: _str(j['reason']),
+        recoveryMethod: _str(j['recoveryMethod']),
+        noticeReference: _str(j['noticeReference']),
+        noticeServedAt: _str(j['noticeServedAt']),
+        graceEndsAt: _str(j['graceEndsAt']),
+        outstandingAtProposal: _num(j['outstandingAtProposal']),
+        borrowerSavingsProposed: _num(j['borrowerSavingsProposed']),
+        guarantorSavingsProposed: _num(j['guarantorSavingsProposed']),
+        totalProposed: _num(j['totalProposed']),
+        remainingAfterProposal: _num(j['remainingAfterProposal']),
+        makerUserId: _str(j['makerUserId']),
+        checkerUserId: _str(j['checkerUserId']),
+        createdAt: _str(j['createdAt']),
+        allocations: (j['allocations'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(LoanRecoveryAllocation.fromJson)
+            .toList(),
+      );
+}
+
 /// The SACCO's platform subscription (from GET /api/v1/subscriptions).
 class Subscription {
   const Subscription({
@@ -655,8 +788,9 @@ class Subscription {
   final int? daysToExpiry;
 
   num get balanceDue => (amount - paid) < 0 ? 0 : (amount - paid);
-  int get uncoveredMembers =>
-      memberCount - paidMemberCapacity < 0 ? 0 : memberCount - paidMemberCapacity;
+  int get uncoveredMembers => memberCount - paidMemberCapacity < 0
+      ? 0
+      : memberCount - paidMemberCapacity;
 
   factory Subscription.fromJson(Map<String, dynamic> j) => Subscription(
         id: _str(j['id']),
@@ -674,7 +808,8 @@ class Subscription {
         tierLabel: _str(j['tierLabel']),
         billingDescription: _str(j['billingDescription']),
         expiry: _str(j['expiry']),
-        daysToExpiry: j['daysToExpiry'] == null ? null : _int(j['daysToExpiry']),
+        daysToExpiry:
+            j['daysToExpiry'] == null ? null : _int(j['daysToExpiry']),
       );
 }
 
@@ -883,8 +1018,7 @@ class MemberStatement {
 
   /// Lines that moved the given fund, newest first.
   List<StatementLine> forFund(String fund) {
-    final rows =
-        lines.where((l) => l.movementFor(fund) != 0).toList();
+    final rows = lines.where((l) => l.movementFor(fund) != 0).toList();
     rows.sort((a, b) => b.postedAt.compareTo(a.postedAt));
     return rows;
   }
@@ -966,7 +1100,9 @@ class FinancialTxn {
 
   /// Whether this transaction reduces a member's funds (outflow).
   bool get isOutflow =>
-      type.contains('withdrawal') || type.contains('claim') || type.contains('disburse');
+      type.contains('withdrawal') ||
+      type.contains('claim') ||
+      type.contains('disburse');
 
   /// The date to display/sort by (posted, else created).
   String get date => postedAt.isNotEmpty ? postedAt : createdAt;
@@ -1076,6 +1212,11 @@ class AppUser {
     required this.status,
     required this.mfaEnabled,
     required this.passwordResetRequired,
+    required this.onboardingChannel,
+    required this.onboardingDeliveryStatus,
+    required this.emailVerified,
+    required this.phoneVerified,
+    required this.activeSessionCount,
   });
 
   final String id;
@@ -1085,6 +1226,11 @@ class AppUser {
   final String status;
   final bool mfaEnabled;
   final bool passwordResetRequired;
+  final String onboardingChannel;
+  final String onboardingDeliveryStatus;
+  final bool emailVerified;
+  final bool phoneVerified;
+  final int activeSessionCount;
 
   factory AppUser.fromJson(Map<String, dynamic> j) => AppUser(
         id: _str(j['id']),
@@ -1094,6 +1240,11 @@ class AppUser {
         status: _str(j['status']),
         mfaEnabled: j['mfaEnabled'] == true,
         passwordResetRequired: j['passwordResetRequired'] == true,
+        onboardingChannel: _str(j['onboardingChannel']),
+        onboardingDeliveryStatus: _str(j['onboardingDeliveryStatus']),
+        emailVerified: j['emailVerified'] == true,
+        phoneVerified: j['phoneVerified'] == true,
+        activeSessionCount: (j['activeSessionCount'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -1116,6 +1267,27 @@ class AppRole {
         name: _str(j['name']),
         protectedRole: j['protectedRole'] == true,
         permissionIds: _strListTop(j['permissionIds']),
+      );
+}
+
+class AppPermission {
+  const AppPermission({
+    required this.id,
+    required this.module,
+    required this.action,
+    required this.description,
+  });
+
+  final String id;
+  final String module;
+  final String action;
+  final String description;
+
+  factory AppPermission.fromJson(Map<String, dynamic> json) => AppPermission(
+        id: _str(json['id']),
+        module: _str(json['module']),
+        action: _str(json['action']),
+        description: _str(json['description']),
       );
 }
 
@@ -1183,6 +1355,30 @@ class NextOfKin {
         phone: _str(j['phone']),
         address: _str(j['address']),
         primaryContact: j['primaryContact'] == true,
+      );
+}
+
+class GroupOfficial {
+  const GroupOfficial({
+    required this.id,
+    required this.role,
+    required this.fullName,
+    required this.phone,
+    required this.email,
+  });
+
+  final String id;
+  final String role;
+  final String fullName;
+  final String phone;
+  final String email;
+
+  factory GroupOfficial.fromJson(Map<String, dynamic> j) => GroupOfficial(
+        id: _str(j['id']),
+        role: _str(j['role']),
+        fullName: _str(j['fullName']),
+        phone: _str(j['phone']),
+        email: _str(j['email']),
       );
 }
 
@@ -1315,8 +1511,7 @@ class ComplaintMessage {
   final String message;
   final String createdAt;
 
-  factory ComplaintMessage.fromJson(Map<String, dynamic> j) =>
-      ComplaintMessage(
+  factory ComplaintMessage.fromJson(Map<String, dynamic> j) => ComplaintMessage(
         id: _str(j['id']),
         senderType: _str(j['senderType']),
         senderUserId: _str(j['senderUserId']),
@@ -1673,8 +1868,9 @@ class ReconciliationStatementLine {
   final String suggestedCollectionAccount;
   final String collectionAccount;
 
-  String get accountLabel =>
-      collectionAccount.isNotEmpty ? collectionAccount : suggestedCollectionAccount;
+  String get accountLabel => collectionAccount.isNotEmpty
+      ? collectionAccount
+      : suggestedCollectionAccount;
 
   factory ReconciliationStatementLine.fromJson(Map<String, dynamic> j) =>
       ReconciliationStatementLine(
@@ -2035,7 +2231,6 @@ class GovernanceMeeting {
       );
 }
 
-
 /// A SACCO source-of-funds register entry (capital): where the SACCO's money
 /// comes from. Distinct from [FundType], which are member account buckets.
 class FundingSource {
@@ -2077,7 +2272,6 @@ class FundingSource {
       );
 }
 
-
 /// One line in the Treasurer's cash book: cash in from the bank, or cash out to a use.
 class TreasuryCashEntry {
   const TreasuryCashEntry({
@@ -2102,7 +2296,8 @@ class TreasuryCashEntry {
 
   bool get isIn => direction == 'in';
 
-  factory TreasuryCashEntry.fromJson(Map<String, dynamic> j) => TreasuryCashEntry(
+  factory TreasuryCashEntry.fromJson(Map<String, dynamic> j) =>
+      TreasuryCashEntry(
         id: _str(j['id']),
         direction: _str(j['direction']),
         purpose: _str(j['purpose']),
@@ -2138,10 +2333,10 @@ class CashBook {
       );
 }
 
-
 /// A chart-of-accounts line (used to pick an expense account).
 class ChartAccount {
-  const ChartAccount({required this.code, required this.name, required this.type});
+  const ChartAccount(
+      {required this.code, required this.name, required this.type});
   final String code;
   final String name;
   final String type;
@@ -2188,7 +2383,6 @@ class Expense {
       );
 }
 
-
 /// A supplier / payee that expenses can be attributed to.
 class Supplier {
   const Supplier({
@@ -2212,5 +2406,136 @@ class Supplier {
         email: _strn(j['email']),
         taxId: _strn(j['taxId']),
         status: _str(j['status']).isEmpty ? 'active' : _str(j['status']),
+      );
+}
+
+class RegulatoryReport {
+  const RegulatoryReport({
+    required this.generatedAt,
+    required this.period,
+    required this.report,
+    required this.csv,
+  });
+
+  final String generatedAt;
+  final String period;
+  final RegulatoryTenantReport report;
+  final String csv;
+
+  factory RegulatoryReport.fromJson(Map<String, dynamic> json) =>
+      RegulatoryReport(
+        generatedAt: _str(json['generatedAt']),
+        period: _str(json['period']),
+        report: RegulatoryTenantReport.fromJson(
+          (json['consolidated'] as Map?)?.cast<String, dynamic>() ?? const {},
+        ),
+        csv: _str(json['csv']),
+      );
+}
+
+class RegulatoryTenantReport {
+  const RegulatoryTenantReport({
+    required this.tenantName,
+    required this.memberCount,
+    required this.activeMembers,
+    required this.savings,
+    required this.shares,
+    required this.welfare,
+    required this.loanPortfolio,
+    required this.activeLoans,
+    required this.loansAtRisk,
+    required this.parPercent,
+    required this.expenseTotal,
+    required this.assetCost,
+    required this.assetNetBookValue,
+    required this.journalEntries,
+    required this.unbalancedJournalEntries,
+    required this.reconciliationExceptions,
+    required this.openComplaints,
+    required this.openResolutions,
+    required this.dataProtection,
+    required this.complianceStatus,
+  });
+
+  final String tenantName;
+  final int memberCount;
+  final int activeMembers;
+  final num savings;
+  final num shares;
+  final num welfare;
+  final num loanPortfolio;
+  final int activeLoans;
+  final num loansAtRisk;
+  final int parPercent;
+  final num expenseTotal;
+  final num assetCost;
+  final num assetNetBookValue;
+  final int journalEntries;
+  final int unbalancedJournalEntries;
+  final int reconciliationExceptions;
+  final int openComplaints;
+  final int openResolutions;
+  final RegulatoryDataProtection dataProtection;
+  final String complianceStatus;
+
+  factory RegulatoryTenantReport.fromJson(Map<String, dynamic> json) =>
+      RegulatoryTenantReport(
+        tenantName: _str(json['tenantName']),
+        memberCount: _int(json['memberCount']),
+        activeMembers: _int(json['activeMembers']),
+        savings: _num(json['savings']),
+        shares: _num(json['shares']),
+        welfare: _num(json['welfare']),
+        loanPortfolio: _num(json['loanPortfolio']),
+        activeLoans: _int(json['activeLoans']),
+        loansAtRisk: _num(json['loansAtRisk']),
+        parPercent: _int(json['parPercent']),
+        expenseTotal: _num(json['expenseTotal']),
+        assetCost: _num(json['assetCost']),
+        assetNetBookValue: _num(json['assetNetBookValue']),
+        journalEntries: _int(json['journalEntries']),
+        unbalancedJournalEntries: _int(json['unbalancedJournalEntries']),
+        reconciliationExceptions: _int(json['reconciliationExceptions']),
+        openComplaints: _int(json['openComplaints']),
+        openResolutions: _int(json['openResolutions']),
+        dataProtection: RegulatoryDataProtection.fromJson(
+          (json['dataProtectionEvidence'] as Map?)?.cast<String, dynamic>() ??
+              const {},
+        ),
+        complianceStatus: _str(json['complianceStatus']),
+      );
+}
+
+class RegulatoryDataProtection {
+  const RegulatoryDataProtection({
+    required this.privacyRequests,
+    required this.openPrivacyRequests,
+    required this.completedPrivacyRequests,
+    required this.kycDocuments,
+    required this.kycDocumentsReviewDue,
+    required this.kycDocumentsDisposed,
+    required this.kycStorageActions,
+    required this.evidenceStatus,
+  });
+
+  final int privacyRequests;
+  final int openPrivacyRequests;
+  final int completedPrivacyRequests;
+  final int kycDocuments;
+  final int kycDocumentsReviewDue;
+  final int kycDocumentsDisposed;
+  final int kycStorageActions;
+  final String evidenceStatus;
+
+  factory RegulatoryDataProtection.fromJson(Map<String, dynamic> json) =>
+      RegulatoryDataProtection(
+        privacyRequests: _int(json['privacyRequests']),
+        openPrivacyRequests: _int(json['openPrivacyRequests']),
+        completedPrivacyRequests: _int(json['completedPrivacyRequests']),
+        kycDocuments: _int(json['kycDocuments']),
+        kycDocumentsReviewDue: _int(json['kycDocumentsReviewDue']),
+        kycDocumentsDisposed: _int(json['kycDocumentsDisposed']),
+        kycStorageActions: _int(json['kycStorageActions']),
+        evidenceStatus: _str(json['evidenceStatus']),
       );
 }

@@ -39,9 +39,20 @@ class MobileMoneyPaymentRulesTest {
         assertThat(MobileMoneyPaymentRules.terminalStatus("expired")).isTrue();
         assertThat(MobileMoneyPaymentRules.terminalStatus("cancelled")).isTrue();
         assertThat(MobileMoneyPaymentRules.terminalStatus("posted")).isTrue();
+        assertThat(MobileMoneyPaymentRules.terminalStatus("rejected")).isTrue();
 
         assertThat(MobileMoneyPaymentRules.terminalStatus("pending")).isFalse();
         assertThat(MobileMoneyPaymentRules.terminalStatus(null)).isFalse();
+    }
+
+    @Test
+    void receivedProviderFundsCannotBeManuallyClosedDuringLedgerApproval() {
+        assertThat(MobileMoneyPaymentRules.providerFundsReceived("pending_approval")).isTrue();
+        assertThat(MobileMoneyPaymentRules.providerFundsReceived(" posted ")).isTrue();
+
+        assertThat(MobileMoneyPaymentRules.providerFundsReceived("pending")).isFalse();
+        assertThat(MobileMoneyPaymentRules.providerFundsReceived("failed")).isFalse();
+        assertThat(MobileMoneyPaymentRules.providerFundsReceived(null)).isFalse();
     }
 
     @Test

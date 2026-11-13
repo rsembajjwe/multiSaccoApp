@@ -24,8 +24,10 @@ const _filters = <_Filter>[
 /// Member complaints with a status filter; each opens a detail where an
 /// authorised officer can update the status and add resolution notes.
 class ComplaintsScreen extends ConsumerStatefulWidget {
-  const ComplaintsScreen({super.key, required this.canManage});
+  const ComplaintsScreen(
+      {super.key, required this.canManage, this.embedded = false});
   final bool canManage;
+  final bool embedded;
 
   @override
   ConsumerState<ComplaintsScreen> createState() => _ComplaintsScreenState();
@@ -39,7 +41,8 @@ class _ComplaintsScreenState extends ConsumerState<ComplaintsScreen> {
   Widget build(BuildContext context) {
     final names = ref.watch(memberNamesProvider).asData?.value ?? const {};
     return Scaffold(
-      appBar: AppBar(title: const Text('Complaints')),
+      appBar:
+          widget.embedded ? null : AppBar(title: const Text('Complaints')),
       body: Column(
         children: [
           SizedBox(

@@ -2,12 +2,13 @@
 // These helpers connect the shell router to feature modules.
 
 const platformModules = [
-  ["dashboard", "Dashboard", "Platform performance and alerts", "dashboard:view", ["super", "operations", "billing", "compliance", "support"]],
-  ["sacco-applications", "SACCO Registration", "Applications and approvals", "tenants:view", ["super", "operations", "billing", "compliance", "support"]],
+  ["dashboard", "Dashboard", "", "dashboard:view", ["super", "operations", "billing", "compliance", "support"]],
+  ["sacco-applications", "SACCOs", "Applications, approvals & account health", "tenants:view", ["super", "operations", "billing", "compliance", "support"]],
+  ["fleet-approvals", "Approval Inbox", "Fleet lifecycle decisions", "tenants:view", ["super", "operations", "compliance"]],
+  ["payment-approvals", "Payment Approvals", "Provider-confirmed member payments", "transactions:view", ["super", "operations", "compliance"]],
   ["subscriptions", "Subscriptions", "Packages and renewals", "subscriptions:view", ["super", "billing"]],
-  ["sacco-accounts", "SACCO Accounts", "SACCO account health", "tenants:view", ["super", "billing", "compliance"]],
-  ["transactions", "Transactions", "Platform finance monitoring", "transactions:view", ["super"]],
-  ["reports", "Reports", "Super admin reporting", "reports:view", ["super"]],
+  ["transactions", "Transactions", "", "transactions:view", ["super"]],
+  ["reports", "Reports", "", "reports:view", ["super"]],
   ["complaints", "Complaints", "Support tickets and escalations", "complaints:view", ["super", "operations", "support"]],
   ["notifications", "Notifications", "SMS, email and in-app", "notifications:view", ["super", "operations"]],
   ["users", "Users and Roles", "Administrator access", "roles:view", ["super"]],
@@ -46,13 +47,13 @@ const saccoModules = [
 ];
 
 const memberModules = [
-  ["home", "Home", "Balances and quick actions"],
-  ["money", "Finances", "Balances, statement and receipts"],
-  ["loans", "Loans", "Loans and guarantor requests"],
-  ["payments", "Payments", "Deposit and repay"],
-  ["notifications", "Messages", "SACCO notices and alerts"],
-  ["complaints", "Support", "Chat and complaint tracking"],
-  ["profile", "Profile", "Your details"]
+  ["home", "Home", ""],
+  ["money", "Finances", ""],
+  ["loans", "Loans", ""],
+  ["payments", "Payments", ""],
+  ["notifications", "Messages", ""],
+  ["complaints", "Support", ""],
+  ["profile", "Profile", ""]
 ];
 
 function saccoAccounts() {
@@ -74,7 +75,7 @@ function saccoAccounts() {
     </div>
     ${filterToolbar("Search SACCO code, name, country, currency, district, status, subscription or package", "Activate SACCO", "Export accounts")}
     ${tenantDetailPanel()}
-    ${recordTable("SACCO account health", rows, ["saccoCode", "name", "country", "currencyCode", "district", "status", "accountHealth", "paymentStage", "approvalStage", "subscriptionStatus", "packageName", "billableMembers", "smsCreditsAllocated", "smsCreditsUsed", "currentSmsCredit", "expiry"])}
+    ${recordTable("SACCO account health", rows, ["saccoCode", "name", "country", "district", "status", "accountHealth", "paymentStage", "approvalStage", "subscriptionStatus", "billableMembers", "expiry"], { panelClass: "sacco-accounts-panel" })}
   `;
 }
 
@@ -193,7 +194,7 @@ function membersView() {
   const fundColumns = memberRegisterFundColumns();
   const memberSummary = buildMemberDirectorySummary(rows);
   const pendingKyc = pendingMemberKycRows(rows);
-  const availableTabs = ["list", "register", "kyc", "contacts", "statement"];
+  const availableTabs = ["list", "register", "import", "kyc", "contacts", "statement"];
   const tab = availableTabs.includes(state.memberTab) ? state.memberTab : "list";
   return `
     ${memberAccountCyclePanel(cycle)}
@@ -206,6 +207,7 @@ function membersView() {
     </div>
     ${memberTabs(tab)}
     ${tab === "register" ? memberRegistrationPanel() : ""}
+    ${tab === "import" ? memberImportPanel() : ""}
     ${tab === "list" ? `
       ${memberListToolbar()}
       ${state.memberListMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberListMessage)}</strong></div>` : ""}
@@ -297,6 +299,7 @@ function memberTabs(activeTab) {
   const tabs = [
     ["list", t("memberList")],
     ["register", t("registerMember")],
+    ["import", "Import members"],
     ["kyc", t("kycDetail")],
     ["contacts", t("contactsDocuments")],
     ["statement", t("statement")]
@@ -355,7 +358,7 @@ function friendlyUserError(error, platformOnly = isPlatform()) {
   const lower = normal(message);
   if (lower.includes("user with that email") && lower.includes("exists")) {
     return platformOnly
-      ? "A platform administrator with that email already exists. Open the Platform administrator list to manage that user, or use a different email."
+      ? "An administrator with that email already exists. Open the Administrator list to manage that user, or use a different email."
       : "A SACCO staff user with that email already exists. Open the SACCO staff access list to manage that user, or use a different email.";
   }
   return message.replace(/\btenants\b/gi, platformOnly ? "platform accounts" : "SACCOs").replace(/\btenant\b/gi, platformOnly ? "platform account" : "SACCO");

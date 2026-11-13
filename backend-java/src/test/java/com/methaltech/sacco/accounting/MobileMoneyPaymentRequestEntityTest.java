@@ -64,6 +64,20 @@ class MobileMoneyPaymentRequestEntityTest {
     }
 
     @Test
+    void markPendingApprovalKeepsRequestOpenAndRecordsResource() {
+        MobileMoneyPaymentRequestEntity request = pendingRequest();
+
+        request.markPendingApproval("financial_transaction", "txn_1");
+
+        assertEquals("pending_approval", request.getStatus());
+        assertEquals(
+                "Payment received; awaiting approval of financial_transaction txn_1.",
+                request.getStatusMessage());
+        assertNull(request.getCompletedAt());
+        assertNotNull(request.getUpdatedAt());
+    }
+
+    @Test
     void manualFailureStatusCompletesRequestAndUsesDefaultReasonWhenBlank() {
         MobileMoneyPaymentRequestEntity request = pendingRequest();
 
@@ -71,6 +85,18 @@ class MobileMoneyPaymentRequestEntityTest {
 
         assertEquals("failed", request.getStatus());
         assertEquals("Payment request marked failed.", request.getStatusMessage());
+        assertNotNull(request.getCompletedAt());
+    }
+
+    @Test
+    void rejectedFinancialDecisionCompletesReceivedPaymentRequest() {
+        MobileMoneyPaymentRequestEntity request = pendingRequest();
+        request.markPendingApproval("financial_transaction", "txn_1");
+
+        request.updateStatus("rejected", "Payment received but rejected during financial review: duplicate receipt");
+
+        assertEquals("rejected", request.getStatus());
+        assertEquals("Payment received but rejected during financial review: duplicate receipt", request.getStatusMessage());
         assertNotNull(request.getCompletedAt());
     }
 
@@ -126,6 +152,44 @@ class MobileMoneyPaymentRequestEntityTest {
         assertEquals("Provider status check failed; request remains pending for retry.", request.getStatusMessage());
         assertNull(request.getCompletedAt());
         assertNotNull(request.getUpdatedAt());
+    }
+
+    @Test
+    void providerStatusCannotRegressPendingApproval() {
+        MobileMoneyPaymentRequestEntity request = pendingRequest();
+        request.markPendingApproval("financial_transaction", "txn_1");
+        String message = request.getStatusMessage();
+        Instant updatedAt = request.getUpdatedAt();
+
+        request.syncProviderStatus(new MobileMoneyProviderStatusResult(
+                "paid_pending_callback",
+                "Provider confirms payment",
+                "PROV-1",
+                "SUCCESSFUL",
+                true,
+                Instant.parse("2026-08-14T11:00:00Z")));
+
+        assertEquals("pending_approval", request.getStatus());
+        assertEquals(message, request.getStatusMessage());
+        assertEquals(updatedAt, request.getUpdatedAt());
+    }
+
+    @Test
+    void providerStatusCannotReopenManuallyClosedRequest() {
+        MobileMoneyPaymentRequestEntity request = pendingRequest();
+        request.updateStatus("cancelled", "Cancelled by staff");
+
+        request.syncProviderStatus(new MobileMoneyProviderStatusResult(
+                "pending_provider_confirmation",
+                "Provider still processing",
+                "PROV-1",
+                "PENDING",
+                true,
+                Instant.parse("2026-08-14T11:00:00Z")));
+
+        assertEquals("cancelled", request.getStatus());
+        assertEquals("Cancelled by staff", request.getStatusMessage());
+        assertNotNull(request.getCompletedAt());
     }
 
     private static MobileMoneyPaymentRequestEntity pendingRequest() {

@@ -41,8 +41,19 @@ cd mobile/staff_app
 # generate the platform runners (no lib/ is touched):
 flutter create --platforms=android,ios --project-name sacco_staff_app .
 flutter pub get
-flutter run     # Android emulator (reaches host via 10.0.2.2)
+flutter run --dart-define=SACCO_ENV=local  # Android emulator via 10.0.2.2
 ```
+
+To run or install the app on a physical phone against the hosted backend:
+
+```powershell
+flutter run --release --dart-define=SACCO_ENV=prod
+# Or create an installable Android package:
+flutter build apk --release --dart-define=SACCO_ENV=prod
+```
+
+Production uses `https://globalntereka.com/api/v1`. Override the endpoint when
+needed with `--dart-define=SACCO_API_BASE_URL=https://example.com/api/v1`.
 
 After `flutter create`, the same **dev-only Android cleartext config** the member
 app uses is needed to reach `http://10.0.2.2:18084` — add
@@ -66,12 +77,19 @@ Demo staff logins (dev profile): SACCO **GREE**, e.g.
 5. **Subscription (done)** — platform subscription status and member
    capacity, with pay-balance and top-up-members (mobile money).
 6. **Transactions (done)** — SACCO-wide financial ledger with search and a
-   type filter (savings / withdrawals / shares / welfare).
+   type filter, plus treasurer cash-desk capture for member contributions and
+   loan repayments with balance validation, atomic cash-book posting, and
+   copyable receipts.
 7. **Reports (done)** — membership, member-fund composition, loan portfolio
-   with arrears, interest income, and operations.
+   with arrears, interest income, operations, and a regulatory compliance
+   snapshot with CSV clipboard export.
 8. **Welfare (done)** — welfare claims list with a status filter.
 9. **Audit log (done)** — recent audit events (who did what, when) with search.
-10. **Users & roles (done, view)** — staff directory with per-user roles, and
-    a roles list with permission counts.
-11. **Fund sources** — configurable member funds such as school fees or health.
-12. **Cross-cutting** — push (staff topics), biometric lock, offline resilience.
+10. **Users & roles (done)** — permission-safe staff and role views; chairperson
+    account creation, initial role assignment, suspension, MFA controls,
+    password resets, session revocation, role reassignment, and custom roles.
+11. **Branches (done)** — branch directory and chairperson branch creation with
+    optional manager assignment.
+12. **Fund sources** — configurable member funds such as school fees or health.
+13. **Cross-cutting** — authenticated staff-device push registration and
+    biometric lock are done; offline read resilience remains.

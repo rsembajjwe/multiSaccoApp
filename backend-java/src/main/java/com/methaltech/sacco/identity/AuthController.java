@@ -32,6 +32,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 class AuthController {
 
+        private static final int MFA_MAX_FAILED_ATTEMPTS = 5;
+
     private final SecureRandom secureRandom = new SecureRandom();
     private final UserRepository userRepository;
     private final AuthSessionRepository authSessionRepository;
@@ -135,8 +137,9 @@ class AuthController {
 
         loginAttemptService.clear(rateLimitKey);
         if (user.isPasswordResetRequired()) {
-            return ResponseEntity.status(HttpStatus.LOCKED)
-                    .body(ApiErrorResponse.of(423, "PASSWORD_RESET_REQUIRED", "Password reset is required before this account can login."));
+            return ResponseEntity.ok(ApiResponse.of(new FirstLoginRequiredResponse(
+                    true,
+                    user.getOnboardingChannel() == null ? "email" : user.getOnboardingChannel())));
         }
 
         if (user.isMfaEnabled()) {
@@ -157,6 +160,54 @@ class AuthController {
         }
 
         return ResponseEntity.ok(ApiResponse.of(loginResponseFor(user, servletRequest)));
+    }
+
+    @PostMapping("/first-login-password")
+    ResponseEntity<?> changeFirstLoginPassword(
+            @Valid @RequestBody FirstLoginPasswordRequest body,
+            HttpServletRequest request) {
+        String identifier = body.username().trim();
+        Tenant tenant = resolveTenant(body.saccoCode());
+        String rateLimitKey = "first-login:" + request.getRemoteAddr() + ":" + (tenant == null ? "invalid" : tenant.getId());
+        if (tenant == null || loginAttemptService.isLimited(rateLimitKey)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiErrorResponse.of(401, "FIRST_LOGIN_INVALID", "Temporary credentials are invalid or expired."));
+        }
+
+        User user = findLoginUser(tenant, identifier)
+                .filter(candidate -> "active".equals(candidate.getStatus()))
+                .filter(User::isPasswordResetRequired)
+                .filter(candidate -> "sent".equals(candidate.getOnboardingDeliveryStatus()))
+                .filter(candidate -> passwordHasher.matches(body.temporaryPassword(), candidate.getPasswordSalt(), candidate.getPasswordHash()))
+                .orElse(null);
+        if (user == null) {
+            loginAttemptService.recordFailure(rateLimitKey);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiErrorResponse.of(401, "FIRST_LOGIN_INVALID", "Temporary credentials are invalid or expired."));
+        }
+        List<String> violations = platformSecurityPolicyService.passwordViolations(body.newPassword());
+        if (!violations.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "WEAK_PASSWORD", platformSecurityPolicyService.passwordPolicyMessage(violations)));
+        }
+        if (passwordHasher.matches(body.newPassword(), user.getPasswordSalt(), user.getPasswordHash())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "PASSWORD_REUSE", "Choose a password different from the temporary password."));
+        }
+
+        PasswordHasher.PasswordHash password = passwordHasher.hash(body.newPassword());
+        user.verifyOnboardingContact();
+        user.changePassword(password.hash(), password.salt());
+        userRepository.save(user);
+        loginAttemptService.clear(rateLimitKey);
+        auditService.record(
+                user.getTenantId(),
+                user,
+                "Completed first-login password change and verified " + user.getOnboardingChannel(),
+                "staff_onboarding",
+                user.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(new PasswordResetConfirmResponse(true)));
     }
 
     @PostMapping("/mfa/enable")
@@ -206,9 +257,25 @@ class AuthController {
         MfaChallenge challenge = mfaChallengeRepository
                 .findByIdAndStatusAndExpiresAtAfter(body.challengeId().trim(), "pending", Instant.now())
                 .orElse(null);
-        if (challenge == null || !challenge.getCodeHash().equals(tokenGenerator.hashToken(body.code().trim()))) {
+        if (challenge == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiErrorResponse.of(401, "MFA_INVALID", "MFA challenge or code is invalid."));
+        }
+        if (!challenge.getCodeHash().equals(tokenGenerator.hashToken(body.code().trim()))) {
+            boolean locked = challenge.recordFailure(MFA_MAX_FAILED_ATTEMPTS);
+            mfaChallengeRepository.save(challenge);
+            auditService.record(
+                    challenge.getTenantId(),
+                    challenge.getUserId(),
+                    "MFA Gateway",
+                    locked ? "Locked MFA challenge after too many failed attempts" : "Failed MFA challenge code",
+                    "mfa_challenge",
+                    challenge.getId(),
+                    request.getRemoteAddr());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiErrorResponse.of(401, "MFA_INVALID", locked
+                            ? "MFA challenge locked after too many failed attempts."
+                            : "MFA challenge or code is invalid."));
         }
         User user = userRepository.findById(challenge.getUserId())
                 .filter(candidate -> "active".equals(candidate.getStatus()))
@@ -500,6 +567,16 @@ class AuthController {
     }
 
     record LoginResponse(String token, String tokenType, UserResponse user, List<String> roleIds, List<String> roleNames, List<String> permissionIds, Instant expiresAt) {
+    }
+
+    record FirstLoginRequiredResponse(boolean passwordChangeRequired, String verificationChannel) {
+    }
+
+    record FirstLoginPasswordRequest(
+            @NotBlank String saccoCode,
+            @NotBlank String username,
+            @NotBlank String temporaryPassword,
+            @NotBlank String newPassword) {
     }
 
     record MfaRequiredResponse(boolean mfaRequired, String challengeId, String deliveryChannel, String demoCode, Instant expiresAt) {

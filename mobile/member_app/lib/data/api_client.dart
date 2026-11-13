@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+import '../api_contract.dart';
 import '../core/auth_events.dart';
 import '../core/config.dart';
 import 'session_store.dart';
@@ -10,6 +11,8 @@ import 'session_store.dart';
 /// and translates transport failures into readable [ApiException]s so the UI
 /// can tell "can't reach the server" apart from "wrong credentials".
 class ApiClient {
+  static const _requestTokenKey = 'memberSessionToken';
+
   ApiClient(this._session, {Dio? dio}) : _dio = dio ?? Dio() {
     _dio.options
       ..baseUrl = AppConfig.baseUrl
@@ -22,13 +25,19 @@ class ApiClient {
           final token = await _session.readToken();
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
+            options.extra[_requestTokenKey] = token;
           }
           handler.next(options);
         },
         onError: (e, handler) async {
-          if (e.response?.statusCode == 401) {
-            await _session.clear();
-            sessionExpiredNotifier.value = true;
+          if (e.response?.statusCode == 401 &&
+              !_isLoginRequest(e.requestOptions.path)) {
+            final rejectedToken = e.requestOptions.extra[_requestTokenKey];
+            final currentToken = await _session.readToken();
+            if (rejectedToken != null && rejectedToken == currentToken) {
+              await _session.clear();
+              sessionExpiredNotifier.value = true;
+            }
           }
           handler.next(e);
         },
@@ -39,7 +48,8 @@ class ApiClient {
   final Dio _dio;
   final SessionStore _session;
 
-  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> post(
+      String path, Map<String, dynamic> body) async {
     final r = await _guard(() => _dio.post<dynamic>(path, data: body));
     return _envelope(r.data);
   }
@@ -76,12 +86,14 @@ class ApiClient {
     return _envelope(r.data);
   }
 
-  Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> put(
+      String path, Map<String, dynamic> body) async {
     final r = await _guard(() => _dio.put<dynamic>(path, data: body));
     return _envelope(r.data);
   }
 
-  Future<Map<String, dynamic>> patch(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> patch(
+      String path, Map<String, dynamic> body) async {
     final r = await _guard(() => _dio.patch<dynamic>(path, data: body));
     return _envelope(r.data);
   }
@@ -90,10 +102,13 @@ class ApiClient {
     final r = await _guard(() => _dio.get<dynamic>(path));
     final d = r.data;
     final list = d is Map<String, dynamic> ? d['data'] : d;
-    return list is List ? list.whereType<Map<String, dynamic>>().toList() : const [];
+    return list is List
+        ? list.whereType<Map<String, dynamic>>().toList()
+        : const [];
   }
 
-  Future<Response<dynamic>> _guard(Future<Response<dynamic>> Function() call) async {
+  Future<Response<dynamic>> _guard(
+      Future<Response<dynamic>> Function() call) async {
     try {
       return await call();
     } on DioException catch (e) {
@@ -104,22 +119,26 @@ class ApiClient {
   ApiException _translate(DioException e) {
     final code = e.response?.statusCode;
     if (code == 401) {
-      return ApiException('Invalid SACCO code, member ID, or password.');
-    }
-    if (code == 400) {
-      return ApiException('The server rejected the request (400).');
+      return ApiException(_isLoginRequest(e.requestOptions.path)
+          ? 'Invalid organization code, member ID, or password.'
+          : 'Your session has expired. Sign in again.');
     }
     if (code != null) {
       final data = e.response?.data;
       final msg = data is Map && data['error'] is Map
           ? '${(data['error'] as Map)['message'] ?? ''}'
           : '';
-      return ApiException('Server error $code${msg.isNotEmpty ? ': $msg' : ''}.');
+      if (code == 400 && msg.isEmpty) {
+        return ApiException('The server rejected the request (400).');
+      }
+      return ApiException(
+          'Server error $code${msg.isNotEmpty ? ': $msg' : ''}.');
     }
-    return ApiException(
-        'Cannot reach the server at ${AppConfig.baseUrl}. '
+    return ApiException('Cannot reach the server at ${AppConfig.baseUrl}. '
         'Check that the backend is running and reachable from this device.');
   }
+
+  bool _isLoginRequest(String path) => path.endsWith(ApiPaths.login);
 
   Map<String, dynamic> _envelope(dynamic data) {
     if (data is Map<String, dynamic>) {

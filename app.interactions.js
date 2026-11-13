@@ -448,7 +448,59 @@ function resetSaccoApplicationTableSearch() {
   };
 }
 
+function schedulePlatformQuickSearch(query) {
+  if (!isPlatform()) return;
+  window.clearTimeout(platformQuickSearchTimer);
+  const normalizedQuery = String(query || "").trim();
+  const sequence = ++platformQuickSearchSequence;
+  state.platformQuickSearchError = "";
+  if (normalizedQuery.length < 2) {
+    state.platformQuickSearchResults = [];
+    state.platformQuickSearchLoading = false;
+    return;
+  }
+  state.platformQuickSearchLoading = true;
+  platformQuickSearchTimer = window.setTimeout(async () => {
+    try {
+      const rows = await api(`/tenants/fleet?search=${encodeURIComponent(normalizedQuery)}&page=0&size=8&sort=name&direction=asc`);
+      if (sequence !== platformQuickSearchSequence || normalizedQuery !== state.search.trim()) return;
+      state.platformQuickSearchResults = (rows || []).map((tenant) => buildQuickSearchResult(
+        "SACCOs",
+        tenant.id,
+        "sacco-applications",
+        tenant.name,
+        `${tenant.saccoCode || tenant.abbreviation || ""} ${tenant.district || ""} ${labelize(tenant.status || "")}`,
+        { selectedTenantId: tenant.id, saccoRegistrationTab: "applications" }
+      ));
+    } catch (error) {
+      if (sequence !== platformQuickSearchSequence) return;
+      state.platformQuickSearchResults = [];
+      state.platformQuickSearchError = friendlyUserError(error, true);
+    } finally {
+      if (sequence !== platformQuickSearchSequence) return;
+      state.platformQuickSearchLoading = false;
+      renderShell();
+      window.requestAnimationFrame(() => {
+        const input = document.getElementById("globalSearch");
+        if (!input || state.search.trim() !== normalizedQuery) return;
+        input.focus();
+        const searchInput = /** @type {HTMLInputElement} */ (input);
+        searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+      });
+    }
+  }, 300);
+}
+
 function bindEvents() {
+  document.querySelectorAll("[data-action='toggle-theme']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.theme = state.theme === "dark" ? "light" : "dark";
+      localStorage.setItem(THEME_KEY, state.theme);
+      applyTheme(state.theme);
+      if (state.auth === "none") renderLogin();
+      else renderShell();
+    });
+  });
   document.querySelector("#loginLocale")?.addEventListener("change", (event) => {
     state.locale = supportedLocales.some((locale) => locale.code === event.target.value) ? event.target.value : DEFAULT_REGION.locale;
     localStorage.setItem(LOCALE_KEY, state.locale);
@@ -466,6 +518,7 @@ function bindEvents() {
       state.authTab = button.dataset.authTab;
       if (state.authTab !== "forgot") clearPasswordResetState();
       clearMfaState();
+      clearFirstLoginState();
       renderLogin();
     });
   });
@@ -490,6 +543,11 @@ function bindEvents() {
       button.disabled = false;
       button.textContent = t("loginSecurely");
     }
+  });
+  document.querySelector("#firstLoginPasswordForm")?.addEventListener("submit", changeFirstLoginPasswordFromForm);
+  document.querySelector("[data-action='cancel-first-login']")?.addEventListener("click", () => {
+    clearFirstLoginState();
+    renderLogin();
   });
   document.querySelectorAll("[data-demo]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -541,7 +599,13 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-summary-view]").forEach((button) => {
     button.addEventListener("click", () => {
-      if (button.dataset.summaryTab) state.moduleTabs[button.dataset.summaryView] = button.dataset.summaryTab;
+      if (button.dataset.summaryTab) {
+        state.moduleTabs[button.dataset.summaryView] = button.dataset.summaryTab;
+        // The merged SACCOs section keeps its tab in a dedicated state field.
+        if (button.dataset.summaryView === "sacco-applications") {
+          state.saccoRegistrationTab = button.dataset.summaryTab === "accounts" ? "applications" : button.dataset.summaryTab;
+        }
+      }
       openView(button.dataset.summaryView);
       renderShell();
     });
@@ -563,8 +627,62 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-sacco-registration-tab]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.saccoRegistrationTab = button.dataset.saccoRegistrationTab;
+      state.saccoRegistrationTab = button.dataset.saccoRegistrationTab === "accounts" ? "applications" : button.dataset.saccoRegistrationTab;
       renderShell();
+    });
+  });
+  document.querySelectorAll("[data-onboarding-next]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = Number(button.dataset.onboardingNext || 1);
+      const current = button.closest("[data-onboarding-stage]");
+      if (target > Number(current?.dataset.onboardingStage || 1)) {
+        const invalid = current?.querySelector("input[required]:invalid, select[required]:invalid");
+        if (invalid instanceof HTMLInputElement || invalid instanceof HTMLSelectElement) {
+          invalid.reportValidity();
+          return;
+        }
+      }
+      document.querySelectorAll("[data-onboarding-stage]").forEach((stage) => stage.classList.toggle("active", Number(stage.dataset.onboardingStage) === target));
+      document.querySelectorAll("[data-onboarding-step]").forEach((step) => {
+        const number = Number(step.dataset.onboardingStep);
+        step.classList.toggle("active", number === target);
+        step.classList.toggle("complete", number < target);
+      });
+      document.querySelector(`[data-onboarding-stage="${target}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+  const directoryFilters = [
+    ["saccoDirectorySearch", "saccoDirectorySearch"],
+    ["saccoDirectoryDistrict", "saccoDirectoryDistrict"],
+    ["saccoDirectoryStatus", "saccoDirectoryStatus"],
+    ["saccoDirectorySubscription", "saccoDirectorySubscription"]
+  ];
+  directoryFilters.forEach(([id, key]) => document.getElementById(id)?.addEventListener("change", (event) => {
+    state[key] = event.target.value;
+    renderShell();
+  }));
+  document.querySelector('[data-action="clear-sacco-directory-filters"]')?.addEventListener("click", () => {
+    state.saccoDirectorySearch = "";
+    state.saccoDirectoryDistrict = "";
+    state.saccoDirectoryStatus = "";
+    state.saccoDirectorySubscription = "";
+    renderShell();
+  });
+  document.querySelectorAll("[data-sacco-approval-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.saccoApprovalQueueFilter = button.dataset.saccoApprovalFilter;
+      renderShell();
+    });
+  });
+  document.getElementById("saccoApprovalQueueSearch")?.addEventListener("change", (event) => {
+    state.saccoApprovalQueueSearch = event.target.value;
+    renderShell();
+  });
+  document.querySelectorAll("[data-sacco-approval-decision]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      state.selectedTenantId = button.dataset.tenantId;
+      state.selectedTenant = tenantRows().find((tenant) => tenant.id === state.selectedTenantId) || null;
+      await saveTenantStatus(button.dataset.saccoApprovalDecision);
     });
   });
   document.querySelector("#saccoApplicationApprovalFilter")?.addEventListener("change", (event) => {
@@ -572,6 +690,142 @@ function bindEvents() {
     resetSaccoApplicationTableSearch();
     renderShell();
   });
+  document.querySelector("#fleetHealthFilter")?.addEventListener("change", async (event) => {
+    state.fleetHealthFilter = event.target.value;
+    state.fleetSelectedIds = [];
+    await loadServerTablePage(tableStateKey("SACCO fleet directory"), 0);
+  });
+  document.querySelector("#fleetStatusFilter")?.addEventListener("change", async (event) => {
+    state.fleetStatusFilter = event.target.value;
+    state.fleetSelectedIds = [];
+    await loadServerTablePage(tableStateKey("SACCO fleet directory"), 0);
+  });
+  document.querySelector("#fleetDistrictFilter")?.addEventListener("change", async (event) => {
+    state.fleetDistrictFilter = event.target.value;
+    state.fleetSelectedIds = [];
+    await loadServerTablePage(tableStateKey("SACCO fleet directory"), 0);
+  });
+  document.querySelector("#fleetManagerFilter")?.addEventListener("change", async (event) => {
+    state.fleetManagerFilter = event.target.value;
+    state.fleetSelectedIds = [];
+    await loadServerTablePage(tableStateKey("SACCO fleet directory"), 0);
+  });
+  document.querySelector("[data-action='clear-fleet-filters']")?.addEventListener("click", async () => {
+    state.fleetHealthFilter = "";
+    state.fleetStatusFilter = "";
+    state.fleetDistrictFilter = "";
+    state.fleetManagerFilter = "";
+    state.fleetSelectedIds = [];
+    const key = tableStateKey("SACCO fleet directory");
+    state.tableState[key] = { ...(state.tableState[key] || {}), search: "", page: 1 };
+    await loadServerTablePage(key, 0);
+  });
+  document.querySelectorAll("[data-fleet-select]").forEach((input) => input.addEventListener("change", () => {
+    const selected = new Set(state.fleetSelectedIds || []);
+    if (input.checked) selected.add(input.dataset.fleetSelect); else selected.delete(input.dataset.fleetSelect);
+    state.fleetSelectedIds = [...selected];
+    renderShell();
+  }));
+  document.querySelector("[data-fleet-select-all]")?.addEventListener("change", (event) => {
+    const visibleIds = dataRows("fleetTenants").map((row) => row.id);
+    const selected = new Set(state.fleetSelectedIds || []);
+    visibleIds.forEach((id) => event.target.checked ? selected.add(id) : selected.delete(id));
+    state.fleetSelectedIds = [...selected];
+    renderShell();
+  });
+  document.querySelector("#fleetBulkForm")?.addEventListener("submit", applyFleetBulkUpdate);
+  document.querySelector("#fleetSaveViewForm")?.addEventListener("submit", saveFleetView);
+  document.querySelector("[data-action='apply-fleet-view']")?.addEventListener("click", applyFleetSavedView);
+  document.querySelector("[data-action='delete-fleet-view']")?.addEventListener("click", deleteFleetSavedView);
+  document.querySelectorAll("[data-fleet-drilldown]").forEach((button) => button.addEventListener("click", async () => {
+    const filterType = button.dataset.fleetDrilldown;
+    const filterValue = button.dataset.filterValue || "";
+    if (filterType === "manager") state.fleetManagerFilter = filterValue;
+    if (filterType === "district") state.fleetDistrictFilter = button.dataset.filterLabel || "";
+    state.fleetSelectedIds = [];
+    await loadServerTablePage(tableStateKey("SACCO fleet directory"), 0);
+    document.querySelector(".fleet-directory-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+  document.querySelectorAll("[data-fleet-job-results]").forEach((button) => button.addEventListener("click", () => openFleetJobResults(button.dataset.fleetJobResults)));
+  document.querySelectorAll("[data-fleet-job-decision]").forEach((button) => button.addEventListener("click", () => decideFleetBulkJob(button.dataset.jobId, button.dataset.fleetJobDecision)));
+  document.querySelectorAll("[data-review-fleet-approval]").forEach((button) => button.addEventListener("click", () => {
+    state.selectedFleetApprovalId = button.dataset.reviewFleetApproval;
+    renderShell();
+    document.querySelector("#fleetApprovalReview")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+  document.querySelector("[data-close-fleet-approval]")?.addEventListener("click", () => {
+    state.selectedFleetApprovalId = "";
+    renderShell();
+  });
+  document.querySelectorAll("[data-fleet-approval-filter]").forEach((button) => button.addEventListener("click", () => {
+    state.fleetApprovalFilter = button.dataset.fleetApprovalFilter;
+    state.selectedFleetApprovalId = "";
+    renderShell();
+  }));
+  [["fleetApprovalSearch", "fleetApprovalSearch"], ["fleetApprovalTypeFilter", "fleetApprovalTypeFilter"], ["fleetApprovalPriorityFilter", "fleetApprovalPriorityFilter"]].forEach(([id, key]) => {
+    document.getElementById(id)?.addEventListener("change", (event) => {
+      state[key] = event.target.value;
+      state.selectedFleetApprovalId = "";
+      renderShell();
+    });
+  });
+  document.querySelectorAll("[data-fleet-approval-page]").forEach((button) => button.addEventListener("click", () => loadFleetApprovalQueue(Number(button.dataset.fleetApprovalPage || 0))));
+  document.querySelector("[data-action='refresh-fleet-approvals']")?.addEventListener("click", () => loadFleetApprovalQueue(state.fleetApprovalPage));
+  document.querySelector("#platformPaymentApprovalFilters")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.platformPaymentApprovalSearch = value("platformPaymentApprovalSearch").trim();
+    state.platformPaymentApprovalChannel = value("platformPaymentApprovalChannel");
+    state.platformPaymentApprovalAmount = value("platformPaymentApprovalAmount");
+    state.platformPaymentApprovalTenant = value("platformPaymentApprovalTenant");
+    state.selectedPaymentApprovalId = "";
+    loadPlatformPaymentApprovals(0);
+  });
+  document.querySelector("[data-action='clear-payment-approval-filters']")?.addEventListener("click", () => {
+    state.platformPaymentApprovalSearch = "";
+    state.platformPaymentApprovalChannel = "";
+    state.platformPaymentApprovalAmount = "";
+    state.platformPaymentApprovalTenant = "";
+    state.selectedPaymentApprovalId = "";
+    loadPlatformPaymentApprovals(0);
+  });
+  document.querySelector("[data-action='refresh-payment-approvals']")?.addEventListener("click", () => loadPlatformPaymentApprovals(state.platformPaymentApprovalPage));
+  document.querySelectorAll("[data-payment-approval-page]").forEach((button) => button.addEventListener("click", () => loadPlatformPaymentApprovals(Number(button.dataset.paymentApprovalPage || 0))));
+  document.querySelectorAll("[data-payment-decision]").forEach((button) => button.addEventListener("click", () => decidePlatformPayment(button.dataset.transactionId, button.dataset.paymentDecision)));
+  document.querySelectorAll("[data-payment-approval-tab]").forEach((button) => button.addEventListener("click", () => {
+    state.platformPaymentApprovalTab = button.dataset.paymentApprovalTab;
+    state.selectedPaymentApprovalId = "";
+    renderShell();
+  }));
+  document.querySelectorAll("[data-review-payment-approval]").forEach((button) => button.addEventListener("click", () => {
+    state.selectedPaymentApprovalId = button.dataset.reviewPaymentApproval;
+    renderShell();
+  }));
+  document.querySelector("[data-action='close-payment-approval-review']")?.addEventListener("click", () => {
+    state.selectedPaymentApprovalId = "";
+    renderShell();
+  });
+  document.querySelector("[data-action='close-fleet-job-results']")?.addEventListener("click", closeFleetJobResults);
+  document.querySelector("[data-action='export-fleet-job-results']")?.addEventListener("click", exportFleetJobResults);
+  document.querySelectorAll("[data-incident-action]").forEach((button) => button.addEventListener("click", () => updateFleetIncident(button.dataset.incidentKey, button.dataset.incidentAction)));
+  document.querySelectorAll("[data-assign-incident]").forEach((button) => button.addEventListener("click", () => assignFleetIncident(button.dataset.assignIncident)));
+  document.querySelector("#fleetRenewalRate")?.addEventListener("change", (event) => {
+    state.fleetRenewalRate = Number(event.target.value);
+    renderShell();
+  });
+  document.querySelector("#fleetRenewalPriceAdjustment")?.addEventListener("change", (event) => {
+    state.fleetRenewalPriceAdjustment = Number(event.target.value);
+    renderShell();
+  });
+  document.querySelectorAll("[data-renewal-preset]").forEach((button) => button.addEventListener("click", () => {
+    const preset = button.dataset.renewalPreset;
+    const values = preset === "conservative" ? [65, -5] : preset === "growth" ? [95, 8] : [85, 0];
+    state.fleetRenewalRate = values[0];
+    state.fleetRenewalPriceAdjustment = values[1];
+    renderShell();
+  }));
+  document.querySelector("#fleetScenarioSaveForm")?.addEventListener("submit", saveFleetRenewalScenario);
+  document.querySelectorAll("[data-apply-renewal-scenario]").forEach((button) => button.addEventListener("click", () => applyFleetRenewalScenario(button.dataset.applyRenewalScenario)));
+  document.querySelectorAll("[data-delete-renewal-scenario]").forEach((button) => button.addEventListener("click", () => deleteFleetRenewalScenario(button.dataset.deleteRenewalScenario)));
   document.querySelector("#saccoApplicationAccessFilter")?.addEventListener("change", (event) => {
     state.saccoApplicationAccessFilter = event.target.value;
     resetSaccoApplicationTableSearch();
@@ -710,6 +964,30 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='platform-transaction-detail']").forEach((button) => {
     button.addEventListener("click", () => openPlatformTransactionDetail(button.dataset.rowId));
   });
+  document.querySelector("#platformTransactionFilters")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.platformTransactionSearch = value("platformTransactionSearch").trim();
+    state.platformTransactionDateFrom = value("platformTransactionDateFrom");
+    state.platformTransactionDateTo = value("platformTransactionDateTo");
+    state.platformTransactionTenant = value("platformTransactionTenant");
+    state.platformTransactionChannel = value("platformTransactionChannel");
+    state.platformTransactionStatus = value("platformTransactionStatus");
+    renderShell();
+  });
+  document.querySelector("[data-action='clear-platform-transaction-filters']")?.addEventListener("click", () => {
+    state.platformTransactionSearch = "";
+    state.platformTransactionDateFrom = "";
+    state.platformTransactionDateTo = "";
+    state.platformTransactionTenant = "";
+    state.platformTransactionChannel = "";
+    state.platformTransactionStatus = "";
+    renderShell();
+  });
+  document.querySelector("[data-action='export-platform-transactions']")?.addEventListener("click", exportPlatformTransactions);
+  document.querySelector("[data-action='clear-platform-transaction-form']")?.addEventListener("click", () => {
+    state.platformTransactionMessage = "";
+    state.platformTransactionError = "";
+  });
   document.querySelector("#platformTransactionSaccoSearch")?.addEventListener("change", (event) => {
     const match = resolvePlatformTransactionSearch(event.target.value);
     if (!match) return;
@@ -728,6 +1006,47 @@ function bindEvents() {
   document.querySelector("#subscriptionYearFilter")?.addEventListener("change", (event) => {
     state.subscriptionYearFilter = event.target.value;
     renderShell();
+  });
+  document.querySelector("#subscriptionControlFilters")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.subscriptionControlSearch = value("subscriptionControlSearch").trim();
+    state.subscriptionControlStatus = value("subscriptionControlStatus");
+    renderShell();
+  });
+  document.querySelector("[data-action='clear-subscription-control-filters']")?.addEventListener("click", () => {
+    state.subscriptionControlSearch = "";
+    state.subscriptionControlStatus = "";
+    renderShell();
+  });
+  document.querySelectorAll("[data-open-subscription-renewal]").forEach((button) => button.addEventListener("click", () => {
+    state.selectedSubscriptionRenewalId = button.dataset.openSubscriptionRenewal;
+    state.selectedSubscriptionId = button.dataset.openSubscriptionRenewal;
+    state.selectedSubscriptionError = "";
+    renderShell();
+  }));
+  document.querySelectorAll("[data-row-action='subscription-renewal']").forEach((button) => button.addEventListener("click", () => {
+    state.selectedSubscriptionRenewalId = button.dataset.rowId;
+    state.selectedSubscriptionId = button.dataset.rowId;
+    state.selectedSubscriptionError = "";
+    renderShell();
+  }));
+  document.querySelector("[data-action='close-subscription-renewal']")?.addEventListener("click", () => {
+    state.selectedSubscriptionRenewalId = "";
+    state.selectedSubscriptionError = "";
+    renderShell();
+  });
+  document.querySelector("#subscriptionRenewalForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const verifiedInput = /** @type {HTMLInputElement | null} */ (document.getElementById("subscriptionRenewalPaymentVerified"));
+    const verified = Boolean(verifiedInput?.checked);
+    const overrideReason = value("subscriptionRenewalOverrideReason").trim();
+    if (!verified && !overrideReason) {
+      state.selectedSubscriptionError = "Verify payment or provide an authorized administrative override reason.";
+      renderShell();
+      return;
+    }
+    await recordSubscriptionPayment(Number(value("subscriptionPaymentAmount") || 0));
+    if (!state.selectedSubscriptionError) state.selectedSubscriptionRenewalId = "";
   });
   document.querySelector("#subscriptionYearSort")?.addEventListener("change", (event) => {
     state.subscriptionYearSort = event.target.value;
@@ -914,11 +1233,25 @@ function bindEvents() {
   document.querySelectorAll("[data-row-action='notification-retry']").forEach((button) => {
     button.addEventListener("click", () => retryNotificationDelivery(button.dataset.rowId));
   });
+  document.querySelectorAll("[data-row-action='notification-detail']").forEach((button) => button.addEventListener("click", () => {
+    state.selectedNotificationDeliveryId = button.dataset.rowId;
+    renderShell();
+  }));
+  document.querySelector("[data-action='close-notification-delivery-detail']")?.addEventListener("click", () => {
+    state.selectedNotificationDeliveryId = "";
+    renderShell();
+  });
   document.querySelectorAll("[data-notification-bulk-ack]").forEach((button) => {
     button.addEventListener("click", () => acknowledgeVisibleNotifications(button.dataset.notificationBulkAck));
   });
   document.querySelectorAll("[data-message-category]").forEach((button) => {
     button.addEventListener("click", () => setMessageCategory(button.dataset.messageCategory));
+  });
+  document.querySelectorAll("[data-message-repository-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.messageRepositoryTab = button.dataset.messageRepositoryTab;
+      renderShell();
+    });
   });
   document.querySelector("[data-send-sacco-message]")?.addEventListener("click", () => sendSaccoMessage());
   document.querySelector("[data-save-membership-calendar]")?.addEventListener("click", () => saveMembershipCalendar());
@@ -975,7 +1308,7 @@ function bindEvents() {
   document.querySelectorAll("[data-member-dues-participation]").forEach((button) => {
     button.addEventListener("click", () => setMemberDuesParticipation(button.dataset.memberDuesParticipation, button.dataset.participationStatus));
   });
-  document.querySelector("#subscriptionPaymentForm")?.addEventListener("submit", initiateMemberDuesMobileMoney);
+  document.querySelector("#memberSubscriptionPaymentForm")?.addEventListener("submit", initiateMemberDuesMobileMoney);
   document.querySelectorAll("[data-action='close-subscription-payment-dialog']").forEach((button) => {
     button.addEventListener("click", closeSubscriptionPaymentDialog);
   });
@@ -1014,18 +1347,35 @@ function bindEvents() {
     button.addEventListener("click", () => saveCollectionSettings(button.dataset.saveCollectionSettings));
   });
   document.querySelectorAll("[data-add-collection-account]").forEach((button) => {
-    button.addEventListener("click", () => saveCollectionAccount());
+    button.addEventListener("click", () => saveCollectionAccount(button.dataset.accountTenantId || ""));
   });
   document.querySelectorAll("[data-remove-collection-account]").forEach((button) => {
-    button.addEventListener("click", () => removeCollectionAccount(button.dataset.removeCollectionAccount));
+    button.addEventListener("click", () => removeCollectionAccount(button.dataset.removeCollectionAccount, button.dataset.accountTenantId || ""));
+  });
+  document.querySelectorAll("[data-update-collection-account]").forEach((button) => {
+    button.addEventListener("click", () => updateCollectionAccount(button.dataset.updateCollectionAccount, button.dataset.accountTenantId || ""));
+  });
+  document.querySelectorAll("[data-add-platform-mobile-money-account]").forEach((button) => {
+    button.addEventListener("click", () => savePlatformMobileMoneyAccount());
+  });
+  document.querySelectorAll("[data-remove-platform-mobile-money-account]").forEach((button) => {
+    button.addEventListener("click", () => removePlatformMobileMoneyAccount(button.dataset.removePlatformMobileMoneyAccount));
   });
   document.querySelector("[data-action='close-tenant-detail']")?.addEventListener("click", () => {
     state.selectedTenantId = "";
     state.selectedTenant = null;
     state.selectedTenantProfile = null;
     state.selectedTenantPaymentAccounts = [];
+    state.selectedTenantOfficials = [];
+    state.selectedTenantMembers = [];
     state.selectedTenantMessage = "";
     state.selectedTenantError = "";
+    renderShell();
+  });
+  document.querySelector("[data-action='open-member-registration-for-tenant']")?.addEventListener("click", () => {
+    state.memberFormTenantId = state.selectedTenantId || "";
+    state.currentView = "members";
+    state.memberTab = "register";
     renderShell();
   });
   document.querySelector("[data-action='close-subscription-detail']")?.addEventListener("click", () => {
@@ -1161,8 +1511,13 @@ function bindEvents() {
     input.addEventListener("change", syncGovernanceChairpersonMemberSelection);
   });
   document.querySelector("#memberRegistrationForm")?.addEventListener("submit", createMemberFromForm);
+  document.querySelector("#newMemberTenantId")?.addEventListener("change", (event) => {
+    state.memberFormTenantId = event.target.value || "";
+    renderShell();
+  });
   document.querySelector("#memberDocumentForm")?.addEventListener("submit", createMemberDocumentFromForm);
   document.querySelector("#platformSaccoForm")?.addEventListener("submit", createPlatformSacco);
+  document.querySelector("#trialExtensionForm")?.addEventListener("submit", extendSelectedTenantTrial);
   document.querySelector("#newTenantName")?.addEventListener("input", updateGeneratedSaccoCode);
   document.querySelector("#newTenantCountry")?.addEventListener("change", () => syncCountryCurrency("newTenantCountry", "newTenantCurrencyCode"));
   syncCountryCurrency("newTenantCountry", "newTenantCurrencyCode");
@@ -1194,6 +1549,8 @@ function bindEvents() {
   document.querySelector("#notificationTemplateForm")?.addEventListener("submit", createNotificationTemplate);
   document.querySelector("#notificationTemplateEditForm")?.addEventListener("submit", saveNotificationTemplate);
   document.querySelector("#platformSecurityPolicyForm")?.addEventListener("submit", savePlatformSecurityPolicy);
+  document.querySelector("#platformMobileMoneyConfigForm")?.addEventListener("submit", savePlatformMobileMoneyConfig);
+  document.querySelector("#platformProfileForm")?.addEventListener("submit", savePlatformProfile);
   document.querySelector("#branchSetupForm")?.addEventListener("submit", createBranchFromForm);
   document.querySelectorAll("[data-product-form]").forEach((form) => form.addEventListener("submit", createFinancialProduct));
   document.querySelectorAll("[data-account-form]").forEach((form) => form.addEventListener("submit", openFinancialAccount));
@@ -1280,17 +1637,57 @@ function bindEvents() {
     runMemberDecision("custom");
   });
   document.querySelector("#memberProfileForm")?.addEventListener("submit", saveMemberProfile);
+  document.querySelector("#memberSelfProfileForm")?.addEventListener("submit", saveMemberContact);
+  document.querySelector("#memberProfilePhotoForm")?.addEventListener("submit", uploadMemberProfilePhoto);
   document.querySelector("#memberStaffLinkForm")?.addEventListener("submit", saveMemberStaffLink);
   document.querySelector("#tenantStatusForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     saveTenantStatus(value("selectedTenantStatus"));
   });
+  document.querySelectorAll("[data-assign-sacco-official]").forEach((button) => {
+    button.addEventListener("click", () => assignSaccoOfficial(button.dataset.assignSaccoOfficial));
+  });
+  document.querySelector("#addTenantMemberForm")?.addEventListener("submit", addTenantMember);
+  document.querySelectorAll("[data-approve-tenant-member]").forEach((button) => {
+    button.addEventListener("click", () => approveTenantMember(button.dataset.approveTenantMember));
+  });
+  document.querySelectorAll("[data-reject-tenant-member]").forEach((button) => {
+    button.addEventListener("click", () => rejectTenantMember(button.dataset.rejectTenantMember));
+  });
+  document.querySelectorAll("[data-reactivate-tenant-member]").forEach((button) => {
+    button.addEventListener("click", () => reactivateTenantMember(button.dataset.reactivateTenantMember));
+  });
+  document.querySelectorAll("[data-verify-member-kyc]").forEach((button) => {
+    button.addEventListener("click", () => verifyMemberKyc(button.dataset.verifyMemberKyc));
+  });
+  document.querySelectorAll("[data-reject-member-kyc]").forEach((button) => {
+    button.addEventListener("click", () => rejectMemberKyc(button.dataset.rejectMemberKyc));
+  });
+  document.querySelectorAll("[data-grant-official-staff]").forEach((button) => {
+    button.addEventListener("click", () => grantOfficialStaffAccess(button.dataset.memberId, button.dataset.grantOfficialStaff));
+  });
+  document.querySelector("#deleteTenantForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    deleteSelectedSacco(value("deleteTenantConfirmCode"));
+  });
+  document.querySelector("#tenantDetailsForm")?.addEventListener("submit", saveSelectedTenantDetails);
   document.querySelector("#subscriptionPaymentForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    recordSubscriptionPayment();
+    if (document.getElementById("platformTransactionSubscriptionId")) recordPlatformSubscriptionPayment();
+    else recordSubscriptionPayment();
   });
   document.querySelector("[data-subscription-payment-mode]")?.addEventListener("change", syncSubscriptionPaymentMode);
   document.querySelector("[data-subscription-member-slots]")?.addEventListener("input", syncSubscriptionPaymentMode);
+  document.querySelector("#subscriptionPaymentChannel")?.addEventListener("change", syncSubscriptionPaymentChannel);
+  syncSubscriptionPaymentChannel();
+  document.querySelector("#savingsImportCsv")?.addEventListener("input", (event) => { state.savingsImportCsv = event.target.value; });
+  document.querySelector("[data-action='download-savings-template']")?.addEventListener("click", downloadSavingsImportTemplate);
+  document.querySelector("[data-action='validate-savings-import']")?.addEventListener("click", () => importSavingsDeposits(true));
+  document.querySelector("[data-action='import-savings-deposits']")?.addEventListener("click", () => importSavingsDeposits(false));
+  document.querySelector("#memberImportCsv")?.addEventListener("input", (event) => { state.memberImportCsv = event.target.value; });
+  document.querySelector("[data-action='download-member-template']")?.addEventListener("click", downloadMemberImportTemplate);
+  document.querySelector("[data-action='validate-member-import']")?.addEventListener("click", () => importMembersFromCsv(true));
+  document.querySelector("[data-action='import-members']")?.addEventListener("click", () => importMembersFromCsv(false));
   document.querySelector("#packageSetupForm")?.addEventListener("submit", savePackageSetup);
   document.querySelectorAll("[data-tenant-status]").forEach((button) => {
     button.addEventListener("click", () => saveTenantStatus(button.dataset.tenantStatus));
@@ -1300,6 +1697,9 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-member-decision]").forEach((button) => {
     button.addEventListener("click", () => runMemberDecision(button.dataset.memberDecision));
+  });
+  document.querySelectorAll("[data-send-member-credentials]").forEach((button) => {
+    button.addEventListener("click", () => sendMemberActivationCredentials(button.dataset.memberId, button.dataset.sendMemberCredentials));
   });
   document.querySelectorAll("[data-transaction-action]").forEach((button) => {
     button.addEventListener("click", () => runTransactionAction(button.dataset.transactionAction));
@@ -1366,6 +1766,14 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-payment-provider-status]").forEach((button) => {
     button.addEventListener("click", () => refreshPaymentRequestProviderStatus(button.dataset.paymentProviderStatus));
+  });
+  document.querySelectorAll("[data-chat-retry]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const threadId = button.dataset.chatRetry || state.selectedComplaintId;
+      state.chatError = "";
+      if (threadId) loadChatMessages(threadId);
+      else refreshChatThreads().then(() => renderShell());
+    });
   });
   document.querySelectorAll("[data-action='refresh']").forEach((button) => button.addEventListener("click", refreshAll));
   document.querySelectorAll("[data-action='refresh-member']").forEach((button) => button.addEventListener("click", refreshMember));
@@ -1459,7 +1867,8 @@ function bindEvents() {
   document.querySelector("#globalSearch")?.addEventListener("input", (event) => {
     state.search = event.target.value;
     state.quickSearchActiveId = "";
-    renderShell();
+    schedulePlatformQuickSearch(state.search);
+    if (!isPlatform()) renderShell();
   });
   document.querySelectorAll("[data-search-input]").forEach((input) => input.addEventListener("input", (event) => {
     state.search = event.target.value;

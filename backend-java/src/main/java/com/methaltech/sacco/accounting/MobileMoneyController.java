@@ -94,6 +94,9 @@ class MobileMoneyController {
         MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
         if (currentSession == null) return memberAuthService.authRequired();
 
+        ResponseEntity<?> providerValidation = validatePaymentProvider(body.provider());
+        if (providerValidation != null) return providerValidation;
+
         Member member = currentSession.member();
         if (!"active".equals(member.getStatus())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -192,7 +195,7 @@ class MobileMoneyController {
                 || !authService.hasPermission(currentSession.user(), "member-subscription:manage"))) {
             return authService.permissionRequired(requiredPermission);
         }
-        ResponseEntity<?> providerValidation = validateStaffPaymentProvider(body.provider());
+        ResponseEntity<?> providerValidation = validatePaymentProvider(body.provider());
         if (providerValidation != null) return providerValidation;
         Member member = memberRepository.findById(body.memberId().trim()).orElse(null);
         if (member == null) {
@@ -261,7 +264,7 @@ class MobileMoneyController {
         }
         MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(MobileMoneyPaymentRequestEntity.from(
                 result,
-                "",
+                null,
                 phone,
                 payload(body.providerPayload())));
         auditService.record(
@@ -291,7 +294,7 @@ class MobileMoneyController {
         return Money.normalize(balanceDue.compareTo(BigDecimal.ZERO) > 0 ? balanceDue : subscription.getAmount());
     }
 
-    private ResponseEntity<?> validateStaffPaymentProvider(String provider) {
+    private ResponseEntity<?> validatePaymentProvider(String provider) {
         if (provider == null || provider.isBlank()) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "MOBILE_MONEY_PROVIDER_REQUIRED",
@@ -315,7 +318,7 @@ class MobileMoneyController {
         if (!authService.hasPermission(currentSession.user(), "subscriptions:manage")) {
             return authService.permissionRequired("subscriptions:manage");
         }
-        ResponseEntity<?> providerValidation = validateStaffPaymentProvider(body.provider());
+        ResponseEntity<?> providerValidation = validatePaymentProvider(body.provider());
         if (providerValidation != null) return providerValidation;
         String tenantId = authService.isPlatform(currentSession.user()) && body.tenantId() != null && !body.tenantId().isBlank()
                 ? body.tenantId().trim()
@@ -388,7 +391,7 @@ class MobileMoneyController {
         }
         MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(MobileMoneyPaymentRequestEntity.from(
                 result,
-                "",
+                null,
                 phone,
                 payload(saccoSubscriptionPayload(body.providerPayload(), body.memberSubscriptionIds()))));
         auditService.record(
@@ -411,7 +414,7 @@ class MobileMoneyController {
         if (!authService.hasPermission(currentSession.user(), "notifications:manage")) {
             return authService.permissionRequired("notifications:manage");
         }
-        ResponseEntity<?> providerValidation = validateStaffPaymentProvider(body.provider());
+        ResponseEntity<?> providerValidation = validatePaymentProvider(body.provider());
         if (providerValidation != null) return providerValidation;
         String tenantId = authService.isPlatform(currentSession.user()) && body.tenantId() != null && !body.tenantId().isBlank()
                 ? body.tenantId().trim()
@@ -678,6 +681,7 @@ class MobileMoneyController {
     }
 
     @GetMapping("/payment-requests/{requestId}/provider-status")
+    @Transactional
     ResponseEntity<?> refreshProviderStatus(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @PathVariable String requestId,
@@ -747,9 +751,10 @@ class MobileMoneyController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "TENANT_ACCESS_DENIED", "Requested SACCO scope does not match this mobile-money payment request."));
         }
-        if ("posted".equals(request.getStatus())) {
+        if (MobileMoneyPaymentRules.providerFundsReceived(request.getStatus())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "PAYMENT_REQUEST_ALREADY_POSTED", "Posted payment requests cannot be changed manually."));
+                    .body(ApiErrorResponse.of(409, "PAYMENT_REQUEST_ALREADY_POSTED",
+                            "Payment requests with received provider funds cannot be changed manually."));
         }
         request.updateStatus(status, body.reason());
         MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(request);
@@ -833,19 +838,46 @@ class MobileMoneyController {
     }
 
     private ResponseEntity<?> refreshAndSaveProviderStatus(MobileMoneyPaymentRequestEntity request) {
-        if ("posted".equals(request.getStatus())) {
+        if (!MobileMoneyPaymentRules.providerStatusRefreshable(request.getStatus())) {
             return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(request)));
         }
         try {
             MobileMoneyProviderStatusResult result = mobileMoneyRouter.resolve(request.getProvider()).queryPaymentStatus(request);
             request.syncProviderStatus(result);
             MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(request);
+            if ("paid_pending_callback".equals(saved.getStatus())) {
+                ResponseEntity<?> posting = postProviderConfirmedRequest(saved, result);
+                if (!posting.getStatusCode().is2xxSuccessful()) return posting;
+                MobileMoneyPaymentRequestEntity posted = paymentRequestRepository.findById(saved.getId()).orElse(saved);
+                return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(posted)));
+            }
             return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
         } catch (MobileMoneyProviderException exception) {
             request.recordProviderStatusCheckFailure("Provider status check failed: " + exception.getMessage());
             MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(request);
             return ResponseEntity.ok(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
         }
+    }
+
+    private ResponseEntity<?> postProviderConfirmedRequest(
+            MobileMoneyPaymentRequestEntity request,
+            MobileMoneyProviderStatusResult providerStatus) {
+        Map<String, Object> providerPayload = new java.util.LinkedHashMap<>();
+        providerPayload.put("source", "authenticated_provider_status_check");
+        providerPayload.put("providerStatus", providerStatus.providerStatus());
+        if (providerStatus.providerReference() != null) {
+            providerPayload.put("providerReference", providerStatus.providerReference());
+        }
+        return receiveCallback(new MobileMoneyCallbackRequest(
+                request.getTenantId(),
+                request.getMemberId(),
+                null,
+                request.getLoanId(),
+                request.getPurpose(),
+                request.getAmount(),
+                request.getExternalReference(),
+                request.getProvider(),
+                providerPayload));
     }
 
     private ResponseEntity<?> postContribution(
@@ -862,7 +894,7 @@ class MobileMoneyController {
         ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
         if (idempotencyConflict != null) return idempotencyConflict;
 
-        FinancialTransaction transaction = transactionRepository.save(FinancialTransaction.postedProviderTransaction(
+        FinancialTransaction transaction = transactionRepository.save(FinancialTransaction.pendingProviderTransaction(
                 "txn_" + UUID.randomUUID(),
                 tenantId,
                 member.getBranchId(),
@@ -873,11 +905,7 @@ class MobileMoneyController {
                 externalReference,
                 "Mobile-money " + body.purpose().trim().replace('_', ' '),
                 SYSTEM_USER_ID));
-        member.applyPostedTransaction(body.purpose().trim(), amount);
-        memberRepository.save(member);
-        memberFundBalanceService.applyPosted(tenantId, member.getId(), body.purpose().trim(), amount);
-        createStatementLine(tenantId, amount, externalReference, "Mobile-money collection " + body.purpose().trim());
-        notificationService.notifyPaymentPosted(member, body.purpose().trim(), amount, "financial_transaction", transaction.getId());
+        notificationService.notifyPaymentPendingApproval(member, body.purpose().trim(), amount, "financial_transaction", transaction.getId());
 
         MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
                 "callback_" + UUID.randomUUID(),
@@ -888,10 +916,10 @@ class MobileMoneyController {
                 externalReference,
                 provider,
                 payload(body.providerPayload()),
-                "posted",
+                "pending_approval",
                 "financial_transaction",
                 transaction.getId()));
-        markMatchingPaymentRequestPosted(tenantId, externalReference, "financial_transaction", transaction.getId());
+        markMatchingPaymentRequestPendingApproval(tenantId, externalReference, "financial_transaction", transaction.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
     }
 
@@ -918,7 +946,7 @@ class MobileMoneyController {
         MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
                 "callback_" + UUID.randomUUID(),
                 tenantId,
-                "",
+                null,
                 body.purpose().trim(),
                 amount,
                 externalReference,
@@ -987,9 +1015,6 @@ class MobileMoneyController {
             String provider,
             Member member,
             BigDecimal amount) {
-        ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
-        if (idempotencyConflict != null) return idempotencyConflict;
-
         Subscription subscription = subscriptionRepository.findFirstByTenantIdOrderByCreatedAtDesc(tenantId).orElse(null);
         if (subscription == null) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -1044,9 +1069,6 @@ class MobileMoneyController {
             String provider,
             BigDecimal amount,
             MobileMoneyPaymentRequestEntity matchingRequest) {
-        ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
-        if (idempotencyConflict != null) return idempotencyConflict;
-
         Subscription subscription = subscriptionRepository.findFirstByTenantIdOrderByCreatedAtDesc(tenantId).orElse(null);
         if (subscription == null) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -1062,6 +1084,9 @@ class MobileMoneyController {
         }
         ResponseEntity<?> allocationCheck = validateSelectedMembershipAllocation(subscription, selectedMemberships, amount);
         if (allocationCheck != null) return allocationCheck;
+
+        ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
+        if (idempotencyConflict != null) return idempotencyConflict;
 
         SubscriptionPayment payment = subscriptionPaymentRepository.save(new SubscriptionPayment(
                 "subscription_payment_" + UUID.randomUUID(),
@@ -1083,7 +1108,7 @@ class MobileMoneyController {
         MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
                 "callback_" + UUID.randomUUID(),
                 tenantId,
-                "",
+                null,
                 body.purpose().trim(),
                 amount,
                 externalReference,
@@ -1246,7 +1271,7 @@ class MobileMoneyController {
                 "pending_approval",
                 "loan_repayment",
                 repayment.getId()));
-        markMatchingPaymentRequestPosted(tenantId, externalReference, "loan_repayment", repayment.getId());
+        markMatchingPaymentRequestPendingApproval(tenantId, externalReference, "loan_repayment", repayment.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
     }
 
@@ -1269,6 +1294,18 @@ class MobileMoneyController {
         paymentRequestRepository.findByTenantIdAndExternalReferenceIgnoreCase(tenantId, externalReference)
                 .ifPresent(request -> {
                     request.markPosted(resourceType, resourceId);
+                    paymentRequestRepository.save(request);
+                });
+    }
+
+    private void markMatchingPaymentRequestPendingApproval(
+            String tenantId,
+            String externalReference,
+            String resourceType,
+            String resourceId) {
+        paymentRequestRepository.findByTenantIdAndExternalReferenceIgnoreCase(tenantId, externalReference)
+                .ifPresent(request -> {
+                    request.markPendingApproval(resourceType, resourceId);
                     paymentRequestRepository.save(request);
                 });
     }

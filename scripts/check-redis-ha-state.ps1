@@ -64,6 +64,7 @@ try {
   try {
     Invoke-Checked ".\mvnw.cmd" @(
       "-Dtest=RedisSharedStateSmokeTest",
+      "-Djacoco.skip=true",
       "-Dsacco.redis.url=$redisUrl",
       "test"
     )

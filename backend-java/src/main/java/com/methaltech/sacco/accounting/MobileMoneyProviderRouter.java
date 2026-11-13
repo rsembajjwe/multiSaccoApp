@@ -6,6 +6,7 @@ import java.util.Locale;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import com.methaltech.sacco.config.ProviderCredentialService;
 
 /**
  * Selects the mobile-money provider for a request by the payer's network, so several providers (e.g.
@@ -17,10 +18,14 @@ import org.springframework.stereotype.Component;
 public class MobileMoneyProviderRouter {
 
     private final Map<String, MobileMoneyProvider> providersById = new HashMap<>();
-    private final MobileMoneyProvider defaultProvider;
+    private final ProviderCredentialService credentialService;
+    private final MobileMoneyProvider demoProvider;
+    private final List<MobileMoneyProvider> allProviders;
+    private final String environmentDefaultProviderId;
 
     MobileMoneyProviderRouter(
             List<MobileMoneyProvider> providers,
+            ProviderCredentialService credentialService,
             @Value("${sacco.providers.mobile-money:demo_mobile_money}") String defaultProviderId) {
         MobileMoneyProvider demo = null;
         for (MobileMoneyProvider provider : providers) {
@@ -32,7 +37,10 @@ public class MobileMoneyProviderRouter {
             }
             providersById.put(provider.providerId(), provider);
         }
-        this.defaultProvider = resolveDefault(defaultProviderId, demo, providers);
+        this.credentialService = credentialService;
+        this.demoProvider = demo;
+        this.allProviders = List.copyOf(providers);
+        this.environmentDefaultProviderId = defaultProviderId;
     }
 
     /** Provider for the requested network; falls back to the default when the network is unknown or
@@ -45,7 +53,7 @@ public class MobileMoneyProviderRouter {
                 return provider;
             }
         }
-        return defaultProvider;
+        return defaultProvider();
     }
 
     boolean recognizesNetwork(String requestedNetwork) {
@@ -59,12 +67,13 @@ public class MobileMoneyProviderRouter {
                 .sorted(java.util.Comparator.comparing(PaymentProviderOption::network))
                 .toList();
         if (!configured.isEmpty()) return configured;
-        if (defaultProvider == null) return List.of();
-        return List.of(new PaymentProviderOption("default", "Mobile money", defaultProvider.providerId(), true));
+        MobileMoneyProvider fallback = defaultProvider();
+        if (fallback == null) return List.of();
+        return List.of(new PaymentProviderOption("default", "Mobile money", fallback.providerId(), true));
     }
 
     MobileMoneyProvider defaultProvider() {
-        return defaultProvider;
+        return resolveDefault(effectiveDefaultProviderId(), demoProvider, allProviders);
     }
 
     /** Live account/float balances for every configured provider that supports a balance lookup
@@ -102,6 +111,14 @@ public class MobileMoneyProviderRouter {
             return firstConfiguredReal;
         }
         return demo != null ? demo : (all.isEmpty() ? null : all.get(0));
+    }
+
+    private String effectiveDefaultProviderId() {
+        String stored = credentialService.resolve(
+                ProviderCredentialService.PLATFORM_SCOPE,
+                "mobile_money",
+                "active_provider");
+        return stored == null || stored.isBlank() ? environmentDefaultProviderId : stored;
     }
 
     private static String canonicalId(String network) {

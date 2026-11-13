@@ -3,6 +3,8 @@ package com.methaltech.sacco.identity;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.security.TokenGenerator;
 import java.time.Instant;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -62,12 +64,18 @@ public class AuthService {
 
     public boolean hasPermission(User user, String permissionId) {
         if (user == null || permissionId == null || permissionId.isBlank()) return false;
+        return permissionIds(user).contains(permissionId);
+    }
+
+    public Set<String> permissionIds(User user) {
+        if (user == null) return Set.of();
         var roleIds = userRoleRepository.findByIdUserIdAndTenantId(user.getId(), user.getTenantId()).stream()
                 .map(userRole -> userRole.getId().getRoleId())
                 .toList();
-        if (roleIds.isEmpty()) return false;
+        if (roleIds.isEmpty()) return Set.of();
         return rolePermissionRepository.findByIdRoleIdIn(roleIds).stream()
-                .anyMatch(rolePermission -> permissionId.equals(rolePermission.getId().getPermissionId()));
+                .map(rolePermission -> rolePermission.getId().getPermissionId())
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     public ResponseEntity<ApiErrorResponse> permissionRequired(String permissionId) {

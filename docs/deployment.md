@@ -19,6 +19,8 @@ Edit `.env` and set a strong `POSTGRES_PASSWORD`.
 
 Keep `SACCO_DEMO_LOGINS_ENABLED=false` outside development/demo verification. The production Spring profile defaults seeded staff/member demo logins to disabled unless this environment variable is explicitly enabled.
 
+Permanent tenant purge is a maintenance-only capability. It defaults to disabled, is always disabled by the production Spring profile, and must never be used for ordinary tenant offboarding. Use `inactive`, `suspended`, or `terminated` lifecycle status so financial and audit history remains available.
+
 For hosted staging preparation, use [Staging Environment and Secrets Guide](staging-environment.md) and start from `deploy\staging.env.example`. Real staging secrets must stay in the host secret store or an untracked `.env`.
 
 For the low-budget Hetzner CX22 deployment of `tereka.online`, use [Hetzner CX22 Deployment](hetzner-cx22-deployment.md). It runs PostgreSQL, the Java backend, and Caddy on one VPS, with Caddy serving the UI and proxying `/api/v1` to the backend over one HTTPS domain.
@@ -32,7 +34,7 @@ docker compose up --build
 Health check:
 
 ```text
-http://127.0.0.1:8080/actuator/health
+http://127.0.0.1:8080/actuator/health/readiness
 ```
 
 API health:

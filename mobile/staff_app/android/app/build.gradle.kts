@@ -6,6 +6,21 @@ plugins {
 }
 
 android {
+    val releaseStoreFilePath = providers.gradleProperty("SACCO_STAFF_UPLOAD_STORE_FILE").orNull
+        ?: System.getenv("SACCO_STAFF_UPLOAD_STORE_FILE")
+    val releaseStorePassword = providers.gradleProperty("SACCO_STAFF_UPLOAD_STORE_PASSWORD").orNull
+        ?: System.getenv("SACCO_STAFF_UPLOAD_STORE_PASSWORD")
+    val releaseKeyAlias = providers.gradleProperty("SACCO_STAFF_UPLOAD_KEY_ALIAS").orNull
+        ?: System.getenv("SACCO_STAFF_UPLOAD_KEY_ALIAS")
+    val releaseKeyPassword = providers.gradleProperty("SACCO_STAFF_UPLOAD_KEY_PASSWORD").orNull
+        ?: System.getenv("SACCO_STAFF_UPLOAD_KEY_PASSWORD")
+    val hasReleaseSigning = listOf(
+        releaseStoreFilePath,
+        releaseStorePassword,
+        releaseKeyAlias,
+        releaseKeyPassword,
+    ).all { !it.isNullOrBlank() }
+
     namespace = "com.methaltech.sacco_staff_app"
     packaging {
         resources {
@@ -54,21 +69,12 @@ android {
 
     signingConfigs {
         create("release") {
-            val storeFilePath = providers.gradleProperty("SACCO_STAFF_UPLOAD_STORE_FILE").orNull
-                ?: System.getenv("SACCO_STAFF_UPLOAD_STORE_FILE")
-            val storePasswordValue = providers.gradleProperty("SACCO_STAFF_UPLOAD_STORE_PASSWORD").orNull
-                ?: System.getenv("SACCO_STAFF_UPLOAD_STORE_PASSWORD")
-            val keyAliasValue = providers.gradleProperty("SACCO_STAFF_UPLOAD_KEY_ALIAS").orNull
-                ?: System.getenv("SACCO_STAFF_UPLOAD_KEY_ALIAS")
-            val keyPasswordValue = providers.gradleProperty("SACCO_STAFF_UPLOAD_KEY_PASSWORD").orNull
-                ?: System.getenv("SACCO_STAFF_UPLOAD_KEY_PASSWORD")
-
-            if (!storeFilePath.isNullOrBlank()) {
-                storeFile = file(storeFilePath)
+            if (!releaseStoreFilePath.isNullOrBlank()) {
+                storeFile = file(releaseStoreFilePath)
             }
-            storePassword = storePasswordValue
-            keyAlias = keyAliasValue
-            keyPassword = keyPasswordValue
+            storePassword = releaseStorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
         }
     }
 
@@ -81,7 +87,11 @@ android {
         release {
             manifestPlaceholders["networkSecurityConfig"] = "@xml/network_security_config_prod"
             manifestPlaceholders["usesCleartextTraffic"] = "false"
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

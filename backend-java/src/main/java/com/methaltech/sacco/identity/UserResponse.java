@@ -9,6 +9,10 @@ record UserResponse(
         String status,
         boolean mfaEnabled,
         boolean passwordResetRequired,
+        String onboardingChannel,
+        String onboardingDeliveryStatus,
+        boolean emailVerified,
+        boolean phoneVerified,
         long activeSessionCount) {
 
     static UserResponse from(User user) {
@@ -25,6 +29,10 @@ record UserResponse(
                 user.getStatus(),
                 user.isMfaEnabled(),
                 user.isPasswordResetRequired(),
+                user.getOnboardingChannel(),
+                user.getOnboardingDeliveryStatus(),
+                user.isEmailVerified(),
+                user.isPhoneVerified(),
                 activeSessionCount);
     }
 }

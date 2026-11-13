@@ -138,6 +138,14 @@ public class Subscription {
         this.updatedAt = Instant.now();
     }
 
+    public void extendTrial(int days) {
+        LocalDate base = expiry == null || expiry.isBefore(LocalDate.now()) ? LocalDate.now() : expiry;
+        this.status = "trial";
+        this.expiry = base.plusDays(days);
+        this.lastReminderOn = null;
+        this.updatedAt = Instant.now();
+    }
+
     /** Marks the subscription expired once it has lapsed past its grace window. */
     void markExpired() {
         this.status = "expired";

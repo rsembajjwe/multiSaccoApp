@@ -87,13 +87,21 @@ describe("classic member portal renderer", () => {
     renderIntoDom(context, context.renderMemberView("money"));
     expect(text()).toContain("Statement");
 
-    context.state.moduleTabs.money = "receipts";
+    context.state.moduleTabs.money = "accounts";
     renderIntoDom(context, context.renderMemberView("money"));
-    expect(text()).toContain("Receipts");
+    expect(text()).not.toContain("Receipts");
 
     context.state.moduleTabs.profile = "contacts";
     renderIntoDom(context, context.renderMemberView("profile"));
     expect(text()).toContain("Member contact controls");
+
+    context.state.moduleTabs.profile = "security";
+    renderIntoDom(context, context.renderMemberView("profile"));
+    expect(text()).toContain("Member security center");
+
+    context.state.loading = true;
+    renderIntoDom(context, context.renderMemberView("home"));
+    expect(text()).toContain("Refreshing your member portal");
   });
 
   function text(): string {

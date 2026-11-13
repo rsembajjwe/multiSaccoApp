@@ -15,6 +15,7 @@ interface TerekaLocaleMetadata {
 
 interface TerekaPageEnvelope {
   page?: number;
+  number?: number;
   size?: number;
   totalElements?: number;
   totalPages?: number;
@@ -1832,6 +1833,7 @@ interface TerekaState {
   auth: string;
   authTab: string;
   locale: string;
+  theme: "light" | "dark";
   networkOnline: boolean;
   runtime: Record<string, any>;
   token: string;
@@ -1842,6 +1844,9 @@ interface TerekaState {
   permissionIds: string[];
   currentView: string;
   search: string;
+  platformQuickSearchResults: TerekaQuickSearchResult[];
+  platformQuickSearchLoading: boolean;
+  platformQuickSearchError: string;
   tableState: Record<string, TerekaTableState>;
   pageMeta: Record<string, TerekaPageEnvelope>;
   chatFilters: Record<string, any>;

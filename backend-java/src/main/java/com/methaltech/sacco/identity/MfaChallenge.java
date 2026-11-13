@@ -38,6 +38,9 @@ class MfaChallenge {
     @Column(name = "created_at")
     private Instant createdAt;
 
+    @Column(name = "failed_attempts", nullable = false)
+    private int failedAttempts;
+
     MfaChallenge(String id, String tenantId, String userId, String codeHash, Instant expiresAt) {
         this.id = id;
         this.tenantId = tenantId;
@@ -46,10 +49,20 @@ class MfaChallenge {
         this.status = "pending";
         this.expiresAt = expiresAt;
         this.createdAt = Instant.now();
+        this.failedAttempts = 0;
     }
 
     void verify() {
         this.status = "verified";
         this.verifiedAt = Instant.now();
+    }
+
+    boolean recordFailure(int maxAttempts) {
+        failedAttempts++;
+        if (failedAttempts >= maxAttempts) {
+            this.status = "locked";
+            return true;
+        }
+        return false;
     }
 }

@@ -1,7 +1,9 @@
 package com.methaltech.sacco.tenant;
 
 import com.methaltech.sacco.api.ApiResponse;
+import com.methaltech.sacco.branch.DefaultBranchProvisioningService;
 import com.methaltech.sacco.identity.AuditService;
+import com.methaltech.sacco.identity.DefaultSaccoRoleProvisioningService;
 import com.methaltech.sacco.notification.NotificationService;
 import com.methaltech.sacco.subscription.Subscription;
 import com.methaltech.sacco.subscription.SubscriptionRepository;
@@ -11,9 +13,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequestMapping("/api/v1/public/sacco-registrations")
@@ -32,6 +32,9 @@ class PublicSaccoRegistrationController {
     private final SubscriptionService subscriptionService;
     private final AuditService auditService;
     private final NotificationService notificationService;
+        private final DefaultBranchProvisioningService defaultBranchProvisioningService;
+        private final DefaultSaccoRoleProvisioningService defaultSaccoRoleProvisioningService;
+        private final OrganizationCodeGenerator organizationCodeGenerator;
 
     PublicSaccoRegistrationController(
             TenantRepository tenantRepository,
@@ -39,18 +42,25 @@ class PublicSaccoRegistrationController {
             SubscriptionRepository subscriptionRepository,
             SubscriptionService subscriptionService,
             AuditService auditService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            DefaultBranchProvisioningService defaultBranchProvisioningService,
+            DefaultSaccoRoleProvisioningService defaultSaccoRoleProvisioningService,
+            OrganizationCodeGenerator organizationCodeGenerator) {
         this.tenantRepository = tenantRepository;
         this.saccoProfileRepository = saccoProfileRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.subscriptionService = subscriptionService;
         this.auditService = auditService;
         this.notificationService = notificationService;
+        this.defaultBranchProvisioningService = defaultBranchProvisioningService;
+        this.defaultSaccoRoleProvisioningService = defaultSaccoRoleProvisioningService;
+        this.organizationCodeGenerator = organizationCodeGenerator;
     }
 
     @PostMapping
+    @Transactional
     ResponseEntity<?> registerSacco(@Valid @RequestBody PublicSaccoRegistrationRequest body, HttpServletRequest request) {
-        String finalSaccoCode = nextAvailableCode(generatedSaccoCode(body.name()));
+        String finalSaccoCode = organizationCodeGenerator.nextCode(body.name());
 
         Tenant tenant = new Tenant(
                 "tenant_" + UUID.randomUUID(),
@@ -66,6 +76,14 @@ class PublicSaccoRegistrationController {
                 "starter");
         tenant.updateStatus("pending_self_registration");
         tenant = tenantRepository.save(tenant);
+        defaultBranchProvisioningService.ensureMainBranch(
+                tenant.getId(),
+                tenant.getAbbreviation(),
+                blankToDefault(body.district()),
+                null);
+        // The Chairperson is the SACCO administrator; provision the Chairperson role (full admin permissions)
+        // rather than a separate "SACCO Administrator" role.
+        defaultSaccoRoleProvisioningService.ensureOfficialRole(tenant.getId(), "chairperson", null);
         SaccoProfile profile = saccoProfileRepository.save(new SaccoProfile(
                 "profile_" + UUID.randomUUID(),
                 tenant.getId(),
@@ -109,45 +127,6 @@ class PublicSaccoRegistrationController {
                 "Registration received. Your 1-month free trial is active — start using the system now and pay the subscription any time before the trial ends.")));
     }
 
-    private String generatedSaccoCode(String name) {
-        String[] words = blankToDefault(name, "SACCO")
-                .toUpperCase(Locale.ROOT)
-                .replaceAll("[^A-Z\\s]", " ")
-                .trim()
-                .split("\\s+");
-        List<String> usefulWords = java.util.Arrays.stream(words)
-                .filter(word -> !word.isBlank())
-                .filter(word -> !Set.of("SACCO", "COOPERATIVE", "COOP", "LIMITED", "LTD", "THE", "AND", "OF").contains(word))
-                .toList();
-        String source = usefulWords.isEmpty() ? "SACCO" : String.join("", usefulWords);
-        return (source.replaceAll("[^A-Z]", "") + "SACO").substring(0, 4);
-    }
-
-    private String nextAvailableCode(String requestedCode) {
-        String base = (blankToDefault(requestedCode, "SACO").replaceAll("[^A-Z]", "") + "SACO").substring(0, 4);
-        if (!codeExists(base)) return base;
-        for (int index = 0; index < 26 * 26; index++) {
-            String code = base.substring(0, 2) + (char) ('A' + (index / 26)) + (char) ('A' + (index % 26));
-            if (!codeExists(code)) return code;
-        }
-        for (int index = 0; index < 26 * 26 * 26 * 26; index++) {
-            int cursor = index;
-            char[] letters = new char[4];
-            for (int position = 3; position >= 0; position--) {
-                letters[position] = (char) ('A' + (cursor % 26));
-                cursor = cursor / 26;
-            }
-            String code = new String(letters);
-            if (!codeExists(code)) return code;
-        }
-        return base;
-    }
-
-    private boolean codeExists(String code) {
-        return tenantRepository.findAll().stream()
-                .anyMatch(tenant -> code.equalsIgnoreCase(tenant.getAbbreviation()));
-    }
-
     private String blankToDefault(String value) {
         return blankToDefault(value, "");
     }
@@ -166,7 +145,7 @@ class PublicSaccoRegistrationController {
     record PublicSaccoRegistrationRequest(
             @NotBlank String name,
             String saccoCode,
-            @NotBlank String registrationNo,
+            String registrationNo,
             @NotBlank String district,
             @NotBlank String parish,
             @NotBlank String village,
