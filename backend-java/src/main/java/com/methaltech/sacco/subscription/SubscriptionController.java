@@ -13,6 +13,7 @@ import com.methaltech.sacco.tenant.SaccoContactLookup;
 import com.methaltech.sacco.tenant.Tenant;
 import com.methaltech.sacco.tenant.TenantRepository;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -27,6 +28,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -61,6 +63,53 @@ class SubscriptionController {
                 .stream()
                 .map(SubscriptionPackageResponse::from)
                 .toList()));
+    }
+
+    @GetMapping("/api/v1/subscription-packages/admin")
+    ResponseEntity<?> listAllPackages(@RequestHeader(name = "Authorization", required = false) String authorization) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())
+                || !authService.hasPermission(currentSession.user(), "subscriptions:view")) {
+            return authService.permissionRequired("subscriptions:view");
+        }
+        return ResponseEntity.ok(ApiResponse.of(packageRepository.findAllByOrderByMemberLimitAsc().stream()
+                .map(SubscriptionPackageResponse::from)
+                .toList()));
+    }
+
+    @PatchMapping("/api/v1/subscription-packages/{packageId}")
+    ResponseEntity<?> updatePackage(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String packageId,
+            @Valid @RequestBody UpdateSubscriptionPackageRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())
+                || !authService.hasPermission(currentSession.user(), "subscriptions:manage")) {
+            return authService.permissionRequired("subscriptions:manage");
+        }
+        if (body.price() == null || body.price().signum() < 0
+                || ("active".equals(body.status()) && body.price().signum() <= 0) || body.minMembers() == null
+                || body.memberLimit() == null || body.minMembers() < 0 || body.memberLimit() < body.minMembers()
+                || body.userLimit() == null || body.userLimit() < 1 || body.branchLimit() == null
+                || body.branchLimit() < 1 || !Set.of("annual", "monthly").contains(body.billingPeriod())
+                || !Set.of("active", "inactive").contains(body.status())) {
+            return ResponseEntity.badRequest().body(ApiErrorResponse.of(
+                    400, "INVALID_SUBSCRIPTION_PACKAGE", "Enter valid package pricing, limits, period and status."));
+        }
+        SubscriptionPackage subscriptionPackage = packageRepository.findById(packageId).orElse(null);
+        if (subscriptionPackage == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "SUBSCRIPTION_PACKAGE_NOT_FOUND", "Subscription package not found."));
+        }
+        subscriptionPackage.update(body.name(), body.price(), body.billingPeriod(), body.minMembers(),
+                body.memberLimit(), body.tierLabel(), body.userLimit(), body.branchLimit(), body.modules(), body.status());
+        SubscriptionPackage saved = packageRepository.save(subscriptionPackage);
+        auditService.record("tenant_platform", currentSession.user(), "Updated subscription package " + saved.getName(),
+                "subscription_package", saved.getId(), request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(SubscriptionPackageResponse.from(saved)));
     }
 
     @GetMapping("/api/v1/subscriptions")
@@ -123,7 +172,7 @@ class SubscriptionController {
                         .body(ApiErrorResponse.of(404, "SUBSCRIPTION_NOT_FOUND", "Subscription not found.")));
     }
 
-        @PostMapping("/api/v1/subscriptions/{subscriptionId}/trial-extension")
+    @PostMapping("/api/v1/subscriptions/{subscriptionId}/trial-extension")
         ResponseEntity<?> extendTrial(
                         @RequestHeader(name = "Authorization", required = false) String authorization,
                         @PathVariable String subscriptionId,
@@ -167,9 +216,59 @@ class SubscriptionController {
                 return ResponseEntity.ok(ApiResponse.of(SubscriptionResponse.from(saved)));
         }
 
+    @PostMapping("/api/v1/subscriptions/{subscriptionId}/upgrade")
+    @Transactional
+    ResponseEntity<?> upgradePackage(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String subscriptionId,
+            @Valid @RequestBody UpgradeSubscriptionRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "PLATFORM_ADMIN_REQUIRED", "Only platform administrators can upgrade SACCO packages."));
+        }
+        if (!authService.hasPermission(currentSession.user(), "subscriptions:manage")) {
+            return authService.permissionRequired("subscriptions:manage");
+        }
+
+        Subscription subscription = subscriptionRepository.findById(subscriptionId).orElse(null);
+        if (subscription == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "SUBSCRIPTION_NOT_FOUND", "Subscription not found."));
+        }
+        SubscriptionPackage currentPackage = packageRepository.findById(subscription.getPackageId()).orElse(null);
+        SubscriptionPackage targetPackage = packageRepository.findById(body.packageId().trim()).orElse(null);
+        if (targetPackage == null || !"active".equalsIgnoreCase(targetPackage.getStatus())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_SUBSCRIPTION_PACKAGE", "Select an active subscription package."));
+        }
+        if (currentPackage != null && targetPackage.getMemberLimit() <= currentPackage.getMemberLimit()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "PACKAGE_UPGRADE_REQUIRED", "The selected package must have a higher member limit."));
+        }
+
+        subscription.upgradePackage(targetPackage.getId());
+        Subscription saved = subscriptionRepository.save(subscriptionService.refreshBilling(subscription));
+        tenantRepository.findById(saved.getTenantId()).ifPresent(tenant -> {
+            tenant.updatePackage(targetPackage.getId());
+            tenantRepository.save(tenant);
+        });
+        auditService.record(
+                saved.getTenantId(),
+                currentSession.user(),
+                "Upgraded staff-app package from " + (currentPackage == null ? "unassigned" : currentPackage.getName())
+                        + " to " + targetPackage.getName(),
+                "subscription_package_upgrade",
+                saved.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(SubscriptionResponse.from(saved)));
+    }
+
     /**
      * Tenant-facing subscription payment. Lets a SACCO administrator pay their own subscription
-     * balance or top up member capacity (mobile-money), without needing a platform admin. Reuses
+     * balance by mobile money without needing a platform administrator. Reuses
      * the same payment application logic as the platform recording endpoint. The caller must own
      * the subscription's tenant and hold tenants:manage (platform admins may act for any tenant).
      */
@@ -227,6 +326,12 @@ class SubscriptionController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_AMOUNT", "Subscription callback amount must be greater than zero."));
         }
+        subscriptionService.refreshBilling(subscription);
+        BigDecimal due = Money.normalize(subscription.getAmount().subtract(subscription.getPaid()).max(BigDecimal.ZERO));
+        if (subscriptionService.requiresFullPayment(subscription) && amount.compareTo(due) != 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "FULL_PAYMENT_REQUIRED", "Fixed annual packages must be paid in one full payment of the outstanding balance."));
+        }
         Instant receivedAt = body.receivedAt() == null ? Instant.now() : body.receivedAt();
         if (periodService.isClosed(tenantId, receivedAt)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -275,6 +380,10 @@ class SubscriptionController {
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_AMOUNT", "Payment amount must be greater than zero."));
+        }
+        if (subscriptionService.requiresFullPayment(subscription) && amount.compareTo(due) != 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "FULL_PAYMENT_REQUIRED", "Fixed annual packages must be paid in one full payment of the outstanding balance."));
         }
 
         Instant receivedAt = body.receivedAt() == null ? Instant.now() : body.receivedAt();
@@ -327,8 +436,24 @@ class SubscriptionController {
                 false)));
     }
 
-        record ExtendTrialRequest(@NotNull Integer days, @NotBlank String reason) {
-        }
+    record ExtendTrialRequest(@NotNull Integer days, @NotBlank String reason) {
+    }
+
+    record UpgradeSubscriptionRequest(@NotBlank String packageId) {
+    }
+
+    record UpdateSubscriptionPackageRequest(
+            @NotBlank String name,
+            @NotNull BigDecimal price,
+            @NotBlank String billingPeriod,
+            @NotNull Integer minMembers,
+            @NotNull Integer memberLimit,
+            @NotBlank String tierLabel,
+            @NotNull Integer userLimit,
+            @NotNull Integer branchLimit,
+            @NotBlank String modules,
+            @NotBlank String status) {
+    }
 
     private BigDecimal paymentAmountFor(Subscription subscription, RecordSubscriptionPaymentRequest body, BigDecimal due) {
         String paymentMode = body.paymentMode() == null || body.paymentMode().isBlank()

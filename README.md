@@ -19,6 +19,7 @@ The production backend path is Java/Spring Boot in `backend-java`. The Node serv
 - Member self-service portal.
 - Member login with balance viewing.
 - Reports, compliance snapshot, and audit trail.
+- Proprietor SMS broadcasts to all or selected SACCO leadership, restricted to verified telephone numbers and fully delivery-audited.
 
 ## How to run
 
@@ -105,6 +106,8 @@ SMS, email, and mobile-money provider IDs are environment-managed through `SACCO
 Staff onboarding is provider-backed. The administrator selects email or SMS, the backend generates and sends a temporary password, and no full session is issued until the recipient replaces it. Successful use of the delivered credential verifies the selected contact. To execute the one-time two-SACCO reseed, start the backend once with `SACCO_TWO_SACCO_RESEED_ENABLED=true`; the reseed is database-tracked and will not repeat after completion.
 
 Secrets and provider credentials must stay outside Git. Use [docs/secrets-management.md](docs/secrets-management.md) for the storage and rotation runbook. `npm.cmd run check` includes a secrets-management contract check that scans deployment example files for real-looking secret values.
+
+The current proprietor mobile capability gaps and recommended delivery order are tracked in [docs/proprietor-mobile-gap-review.md](docs/proprietor-mobile-gap-review.md).
 
 Production PostgreSQL connection-pool settings are explicit and environment-tunable. Use [docs/database-performance.md](docs/database-performance.md) for the HikariCP defaults, Hetzner CX22 starting point, multi-instance pool formula, and N+1/query review guidance.
 

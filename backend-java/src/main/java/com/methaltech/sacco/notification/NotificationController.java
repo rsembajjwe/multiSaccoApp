@@ -53,6 +53,7 @@ class NotificationController {
     private final AuditService auditService;
     private final AfroSmsCreditService afroSmsCreditService;
     private final SmsWalletService smsWalletService;
+    private final PlatformSmsBroadcastService platformSmsBroadcastService;
 
     @GetMapping("/deliveries")
     ResponseEntity<?> listDeliveries(
@@ -552,6 +553,45 @@ class NotificationController {
                 .body(ApiResponse.of(new SmsBroadcastResponse(sent.size(), segmentCount, requiredCredits, smsWalletService.balance(tenantId))));
     }
 
+    @PostMapping("/platform/sms-broadcast")
+    ResponseEntity<?> sendPlatformSmsBroadcast(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestBody PlatformSmsBroadcastRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiErrorResponse.of(403, "PLATFORM_ACCESS_REQUIRED", "Only platform staff can message SACCO leadership."));
+        }
+        if (!authService.hasPermission(currentSession.user(), "notifications:manage")) {
+            return authService.permissionRequired("notifications:manage");
+        }
+        String title = body == null || body.title() == null || body.title().isBlank()
+                ? "Tereka platform update"
+                : body.title().trim();
+        String message = body == null || body.body() == null ? "" : body.body().trim();
+        if (message.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "SMS_MESSAGE_REQUIRED", "Enter the SMS message to send."));
+        }
+        try {
+            PlatformSmsBroadcastService.PlatformSmsBroadcastResult result = platformSmsBroadcastService.send(
+                    body.allSaccos(), body.tenantIds(), title, message);
+            auditService.record(
+                    "tenant_platform",
+                    currentSession.user(),
+                    "Sent platform SMS broadcast to " + result.saccosSelected() + " SACCO(s) and " + result.recipients() + " verified leader(s)",
+                    "platform_sms_broadcast",
+                    "broadcast_" + java.util.UUID.randomUUID(),
+                    request.getRemoteAddr());
+            return ResponseEntity.accepted().body(ApiResponse.of(result));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_SACCO_SELECTION", exception.getMessage()));
+        }
+    }
+
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
         if (authService.isPlatform(currentSession.user()) && (requestedTenantId == null || requestedTenantId.isBlank())) {
             return null;
@@ -588,5 +628,8 @@ class NotificationController {
     }
 
     record SmsBroadcastResponse(int recipients, int smsSegments, int smsCreditsUsed, int smsBalance) {
+    }
+
+    record PlatformSmsBroadcastRequest(boolean allSaccos, List<String> tenantIds, String title, String body) {
     }
 }

@@ -692,7 +692,6 @@ class AdminRepository {
   Future<MobileMoneyPaymentRequest> requestSaccoSubscriptionMobileMoney({
     required num amount,
     required String payerPhone,
-    List<String> memberSubscriptionIds = const [],
     String? provider,
   }) async {
     final data = await _api.post(
@@ -700,8 +699,6 @@ class AdminRepository {
       {
         'amount': amount,
         'payerPhone': payerPhone.trim(),
-        if (memberSubscriptionIds.isNotEmpty)
-          'memberSubscriptionIds': memberSubscriptionIds,
         if (provider != null && provider.trim().isNotEmpty)
           'provider': provider.trim(),
       },

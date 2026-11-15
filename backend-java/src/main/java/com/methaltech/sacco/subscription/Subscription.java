@@ -110,6 +110,11 @@ public class Subscription {
         this.updatedAt = Instant.now();
     }
 
+    void upgradePackage(String packageId) {
+        this.packageId = packageId;
+        this.updatedAt = Instant.now();
+    }
+
     public void recordPayment(BigDecimal paymentAmount, LocalDate activeExpiry) {
         this.paid = this.paid.add(paymentAmount).min(this.amount);
         if (this.paid.compareTo(this.amount) >= 0 || paidMemberCapacity() >= SubscriptionService.MINIMUM_ACTIVE_MEMBER_COVERAGE) {

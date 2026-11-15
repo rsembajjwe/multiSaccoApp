@@ -5,5 +5,7 @@ public record StaffNotificationRecipient(
         String tenantId,
         String fullName,
         String email,
-        String phone) {
+        String phone,
+        boolean emailVerified,
+        boolean phoneVerified) {
 }

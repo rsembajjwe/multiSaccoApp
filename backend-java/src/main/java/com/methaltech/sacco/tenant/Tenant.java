@@ -120,6 +120,11 @@ public class Tenant {
         this.updatedAt = Instant.now();
     }
 
+    public void updatePackage(String packageId) {
+        this.packageId = packageId;
+        this.updatedAt = Instant.now();
+    }
+
     public void updateDetails(String name, String registrationNo, String district, String country) {
         this.name = name;
         this.registrationNo = registrationNo;

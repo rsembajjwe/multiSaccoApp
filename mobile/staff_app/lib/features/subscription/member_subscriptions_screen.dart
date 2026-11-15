@@ -41,19 +41,12 @@ class _MemberSubscriptionsScreenState
   Widget build(BuildContext context) {
     final summaryAsync = ref.watch(memberSubscriptionSummaryProvider);
     final namesAsync = ref.watch(memberNamesProvider);
-    final platformSubs = ref.watch(subscriptionsProvider).asData?.value;
-    final platformSub = platformSubs == null || platformSubs.isEmpty
-        ? null
-        : platformSubs.first;
     final names = namesAsync.asData?.value ?? const <String, String>{};
     final summary = summaryAsync.asData?.value;
     final paid = summary?.paid ?? 0;
     final unpaid = summary?.unpaid ?? 0;
-    final int? remainingSlots = platformSub == null
-        ? null
-        : (platformSub.paidMemberCapacity - paid).clamp(0, 1 << 30).toInt();
-    final selectedTotal = _selected.values
-        .fold<num>(0, (total, s) => total + s.balanceDue);
+    final selectedTotal =
+        _selected.values.fold<num>(0, (total, s) => total + s.balanceDue);
     final selectableLoaded =
         _loaded.where(_canSelect).where((s) => !_selected.containsKey(s.id));
 
@@ -68,8 +61,6 @@ class _MemberSubscriptionsScreenState
                 _Summary(
                   paid: paid,
                   unpaid: unpaid,
-                  paidCapacity: platformSub?.paidMemberCapacity,
-                  remainingSlots: remainingSlots,
                 ),
                 const SizedBox(height: 12),
                 SegmentedButton<String>(
@@ -89,17 +80,10 @@ class _MemberSubscriptionsScreenState
                   _SelectedMembersPanel(
                     selectedCount: _selected.length,
                     selectedTotal: selectedTotal,
-                    availableSlots: remainingSlots,
                     busy: _busy,
-                    onActivatePaidSlots: _selected.isEmpty ||
-                            _busy ||
-                            remainingSlots == null ||
-                            _selected.length > remainingSlots
+                    onRecordPayments: _selected.isEmpty || _busy
                         ? null
-                        : _activateSelectedUsingPaidSlots,
-                    onPayPlatform: _selected.isEmpty || _busy
-                        ? null
-                        : _payPlatformForSelected,
+                        : _recordSelectedMemberAppPayments,
                     onSelectAllLoaded: _busy || selectableLoaded.isEmpty
                         ? null
                         : () => setState(() {
@@ -157,58 +141,7 @@ class _MemberSubscriptionsScreenState
     return true;
   }
 
-  Future<void> _payPlatformForSelected() async {
-    final total = _selected.values.fold<num>(0, (t, s) => t + s.balanceDue);
-    if (total <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Selected dues require ${Fmt.money(total)}.')));
-      return;
-    }
-    final payment = await showDialog<_MobileMoneyDetails>(
-      context: context,
-      builder: (_) => const _PhoneDialog(title: 'SACCO account mobile money'),
-    );
-    if (payment == null || payment.phone.trim().isEmpty) return;
-    if (!mounted) return;
-    final confirmed = await confirmAction(
-      context,
-      title: 'Pay platform for selected members?',
-      message:
-          'Send a ${Fmt.money(total)} ${payment.provider.toUpperCase()} mobile money prompt to ${payment.phone.trim()}. Selected members will activate after payment succeeds.',
-      confirmLabel: 'Send prompt',
-      icon: Icons.account_balance_wallet_outlined,
-    );
-    if (!confirmed || !mounted) return;
-    setState(() => _busy = true);
-    try {
-      final request = await ref
-          .read(adminRepositoryProvider)
-          .requestSaccoSubscriptionMobileMoney(
-            amount: total,
-            payerPhone: payment.phone,
-            provider: payment.provider,
-            memberSubscriptionIds: _selected.keys.toList(),
-          );
-      ref.invalidate(subscriptionsProvider);
-      ref.invalidate(mobileMoneyPaymentRequestsProvider);
-      _selected.clear();
-      _refreshList();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-                'Prompt sent: ${request.externalReference}. Members activate after payment succeeds.')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _activateSelectedUsingPaidSlots() async {
+  Future<void> _recordSelectedMemberAppPayments() async {
     final total = _selected.values.fold<num>(0, (t, s) => t + s.balanceDue);
     if (total <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -217,25 +150,26 @@ class _MemberSubscriptionsScreenState
     }
     final confirmed = await confirmAction(
       context,
-      title: 'Activate selected members?',
+      title: 'Record selected member-app payments?',
       message:
-          'Use paid capacity to activate ${_selected.length} member subscription(s) worth ${Fmt.money(total)}.',
-      confirmLabel: 'Activate',
+          'Record UGX 5,000 annual member-app access for ${_selected.length} selected member(s), total ${Fmt.money(total)}.',
+      confirmLabel: 'Record payment',
       icon: Icons.verified_user_outlined,
     );
     if (!confirmed || !mounted) return;
     setState(() => _busy = true);
     try {
-      await ref.read(adminRepositoryProvider).recordBulkMemberSubscriptionPayment(
+      await ref
+          .read(adminRepositoryProvider)
+          .recordBulkMemberSubscriptionPayment(
             amount: total,
             subscriptionIds: _selected.keys.toList(),
           );
-      ref.invalidate(subscriptionsProvider);
       _selected.clear();
       _refreshList();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Selected members activated using paid slots.')));
+            content: Text('Selected member-app subscriptions activated.')));
       }
     } catch (e) {
       if (mounted) {
@@ -256,26 +190,26 @@ class _MemberSubscriptionsScreenState
     if (!mounted) return;
     final confirmed = await confirmAction(
       context,
-      title: 'Send member dues prompt?',
+      title: 'Send member-app payment prompt?',
       message:
-          'Send a ${payment.provider.toUpperCase()} mobile money prompt to ${payment.phone.trim()} for this member subscription.',
+          'Send a UGX 5,000 ${payment.provider.toUpperCase()} mobile money prompt to ${payment.phone.trim()} for annual member-app access.',
       confirmLabel: 'Send prompt',
       icon: Icons.send_to_mobile_outlined,
     );
     if (!confirmed) return;
     try {
-      final request = await ref
-          .read(adminRepositoryProvider)
-          .requestMemberDuesMobileMoney(
-            memberId: sub.memberId,
-            subscriptionId: sub.id,
-            payerPhone: payment.phone,
-            provider: payment.provider,
-          );
+      final request =
+          await ref.read(adminRepositoryProvider).requestMemberDuesMobileMoney(
+                memberId: sub.memberId,
+                subscriptionId: sub.id,
+                payerPhone: payment.phone,
+                provider: payment.provider,
+              );
       ref.invalidate(mobileMoneyPaymentRequestsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Payment prompt created: ${request.externalReference}')));
+            content:
+                Text('Payment prompt created: ${request.externalReference}')));
       }
     } catch (e) {
       if (mounted) {
@@ -290,13 +224,9 @@ class _Summary extends StatelessWidget {
   const _Summary({
     required this.paid,
     required this.unpaid,
-    required this.paidCapacity,
-    required this.remainingSlots,
   });
   final int paid;
   final int unpaid;
-  final int? paidCapacity;
-  final int? remainingSlots;
 
   @override
   Widget build(BuildContext context) {
@@ -305,7 +235,7 @@ class _Summary extends StatelessWidget {
         Expanded(
           child: BalanceCard(
             label: 'Subscribed',
-            value: paidCapacity == null ? '$paid' : '$paid / $paidCapacity',
+            value: '$paid',
             icon: Icons.verified_user_outlined,
             color: const Color(0xFF0F766E),
           ),
@@ -313,8 +243,8 @@ class _Summary extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: BalanceCard(
-            label: 'Available paid slots',
-            value: remainingSlots == null ? '-' : '$remainingSlots',
+            label: 'Awaiting payment',
+            value: '$unpaid',
             icon: Icons.pending_actions_outlined,
             color: const Color(0xFFB45309),
           ),
@@ -328,32 +258,28 @@ class _SelectedMembersPanel extends StatelessWidget {
   const _SelectedMembersPanel({
     required this.selectedCount,
     required this.selectedTotal,
-    required this.availableSlots,
     required this.busy,
-    required this.onActivatePaidSlots,
-    required this.onPayPlatform,
+    required this.onRecordPayments,
     required this.onSelectAllLoaded,
     required this.onClearSelection,
   });
 
   final int selectedCount;
   final num selectedTotal;
-  final int? availableSlots;
   final bool busy;
-  final VoidCallback? onActivatePaidSlots;
-  final VoidCallback? onPayPlatform;
+  final VoidCallback? onRecordPayments;
   final VoidCallback? onSelectAllLoaded;
   final VoidCallback? onClearSelection;
 
   @override
   Widget build(BuildContext context) {
     return SectionCard(
-      title: 'Selected member dues',
+      title: 'Selected member-app subscriptions',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '$selectedCount selected - dues ${Fmt.money(selectedTotal)}',
+            '$selectedCount selected - annual access ${Fmt.money(selectedTotal)}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           Row(
@@ -370,19 +296,11 @@ class _SelectedMembersPanel extends StatelessWidget {
               ),
             ],
           ),
-          if (availableSlots != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                '$availableSlots paid slot(s) available before another platform top-up.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: busy ? null : onActivatePaidSlots,
+              onPressed: busy ? null : onRecordPayments,
               icon: busy
                   ? const SizedBox(
                       height: 18,
@@ -390,22 +308,7 @@ class _SelectedMembersPanel extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.verified_user_outlined),
-              label: const Text('Activate using paid slots'),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: busy ? null : onPayPlatform,
-              icon: busy
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.account_balance_wallet_outlined),
-              label: const Text('Pay platform and auto-activate'),
+              label: const Text('Record selected payments'),
             ),
           ),
         ],
@@ -498,27 +401,27 @@ class _PhoneDialogState extends State<_PhoneDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'mtn', label: Text('MTN')),
-              ButtonSegment(value: 'airtel', label: Text('Airtel')),
-            ],
-            selected: {_provider},
-            onSelectionChanged: (value) =>
-                setState(() => _provider = value.first),
-          ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _controller,
-            keyboardType: TextInputType.phone,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Payer phone number',
-              prefixIcon: Icon(Icons.phone_android_outlined),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'mtn', label: Text('MTN')),
+                ButtonSegment(value: 'airtel', label: Text('Airtel')),
+              ],
+              selected: {_provider},
+              onSelectionChanged: (value) =>
+                  setState(() => _provider = value.first),
             ),
-            validator: (value) =>
-                validateUgandanMobileMoneyPhone(value, _provider),
-          ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _controller,
+              keyboardType: TextInputType.phone,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Payer phone number',
+                prefixIcon: Icon(Icons.phone_android_outlined),
+              ),
+              validator: (value) =>
+                  validateUgandanMobileMoneyPhone(value, _provider),
+            ),
           ],
         ),
       ),

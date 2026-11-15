@@ -89,6 +89,8 @@ class ApiClient {
       _mutate('PATCH', path, body);
   Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) =>
       _mutate('PUT', path, body);
+  Future<Map<String, dynamic>> delete(String path, Map<String, dynamic> body) =>
+      _mutate('DELETE', path, body);
 
   Future<Map<String, dynamic>> _mutate(
     String method,

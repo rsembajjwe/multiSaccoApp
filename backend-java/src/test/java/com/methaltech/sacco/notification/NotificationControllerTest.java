@@ -45,13 +45,14 @@ class NotificationControllerTest {
     private final AuditService auditService = mock(AuditService.class);
     private final AfroSmsCreditService afroSmsCreditService = mock(AfroSmsCreditService.class);
     private final SmsWalletService smsWalletService = mock(SmsWalletService.class);
+    private final PlatformSmsBroadcastService platformSmsBroadcastService = mock(PlatformSmsBroadcastService.class);
     private final HttpServletRequest request = mock(HttpServletRequest.class);
     private final User saccoUser = user("user_one", "tenant_one", "SACCO User");
     private final User platformUser = user("platform_one", "tenant_platform", "Platform User");
     private final NotificationController controller = new NotificationController(deliveryRepository,
             notificationRepository, memberRepository, notificationService, broadcastDispatcher, List.of(provider),
             evidenceService, runHistoryService, reconciliationJob, authService, auditService,
-            afroSmsCreditService, smsWalletService);
+            afroSmsCreditService, smsWalletService, platformSmsBroadcastService);
 
     @BeforeEach
     void configureDefaults() {
@@ -248,6 +249,28 @@ class NotificationControllerTest {
                 (NotificationController.SmsBroadcastResponse) ((ApiResponse<?>) response.getBody()).data();
         assertEquals(1, result.recipients());
         assertTrue(result.smsCreditsUsed() >= 1);
+    }
+
+    @Test
+    void platformSmsBroadcastRequiresPlatformAccessAndAuditsTheResult() {
+        allow("Bearer sacco", saccoUser, "notifications:manage");
+        NotificationController.PlatformSmsBroadcastRequest body =
+                new NotificationController.PlatformSmsBroadcastRequest(true, List.of(), "Notice", "Hello leaders");
+        assertError(controller.sendPlatformSmsBroadcast("Bearer sacco", body, request),
+                HttpStatus.FORBIDDEN, "PLATFORM_ACCESS_REQUIRED");
+
+        allow("Bearer platform", platformUser, "notifications:manage");
+        PlatformSmsBroadcastService.PlatformSmsBroadcastResult result =
+                new PlatformSmsBroadcastService.PlatformSmsBroadcastResult(2, 2, 5, 4, 1, 1, 5);
+        when(platformSmsBroadcastService.send(true, List.of(), "Notice", "Hello leaders"))
+                .thenReturn(result);
+        ResponseEntity<?> response = controller.sendPlatformSmsBroadcast("Bearer platform", body, request);
+
+        assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
+        assertEquals(result, ((ApiResponse<?>) response.getBody()).data());
+        verify(auditService).record(eq("tenant_platform"), eq(platformUser),
+                eq("Sent platform SMS broadcast to 2 SACCO(s) and 5 verified leader(s)"),
+                eq("platform_sms_broadcast"), any(), eq("127.0.0.1"));
     }
 
     private Notification notification(String id, String tenantId, String userId, String title, String body) {

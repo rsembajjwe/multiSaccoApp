@@ -3,6 +3,8 @@ package com.methaltech.sacco.notification;
 import com.methaltech.sacco.money.Money;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -38,6 +40,11 @@ public class SmsWalletService {
 
     @Transactional
     public int creditFromPayment(String tenantId, BigDecimal amount, String reference) {
+        return creditFromPayment(tenantId, amount, reference, "Mobile-money SMS credit purchase");
+    }
+
+    @Transactional
+    public int creditFromPayment(String tenantId, BigDecimal amount, String reference, String description) {
         BigDecimal rate = smsRate();
         if (rate.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("SMS rate has not been configured by the platform.");
@@ -51,8 +58,52 @@ public class SmsWalletService {
                 "UPDATE sms_wallets SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ?",
                 credits,
                 tenantId);
-        ledger(tenantId, "credit", credits, rate, amount, reference, "Mobile-money SMS credit purchase");
+        ledger(tenantId, "credit", credits, rate, amount, reference, description);
         return credits;
+    }
+
+    public boolean referenceExists(String tenantId, String reference) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM sms_wallet_ledger WHERE tenant_id = ? AND reference = ?",
+                Integer.class,
+                tenantId,
+                reference);
+        return count != null && count > 0;
+    }
+
+    public List<SmsSale> sales(String tenantId, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 500));
+        String columns = "SELECT id, tenant_id, quantity, unit_price, amount, reference, description, created_at "
+                + "FROM sms_wallet_ledger WHERE direction = 'credit' ";
+        Object[] arguments;
+        String sql;
+        if (tenantId == null || tenantId.isBlank()) {
+            sql = columns + "ORDER BY created_at DESC LIMIT ?";
+            arguments = new Object[] {safeLimit};
+        } else {
+            sql = columns + "AND tenant_id = ? ORDER BY created_at DESC LIMIT ?";
+            arguments = new Object[] {tenantId.trim(), safeLimit};
+        }
+        return jdbcTemplate.query(sql, (resultSet, rowNumber) -> new SmsSale(
+                resultSet.getString("id"),
+                resultSet.getString("tenant_id"),
+                resultSet.getInt("quantity"),
+                resultSet.getBigDecimal("unit_price"),
+                resultSet.getBigDecimal("amount"),
+                resultSet.getString("reference"),
+                resultSet.getString("description"),
+                resultSet.getTimestamp("created_at").toInstant()), arguments);
+    }
+
+    public record SmsSale(
+            String id,
+            String tenantId,
+            int quantity,
+            BigDecimal unitPrice,
+            BigDecimal amount,
+            String reference,
+            String description,
+            Instant createdAt) {
     }
 
     @Transactional

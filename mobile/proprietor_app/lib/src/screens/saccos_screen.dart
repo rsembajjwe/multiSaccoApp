@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models.dart';
 import '../providers.dart';
 import '../widgets.dart';
+import 'sacco_lifecycle_screen.dart';
 
 class SaccosScreen extends ConsumerStatefulWidget {
   const SaccosScreen({super.key, required this.session});
@@ -84,6 +85,7 @@ class _SaccosScreenState extends ConsumerState<SaccosScreen> {
                           item: page.items[index],
                           canManage: widget.session.can('tenants:manage'),
                           onStatus: _changeStatus,
+                          onOpen: _openSacco,
                         ),
                       ),
                     ),
@@ -131,6 +133,20 @@ class _SaccosScreenState extends ConsumerState<SaccosScreen> {
       ref.invalidate(fleetSummaryProvider);
     }
   }
+
+  Future<void> _openSacco(TenantFleetItem item) async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            SaccoLifecycleScreen(tenantId: item.id, session: widget.session),
+      ),
+    );
+    if (changed == true) {
+      ref.invalidate(fleetProvider(_query));
+      ref.invalidate(fleetSummaryProvider);
+    }
+  }
 }
 
 class _TenantCard extends StatelessWidget {
@@ -138,83 +154,91 @@ class _TenantCard extends StatelessWidget {
     required this.item,
     required this.canManage,
     required this.onStatus,
+    required this.onOpen,
   });
   final TenantFleetItem item;
   final bool canManage;
   final Future<void> Function(TenantFleetItem, String) onStatus;
+  final ValueChanged<TenantFleetItem> onOpen;
 
   @override
   Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(child: Text(item.code.isEmpty ? 'S' : item.code[0])),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
+    child: InkWell(
+      onTap: () => onOpen(item),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  child: Text(item.code.isEmpty ? 'S' : item.code[0]),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
+                      Text(
+                        '${item.code} • ${item.district.isEmpty ? 'District not set' : item.district}',
+                      ),
+                    ],
+                  ),
+                ),
+                StatusPill(item.health),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(item.healthReason),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                StatusPill(item.status),
+                const SizedBox(width: 8),
+                StatusPill(item.subscriptionStatus),
+                const Spacer(),
+                Text(
+                  '${item.onboarding}% setup',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            if (canManage) ...[
+              const Divider(height: 24),
+              Align(
+                alignment: Alignment.centerRight,
+                child: PopupMenuButton<String>(
+                  onSelected: (status) => onStatus(item, status),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'active', child: Text('Activate')),
+                    PopupMenuItem(
+                      value: 'pending_review',
+                      child: Text('Return to review'),
                     ),
-                    Text(
-                      '${item.code} • ${item.district.isEmpty ? 'District not set' : item.district}',
+                    PopupMenuItem(
+                      value: 'suspended',
+                      child: Text('Suspend access'),
                     ),
                   ],
+                  child: const Chip(
+                    avatar: Icon(Icons.manage_accounts, size: 18),
+                    label: Text('Lifecycle action'),
+                  ),
                 ),
               ),
-              StatusPill(item.health),
             ],
-          ),
-          const SizedBox(height: 14),
-          Text(item.healthReason),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              StatusPill(item.status),
-              const SizedBox(width: 8),
-              StatusPill(item.subscriptionStatus),
-              const Spacer(),
-              Text(
-                '${item.onboarding}% setup',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-          if (canManage) ...[
-            const Divider(height: 24),
-            Align(
-              alignment: Alignment.centerRight,
-              child: PopupMenuButton<String>(
-                onSelected: (status) => onStatus(item, status),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'active', child: Text('Activate')),
-                  PopupMenuItem(
-                    value: 'pending_review',
-                    child: Text('Return to review'),
-                  ),
-                  PopupMenuItem(
-                    value: 'suspended',
-                    child: Text('Suspend access'),
-                  ),
-                ],
-                child: const Chip(
-                  avatar: Icon(Icons.manage_accounts, size: 18),
-                  label: Text('Lifecycle action'),
-                ),
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     ),
   );
@@ -238,7 +262,15 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
   final _adminName = TextEditingController();
   final _adminEmail = TextEditingController();
   final _adminPhone = TextEditingController();
+  final _treasurerName = TextEditingController();
+  final _treasurerEmail = TextEditingController();
+  final _treasurerPhone = TextEditingController();
+  final _secretaryName = TextEditingController();
+  final _secretaryEmail = TextEditingController();
+  final _secretaryPhone = TextEditingController();
   String _delivery = 'email';
+  String _treasurerDelivery = 'email';
+  String _secretaryDelivery = 'email';
   String _package = '';
   bool _paid = false;
 
@@ -253,6 +285,12 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
       _adminName,
       _adminEmail,
       _adminPhone,
+      _treasurerName,
+      _treasurerEmail,
+      _treasurerPhone,
+      _secretaryName,
+      _secretaryEmail,
+      _secretaryPhone,
     ]) {
       controller.dispose();
     }
@@ -265,6 +303,10 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
     _package = _package.isEmpty && packages.isNotEmpty
         ? packages.first.id
         : _package;
+    SubscriptionPackage? selectedPackage;
+    for (final item in packages) {
+      if (item.id == _package) selectedPackage = item;
+    }
     return Scaffold(
       appBar: AppBar(title: const Text('Register SACCO')),
       body: Stepper(
@@ -302,24 +344,33 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
             ),
           ),
           Step(
-            title: const Text('Initial administrator'),
+            title: const Text('SACCO officials'),
             isActive: _step >= 1,
             content: Column(
               children: [
-                _field(_adminName, 'Full name', required: true),
-                _field(_adminEmail, 'Active email', email: true),
-                _field(_adminPhone, 'Verified telephone', phone: true),
-                DropdownButtonFormField<String>(
-                  initialValue: _delivery,
-                  decoration: const InputDecoration(
-                    labelText: 'Invitation channel',
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'email', child: Text('Email')),
-                    DropdownMenuItem(value: 'sms', child: Text('SMS')),
-                  ],
-                  onChanged: (value) =>
-                      setState(() => _delivery = value ?? 'email'),
+                _officialSection(
+                  'Chairperson',
+                  _adminName,
+                  _adminEmail,
+                  _adminPhone,
+                  _delivery,
+                  (value) => setState(() => _delivery = value),
+                ),
+                _officialSection(
+                  'Treasurer',
+                  _treasurerName,
+                  _treasurerEmail,
+                  _treasurerPhone,
+                  _treasurerDelivery,
+                  (value) => setState(() => _treasurerDelivery = value),
+                ),
+                _officialSection(
+                  'Secretary',
+                  _secretaryName,
+                  _secretaryEmail,
+                  _secretaryPhone,
+                  _secretaryDelivery,
+                  (value) => setState(() => _secretaryDelivery = value),
                 ),
               ],
             ),
@@ -336,12 +387,44 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
                       .map(
                         (item) => DropdownMenuItem(
                           value: item.id,
-                          child: Text('${item.name} • ${money(item.price)}'),
+                          child: Text(
+                            item.isPerMember
+                                ? '${item.name} • ${money(item.price)} per member'
+                                : '${item.name} • ${money(item.price)} annually',
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       )
                       .toList(),
                   onChanged: (value) => setState(() => _package = value ?? ''),
                 ),
+                if (selectedPackage != null) ...[
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            selectedPackage.tierLabel,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            selectedPackage.isPerMember
+                                ? '${money(selectedPackage.price)} per registered member each year.'
+                                : '${money(selectedPackage.price)} for the full annual package. Partial payments are not accepted.',
+                          ),
+                          if (selectedPackage.modules.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(selectedPackage.modules),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 SwitchListTile(
                   value: _paid,
                   onChanged: (value) => setState(() => _paid = value),
@@ -371,14 +454,22 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
                     ),
                     Text('${_registration.text} • ${_district.text}'),
                     const Divider(),
-                    Text('Administrator: ${_adminName.text}'),
-                    Text(
-                      _delivery == 'email'
-                          ? _adminEmail.text
-                          : _adminPhone.text,
+                    Text('Chairperson: ${_adminName.text}'),
+                    Text('Treasurer: ${_treasurerName.text}'),
+                    Text('Secretary: ${_secretaryName.text}'),
+                    const Text(
+                      'Each official receives a temporary password through the selected email or SMS channel.',
                     ),
                     const Divider(),
-                    Text('Plan: ${_package.isEmpty ? 'Unassigned' : _package}'),
+                    Text(
+                      'Plan: ${selectedPackage?.name ?? (_package.isEmpty ? 'Unassigned' : _package)}',
+                    ),
+                    if (selectedPackage != null)
+                      Text(
+                        selectedPackage.isPerMember
+                            ? '${money(selectedPackage.price)} per registered member annually'
+                            : '${money(selectedPackage.price)} payable in full annually',
+                      ),
                     Text(
                       _paid
                           ? 'Payment verified'
@@ -415,18 +506,81 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
     ),
   );
 
+  Widget _officialSection(
+    String office,
+    TextEditingController name,
+    TextEditingController email,
+    TextEditingController phone,
+    String deliveryChannel,
+    ValueChanged<String> onDeliveryChanged,
+  ) => Card(
+    margin: const EdgeInsets.only(bottom: 14),
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(office, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 10),
+          _field(name, 'Full name', required: true),
+          _field(email, 'Active email', email: true),
+          _field(phone, 'Active telephone (+country code)', phone: true),
+          DropdownButtonFormField<String>(
+            initialValue: deliveryChannel,
+            decoration: const InputDecoration(
+              labelText: 'Temporary-password channel',
+            ),
+            items: const [
+              DropdownMenuItem(value: 'email', child: Text('Email')),
+              DropdownMenuItem(value: 'sms', child: Text('SMS')),
+            ],
+            onChanged: (value) => onDeliveryChanged(value ?? 'email'),
+          ),
+        ],
+      ),
+    ),
+  );
+
   Future<void> _save() async {
-    final selectedContact = _delivery == 'email'
-        ? _adminEmail.text.trim()
-        : _adminPhone.text.trim();
+    final officials = [
+      _officialPayload(
+        'chairperson',
+        _adminName,
+        _adminEmail,
+        _adminPhone,
+        _delivery,
+      ),
+      _officialPayload(
+        'treasurer',
+        _treasurerName,
+        _treasurerEmail,
+        _treasurerPhone,
+        _treasurerDelivery,
+      ),
+      _officialPayload(
+        'secretary',
+        _secretaryName,
+        _secretaryEmail,
+        _secretaryPhone,
+        _secretaryDelivery,
+      ),
+    ];
+    final invalidOfficial = officials.any((official) {
+      final email = '${official['email']}';
+      final phone = '${official['phone']}';
+      final channel = '${official['deliveryChannel']}';
+      return '${official['fullName']}'.isEmpty ||
+          (email.isEmpty && phone.isEmpty) ||
+          (channel == 'email' && email.isEmpty) ||
+          (channel == 'sms' && phone.isEmpty);
+    });
     if (_name.text.trim().isEmpty ||
         _district.text.trim().isEmpty ||
-        _adminName.text.trim().isEmpty ||
-        selectedContact.isEmpty) {
+        invalidOfficial) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Complete all required organisation and administrator fields.',
+            'Complete all organisation fields and provide each official with an active email or phone matching the selected delivery channel.',
           ),
         ),
       );
@@ -434,7 +588,7 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
     }
     setState(() => _saving = true);
     try {
-      final tenant = await ref.read(platformRepositoryProvider).createTenant({
+      await ref.read(platformRepositoryProvider).createTenant({
         'name': _name.text.trim(),
         'registrationNo': _registration.text.trim(),
         'district': _district.text.trim(),
@@ -445,17 +599,8 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
         'currencyDigits': 0,
         'packageId': _package,
         'paymentStatus': _paid ? 'paid' : 'unpaid',
+        'officials': officials,
       });
-      final tenantId = stringValue(tenant['id']);
-      await ref
-          .read(platformRepositoryProvider)
-          .createAdministrator(
-            tenantId: tenantId,
-            name: _adminName.text.trim(),
-            email: _adminEmail.text.trim(),
-            phone: _adminPhone.text.trim(),
-            deliveryChannel: _delivery,
-          );
       if (mounted) Navigator.pop(context, true);
     } catch (error) {
       if (mounted) {
@@ -467,4 +612,18 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  Map<String, String> _officialPayload(
+    String office,
+    TextEditingController name,
+    TextEditingController email,
+    TextEditingController phone,
+    String deliveryChannel,
+  ) => {
+    'office': office,
+    'fullName': name.text.trim(),
+    'email': email.text.trim(),
+    'phone': phone.text.replaceAll(' ', '').trim(),
+    'deliveryChannel': deliveryChannel,
+  };
 }

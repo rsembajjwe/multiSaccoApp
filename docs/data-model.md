@@ -122,7 +122,7 @@ This model defines the Phase 1 and Phase 2 foundation tables. Production storage
 | --- | --- | --- |
 | id | uuid/string | Primary key. |
 | name | text | Package name. |
-| price | decimal | Fixed annual package price for the package tier. |
+| price | decimal | Annual fixed price, or annual per-member unit price for the Community package. |
 | billing_period | text | `monthly`, `quarterly`, `annual`, etc. |
 | min_members | integer | Minimum billable members for the low-member per-member tier. |
 | member_limit | integer | Optional package limit. |
@@ -151,7 +151,13 @@ This model defines the Phase 1 and Phase 2 foundation tables. Production storage
 | billing_description | text | Human-readable billing rule snapshot. |
 | expiry | date | Subscription expiry. |
 
-Subscription billing rule: SACCOs with 20-250 members pay UGX 5,000 per member annually, with a 20-member minimum. From 251-500 members the Starter fixed annual tier is UGX 1,200,000; from 501-1,000 members the Growth tier is UGX 2,500,000; from 1,001-2,500 members the Scale tier is UGX 5,000,000; from 2,501-5,000 members the Enterprise tier is UGX 8,000,000; from 5,001-10,000 members the Enterprise Plus tier is UGX 12,000,000. Above 10,000 members requires a custom quotation.
+Subscription billing rule: SACCOs with up to 250 members pay UGX 5,000 per registered member annually, with no minimum member charge. From 251-500 members the Starter fixed annual tier is UGX 1,200,000; from 501-1,000 members the Growth tier is UGX 2,500,000; from 1,001-2,500 members the Scale tier is UGX 5,000,000; from 2,501-5,000 members the Enterprise tier is UGX 8,000,000; from 5,001-10,000 members the Enterprise Plus tier is UGX 12,000,000. Above 10,000 members requires a custom quotation.
+
+Fixed annual tiers require the full outstanding balance in one payment. Package upgrades preserve verified payments as credit and only permit movement to a package with a higher member limit.
+
+### member_subscriptions
+
+`member_subscriptions` represents member-app access, not the SACCO staff subscription. Every member-app cycle costs UGX 5,000 and uses the current SACCO subscription expiry. A payment made partway through a SACCO cycle is not prorated and never extends beyond the SACCO cycle end.
 
 ### subscription_payments
 

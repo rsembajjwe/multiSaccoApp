@@ -6,6 +6,12 @@ import '../app.dart';
 import '../models.dart';
 import '../providers.dart';
 import '../widgets.dart';
+import 'advanced_reports_screen.dart';
+import 'sms_broadcast_screen.dart';
+import 'notification_operations_screen.dart';
+import 'payment_operations_screen.dart';
+import 'security_operations_screen.dart';
+import 'fleet_operations_screen.dart';
 
 class MoreScreen extends ConsumerWidget {
   const MoreScreen({super.key, required this.session});
@@ -38,7 +44,7 @@ class MoreScreen extends ConsumerWidget {
             icon: Icons.insights_outlined,
             title: 'Business reports',
             subtitle: 'Revenue, collections and portfolio exposure',
-            page: const ReportsScreen(),
+            page: AdvancedReportsScreen(session: session),
           ),
         if (session.can('users:view'))
           _Link(
@@ -46,6 +52,41 @@ class MoreScreen extends ConsumerWidget {
             title: 'Platform staff',
             subtitle: 'Invite, activate and suspend employees',
             page: StaffScreen(session: session),
+          ),
+        if (session.can('notifications:manage'))
+          const _Link(
+            icon: Icons.sms_outlined,
+            title: 'Message SACCOs',
+            subtitle: 'Send SMS to all or selected SACCO leaders',
+            page: SmsBroadcastScreen(),
+          ),
+        if (session.can('notifications:view'))
+          _Link(
+            icon: Icons.notifications_active_outlined,
+            title: 'Notification operations',
+            subtitle: 'Provider health, campaign history and failed deliveries',
+            page: NotificationOperationsScreen(session: session),
+          ),
+        if (session.can('notifications:view'))
+          _Link(
+            icon: Icons.sync_alt,
+            title: 'Payment operations',
+            subtitle: 'Mobile-money evidence and reconciliation',
+            page: PaymentOperationsScreen(session: session),
+          ),
+        if (session.isPlatform)
+          _Link(
+            icon: Icons.hub_outlined,
+            title: 'Fleet operations',
+            subtitle: 'Bulk SACCO actions, job results and incidents',
+            page: FleetOperationsScreen(session: session),
+          ),
+        if (session.isPlatform)
+          _Link(
+            icon: Icons.admin_panel_settings_outlined,
+            title: 'Platform security',
+            subtitle: 'Password policy, audit history and staff controls',
+            page: SecurityOperationsScreen(session: session),
           ),
         _Link(
           icon: Icons.security_outlined,
@@ -324,14 +365,14 @@ class StaffScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Platform staff'),
         actions: [
-          if (session.can('users:manage'))
+          if (_canManageUsers)
             IconButton(
               onPressed: () => _invite(context, ref),
               icon: const Icon(Icons.person_add_alt_1),
             ),
         ],
       ),
-      floatingActionButton: session.can('users:manage')
+      floatingActionButton: _canManageUsers
           ? FloatingActionButton.extended(
               onPressed: () => _invite(context, ref),
               icon: const Icon(Icons.person_add),
@@ -361,7 +402,10 @@ class StaffScreen extends ConsumerWidget {
                 ),
                 isThreeLine: true,
                 trailing: StatusPill(user.status),
-                onLongPress: session.can('users:manage')
+                onTap: _canManageUsers
+                    ? () => _securityActions(context, ref, user)
+                    : null,
+                onLongPress: _canManageUsers
                     ? () => _toggleStatus(context, ref, user)
                     : null,
               ),
@@ -370,6 +414,93 @@ class StaffScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  bool get _canManageUsers =>
+      session.can('users:manage') || session.can('users:create');
+
+  Future<void> _securityActions(
+    BuildContext context,
+    WidgetRef ref,
+    PlatformUser user,
+  ) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: Icon(user.mfaEnabled ? Icons.lock_open : Icons.security),
+              title: Text(user.mfaEnabled ? 'Disable MFA' : 'Enable MFA'),
+              subtitle: const Text(
+                'Change server-side multi-factor authentication',
+              ),
+              onTap: () => Navigator.pop(sheetContext, 'mfa'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('Force logout'),
+              subtitle: Text('${user.activeSessionCount} active session(s)'),
+              onTap: () => Navigator.pop(sheetContext, 'sessions'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.password),
+              title: const Text('Require password reset'),
+              subtitle: Text(
+                user.passwordResetRequired
+                    ? 'Already required'
+                    : 'Create a 30-minute reset request',
+              ),
+              onTap: user.passwordResetRequired
+                  ? null
+                  : () => Navigator.pop(sheetContext, 'password'),
+            ),
+            ListTile(
+              leading: Icon(
+                user.status == 'active' ? Icons.block : Icons.check_circle,
+              ),
+              title: Text(
+                user.status == 'active' ? 'Suspend user' : 'Activate user',
+              ),
+              onTap: () => Navigator.pop(sheetContext, 'status'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !context.mounted) return;
+    try {
+      final repository = ref.read(platformRepositoryProvider);
+      switch (action) {
+        case 'mfa':
+          await repository.updateUserMfa(user.id, !user.mfaEnabled);
+          break;
+        case 'sessions':
+          await repository.revokeUserSessions(user.id);
+          break;
+        case 'password':
+          await repository.requestUserPasswordReset(user.id);
+          break;
+        case 'status':
+          await _toggleStatus(context, ref, user);
+          return;
+      }
+      ref.invalidate(platformUsersProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Security action completed and audited.'),
+          ),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
   }
 
   Future<void> _invite(BuildContext context, WidgetRef ref) async {

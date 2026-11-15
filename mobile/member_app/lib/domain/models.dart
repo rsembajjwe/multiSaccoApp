@@ -31,11 +31,15 @@ class DashboardSummary {
     final balances = (json['balances'] as Map<String, dynamic>?) ?? json;
     final member = json['member'] as Map<String, dynamic>?;
     final loansJson = (json['loans'] as List<dynamic>?) ?? const [];
-    final derivedLoanBalance = loansJson.whereType<Map<String, dynamic>>().fold<num>(
-        0,
-        (sum, l) =>
-            sum + _num(l['balance'] ?? l['outstanding'] ?? l['loanBalance']));
-    final explicitLoanBalance = _num(json['loanBalance'] ?? balances['loanBalance']);
+    final derivedLoanBalance = loansJson
+        .whereType<Map<String, dynamic>>()
+        .fold<num>(
+            0,
+            (sum, l) =>
+                sum +
+                _num(l['balance'] ?? l['outstanding'] ?? l['loanBalance']));
+    final explicitLoanBalance =
+        _num(json['loanBalance'] ?? balances['loanBalance']);
     final lines =
         ((json['statementLines'] ?? json['transactions']) as List<dynamic>?) ??
             const [];
@@ -139,15 +143,19 @@ class Loan {
 
   factory Loan.fromJson(Map<String, dynamic> j) => Loan(
         id: '${j['id'] ?? ''}',
-        product: '${j['product'] ?? j['productName'] ?? j['loanProduct'] ?? 'Loan'}',
+        product:
+            '${j['product'] ?? j['productName'] ?? j['loanProduct'] ?? 'Loan'}',
         principal: _num(j['principal'] ?? j['amount']),
         balance: _num(j['balance'] ?? j['outstanding'] ?? j['loanBalance']),
         status: '${j['status'] ?? ''}',
         stage: j['stage'] as String?,
-        interestRate: j['interestRate'] == null ? null : _num(j['interestRate']),
-        totalPayable: j['totalPayable'] == null ? null : _num(j['totalPayable']),
-        monthlyInstallment:
-            j['monthlyInstallment'] == null ? null : _num(j['monthlyInstallment']),
+        interestRate:
+            j['interestRate'] == null ? null : _num(j['interestRate']),
+        totalPayable:
+            j['totalPayable'] == null ? null : _num(j['totalPayable']),
+        monthlyInstallment: j['monthlyInstallment'] == null
+            ? null
+            : _num(j['monthlyInstallment']),
       );
 
   final String id;
@@ -171,8 +179,10 @@ class LoanProduct {
 
   factory LoanProduct.fromJson(Map<String, dynamic> j) => LoanProduct(
         id: '${j['id'] ?? j['loanProductId'] ?? ''}',
-        name: '${j['name'] ?? j['productName'] ?? j['product'] ?? 'Loan product'}',
-        interestRate: j['interestRate'] == null ? null : _num(j['interestRate']),
+        name:
+            '${j['name'] ?? j['productName'] ?? j['product'] ?? 'Loan product'}',
+        interestRate:
+            j['interestRate'] == null ? null : _num(j['interestRate']),
         maxTermMonths: j['maxTermMonths'] == null && j['termMonths'] == null
             ? null
             : _num(j['maxTermMonths'] ?? j['termMonths']).toInt(),
@@ -196,7 +206,8 @@ class MobileMoneyPayment {
     this.createdAt,
   });
 
-  factory MobileMoneyPayment.fromJson(Map<String, dynamic> j) => MobileMoneyPayment(
+  factory MobileMoneyPayment.fromJson(Map<String, dynamic> j) =>
+      MobileMoneyPayment(
         id: '${j['id'] ?? ''}',
         purpose: '${j['purpose'] ?? ''}',
         amount: _num(j['amount']),
@@ -222,7 +233,7 @@ enum PaymentPurpose {
   savings('savings_deposit', 'Deposit to savings'),
   shares('share_purchase', 'Buy shares'),
   welfare('welfare_contribution', 'Welfare contribution'),
-  membershipDues('membership_dues', 'Membership dues'),
+  membershipDues('membership_dues', 'Member app annual access'),
   loanRepayment('loan_repayment', 'Loan repayment');
 
   const PaymentPurpose(this.value, this.label);
@@ -251,14 +262,17 @@ class MemberNotification {
   });
 
   factory MemberNotification.fromJson(Map<String, dynamic> j) {
-    final ack = j['acknowledgedAt'] ?? j['readAt'] ?? j['acknowledged'] ?? j['read'];
+    final ack =
+        j['acknowledgedAt'] ?? j['readAt'] ?? j['acknowledged'] ?? j['read'];
     final isRead = ack is bool ? ack : ack != null;
     return MemberNotification(
       id: '${j['id'] ?? ''}',
       title: '${j['title'] ?? j['subject'] ?? j['type'] ?? 'Notice'}',
       body: '${j['body'] ?? j['message'] ?? j['content'] ?? ''}',
       read: isRead,
-      createdAt: j['createdAt'] != null ? DateTime.tryParse('${j['createdAt']}') : null,
+      createdAt: j['createdAt'] != null
+          ? DateTime.tryParse('${j['createdAt']}')
+          : null,
     );
   }
 
@@ -378,8 +392,7 @@ class ComplaintMessage {
     required this.createdAt,
   });
 
-  factory ComplaintMessage.fromJson(Map<String, dynamic> j) =>
-      ComplaintMessage(
+  factory ComplaintMessage.fromJson(Map<String, dynamic> j) => ComplaintMessage(
         id: '${j['id'] ?? ''}',
         senderType: '${j['senderType'] ?? ''}',
         senderName: '${j['senderName'] ?? ''}',
@@ -416,7 +429,8 @@ class MemberSubscription {
     required this.lifecycleState,
   });
 
-  factory MemberSubscription.fromJson(Map<String, dynamic> j) => MemberSubscription(
+  factory MemberSubscription.fromJson(Map<String, dynamic> j) =>
+      MemberSubscription(
         id: '${j['id'] ?? ''}',
         planName: '${j['planName'] ?? 'Subscription'}',
         amount: _num(j['amount']),
@@ -425,7 +439,8 @@ class MemberSubscription {
         status: '${j['status'] ?? ''}',
         billingPeriod: '${j['billingPeriod'] ?? ''}',
         expiry: DateTime.tryParse('${j['expiry'] ?? ''}'),
-        daysToExpiry: j['daysToExpiry'] == null ? null : _num(j['daysToExpiry']).toInt(),
+        daysToExpiry:
+            j['daysToExpiry'] == null ? null : _num(j['daysToExpiry']).toInt(),
         lifecycleState: '${j['lifecycleState'] ?? ''}',
       );
 

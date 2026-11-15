@@ -67,8 +67,8 @@ class PlatformBillingService {
             }
         }
 
-        // Metered charged-channel usage: SMS and WhatsApp both cost money to send. Email and push are free.
-        addLine(lines, catalog.get("sms_rate"), channelCount(tenantId, "sms"));
+        // SMS is prepaid through the SACCO wallet and must not be billed again as postpaid usage.
+        // WhatsApp remains metered because it has no prepaid wallet.
         addLine(lines, catalog.get("whatsapp_rate"), channelCount(tenantId, "whatsapp"));
 
         BigDecimal annual = sumByPeriod(lines, "annual").add(sumByPeriod(lines, "monthly"));

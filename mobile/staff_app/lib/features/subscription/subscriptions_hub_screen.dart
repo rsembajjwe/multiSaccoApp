@@ -36,8 +36,8 @@ class SubscriptionsHubScreen extends ConsumerWidget {
           if (canViewSubscription)
             _HubTile(
               icon: Icons.workspace_premium_outlined,
-              title: 'SACCO platform subscription',
-              subtitle: 'Pay balance and top up member capacity',
+              title: 'SACCO staff app subscription',
+              subtitle: 'Pay the SACCO staff-access balance',
               enabled: true,
               onTap: () => Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => SubscriptionScreen(canPay: canPaySubscription),
@@ -46,9 +46,8 @@ class SubscriptionsHubScreen extends ConsumerWidget {
           if (canViewMemberSubscriptions || canManageMemberSubscriptions)
             _HubTile(
               icon: Icons.fact_check_outlined,
-              title: 'Member dues',
-              subtitle:
-                  'Track paid members and pay platform for selected members',
+              title: 'Member app subscriptions',
+              subtitle: 'Track each member’s UGX 5,000 annual app access',
               enabled: true,
               onTap: () => Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => MemberSubscriptionsScreen(
@@ -82,13 +81,12 @@ class SubscriptionsHubScreen extends ConsumerWidget {
     );
     if (request == null) return;
     try {
-      final payment = await ref
-          .read(adminRepositoryProvider)
-          .requestSmsTopUpMobileMoney(
-            smsCount: request.smsCount,
-            payerPhone: request.phone,
-            provider: request.provider,
-          );
+      final payment =
+          await ref.read(adminRepositoryProvider).requestSmsTopUpMobileMoney(
+                smsCount: request.smsCount,
+                payerPhone: request.phone,
+                provider: request.provider,
+              );
       ref.invalidate(mobileMoneyPaymentRequestsProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -187,42 +185,42 @@ class _SmsTopUpDialogState extends State<_SmsTopUpDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'mtn', label: Text('MTN')),
-              ButtonSegment(value: 'airtel', label: Text('Airtel')),
-            ],
-            selected: {_provider},
-            onSelectionChanged: (value) =>
-                setState(() => _provider = value.first),
-          ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _count,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'SMS credits',
-              prefixIcon: Icon(Icons.sms_outlined),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'mtn', label: Text('MTN')),
+                ButtonSegment(value: 'airtel', label: Text('Airtel')),
+              ],
+              selected: {_provider},
+              onSelectionChanged: (value) =>
+                  setState(() => _provider = value.first),
             ),
-            validator: (value) {
-              final count = int.tryParse(
-                  (value ?? '').trim().replaceAll(',', ''));
-              return count == null || count <= 0
-                  ? 'Enter the number of SMS credits.'
-                  : null;
-            },
-          ),
-          const SizedBox(height: 10),
-          TextFormField(
-            controller: _phone,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'SACCO mobile money phone',
-              prefixIcon: Icon(Icons.phone_android_outlined),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _count,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'SMS credits',
+                prefixIcon: Icon(Icons.sms_outlined),
+              ),
+              validator: (value) {
+                final count =
+                    int.tryParse((value ?? '').trim().replaceAll(',', ''));
+                return count == null || count <= 0
+                    ? 'Enter the number of SMS credits.'
+                    : null;
+              },
             ),
-            validator: (value) =>
-                validateUgandanMobileMoneyPhone(value, _provider),
-          ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _phone,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'SACCO mobile money phone',
+                prefixIcon: Icon(Icons.phone_android_outlined),
+              ),
+              validator: (value) =>
+                  validateUgandanMobileMoneyPhone(value, _provider),
+            ),
           ],
         ),
       ),

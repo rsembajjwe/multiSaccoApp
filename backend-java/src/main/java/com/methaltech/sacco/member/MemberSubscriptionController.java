@@ -6,9 +6,6 @@ import com.methaltech.sacco.api.PageParams;
 import com.methaltech.sacco.api.PagedResponse;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
-import com.methaltech.sacco.subscription.Subscription;
-import com.methaltech.sacco.subscription.SubscriptionRepository;
-import com.methaltech.sacco.subscription.SubscriptionService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -43,8 +40,6 @@ class MemberSubscriptionController {
     private final MemberSubscriptionService memberSubscriptionService;
     private final AuthService authService;
     private final AuditService auditService;
-    private final SubscriptionRepository subscriptionRepository;
-    private final SubscriptionService subscriptionService;
 
     @GetMapping
     ResponseEntity<?> list(
@@ -126,19 +121,23 @@ class MemberSubscriptionController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(ApiErrorResponse.of(403, "TENANT_REQUIRED", "Select a SACCO to assign a membership."));
         }
-        String planName = body == null || body.planName() == null ? "" : body.planName().trim();
-        if (body == null || body.memberId() == null || body.memberId().isBlank() || planName.isBlank() || body.amount() == null || body.amount().signum() <= 0) {
+        if (body == null || body.memberId() == null || body.memberId().isBlank()) {
             return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "MEMBERSHIP_INPUT_INVALID", "Member, plan name and a positive amount are required."));
+                    .body(ApiErrorResponse.of(400, "MEMBERSHIP_INPUT_INVALID", "A member is required."));
         }
         Member member = memberRepository.findById(body.memberId().trim()).orElse(null);
         if (member == null || !tenantId.equals(member.getTenantId())) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member was not found in this SACCO."));
         }
-        MemberSubscription saved = memberSubscriptionService.assign(tenantId, member.getId(), planName, body.amount(), body.billingPeriod());
+        MemberSubscription saved = memberSubscriptionService.assign(
+                tenantId,
+                member.getId(),
+                "Member app annual access",
+                MemberSubscriptionService.MEMBER_APP_ANNUAL_FEE,
+                "annual");
         auditService.record(tenantId, session.user(),
-                "Assigned membership \"" + planName + "\" to member " + member.getFullName(),
+                "Assigned annual member-app subscription to member " + member.getFullName(),
                 "member_subscription", saved.getId(), request.getRemoteAddr());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MemberSubscriptionResponse.from(saved)));
     }
@@ -168,14 +167,15 @@ class MemberSubscriptionController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "PAYMENT_AMOUNT_INVALID", "A positive payment amount is required."));
         }
-        ResponseEntity<?> capacityCheck = activationCapacityCheck(subscription.getTenantId(), subscription, amount, 1);
-        if (capacityCheck != null) return capacityCheck;
         MemberSubscription saved;
         try {
             saved = memberSubscriptionService.recordPayment(subscription, amount);
         } catch (IllegalStateException ex) {
+            String code = ex.getMessage() != null && ex.getMessage().contains("already fully paid")
+                    ? "MEMBERSHIP_ALREADY_PAID"
+                    : "SACCO_SUBSCRIPTION_NOT_ACTIVE";
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "MEMBERSHIP_ALREADY_PAID", ex.getMessage()));
+                    .body(ApiErrorResponse.of(409, code, ex.getMessage()));
         }
         auditService.record(subscription.getTenantId(), session.user(),
                 "Recorded member subscription payment of " + amount + " for subscription " + subscription.getId(),
@@ -238,48 +238,20 @@ class MemberSubscriptionController {
                     .body(ApiErrorResponse.of(409, "BULK_PAYMENT_OVER_ALLOCATED",
                             "Selected members require " + requiredAmount + ", which exceeds the amount received."));
         }
-        ResponseEntity<?> capacityCheck = activationCapacityCheck(tenantId, null, null, subscriptions.size());
-        if (capacityCheck != null) return capacityCheck;
-
-        List<MemberSubscriptionResponse> saved = subscriptions.stream()
-                .map(subscription -> memberSubscriptionService.recordPayment(subscription, payableAmount(subscription)))
-                .map(MemberSubscriptionResponse::from)
-                .toList();
+        List<MemberSubscriptionResponse> saved;
+        try {
+            saved = subscriptions.stream()
+                    .map(subscription -> memberSubscriptionService.recordPayment(subscription, payableAmount(subscription)))
+                    .map(MemberSubscriptionResponse::from)
+                    .toList();
+        } catch (IllegalStateException exception) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "SACCO_SUBSCRIPTION_NOT_ACTIVE", exception.getMessage()));
+        }
         auditService.record(tenantId, session.user(),
                 "Recorded bulk member subscription payment for " + saved.size() + " member(s), amount received " + receivedAmount,
                 "member_subscription", "bulk", request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(new BulkPaymentResponse(receivedAmount, requiredAmount, saved.size(), saved)));
-    }
-
-    private ResponseEntity<?> activationCapacityCheck(
-            String tenantId,
-            MemberSubscription subscription,
-            BigDecimal paymentAmount,
-            int requestedActivations) {
-        if (tenantId == null) return null;
-        int activations = requestedActivations;
-        if (subscription != null) {
-            BigDecimal paid = subscription.getPaid() == null ? BigDecimal.ZERO : subscription.getPaid();
-            BigDecimal amount = subscription.getAmount() == null ? BigDecimal.ZERO : subscription.getAmount();
-            boolean alreadyActive = "active".equals(subscription.getStatus()) && paid.compareTo(amount) >= 0;
-            boolean willActivate = !alreadyActive && paid.add(paymentAmount == null ? BigDecimal.ZERO : paymentAmount).compareTo(amount) >= 0;
-            activations = willActivate ? 1 : 0;
-        }
-        if (activations <= 0) return null;
-        Subscription platformSubscription = subscriptionRepository.findFirstByTenantIdOrderByCreatedAtDesc(tenantId).orElse(null);
-        if (platformSubscription == null) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "NO_SACCO_SUBSCRIPTION", "This SACCO has no platform subscription capacity."));
-        }
-        subscriptionService.refreshBilling(platformSubscription);
-        int capacity = platformSubscription.paidMemberCapacity();
-        long activeMembers = repository.countByTenantIdAndStatus(tenantId, "active");
-        if (activeMembers + activations > capacity) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "MEMBER_SUBSCRIPTION_CAPACITY_EXCEEDED",
-                            "The SACCO has paid for " + capacity + " member subscription(s). Pay the platform first before activating more members."));
-        }
-        return null;
     }
 
     private BigDecimal payableAmount(MemberSubscription subscription) {

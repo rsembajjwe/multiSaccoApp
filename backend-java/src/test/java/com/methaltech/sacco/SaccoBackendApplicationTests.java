@@ -612,7 +612,7 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data.length()", is(1)))
 				.andExpect(jsonPath("$.data[0].status", is("active")))
 				.andExpect(jsonPath("$.data[0].paid", is(100000.00)))
-				.andExpect(jsonPath("$.data[0].billingDescription", is("UGX 5,000 per member annually, minimum 20 members")));
+				.andExpect(jsonPath("$.data[0].billingDescription", is("UGX 5,000 per registered member annually")));
 
 		MvcResult unpaidTenantResult = mockMvc.perform(post("/api/v1/tenants")
 						.header("Authorization", "Bearer " + token)
@@ -962,10 +962,11 @@ class SaccoBackendApplicationTests {
 		mockMvc.perform(get("/api/v1/subscription-packages")
 						.header("Authorization", "Bearer " + platformToken))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.length()", is(5)))
-				.andExpect(jsonPath("$.data[0].id", is("starter")))
-				.andExpect(jsonPath("$.data[0].minMembers", is(251)))
-				.andExpect(jsonPath("$.data[0].memberLimit", is(500)));
+				.andExpect(jsonPath("$.data.length()", is(6)))
+				.andExpect(jsonPath("$.data[0].id", is("community")))
+				.andExpect(jsonPath("$.data[0].price", is(5000.0)))
+				.andExpect(jsonPath("$.data[0].minMembers", is(0)))
+				.andExpect(jsonPath("$.data[0].memberLimit", is(250)));
 
 		mockMvc.perform(get("/api/v1/subscriptions?tenantId=tenant_green")
 						.header("Authorization", "Bearer " + platformToken))
@@ -974,11 +975,11 @@ class SaccoBackendApplicationTests {
 				.andExpect(jsonPath("$.data[0].tenantId", is("tenant_green")))
 				// memberCount is recomputed live from the members table, so other tests that register
 				// members in tenant_green (e.g. loan borrowers) can raise it. Assert the billing logic
-				// (per-member tier with the 20-member minimum) rather than an order-dependent exact count.
+				// (per-member tier using the live registered-member count) rather than an order-dependent exact count.
 				.andExpect(jsonPath("$.data[0].memberCount", greaterThanOrEqualTo(12)))
-				.andExpect(jsonPath("$.data[0].billableMembers", greaterThanOrEqualTo(20)))
+				.andExpect(jsonPath("$.data[0].billableMembers", greaterThanOrEqualTo(12)))
 				.andExpect(jsonPath("$.data[0].tierId", is("per_member")))
-				.andExpect(jsonPath("$.data[0].billingDescription", is("UGX 5,000 per member annually, minimum 20 members")));
+				.andExpect(jsonPath("$.data[0].billingDescription", is("UGX 5,000 per registered member annually")));
 
 		MvcResult payment = mockMvc.perform(post("/api/v1/subscriptions/subscription_lake_starter/payments")
 						.header("Authorization", "Bearer " + platformToken)
@@ -6699,7 +6700,7 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
-	void memberSubscriptionCapacityBlocksManualAndBulkActivationBypass() throws Exception {
+	void memberAppPaymentsAreIndependentFromSaccoStaffSubscriptionCapacity() throws Exception {
 		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String originalStatus = jdbcTemplate.queryForObject(
 				"SELECT status FROM subscriptions WHERE tenant_id = 'tenant_green'", String.class);
@@ -6734,8 +6735,8 @@ class SaccoBackendApplicationTests {
 							.header("Authorization", "Bearer " + staffToken)
 							.contentType("application/json")
 							.content("{\"amount\":5000}"))
-					.andExpect(status().isConflict())
-					.andExpect(jsonPath("$.error.code", is("MEMBER_SUBSCRIPTION_CAPACITY_EXCEEDED")));
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.status", is("active")));
 
 			jdbcTemplate.update(
 					"UPDATE subscriptions SET paid = ? WHERE tenant_id = 'tenant_green'",
@@ -6763,8 +6764,8 @@ class SaccoBackendApplicationTests {
 							.content("""
 									{"amount":10000,"subscriptionIds":["%s","%s"],"method":"cash"}
 									""".formatted(firstBulkId, secondBulkId)))
-					.andExpect(status().isConflict())
-					.andExpect(jsonPath("$.error.code", is("MEMBER_SUBSCRIPTION_CAPACITY_EXCEEDED")));
+					.andExpect(status().isOk())
+					.andExpect(jsonPath("$.data.paidMembers", is(2)));
 		} finally {
 			for (String id : created) {
 				jdbcTemplate.update("DELETE FROM member_subscriptions WHERE id = ?", id);
@@ -7078,7 +7079,7 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
-	void saccoPlatformFeeCallbackRejectsStaleSelectedMemberSubscriptions() throws Exception {
+	void saccoStaffSubscriptionRequestDoesNotAllocateMemberAppSubscriptions() throws Exception {
 		String staffToken = loginAndReturnToken("admin@greenvalley.local", "Sacco@12345");
 		String membershipId = null;
 		String reference = "MM-SUB-STALE-" + System.currentTimeMillis();
@@ -7099,24 +7100,11 @@ class SaccoBackendApplicationTests {
 									""".formatted(reference, membershipId)))
 					.andExpect(status().isAccepted());
 
-			jdbcTemplate.update("DELETE FROM member_subscriptions WHERE id = ?", membershipId);
-			membershipId = null;
-
-			mockMvc.perform(post("/api/v1/integrations/mobile-money/callback")
-							.contentType("application/json")
-							.content("""
-									{"tenantId":"tenant_green","purpose":"platform_fee","amount":5000,"externalReference":"%s","provider":"mtn","providerPayload":{"phone":"+256700000001"}}
-									""".formatted(reference)))
-					.andExpect(status().isConflict())
-					.andExpect(jsonPath("$.error.code", is("INVALID_MEMBER_SUBSCRIPTION_SELECTION")));
-
-			mockMvc.perform(post("/api/v1/integrations/mobile-money/callback")
-							.contentType("application/json")
-							.content("""
-									{"tenantId":"tenant_green","purpose":"platform_fee","amount":5000,"externalReference":"%s","provider":"mtn","providerPayload":{"phone":"+256700000001"}}
-									""".formatted(reference)))
-					.andExpect(status().isConflict())
-					.andExpect(jsonPath("$.error.code", is("INVALID_MEMBER_SUBSCRIPTION_SELECTION")));
+			String storedPayload = jdbcTemplate.queryForObject(
+					"SELECT provider_payload FROM mobile_money_payment_requests WHERE external_reference = ?",
+					String.class,
+					reference);
+			org.junit.jupiter.api.Assertions.assertFalse(storedPayload.contains("memberSubscriptionIds"));
 		} finally {
 			jdbcTemplate.update("DELETE FROM statement_lines WHERE tenant_id = 'tenant_green' AND external_reference = ?", reference);
 			jdbcTemplate.update("DELETE FROM subscription_payments WHERE external_reference = ?", reference);
@@ -7142,8 +7130,8 @@ class SaccoBackendApplicationTests {
 						billable_members = 20,
 						unit_price = 5000.00,
 						tier_id = 'per_member',
-						tier_label = '20-250 members',
-						billing_description = 'UGX 5,000 per member annually, minimum 20 members'
+						tier_label = 'Up to 250 members',
+						billing_description = 'UGX 5,000 per registered member annually'
 					WHERE tenant_id = 'tenant_green'
 					""");
 
@@ -7183,8 +7171,8 @@ class SaccoBackendApplicationTests {
 						billable_members = 20,
 						unit_price = 5000.00,
 						tier_id = 'per_member',
-						tier_label = '20-250 members',
-						billing_description = 'UGX 5,000 per member annually, minimum 20 members',
+						tier_label = 'Up to 250 members',
+						billing_description = 'UGX 5,000 per registered member annually',
 						expiry = DATE '2027-07-14'
 					WHERE tenant_id = 'tenant_green'
 					""");
@@ -7228,7 +7216,7 @@ class SaccoBackendApplicationTests {
 	}
 
 	@Test
-	void trialAndPaidMemberCapacityControlsMemberDeposits() throws Exception {
+	void freeTrialAndActiveSaccoSubscriptionAllowStaffDepositsForAllMembers() throws Exception {
 		String treasurerToken = loginAndReturnToken("rsembajjwe1@gmail.com", "Treasurer@123456");
 		String originalStatus = jdbcTemplate.queryForObject(
 				"SELECT status FROM subscriptions WHERE tenant_id = 'tenant_green'", String.class);
@@ -7268,11 +7256,10 @@ class SaccoBackendApplicationTests {
 									  "type": "savings_deposit",
 									  "channel": "bank",
 									  "amount": 10000,
-									  "narration": "Trial capacity blocked"
+					  "narration": "Trial access allowed"
 									}
 									"""))
-					.andExpect(status().isForbidden())
-					.andExpect(jsonPath("$.error.code", is("SACCO_TRIAL_SETUP_ONLY")));
+				.andExpect(status().isCreated());
 
 			jdbcTemplate.update("""
 					UPDATE subscriptions
@@ -7315,13 +7302,12 @@ class SaccoBackendApplicationTests {
 									  "type": "savings_deposit",
 									  "channel": "bank",
 									  "amount": 10000,
-									  "narration": "Paid capacity overflow blocked"
+					  "narration": "Staff access independent of member app"
 									}
 									"""))
-					.andExpect(status().isForbidden())
-					.andExpect(jsonPath("$.error.code", is("MEMBER_NOT_WITHIN_PAID_CAPACITY")));
+				.andExpect(status().isCreated());
 		} finally {
-			jdbcTemplate.update("DELETE FROM financial_transactions WHERE narration IN ('Paid capacity allowed', 'Trial capacity blocked', 'Paid capacity overflow blocked')");
+			jdbcTemplate.update("DELETE FROM financial_transactions WHERE narration IN ('Paid capacity allowed', 'Trial access allowed', 'Staff access independent of member app')");
 			jdbcTemplate.update("DELETE FROM members WHERE id LIKE 'member_green_capacity_%'");
 			jdbcTemplate.update("UPDATE subscriptions SET status = ?, paid = ?, expiry = ? WHERE tenant_id = 'tenant_green'",
 					originalStatus, originalPaid, originalExpiry);
@@ -10336,8 +10322,8 @@ class SaccoBackendApplicationTests {
 				.andExpect(status().isOk());
 
 		// Fund savings and shares directly on the member. A posted deposit would be rejected once the new
-		// member sits beyond the SACCO's paid-member capacity (MEMBER_NOT_WITHIN_PAID_CAPACITY), whereas the
-		// loan flow is not capacity-gated and reads the savings/shares balance columns for its
+		// member-app payment is independent from staff-side financial posting, while the loan flow
+		// reads the savings/shares balance columns for its
 		// debt-service-ratio and cover gates. 900,000 savings mirrors the standing seed member's profile.
 		jdbcTemplate.update(
 				"UPDATE members SET savings_balance = 900000, shares_balance = 150000 WHERE id = ?", memberId);

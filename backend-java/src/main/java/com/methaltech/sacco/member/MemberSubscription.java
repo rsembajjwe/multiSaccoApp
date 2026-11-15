@@ -12,9 +12,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * A member's membership dues subscription: amount, payment status and optional expiry. One-time dues do
- * not expire; recurring dues renew by billing period. Managed by SACCO staff and distinct from the
- * platform's per-SACCO subscription.
+ * A member's annual mobile-app access subscription. Its expiry follows the SACCO staff-app subscription
+ * cycle, regardless of the member's payment date.
  */
 @Entity
 @Table(name = "member_subscriptions")
@@ -82,7 +81,7 @@ public class MemberSubscription {
         return this.paid != null && this.amount != null && this.paid.compareTo(this.amount) >= 0;
     }
 
-    /** Applies a dues payment; once fully paid the membership becomes active and expiry is extended. */
+    /** Applies an app-access payment and activates access through the supplied SACCO cycle expiry. */
     void recordPayment(BigDecimal paymentAmount, LocalDate activeExpiry) {
         this.paid = this.paid.add(paymentAmount).min(this.amount);
         this.status = this.paid.compareTo(this.amount) >= 0 ? "active" : "pending_payment";
@@ -101,6 +100,22 @@ public class MemberSubscription {
     void resetForRenewal() {
         this.paid = BigDecimal.ZERO;
         this.status = "pending_payment";
+        this.updatedAt = Instant.now();
+    }
+
+    void alignToSaccoCycle(BigDecimal annualFee, LocalDate cycleExpiry) {
+        boolean cycleChanged = this.expiry == null || !this.expiry.equals(cycleExpiry);
+        if (cycleChanged) {
+            this.paid = BigDecimal.ZERO;
+            this.status = "pending_payment";
+        }
+        this.planName = "Member app annual access";
+        this.amount = annualFee;
+        this.billingPeriod = "annual";
+        this.expiry = cycleExpiry;
+        if (this.paid.compareTo(this.amount) > 0) {
+            this.paid = this.amount;
+        }
         this.updatedAt = Instant.now();
     }
 

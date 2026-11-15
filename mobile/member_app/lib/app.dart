@@ -12,6 +12,7 @@ import 'features/loans/loans_screen.dart';
 import 'features/messages/messages_screen.dart';
 import 'features/payments/payments_screen.dart';
 import 'features/profile/profile_screen.dart';
+import 'features/subscription/subscription_screen.dart';
 import 'features/shell/home_shell.dart';
 import 'providers.dart';
 
@@ -29,8 +30,7 @@ class _SaccoMemberAppState extends ConsumerState<SaccoMemberApp>
     initialLocation: '/login',
     refreshListenable: sessionExpiredNotifier,
     redirect: (context, state) {
-      if (sessionExpiredNotifier.value &&
-          state.matchedLocation != '/login') {
+      if (sessionExpiredNotifier.value && state.matchedLocation != '/login') {
         return '/login';
       }
       return null;
@@ -44,6 +44,10 @@ class _SaccoMemberAppState extends ConsumerState<SaccoMemberApp>
       GoRoute(path: '/payments', builder: (_, __) => const PaymentsScreen()),
       GoRoute(path: '/messages', builder: (_, __) => const MessagesScreen()),
       GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+      GoRoute(
+        path: '/subscription',
+        builder: (_, __) => const SubscriptionScreen(),
+      ),
     ],
   );
 

@@ -28,14 +28,55 @@ final fleetProvider = FutureProvider.autoDispose
       (ref, search) =>
           ref.watch(platformRepositoryProvider).tenants(search: search),
     );
+final saccoLifecycleProvider = FutureProvider.autoDispose
+    .family<SaccoLifecycleData, String>(
+      (ref, tenantId) =>
+          ref.watch(platformRepositoryProvider).saccoLifecycle(tenantId),
+    );
 final subscriptionsProvider = FutureProvider.autoDispose(
   (ref) => ref.watch(platformRepositoryProvider).subscriptions(),
 );
 final packagesProvider = FutureProvider.autoDispose(
   (ref) => ref.watch(platformRepositoryProvider).packages(),
 );
+final billingCatalogProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).billingCatalog(),
+);
+final adminPackagesProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).adminPackages(),
+);
+final smsSalesProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).smsSales(),
+);
+final smsBroadcastTenantsProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).tenants(),
+);
+final notificationProviderStatusProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).notificationProviderStatus(),
+);
+final notificationDeliveriesProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).notificationDeliveries(),
+);
+final paymentOperationsEvidenceProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).paymentOperationsEvidence(),
+);
+final subscriptionPaymentsProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).subscriptionPayments(),
+);
 final approvalsProvider = FutureProvider.autoDispose(
   (ref) => ref.watch(platformRepositoryProvider).approvals(),
+);
+final fleetJobsProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).fleetJobs(),
+);
+final fleetIncidentsProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).fleetIncidents(),
+);
+final fleetSavedViewsProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).fleetSavedViews(),
+);
+final forecastScenariosProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).forecastScenarios(),
 );
 final ticketsProvider = FutureProvider.autoDispose(
   (ref) => ref.watch(platformRepositoryProvider).tickets(),
@@ -46,3 +87,11 @@ final platformUsersProvider = FutureProvider.autoDispose(
 final platformRolesProvider = FutureProvider.autoDispose(
   (ref) => ref.watch(platformRepositoryProvider).roles(),
 );
+final platformSecurityPolicyProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).securityPolicy(),
+);
+final platformAuditEventsProvider = FutureProvider.autoDispose
+    .family<PageResult<PlatformAuditEvent>, String>(
+      (ref, search) =>
+          ref.watch(platformRepositoryProvider).auditEvents(search: search),
+    );

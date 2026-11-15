@@ -4,6 +4,7 @@ import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
+import com.methaltech.sacco.notification.SmsWalletService;
 import com.methaltech.sacco.subscription.BillingResponses.BillingCatalogResponse;
 import com.methaltech.sacco.subscription.BillingResponses.TenantBillingItemResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,18 +38,21 @@ class PlatformBillingController {
     private final PlatformBillingService billingService;
     private final AuthService authService;
     private final AuditService auditService;
+    private final SmsWalletService smsWalletService;
 
     PlatformBillingController(
             BillingCatalogRepository catalogRepository,
             TenantBillingItemRepository billingItemRepository,
             PlatformBillingService billingService,
             AuthService authService,
-            AuditService auditService) {
+            AuditService auditService,
+            SmsWalletService smsWalletService) {
         this.catalogRepository = catalogRepository;
         this.billingItemRepository = billingItemRepository;
         this.billingService = billingService;
         this.authService = authService;
         this.auditService = auditService;
+        this.smsWalletService = smsWalletService;
     }
 
     @GetMapping("/catalog")
@@ -71,7 +75,8 @@ class PlatformBillingController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiErrorResponse.of(404, "BILLING_RATE_NOT_FOUND", "Billing rate not found."));
         }
-        if (body.unitPrice() == null || body.unitPrice().signum() < 0) {
+        if (body.unitPrice() == null || body.unitPrice().signum() < 0
+                || ("sms_rate".equals(code) && (body.active() == null || body.active()) && body.unitPrice().signum() <= 0)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_BILLING_RATE", "Unit price must be zero or greater."));
         }
@@ -81,6 +86,56 @@ class PlatformBillingController {
                 "Updated billing rate " + saved.getCode() + " to " + saved.getUnitPrice(),
                 "billing_rate", saved.getCode(), request.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.of(BillingCatalogResponse.from(saved)));
+    }
+
+    @PostMapping("/sms-wallets/{tenantId}/cash-payments")
+    ResponseEntity<?> recordSmsCashPayment(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String tenantId,
+            @Valid @RequestBody SmsCashPaymentRequest body,
+            HttpServletRequest request) {
+        ResponseEntity<?> guard = requirePlatform(authorization, "subscriptions:manage");
+        if (guard != null) return guard;
+        int smsCount = body.smsCount() == null ? 0 : body.smsCount();
+        if (smsCount <= 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "SMS_COUNT_REQUIRED", "Enter the number of SMS credits purchased."));
+        }
+        String reference = body.reference().trim();
+        if (smsWalletService.referenceExists(tenantId, reference)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "SMS_PAYMENT_REFERENCE_EXISTS", "That SMS cash-payment reference already exists."));
+        }
+        BigDecimal amount = smsWalletService.amountFor(smsCount);
+        if (amount.signum() <= 0) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "SMS_RATE_NOT_CONFIGURED", "Set a positive SMS rate before recording purchases."));
+        }
+        int credited = smsWalletService.creditFromPayment(
+                tenantId,
+                amount,
+                reference,
+                "Cash SMS credit purchase");
+        int balance = smsWalletService.balance(tenantId);
+        auditService.record(
+                tenantId,
+                currentUser(authorization),
+                "Recorded cash SMS purchase " + reference + " for " + credited + " credits",
+                "sms_wallet",
+                tenantId,
+                request.getRemoteAddr());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(
+                new SmsCashPaymentResponse(tenantId, credited, smsWalletService.smsRate(), amount, balance, reference)));
+    }
+
+    @GetMapping("/sms-sales")
+    ResponseEntity<?> listSmsSales(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String tenantId,
+            @RequestParam(name = "limit", required = false, defaultValue = "200") Integer limit) {
+        ResponseEntity<?> guard = requirePlatform(authorization, "subscriptions:view");
+        if (guard != null) return guard;
+        return ResponseEntity.ok(ApiResponse.of(smsWalletService.sales(tenantId, limit == null ? 200 : limit)));
     }
 
     @GetMapping("/items")
@@ -179,6 +234,18 @@ class PlatformBillingController {
     }
 
     record CatalogRateRequest(BigDecimal unitPrice, Boolean active) {
+    }
+
+    record SmsCashPaymentRequest(Integer smsCount, @NotBlank String reference) {
+    }
+
+    record SmsCashPaymentResponse(
+            String tenantId,
+            int smsCredits,
+            BigDecimal unitPrice,
+            BigDecimal amount,
+            int smsBalance,
+            String reference) {
     }
 
     record AddBillingItemRequest(@NotBlank String tenantId, @NotBlank String catalogCode, Integer quantity) {

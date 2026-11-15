@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Daily maintenance of member membership dues: expire lapsed memberships and send renewal reminders.
+ * Daily maintenance of member-app access: expire lapsed subscriptions and send renewal reminders.
  * Uses the application's existing {@code @EnableScheduling}. Idempotent.
  */
 @Component

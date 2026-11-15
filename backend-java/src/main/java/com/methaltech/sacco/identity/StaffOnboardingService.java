@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class StaffOnboardingService {
+public class StaffOnboardingService {
 
     private static final char[] UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ".toCharArray();
     private static final char[] LOWER = "abcdefghijkmnopqrstuvwxyz".toCharArray();
@@ -36,7 +36,7 @@ class StaffOnboardingService {
     }
 
     @Transactional
-    User createUser(
+    public User createUser(
             String tenantId,
             String fullName,
             String email,

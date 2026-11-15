@@ -116,7 +116,7 @@ class MemberAuthController {
     private final SaccoPaymentAccountRepository paymentAccountRepository;
     private final MemberFundBalanceService memberFundBalanceService;
     private final NotificationChannelPreferenceService channelPreferenceService;
-    private final MemberSubscriptionRepository memberSubscriptionRepository;
+    private final MemberSubscriptionService memberSubscriptionService;
     private final MemberPasswordResetRequestRepository passwordResetRepository;
     private final LoanProductCatalog loanProductCatalog;
     private final DocumentStorageService documentStorageService;
@@ -151,7 +151,7 @@ class MemberAuthController {
             SaccoPaymentAccountRepository paymentAccountRepository,
             MemberFundBalanceService memberFundBalanceService,
             NotificationChannelPreferenceService channelPreferenceService,
-            MemberSubscriptionRepository memberSubscriptionRepository,
+            MemberSubscriptionService memberSubscriptionService,
             MemberPasswordResetRequestRepository passwordResetRepository,
             LoanProductCatalog loanProductCatalog,
             DocumentStorageService documentStorageService,
@@ -184,7 +184,7 @@ class MemberAuthController {
         this.paymentAccountRepository = paymentAccountRepository;
         this.memberFundBalanceService = memberFundBalanceService;
         this.channelPreferenceService = channelPreferenceService;
-        this.memberSubscriptionRepository = memberSubscriptionRepository;
+        this.memberSubscriptionService = memberSubscriptionService;
         this.passwordResetRepository = passwordResetRepository;
         this.loanProductCatalog = loanProductCatalog;
         this.documentStorageService = documentStorageService;
@@ -631,10 +631,8 @@ class MemberAuthController {
     ResponseEntity<?> membership(@RequestHeader(name = "Authorization", required = false) String authorization) {
         MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
         if (currentSession == null) return memberAuthService.authRequired();
-        return ResponseEntity.ok(ApiResponse.of(memberSubscriptionRepository
-                .findFirstByMemberIdOrderByCreatedAtDesc(currentSession.member().getId())
-                .map(MemberSubscriptionResponse::from)
-                .orElse(null)));
+        return ResponseEntity.ok(ApiResponse.of(MemberSubscriptionResponse.from(
+                memberSubscriptionService.ensureMandatorySubscription(currentSession.member()))));
     }
 
     @PostMapping(path = "/profile-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../domain/models.dart';
 import '../../providers.dart';
@@ -17,7 +18,7 @@ class SubscriptionScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(membershipProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('My subscription')),
+      appBar: AppBar(title: const Text('Member app subscription')),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ErrorRetry(
@@ -31,11 +32,14 @@ class SubscriptionScreen extends ConsumerWidget {
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                    'No subscription on file. Contact your SACCO office to set one up.',
+                    'No member-app subscription is available. Contact your SACCO office.',
                     textAlign: TextAlign.center),
               ),
             );
           }
+          final active = sub.status == 'active' &&
+              sub.expiry != null &&
+              !sub.expiry!.isBefore(DateTime.now());
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(membershipProvider),
             child: ListView(
@@ -51,8 +55,7 @@ class SubscriptionScreen extends ConsumerWidget {
                             style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 12),
                         _row('Status', sub.status),
-                        if (sub.billingPeriod.isNotEmpty)
-                          _row('Billing', sub.billingPeriod),
+                        _row('Billing', 'Annual — SACCO cycle'),
                         _row('Amount', _money.format(sub.amount)),
                         _row('Paid', _money.format(sub.paid)),
                         _row('Balance due', _money.format(sub.balanceDue)),
@@ -66,17 +69,39 @@ class SubscriptionScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                if (sub.balanceDue > 0)
+                if (!active && sub.balanceDue > 0)
                   FilledButton.icon(
                     onPressed: () => _openPaySheet(context, ref, sub),
                     icon: const Icon(Icons.payments_outlined),
-                    label: Text('Pay dues (${_money.format(sub.balanceDue)})'),
+                    label: Text(
+                        'Pay annual access (${_money.format(sub.balanceDue)})'),
+                  )
+                else if (active)
+                  Column(
+                    children: [
+                      const Card(
+                        child: ListTile(
+                          leading:
+                              Icon(Icons.check_circle, color: Colors.green),
+                          title:
+                              Text('Your member-app subscription is active.'),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: () => context.go('/home'),
+                        icon: const Icon(Icons.arrow_forward),
+                        label: const Text('Continue to member app'),
+                      ),
+                    ],
                   )
                 else
                   const Card(
                     child: ListTile(
-                      leading: Icon(Icons.check_circle, color: Colors.green),
-                      title: Text('Your subscription is fully paid.'),
+                      leading: Icon(Icons.info_outline),
+                      title: Text('SACCO staff subscription renewal required.'),
+                      subtitle: Text(
+                          'Contact your SACCO office before renewing member-app access.'),
                     ),
                   ),
               ],
@@ -178,7 +203,7 @@ class _PayDuesFormState extends ConsumerState<_PayDuesForm> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Pay subscription dues',
+          Text('Pay member app annual access',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 16),
           MobileMoneyNetworkSelector(

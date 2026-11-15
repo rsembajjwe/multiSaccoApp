@@ -114,7 +114,7 @@ workstreams. Items marked **[code]** I can implement here; **[external]** depend
    *Done when:* focused service/domain unit tests exist for every money path and permission rule (not
    just the big integration suite); coverage floor enforced in CI.
    *Current progress:* Block 3 is complete for the agreed backend test-pyramid pass. Focused unit tests now cover subscription billing tier
-   boundaries, the 100-member minimum, 5,000-per-member pricing up to 250 members, fixed tiers above
+   boundaries, 5,000-per-registered-member pricing up to 250 members, fixed tiers above
    250 members, paid/unpaid initial subscription activation, live-member-count billing refresh,
    bearer-session acceptance/rejection, suspended-user rejection, platform/SACCO identity separation,
    multi-role permission matching, fail-closed permission checks, loan interest/installment terms,

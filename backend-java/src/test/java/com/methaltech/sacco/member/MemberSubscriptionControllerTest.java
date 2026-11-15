@@ -11,9 +11,6 @@ import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.identity.User;
-import com.methaltech.sacco.subscription.Subscription;
-import com.methaltech.sacco.subscription.SubscriptionRepository;
-import com.methaltech.sacco.subscription.SubscriptionService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -32,13 +29,11 @@ class MemberSubscriptionControllerTest {
     private final MemberSubscriptionService service = mock(MemberSubscriptionService.class);
     private final AuthService authService = mock(AuthService.class);
     private final AuditService auditService = mock(AuditService.class);
-    private final SubscriptionRepository platformRepository = mock(SubscriptionRepository.class);
-    private final SubscriptionService platformService = mock(SubscriptionService.class);
     private final HttpServletRequest request = mock(HttpServletRequest.class);
     private final User user = user("user_one", "tenant_one");
     private final User platform = user("platform", "tenant_platform");
     private final MemberSubscriptionController controller = new MemberSubscriptionController(repository,
-            memberRepository, service, authService, auditService, platformRepository, platformService);
+            memberRepository, service, authService, auditService);
 
     @BeforeEach
     void configureDefaults() {
@@ -88,7 +83,7 @@ class MemberSubscriptionControllerTest {
         when(member.getFullName()).thenReturn("Member One");
         when(memberRepository.findById("member_one")).thenReturn(Optional.of(member));
         MemberSubscription saved = subscription("sub_one", "tenant_one", "100");
-        when(service.assign("tenant_one", "member_one", "Annual", new BigDecimal("100"), "annual"))
+        when(service.assign("tenant_one", "member_one", "Member app annual access", new BigDecimal("5000"), "annual"))
                 .thenReturn(saved);
         assertEquals(HttpStatus.CREATED, controller.assign("Bearer manage", body, request).getStatusCode());
         verify(auditService).record(org.mockito.ArgumentMatchers.eq("tenant_one"),
@@ -97,7 +92,7 @@ class MemberSubscriptionControllerTest {
     }
 
     @Test
-    void paymentChecksExistenceTenantAmountAndPlatformCapacity() {
+    void paymentChecksExistenceTenantAndAmount() {
         allow("Bearer manage", user, "member-subscription:manage");
         assertError(controller.recordPayment("Bearer manage", "missing",
                 new MemberSubscriptionController.PaymentRequest(BigDecimal.ONE, "cash"), request),
@@ -114,17 +109,9 @@ class MemberSubscriptionControllerTest {
         assertError(controller.recordPayment("Bearer manage", "own",
                 new MemberSubscriptionController.PaymentRequest(BigDecimal.ZERO, "cash"), request),
                 HttpStatus.BAD_REQUEST, "PAYMENT_AMOUNT_INVALID");
-        assertError(controller.recordPayment("Bearer manage", "own",
-                new MemberSubscriptionController.PaymentRequest(new BigDecimal("100"), "cash"), request),
-                HttpStatus.CONFLICT, "NO_SACCO_SUBSCRIPTION");
-
-        Subscription platformSubscription = platformSubscription(10);
-        when(platformRepository.findFirstByTenantIdOrderByCreatedAtDesc("tenant_one"))
-                .thenReturn(Optional.of(platformSubscription));
-        when(repository.countByTenantIdAndStatus("tenant_one", "active")).thenReturn(10L);
-        assertError(controller.recordPayment("Bearer manage", "own",
-                new MemberSubscriptionController.PaymentRequest(new BigDecimal("100"), "cash"), request),
-                HttpStatus.CONFLICT, "MEMBER_SUBSCRIPTION_CAPACITY_EXCEEDED");
+        when(service.recordPayment(own, new BigDecimal("100"))).thenReturn(own);
+        assertEquals(HttpStatus.OK, controller.recordPayment("Bearer manage", "own",
+                new MemberSubscriptionController.PaymentRequest(new BigDecimal("100"), "cash"), request).getStatusCode());
     }
 
     @Test
@@ -132,11 +119,8 @@ class MemberSubscriptionControllerTest {
         allow("Bearer manage", user, "member-subscription:manage");
         MemberSubscription own = subscription("own", "tenant_one", "100");
         when(repository.findById("own")).thenReturn(Optional.of(own));
-        when(platformRepository.findFirstByTenantIdOrderByCreatedAtDesc("tenant_one"))
-                .thenReturn(Optional.of(platformSubscription(100)));
-        when(repository.countByTenantIdAndStatus("tenant_one", "active")).thenReturn(1L);
         when(service.recordPayment(own, new BigDecimal("100")))
-                .thenThrow(new IllegalStateException("Already paid"))
+                .thenThrow(new IllegalStateException("Member subscription is already fully paid for the current cycle."))
                 .thenReturn(own);
         assertError(controller.recordPayment("Bearer manage", "own",
                 new MemberSubscriptionController.PaymentRequest(new BigDecimal("100"), "cash"), request),
@@ -162,8 +146,6 @@ class MemberSubscriptionControllerTest {
                 new MemberSubscriptionController.BulkPaymentRequest(new BigDecimal("50"), List.of("one", "two"), "cash", null), request),
                 HttpStatus.CONFLICT, "BULK_PAYMENT_OVER_ALLOCATED");
 
-        when(platformRepository.findFirstByTenantIdOrderByCreatedAtDesc("tenant_one"))
-                .thenReturn(Optional.of(platformSubscription(100)));
         when(service.recordPayment(any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
         ResponseEntity<?> response = controller.recordBulkPayment("Bearer manage",
                 new MemberSubscriptionController.BulkPaymentRequest(new BigDecimal("100"), List.of("one", "two"), "cash", null), request);
@@ -176,12 +158,6 @@ class MemberSubscriptionControllerTest {
     private MemberSubscription subscription(String id, String tenantId, String amount) {
         return new MemberSubscription(id, tenantId, "member_one", "Annual", new BigDecimal(amount),
                 "annual", LocalDate.now(), LocalDate.now().plusYears(1));
-    }
-
-    private Subscription platformSubscription(int capacity) {
-        BigDecimal value = BigDecimal.valueOf(capacity);
-        return new Subscription("platform_sub", "tenant_one", "starter", "active", "INV", value, value,
-                capacity, capacity, BigDecimal.ONE, "tier", "Tier", "Capacity", LocalDate.now().plusYears(1));
     }
 
     private void allow(String token, User currentUser, String permission) {

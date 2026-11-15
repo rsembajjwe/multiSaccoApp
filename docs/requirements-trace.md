@@ -36,7 +36,8 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - Server-side tenants, users, and audit events fetched through `/api/v1`.
 - Server-side branch and member onboarding endpoints with tenant isolation.
 - Member document metadata endpoint for KYC/document tracking.
-- Java subscription endpoints expose active packages, recalculate annual billing with the UGX 5,000/member and 100-member minimum rule up to 250 members, preserve the fixed tiers above 250 members, and post platform payments into journals.
+- Java subscription endpoints expose active packages, recalculate annual billing at UGX 5,000 per registered member up to 250 members, preserve the fixed tiers above 250 members, and post platform payments into journals.
+- Member-app access uses a separate UGX 5,000 annual member subscription whose expiry is inherited from the active SACCO staff-subscription cycle; unpaid members retain payment-only app access while staff can continue managing their records.
 - Java member mobile dashboard and loan endpoints return server-confirmed balances, loans, latest notifications, pending guarantor requests, and create mobile-submitted loan applications with member audit and notification records.
 
 ## Represented as design controls
@@ -54,6 +55,8 @@ Source: `C:\Users\Methaltech\Downloads\SACCO Management Platform Requirements.do
 - SACCO registration UI can switch from local demo data to API-backed tenant onboarding after platform login.
 - Subscription UI can switch from local demo data to API-backed package, invoice, and payment records after login.
 - Subscription billing uses UGX 5,000 per member annually up to 250 members, then fixed annual tiers for larger SACCOs.
+- Proprietor SACCO registration creates chairperson, treasurer, and secretary member/staff records, validates at least one reachable contact per official, and delivers mandatory-reset temporary passwords by email or SMS.
+- SMS revenue uses a proprietor-controlled unit rate, proprietor-recorded cash wallet purchases, and staff-initiated mobile-money wallet purchases; all SMS sends consume prepaid SACCO credits.
 - Transactions UI can switch from local demo data to API-backed financial postings after login.
 - Backend financial transaction creation validates tenant, member, branch, type, channel, and positive amount.
 - Approvals UI can post or reject API-backed pending financial transactions with maker-checker enforcement.

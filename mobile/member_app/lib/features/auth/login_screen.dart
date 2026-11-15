@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth_events.dart';
+import '../../domain/models.dart';
 import '../../providers.dart';
 import 'forgot_password_screen.dart';
 import 'group_registration_screen.dart';
@@ -29,9 +30,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (sessionExpiredNotifier.value) return;
       final has = await ref.read(memberRepositoryProvider).hasSession();
       if (!has || !mounted) return;
-      final locked = await ref.read(sessionStoreProvider).biometricLockEnabled() &&
-          await ref.read(biometricServiceProvider).isSupported();
-      if (mounted) context.go(locked ? '/lock' : '/home');
+      final locked =
+          await ref.read(sessionStoreProvider).biometricLockEnabled() &&
+              await ref.read(biometricServiceProvider).isSupported();
+      if (locked) {
+        if (mounted) context.go('/lock');
+        return;
+      }
+      final subscription =
+          await ref.read(memberRepositoryProvider).membership();
+      if (mounted) context.go(_destination(subscription));
     });
   }
 
@@ -55,12 +63,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: _password.text,
           );
       sessionExpiredNotifier.value = false;
-      if (mounted) context.go('/home');
+      final subscription =
+          await ref.read(memberRepositoryProvider).membership();
+      if (mounted) context.go(_destination(subscription));
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String _destination(MemberSubscription? subscription) {
+    final expiry = subscription?.expiry;
+    final active = subscription?.status == 'active' &&
+        expiry != null &&
+        !expiry.isBefore(DateTime.now());
+    return active ? '/home' : '/subscription';
   }
 
   @override
@@ -101,7 +119,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Text('Sign in to your account',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 28),
                   TextField(
                     controller: _sacco,

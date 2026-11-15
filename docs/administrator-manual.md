@@ -37,8 +37,27 @@ Cross-tenant reads and writes are blocked for SACCO administrators.
 
 Subscription billing follows the configured SACCO member-count model:
 
-- Up to 250 members: UGX 5,000 per member per year, with a 100-member minimum.
+- Up to 250 members: UGX 5,000 per registered member per year, with no minimum member charge.
 - Above 250 members: fixed annual package tiers are retained for larger SACCO bands.
+- Proprietor SACCO registration lists the Community package for the up-to-250-member band and shows whether a price is per member or a fixed annual total.
+- Fixed annual packages must be settled in one payment. A proprietor may upgrade a SACCO to a higher member-limit package; verified payments are credited and the remaining upgraded-package balance becomes due in full.
+
+### SACCO official onboarding
+
+- Proprietor registration captures a chairperson, treasurer, and secretary as the SACCO's first three verified members.
+- Every official must have an active email address, an active international-format phone number, or both.
+- The selected email or SMS channel receives a generated temporary password. First login requires a password change before staff access is granted.
+
+### SMS revenue and credits
+
+- The proprietor sets the platform selling price per SMS from Staff App Billing.
+- Cash purchases are recorded by the proprietor against a SACCO and immediately credit that SACCO's prepaid SMS wallet.
+- Mobile-money SMS purchases are initiated from the staff app at the same proprietor-controlled rate.
+- Broadcasts and SMS notifications debit the SACCO wallet by the number of SMS segments sent. The member app only receives applicable messages; it does not control the SACCO wallet.
+
+New SACCOs receive one month of free staff-app access. Platform administrators can grant an audited extension of 1-31 days with a required reason. This SACCO-level subscription controls staff operations and does not activate member-app accounts.
+
+Member-app access is a separate UGX 5,000 annual subscription for each member. Its expiry always matches the SACCO staff-subscription cycle: if the SACCO cycle runs January 2026 to January 2027, a member paying in November 2026 still expires in January 2027. The fee is not prorated. Unpaid members remain fully manageable by authorised SACCO staff but are restricted to the member-app subscription payment screen.
 
 Only platform administrators can post subscription payments. Payments are idempotent by external reference and feed accounting journals.
 

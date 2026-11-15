@@ -5,6 +5,7 @@ import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.api.PageParams;
 import com.methaltech.sacco.api.PagedResponse;
 import com.methaltech.sacco.branch.DefaultBranchProvisioningService;
+import com.methaltech.sacco.branch.Branch;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.identity.DefaultSaccoRoleProvisioningService;
@@ -67,6 +68,7 @@ class TenantController {
     private final DefaultBranchProvisioningService defaultBranchProvisioningService;
     private final DefaultSaccoRoleProvisioningService defaultSaccoRoleProvisioningService;
     private final com.methaltech.sacco.member.SaccoStarterMemberProvisioningService starterMemberProvisioningService;
+    private final com.methaltech.sacco.member.SaccoOfficialOnboardingService officialOnboardingService;
     private final boolean provisionStarterMembers;
     private final boolean tenantPurgeEnabled;
 
@@ -86,6 +88,7 @@ class TenantController {
             DefaultBranchProvisioningService defaultBranchProvisioningService,
             DefaultSaccoRoleProvisioningService defaultSaccoRoleProvisioningService,
             com.methaltech.sacco.member.SaccoStarterMemberProvisioningService starterMemberProvisioningService,
+            com.methaltech.sacco.member.SaccoOfficialOnboardingService officialOnboardingService,
             @org.springframework.beans.factory.annotation.Value("${sacco.provision-starter-members:false}") boolean provisionStarterMembers,
             @org.springframework.beans.factory.annotation.Value("${sacco.tenant-purge.enabled:false}") boolean tenantPurgeEnabled) {
         this.tenantRepository = tenantRepository;
@@ -103,6 +106,7 @@ class TenantController {
         this.defaultBranchProvisioningService = defaultBranchProvisioningService;
         this.defaultSaccoRoleProvisioningService = defaultSaccoRoleProvisioningService;
         this.starterMemberProvisioningService = starterMemberProvisioningService;
+        this.officialOnboardingService = officialOnboardingService;
         this.provisionStarterMembers = provisionStarterMembers;
         this.tenantPurgeEnabled = tenantPurgeEnabled;
     }
@@ -294,6 +298,26 @@ class TenantController {
         }
         if (!authService.isPlatform(currentSession.user())) return platformRequired("Only platform administrators can create tenants here.");
 
+        List<com.methaltech.sacco.member.SaccoOfficialOnboardingService.OfficialInput> officialInputs =
+                body.officials() == null
+                        ? List.of()
+                        : body.officials().stream()
+                                .map(official -> new com.methaltech.sacco.member.SaccoOfficialOnboardingService.OfficialInput(
+                                        official.office(),
+                                        official.fullName(),
+                                        official.email(),
+                                        official.phone(),
+                                        official.deliveryChannel()))
+                                .toList();
+        if (!officialInputs.isEmpty()) {
+            try {
+                officialOnboardingService.validate(officialInputs);
+            } catch (IllegalArgumentException invalidOfficials) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "INVALID_SACCO_OFFICIALS", invalidOfficials.getMessage()));
+            }
+        }
+
         boolean paid = "paid".equalsIgnoreCase(blankToDefault(body.paymentStatus()));
         // A registration that supplies a payment status (paid or an explicit unpaid) is a real onboarding
         // and begins operating immediately; one that omits it is a bare record awaiting platform review.
@@ -312,14 +336,14 @@ class TenantController {
                 body.licenseExpiry() == null ? LocalDate.now().plusYears(1) : body.licenseExpiry(),
                 blankToDefault(body.packageId()));
         Tenant savedTenant = tenantRepository.save(tenant);
-        defaultBranchProvisioningService.ensureMainBranch(
+        Branch mainBranch = defaultBranchProvisioningService.ensureMainBranch(
             savedTenant.getId(),
             savedTenant.getAbbreviation(),
             blankToDefault(body.district()),
             currentSession.user().getId());
-        // The Chairperson is the SACCO administrator, so provision the Chairperson role (which carries the
-        // full administrator permission set) instead of a separate "SACCO Administrator" role.
         defaultSaccoRoleProvisioningService.ensureOfficialRole(savedTenant.getId(), "chairperson", currentSession.user().getId());
+        defaultSaccoRoleProvisioningService.ensureOfficialRole(savedTenant.getId(), "treasurer", currentSession.user().getId());
+        defaultSaccoRoleProvisioningService.ensureOfficialRole(savedTenant.getId(), "secretary", currentSession.user().getId());
         SaccoProfile profile = saccoProfileRepository.save(new SaccoProfile(
                 "profile_" + UUID.randomUUID(),
                 savedTenant.getId(),
@@ -335,6 +359,15 @@ class TenantController {
                 savedTenant.getId(),
                 savedTenant.getPackageId(),
                 paid));
+        if (body.officials() != null && !body.officials().isEmpty()) {
+            officialOnboardingService.onboard(
+                    savedTenant.getId(),
+                    savedTenant.getAbbreviation(),
+                    address(body.district(), body.parish(), body.village(), body.memberRange()),
+                    mainBranch,
+                    officialInputs,
+                    currentSession.user().getId());
+        }
         // A paid registration is activated immediately with a covered operating trial window. An unpaid
         // registration that still supplied a payment status begins an active setup trial (its subscription
         // remains in "trial" and lapses to read-only once it expires). A registration that omitted the
@@ -354,7 +387,7 @@ class TenantController {
         // secretary and treasurer can be assigned immediately. Off by default (opt in with
         // sacco.provision-starter-members=true) so production and the test suite never get placeholder members.
         // Best-effort so it can never fail SACCO creation.
-        if (provisionStarterMembers) {
+        if (provisionStarterMembers && (body.officials() == null || body.officials().isEmpty())) {
             try {
                 starterMemberProvisioningService.provisionStarterMembers(
                         savedTenant.getId(),
@@ -1039,7 +1072,16 @@ class TenantController {
             String parish,
             String village,
             String contactNumber,
-            String memberRange) {
+            String memberRange,
+            List<OfficialOnboardingRequest> officials) {
+    }
+
+    record OfficialOnboardingRequest(
+            String office,
+            String fullName,
+            String email,
+            String phone,
+            String deliveryChannel) {
     }
 
     record FleetBulkUpdateRequest(

@@ -41,4 +41,27 @@ class SubscriptionPackage {
 
     private String modules;
     private String status;
+
+    void update(
+            String name,
+            BigDecimal price,
+            String billingPeriod,
+            int minMembers,
+            int memberLimit,
+            String tierLabel,
+            int userLimit,
+            int branchLimit,
+            String modules,
+            String status) {
+        this.name = name.trim();
+        this.price = price;
+        this.billingPeriod = billingPeriod;
+        this.minMembers = minMembers;
+        this.memberLimit = memberLimit;
+        this.tierLabel = tierLabel.trim();
+        this.userLimit = userLimit;
+        this.branchLimit = branchLimit;
+        this.modules = modules.trim();
+        this.status = status;
+    }
 }

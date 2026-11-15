@@ -671,29 +671,12 @@ class _OperationsAlerts extends ConsumerWidget {
 
     if (subscriptions != null && subscriptions.isNotEmpty) {
       final sub = subscriptions.first;
-      if (sub.uncoveredMembers > 0) {
-        alerts.add(_AlertItem(
-          icon: Icons.group_off_outlined,
-          title: 'Subscription capacity exceeded',
-          detail:
-              '${sub.uncoveredMembers} member(s) are outside paid platform capacity.',
-          color: const Color(0xFFB91C1C),
-        ));
-      } else if (sub.paidMemberCapacity - sub.memberCount <= 2) {
-        alerts.add(_AlertItem(
-          icon: Icons.group_add_outlined,
-          title: 'Few paid slots left',
-          detail:
-              '${sub.paidMemberCapacity - sub.memberCount} paid member slot(s) remain.',
-          color: const Color(0xFFB45309),
-        ));
-      }
       if (sub.daysToExpiry != null && sub.daysToExpiry! <= 7) {
         alerts.add(_AlertItem(
           icon: Icons.workspace_premium_outlined,
           title: 'Subscription renewal due',
           detail:
-              'Platform subscription expires in ${sub.daysToExpiry} day(s).',
+              'Staff app subscription expires in ${sub.daysToExpiry} day(s).',
           color: const Color(0xFFB45309),
         ));
       }

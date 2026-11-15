@@ -33,6 +33,13 @@ public class StaffNotificationRecipientService {
         return saccoRecipientsByRole(tenantId, this::isSubscriptionLeadershipRole);
     }
 
+    public List<StaffNotificationRecipient> verifiedSaccoLeadershipSmsRecipients(String tenantId) {
+        return saccoSubscriptionLeadershipRecipients(tenantId).stream()
+                .filter(StaffNotificationRecipient::phoneVerified)
+                .filter(recipient -> recipient.phone() != null && !recipient.phone().isBlank())
+                .toList();
+    }
+
     public List<StaffNotificationRecipient> saccoComplaintRecipients(String tenantId) {
         return saccoRecipientsByRole(tenantId, this::isComplaintHandlingRole);
     }
@@ -67,7 +74,7 @@ public class StaffNotificationRecipientService {
                 .filter(user -> "tenant_platform".equals(user.getTenantId()))
                 .filter(user -> "active".equalsIgnoreCase(user.getStatus()))
                 .map(user -> new StaffNotificationRecipient(user.getId(), user.getTenantId(), user.getFullName(),
-                        user.getEmail(), user.getPhone()));
+                        user.getEmail(), user.getPhone(), user.isEmailVerified(), user.isPhoneVerified()));
     }
 
     private List<StaffNotificationRecipient> saccoRecipientsByRole(String tenantId, java.util.function.Predicate<Role> rolePredicate) {
@@ -144,7 +151,9 @@ public class StaffNotificationRecipientService {
                         user.getTenantId(),
                         user.getFullName(),
                         user.getEmail(),
-                        user.getPhone()))
+                        user.getPhone(),
+                        user.isEmailVerified(),
+                        user.isPhoneVerified()))
                 .toList();
     }
 }

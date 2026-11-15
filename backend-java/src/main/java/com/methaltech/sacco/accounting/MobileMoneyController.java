@@ -34,7 +34,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -51,7 +50,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @RestController
@@ -129,6 +127,13 @@ class MobileMoneyController {
         if ("loan_repayment".equals(purpose)) {
             ResponseEntity<?> loanValidation = validateLoanRepaymentRequest(body.loanId(), member, amount);
             if (loanValidation != null) return loanValidation;
+        }
+        if (!"membership_dues".equals(purpose) && !"personal_app_fee".equals(purpose)) {
+            MemberSubscriptionService.MemberAppAccess memberAppAccess = memberSubscriptionService.accessFor(member);
+            if (!memberAppAccess.allowed()) {
+                return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED)
+                        .body(ApiErrorResponse.of(402, memberAppAccess.code(), memberAppAccess.message()));
+            }
         }
         if (requiresMemberDepositAccess(purpose)) {
             ResponseEntity<?> accessCheck = memberDepositAccessCheck(member);
@@ -329,27 +334,18 @@ class MobileMoneyController {
                     .body(ApiErrorResponse.of(409, "NO_SACCO_SUBSCRIPTION", "This SACCO has no platform subscription to pay."));
         }
         subscriptionService.refreshBilling(subscription);
-        List<MemberSubscription> selectedMemberships = selectedMemberSubscriptions(tenantId, body.memberSubscriptionIds());
-        int selectedIdCount = distinctIdCount(body.memberSubscriptionIds());
-        if (selectedIdCount > 0 && selectedMemberships.size() != selectedIdCount) {
-            return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "INVALID_MEMBER_SUBSCRIPTION_SELECTION",
-                            "One or more selected member subscriptions were not found for this SACCO."));
-        }
-        BigDecimal selectedAmount = selectedMemberships.stream()
-                .map(this::payableMembershipAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal amount = body.amount() == null
                 ? subscription.getAmount().subtract(subscription.getPaid()).max(BigDecimal.ZERO)
                 : Money.normalize(body.amount());
-        if (!selectedMemberships.isEmpty() && amount.compareTo(selectedAmount) != 0) {
-            return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "SELECTED_MEMBERS_AMOUNT_MISMATCH",
-                            "Selected members require exactly " + selectedAmount + "."));
-        }
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_AMOUNT", "Payment amount must be greater than zero."));
+        }
+        BigDecimal due = subscription.getAmount().subtract(subscription.getPaid()).max(BigDecimal.ZERO);
+        if (subscriptionService.requiresFullPayment(subscription) && amount.compareTo(due) != 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "FULL_PAYMENT_REQUIRED",
+                            "Fixed annual packages must be paid in one full payment of the outstanding balance."));
         }
         String phone = body.payerPhone() == null ? "" : body.payerPhone().trim();
         if (phone.isBlank()) {
@@ -384,7 +380,7 @@ class MobileMoneyController {
                     phone,
                     externalReference,
                     body.provider(),
-                    saccoSubscriptionPayload(body.providerPayload(), body.memberSubscriptionIds())));
+                    body.providerPayload()));
         } catch (MobileMoneyProviderException exception) {
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                     .body(ApiErrorResponse.of(502, "PAYMENT_PROVIDER_UNAVAILABLE", exception.getMessage()));
@@ -393,7 +389,7 @@ class MobileMoneyController {
                 result,
                 null,
                 phone,
-                payload(saccoSubscriptionPayload(body.providerPayload(), body.memberSubscriptionIds()))));
+                payload(body.providerPayload())));
         auditService.record(
                 tenantId,
                 currentSession.user(),
@@ -541,7 +537,7 @@ class MobileMoneyController {
             return postMemberPlatformFee(body, tenantId, externalReference, provider, member, amount);
         }
         if ("personal_app_fee".equals(purpose)) {
-            return postPersonalAppFee(body, tenantId, externalReference, provider, member, amount);
+            return postMembershipDues(body, tenantId, externalReference, provider, member, amount);
         }
         if ("password_reset_sms".equals(purpose)) {
             return activatePasswordResetSms(body, tenantId, externalReference, provider, member, amount);
@@ -988,7 +984,13 @@ class MobileMoneyController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "NO_MEMBERSHIP", "This member has no subscription to apply payment to."));
         }
-        MemberSubscription updated = memberSubscriptionService.recordPayment(membership, amount);
+        MemberSubscription updated;
+        try {
+            updated = memberSubscriptionService.recordPayment(membership, amount);
+        } catch (IllegalStateException exception) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "MEMBER_APP_SUBSCRIPTION_NOT_AVAILABLE", exception.getMessage()));
+        }
         createStatementLine(tenantId, amount, externalReference, "Mobile-money member subscription");
         notificationService.notifyPaymentPosted(member, "membership_dues", amount, "member_subscription", updated.getId());
 
@@ -1024,7 +1026,7 @@ class MobileMoneyController {
         if (subscription.getUnitPrice() == null || subscription.getUnitPrice().compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "MEMBER_PLATFORM_FEE_NOT_ALLOWED",
-                            "Member-by-member platform fee payment is only available for the 20-250 member tier."));
+                            "Member-by-member platform fee payment is only available for the up-to-250-member Community package."));
         }
         if (amount.compareTo(subscription.getUnitPrice()) < 0) {
             return ResponseEntity.badRequest()
@@ -1075,16 +1077,12 @@ class MobileMoneyController {
                     .body(ApiErrorResponse.of(409, "NO_SACCO_SUBSCRIPTION", "This SACCO has no platform subscription to apply payment to."));
         }
         subscriptionService.refreshBilling(subscription);
-        List<MemberSubscription> selectedMemberships = selectedMemberSubscriptionsFromPayload(tenantId, matchingRequest.getProviderPayload());
-        int selectedIdCount = selectedMemberSubscriptionIdCountFromPayload(matchingRequest.getProviderPayload());
-        if (selectedIdCount > 0 && selectedMemberships.size() != selectedIdCount) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "INVALID_MEMBER_SUBSCRIPTION_SELECTION",
-                            "One or more selected member subscriptions can no longer be activated for this SACCO."));
+        BigDecimal due = subscription.getAmount().subtract(subscription.getPaid()).max(BigDecimal.ZERO);
+        if (subscriptionService.requiresFullPayment(subscription) && amount.compareTo(due) != 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "FULL_PAYMENT_REQUIRED",
+                            "Fixed annual packages must be paid in one full payment of the outstanding balance."));
         }
-        ResponseEntity<?> allocationCheck = validateSelectedMembershipAllocation(subscription, selectedMemberships, amount);
-        if (allocationCheck != null) return allocationCheck;
-
         ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
         if (idempotencyConflict != null) return idempotencyConflict;
 
@@ -1101,10 +1099,6 @@ class MobileMoneyController {
         Subscription savedSubscription = subscriptionRepository.save(subscription);
         createStatementLine(tenantId, amount, externalReference, "Mobile-money SACCO platform subscription");
 
-        List<MemberSubscription> activated = selectedMemberships.stream()
-                .map(membership -> memberSubscriptionService.recordPayment(membership, payableMembershipAmount(membership)))
-                .toList();
-
         MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
                 "callback_" + UUID.randomUUID(),
                 tenantId,
@@ -1115,46 +1109,16 @@ class MobileMoneyController {
                 provider,
                 payload(body.providerPayload()),
                 "posted",
-                activated.isEmpty() ? "subscription" : "member_subscription",
-                activated.isEmpty() ? payment.getId() : "bulk"));
+                "subscription",
+                payment.getId()));
         markMatchingPaymentRequestPosted(tenantId, externalReference, "subscription", payment.getId());
         auditService.record(
                 tenantId,
                 null,
-                "Posted SACCO platform subscription payment " + externalReference
-                        + " and activated " + activated.size() + " member subscription(s)",
+                "Posted SACCO staff-app subscription payment " + externalReference,
                 "subscription",
                 savedSubscription.getId(),
                 null);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
-    }
-
-    private ResponseEntity<?> postPersonalAppFee(
-            MobileMoneyCallbackRequest body,
-            String tenantId,
-            String externalReference,
-            String provider,
-            Member member,
-            BigDecimal amount) {
-        ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
-        if (idempotencyConflict != null) return idempotencyConflict;
-
-        createStatementLine(tenantId, amount, externalReference, "Mobile-money personal app access fee");
-        notificationService.notifyPaymentPosted(member, "personal_app_fee", amount, "member", member.getId());
-
-        MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
-                "callback_" + UUID.randomUUID(),
-                tenantId,
-                member.getId(),
-                body.purpose().trim(),
-                amount,
-                externalReference,
-                provider,
-                payload(body.providerPayload()),
-                "posted",
-                "personal_app_fee",
-                member.getId()));
-        markMatchingPaymentRequestPosted(tenantId, externalReference, "personal_app_fee", member.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
     }
 
@@ -1370,21 +1334,6 @@ class MobileMoneyController {
         }
     }
 
-    private Map<String, Object> saccoSubscriptionPayload(Map<String, Object> providerPayload, List<String> subscriptionIds) {
-        java.util.LinkedHashMap<String, Object> payload = new java.util.LinkedHashMap<>();
-        if (providerPayload != null) {
-            payload.putAll(providerPayload);
-        }
-        if (subscriptionIds != null && !subscriptionIds.isEmpty()) {
-            payload.put("memberSubscriptionIds", subscriptionIds.stream()
-                    .filter(id -> id != null && !id.isBlank())
-                    .map(String::trim)
-                    .distinct()
-                    .toList());
-        }
-        return payload;
-    }
-
     private Map<String, Object> smsTopUpPayload(Map<String, Object> providerPayload, int smsCount) {
         java.util.LinkedHashMap<String, Object> payload = new java.util.LinkedHashMap<>();
         if (providerPayload != null) {
@@ -1401,95 +1350,6 @@ class MobileMoneyController {
         } catch (Exception ignored) {
             return 0;
         }
-    }
-
-    private List<MemberSubscription> selectedMemberSubscriptions(String tenantId, List<String> subscriptionIds) {
-        if (subscriptionIds == null || subscriptionIds.isEmpty()) return List.of();
-        List<MemberSubscription> memberships = new ArrayList<>();
-        for (String id : subscriptionIds.stream().filter(candidate -> candidate != null && !candidate.isBlank()).map(String::trim).distinct().toList()) {
-            memberSubscriptionRepository.findById(id)
-                    .filter(membership -> tenantId.equals(membership.getTenantId()))
-                    .ifPresent(memberships::add);
-        }
-        return memberships;
-    }
-
-    private int distinctIdCount(List<String> ids) {
-        if (ids == null || ids.isEmpty()) return 0;
-        return ids.stream()
-                .filter(id -> id != null && !id.isBlank())
-                .map(String::trim)
-                .distinct()
-                .toList()
-                .size();
-    }
-
-    private List<MemberSubscription> selectedMemberSubscriptionsFromPayload(String tenantId, String storedPayload) {
-        if (storedPayload == null || storedPayload.isBlank()) return List.of();
-        try {
-            JsonNode ids = objectMapper.readTree(storedPayload).path("memberSubscriptionIds");
-            if (!ids.isArray()) return List.of();
-            List<String> subscriptionIds = new ArrayList<>();
-            for (JsonNode id : ids) {
-                String value = id.asString();
-                if (value != null && !value.isBlank()) {
-                    subscriptionIds.add(value);
-                }
-            }
-            return selectedMemberSubscriptions(tenantId, subscriptionIds);
-        } catch (Exception ignored) {
-            return List.of();
-        }
-    }
-
-    private int selectedMemberSubscriptionIdCountFromPayload(String storedPayload) {
-        if (storedPayload == null || storedPayload.isBlank()) return 0;
-        try {
-            JsonNode ids = objectMapper.readTree(storedPayload).path("memberSubscriptionIds");
-            if (!ids.isArray()) return 0;
-            java.util.HashSet<String> uniqueIds = new java.util.HashSet<>();
-            for (JsonNode id : ids) {
-                String value = id.asString();
-                if (value != null && !value.isBlank()) {
-                    uniqueIds.add(value.trim());
-                }
-            }
-            return uniqueIds.size();
-        } catch (Exception ignored) {
-            return 0;
-        }
-    }
-
-    private ResponseEntity<?> validateSelectedMembershipAllocation(
-            Subscription subscription,
-            List<MemberSubscription> selectedMemberships,
-            BigDecimal amount) {
-        if (selectedMemberships.isEmpty()) return null;
-        BigDecimal selectedAmount = selectedMemberships.stream()
-                .map(this::payableMembershipAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (amount.compareTo(selectedAmount) < 0) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "SELECTED_MEMBERS_UNDERPAID",
-                            "Selected members require " + selectedAmount + "."));
-        }
-        BigDecimal unitPrice = subscription.getUnitPrice();
-        if (unitPrice == null || unitPrice.compareTo(BigDecimal.ZERO) <= 0) return null;
-        BigDecimal paid = subscription.getPaid() == null ? BigDecimal.ZERO : subscription.getPaid();
-        int futureCapacity = paid.add(amount).divideToIntegralValue(unitPrice).intValue();
-        long activeMembers = memberSubscriptionRepository.countByTenantIdAndStatus(subscription.getTenantId(), "active");
-        if (activeMembers + selectedMemberships.size() > futureCapacity) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "MEMBER_SUBSCRIPTION_CAPACITY_EXCEEDED",
-                            "This payment does not create enough platform slots for the selected members."));
-        }
-        return null;
-    }
-
-    private BigDecimal payableMembershipAmount(MemberSubscription subscription) {
-        BigDecimal amount = subscription.getAmount() == null ? BigDecimal.ZERO : subscription.getAmount();
-        BigDecimal paid = subscription.getPaid() == null ? BigDecimal.ZERO : subscription.getPaid();
-        return amount.subtract(paid).max(BigDecimal.ZERO);
     }
 
     private String tenantScope(AuthService.CurrentSession currentSession, String requestedTenantId) {
@@ -1542,7 +1402,6 @@ class MobileMoneyController {
             @NotBlank String payerPhone,
             String externalReference,
             String provider,
-            List<String> memberSubscriptionIds,
             Map<String, Object> providerPayload) {
     }
 

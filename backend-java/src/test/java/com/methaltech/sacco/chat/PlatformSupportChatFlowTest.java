@@ -60,7 +60,7 @@ class PlatformSupportChatFlowTest {
                         .header("Authorization", "Bearer " + platformToken)
                         .contentType("application/json")
                         .content("""
-                                { "body": "You are on the per-member tier, minimum 20 members." }
+                                { "body": "You are on the per-registered-member tier." }
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.senderType", is("PLATFORM")));

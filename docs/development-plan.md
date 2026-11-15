@@ -360,7 +360,7 @@ Progress:
 - SACCO registration screen now reads API-backed tenants after login and creates/approves tenants through `/api/v1/tenants`.
 - Subscription package, invoice, and payment endpoints added.
 - Subscriptions screen now reads API-backed packages/subscriptions after login and records payments through `/api/v1/subscriptions/:id/payments`.
-- Subscription billing now uses UGX 5,000 per member annually from 20-250 members, then fixed annual tiers for 251-500, 501-1,000, 1,001-2,500, 2,501-5,000, and 5,001-10,000 members.
+- Subscription billing now uses UGX 5,000 per registered member annually up to 250 members, then fixed annual tiers for 251-500, 501-1,000, 1,001-2,500, 2,501-5,000, and 5,001-10,000 members.
 - Member portal login now authenticates members and returns their own backend balances.
 - Financial transaction listing and submission endpoints added for savings deposits, share purchases, welfare contributions, and withdrawals.
 - Transactions screen now reads API-backed postings after login and submits new pending transactions through `/api/v1/financial-transactions`.
@@ -416,7 +416,8 @@ Progress:
 - Java member self-service auth added with Flyway `member_sessions`, member login by membership number/phone/email, balance-aware `/api/v1/member-auth/me`, logout revocation, and member audit events.
 - Java member mobile self-service added with `/api/v1/member-auth/mobile-dashboard` and `/api/v1/member-auth/mobile-loans`, server-confirmed dashboard projection, mobile loan validation, loan notification creation, and member audit events.
 - Java member notifications listing added with `/api/v1/member-auth/notifications`, returning only the authenticated member's in-app notification history.
-- Java subscription billing added with Flyway `subscription_packages`/`subscriptions`/`subscription_payments`, UGX 5,000/member annual billing from 20-250 members with a 20-member minimum, fixed tiers above 250 members, platform payment posting, member-paid platform fee callbacks, idempotent references, closed-period controls, and balanced subscription payment journals.
+- Java subscription billing added with Flyway `subscription_packages`/`subscriptions`/`subscription_payments`, UGX 5,000 per registered member annually up to 250 members, fixed tiers above 250 members, platform payment posting, member-paid platform fee callbacks, idempotent references, closed-period controls, and balanced subscription payment journals.
+- Staff-app subscriptions and member-app subscriptions are independent. Member app access costs UGX 5,000 per member for the remainder of the SACCO's current annual cycle and does not restrict staff-side member management.
 - Java financial product setup added with Flyway `financial_products`, seeded savings/share/welfare products, tenant-scoped listing/creation, duplicate-code controls, and audit events.
 - Java financial accounts added with Flyway `financial_accounts`, seeded member product accounts, tenant/member/type filtering, active-member account opening, duplicate member-product controls, and audit events.
 - Java welfare claims added with Flyway `welfare_claims`, tenant-scoped submission, approval/rejection, payment controls, member welfare balance reduction, audit events, and balanced welfare claim journals.
