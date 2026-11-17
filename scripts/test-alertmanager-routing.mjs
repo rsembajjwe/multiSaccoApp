@@ -38,7 +38,7 @@ try {
   });
   const receiverPort = receiver.address().port;
   const webhookHost = usesHostNetwork ? "127.0.0.1" : "host.docker.internal";
-  await writeFile(webhookSecretPath, `http://${webhookHost}:${receiverPort}/alerts`, { mode: 0o600 });
+  await writeFile(webhookSecretPath, `http://${webhookHost}:${receiverPort}/alerts`, { mode: 0o644 });
 
   const dockerArguments = [
     "run", "--detach", "--rm", "--name", containerName,
