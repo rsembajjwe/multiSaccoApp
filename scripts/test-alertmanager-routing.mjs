@@ -41,6 +41,7 @@ try {
   await docker([
     "run", "--detach", "--rm", "--name", containerName,
     "--publish", "127.0.0.1::9093",
+    "--add-host", "host.docker.internal:host-gateway",
     "--volume", `${path.join(root, "deploy", "alertmanager.yml")}:/etc/alertmanager/alertmanager.yml:ro`,
     "--volume", `${webhookSecretPath}:/run/secrets/alertmanager_webhook_url:ro`,
     "prom/alertmanager:v0.28.1",

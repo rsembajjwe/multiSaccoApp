@@ -47,7 +47,7 @@ void main() {
 }
 
 class _RecordingApiClient extends ApiClient {
-  _RecordingApiClient(SessionStore store) : super(store, dio: Dio());
+  _RecordingApiClient(super.store) : super(dio: Dio());
 
   String? lastPath;
   Map<String, dynamic>? lastBody;
