@@ -72,6 +72,9 @@ try {
   $env:POSTGRES_PORT = "$PostgresPort"
   $env:BACKEND_PORT = "$BackendPort"
   $env:SACCO_DEMO_LOGINS_ENABLED = "true"
+  $env:SACCO_SMS_PROVIDER = "demo_sms"
+  $env:SACCO_EMAIL_PROVIDER = "demo_email"
+  $env:SACCO_MOBILE_MONEY_PROVIDER = "demo_mobile_money"
   $env:SACCO_DOCUMENT_STORAGE_PROVIDER = "local_filesystem"
   $env:SACCO_DOCUMENT_STORAGE_LOCAL_ROOT = "$repoRoot\.runtime\readiness-kyc"
   $env:SACCO_MOBILE_MONEY_CALLBACK_SECRET = "readiness_check_callback_secret_2026"
@@ -133,6 +136,9 @@ try {
   Remove-Item Env:\UAT_UI_PORT -ErrorAction SilentlyContinue
   Remove-Item Env:\SACCO_MOBILE_MONEY_CALLBACK_SECRET -ErrorAction SilentlyContinue
   Remove-Item Env:\SACCO_MOBILE_MONEY_REQUIRE_SIGNED_CALLBACKS -ErrorAction SilentlyContinue
+  Remove-Item Env:\SACCO_SMS_PROVIDER -ErrorAction SilentlyContinue
+  Remove-Item Env:\SACCO_EMAIL_PROVIDER -ErrorAction SilentlyContinue
+  Remove-Item Env:\SACCO_MOBILE_MONEY_PROVIDER -ErrorAction SilentlyContinue
 
   if ($composeStarted) {
     Write-Host "Stopping production-readiness Docker Compose stack: $ProjectName"
