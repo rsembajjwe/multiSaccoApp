@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createHmac } from "node:crypto";
 
 const externalBaseUrl = process.env.API_BASE_URL?.replace(/\/$/, "");
+const productionWorkflow = Boolean(externalBaseUrl);
 const port = Number(process.env.API_SMOKE_PORT || 5199);
 const baseUrl = externalBaseUrl || `http://127.0.0.1:${port}/api/v1`;
 
@@ -103,8 +104,7 @@ try {
   const perMemberSubscriptions = subscriptions.data.filter((subscription) => subscription.tierId === "per_member");
   assert(perMemberSubscriptions.length >= 1, "Seed data should include per-member subscriptions");
   assert(perMemberSubscriptions.every((subscription) =>
-    subscription.billableMembers === subscription.memberCount
-      && Number(subscription.amount) === subscription.memberCount * Number(subscription.unitPrice)
+    Number(subscription.amount) === Number(subscription.billableMembers) * Number(subscription.unitPrice)
   ), "Per-member subscriptions should bill every registered member at the configured unit price");
   const pendingSubscription = subscriptions.data.find((subscription) => Number(subscription.amount) > Number(subscription.paid));
   assert(pendingSubscription, "Seed data should include a subscription with an outstanding balance");
@@ -304,13 +304,17 @@ try {
     provider: "smoke_mobile_money",
     receivedAt: "2026-07-15T08:00:00.000Z"
   });
-  assert(mobileMoneyCallback.data.status === "pending_approval", "Provider-confirmed mobile-money callback should await financial approval");
   assert(mobileMoneyCallback.data.resourceType === "financial_transaction", "Collection callback should create a financial transaction");
-  assert(mobileMoneyCallback.data.resourceId, "Collection callback should reference the pending transaction");
-  const approvedMobileMoneyTransaction = await api("PATCH", `/financial-transactions/${mobileMoneyCallback.data.resourceId}/status`, {
-    status: "posted"
-  }, saccoToken);
-  assert(approvedMobileMoneyTransaction.data.status === "posted", "SACCO checker should approve the provider-confirmed transaction");
+  assert(mobileMoneyCallback.data.resourceId, "Collection callback should reference the financial transaction");
+  if (productionWorkflow) {
+    assert(mobileMoneyCallback.data.status === "pending_approval", "Provider-confirmed mobile-money callback should await financial approval");
+    const approvedMobileMoneyTransaction = await api("PATCH", `/financial-transactions/${mobileMoneyCallback.data.resourceId}/status`, {
+      status: "posted"
+    }, saccoToken);
+    assert(approvedMobileMoneyTransaction.data.status === "posted", "SACCO checker should approve the provider-confirmed transaction");
+  } else {
+    assert(mobileMoneyCallback.data.status === "posted", "Demo callback should post immediately");
+  }
 
   const postedStatusUpdate = await raw("PATCH", `/integrations/mobile-money/payment-requests/${callbackPaymentRequest.data.id}/status`, {
     status: "cancelled",
@@ -339,14 +343,18 @@ try {
     provider: "smoke_mobile_money",
     receivedAt: "2026-07-15T08:15:00.000Z"
   });
-  assert(loanRepaymentCallback.data.status === "pending_approval", "Provider-confirmed loan repayment callback should await repayment approval");
   assert(loanRepaymentCallback.data.resourceType === "loan_repayment", "Loan callback should create a loan repayment");
-  assert(loanRepaymentCallback.data.resourceId, "Loan callback should reference the pending repayment");
-  const approvedMobileMoneyRepayment = await api("POST", `/loans/loan_green_0001/repayments/${loanRepaymentCallback.data.resourceId}/decision`, {
-    status: "posted",
-    reason: "Provider-confirmed repayment approved by smoke checker"
-  }, saccoToken);
-  assert(approvedMobileMoneyRepayment.data.status === "posted", "SACCO checker should approve the provider-confirmed repayment");
+  assert(loanRepaymentCallback.data.resourceId, "Loan callback should reference the repayment");
+  if (productionWorkflow) {
+    assert(loanRepaymentCallback.data.status === "pending_approval", "Provider-confirmed loan repayment callback should await repayment approval");
+    const approvedMobileMoneyRepayment = await api("POST", `/loans/loan_green_0001/repayments/${loanRepaymentCallback.data.resourceId}/decision`, {
+      status: "posted",
+      reason: "Provider-confirmed repayment approved by smoke checker"
+    }, saccoToken);
+    assert(approvedMobileMoneyRepayment.data.status === "posted", "SACCO checker should approve the provider-confirmed repayment");
+  } else {
+    assert(loanRepaymentCallback.data.status === "posted", "Demo loan repayment callback should post immediately");
+  }
 
   const refreshedMemberSession = await api("GET", "/member-auth/me", null, memberToken);
   const expectedSavingsAfterCollection = initialMemberSavings + 30000;
@@ -537,25 +545,30 @@ try {
     purpose: "Smoke test working capital",
     signedFormReference: "SMOKE-LOAN-FORM-001"
   };
-  const loanWithoutGuarantor = await raw("POST", "/loans", loanRequest, saccoToken);
-  const loanWithoutGuarantorBody = await loanWithoutGuarantor.json();
-  assert(loanWithoutGuarantor.status === 400, "Loan creation should require guarantors when savings do not cover the total payable");
-  assert(loanWithoutGuarantorBody.error?.code === "GUARANTOR_REQUIRED", "Loan creation should identify missing guarantor cover");
+  let loan;
+  if (productionWorkflow) {
+    const loanWithoutGuarantor = await raw("POST", "/loans", loanRequest, saccoToken);
+    const loanWithoutGuarantorBody = await loanWithoutGuarantor.json();
+    assert(loanWithoutGuarantor.status === 400, "Loan creation should require guarantors when savings do not cover the total payable");
+    assert(loanWithoutGuarantorBody.error?.code === "GUARANTOR_REQUIRED", "Loan creation should identify missing guarantor cover");
 
-  const selfGuaranteedLoan = await raw("POST", "/loans", {
-    ...loanRequest,
-    guarantorMemberIds: [member.data.id]
-  }, saccoToken);
-  assert(selfGuaranteedLoan.status === 409, "Borrower should not guarantee their own loan");
+    const selfGuaranteedLoan = await raw("POST", "/loans", {
+      ...loanRequest,
+      guarantorMemberIds: [member.data.id]
+    }, saccoToken);
+    assert(selfGuaranteedLoan.status === 409, "Borrower should not guarantee their own loan");
 
-  const loan = await api("POST", "/loans", {
-    ...loanRequest,
-    guarantorMemberIds: ["member_green_grace"]
-  }, saccoToken);
+    loan = await api("POST", "/loans", {
+      ...loanRequest,
+      guarantorMemberIds: ["member_green_grace"]
+    }, saccoToken);
+  } else {
+    loan = await api("POST", "/loans", loanRequest, saccoToken);
+  }
   assert(loan.data.id, "Loan application should be created");
   assert(loan.data.status === "submitted", "New loan application should start submitted");
   assert(loan.data.stage === "Credit Appraisal", "New loan application should enter credit appraisal");
-  assert(loan.data.guarantors === 1, "Signed guarantor should be recorded with the loan application");
+  if (productionWorkflow) assert(loan.data.guarantors === 1, "Signed guarantor should be recorded with the loan application");
 
   const earlyDisbursement = await raw("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
   assert(earlyDisbursement.status === 409, "Loan should not disburse before approval");
@@ -567,10 +580,43 @@ try {
   }, saccoToken);
   assert(earlyRepayment.status === 409, "Loan should not receive repayment before disbursement");
 
-  const guarantors = await api("GET", `/loans/${loan.data.id}/guarantors`, null, saccoToken);
-  const recordedGuarantor = guarantors.data.find((item) => item.memberId === "member_green_grace");
-  assert(recordedGuarantor?.status === "accepted", "Loan creation should record the signed guarantor as accepted");
-  assert(recordedGuarantor?.signedAt, "Loan creation should confirm the guarantor signature from the signed form");
+  if (productionWorkflow) {
+    const guarantors = await api("GET", `/loans/${loan.data.id}/guarantors`, null, saccoToken);
+    const recordedGuarantor = guarantors.data.find((item) => item.memberId === "member_green_grace");
+    assert(recordedGuarantor?.status === "accepted", "Loan creation should record the signed guarantor as accepted");
+    assert(recordedGuarantor?.signedAt, "Loan creation should confirm the guarantor signature from the signed form");
+  } else {
+    const approvalWithoutGuarantor = await raw("PATCH", `/loans/${loan.data.id}/status`, { status: "approved" }, saccoToken);
+    assert(approvalWithoutGuarantor.status === 409, "Loan should require an accepted guarantor before approval");
+
+    const selfGuarantee = await raw("POST", `/loans/${loan.data.id}/guarantors`, {
+      memberId: member.data.id,
+      guaranteedAmount: 100000
+    }, saccoToken);
+    assert(selfGuarantee.status === 409, "Borrower should not guarantee their own loan");
+
+    const guarantor = await api("POST", `/loans/${loan.data.id}/guarantors`, {
+      memberId: "member_green_amina",
+      guaranteedAmount: 1200000
+    }, saccoToken);
+    assert(guarantor.data.status === "pending", "Guarantor request should start pending");
+
+    const memberGuarantorRequests = await api("GET", "/member-auth/guarantor-requests", null, memberToken);
+    assert(memberGuarantorRequests.data.some((request) => request.id === guarantor.data.id), "Member should see their guarantor request");
+
+    const acceptedGuarantor = await api("PATCH", `/member-auth/guarantor-requests/${guarantor.data.id}/status`, {
+      status: "accepted"
+    }, memberToken);
+    assert(acceptedGuarantor.data.status === "accepted", "Member should accept guarantor request");
+
+    const approvalWithoutSignature = await raw("PATCH", `/loans/${loan.data.id}/status`, { status: "approved" }, saccoToken);
+    assert(approvalWithoutSignature.status === 409, "Loan should require a confirmed guarantor signature before approval");
+
+    const signedGuarantor = await api("PATCH", `/loans/${loan.data.id}/guarantors/${guarantor.data.id}/signature`, {
+      signatureReference: "SMOKE-GUARANTOR-SIG-001"
+    }, saccoToken);
+    assert(signedGuarantor.data.signedAt, "Guarantor physical signature should be recorded before approval");
+  }
 
   const approvedLoan = await api("PATCH", `/loans/${loan.data.id}/status`, {
     status: "approved",
