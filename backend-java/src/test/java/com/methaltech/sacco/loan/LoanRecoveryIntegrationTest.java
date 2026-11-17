@@ -1,5 +1,6 @@
 package com.methaltech.sacco.loan;
 
+import com.methaltech.sacco.PostgresIntegrationTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -19,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @Transactional
-class LoanRecoveryIntegrationTest {
+class LoanRecoveryIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired private LoanRecoveryService recoveryService;
     @Autowired private LoanRepository loanRepository;

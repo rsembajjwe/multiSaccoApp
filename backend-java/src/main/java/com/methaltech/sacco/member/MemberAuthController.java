@@ -34,7 +34,12 @@ import com.methaltech.sacco.notification.NotificationChannelPreferenceService;
 import com.methaltech.sacco.notification.NotificationRepository;
 import com.methaltech.sacco.notification.NotificationResponse;
 import com.methaltech.sacco.notification.NotificationService;
+import com.methaltech.sacco.notification.MemberSmsWalletService;
+import com.methaltech.sacco.notification.OnboardingNotificationService;
+import com.methaltech.sacco.notification.SmsMessageSegments;
 import com.methaltech.sacco.security.PasswordHasher;
+import com.methaltech.sacco.security.PhoneNumberNormalizer;
+import com.methaltech.sacco.security.ContactMasker;
 import com.methaltech.sacco.security.TokenGenerator;
 import com.methaltech.sacco.tenant.Tenant;
 import com.methaltech.sacco.tenant.TenantRepository;
@@ -121,6 +126,8 @@ class MemberAuthController {
     private final LoanProductCatalog loanProductCatalog;
     private final DocumentStorageService documentStorageService;
     private final MemberDocumentRepository memberDocumentRepository;
+    private final MemberSmsWalletService memberSmsWalletService;
+    private final OnboardingNotificationService onboardingNotificationService;
 
     MemberAuthController(
             MemberRepository memberRepository,
@@ -155,7 +162,9 @@ class MemberAuthController {
             MemberPasswordResetRequestRepository passwordResetRepository,
             LoanProductCatalog loanProductCatalog,
             DocumentStorageService documentStorageService,
-            MemberDocumentRepository memberDocumentRepository) {
+            MemberDocumentRepository memberDocumentRepository,
+            MemberSmsWalletService memberSmsWalletService,
+            OnboardingNotificationService onboardingNotificationService) {
         this.memberRepository = memberRepository;
         this.memberSessionRepository = memberSessionRepository;
         this.loanRepository = loanRepository;
@@ -189,11 +198,13 @@ class MemberAuthController {
         this.loanProductCatalog = loanProductCatalog;
         this.documentStorageService = documentStorageService;
         this.memberDocumentRepository = memberDocumentRepository;
+        this.memberSmsWalletService = memberSmsWalletService;
+        this.onboardingNotificationService = onboardingNotificationService;
     }
 
     @PostMapping("/login")
     ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
-        String identifier = request.identifier().trim();
+        String identifier = PhoneNumberNormalizer.normalizeUgandan(request.identifier());
         Tenant requestedTenant = resolveTenant(request.saccoCode());
         if (request.saccoCode() != null && !request.saccoCode().isBlank() && requestedTenant == null) {
             recordLoginAudit("tenant_platform", "Blocked member login with invalid SACCO code " + request.saccoCode().trim(), identifier, servletRequest);
@@ -263,16 +274,15 @@ class MemberAuthController {
     }
 
     private java.util.Optional<Member> findLoginMember(Tenant tenant, String identifier) {
-        if (tenant == null) {
-            return memberRepository.findFirstByMembershipNoIgnoreCaseOrPhoneIgnoreCaseOrEmailIgnoreCase(identifier, identifier, identifier);
+        for (String variant : PhoneNumberNormalizer.loginVariants(identifier)) {
+            java.util.Optional<Member> member = tenant == null
+                    ? memberRepository.findFirstByMembershipNoIgnoreCaseOrPhoneIgnoreCaseOrEmailIgnoreCase(
+                            variant, variant, variant)
+                    : memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCaseOrTenantIdAndPhoneIgnoreCaseOrTenantIdAndEmailIgnoreCase(
+                            tenant.getId(), variant, tenant.getId(), variant, tenant.getId(), variant);
+            if (member.isPresent()) return member;
         }
-        return memberRepository.findFirstByTenantIdAndMembershipNoIgnoreCaseOrTenantIdAndPhoneIgnoreCaseOrTenantIdAndEmailIgnoreCase(
-                tenant.getId(),
-                identifier,
-                tenant.getId(),
-                identifier,
-                tenant.getId(),
-                identifier);
+        return java.util.Optional.empty();
     }
 
     private ResponseEntity<ApiErrorResponse> rateLimited(String key) {
@@ -564,33 +574,62 @@ class MemberAuthController {
         Tenant tenant = resolveTenant(body == null ? null : body.saccoCode());
         Member member = body == null || body.identifier() == null || body.identifier().isBlank()
                 ? null
-                : findLoginMember(tenant, body.identifier().trim()).filter(candidate -> "active".equals(candidate.getStatus())).orElse(null);
+                : findLoginMember(tenant, PhoneNumberNormalizer.normalizeUgandan(body.identifier())).filter(candidate -> "active".equals(candidate.getStatus())).orElse(null);
         Instant expiresAt = Instant.now().plus(Duration.ofMinutes(30));
         String demoToken = null;
-        String externalReference = null;
+        String destination = null;
         if (member != null) {
-            String token = tokenGenerator.createToken();
-            externalReference = sms ? "PWDRESET-" + UUID.randomUUID() : null;
+            String token = tokenGenerator.createPasswordResetCode();
+            String recipient = sms ? member.getPhone() : member.getEmail();
+            if (recipient == null || recipient.isBlank()) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "RESET_CHANNEL_UNAVAILABLE",
+                                "This account has no " + (sms ? "phone number" : "email address") + " configured."));
+            }
+            int requiredCredits = sms ? SmsMessageSegments.count(
+                    "Your Tereka Online password reset code is " + token + ". It expires in 30 minutes.") : 0;
+            int balance = sms ? memberSmsWalletService.balance(member.getTenantId(), member.getId()) : 0;
+            if (requiredCredits > balance) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "INSUFFICIENT_SMS_BALANCE",
+                                "Your SMS balance is " + balance + ". Choose free email delivery or buy SMS credits after signing in."));
+            }
+            String organizationName = tenantService.findById(member.getTenantId())
+                    .map(TenantResponse::name).orElse("Your SACCO");
+            String reference = "MEMBER-PWD-RESET-" + UUID.randomUUID();
+            if (requiredCredits > 0) {
+                memberSmsWalletService.debit(member.getTenantId(), member.getId(), requiredCredits,
+                        reference, "Member password reset SMS");
+            }
+            try {
+                onboardingNotificationService.sendPasswordResetCode(channel, recipient, member.getFullName(),
+                        organizationName, token);
+            } catch (OnboardingNotificationService.OnboardingDeliveryException exception) {
+                if (requiredCredits > 0) {
+                    memberSmsWalletService.refund(member.getTenantId(), member.getId(), requiredCredits,
+                            reference, "Refund for failed member password reset SMS");
+                }
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                        .body(ApiErrorResponse.of(502, "RESET_DELIVERY_FAILED", exception.getMessage()));
+            }
+            destination = ContactMasker.mask(recipient);
             MemberPasswordResetRequest reset = passwordResetRepository.save(new MemberPasswordResetRequest(
                     "mprr_" + UUID.randomUUID(),
                     member.getTenantId(),
                     member.getId(),
                     token,
                     channel,
-                    sms ? "pending_payment" : "pending",
-                    sms ? new BigDecimal("500") : BigDecimal.ZERO,
-                    externalReference,
+                    "pending",
+                    BigDecimal.ZERO,
+                    null,
                     expiresAt));
-            if (!sms) {
-                notificationService.sendPasswordResetCode(member, token, channel);
-            }
             auditService.record(member.getTenantId(), member.getId(), member.getFullName(),
                     "Requested password reset via " + channel, "member_password_reset", reset.getId(), request.getRemoteAddr());
             demoToken = demoCredentialPolicy.demoLoginsEnabled() ? token : null;
         }
         // Generic response either way (do not confirm whether the identifier exists).
         return ResponseEntity.ok(ApiResponse.of(new MemberPasswordResetResponse(
-                true, sms, sms ? 500 : 0, externalReference, demoToken, member == null ? null : expiresAt)));
+                true, false, 0, null, demoToken, member == null ? null : expiresAt, channel, destination)));
     }
 
     @PostMapping("/password-reset/confirm")
@@ -601,7 +640,8 @@ class MemberAuthController {
                     .body(ApiErrorResponse.of(400, "WEAK_PASSWORD", "Password must be at least 8 characters."));
         }
         MemberPasswordResetRequest reset = passwordResetRepository
-                .findFirstByTokenAndStatusAndExpiresAtAfter(body.token().trim(), "pending", Instant.now())
+                .findFirstByTokenAndStatusAndExpiresAtAfter(
+                        tokenGenerator.normalizePasswordResetCode(body.token()), "pending", Instant.now())
                 .orElse(null);
         if (reset == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -1428,7 +1468,15 @@ class MemberAuthController {
     record MemberPasswordResetRequestBody(String saccoCode, String identifier, String channel) {
     }
 
-    record MemberPasswordResetResponse(boolean accepted, boolean paymentRequired, int amount, String externalReference, String resetToken, Instant expiresAt) {
+    record MemberPasswordResetResponse(
+            boolean accepted,
+            boolean paymentRequired,
+            int amount,
+            String externalReference,
+            String resetToken,
+            Instant expiresAt,
+            String channel,
+            String destination) {
     }
 
     record MemberPasswordResetConfirmRequest(@NotBlank String token, @NotBlank String newPassword) {

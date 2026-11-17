@@ -1,14 +1,18 @@
 import '../core/format.dart';
 import '../domain/models.dart';
 import 'api_client.dart';
+import 'offline_read_cache.dart';
 import 'push_service.dart';
 import 'session_store.dart';
 
 class AuthRepository {
-  AuthRepository(this._api, this._session, this._push);
+  AuthRepository(this._api, this._session, this._push,
+      [StaffReadCache? readCache])
+      : _readCache = readCache;
   final ApiClient _api;
   final SessionStore _session;
   final StaffPushTopics _push;
+  final StaffReadCache? _readCache;
 
   Future<LoginOutcome> login({
     required String saccoCode,
@@ -25,8 +29,7 @@ class AuthRepository {
       return LoginOutcome(mfa: MfaChallenge.fromJson(data));
     }
     if (data['passwordChangeRequired'] == true) {
-      return LoginOutcome(
-          firstLogin: FirstLoginRequirement.fromJson(data));
+      return LoginOutcome(firstLogin: FirstLoginRequirement.fromJson(data));
     }
     final session = StaffSession.fromLogin(data);
     await _persist(session, saccoCode);
@@ -43,6 +46,33 @@ class AuthRepository {
       'saccoCode': saccoCode,
       'username': username,
       'temporaryPassword': temporaryPassword,
+      'newPassword': newPassword,
+    });
+  }
+
+  Future<String?> requestPasswordReset({
+    required String saccoCode,
+    required String identifier,
+    required String channel,
+  }) async {
+    final normalizedIdentifier = identifier.trim();
+    final data = await _api.post('/auth/password-reset/request', {
+      'saccoCode': saccoCode.trim(),
+      'identifier': normalizedIdentifier,
+      if (channel == 'email' && normalizedIdentifier.contains('@'))
+        'email': normalizedIdentifier,
+      'channel': channel,
+    });
+    final destination = '${data['destination'] ?? ''}'.trim();
+    return destination.isEmpty ? null : destination;
+  }
+
+  Future<void> confirmPasswordReset({
+    required String token,
+    required String newPassword,
+  }) async {
+    await _api.post('/auth/password-reset/confirm', {
+      'token': token.trim(),
       'newPassword': newPassword,
     });
   }
@@ -71,6 +101,17 @@ class AuthRepository {
     return session;
   }
 
+  Future<StaffSession> updateContact({
+    required String email,
+    required String phone,
+  }) async {
+    final data = await _api.patch('/auth/me/contact', {
+      'email': email.trim(),
+      'phone': phone.trim(),
+    });
+    return StaffSession.fromLogin(data);
+  }
+
   Future<void> logout() async {
     final saccoCode = await _session.readSacco();
     await unregisterPushDevice();
@@ -79,6 +120,7 @@ class AuthRepository {
     } catch (_) {}
     if (saccoCode != null && saccoCode.isNotEmpty) {
       await _push.unsubscribeStaff(saccoCode);
+      await _readCache?.clearTenant(saccoCode);
     }
     await _session.clear();
   }

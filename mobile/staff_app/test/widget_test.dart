@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sacco_staff_app/data/push_service.dart';
+import 'package:sacco_staff_app/data/app_version_service.dart';
 import 'package:sacco_staff_app/domain/models.dart';
 import 'package:sacco_staff_app/features/auth/login_screen.dart';
 import 'package:sacco_staff_app/features/branches/branches_screen.dart';
 import 'package:sacco_staff_app/features/funds/fund_sources_screen.dart';
 import 'package:sacco_staff_app/features/loans/loan_detail_screen.dart';
+import 'package:sacco_staff_app/features/members/member_detail_screen.dart';
 import 'package:sacco_staff_app/features/reports/regulatory_report_screen.dart';
 import 'package:sacco_staff_app/features/settings/settings_screen.dart';
 import 'package:sacco_staff_app/features/treasury/cash_book_screen.dart';
@@ -56,6 +58,7 @@ void main() {
       ProviderScope(
         overrides: [
           pushServiceProvider.overrideWithValue(_NoopPushTopics()),
+          appVersionPolicyProvider.overrideWith((ref) async => null),
         ],
         child: const MaterialApp(home: LoginScreen()),
       ),
@@ -66,6 +69,133 @@ void main() {
     expect(find.byType(TextField), findsNWidgets(3));
   });
 
+  testWidgets('staff can show and hide the login password', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          pushServiceProvider.overrideWithValue(_NoopPushTopics()),
+          appVersionPolicyProvider.overrideWith((ref) async => null),
+        ],
+        child: const MaterialApp(home: LoginScreen()),
+      ),
+    );
+    await tester.pump();
+
+    final passwordField = find.byType(TextField).last;
+    expect(tester.widget<TextField>(passwordField).obscureText, isTrue);
+    await tester.tap(find.byTooltip('Show password'));
+    await tester.pump();
+    expect(tester.widget<TextField>(passwordField).obscureText, isFalse);
+    expect(find.byTooltip('Hide password'), findsOneWidget);
+  });
+
+  testWidgets('unsupported staff build blocks login', (tester) async {
+    const policy = AppVersionPolicy(
+      currentVersionCode: 24,
+      minimumVersionCode: 25,
+      latestVersionCode: 26,
+      upgradeRequired: true,
+      updateAvailable: true,
+      updateUrl: 'https://example.test/staff.apk',
+      message: 'Install the approved update.',
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          pushServiceProvider.overrideWithValue(_NoopPushTopics()),
+          appVersionPolicyProvider.overrideWith((ref) async => policy),
+        ],
+        child: const MaterialApp(home: LoginScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Staff app update required'), findsOneWidget);
+    expect(find.text('Install the approved update.'), findsOneWidget);
+    expect(find.text('Sign in'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
+  });
+
+  testWidgets('member profile shows complete loan and guarantee exposure',
+      (tester) async {
+    const member = Member(
+      id: 'member-1',
+      branchId: 'branch-1',
+      nationalId: 'CM123',
+      membershipNo: 'M-001',
+      fullName: 'Prossy Member',
+      memberType: 'individual',
+      phone: '+256700000001',
+      whatsapp: '',
+      email: 'prossy@example.com',
+      address: '',
+      status: 'active',
+      kycStatus: 'verified',
+      joiningDate: '2026-01-01',
+      savings: 300000,
+      shares: 50000,
+      welfare: 10000,
+      loanBalance: 125000,
+      loanStatus: 'active',
+      guaranteedLoanBalance: 50000,
+      guaranteeCapacity: 250000,
+    );
+    const exposure = MemberLoanExposure(
+      memberId: 'member-1',
+      fullName: 'Prossy Member',
+      membershipNo: 'M-001',
+      status: 'active',
+      savings: 300000,
+      shares: 50000,
+      welfare: 10000,
+      openLoanCount: 1,
+      openLoanBalance: 125000,
+      guaranteedLoanBalance: 50000,
+      guaranteeCeiling: 300000,
+      committedGuarantees: 50000,
+      guaranteeCapacity: 250000,
+      guaranteeLabels: ['Guaranteed for George — UGX 50,000'],
+      openLoan: null,
+    );
+    const session = StaffSession(
+      token: 'token',
+      userId: 'treasurer',
+      userName: 'Treasurer',
+      email: 'treasurer@example.com',
+      phone: '+256700000002',
+      roleNames: ['Treasurer'],
+      permissions: ['members:view', 'loans:view'],
+      saccoName: 'Test SACCO',
+      tenantId: 'tenant-test',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sessionProvider.overrideWith((ref) async => session),
+          memberProvider.overrideWith((ref, id) async => member),
+          memberLoanExposureProvider.overrideWith((ref, id) async => exposure),
+          memberLoansProvider.overrideWith((ref, id) async => const <Loan>[]),
+          memberFundBalancesProvider
+              .overrideWith((ref) async => const <MemberFundBalance>[]),
+          fundTypesProvider.overrideWith((ref) async => const <FundType>[]),
+        ],
+        child: const MaterialApp(
+          home: MemberDetailScreen(memberId: 'member-1'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Financial standing'), findsOneWidget);
+    expect(
+        find.text('Active for loan and guarantee workflows'), findsOneWidget);
+    expect(find.text('Total loan exposure'), findsOneWidget);
+    expect(find.text('UGX 175,000'), findsOneWidget);
+    expect(find.text('Guarantee commitments'), findsOneWidget);
+    expect(find.textContaining('Guaranteed for George'), findsOneWidget);
+  });
+
   testWidgets('settings groups detailed controls into focused pages',
       (tester) async {
     const session = StaffSession(
@@ -73,6 +203,7 @@ void main() {
       userId: 'chair',
       userName: 'Chairperson',
       email: 'chair@example.com',
+      phone: '+256700000001',
       roleNames: ['Chairperson'],
       permissions: [
         'fund-types:manage',
@@ -147,6 +278,7 @@ void main() {
       userId: 'chair',
       userName: 'Chairperson',
       email: 'chair@example.com',
+      phone: '+256700000001',
       roleNames: ['Chairperson'],
       permissions: ['loans:view', 'loans:approve'],
       saccoName: 'Test SACCO',
@@ -407,6 +539,48 @@ void main() {
     expect(find.text('Tap to search & select a member'), findsOneWidget);
     expect(find.text('Receipt reference (optional)'), findsOneWidget);
     expect(find.text('Post repayment'), findsOneWidget);
+
+    await tester.tap(find.text('Post repayment'));
+    await tester.pump();
+
+    expect(
+      find.text('Complete the highlighted repayment fields before posting.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('cash movement keeps validation feedback inside the form',
+      (tester) async {
+    const cashBook = CashBook(
+      cashOnHand: 0,
+      totalIn: 0,
+      totalOut: 0,
+      entries: [],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          cashBookProvider.overrideWith((ref) async => cashBook),
+        ],
+        child: const MaterialApp(
+          home: CashBookScreen(canManage: true),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Record'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cash movement'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Record entry'));
+    await tester.tap(find.text('Record entry'));
+    await tester.pump();
+
+    expect(
+      find.text('Complete the highlighted cash fields before posting.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('regulatory report shows compliance snapshot and CSV export',

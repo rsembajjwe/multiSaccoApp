@@ -5,6 +5,7 @@ import '../api_client.dart';
 import '../app.dart';
 import '../config.dart';
 import '../theme.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, this.initialError});
@@ -217,6 +218,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             labelText: 'Password',
                             prefixIcon: const Icon(Icons.lock_outline),
                             suffixIcon: IconButton(
+                              tooltip: _obscure
+                                  ? 'Show password'
+                                  : 'Hide password',
                               onPressed: () =>
                                   setState(() => _obscure = !_obscure),
                               icon: Icon(
@@ -250,6 +254,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 : const Icon(Icons.login),
                             label: const Text('Sign in securely'),
                           ),
+                        ),
+                        TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => ForgotPasswordScreen(
+                                      identifier: _email.text.trim(),
+                                    ),
+                                  ),
+                                ),
+                          child: const Text('Forgot password?'),
                         ),
                       ],
                     ),

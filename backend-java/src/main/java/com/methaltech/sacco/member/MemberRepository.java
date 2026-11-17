@@ -23,6 +23,26 @@ public interface MemberRepository extends JpaRepository<Member, String> {
     @Query("""
             SELECT m FROM Member m
             WHERE m.tenantId = :tenantId
+              AND LOWER(m.status) = 'active'
+              AND (:branchScoped = false OR m.branchId IN :branchIds)
+              AND (:guarantorOnly = false OR m.guarantorListingOptOut = false)
+              AND (:excludeMemberId = '' OR m.id <> :excludeMemberId)
+              AND (:search = '' OR
+                   LOWER(CONCAT(COALESCE(m.membershipNo, ''), ' ', COALESCE(m.fullName, ''), ' ', COALESCE(m.phone, '')))
+                   LIKE LOWER(CONCAT('%', :search, '%')))
+            """)
+    Page<Member> findLoanCandidates(
+            @Param("tenantId") String tenantId,
+            @Param("branchScoped") boolean branchScoped,
+            @Param("branchIds") List<String> branchIds,
+            @Param("guarantorOnly") boolean guarantorOnly,
+            @Param("excludeMemberId") String excludeMemberId,
+            @Param("search") String search,
+            Pageable pageable);
+
+    @Query("""
+            SELECT m FROM Member m
+            WHERE m.tenantId = :tenantId
               AND m.status = 'active'
               AND m.guarantorListingOptOut = false
               AND (LOWER(m.fullName) LIKE LOWER(CONCAT('%', :query, '%'))

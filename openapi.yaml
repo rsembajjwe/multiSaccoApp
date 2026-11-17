@@ -73,6 +73,47 @@ paths:
                       service: { type: string, example: "multiSaccoApp Java API" }
                       demoLoginsEnabled: { type: boolean, example: false }
 
+  /mobile-app-policy:
+    get:
+      tags: [Health]
+      summary: Mobile app minimum and latest version policy
+      security: []
+      parameters:
+        - in: query
+          name: app
+          required: true
+          schema: { type: string, enum: [member, staff, proprietor] }
+        - in: query
+          name: platform
+          required: true
+          schema: { type: string, enum: [android, ios] }
+        - in: query
+          name: versionCode
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Version policy for the supplied app build
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [app, platform, currentVersionCode, minimumVersionCode, latestVersionCode, upgradeRequired, updateAvailable]
+                    properties:
+                      app: { type: string, example: staff }
+                      platform: { type: string, example: android }
+                      currentVersionCode: { type: integer, example: 26 }
+                      minimumVersionCode: { type: integer, example: 25 }
+                      latestVersionCode: { type: integer, example: 26 }
+                      upgradeRequired: { type: boolean, example: false }
+                      updateAvailable: { type: boolean, example: false }
+                      updateUrl: { type: string, example: "https://globalntereka.com" }
+                      message: { type: string, example: "A newer approved Staff app is available." }
+        "400": { $ref: "#/components/responses/Error" }
+
   /auth/login:
     post:
       tags: [Authentication]
@@ -2307,6 +2348,49 @@ paths:
                   data: { $ref: "#/components/schemas/ProviderOperationalEvidence" }
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
+
+  /notifications/messages/sms:
+    post:
+      tags: [Notifications]
+      summary: Send or schedule a SACCO-funded member SMS broadcast
+      description: Sends to all members with phone numbers or selected tenant members. Account-status mode personalizes each message with member status, savings and open-loan balance. SACCO SMS credits are debited when delivery starts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                title: { type: string }
+                body: { type: string }
+                memberIds: { type: array, items: { type: string } }
+                mode: { type: string, enum: [custom, account_status], default: custom }
+                scheduledAt: { type: string, format: date-time }
+      responses:
+        "202": { description: SMS sent or scheduled }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /notifications/sms-schedules:
+    get:
+      tags: [Notifications]
+      summary: List tenant SMS schedules
+      responses:
+        "200": { description: Tenant-scoped scheduled SMS history }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /notifications/sms-schedules/{scheduleId}/cancel:
+    patch:
+      tags: [Notifications]
+      summary: Cancel a pending tenant SMS schedule
+      parameters:
+        - { name: scheduleId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Schedule cancelled }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
 
   /notifications/provider-job-runs:
     get:

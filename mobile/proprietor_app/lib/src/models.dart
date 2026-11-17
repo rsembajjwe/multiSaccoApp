@@ -13,6 +13,7 @@ class PlatformSession {
     required this.userId,
     required this.name,
     required this.email,
+    required this.phone,
     required this.tenantId,
     required this.roles,
     required this.permissions,
@@ -22,6 +23,7 @@ class PlatformSession {
   final String userId;
   final String name;
   final String email;
+  final String phone;
   final String tenantId;
   final List<String> roles;
   final List<String> permissions;
@@ -38,6 +40,7 @@ class PlatformSession {
       userId: stringValue(user['id']),
       name: stringValue(user['fullName'] ?? user['name']),
       email: stringValue(user['email']),
+      phone: stringValue(user['phone']),
       tenantId: stringValue(user['tenantId'] ?? tenant['id']),
       roles: stringList(json['roleNames']),
       permissions: stringList(json['permissionIds']),
@@ -149,6 +152,8 @@ class TenantFleetItem {
     required this.subscriptionExpiry,
     required this.balanceDue,
     required this.onboarding,
+    required this.setupMissing,
+    required this.smsBalance,
   });
 
   final String id;
@@ -162,6 +167,8 @@ class TenantFleetItem {
   final DateTime? subscriptionExpiry;
   final num balanceDue;
   final int onboarding;
+  final List<String> setupMissing;
+  final int? smsBalance;
 
   factory TenantFleetItem.fromJson(Map<String, dynamic> json) =>
       TenantFleetItem(
@@ -178,6 +185,13 @@ class TenantFleetItem {
         ),
         balanceDue: numberValue(json['balanceDue']),
         onboarding: numberValue(json['onboarding']).toInt(),
+        setupMissing: (json['setupMissing'] as List? ?? const [])
+            .map(stringValue)
+            .where((item) => item.isNotEmpty)
+            .toList(),
+        smsBalance: json.containsKey('smsBalance')
+            ? numberValue(json['smsBalance']).toInt()
+            : null,
       );
 }
 
@@ -229,12 +243,18 @@ class SaccoOfficialItem {
     required this.memberId,
     required this.membershipNo,
     required this.fullName,
+    required this.email,
+    required this.phone,
+    required this.staffAccessGranted,
     required this.validMember,
   });
   final String office;
   final String memberId;
   final String membershipNo;
   final String fullName;
+  final String email;
+  final String phone;
+  final bool staffAccessGranted;
   final bool validMember;
 
   factory SaccoOfficialItem.fromJson(Map<String, dynamic> json) =>
@@ -243,6 +263,9 @@ class SaccoOfficialItem {
         memberId: stringValue(json['memberId']),
         membershipNo: stringValue(json['membershipNo']),
         fullName: stringValue(json['fullName']),
+        email: stringValue(json['email']),
+        phone: stringValue(json['phone']),
+        staffAccessGranted: json['staffAccessGranted'] == true,
         validMember: json['validMember'] == true,
       );
 }
@@ -572,6 +595,96 @@ class SmsSaleItem {
     description: stringValue(json['description']),
     createdAt: DateTime.tryParse(stringValue(json['createdAt'])),
   );
+}
+
+class SmsInventorySummary {
+  const SmsInventorySummary({
+    required this.provider,
+    required this.providerStatus,
+    required this.providerBalance,
+    required this.providerUnitCost,
+    required this.saccoSellingRate,
+    required this.providerAvailableCredits,
+    required this.saccoCreditsOutstanding,
+    required this.memberCreditsOutstanding,
+    required this.totalCreditsOutstanding,
+    required this.reserveCredits,
+    required this.lowStockThreshold,
+    required this.grossMarginPerSms,
+    required this.grossMarginPercent,
+    required this.totalCreditsSold,
+    required this.totalSalesRevenue,
+    required this.suggestedTopUpAmount,
+    required this.alertLevel,
+    required this.alertCode,
+    required this.alertMessage,
+    required this.providerCheckedAt,
+    required this.settingsUpdatedAt,
+    required this.settingsUpdatedBy,
+  });
+
+  final String provider;
+  final String providerStatus;
+  final num providerBalance;
+  final num providerUnitCost;
+  final num saccoSellingRate;
+  final int providerAvailableCredits;
+  final int saccoCreditsOutstanding;
+  final int memberCreditsOutstanding;
+  final int totalCreditsOutstanding;
+  final int reserveCredits;
+  final int lowStockThreshold;
+  final num grossMarginPerSms;
+  final num grossMarginPercent;
+  final int totalCreditsSold;
+  final num totalSalesRevenue;
+  final num suggestedTopUpAmount;
+  final String alertLevel;
+  final String alertCode;
+  final String alertMessage;
+  final DateTime? providerCheckedAt;
+  final DateTime? settingsUpdatedAt;
+  final String settingsUpdatedBy;
+
+  bool get needsAttention => alertLevel != 'ok';
+
+  factory SmsInventorySummary.fromJson(Map<String, dynamic> json) =>
+      SmsInventorySummary(
+        provider: stringValue(json['provider']),
+        providerStatus: stringValue(json['providerStatus']),
+        providerBalance: numberValue(json['providerBalance']),
+        providerUnitCost: numberValue(json['providerUnitCost']),
+        saccoSellingRate: numberValue(json['saccoSellingRate']),
+        providerAvailableCredits: numberValue(
+          json['providerAvailableCredits'],
+        ).toInt(),
+        saccoCreditsOutstanding: numberValue(
+          json['saccoCreditsOutstanding'],
+        ).toInt(),
+        memberCreditsOutstanding: numberValue(
+          json['memberCreditsOutstanding'],
+        ).toInt(),
+        totalCreditsOutstanding: numberValue(
+          json['totalCreditsOutstanding'],
+        ).toInt(),
+        reserveCredits: numberValue(json['reserveCredits']).toInt(),
+        lowStockThreshold: numberValue(json['lowStockThreshold']).toInt(),
+        grossMarginPerSms: numberValue(json['grossMarginPerSms']),
+        grossMarginPercent: numberValue(json['grossMarginPercent']),
+        totalCreditsSold: numberValue(json['totalCreditsSold']).toInt(),
+        totalSalesRevenue: numberValue(json['totalSalesRevenue']),
+        suggestedTopUpAmount: numberValue(json['suggestedTopUpAmount']),
+        alertLevel: stringValue(json['alertLevel']),
+        alertCode: stringValue(json['alertCode']),
+        alertMessage: stringValue(json['alertMessage']),
+        providerCheckedAt: DateTime.tryParse(
+          stringValue(json['providerCheckedAt']),
+        ),
+        settingsUpdatedAt: DateTime.tryParse(
+          stringValue(json['settingsUpdatedAt']),
+        ),
+        settingsUpdatedBy: stringValue(json['settingsUpdatedBy']),
+      );
 }
 
 class PlatformSmsBroadcastResult {

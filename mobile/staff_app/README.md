@@ -61,9 +61,11 @@ app uses is needed to reach `http://10.0.2.2:18084` — add
 `localhost`) and reference it on `<application>` in the manifest. Consider renaming
 the package to `com.methaltech.sacco_staff` (distinct from the member app).
 
-Demo staff logins (dev profile): SACCO **GREE**, e.g.
-`admin@greenvalley.local` / `Sacco@12345`, or `treasurer@greenvalley.local` /
-`Treasurer@12345`.
+Demo staff logins (dev profile) are tenant-scoped by the SACCO code. For SACCO
+**GREE**, use `rsembajjwe@gmail.com` / `Chair@123456`,
+`rsembajjwe1@gmail.com` / `Treasurer@123456`, or
+`rsembajjwe2@gmail.com` / `Secretary@123456`. Production reissues a temporary
+password to each registered email and requires it to be changed on first login.
 
 ## Roadmap (phased toward full parity)
 1. **Foundation (done)** — staff login + MFA, permission gating, dashboard hub,
@@ -92,4 +94,8 @@ Demo staff logins (dev profile): SACCO **GREE**, e.g.
     optional manager assignment.
 12. **Fund sources** — configurable member funds such as school fees or health.
 13. **Cross-cutting** — authenticated staff-device push registration and
-    biometric lock are done; offline read resilience remains.
+    biometric lock, and encrypted tenant-scoped offline read fallback are done.
+    Saved reads expire after 24 hours and always display a read-only notice.
+14. **Release safety (done)** — startup checks the public server release policy,
+    shows optional updates, and blocks login only when the installed build is below
+    the configured minimum supported build.

@@ -6,7 +6,11 @@ import '../../core/widgets/confirm_action.dart';
 import '../../core/widgets/member_picker.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
+import '../loans/loan_detail_screen.dart';
 import 'cash_receipt_dialog.dart';
+
+List<Loan> repaymentEligibleLoans(Iterable<Loan> loans) =>
+    loans.where((loan) => loan.isOpen && loan.balance > 0).toList();
 
 class LoanRepaymentSheet extends ConsumerStatefulWidget {
   const LoanRepaymentSheet({super.key});
@@ -26,6 +30,7 @@ class _LoanRepaymentSheetState extends ConsumerState<LoanRepaymentSheet> {
   bool _loadingLoans = false;
   bool _busy = false;
   String? _loanError;
+  String? _formError;
 
   @override
   void dispose() {
@@ -36,19 +41,21 @@ class _LoanRepaymentSheetState extends ConsumerState<LoanRepaymentSheet> {
   }
 
   Future<void> _pickMember() async {
-    final member = await showMemberPicker(context);
+    final member = await showMemberPicker(context,
+        unavailableReason: postingUnavailableReason);
     if (member == null || !mounted) return;
     setState(() {
       _member = member;
       _loan = null;
       _loans = const [];
       _loanError = null;
+      _formError = null;
       _loadingLoans = true;
     });
     try {
       final loans =
           await ref.read(adminRepositoryProvider).memberLoans(member.id);
-      final active = loans.where((loan) => loan.status == 'active').toList();
+      final active = repaymentEligibleLoans(loans);
       if (!mounted) return;
       setState(() {
         _loans = active;
@@ -62,11 +69,14 @@ class _LoanRepaymentSheetState extends ConsumerState<LoanRepaymentSheet> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    setState(() => _formError = null);
+    if (!_formKey.currentState!.validate()) {
+      setState(() => _formError =
+          'Complete the highlighted repayment fields before posting.');
+      return;
+    }
     if (_member == null || _loan == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Choose a member and active loan.')),
-      );
+      setState(() => _formError = 'Choose a member and open loan.');
       return;
     }
     final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
@@ -94,6 +104,7 @@ class _LoanRepaymentSheetState extends ConsumerState<LoanRepaymentSheet> {
       ref.invalidate(cashBookProvider);
       ref.invalidate(loansProvider);
       ref.invalidate(memberLoansProvider(member.id));
+      ref.invalidate(memberLoanExposureProvider(member.id));
       ref.invalidate(loanRepaymentsProvider(loan.id));
       ref.invalidate(memberProvider(member.id));
       ref.invalidate(saccoStatusProvider);
@@ -110,9 +121,8 @@ class _LoanRepaymentSheetState extends ConsumerState<LoanRepaymentSheet> {
       if (mounted) Navigator.pop(context);
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not post repayment. $error')),
-        );
+        setState(() =>
+            _formError = 'Could not post repayment. Review and retry. $error');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -162,20 +172,23 @@ class _LoanRepaymentSheetState extends ConsumerState<LoanRepaymentSheet> {
               if (_loadingLoans) const LinearProgressIndicator(),
               if (_loanError != null)
                 Text(
-                  'Could not load active loans. $_loanError',
+                  'Could not load open loans. $_loanError',
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               if (_member != null && !_loadingLoans && _loans.isEmpty)
-                const Text('This member has no active loan.'),
-              if (_loans.isNotEmpty)
+                const Text('This member has no open loan balance.'),
+              if (_loans.isNotEmpty) ...[
+                _MemberLoanGuide(loans: _loans),
+                const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
                   initialValue: _loan?.id,
-                  decoration: const InputDecoration(labelText: 'Active loan'),
+                  decoration: const InputDecoration(labelText: 'Loan to pay'),
                   items: _loans
                       .map((loan) => DropdownMenuItem(
                             value: loan.id,
                             child: Text(
-                              '${loan.product} - ${Fmt.money(loan.balance)} due',
+                              '${loan.product} - ${Fmt.money(loan.balance)} - ${Fmt.label(loan.status)}',
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ))
                       .toList(),
@@ -187,23 +200,24 @@ class _LoanRepaymentSheetState extends ConsumerState<LoanRepaymentSheet> {
                             );
                           }),
                 ),
+              ],
               if (_loan != null) ...[
                 const SizedBox(height: 8),
-                Text(
-                  _loan!.inArrears
-                      ? 'Warning: ${Fmt.money(_loan!.arrearsAmount)} is in arrears.'
-                      : 'Outstanding balance: ${Fmt.money(_loan!.balance)}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: _loan!.inArrears
-                        ? Theme.of(context).colorScheme.error
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                _SelectedLoanGuide(
+                  loan: _loan!,
+                  onViewHistory: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => LoanDetailScreen(loan: _loan!),
+                    ),
                   ),
                 ),
               ],
               const SizedBox(height: 12),
               TextFormField(
                 controller: _amount,
+                onChanged: (_) {
+                  if (_formError != null) setState(() => _formError = null);
+                },
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
@@ -237,6 +251,22 @@ class _LoanRepaymentSheetState extends ConsumerState<LoanRepaymentSheet> {
                 decoration: const InputDecoration(labelText: 'Narration'),
               ),
               const SizedBox(height: 16),
+              if (_formError != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _formError!,
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onErrorContainer),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -253,6 +283,74 @@ class _LoanRepaymentSheetState extends ConsumerState<LoanRepaymentSheet> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MemberLoanGuide extends StatelessWidget {
+  const _MemberLoanGuide({required this.loans});
+
+  final List<Loan> loans;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = loans.fold<num>(0, (sum, loan) => sum + loan.balance);
+    return Text(
+      '${loans.length} open loan${loans.length == 1 ? '' : 's'} - Total outstanding ${Fmt.money(total)}',
+      style: const TextStyle(fontWeight: FontWeight.w700),
+    );
+  }
+}
+
+class _SelectedLoanGuide extends StatelessWidget {
+  const _SelectedLoanGuide({
+    required this.loan,
+    required this.onViewHistory,
+  });
+
+  final Loan loan;
+  final VoidCallback onViewHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: loan.inArrears ? scheme.errorContainer : scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(loan.product,
+              style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text('Original principal: ${Fmt.money(loan.amount)}'),
+          Text('Total payable: ${Fmt.money(loan.totalPayable)}'),
+          Text('Paid to date: ${Fmt.money(loan.repaymentTotal)}'),
+          Text('Outstanding balance: ${Fmt.money(loan.balance)}'),
+          if (loan.monthlyInstallment > 0)
+            Text('Expected installment: ${Fmt.money(loan.monthlyInstallment)}'),
+          if (loan.nextDueDate.isNotEmpty)
+            Text('Next due date: ${Fmt.date(loan.nextDueDate)}'),
+          if (loan.inArrears)
+            Text(
+              'Arrears: ${Fmt.money(loan.arrearsAmount)}',
+              style: TextStyle(
+                color: scheme.onErrorContainer,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onViewHistory,
+            icon: const Icon(Icons.history_outlined),
+            label: const Text('View loan payment history'),
+          ),
+        ],
       ),
     );
   }

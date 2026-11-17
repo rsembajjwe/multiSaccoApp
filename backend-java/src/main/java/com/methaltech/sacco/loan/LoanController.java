@@ -270,6 +270,7 @@ class LoanController {
     }
 
     @PostMapping
+    @Transactional
     ResponseEntity<?> createLoan(
             @RequestHeader(name = "Authorization", required = false) String authorization,
             @Valid @RequestBody CreateLoanRequest body,
@@ -351,6 +352,82 @@ class LoanController {
                     .body(ApiErrorResponse.of(400, "SIGNED_FORM_REQUIRED", "Enter a signed form reference or attach the signed loan form."));
         }
 
+        List<String> guarantorMemberIds = body.guarantorMemberIds() == null
+                ? List.of()
+                : body.guarantorMemberIds().stream()
+                        .map(value -> value == null ? "" : value.trim())
+                        .filter(value -> !value.isBlank())
+                        .toList();
+        if (new HashSet<>(guarantorMemberIds).size() != guarantorMemberIds.size()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "DUPLICATE_GUARANTOR", "Select each guarantor only once."));
+        }
+
+        BigDecimal totalPayable = Loan.totalPayableFor(
+                body.product(), amount, body.repaymentMonths(), interestRate, chargeFee);
+        BigDecimal coverShortfall = LoanCoverage.shortfall(
+                totalPayable, member.getAvailableSavings(), BigDecimal.ZERO);
+        if (coverShortfall.signum() == 0 && !guarantorMemberIds.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "GUARANTOR_NOT_REQUIRED",
+                            "Remove guarantors because the member's savings cover the loan, interest and charges."));
+        }
+        if (coverShortfall.signum() > 0 && guarantorMemberIds.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "GUARANTOR_REQUIRED",
+                            "Select guarantors to cover " + coverShortfall.toPlainString()
+                                    + ". Interest and charges are included."));
+        }
+        if (!guarantorMemberIds.isEmpty() && signedFormReference.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "GUARANTOR_SIGNATURE_REFERENCE_REQUIRED",
+                            "Enter the signed loan form reference confirming all guarantor signatures."));
+        }
+
+        List<Member> guarantorMembers = new ArrayList<>();
+        List<BigDecimal> guarantorCapacities = new ArrayList<>();
+        for (String guarantorMemberId : guarantorMemberIds) {
+            Member guarantor = memberRepository.findById(guarantorMemberId)
+                    .filter(candidate -> candidate.getTenantId().equals(tenantId))
+                    .orElse(null);
+            if (guarantor == null) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "INVALID_GUARANTOR", "A selected guarantor does not exist for this SACCO."));
+            }
+            if (!"active".equals(guarantor.getStatus())) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "GUARANTOR_NOT_ACTIVE", guarantor.getFullName() + " is not an active member."));
+            }
+            if (guarantor.getId().equals(member.getId())) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "BORROWER_CANNOT_GUARANTEE", "A borrower cannot guarantee their own loan."));
+            }
+            if (!canAccessMemberBranch(currentSession, tenantId, guarantor)) {
+                return branchAccessDenied();
+            }
+            guarantorMembers.add(guarantor);
+            BigDecimal capacity = guaranteeCapacity(guarantor, null);
+            if (capacity.signum() == 0) {
+                return ResponseEntity.badRequest()
+                        .body(ApiErrorResponse.of(400, "GUARANTEE_CAPACITY_EXCEEDED",
+                                guarantor.getFullName() + " has no available guarantee capacity."));
+            }
+            guarantorCapacities.add(capacity);
+        }
+        LoanCoverage.Allocation guarantorAllocation = LoanCoverage.allocate(coverShortfall, guarantorCapacities);
+        if (guarantorAllocation.remainingShortfall().signum() > 0) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "GUARANTOR_COVER_INSUFFICIENT",
+                            "Selected guarantors are short by "
+                                    + guarantorAllocation.remainingShortfall().toPlainString()
+                                    + ". Interest and charges are included."));
+        }
+        if (guarantorAllocation.amounts().stream().anyMatch(value -> value.signum() == 0)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "EXCESS_GUARANTORS",
+                            "Remove guarantors that are not needed to cover the remaining loan shortfall."));
+        }
+
         Loan loan = loanRepository.save(Loan.submitted(
                 "loan_" + UUID.randomUUID(),
                 tenantId,
@@ -372,6 +449,34 @@ class LoanController {
                 currentSession.user().getId());
         loan = loanRepository.save(loan);
         createRepaymentSchedule(loan);
+
+        int acceptedGuarantorCount = 0;
+        for (int index = 0; index < guarantorMembers.size(); index++) {
+            BigDecimal guaranteedAmount = guarantorAllocation.amounts().get(index);
+            if (guaranteedAmount.signum() == 0) continue;
+            Member guarantorMember = guarantorMembers.get(index);
+            LoanGuarantor guarantor = new LoanGuarantor(
+                    "guarantor_" + UUID.randomUUID(),
+                    tenantId,
+                    loan.getId(),
+                    guarantorMember.getId(),
+                    guaranteedAmount,
+                    currentSession.user().getId());
+            guarantor.decide("accepted");
+            guarantor.markSigned(signedFormReference, currentSession.user().getId());
+            LoanGuarantor savedGuarantor = guarantorRepository.save(guarantor);
+            acceptedGuarantorCount++;
+            auditService.record(
+                    tenantId,
+                    currentSession.user(),
+                    "Recorded signed loan guarantor " + guarantorMember.getMembershipNo(),
+                    "loan_guarantor",
+                    savedGuarantor.getId(),
+                    request.getRemoteAddr());
+            notificationService.notifyGuarantorRecorded(guarantorMember, member, loan.getId(), guaranteedAmount);
+        }
+        loan.refreshGuarantors(acceptedGuarantorCount);
+        loan = loanRepository.save(loan);
 
         auditService.record(
                 tenantId,
@@ -745,6 +850,50 @@ class LoanController {
             return branchAccessDenied();
         }
 
+        return ResponseEntity.ok(ApiResponse.of(memberLoanExposureData(tenantId, member)));
+    }
+
+    @GetMapping("/member-candidates")
+    ResponseEntity<?> memberCandidates(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @RequestParam(name = "tenantId", required = false) String requestedTenantId,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "guarantorOnly", defaultValue = "false") boolean guarantorOnly,
+            @RequestParam(name = "excludeMemberId", required = false) String excludeMemberId,
+            @RequestParam(name = "page", defaultValue = "0") Integer page,
+            @RequestParam(name = "size", defaultValue = "20") Integer size) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "loans:view")) {
+            return authService.permissionRequired("loans:view");
+        }
+        String tenantId = tenantScope(currentSession, requestedTenantId);
+        if (tenantId == null) return tenantAccessDenied();
+
+        List<String> scopedBranches = branchScope(currentSession, tenantId);
+        boolean branchScoped = !scopedBranches.isEmpty();
+        List<String> queryBranches = branchScoped ? scopedBranches : List.of("");
+        Pageable pageable = PageParams.toPageable(page, size, Sort.by("membershipNo").ascending());
+        Page<Member> candidates = memberRepository.findLoanCandidates(
+                tenantId,
+                branchScoped,
+                queryBranches,
+                guarantorOnly,
+                excludeMemberId == null ? "" : excludeMemberId.trim(),
+                search == null ? "" : search.trim(),
+                pageable);
+        List<MemberLoanExposureResponse> data = candidates.getContent().stream()
+                .map(member -> memberLoanExposureData(tenantId, member))
+                .toList();
+        return ResponseEntity.ok(PagedResponse.of(
+                data,
+                candidates.getNumber(),
+                candidates.getSize(),
+                candidates.getTotalElements(),
+                candidates.getTotalPages()));
+    }
+
+    private MemberLoanExposureResponse memberLoanExposureData(String tenantId, Member member) {
         List<Loan> memberLoans = loanRepository.findByTenantIdAndMemberIdOrderByCreatedAtAsc(tenantId, member.getId());
         List<Loan> openLoans = memberLoans.stream()
                 .filter(loan -> OPEN_LOAN_STATUSES.contains(loan.getStatus()))
@@ -804,7 +953,7 @@ class LoanController {
                 capacity,
                 guaranteeLabels,
                 topUpTarget == null ? null : LoanResponse.from(topUpTarget));
-        return ResponseEntity.ok(ApiResponse.of(data));
+        return data;
     }
 
     @PostMapping("/{loanId}/guarantors")
@@ -1163,7 +1312,7 @@ class LoanController {
     private LoanCoverResponse buildLoanCover(Loan loan) {
         Member applicant = memberRepository.findById(loan.getMemberId()).orElse(null);
         BigDecimal selfCover = applicant == null ? BigDecimal.ZERO : applicant.getAvailableSavings();
-        BigDecimal totalPayable = loan.getTotalPayable() == null ? loan.getAmount() : loan.getTotalPayable();
+        BigDecimal totalPayable = LoanCoverage.requiredAmount(loan);
         LoanCoverResponse.ApplicantCover applicantCover = new LoanCoverResponse.ApplicantCover(
                 loan.getMemberId(),
                 applicant == null ? "-" : applicant.getMembershipNo(),
@@ -1188,14 +1337,15 @@ class LoanController {
 
         BigDecimal acceptedPledges = guarantors.stream()
                 .filter(item -> "accepted".equals(item.getStatus()))
+                .filter(item -> item.getSignedAt() != null)
                 .map(LoanGuarantor::getGuaranteedAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal totalCover = selfCover.add(acceptedPledges);
-        BigDecimal coverRatio = loan.getAmount().signum() == 0
+        BigDecimal coverRatio = totalPayable.signum() == 0
                 ? BigDecimal.ZERO
-                : totalCover.divide(loan.getAmount(), 2, RoundingMode.HALF_UP);
-        boolean covered = totalCover.compareTo(loan.getAmount()) >= 0;
-        BigDecimal shortfall = covered ? BigDecimal.ZERO : loan.getAmount().subtract(totalCover);
+                : totalCover.divide(totalPayable, 2, RoundingMode.HALF_UP);
+        boolean covered = LoanCoverage.covered(totalPayable, selfCover, acceptedPledges);
+        BigDecimal shortfall = LoanCoverage.shortfall(totalPayable, selfCover, acceptedPledges);
 
         return new LoanCoverResponse(
                 loan.getId(),
@@ -1669,7 +1819,7 @@ class LoanController {
         BigDecimal selfCover = memberRepository.findById(loan.getMemberId())
                 .map(Member::getAvailableSavings)
                 .orElse(BigDecimal.ZERO);
-        BigDecimal totalPayable = loan.getTotalPayable() == null ? loan.getAmount() : loan.getTotalPayable();
+        BigDecimal totalPayable = LoanCoverage.requiredAmount(loan);
         boolean selfSecured = selfCover.compareTo(totalPayable) >= 0;
         if (!selfSecured) {
             // Guarantors and the cover gate are only required when the loan is not fully secured by savings.
@@ -1686,6 +1836,19 @@ class LoanController {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
                         .body(ApiErrorResponse.of(409, "GUARANTOR_SIGNATURE_REQUIRED",
                                 "At least one accepted guarantor with a confirmed physical signature is required before loan approval."));
+            }
+            BigDecimal signedGuarantees = guarantorRepository.findByLoanIdOrderByCreatedAtDesc(loan.getId())
+                    .stream()
+                    .filter(item -> "accepted".equals(item.getStatus()))
+                    .filter(item -> item.getSignedAt() != null)
+                    .map(LoanGuarantor::getGuaranteedAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal shortfall = LoanCoverage.shortfall(totalPayable, selfCover, signedGuarantees);
+            if (shortfall.signum() > 0) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "LOAN_COVER_SHORTFALL",
+                                "Borrower savings and accepted signed guarantees are short by "
+                                        + shortfall.toPlainString() + ". Interest and charges are included."));
             }
         }
 
@@ -1770,12 +1933,32 @@ class LoanController {
                     .body(ApiErrorResponse.of(409, "GUARANTOR_ALREADY_REQUESTED", "This guarantor already has an active request for the loan."));
         }
 
-        BigDecimal amount = body.guaranteedAmount() == null ? loan.getAmount() : Money.normalize(body.guaranteedAmount());
+        BigDecimal capacity = guaranteeCapacity(guarantor, null);
+        BigDecimal amount;
+        if (body.guaranteedAmount() == null) {
+            BigDecimal borrowerSavings = memberRepository.findById(loan.getMemberId())
+                    .map(Member::getAvailableSavings)
+                    .orElse(BigDecimal.ZERO);
+            BigDecimal existingPledges = guarantorRepository.findByLoanIdOrderByCreatedAtDesc(loan.getId())
+                    .stream()
+                    .filter(item -> !GUARANTEE_INACTIVE_STATUSES.contains(item.getStatus()))
+                    .map(LoanGuarantor::getGuaranteedAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal remainingShortfall = LoanCoverage.shortfall(
+                    LoanCoverage.requiredAmount(loan), borrowerSavings, existingPledges);
+            if (remainingShortfall.signum() == 0) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "LOAN_ALREADY_COVERED",
+                                "The borrower's savings and existing guarantees already cover the loan, interest and charges."));
+            }
+            amount = remainingShortfall.min(capacity);
+        } else {
+            amount = Money.normalize(body.guaranteedAmount());
+        }
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_GUARANTEE_AMOUNT", "Guaranteed amount must be greater than zero."));
         }
-        BigDecimal capacity = guaranteeCapacity(guarantor, null);
         if (amount.compareTo(capacity) > 0) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "GUARANTEE_CAPACITY_EXCEEDED", "Guarantor capacity is too low for this pledge."));
@@ -2332,7 +2515,8 @@ class LoanController {
             String applicationSource,
             String signedFormReference,
             LocalDate signedFormReceivedAt,
-            String signedFormFileName) {
+            String signedFormFileName,
+            List<String> guarantorMemberIds) {
     }
 
     record AppraisalRequest(

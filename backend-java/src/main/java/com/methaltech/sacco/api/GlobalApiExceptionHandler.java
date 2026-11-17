@@ -1,6 +1,7 @@
 package com.methaltech.sacco.api;
 
 import com.methaltech.sacco.notification.OnboardingNotificationService.OnboardingDeliveryException;
+import com.methaltech.sacco.notification.NotificationProviderException;
 import jakarta.persistence.OptimisticLockException;
 import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -72,6 +73,13 @@ class GlobalApiExceptionHandler {
         log.warn("Staff onboarding delivery failed: {}", error.getMessage());
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ApiErrorResponse.of(503, "ONBOARDING_DELIVERY_FAILED", error.getMessage()));
+    }
+
+    @ExceptionHandler(NotificationProviderException.class)
+    ResponseEntity<ApiErrorResponse> notificationProviderUnavailable(NotificationProviderException error) {
+        log.warn("Notification provider unavailable: {}", error.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiErrorResponse.of(503, "NOTIFICATION_PROVIDER_UNAVAILABLE", error.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

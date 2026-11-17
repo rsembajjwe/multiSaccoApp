@@ -4,7 +4,9 @@ import com.methaltech.sacco.money.Money;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -24,6 +26,21 @@ public class SmsWalletService {
                 Integer.class,
                 tenantId);
         return value == null ? 0 : value;
+    }
+
+    public Map<String, Integer> balances(List<String> tenantIds) {
+        Map<String, Integer> balances = new LinkedHashMap<>();
+        tenantIds.stream().distinct().forEach(tenantId -> balances.put(tenantId, 0));
+        if (balances.isEmpty()) return balances;
+        String placeholders = String.join(",", java.util.Collections.nCopies(balances.size(), "?"));
+        jdbcTemplate.query(
+                        "SELECT tenant_id, balance FROM sms_wallets WHERE tenant_id IN (" + placeholders + ")",
+                        (resultSet, rowNumber) -> Map.entry(
+                                resultSet.getString("tenant_id"),
+                                resultSet.getInt("balance")),
+                        balances.keySet().toArray())
+                .forEach(entry -> balances.put(entry.getKey(), entry.getValue()));
+        return balances;
     }
 
     public BigDecimal smsRate() {
@@ -120,6 +137,18 @@ public class SmsWalletService {
         }
         BigDecimal rate = smsRate();
         ledger(tenantId, "debit", quantity, rate, amountFor(quantity), reference, description);
+    }
+
+    @Transactional
+    public void refund(String tenantId, int quantity, String relatedReference, String description) {
+        if (quantity <= 0) return;
+        ensureWallet(tenantId);
+        jdbcTemplate.update(
+                "UPDATE sms_wallets SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE tenant_id = ?",
+                quantity, tenantId);
+        BigDecimal rate = smsRate();
+        ledger(tenantId, "credit", quantity, rate, amountFor(quantity),
+                relatedReference + "-REFUND-" + UUID.randomUUID(), description);
     }
 
     private void ensureWallet(String tenantId) {

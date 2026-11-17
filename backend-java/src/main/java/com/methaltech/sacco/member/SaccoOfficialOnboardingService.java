@@ -4,6 +4,7 @@ import com.methaltech.sacco.branch.Branch;
 import com.methaltech.sacco.identity.OfficialStaffAccountService;
 import com.methaltech.sacco.identity.User;
 import com.methaltech.sacco.security.PasswordHasher;
+import com.methaltech.sacco.security.PhoneNumberNormalizer;
 import com.methaltech.sacco.tenant.SaccoOfficialAssignment;
 import com.methaltech.sacco.tenant.SaccoOfficialAssignmentRepository;
 import java.time.LocalDate;
@@ -137,7 +138,7 @@ public class SaccoOfficialOnboardingService {
     }
 
     private String normalizePhone(String phone) {
-        return phone == null ? "" : phone.replace(" ", "").trim();
+        return PhoneNumberNormalizer.normalizeUgandan(phone);
     }
 
     public record OfficialInput(

@@ -12,6 +12,7 @@ import com.methaltech.sacco.identity.DefaultSaccoRoleProvisioningService;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.notification.NotificationService;
+import com.methaltech.sacco.notification.SmsWalletService;
 import com.methaltech.sacco.subscription.Subscription;
 import com.methaltech.sacco.subscription.SubscriptionAccessService;
 import com.methaltech.sacco.subscription.SubscriptionRepository;
@@ -28,6 +29,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.Page;
@@ -69,6 +71,7 @@ class TenantController {
     private final DefaultSaccoRoleProvisioningService defaultSaccoRoleProvisioningService;
     private final com.methaltech.sacco.member.SaccoStarterMemberProvisioningService starterMemberProvisioningService;
     private final com.methaltech.sacco.member.SaccoOfficialOnboardingService officialOnboardingService;
+    private final SmsWalletService smsWalletService;
     private final boolean provisionStarterMembers;
     private final boolean tenantPurgeEnabled;
 
@@ -89,6 +92,7 @@ class TenantController {
             DefaultSaccoRoleProvisioningService defaultSaccoRoleProvisioningService,
             com.methaltech.sacco.member.SaccoStarterMemberProvisioningService starterMemberProvisioningService,
             com.methaltech.sacco.member.SaccoOfficialOnboardingService officialOnboardingService,
+            SmsWalletService smsWalletService,
             @org.springframework.beans.factory.annotation.Value("${sacco.provision-starter-members:false}") boolean provisionStarterMembers,
             @org.springframework.beans.factory.annotation.Value("${sacco.tenant-purge.enabled:false}") boolean tenantPurgeEnabled) {
         this.tenantRepository = tenantRepository;
@@ -107,6 +111,7 @@ class TenantController {
         this.defaultSaccoRoleProvisioningService = defaultSaccoRoleProvisioningService;
         this.starterMemberProvisioningService = starterMemberProvisioningService;
         this.officialOnboardingService = officialOnboardingService;
+        this.smsWalletService = smsWalletService;
         this.provisionStarterMembers = provisionStarterMembers;
         this.tenantPurgeEnabled = tenantPurgeEnabled;
     }
@@ -185,17 +190,14 @@ class TenantController {
         if (health != null && !health.isBlank()) {
             List<Tenant> candidates = tenantRepository.findAll(specification, Sort.by(sortDirection, sortProperty));
             Map<String, Subscription> candidateSubscriptions = latestSubscriptions(candidates);
-            List<FleetTenantResponse> matchingHealth = candidates.stream()
-                    .map(tenant -> FleetTenantResponse.from(tenant, candidateSubscriptions.get(tenant.getId())))
+            List<FleetTenantResponse> matchingHealth = fleetRows(candidates, candidateSubscriptions).stream()
                     .filter(row -> row.health().equalsIgnoreCase(health))
                     .toList();
             return ResponseEntity.ok(PageParams.paged(matchingHealth, page, size));
         }
         Page<Tenant> tenantPage = tenantRepository.findAll(specification, pageable);
         Map<String, Subscription> latestSubscriptions = latestSubscriptions(tenantPage.getContent());
-        List<FleetTenantResponse> rows = tenantPage.getContent().stream()
-                .map(tenant -> FleetTenantResponse.from(tenant, latestSubscriptions.get(tenant.getId())))
-                .toList();
+        List<FleetTenantResponse> rows = fleetRows(tenantPage.getContent(), latestSubscriptions);
         return ResponseEntity.ok(PagedResponse.of(rows, tenantPage.getNumber(), tenantPage.getSize(), tenantPage.getTotalElements(), tenantPage.getTotalPages()));
     }
 
@@ -211,9 +213,7 @@ class TenantController {
                 .filter(tenant -> !"tenant_platform".equals(tenant.getId()))
                 .toList();
         Map<String, Subscription> subscriptions = latestSubscriptions(tenants);
-        List<FleetTenantResponse> fleet = tenants.stream()
-                .map(tenant -> FleetTenantResponse.from(tenant, subscriptions.get(tenant.getId())))
-                .toList();
+        List<FleetTenantResponse> fleet = fleetRows(tenants, subscriptions);
         return ResponseEntity.ok(ApiResponse.of(FleetSummaryResponse.from(fleet)));
     }
 
@@ -249,9 +249,7 @@ class TenantController {
         }
         tenantRepository.saveAll(tenants);
         Map<String, Subscription> latestSubscriptions = latestSubscriptions(tenants);
-        return ResponseEntity.ok(ApiResponse.of(tenants.stream()
-                .map(tenant -> FleetTenantResponse.from(tenant, latestSubscriptions.get(tenant.getId())))
-                .toList()));
+        return ResponseEntity.ok(ApiResponse.of(fleetRows(tenants, latestSubscriptions)));
     }
 
     private Map<String, Subscription> latestSubscriptions(List<Tenant> tenants) {
@@ -261,6 +259,27 @@ class TenantController {
         subscriptionRepository.findByTenantIdInOrderByTenantIdAscCreatedAtDesc(tenantIds)
                 .forEach(subscription -> latest.putIfAbsent(subscription.getTenantId(), subscription));
         return latest;
+    }
+
+    private List<FleetTenantResponse> fleetRows(List<Tenant> tenants, Map<String, Subscription> subscriptions) {
+        if (tenants.isEmpty()) return List.of();
+        List<String> tenantIds = tenants.stream().map(Tenant::getId).toList();
+        Map<String, SaccoProfile> profiles = saccoProfileRepository.findByTenantIdIn(tenantIds).stream()
+                .collect(Collectors.toMap(SaccoProfile::getTenantId, profile -> profile));
+        Map<String, Set<String>> assignedOffices = officialAssignmentRepository
+                .findByTenantIdInOrderByTenantIdAscOfficeAsc(tenantIds).stream()
+                .collect(Collectors.groupingBy(
+                        SaccoOfficialAssignment::getTenantId,
+                        Collectors.mapping(SaccoOfficialAssignment::getOffice, Collectors.toSet())));
+        Map<String, Integer> smsBalances = smsWalletService.balances(tenantIds);
+        return tenants.stream()
+                .map(tenant -> FleetTenantResponse.from(
+                        tenant,
+                        subscriptions.get(tenant.getId()),
+                        profiles.get(tenant.getId()),
+                        assignedOffices.getOrDefault(tenant.getId(), Set.of()),
+                        smsBalances.getOrDefault(tenant.getId(), 0)))
+                .toList();
     }
 
     private String bulkUpdateDescription(FleetBulkUpdateRequest body) {
@@ -873,6 +892,21 @@ class TenantController {
                 normalizeCalendarMonth(body.membershipCalendarStartMonth(), profile.getMembershipCalendarStartMonth()),
                 normalizeCalendarDay(body.membershipCalendarStartDay(), profile.getMembershipCalendarStartDay()),
                 normalizePositiveAmount(body.membershipSubscriptionAmount(), profile.getMembershipSubscriptionAmount()));
+        String savingsCyclePeriod = firstNonBlank(body.savingsCyclePeriod(), profile.getSavingsCyclePeriod()).toLowerCase();
+        if (!Set.of("continuous", "annual").contains(savingsCyclePeriod)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_SAVINGS_CYCLE", "Savings cycle must be continuous or annual."));
+        }
+        int savingsCycleMonth = normalizeCalendarMonth(body.savingsCycleStartMonth(), profile.getSavingsCycleStartMonth());
+        int savingsCycleDay = normalizeCalendarDay(body.savingsCycleStartDay(), profile.getSavingsCycleStartDay());
+        int withdrawalWindowDays = body.savingsWithdrawalWindowDays() == null
+                ? (profile.getSavingsWithdrawalWindowDays() == null ? 30 : profile.getSavingsWithdrawalWindowDays())
+                : body.savingsWithdrawalWindowDays();
+        if (withdrawalWindowDays < 1 || withdrawalWindowDays > 366) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_WITHDRAWAL_WINDOW", "Withdrawal window must be between 1 and 366 days."));
+        }
+        profile.updateSavingsCycle(savingsCyclePeriod, savingsCycleMonth, savingsCycleDay, withdrawalWindowDays);
         BigDecimal loanInterestRate = normalizeInterestRate(body.loanInterestRate(), profile.getLoanInterestRate());
         if (loanInterestRate == null) {
             return ResponseEntity.badRequest()
@@ -933,7 +967,7 @@ class TenantController {
                 .findFirst()
                 .orElse(null);
         if (assignment == null) {
-            return new SaccoOfficialResponse(office, null, null, null, null, null, false);
+            return new SaccoOfficialResponse(office, null, null, null, null, null, false, null, null, false);
         }
         Member member = memberRepository.findById(assignment.getMemberId()).orElse(null);
         boolean validMember = member != null && assignment.getTenantId().equals(member.getTenantId());
@@ -942,6 +976,9 @@ class TenantController {
                 assignment.getMemberId(),
                 member == null ? "" : member.getMembershipNo(),
                 member == null ? "" : member.getFullName(),
+                member == null ? "" : member.getEmail(),
+                member == null ? "" : member.getPhone(),
+                member != null && member.getLinkedUserId() != null,
                 assignment.getAssignedAt(),
                 assignment.getUpdatedAt(),
                 validMember);
@@ -1124,6 +1161,9 @@ class TenantController {
             String memberId,
             String membershipNo,
             String fullName,
+            String email,
+            String phone,
+            boolean staffAccessGranted,
             java.time.Instant assignedAt,
             java.time.Instant updatedAt,
             boolean validMember) {
@@ -1142,6 +1182,10 @@ class TenantController {
             Integer membershipCalendarStartMonth,
             Integer membershipCalendarStartDay,
             BigDecimal membershipSubscriptionAmount,
+            String savingsCyclePeriod,
+            Integer savingsCycleStartMonth,
+            Integer savingsCycleStartDay,
+            Integer savingsWithdrawalWindowDays,
             BigDecimal loanInterestRate,
             String logoDataUrl) {
     }

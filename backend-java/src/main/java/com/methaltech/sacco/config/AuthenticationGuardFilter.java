@@ -29,6 +29,7 @@ class AuthenticationGuardFilter extends OncePerRequestFilter {
 
     private static final Set<String> PUBLIC_ENDPOINTS = Set.of(
             "GET /api/v1/health",
+            "GET /api/v1/mobile-app-policy",
             "POST /api/v1/auth/login",
             "POST /api/v1/auth/first-login-password",
             "POST /api/v1/auth/mfa/verify",
@@ -39,7 +40,8 @@ class AuthenticationGuardFilter extends OncePerRequestFilter {
             "POST /api/v1/member-auth/password-reset/confirm",
             "POST /api/v1/integrations/mobile-money/callback",
             "POST /api/v1/integrations/mobile-money/subscription-callback",
-            "POST /api/v1/public/sacco-registrations");
+            "POST /api/v1/public/sacco-registrations",
+            "POST /api/v1/public/group-registrations");
 
     private final AuthService authService;
     private final MemberAuthService memberAuthService;
@@ -64,9 +66,6 @@ class AuthenticationGuardFilter extends OncePerRequestFilter {
     }
 
     private boolean isPublic(String method, String uri) {
-        if (uri.startsWith("/api/v1/public/")) {
-            return true;
-        }
         return PUBLIC_ENDPOINTS.contains(method.toUpperCase() + " " + uri);
     }
 

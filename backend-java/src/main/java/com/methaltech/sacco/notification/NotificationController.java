@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,8 @@ class NotificationController {
     private final AfroSmsCreditService afroSmsCreditService;
     private final SmsWalletService smsWalletService;
     private final PlatformSmsBroadcastService platformSmsBroadcastService;
+    private final SaccoSmsBroadcastService saccoSmsBroadcastService;
+    private final SaccoSmsScheduleService saccoSmsScheduleService;
 
     @GetMapping("/deliveries")
     ResponseEntity<?> listDeliveries(
@@ -511,7 +514,10 @@ class NotificationController {
                 ? "SACCO message"
                 : body.title().trim();
         String message = body == null || body.body() == null ? "" : body.body().trim();
-        if (message.isBlank()) {
+        String mode = body == null || body.mode() == null || body.mode().isBlank()
+                ? "custom"
+                : body.mode().trim().toLowerCase();
+        if (message.isBlank() && !"account_status".equals(mode)) {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "SMS_MESSAGE_REQUIRED", "Enter the SMS message to send."));
         }
@@ -519,38 +525,80 @@ class NotificationController {
         List<String> memberIds = body.memberIds() == null
                 ? List.of()
                 : body.memberIds().stream().filter(id -> id != null && !id.isBlank()).map(String::trim).distinct().toList();
-        List<Member> recipients = memberIds.isEmpty()
-                ? memberRepository.findByTenantIdOrderByMembershipNoAsc(tenantId)
-                : memberRepository.findAllById(memberIds).stream()
-                        .filter(member -> tenantId.equals(member.getTenantId()))
-                        .toList();
-        recipients = recipients.stream()
-                .filter(member -> member.getPhone() != null && !member.getPhone().isBlank())
-                .toList();
-        if (recipients.isEmpty()) {
+        if (!Set.of("custom", "account_status").contains(mode)) {
             return ResponseEntity.badRequest()
-                    .body(ApiErrorResponse.of(400, "NO_SMS_RECIPIENTS", "No members with phone numbers were found."));
+                    .body(ApiErrorResponse.of(400, "INVALID_SMS_MODE", "SMS mode must be custom or account_status."));
         }
-
-        int recipientCount = recipients.size();
-        int segmentCount = SmsMessageSegments.count(message);
-        int requiredCredits = recipientCount * segmentCount;
         try {
-            smsWalletService.debit(tenantId, requiredCredits, "SMS-BCAST-" + java.util.UUID.randomUUID(), "SACCO SMS broadcast");
+            if (body.scheduledAt() != null && body.scheduledAt().isAfter(Instant.now().plusSeconds(30))) {
+                SaccoSmsSchedule scheduled = saccoSmsScheduleService.schedule(
+                        tenantId, title, message, mode, memberIds, body.scheduledAt(), currentSession.user().getId());
+                auditService.record(
+                        tenantId,
+                        currentSession.user(),
+                        "Scheduled SMS message \"" + title + "\" for " + scheduled.getScheduledAt(),
+                        "sacco_sms_schedule",
+                        scheduled.getId(),
+                        request.getRemoteAddr());
+                return ResponseEntity.accepted().body(ApiResponse.of(SaccoSmsScheduleResponse.from(scheduled)));
+            }
+            SaccoSmsBroadcastService.SendResult result = saccoSmsBroadcastService.send(
+                    tenantId, memberIds, mode, title, message);
+            auditService.record(
+                    tenantId,
+                    currentSession.user(),
+                    "Sent SMS message \"" + title + "\" to " + result.recipients() + " member(s)",
+                    "sms_wallet",
+                    "broadcast_" + result.recipients(),
+                    request.getRemoteAddr());
+            return ResponseEntity.accepted()
+                    .body(ApiResponse.of(new SmsBroadcastResponse(
+                            result.recipients(), 0, result.creditsUsed(), result.smsBalance())));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "NO_SMS_RECIPIENTS", ex.getMessage()));
         } catch (IllegalStateException ex) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ApiErrorResponse.of(409, "INSUFFICIENT_SMS_BALANCE", ex.getMessage()));
         }
-        List<Notification> sent = notificationService.notifySmsBroadcast(tenantId, recipients, title, message);
-        auditService.record(
-                tenantId,
-                currentSession.user(),
-                "Sent SMS message \"" + title + "\" to " + sent.size() + " member(s)",
-                "sms_wallet",
-                "broadcast_" + sent.size(),
-                request.getRemoteAddr());
-        return ResponseEntity.accepted()
-                .body(ApiResponse.of(new SmsBroadcastResponse(sent.size(), segmentCount, requiredCredits, smsWalletService.balance(tenantId))));
+    }
+
+    @GetMapping("/sms-schedules")
+    ResponseEntity<?> smsSchedules(
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "notifications:manage")) {
+            return authService.permissionRequired("notifications:manage");
+        }
+        String tenantId = currentSession.user().getTenantId();
+        return ResponseEntity.ok(ApiResponse.of(saccoSmsScheduleService.list(tenantId).stream()
+                .map(SaccoSmsScheduleResponse::from)
+                .toList()));
+    }
+
+    @PatchMapping("/sms-schedules/{scheduleId}/cancel")
+    ResponseEntity<?> cancelSmsSchedule(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @PathVariable String scheduleId,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.hasPermission(currentSession.user(), "notifications:manage")) {
+            return authService.permissionRequired("notifications:manage");
+        }
+        try {
+            SaccoSmsSchedule schedule = saccoSmsScheduleService.cancel(currentSession.user().getTenantId(), scheduleId);
+            auditService.record(schedule.getTenantId(), currentSession.user(), "Cancelled scheduled SMS " + schedule.getTitle(),
+                    "sacco_sms_schedule", schedule.getId(), request.getRemoteAddr());
+            return ResponseEntity.ok(ApiResponse.of(SaccoSmsScheduleResponse.from(schedule)));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiErrorResponse.of(404, "SMS_SCHEDULE_NOT_FOUND", exception.getMessage()));
+        } catch (IllegalStateException exception) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "SMS_SCHEDULE_NOT_PENDING", exception.getMessage()));
+        }
     }
 
     @PostMapping("/platform/sms-broadcast")
@@ -621,13 +669,44 @@ class NotificationController {
     record BulkAcknowledgeResponse(int acknowledged) {
     }
 
-    record BroadcastMessageRequest(String tenantId, String title, String body, List<String> memberIds) {
+    record BroadcastMessageRequest(
+            String tenantId,
+            String title,
+            String body,
+            List<String> memberIds,
+            String mode,
+            Instant scheduledAt) {
+        BroadcastMessageRequest(String tenantId, String title, String body, List<String> memberIds) {
+            this(tenantId, title, body, memberIds, "custom", null);
+        }
     }
 
     record BroadcastMessageResponse(int recipients, String title) {
     }
 
     record SmsBroadcastResponse(int recipients, int smsSegments, int smsCreditsUsed, int smsBalance) {
+    }
+
+    record SaccoSmsScheduleResponse(
+            String id,
+            String title,
+            String body,
+            String mode,
+            Instant scheduledAt,
+            String status,
+            int estimatedCredits,
+            int recipients,
+            int creditsUsed,
+            String failureReason,
+            Instant createdAt,
+            Instant sentAt) {
+        static SaccoSmsScheduleResponse from(SaccoSmsSchedule schedule) {
+            return new SaccoSmsScheduleResponse(
+                    schedule.getId(), schedule.getTitle(), schedule.getBody(), schedule.getMessageMode(),
+                    schedule.getScheduledAt(), schedule.getStatus(), schedule.getEstimatedCredits(),
+                    schedule.getRecipients(), schedule.getCreditsUsed(), schedule.getFailureReason(),
+                    schedule.getCreatedAt(), schedule.getSentAt());
+        }
     }
 
     record PlatformSmsBroadcastRequest(boolean allSaccos, List<String> tenantIds, String title, String body) {

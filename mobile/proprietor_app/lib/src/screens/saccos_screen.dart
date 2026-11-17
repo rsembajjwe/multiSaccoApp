@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models.dart';
+import '../platform_repository.dart';
 import '../providers.dart';
 import '../widgets.dart';
 import 'sacco_lifecycle_screen.dart';
@@ -201,17 +202,36 @@ class _TenantCard extends StatelessWidget {
             const SizedBox(height: 14),
             Text(item.healthReason),
             const SizedBox(height: 12),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                StatusPill(item.status),
-                const SizedBox(width: 8),
-                StatusPill(item.subscriptionStatus),
-                const Spacer(),
-                Text(
-                  '${item.onboarding}% setup',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                _LabeledStatus(label: 'SACCO', value: item.status),
+                _LabeledStatus(
+                  label: 'Subscription',
+                  value: item.subscriptionStatus,
+                ),
+                Chip(
+                  avatar: const Icon(Icons.sms_outlined, size: 18),
+                  label: Text(
+                    item.smsBalance == null
+                        ? 'SMS balance unavailable'
+                        : '${item.smsBalance} SMS available',
+                  ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(value: item.onboarding / 100),
+            const SizedBox(height: 6),
+            Text(
+              item.setupMissing.isEmpty && item.onboarding >= 100
+                  ? 'Setup complete (100%)'
+                  : item.setupMissing.isEmpty
+                  ? '${item.onboarding}% setup • Missing-step details require the latest backend.'
+                  : '${item.onboarding}% setup • Still required: ${item.setupMissing.join(', ')}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
             if (canManage) ...[
               const Divider(height: 24),
@@ -241,6 +261,22 @@ class _TenantCard extends StatelessWidget {
         ),
       ),
     ),
+  );
+}
+
+class _LabeledStatus extends StatelessWidget {
+  const _LabeledStatus({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text('$label: ', style: Theme.of(context).textTheme.bodySmall),
+      StatusPill(value),
+    ],
   );
 }
 
@@ -502,6 +538,10 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
           : TextInputType.text,
       decoration: InputDecoration(
         labelText: required ? '$labelText *' : labelText,
+        hintText: phone ? '+256 700 123456' : null,
+        helperText: phone
+            ? 'Use international format (+256…). Officials can sign in with this phone number.'
+            : null,
       ),
     ),
   );
@@ -524,7 +564,7 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
           const SizedBox(height: 10),
           _field(name, 'Full name', required: true),
           _field(email, 'Active email', email: true),
-          _field(phone, 'Active telephone (+country code)', phone: true),
+          _field(phone, 'Active telephone', phone: true),
           DropdownButtonFormField<String>(
             initialValue: deliveryChannel,
             decoration: const InputDecoration(
@@ -588,20 +628,62 @@ class _RegistrationWizardState extends ConsumerState<RegistrationWizard> {
     }
     setState(() => _saving = true);
     try {
-      await ref.read(platformRepositoryProvider).createTenant({
-        'name': _name.text.trim(),
-        'registrationNo': _registration.text.trim(),
-        'district': _district.text.trim(),
-        'parish': _parish.text.trim(),
-        'contactNumber': _phone.text.trim(),
-        'country': 'Uganda',
-        'currencyCode': 'UGX',
-        'currencyDigits': 0,
-        'packageId': _package,
-        'paymentStatus': _paid ? 'paid' : 'unpaid',
-        'officials': officials,
-      });
-      if (mounted) Navigator.pop(context, true);
+      final createdTenant = await ref
+          .read(platformRepositoryProvider)
+          .createTenant({
+            'name': _name.text.trim(),
+            'registrationNo': _registration.text.trim(),
+            'district': _district.text.trim(),
+            'parish': _parish.text.trim(),
+            'contactNumber': _phone.text.trim(),
+            'country': 'Uganda',
+            'currencyCode': 'UGX',
+            'currencyDigits': 0,
+            'packageId': _package,
+            'paymentStatus': _paid ? 'paid' : 'unpaid',
+            'officials': officials,
+          });
+      await ref
+          .read(platformRepositoryProvider)
+          .ensureOfficialAssignments(
+            stringValue(createdTenant['id']),
+            officials,
+          );
+      if (mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('SACCO created and invitations sent'),
+            content: const Text(
+              'Each official was sent a temporary password using the selected email or SMS channel. If an invitation is not received, open Manage SACCO and use Resend by email or Resend by SMS.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        );
+        if (mounted) Navigator.pop(context, true);
+      }
+    } on OfficialAssignmentException catch (error) {
+      if (mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('SACCO created - assignment required'),
+            content: Text('$error'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        );
+        if (mounted) Navigator.pop(context, true);
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(

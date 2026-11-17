@@ -81,7 +81,7 @@ public class StaffOnboardingService {
     }
 
     @Transactional
-    User reissueTemporaryPassword(User user, String channel) {
+    public User reissueTemporaryPassword(User user, String channel) {
         String temporaryPassword = temporaryPassword();
         PasswordHasher.PasswordHash password = passwordHasher.hash(temporaryPassword);
         user.setTemporaryPassword(password.hash(), password.salt(), channel);

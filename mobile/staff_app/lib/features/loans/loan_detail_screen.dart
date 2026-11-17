@@ -8,6 +8,16 @@ import '../../domain/models.dart';
 import '../../providers.dart';
 import 'loan_schedule_screen.dart';
 
+bool loanHasBeenDisbursed(Loan loan) => loan.disbursedAt.trim().isNotEmpty;
+
+String loanHistoryOriginLabel(Loan loan) => loanHasBeenDisbursed(loan)
+    ? 'Loan disbursed - Total payable ${Fmt.money(loan.totalPayable)}'
+    : 'Loan application recorded - Awaiting disbursement';
+
+String loanEmptyHistoryMessage(Loan loan) => loanHasBeenDisbursed(loan)
+    ? 'No repayments recorded after disbursement.'
+    : 'Repayments begin after loan disbursement.';
+
 /// A single loan with its full terms and complete payment (repayment) history.
 class LoanDetailScreen extends ConsumerStatefulWidget {
   const LoanDetailScreen({super.key, required this.loan});
@@ -259,23 +269,24 @@ class _LoanDetailScreenState extends ConsumerState<LoanDetailScreen> {
                 ),
               ),
               data: (repayments) {
-                if (repayments.isEmpty) {
-                  return const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Center(
-                          child:
-                              Text('No payments recorded on this loan yet.')),
-                    ),
-                  );
-                }
+                final chronological = [...repayments]
+                  ..sort((a, b) => a.receivedAt.compareTo(b.receivedAt));
                 return Column(
-                  children: repayments
-                      .map((r) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: _RepaymentTile(repayment: r),
-                          ))
-                      .toList(),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _LoanDisbursementTile(loan: loan),
+                    ),
+                    if (chronological.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Text(loanEmptyHistoryMessage(loan)),
+                      ),
+                    ...chronological.map((r) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _RepaymentTile(repayment: r),
+                        )),
+                  ],
                 );
               },
             ),
@@ -915,6 +926,55 @@ class _RepaymentTile extends StatelessWidget {
   }
 }
 
+class _LoanDisbursementTile extends StatelessWidget {
+  const _LoanDisbursementTile({required this.loan});
+
+  final Loan loan;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final date = loanHasBeenDisbursed(loan) ? loan.disbursedAt : loan.createdAt;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.account_balance_outlined,
+                  color: scheme.onPrimaryContainer, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(Fmt.dateTime(date),
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(
+                    loanHistoryOriginLabel(loan),
+                    style:
+                        TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            Text(Fmt.money(loan.amount),
+                style: const TextStyle(fontWeight: FontWeight.w800)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _LoanWarningBanner extends StatelessWidget {
   const _LoanWarningBanner({
     required this.icon,
@@ -970,6 +1030,7 @@ class _LoanDecisionSheetState extends ConsumerState<_LoanDecisionSheet> {
   bool _treasurer = false;
   bool _committee = false;
   bool _busy = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -980,6 +1041,7 @@ class _LoanDecisionSheetState extends ConsumerState<_LoanDecisionSheet> {
   }
 
   Future<void> _submit(String status) async {
+    setState(() => _errorMessage = null);
     final approving = status == 'approved';
     if (approving &&
         !(_chairperson || _secretary || _treasurer || _committee)) {
@@ -1021,8 +1083,7 @@ class _LoanDecisionSheetState extends ConsumerState<_LoanDecisionSheet> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    if (mounted) setState(() => _errorMessage = message);
   }
 
   @override
@@ -1050,6 +1111,24 @@ class _LoanDecisionSheetState extends ConsumerState<_LoanDecisionSheet> {
             Text(
               '${Fmt.label(widget.loan.product)} · ${Fmt.money(widget.loan.amount)}',
             ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  _errorMessage!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             TextFormField(
               controller: _reference,

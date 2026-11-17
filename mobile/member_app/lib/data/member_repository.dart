@@ -94,16 +94,19 @@ class MemberRepository {
     return rows.map(FundBalance.fromJson).toList();
   }
 
-  Future<void> requestPasswordReset({
+  Future<String?> requestPasswordReset({
     String? saccoCode,
     required String identifier,
     String channel = 'sms',
   }) async {
-    await _api.post(ApiPaths.passwordResetRequest, {
-      if (saccoCode != null && saccoCode.isNotEmpty) 'saccoCode': saccoCode,
-      'identifier': identifier,
+    final normalizedSaccoCode = saccoCode?.trim() ?? '';
+    final data = await _api.post(ApiPaths.passwordResetRequest, {
+      if (normalizedSaccoCode.isNotEmpty) 'saccoCode': normalizedSaccoCode,
+      'identifier': identifier.trim(),
       'channel': channel,
     });
+    final destination = '${data['destination'] ?? ''}'.trim();
+    return destination.isEmpty ? null : destination;
   }
 
   Future<void> confirmPasswordReset({
@@ -111,7 +114,7 @@ class MemberRepository {
     required String newPassword,
   }) async {
     await _api.post(ApiPaths.passwordResetConfirm, {
-      'token': token,
+      'token': token.trim(),
       'newPassword': newPassword,
     });
   }
@@ -131,7 +134,8 @@ class MemberRepository {
     await _api.post(ApiPaths.mobileComplaints, {
       'category': category,
       'subject': subject,
-      if (description != null && description.isNotEmpty) 'description': description,
+      if (description != null && description.isNotEmpty)
+        'description': description,
       'priority': priority,
     });
   }

@@ -38,10 +38,12 @@ deploy/secrets/
 .release/
 *.log
 *.apk
+mobile/*/android/build/
 tmp-*.log
 .idea/
 .vscode/
 .local-pids/
+.local-deploy/
 .runtime/
 .tmp/
 .tmp-*

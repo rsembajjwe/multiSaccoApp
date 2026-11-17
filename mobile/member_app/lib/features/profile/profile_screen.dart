@@ -73,6 +73,16 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 12),
             Card(
               child: ListTile(
+                leading: const Icon(Icons.sms_outlined),
+                title: const Text('Personal SMS'),
+                subtitle: const Text('Buy credits and message selected phone contacts'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/sms'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
                 leading: const Icon(Icons.card_membership_outlined),
                 title: const Text('My subscription'),
                 subtitle: const Text('View status and pay dues'),

@@ -3,7 +3,12 @@ package com.methaltech.sacco.identity;
 import com.methaltech.sacco.api.ApiErrorResponse;
 import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.security.PasswordHasher;
+import com.methaltech.sacco.security.PhoneNumberNormalizer;
+import com.methaltech.sacco.security.ContactMasker;
 import com.methaltech.sacco.security.TokenGenerator;
+import com.methaltech.sacco.notification.OnboardingNotificationService;
+import com.methaltech.sacco.notification.SmsMessageSegments;
+import com.methaltech.sacco.notification.SmsWalletService;
 import com.methaltech.sacco.subscription.SubscriptionRepository;
 import com.methaltech.sacco.tenant.Tenant;
 import com.methaltech.sacco.tenant.TenantRepository;
@@ -22,6 +27,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -52,6 +58,9 @@ class AuthController {
     private final DemoCredentialPolicy demoCredentialPolicy;
     private final PlatformSecurityPolicyService platformSecurityPolicyService;
     private final SubscriptionRepository subscriptionRepository;
+    private final OnboardingNotificationService onboardingNotificationService;
+    private final SmsWalletService smsWalletService;
+    private final SelfContactService selfContactService;
 
     AuthController(
             UserRepository userRepository,
@@ -70,7 +79,10 @@ class AuthController {
             LoginAttemptService loginAttemptService,
             DemoCredentialPolicy demoCredentialPolicy,
             PlatformSecurityPolicyService platformSecurityPolicyService,
-            SubscriptionRepository subscriptionRepository) {
+            SubscriptionRepository subscriptionRepository,
+            OnboardingNotificationService onboardingNotificationService,
+            SmsWalletService smsWalletService,
+            SelfContactService selfContactService) {
         this.userRepository = userRepository;
         this.authSessionRepository = authSessionRepository;
         this.passwordResetRequestRepository = passwordResetRequestRepository;
@@ -88,6 +100,9 @@ class AuthController {
         this.demoCredentialPolicy = demoCredentialPolicy;
         this.platformSecurityPolicyService = platformSecurityPolicyService;
         this.subscriptionRepository = subscriptionRepository;
+        this.onboardingNotificationService = onboardingNotificationService;
+        this.smsWalletService = smsWalletService;
+        this.selfContactService = selfContactService;
     }
 
     @PostMapping("/login")
@@ -166,7 +181,7 @@ class AuthController {
     ResponseEntity<?> changeFirstLoginPassword(
             @Valid @RequestBody FirstLoginPasswordRequest body,
             HttpServletRequest request) {
-        String identifier = body.username().trim();
+        String identifier = PhoneNumberNormalizer.normalizeUgandan(body.username());
         Tenant tenant = resolveTenant(body.saccoCode());
         String rateLimitKey = "first-login:" + request.getRemoteAddr() + ":" + (tenant == null ? "invalid" : tenant.getId());
         if (tenant == null || loginAttemptService.isLimited(rateLimitKey)) {
@@ -342,8 +357,8 @@ class AuthController {
 
     private String loginIdentifier(LoginRequest request) {
         String username = request.username() == null ? "" : request.username().trim();
-        if (!username.isBlank()) return username;
-        return request.email() == null ? "" : request.email().trim();
+        if (!username.isBlank()) return PhoneNumberNormalizer.normalizeUgandan(username);
+        return request.email() == null ? "" : PhoneNumberNormalizer.normalizeUgandan(request.email());
     }
 
     private Tenant resolveTenant(String saccoCode) {
@@ -362,8 +377,11 @@ class AuthController {
         if (identifier.contains("@")) {
             return userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), identifier);
         }
-        return userRepository.findByTenantIdAndPhone(tenant.getId(), identifier)
-                .or(() -> userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), identifier));
+        for (String variant : PhoneNumberNormalizer.loginVariants(identifier)) {
+            java.util.Optional<User> user = userRepository.findByTenantIdAndPhone(tenant.getId(), variant);
+            if (user.isPresent()) return user;
+        }
+        return userRepository.findByTenantIdAndEmailIgnoreCase(tenant.getId(), identifier);
     }
 
     private boolean saccoCanOperate(Tenant tenant) {
@@ -432,6 +450,39 @@ class AuthController {
                 currentSession.session().getExpiresAt())));
     }
 
+    @PatchMapping("/me/contact")
+    ResponseEntity<?> updateOwnContact(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody UpdateOwnContactRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+
+        try {
+            User saved = selfContactService.update(currentSession.user(), body.email(), body.phone());
+            auditService.record(
+                    saved.getTenantId(),
+                    saved,
+                    "Updated own email address and telephone number",
+                    "user_contact",
+                    saved.getId(),
+                    request.getRemoteAddr());
+            TenantResponse tenant = tenantService.findById(saved.getTenantId()).orElse(null);
+            UserAccessResponse access = accessFor(saved);
+            return ResponseEntity.ok(ApiResponse.of(new CurrentUserResponse(
+                    UserResponse.from(saved),
+                    tenant,
+                    access.roleIds(),
+                    access.roleNames(),
+                    access.permissionIds(),
+                    currentSession.session().getExpiresAt())));
+        } catch (SelfContactService.ContactUpdateException exception) {
+            HttpStatus status = exception.code().endsWith("_IN_USE") ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
+            return ResponseEntity.status(status)
+                    .body(ApiErrorResponse.of(status.value(), exception.code(), exception.getMessage()));
+        }
+    }
+
     @GetMapping("/security-summary")
     ResponseEntity<?> securitySummary(@RequestHeader(name = "Authorization", required = false) String authorization) {
         AuthService.CurrentSession currentSession = authService.currentSession(authorization);
@@ -492,14 +543,72 @@ class AuthController {
 
     @PostMapping("/password-reset/request")
     ResponseEntity<?> requestPasswordReset(@Valid @RequestBody PasswordResetRequestBody body, HttpServletRequest request) {
-        User user = userRepository.findByEmailIgnoreCase(body.email().trim())
+        String channel = "sms".equalsIgnoreCase(body.channel()) ? "sms" : "email";
+        Tenant tenant = resolveTenant(body.saccoCode());
+        String identifier = body.identifier() == null || body.identifier().isBlank() ? body.email() : body.identifier();
+        String normalizedIdentifier = PhoneNumberNormalizer.normalizeUgandan(identifier == null ? "" : identifier);
+        User user = findPasswordResetUser(tenant, normalizedIdentifier)
                 .filter(candidate -> "active".equals(candidate.getStatus()))
                 .orElse(null);
         String resetToken = null;
+        String destination = null;
         Instant expiresAt = Instant.now().plus(Duration.ofMinutes(30));
 
         if (user != null) {
-            resetToken = tokenGenerator.createToken();
+            String recipient = "sms".equals(channel) ? user.getPhone() : user.getEmail();
+            if (recipient == null || recipient.isBlank()) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "RESET_CHANNEL_UNAVAILABLE",
+                                "This account has no " + ("sms".equals(channel) ? "phone number" : "email address") + " configured."));
+            }
+            resetToken = tokenGenerator.createPasswordResetCode();
+            destination = ContactMasker.mask(recipient);
+            int requiredCredits = "sms".equals(channel) ? SmsMessageSegments.count(
+                    "Your Tereka Online password reset code is " + resetToken + ". It expires in 30 minutes.") : 0;
+            boolean useMainSmsAccount = "sms".equals(channel) && authService.isPlatform(user);
+            OnboardingNotificationService.SmsAccountCapacity mainSmsCapacity = null;
+            if (useMainSmsAccount) {
+                try {
+                    mainSmsCapacity = onboardingNotificationService.platformSmsCapacity(smsWalletService.smsRate());
+                } catch (OnboardingNotificationService.OnboardingDeliveryException exception) {
+                    return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                            .body(ApiErrorResponse.of(502, "SMS_BALANCE_UNAVAILABLE", exception.getMessage()));
+                }
+            }
+            int balance = !"sms".equals(channel)
+                    ? 0
+                    : useMainSmsAccount
+                            ? mainSmsCapacity.availableMessages()
+                            : smsWalletService.balance(user.getTenantId());
+            if (requiredCredits > balance) {
+                String balanceMessage = useMainSmsAccount
+                        ? "The main SMS account has UGX " + mainSmsCapacity.balance().stripTrailingZeros().toPlainString()
+                                + ", which covers " + balance + " SMS message(s) at UGX "
+                                + mainSmsCapacity.unitPrice().stripTrailingZeros().toPlainString() + " each."
+                        : "The SACCO has " + balance + " SMS credit(s).";
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(ApiErrorResponse.of(409, "INSUFFICIENT_SMS_BALANCE",
+                                balanceMessage + " " + requiredCredits
+                                        + " SMS credit(s) are required. Choose email or add SMS funds."));
+            }
+            String smsReference = "PWD-RESET-" + UUID.randomUUID();
+            if (requiredCredits > 0 && !useMainSmsAccount) {
+                smsWalletService.debit(user.getTenantId(), requiredCredits, smsReference,
+                        "SACCO staff password reset SMS");
+            }
+            try {
+                String organizationName = tenantService.findById(user.getTenantId())
+                        .map(TenantResponse::name).orElse("Your SACCO");
+                onboardingNotificationService.sendPasswordResetCode(
+                        channel, recipient, user.getFullName(), organizationName, resetToken);
+            } catch (OnboardingNotificationService.OnboardingDeliveryException exception) {
+                if (requiredCredits > 0 && !useMainSmsAccount) {
+                    smsWalletService.refund(user.getTenantId(), requiredCredits, smsReference,
+                            "Refund for failed password reset SMS");
+                }
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                        .body(ApiErrorResponse.of(502, "RESET_DELIVERY_FAILED", exception.getMessage()));
+            }
             PasswordResetRequest resetRequest = passwordResetRequestRepository.save(new PasswordResetRequest(
                     "reset_" + UUID.randomUUID(),
                     user.getTenantId(),
@@ -518,7 +627,14 @@ class AuthController {
         }
 
         String responseToken = demoCredentialPolicy.demoLoginsEnabled() ? resetToken : null;
-        return ResponseEntity.ok(ApiResponse.of(new PasswordResetRequestResponse(true, responseToken, responseToken == null ? null : expiresAt)));
+        return ResponseEntity.ok(ApiResponse.of(new PasswordResetRequestResponse(
+                true, responseToken, responseToken == null ? null : expiresAt, channel, destination)));
+    }
+
+    private java.util.Optional<User> findPasswordResetUser(Tenant tenant, String identifier) {
+        if (tenant != null) return findLoginUser(tenant, identifier);
+        if (identifier.contains("@")) return userRepository.findByEmailIgnoreCase(identifier);
+        return java.util.Optional.empty();
     }
 
     @PostMapping("/password-reset/confirm")
@@ -530,7 +646,10 @@ class AuthController {
         }
 
         PasswordResetRequest resetRequest = passwordResetRequestRepository
-                .findByTokenHashAndStatusAndExpiresAtAfter(tokenGenerator.hashToken(body.token().trim()), "pending", Instant.now())
+                .findByTokenHashAndStatusAndExpiresAtAfter(
+                        tokenGenerator.hashToken(tokenGenerator.normalizePasswordResetCode(body.token())),
+                        "pending",
+                        Instant.now())
                 .orElse(null);
         if (resetRequest == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -591,6 +710,9 @@ class AuthController {
     record CurrentUserResponse(UserResponse user, TenantResponse tenant, List<String> roleIds, List<String> roleNames, List<String> permissionIds, Instant expiresAt) {
     }
 
+    record UpdateOwnContactRequest(@NotBlank @Email String email, @NotBlank String phone) {
+    }
+
     record UserAccessResponse(List<String> roleIds, List<String> roleNames, List<String> permissionIds) {
     }
 
@@ -626,10 +748,15 @@ class AuthController {
     record SessionExtensionResponse(Instant expiresAt) {
     }
 
-    record PasswordResetRequestBody(@Email @NotBlank String email) {
+    record PasswordResetRequestBody(String saccoCode, String identifier, @Email String email, String channel) {
     }
 
-    record PasswordResetRequestResponse(boolean accepted, String resetToken, Instant expiresAt) {
+    record PasswordResetRequestResponse(
+            boolean accepted,
+            String resetToken,
+            Instant expiresAt,
+            String channel,
+            String destination) {
     }
 
     record PasswordResetConfirmRequest(@NotBlank String token, @NotBlank String newPassword) {

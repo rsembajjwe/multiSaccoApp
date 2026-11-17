@@ -6,6 +6,8 @@ import '../domain/models.dart';
 
 import '../core/auth_events.dart';
 import '../core/config.dart';
+import '../core/offline_state.dart';
+import 'offline_read_cache.dart';
 import 'push_service.dart';
 import 'session_store.dart';
 
@@ -14,7 +16,9 @@ import 'session_store.dart';
 class ApiClient {
   static const _requestTokenKey = 'staffSessionToken';
 
-  ApiClient(this._session, this._push, {Dio? dio}) : _dio = dio ?? Dio() {
+  ApiClient(this._session, this._push, {Dio? dio, StaffReadCache? readCache})
+      : _dio = dio ?? Dio(),
+        _readCache = readCache ?? StaffReadCache(_session) {
     _dio.options
       ..baseUrl = AppConfig.baseUrl
       ..connectTimeout = const Duration(seconds: 15)
@@ -46,6 +50,7 @@ class ApiClient {
               final saccoCode = await _session.readSacco();
               if (saccoCode != null && saccoCode.isNotEmpty) {
                 await _push.unsubscribeStaff(saccoCode);
+                await _readCache.clearTenant(saccoCode);
               }
               await _session.clear();
               sessionExpiredNotifier.value = true;
@@ -60,6 +65,7 @@ class ApiClient {
   final Dio _dio;
   final SessionStore _session;
   final StaffPushTopics _push;
+  final StaffReadCache _readCache;
   int _idempotencySequence = 0;
 
   Future<Map<String, dynamic>> post(
@@ -68,9 +74,10 @@ class ApiClient {
     return _envelope(r.data);
   }
 
-  Future<Map<String, dynamic>> get(String path) async {
-    final r = await _guard(() => _dio.get<dynamic>(path));
-    return _envelope(r.data);
+  Future<Map<String, dynamic>> get(String path,
+      {Map<String, dynamic>? query}) async {
+    final data = await _getData(path, query: query);
+    return _envelope(data);
   }
 
   /// Fetches raw bytes (e.g. a document/image) with its content type.
@@ -83,9 +90,7 @@ class ApiClient {
 
   Future<List<Map<String, dynamic>>> getList(String path,
       {Map<String, dynamic>? query}) async {
-    final r =
-        await _guard(() => _dio.get<dynamic>(path, queryParameters: query));
-    final d = r.data;
+    final d = await _getData(path, query: query);
     final list = d is Map<String, dynamic> ? d['data'] : d;
     return list is List
         ? list.whereType<Map<String, dynamic>>().toList()
@@ -96,8 +101,7 @@ class ApiClient {
   Future<PageResult<Map<String, dynamic>>> getPage(String path,
       {int page = 0, int size = 20, Map<String, dynamic>? query}) async {
     final q = <String, dynamic>{'page': page, 'size': size, ...?query};
-    final r = await _guard(() => _dio.get<dynamic>(path, queryParameters: q));
-    final d = r.data;
+    final d = await _getData(path, query: q);
     final rows = (d is Map && d['data'] is List)
         ? (d['data'] as List).whereType<Map<String, dynamic>>().toList()
         : <Map<String, dynamic>>[];
@@ -133,6 +137,30 @@ class ApiClient {
       return await call();
     } on DioException catch (e) {
       throw _translate(e);
+    }
+  }
+
+  Future<dynamic> _getData(
+    String path, {
+    Map<String, dynamic>? query,
+  }) async {
+    try {
+      final response = await _dio.get<dynamic>(path, queryParameters: query);
+      await _readCache.write(path, query, response.data);
+      offlineReadNotifier.value = null;
+      return response.data;
+    } on DioException catch (error) {
+      if (_isOfflineFailure(error)) {
+        final cached = await _readCache.read(path, query);
+        if (cached != null) {
+          offlineReadNotifier.value = OfflineReadState(
+            path: path,
+            cachedAt: cached.cachedAt,
+          );
+          return cached.data;
+        }
+      }
+      throw _translate(error);
     }
   }
 
@@ -176,6 +204,14 @@ class ApiClient {
       method == 'PATCH' ||
       method == 'PUT' ||
       method == 'DELETE';
+
+  bool _isOfflineFailure(DioException error) =>
+      error.response == null &&
+      (error.type == DioExceptionType.connectionError ||
+          error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout ||
+          error.type == DioExceptionType.unknown);
 
   bool _isAuthPath(String path) =>
       path.contains('/auth/login') || path.contains('/auth/mfa/');

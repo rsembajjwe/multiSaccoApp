@@ -1,5 +1,6 @@
 package com.methaltech.sacco.chat;
 
+import com.methaltech.sacco.PostgresIntegrationTest;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
@@ -23,7 +24,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @AutoConfigureMockMvc
 @SpringBootTest(properties = "sacco.rate-limit.enabled=false")
-class ChatControllerTest {
+class ChatControllerTest extends PostgresIntegrationTest {
 
     private static final String BACKFILLED_THREAD = "chat_complaint_green_0001";
 

@@ -1,5 +1,6 @@
 package com.methaltech.sacco.accounting;
 
+import com.methaltech.sacco.PostgresIntegrationTest;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -27,7 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
         "sacco.integrations.mobile-money.require-signed-callbacks=true",
         "sacco.rate-limit.enabled=false"
 })
-class MobileMoneyCallbackSignatureTest {
+class MobileMoneyCallbackSignatureTest extends PostgresIntegrationTest {
 
     private static final String SECRET = "test_shared_secret_123";
 

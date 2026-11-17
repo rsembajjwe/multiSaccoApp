@@ -1,5 +1,6 @@
 package com.methaltech.sacco.chat;
 
+import com.methaltech.sacco.PostgresIntegrationTest;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -22,7 +23,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @AutoConfigureMockMvc
 @SpringBootTest(properties = "sacco.rate-limit.enabled=false")
-class PlatformSupportChatFlowTest {
+class PlatformSupportChatFlowTest extends PostgresIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;

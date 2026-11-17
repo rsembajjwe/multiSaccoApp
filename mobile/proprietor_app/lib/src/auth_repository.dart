@@ -40,6 +40,32 @@ class AuthRepository {
     });
   }
 
+  Future<String?> requestPasswordReset({
+    required String identifier,
+    required String channel,
+  }) async {
+    final normalizedIdentifier = identifier.trim();
+    final data = await _api.post('/auth/password-reset/request', {
+      'saccoCode': 'PLATFORM',
+      'identifier': normalizedIdentifier,
+      if (channel == 'email' && normalizedIdentifier.contains('@'))
+        'email': normalizedIdentifier,
+      'channel': channel,
+    });
+    final destination = '${data['destination'] ?? ''}'.trim();
+    return destination.isEmpty ? null : destination;
+  }
+
+  Future<void> confirmPasswordReset({
+    required String token,
+    required String newPassword,
+  }) async {
+    await _api.post('/auth/password-reset/confirm', {
+      'token': token.trim(),
+      'newPassword': newPassword,
+    });
+  }
+
   Future<PlatformSession> verifyMfa({
     required String challengeId,
     required String code,
@@ -61,6 +87,17 @@ class AuthRepository {
       );
     }
     return session;
+  }
+
+  Future<PlatformSession> updateContact({
+    required String email,
+    required String phone,
+  }) async {
+    final data = await _api.patch('/auth/me/contact', {
+      'email': email.trim(),
+      'phone': phone.trim(),
+    });
+    return PlatformSession.fromJson(data);
   }
 
   Future<bool> hasSession() async =>

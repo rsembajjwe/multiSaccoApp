@@ -12,6 +12,7 @@ import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.loan.Loan;
 import com.methaltech.sacco.loan.LoanRepository;
+import com.methaltech.sacco.loan.LoanGuaranteeLiabilityService;
 import com.methaltech.sacco.loan.LoanRepayment;
 import com.methaltech.sacco.loan.LoanRepaymentRepository;
 import com.methaltech.sacco.member.Member;
@@ -23,6 +24,7 @@ import com.methaltech.sacco.tenant.TenantMoneyFormatter;
 import com.methaltech.sacco.tenant.CollectionMode;
 import com.methaltech.sacco.tenant.TenantResponse;
 import com.methaltech.sacco.tenant.TenantService;
+import com.methaltech.sacco.tenant.SavingsWithdrawalPolicyService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -100,6 +102,8 @@ class FinancialTransactionController {
     private final SubscriptionAccessService subscriptionAccessService;
     private final MobileMoneyFinancialDecisionService mobileMoneyFinancialDecisionService;
     private final TreasuryCashPostingService treasuryCashPostingService;
+    private final SavingsWithdrawalPolicyService savingsWithdrawalPolicyService;
+    private final LoanGuaranteeLiabilityService loanGuaranteeLiabilityService;
 
     FinancialTransactionController(
             FinancialTransactionRepository transactionRepository,
@@ -117,7 +121,9 @@ class FinancialTransactionController {
             NotificationService notificationService,
             SubscriptionAccessService subscriptionAccessService,
             MobileMoneyFinancialDecisionService mobileMoneyFinancialDecisionService,
-            TreasuryCashPostingService treasuryCashPostingService) {
+            TreasuryCashPostingService treasuryCashPostingService,
+            SavingsWithdrawalPolicyService savingsWithdrawalPolicyService,
+            LoanGuaranteeLiabilityService loanGuaranteeLiabilityService) {
         this.transactionRepository = transactionRepository;
         this.memberRepository = memberRepository;
         this.branchRepository = branchRepository;
@@ -134,6 +140,8 @@ class FinancialTransactionController {
         this.subscriptionAccessService = subscriptionAccessService;
         this.mobileMoneyFinancialDecisionService = mobileMoneyFinancialDecisionService;
         this.treasuryCashPostingService = treasuryCashPostingService;
+        this.savingsWithdrawalPolicyService = savingsWithdrawalPolicyService;
+        this.loanGuaranteeLiabilityService = loanGuaranteeLiabilityService;
     }
 
     /** A custom contribution type ({@code <fundCode>_contribution}) whose fund is configured and active. */
@@ -259,9 +267,11 @@ class FinancialTransactionController {
             return ResponseEntity.badRequest()
                     .body(ApiErrorResponse.of(400, "INVALID_PAYMENT_CHANNEL", "Unsupported payment channel."));
         }
-        if (!"withdrawal".equals(type)) {
-            ResponseEntity<?> memberAccess = memberDepositAccessCheck(member);
-            if (memberAccess != null) return memberAccess;
+        ResponseEntity<?> memberAccess = memberPostingAccessCheck(member);
+        if (memberAccess != null) return memberAccess;
+        if ("withdrawal".equals(type)) {
+            ResponseEntity<?> withdrawalAccess = withdrawalAccessCheck(tenantId);
+            if (withdrawalAccess != null) return withdrawalAccess;
         }
 
         BigDecimal amount = Money.normalize(body.amount());
@@ -397,6 +407,27 @@ class FinancialTransactionController {
         if (access.allowed()) return null;
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiErrorResponse.of(403, access.code(), access.message()));
+    }
+
+    private ResponseEntity<?> memberPostingAccessCheck(Member member) {
+        if (!isActiveForPosting(member)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "MEMBER_NOT_ACTIVE",
+                            "Transactions cannot be posted for an inactive, suspended, exited, or rejected member."));
+        }
+        return memberDepositAccessCheck(member);
+    }
+
+    static boolean isActiveForPosting(Member member) {
+        return member != null && "active".equalsIgnoreCase(member.getStatus());
+    }
+
+    private ResponseEntity<?> withdrawalAccessCheck(String tenantId) {
+        SavingsWithdrawalPolicyService.WithdrawalWindow window = savingsWithdrawalPolicyService.current(tenantId);
+        if (window.allowed()) return null;
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiErrorResponse.of(409, "SAVINGS_WITHDRAWAL_WINDOW_CLOSED",
+                        "Annual savings withdrawals are closed. The next window opens on " + window.nextOpensOn() + "."));
     }
 
     @GetMapping("/opening-balances/import-template")
@@ -684,6 +715,12 @@ class FinancialTransactionController {
             FinancialTransaction transaction,
             Member member,
             AuthService.CurrentSession currentSession) {
+        ResponseEntity<?> memberAccess = memberPostingAccessCheck(member);
+        if (memberAccess != null) return memberAccess;
+        if ("withdrawal".equals(transaction.getType())) {
+            ResponseEntity<?> withdrawalAccess = withdrawalAccessCheck(transaction.getTenantId());
+            if (withdrawalAccess != null) return withdrawalAccess;
+        }
         ResponseEntity<?> channelCheck = ensureCollectionChannelAllowed(transaction.getTenantId(), transaction.getChannel());
         if (channelCheck != null) return channelCheck;
         Instant postingDate = Instant.now();
@@ -694,9 +731,17 @@ class FinancialTransactionController {
                             "ACCOUNTING_PERIOD_CLOSED",
                             "Accounting period " + periodService.periodKey(postingDate) + " is closed."));
         }
-        if ("withdrawal".equals(transaction.getType()) && !member.hasEnoughSavings(transaction.getAmount())) {
+        if ("withdrawal".equals(transaction.getType())
+                && member.getAvailableSavings().compareTo(transaction.getAmount()) < 0) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(ApiErrorResponse.of(409, "INSUFFICIENT_SAVINGS", "Savings balance is too low for this withdrawal."));
+                    .body(ApiErrorResponse.of(409, "INSUFFICIENT_SAVINGS",
+                            "This withdrawal exceeds the member's available savings."));
+        }
+        if ("withdrawal".equals(transaction.getType())
+                && loanGuaranteeLiabilityService.withdrawableSavings(member).compareTo(transaction.getAmount()) < 0) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "INSUFFICIENT_WITHDRAWABLE_SAVINGS",
+                            "This withdrawal exceeds savings available after loan collateral and guarantee liabilities."));
         }
         if ("loan_repayment".equals(transaction.getType())) {
             BigDecimal loanBalance = repayableLoanBalance(transaction.getTenantId(), member.getId());

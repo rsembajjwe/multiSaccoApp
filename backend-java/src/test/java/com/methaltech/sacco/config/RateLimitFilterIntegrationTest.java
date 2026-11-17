@@ -1,5 +1,6 @@
 package com.methaltech.sacco.config;
 
+import com.methaltech.sacco.PostgresIntegrationTest;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -23,7 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
         "sacco.rate-limit.window=60s",
         "sacco.rate-limit.auth-per-window=2"
 })
-class RateLimitFilterIntegrationTest {
+class RateLimitFilterIntegrationTest extends PostgresIntegrationTest {
 
     private static final String RESET_BODY = """
             { "email": "nobody@example.com" }

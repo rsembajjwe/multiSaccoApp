@@ -21,6 +21,7 @@ class SaccoLifecycleScreen extends ConsumerStatefulWidget {
 
 class _SaccoLifecycleScreenState extends ConsumerState<SaccoLifecycleScreen> {
   bool _changed = false;
+  String? _resendingOffice;
 
   @override
   Widget build(BuildContext context) {
@@ -148,28 +149,119 @@ class _SaccoLifecycleScreenState extends ConsumerState<SaccoLifecycleScreen> {
               'treasurer',
               'secretary',
             ])
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.badge_outlined),
-                title: Text(label(office)),
-                subtitle: Text(
-                  officialsByOffice[office]?.fullName.isNotEmpty == true
-                      ? '${officialsByOffice[office]!.fullName} (${officialsByOffice[office]!.membershipNo})'
-                      : 'Not assigned',
-                ),
-                trailing: _canManage ? const Icon(Icons.swap_horiz) : null,
-                onTap: _canManage
-                    ? () => _assignOfficial(
-                        data,
-                        office,
-                        officialsByOffice[office]?.memberId ?? '',
-                      )
-                    : null,
-              ),
+              _officialTile(data, office, officialsByOffice[office]),
           ],
         ),
       ),
     );
+  }
+
+  Widget _officialTile(
+    SaccoLifecycleData data,
+    String office,
+    SaccoOfficialItem? official,
+  ) {
+    final assigned = official?.fullName.isNotEmpty == true;
+    final canResend =
+        _canManage &&
+        assigned &&
+        official!.staffAccessGranted &&
+        (official.email.isNotEmpty || official.phone.isNotEmpty);
+    return Column(
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.badge_outlined),
+          title: Text(label(office)),
+          subtitle: Text(
+            assigned
+                ? '${official!.fullName} (${official.membershipNo})\n'
+                      'Email: ${official.email.isEmpty ? 'Not provided' : official.email}\n'
+                      'Phone: ${official.phone.isEmpty ? 'Not provided' : official.phone}\n'
+                      'Login username: email or phone number'
+                : 'Not assigned',
+          ),
+          isThreeLine: assigned,
+          trailing: _canManage ? const Icon(Icons.swap_horiz) : null,
+          onTap: _canManage
+              ? () => _assignOfficial(data, office, official?.memberId ?? '')
+              : null,
+        ),
+        if (canResend)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Wrap(
+              spacing: 8,
+              children: [
+                if (official.email.isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: _resendingOffice == null
+                        ? () => _resendInvitation(official, 'email')
+                        : null,
+                    icon: const Icon(Icons.email_outlined),
+                    label: Text(
+                      _resendingOffice == office
+                          ? 'Sending...'
+                          : 'Resend by email',
+                    ),
+                  ),
+                if (official.phone.isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: _resendingOffice == null
+                        ? () => _resendInvitation(official, 'sms')
+                        : null,
+                    icon: const Icon(Icons.sms_outlined),
+                    label: Text(
+                      _resendingOffice == office
+                          ? 'Sending...'
+                          : 'Resend by SMS',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        if (assigned && official?.staffAccessGranted != true)
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Staff access must be granted before invitations can be resent.',
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _resendInvitation(
+    SaccoOfficialItem official,
+    String channel,
+  ) async {
+    setState(() => _resendingOffice = official.office);
+    try {
+      final result = await ref
+          .read(platformRepositoryProvider)
+          .resendOfficialInvitation(
+            memberId: official.memberId,
+            office: official.office,
+            deliveryChannel: channel,
+          );
+      if (!mounted) return;
+      final recipient = stringValue(result['recipient']);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'A new temporary password was sent by ${label(channel)}${recipient.isEmpty ? '' : ' to $recipient'}.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
+      }
+    } finally {
+      if (mounted) setState(() => _resendingOffice = null);
+    }
   }
 
   Widget _accountsCard(SaccoLifecycleData data) => Card(

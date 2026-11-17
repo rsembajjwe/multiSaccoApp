@@ -245,10 +245,23 @@ void main() {
       'accountNumber': '256700000001',
       'active': true,
     });
+    final official = SaccoOfficialItem.fromJson({
+      'office': 'chairperson',
+      'memberId': 'member_one',
+      'membershipNo': 'MUTWE-0001',
+      'fullName': 'Jane Chairperson',
+      'email': 'jane@example.com',
+      'phone': '+256700123456',
+      'staffAccessGranted': true,
+      'validMember': true,
+    });
 
     expect(tenant.allowedCollectionMode, 'BOTH');
     expect(tenant.mobileMoneyActive, isTrue);
     expect(account.toJson(activeOverride: false)['active'], isFalse);
+    expect(official.email, 'jane@example.com');
+    expect(official.phone, '+256700123456');
+    expect(official.staffAccessGranted, isTrue);
   });
 
   test('fleet item parses expiry and outstanding balance', () {
@@ -264,10 +277,14 @@ void main() {
       'subscriptionExpiry': '2027-11-13',
       'balanceDue': 25000,
       'onboarding': 100,
+      'setupMissing': <String>[],
+      'smsBalance': 42,
     });
 
     expect(tenant.subscriptionExpiry, DateTime(2027, 11, 13));
     expect(tenant.balanceDue, 25000);
+    expect(tenant.smsBalance, 42);
+    expect(tenant.setupMissing, isEmpty);
   });
 
   test('fleet operations map job results and incidents', () {
@@ -355,5 +372,37 @@ void main() {
     expect(summary.lines.single.description, 'Base subscription');
     expect(summary.total, 1704500);
     expect(sale.quantity, 100);
+  });
+
+  test('SMS inventory maps provider capacity and customer commitments', () {
+    final inventory = SmsInventorySummary.fromJson({
+      'provider': 'afrosms',
+      'providerStatus': 'ready',
+      'providerBalance': 23955,
+      'providerUnitCost': 35,
+      'saccoSellingRate': 45,
+      'providerAvailableCredits': 684,
+      'saccoCreditsOutstanding': 200,
+      'memberCreditsOutstanding': 25,
+      'totalCreditsOutstanding': 225,
+      'reserveCredits': 459,
+      'lowStockThreshold': 100,
+      'grossMarginPerSms': 10,
+      'grossMarginPercent': 28.57,
+      'totalCreditsSold': 350,
+      'totalSalesRevenue': 15750,
+      'suggestedTopUpAmount': 0,
+      'alertLevel': 'ok',
+      'alertCode': 'SMS_INVENTORY_HEALTHY',
+      'alertMessage': 'SMS inventory is healthy.',
+      'providerCheckedAt': '2026-11-16T10:00:00Z',
+      'settingsUpdatedAt': '2026-11-16T09:00:00Z',
+      'settingsUpdatedBy': 'user_1',
+    });
+
+    expect(inventory.providerAvailableCredits, 684);
+    expect(inventory.totalCreditsOutstanding, 225);
+    expect(inventory.reserveCredits, 459);
+    expect(inventory.needsAttention, isFalse);
   });
 }

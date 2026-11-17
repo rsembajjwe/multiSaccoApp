@@ -2,7 +2,9 @@ package com.methaltech.sacco.subscription;
 
 import com.methaltech.sacco.member.MemberRepository;
 import java.math.BigDecimal;
+import java.text.NumberFormat;
 import java.time.LocalDate;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -108,8 +110,14 @@ public class SubscriptionService {
                 unitPrice,
                 "per_member",
                 tierLabel,
-                "UGX " + unitPrice.stripTrailingZeros().toPlainString() + " per registered member annually",
+                "UGX " + formatWholeAmount(unitPrice) + " per registered member annually",
                 unitPrice.multiply(BigDecimal.valueOf(billableMembers)));
+    }
+
+    private String formatWholeAmount(BigDecimal amount) {
+        NumberFormat formatter = NumberFormat.getIntegerInstance(Locale.US);
+        formatter.setGroupingUsed(true);
+        return formatter.format(amount);
     }
 
     private SubscriptionBilling fallbackBilling(String packageId, int memberCount) {

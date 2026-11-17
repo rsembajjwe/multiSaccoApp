@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/api_client.dart';
 import 'data/admin_repository.dart';
+import 'data/app_version_service.dart';
 import 'data/auth_repository.dart';
 import 'data/biometric_service.dart';
+import 'data/offline_read_cache.dart';
 import 'data/push_service.dart';
 import 'data/session_store.dart';
 import 'domain/models.dart';
@@ -51,16 +53,30 @@ final themeModeProvider = StateNotifierProvider<ThemeModeController, ThemeMode>(
 
 final pushServiceProvider = Provider<StaffPushTopics>((ref) => PushService());
 
+final staffReadCacheProvider = Provider<StaffReadCache>(
+  (ref) => StaffReadCache(ref.watch(sessionStoreProvider)),
+);
+
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient(
       ref.watch(sessionStoreProvider),
       ref.watch(pushServiceProvider),
+      readCache: ref.watch(staffReadCacheProvider),
     ));
+
+final appVersionServiceProvider = Provider<AppVersionService>(
+  (ref) => AppVersionService(ref.watch(apiClientProvider)),
+);
+
+final appVersionPolicyProvider = FutureProvider<AppVersionPolicy?>(
+  (ref) => ref.watch(appVersionServiceProvider).check(),
+);
 
 final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => AuthRepository(
     ref.watch(apiClientProvider),
     ref.watch(sessionStoreProvider),
     ref.watch(pushServiceProvider),
+    ref.watch(staffReadCacheProvider),
   ),
 );
 
@@ -94,6 +110,12 @@ final memberProvider = FutureProvider.autoDispose.family<Member, String>(
 final memberLoansProvider =
     FutureProvider.autoDispose.family<List<Loan>, String>(
   (ref, memberId) => ref.watch(adminRepositoryProvider).memberLoans(memberId),
+);
+
+final memberLoanExposureProvider =
+    FutureProvider.autoDispose.family<MemberLoanExposure, String>(
+  (ref, memberId) =>
+      ref.watch(adminRepositoryProvider).memberLoanExposure(memberId),
 );
 
 final memberFundBalancesProvider =

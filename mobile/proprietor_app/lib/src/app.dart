@@ -59,6 +59,12 @@ class AuthController extends StateNotifier<AsyncValue<PlatformSession?>> {
     );
   }
 
+  Future<void> updateContact(String email, String phone) async {
+    state = AsyncData(
+      await _repository.updateContact(email: email, phone: phone),
+    );
+  }
+
   Future<void> logout() async {
     await _repository.logout();
     state = const AsyncData(null);

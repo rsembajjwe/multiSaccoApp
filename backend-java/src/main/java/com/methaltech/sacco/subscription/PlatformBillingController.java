@@ -5,6 +5,7 @@ import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.identity.AuditService;
 import com.methaltech.sacco.identity.AuthService;
 import com.methaltech.sacco.notification.SmsWalletService;
+import com.methaltech.sacco.notification.SmsInventoryService;
 import com.methaltech.sacco.subscription.BillingResponses.BillingCatalogResponse;
 import com.methaltech.sacco.subscription.BillingResponses.TenantBillingItemResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -39,6 +40,7 @@ class PlatformBillingController {
     private final AuthService authService;
     private final AuditService auditService;
     private final SmsWalletService smsWalletService;
+    private final SmsInventoryService smsInventoryService;
 
     PlatformBillingController(
             BillingCatalogRepository catalogRepository,
@@ -46,13 +48,15 @@ class PlatformBillingController {
             PlatformBillingService billingService,
             AuthService authService,
             AuditService auditService,
-            SmsWalletService smsWalletService) {
+            SmsWalletService smsWalletService,
+            SmsInventoryService smsInventoryService) {
         this.catalogRepository = catalogRepository;
         this.billingItemRepository = billingItemRepository;
         this.billingService = billingService;
         this.authService = authService;
         this.auditService = auditService;
         this.smsWalletService = smsWalletService;
+        this.smsInventoryService = smsInventoryService;
     }
 
     @GetMapping("/catalog")
@@ -136,6 +140,42 @@ class PlatformBillingController {
         ResponseEntity<?> guard = requirePlatform(authorization, "subscriptions:view");
         if (guard != null) return guard;
         return ResponseEntity.ok(ApiResponse.of(smsWalletService.sales(tenantId, limit == null ? 200 : limit)));
+    }
+
+    @GetMapping("/sms-inventory")
+    ResponseEntity<?> smsInventory(
+            @RequestHeader(name = "Authorization", required = false) String authorization) {
+        ResponseEntity<?> guard = requirePlatform(authorization, "subscriptions:view");
+        if (guard != null) return guard;
+        return ResponseEntity.ok(ApiResponse.of(smsInventoryService.summary()));
+    }
+
+    @PatchMapping("/sms-inventory/settings")
+    ResponseEntity<?> updateSmsInventorySettings(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody SmsInventorySettingsRequest body,
+            HttpServletRequest request) {
+        ResponseEntity<?> guard = requirePlatform(authorization, "subscriptions:manage");
+        if (guard != null) return guard;
+        if (body.providerUnitCost() == null || body.providerUnitCost().signum() <= 0
+                || body.saccoSellingRate() == null || body.saccoSellingRate().signum() <= 0
+                || body.lowStockThreshold() == null || body.lowStockThreshold() < 0) {
+            return ResponseEntity.badRequest().body(ApiErrorResponse.of(
+                    400,
+                    "INVALID_SMS_INVENTORY_SETTINGS",
+                    "Provider cost and SACCO selling rate must be positive; warning threshold cannot be negative."));
+        }
+        String actor = currentUser(authorization) == null ? "unknown" : currentUser(authorization).getId();
+        var summary = smsInventoryService.updateSettings(
+                body.providerUnitCost(), body.saccoSellingRate(), body.lowStockThreshold(), actor);
+        auditService.record(
+                "tenant_platform",
+                currentUser(authorization),
+                "Updated SMS supply cost, selling rate and low-stock threshold",
+                "sms_inventory_settings",
+                "1",
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(summary));
     }
 
     @GetMapping("/items")
@@ -246,6 +286,12 @@ class PlatformBillingController {
             BigDecimal amount,
             int smsBalance,
             String reference) {
+    }
+
+    record SmsInventorySettingsRequest(
+            BigDecimal providerUnitCost,
+            BigDecimal saccoSellingRate,
+            Integer lowStockThreshold) {
     }
 
     record AddBillingItemRequest(@NotBlank String tenantId, @NotBlank String catalogCode, Integer quantity) {

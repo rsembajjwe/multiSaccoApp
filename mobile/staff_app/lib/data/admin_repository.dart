@@ -2,6 +2,20 @@ import '../core/format.dart';
 import '../domain/models.dart';
 import 'api_client.dart';
 
+class SmsBroadcastResult {
+  const SmsBroadcastResult({
+    required this.scheduled,
+    required this.smsBalance,
+    required this.creditsUsed,
+    required this.scheduleId,
+  });
+
+  final bool scheduled;
+  final int smsBalance;
+  final int creditsUsed;
+  final String scheduleId;
+}
+
 /// Read/write access to the admin data surfaces: members, loans, repayments
 /// and the SACCO's own platform subscription.
 class AdminRepository {
@@ -60,6 +74,28 @@ class AdminRepository {
             ? {'search': search.trim()}
             : null);
     return r.mapItems(Member.fromJson);
+  }
+
+  Future<PageResult<Member>> loanMemberCandidatesPage({
+    String? search,
+    required int page,
+    int size = 20,
+    bool guarantorOnly = false,
+    String? excludeMemberId,
+  }) async {
+    final query = <String, dynamic>{
+      'guarantorOnly': guarantorOnly,
+      if (excludeMemberId != null && excludeMemberId.trim().isNotEmpty)
+        'excludeMemberId': excludeMemberId.trim(),
+      if (search != null && search.trim().isNotEmpty) 'search': search.trim(),
+    };
+    final result = await _api.getPage(
+      '/loans/member-candidates',
+      page: page,
+      size: size,
+      query: query,
+    );
+    return result.mapItems(Member.fromJson);
   }
 
   Future<PageResult<Loan>> loansPage(
@@ -164,6 +200,7 @@ class AdminRepository {
     required int repaymentMonths,
     required String purpose,
     required String signedFormReference,
+    required List<String> guarantorMemberIds,
   }) async {
     final data = await _api.post('/loans', {
       'memberId': memberId,
@@ -175,6 +212,7 @@ class AdminRepository {
       'purpose': purpose.trim(),
       'applicationSource': 'staff_captured_signed_form',
       'signedFormReference': signedFormReference.trim(),
+      'guarantorMemberIds': guarantorMemberIds,
     });
     return Loan.fromJson(data);
   }
@@ -447,10 +485,22 @@ class AdminRepository {
     String tenantId, {
     num? loanInterestRate,
     String? logoDataUrl,
+    String? savingsCyclePeriod,
+    int? savingsCycleStartMonth,
+    int? savingsCycleStartDay,
+    int? savingsWithdrawalWindowDays,
   }) async {
     final data = await _api.patch('/tenants/$tenantId/profile', {
       if (loanInterestRate != null) 'loanInterestRate': loanInterestRate,
       if (logoDataUrl != null) 'logoDataUrl': logoDataUrl,
+      if (savingsCyclePeriod != null)
+        'savingsCyclePeriod': savingsCyclePeriod,
+      if (savingsCycleStartMonth != null)
+        'savingsCycleStartMonth': savingsCycleStartMonth,
+      if (savingsCycleStartDay != null)
+        'savingsCycleStartDay': savingsCycleStartDay,
+      if (savingsWithdrawalWindowDays != null)
+        'savingsWithdrawalWindowDays': savingsWithdrawalWindowDays,
     });
     return SaccoProfile.fromJson(data);
   }
@@ -734,20 +784,41 @@ class AdminRepository {
     return int.tryParse('$c') ?? 0;
   }
 
-  Future<int> sendSmsBroadcast({
+  Future<SmsBroadcastResult> sendSmsBroadcast({
     required String message,
     String title = 'SACCO message',
     List<String> memberIds = const [],
+    String mode = 'custom',
+    DateTime? scheduledAt,
   }) async {
     final data = await _api.post('/notifications/messages/sms', {
       'title': title.trim().isEmpty ? 'SACCO message' : title.trim(),
       'body': message.trim(),
       if (memberIds.isNotEmpty) 'memberIds': memberIds,
+      'mode': mode,
+      if (scheduledAt != null) 'scheduledAt': scheduledAt.toUtc().toIso8601String(),
     });
-    final balance = data['smsBalance'];
-    if (balance is int) return balance;
-    if (balance is num) return balance.toInt();
-    return int.tryParse('$balance') ?? 0;
+    return SmsBroadcastResult(
+      scheduled: data['scheduledAt'] != null,
+      smsBalance: _intValue(data['smsBalance']),
+      creditsUsed: _intValue(data['smsCreditsUsed']),
+      scheduleId: '${data['id'] ?? ''}',
+    );
+  }
+
+  Future<List<SmsSchedule>> smsSchedules() async {
+    final rows = await _api.getList('/notifications/sms-schedules');
+    return rows.map(SmsSchedule.fromJson).toList();
+  }
+
+  Future<void> cancelSmsSchedule(String id) async {
+    await _api.patch('/notifications/sms-schedules/$id/cancel', const {});
+  }
+
+  static int _intValue(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse('$value') ?? 0;
   }
 
   Future<List<SubscriptionPackage>> packages() async {

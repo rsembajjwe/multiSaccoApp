@@ -44,6 +44,7 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
   bool _loading = false;
   bool _firstDone = false;
   Object? _error;
+  int _generation = 0;
 
   @override
   void initState() {
@@ -66,29 +67,31 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
   }
 
   void _onScroll() {
-    if (_scroll.position.pixels >=
-        _scroll.position.maxScrollExtent - 400) {
+    if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 400) {
       _loadMore();
     }
   }
 
   Future<void> _reset() async {
+    final generation = ++_generation;
     setState(() {
       _items.clear();
       _page = 0;
       _hasMore = true;
+      _loading = false;
       _firstDone = false;
       _error = null;
     });
-    await _loadMore();
+    await _loadMore(generation);
   }
 
-  Future<void> _loadMore() async {
+  Future<void> _loadMore([int? expectedGeneration]) async {
     if (_loading || !_hasMore) return;
+    final generation = expectedGeneration ?? _generation;
     setState(() => _loading = true);
     try {
       final result = await widget.fetch(_page);
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _items.addAll(result.items);
         _hasMore = result.hasMore;
@@ -98,13 +101,15 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
       });
       widget.onItemsChanged?.call(List<T>.unmodifiable(_items));
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || generation != _generation) return;
       setState(() {
         _error = e;
         _firstDone = true;
       });
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _generation) {
+        setState(() => _loading = false);
+      }
     }
   }
 

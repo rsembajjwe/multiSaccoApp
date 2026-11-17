@@ -286,24 +286,47 @@ class MemberController {
     record SmsRecipientCountResponse(long count) {
     }
 
-    // Member summaries, adding each member outstanding loan balance (sum of active/overdue loans) in
-    // one query. Financial figures are withheld unless the viewer holds finance-source:view.
+    // Member summaries, adding each member outstanding loan balance and aggregate status in one query.
+    // Financial figures are withheld unless the viewer holds finance-source:view.
     private List<MemberResponse> toSummaries(List<Member> members, boolean financialsVisible) {
         if (members.isEmpty()) return List.of();
         if (!financialsVisible) {
             return members.stream().map(MemberResponse::fromSummary).toList();
         }
         Map<String, BigDecimal> loanBalances = new HashMap<>();
+        Map<String, String> loanStatuses = new HashMap<>();
         List<String> memberIds = members.stream().map(Member::getId).toList();
         for (Loan loan : loanRepository.findByMemberIdInAndStatusIn(memberIds, OPEN_LOAN_STATUSES)) {
             BigDecimal balance = loan.getBalance();
             if (balance != null) {
                 loanBalances.merge(loan.getMemberId(), balance, BigDecimal::add);
             }
+            loanStatuses.merge(
+                    loan.getMemberId(),
+                    loan.getStatus(),
+                    (current, candidate) -> "overdue".equals(candidate) ? candidate : current);
         }
         return members.stream()
-                .map(member -> MemberResponse.fromSummary(member, loanBalances.get(member.getId()), true))
+                .map(member -> MemberResponse.fromSummary(
+                        member,
+                        loanBalances.getOrDefault(member.getId(), BigDecimal.ZERO),
+                        loanStatuses.getOrDefault(member.getId(), "none"),
+                        true))
                 .toList();
+    }
+
+    private MemberResponse withLoanSummary(Member member) {
+        BigDecimal balance = BigDecimal.ZERO;
+        String status = "none";
+        for (Loan loan : loanRepository.findByMemberIdInAndStatusIn(List.of(member.getId()), OPEN_LOAN_STATUSES)) {
+            if (loan.getBalance() != null) {
+                balance = balance.add(loan.getBalance());
+            }
+            if ("overdue".equals(loan.getStatus()) || "none".equals(status)) {
+                status = loan.getStatus();
+            }
+        }
+        return MemberResponse.from(member, balance, status);
     }
 
     @GetMapping("/fund-balances")
@@ -665,7 +688,7 @@ class MemberController {
         return memberRepository.findById(memberId)
                 .<ResponseEntity<?>>map(member -> {
                     if (!canAccessMember(currentSession, member)) return memberAccessDenied(currentSession, member);
-                    return ResponseEntity.ok(ApiResponse.of(MemberResponse.from(member)));
+                    return ResponseEntity.ok(ApiResponse.of(withLoanSummary(member)));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(ApiErrorResponse.of(404, "MEMBER_NOT_FOUND", "Member not found.")));

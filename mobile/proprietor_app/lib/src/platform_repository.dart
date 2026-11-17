@@ -62,6 +62,55 @@ class PlatformRepository {
   Future<Map<String, dynamic>> createTenant(Map<String, dynamic> body) =>
       _api.post('/tenants', body);
 
+  Future<void> ensureOfficialAssignments(
+    String tenantId,
+    List<Map<String, String>> expectedOfficials,
+  ) async {
+    var officials = (await _api.getList(
+      '/tenants/$tenantId/officials',
+    )).map(SaccoOfficialItem.fromJson).toList();
+    final assignedOffices = {
+      for (final official in officials)
+        if (official.validMember && official.memberId.isNotEmpty)
+          official.office,
+    };
+    if (assignedOffices.length == expectedOfficials.length) return;
+
+    final members = (await _api.getList(
+      '/members/names',
+      query: {'tenantId': tenantId},
+    )).map(MemberNameItem.fromJson).toList();
+    for (final expected in expectedOfficials) {
+      final office = stringValue(expected['office']).trim().toLowerCase();
+      if (office.isEmpty || assignedOffices.contains(office)) continue;
+      final expectedName = _normalizedName(expected['fullName']);
+      final matchingMembers = members
+          .where((member) => _normalizedName(member.name) == expectedName)
+          .toList();
+      if (matchingMembers.length == 1) {
+        await assignOfficial(tenantId, office, matchingMembers.single.id);
+      }
+    }
+
+    officials = (await _api.getList(
+      '/tenants/$tenantId/officials',
+    )).map(SaccoOfficialItem.fromJson).toList();
+    final missingOffices = expectedOfficials
+        .map((official) => stringValue(official['office']).trim().toLowerCase())
+        .where(
+          (office) => !officials.any(
+            (official) =>
+                official.office == office &&
+                official.validMember &&
+                official.memberId.isNotEmpty,
+          ),
+        )
+        .toList();
+    if (missingOffices.isNotEmpty) {
+      throw OfficialAssignmentException(missingOffices);
+    }
+  }
+
   Future<void> createAdministrator({
     required String tenantId,
     required String name,
@@ -89,6 +138,16 @@ class PlatformRepository {
       });
     }
   }
+
+  Future<Map<String, dynamic>> resendOfficialInvitation({
+    required String memberId,
+    required String office,
+    required String deliveryChannel,
+  }) => _api.post('/users/official-staff-access/resend', {
+    'memberId': memberId,
+    'office': office,
+    'deliveryChannel': deliveryChannel,
+  });
 
   Future<void> updateTenantStatus(String tenantId, String status) async {
     await _api.patch('/tenants/$tenantId/status', {'status': status});
@@ -240,6 +299,23 @@ class PlatformRepository {
     '/platform-billing/sms-sales',
     query: {'limit': 500},
   )).map(SmsSaleItem.fromJson).toList();
+
+  Future<SmsInventorySummary> smsInventory() async =>
+      SmsInventorySummary.fromJson(
+        await _api.get('/platform-billing/sms-inventory'),
+      );
+
+  Future<SmsInventorySummary> updateSmsInventorySettings({
+    required num providerUnitCost,
+    required num saccoSellingRate,
+    required int lowStockThreshold,
+  }) async => SmsInventorySummary.fromJson(
+    await _api.patch('/platform-billing/sms-inventory/settings', {
+      'providerUnitCost': providerUnitCost,
+      'saccoSellingRate': saccoSellingRate,
+      'lowStockThreshold': lowStockThreshold,
+    }),
+  );
 
   Future<List<TenantBillingItem>> billingItems(String tenantId) async =>
       (await _api.getList(
@@ -560,3 +636,24 @@ class PlatformRepository {
     );
   }
 }
+
+String _normalizedName(dynamic value) =>
+    stringValue(value).trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+class OfficialAssignmentException implements Exception {
+  const OfficialAssignmentException(this.missingOffices);
+  final List<String> missingOffices;
+
+  @override
+  String toString() =>
+      'The SACCO was created, but ${missingOffices.map(_officeLabel).join(', ')} '
+      'could not be assigned automatically. Open Manage SACCO and assign the '
+      'listed officials to their member records.';
+}
+
+String _officeLabel(String office) => switch (office) {
+  'chairperson' => 'Chairperson',
+  'treasurer' => 'Treasurer',
+  'secretary' => 'Secretary',
+  _ => office,
+};

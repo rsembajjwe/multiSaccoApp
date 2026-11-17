@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/format.dart';
+import '../../core/offline_state.dart';
 import '../../core/widgets/error_retry.dart';
+import '../../core/widgets/offline_read_banner.dart';
 import '../../core/widgets/skeleton.dart';
 import '../branches/branches_screen.dart';
 import '../governance/governance_screen.dart';
@@ -169,11 +171,33 @@ class DashboardScreen extends ConsumerWidget {
           onRetry: () => ref.invalidate(sessionProvider),
         ),
         data: (s) => RefreshIndicator(
-          onRefresh: () async => ref.invalidate(sessionProvider),
+          onRefresh: () async {
+            ref.invalidate(sessionProvider);
+            ref.invalidate(saccoStatusProvider);
+            ref.invalidate(myNotificationsProvider);
+            if (s.can('loans:view')) {
+              ref.invalidate(loanPortfolioSummaryProvider);
+            }
+            if (s.can('finance-source:view')) {
+              ref.invalidate(mobileMoneyPaymentRequestsProvider);
+            }
+            if (s.can('accounting:view')) {
+              ref.invalidate(reconciliationProvider);
+            }
+          },
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
               _Header(session: s),
+              ValueListenableBuilder<OfflineReadState?>(
+                valueListenable: offlineReadNotifier,
+                builder: (context, offline, _) => offline == null
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: OfflineReadBanner(state: offline),
+                      ),
+              ),
               if (s.can('operations:view')) ...[
                 const SizedBox(height: 20),
                 Text('SACCO status',
@@ -181,7 +205,7 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 const _StatusSummary(),
                 const SizedBox(height: 12),
-                const _OperationsAlerts(),
+                _OperationsAlerts(canViewLoans: s.can('loans:view')),
               ],
               if (s.can('finance-source:view')) const _MobileMoneyBalances(),
               const SizedBox(height: 24),
@@ -638,7 +662,9 @@ class _StatusSummary extends ConsumerWidget {
 }
 
 class _OperationsAlerts extends ConsumerWidget {
-  const _OperationsAlerts();
+  const _OperationsAlerts({required this.canViewLoans});
+
+  final bool canViewLoans;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -647,6 +673,9 @@ class _OperationsAlerts extends ConsumerWidget {
     final reconciliation = ref.watch(reconciliationProvider).asData?.value;
     final mobileMoney =
         ref.watch(mobileMoneyPaymentRequestsProvider).asData?.value;
+    final portfolio = canViewLoans
+        ? ref.watch(loanPortfolioSummaryProvider).asData?.value
+        : null;
 
     final alerts = <_AlertItem>[];
     if (status != null) {
@@ -667,6 +696,16 @@ class _OperationsAlerts extends ConsumerWidget {
           color: const Color(0xFFB45309),
         ));
       }
+    }
+
+    if (portfolio != null && portfolio.arrearsCount > 0) {
+      alerts.add(_AlertItem(
+        icon: Icons.warning_amber_outlined,
+        title: 'Loans in arrears',
+        detail: '${portfolio.arrearsCount} loan(s), '
+            '${Fmt.money(portfolio.arrearsAmount)} overdue.',
+        color: const Color(0xFFB91C1C),
+      ));
     }
 
     if (subscriptions != null && subscriptions.isNotEmpty) {

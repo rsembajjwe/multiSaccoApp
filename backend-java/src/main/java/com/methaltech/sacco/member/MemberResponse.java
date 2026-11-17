@@ -25,27 +25,37 @@ record MemberResponse(
         BigDecimal sharesBalance,
         BigDecimal welfareBalance,
         BigDecimal loanBalance,
+        String loanStatus,
         String privacyScope,
         ConsentPreferences consentPreferences,
         Instant createdAt,
         Instant updatedAt) {
 
     static MemberResponse from(Member member) {
-        return from(member, false, null, true);
+        return from(member, false, null, null, true);
     }
 
     static MemberResponse fromSummary(Member member) {
-        return from(member, true, null, true);
+        return from(member, true, null, null, true);
     }
 
     /** Summary with an outstanding loan balance, gated: when [financialsVisible] is false the member's
      *  savings/shares/welfare/loan figures are withheld (null) so only authorised roles see them. */
-    static MemberResponse fromSummary(Member member, BigDecimal loanBalance, boolean financialsVisible) {
-        return from(member, true, loanBalance, financialsVisible);
+    static MemberResponse fromSummary(
+            Member member, BigDecimal loanBalance, String loanStatus, boolean financialsVisible) {
+        return from(member, true, loanBalance, loanStatus, financialsVisible);
+    }
+
+    static MemberResponse from(Member member, BigDecimal loanBalance, String loanStatus) {
+        return from(member, false, loanBalance, loanStatus, true);
     }
 
     private static MemberResponse from(
-            Member member, boolean maskSensitiveFields, BigDecimal loanBalance, boolean financialsVisible) {
+            Member member,
+            boolean maskSensitiveFields,
+            BigDecimal loanBalance,
+            String loanStatus,
+            boolean financialsVisible) {
         return new MemberResponse(
                 member.getId(),
                 member.getTenantId(),
@@ -66,6 +76,7 @@ record MemberResponse(
                 financialsVisible ? member.getSharesBalance() : null,
                 financialsVisible ? member.getWelfareBalance() : null,
                 financialsVisible ? loanBalance : null,
+                financialsVisible ? loanStatus : null,
                 maskSensitiveFields ? "summary_masked" : "detail_full",
                 ConsentPreferences.from(member),
                 member.getCreatedAt(),

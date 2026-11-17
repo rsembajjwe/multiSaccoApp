@@ -50,6 +50,18 @@ class SaccoProfile {
     @Column(name = "membership_subscription_amount")
     private BigDecimal membershipSubscriptionAmount;
 
+    @Column(name = "savings_cycle_period")
+    private String savingsCyclePeriod;
+
+    @Column(name = "savings_cycle_start_month")
+    private Integer savingsCycleStartMonth;
+
+    @Column(name = "savings_cycle_start_day")
+    private Integer savingsCycleStartDay;
+
+    @Column(name = "savings_withdrawal_window_days")
+    private Integer savingsWithdrawalWindowDays;
+
     @Column(name = "loan_interest_rate")
     private BigDecimal loanInterestRate;
 
@@ -87,6 +99,10 @@ class SaccoProfile {
         this.membershipCalendarStartMonth = 1;
         this.membershipCalendarStartDay = 1;
         this.membershipSubscriptionAmount = BigDecimal.valueOf(5000);
+        this.savingsCyclePeriod = "continuous";
+        this.savingsCycleStartMonth = 1;
+        this.savingsCycleStartDay = 1;
+        this.savingsWithdrawalWindowDays = 30;
         this.loanInterestRate = BigDecimal.valueOf(1.5000);
         this.logoDataUrl = "";
         this.createdAt = Instant.now();
@@ -123,6 +139,14 @@ class SaccoProfile {
 
     void updateLoanInterestRate(BigDecimal loanInterestRate) {
         this.loanInterestRate = loanInterestRate == null ? BigDecimal.valueOf(1.5000) : loanInterestRate;
+        this.updatedAt = Instant.now();
+    }
+
+    void updateSavingsCycle(String period, Integer startMonth, Integer startDay, Integer withdrawalWindowDays) {
+        this.savingsCyclePeriod = period;
+        this.savingsCycleStartMonth = startMonth;
+        this.savingsCycleStartDay = startDay;
+        this.savingsWithdrawalWindowDays = withdrawalWindowDays;
         this.updatedAt = Instant.now();
     }
 

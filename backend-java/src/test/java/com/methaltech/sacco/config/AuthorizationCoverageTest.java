@@ -32,6 +32,7 @@ class AuthorizationCoverageTest {
 
     private static final Set<String> PUBLIC_ENDPOINTS = Set.of(
             "GET /api/v1/health",
+            "GET /api/v1/mobile-app-policy",
             "POST /api/v1/auth/login",
             "POST /api/v1/auth/first-login-password",
             "POST /api/v1/auth/mfa/verify",
@@ -42,7 +43,8 @@ class AuthorizationCoverageTest {
             "POST /api/v1/member-auth/password-reset/confirm",
             "POST /api/v1/integrations/mobile-money/callback",
             "POST /api/v1/integrations/mobile-money/subscription-callback",
-            "POST /api/v1/public/sacco-registrations");
+            "POST /api/v1/public/sacco-registrations",
+            "POST /api/v1/public/group-registrations");
 
     @Test
     void everyControllerHandlerIsGuardedOrExplicitlyPublic() throws IOException {
@@ -87,7 +89,7 @@ class AuthorizationCoverageTest {
     }
 
     private boolean isPublic(String route, String key) {
-        return route.startsWith("/api/v1/public/") || PUBLIC_ENDPOINTS.contains(key);
+        return PUBLIC_ENDPOINTS.contains(key);
     }
 
     private String methodBody(String src, int from) {

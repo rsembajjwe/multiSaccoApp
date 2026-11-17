@@ -297,6 +297,7 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
   String _reason = 'loan_disbursement';
   Member? _member;
   bool _busy = false;
+  String? _formError;
 
   @override
   void dispose() {
@@ -307,7 +308,12 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    setState(() => _formError = null);
+    if (!_formKey.currentState!.validate()) {
+      setState(() =>
+          _formError = 'Complete the highlighted cash fields before posting.');
+      return;
+    }
     final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
     final isIn = _inPurposes.contains(_purpose);
     final action = _purpose == 'bank_withdrawal'
@@ -349,8 +355,8 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        setState(() =>
+            _formError = 'Cash entry was not recorded. Review and retry. $e');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -401,6 +407,9 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
               const SizedBox(height: 10),
               TextFormField(
                 controller: _amount,
+                onChanged: (_) {
+                  if (_formError != null) setState(() => _formError = null);
+                },
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
@@ -416,7 +425,8 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
                   onTap: _busy
                       ? null
                       : () async {
-                          final picked = await showMemberPicker(context);
+                          final picked = await showMemberPicker(context,
+                              unavailableReason: postingUnavailableReason);
                           if (picked != null && mounted) {
                             setState(() => _member = picked);
                           }
@@ -453,6 +463,22 @@ class _CashEntrySheetState extends ConsumerState<_CashEntrySheet> {
                 decoration: const InputDecoration(labelText: 'Note (optional)'),
               ),
               const SizedBox(height: 16),
+              if (_formError != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _formError!,
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onErrorContainer),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(

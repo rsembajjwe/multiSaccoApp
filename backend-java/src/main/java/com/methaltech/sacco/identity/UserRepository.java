@@ -12,4 +12,6 @@ interface UserRepository extends JpaRepository<User, String> {
     List<User> findByTenantIdOrderByFullNameAsc(String tenantId);
     boolean existsByTenantIdAndEmailIgnoreCase(String tenantId, String email);
     boolean existsByTenantIdAndPhone(String tenantId, String phone);
+    boolean existsByTenantIdAndIdNotAndEmailIgnoreCase(String tenantId, String id, String email);
+    boolean existsByTenantIdAndIdNotAndPhone(String tenantId, String id, String phone);
 }

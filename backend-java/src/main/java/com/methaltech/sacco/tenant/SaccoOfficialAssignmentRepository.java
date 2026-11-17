@@ -8,6 +8,8 @@ public interface SaccoOfficialAssignmentRepository extends JpaRepository<SaccoOf
 
     List<SaccoOfficialAssignment> findByTenantIdOrderByOfficeAsc(String tenantId);
 
+    List<SaccoOfficialAssignment> findByTenantIdInOrderByTenantIdAscOfficeAsc(List<String> tenantIds);
+
     Optional<SaccoOfficialAssignment> findByTenantIdAndOffice(String tenantId, String office);
 
     Optional<SaccoOfficialAssignment> findByTenantIdAndMemberId(String tenantId, String memberId);

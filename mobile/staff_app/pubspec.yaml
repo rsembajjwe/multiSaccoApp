@@ -1,7 +1,7 @@
 name: sacco_staff_app
 description: SACCO administrator app (Android + iOS) — staff operations on the go.
 publish_to: "none"
-version: 0.1.5+6
+version: 0.1.26+27
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -19,7 +19,6 @@ dependencies:
   firebase_core: ^3.8.0
   firebase_messaging: ^15.1.5
   pdfx: ^2.11.0
-
 dev_dependencies:
   flutter_test:
     sdk: flutter

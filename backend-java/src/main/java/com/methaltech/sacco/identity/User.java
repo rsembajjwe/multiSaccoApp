@@ -185,6 +185,17 @@ public class User {
         this.phone = phone;
     }
 
+    void updateOwnContact(String email, String phone) {
+        if (this.email == null || !this.email.equalsIgnoreCase(email)) {
+            this.emailVerifiedAt = null;
+        }
+        if (this.phone == null || !this.phone.equals(phone)) {
+            this.phoneVerifiedAt = null;
+        }
+        this.email = email;
+        this.phone = phone;
+    }
+
     void changeStatus(String status) {
         this.status = status;
     }

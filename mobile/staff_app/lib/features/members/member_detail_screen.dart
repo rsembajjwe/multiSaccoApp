@@ -47,6 +47,7 @@ class MemberDetailScreen extends ConsumerWidget {
               ref.invalidate(groupOfficialsProvider(memberId));
             }
             ref.invalidate(memberLoansProvider(memberId));
+            ref.invalidate(memberLoanExposureProvider(memberId));
             ref.invalidate(memberFundBalancesProvider);
             ref.invalidate(fundTypesProvider);
           },
@@ -64,9 +65,10 @@ class MemberDetailScreen extends ConsumerWidget {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.manage_accounts_outlined),
-                    label: Text(m.memberType == 'group' && m.status == 'applicant'
-                        ? 'Review application'
-                        : 'Change status'),
+                    label: Text(
+                        m.memberType == 'group' && m.status == 'applicant'
+                            ? 'Review application'
+                            : 'Change status'),
                     onPressed: () => showModalBottomSheet<void>(
                       context: context,
                       showDragHandle: true,
@@ -94,8 +96,12 @@ class MemberDetailScreen extends ConsumerWidget {
                 ),
               ],
               const SizedBox(height: 16),
-              Text('Balances',
+              Text('Financial standing',
                   style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              _FinancialStanding(member: m),
+              const SizedBox(height: 24),
+              Text('Balances', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               _MemberBalanceBoard(member: m),
               const SizedBox(height: 24),
@@ -133,6 +139,131 @@ class MemberDetailScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _FinancialStanding extends ConsumerWidget {
+  const _FinancialStanding({required this.member});
+
+  final Member member;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(memberLoanExposureProvider(member.id));
+    return async.when(
+      loading: () => const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: LinearProgressIndicator(),
+        ),
+      ),
+      error: (error, _) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Could not load financial standing.'),
+              const SizedBox(height: 8),
+              Text('$error',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    ref.invalidate(memberLoanExposureProvider(member.id)),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      data: (exposure) => _FinancialStandingCard(exposure: exposure),
+    );
+  }
+}
+
+class _FinancialStandingCard extends StatelessWidget {
+  const _FinancialStandingCard({required this.exposure});
+
+  final MemberLoanExposure exposure;
+
+  @override
+  Widget build(BuildContext context) {
+    final canSelect = memberStatusAllowsLoanSelection(exposure.status);
+    final scheme = Theme.of(context).colorScheme;
+    final statusColor = canSelect ? const Color(0xFF15803D) : scheme.error;
+    return SectionCard(
+      title: 'Loan and guarantee exposure',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  canSelect
+                      ? Icons.verified_user_outlined
+                      : Icons.block_outlined,
+                  color: statusColor,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    canSelect
+                        ? 'Active for loan and guarantee workflows'
+                        : '${Fmt.label(exposure.status)} members cannot be selected for new loans or guarantees.',
+                    style: TextStyle(
+                        color: statusColor, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          KeyValueRow('Open loans', '${exposure.openLoanCount}'),
+          KeyValueRow(
+              'Own outstanding balance', Fmt.money(exposure.openLoanBalance)),
+          KeyValueRow('Guaranteed loan liabilities',
+              Fmt.money(exposure.guaranteedLoanBalance)),
+          KeyValueRow(
+              'Total loan exposure', Fmt.money(exposure.totalLoanExposure),
+              emphasize: true),
+          const Divider(height: 22),
+          KeyValueRow(
+              'Guarantee ceiling', Fmt.money(exposure.guaranteeCeiling)),
+          KeyValueRow(
+              'Already committed', Fmt.money(exposure.committedGuarantees)),
+          KeyValueRow('Available guarantee capacity',
+              Fmt.money(exposure.guaranteeCapacity),
+              emphasize: true),
+          if (exposure.guaranteeLabels.isNotEmpty) ...[
+            const Divider(height: 22),
+            Text('Guarantee commitments',
+                style: Theme.of(context)
+                    .textTheme
+                    .labelLarge
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            ...exposure.guaranteeLabels.map(
+              (label) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('• $label'),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -193,9 +324,10 @@ class _MemberBalanceBoard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final funds = ref.watch(fundTypesProvider).asData?.value ?? const <FundType>[];
-    final balances =
-        ref.watch(memberFundBalancesProvider).asData?.value ?? const <MemberFundBalance>[];
+    final funds =
+        ref.watch(fundTypesProvider).asData?.value ?? const <FundType>[];
+    final balances = ref.watch(memberFundBalancesProvider).asData?.value ??
+        const <MemberFundBalance>[];
     final byCode = {
       for (final b in balances.where((b) => b.memberId == member.id))
         b.fundCode: b.balance
@@ -246,7 +378,7 @@ class _MemberBalanceBoard extends ConsumerWidget {
                         ? member.welfare
                         : 0);
         return BalanceCard(
-          label: f.name,
+          label: f.code == 'savings' ? 'Total savings' : f.name,
           value: Fmt.money(value),
           icon: _fundIcon(f.code, f.basis),
           color: _fundColor(f.code, f.basis),
@@ -261,7 +393,15 @@ class _MemberBalanceBoard extends ConsumerWidget {
           )),
         );
       }),
-      _LoanBalanceCard(memberId: member.id, memberName: member.fullName),
+      _LoanBalanceCard(
+        memberId: member.id,
+        memberName: member.fullName,
+        initialBalance: member.loanBalance,
+      ),
+      _LoanStatusCard(
+        memberId: member.id,
+        initialStatus: member.loanStatus,
+      ),
     ];
     return GridView.count(
       crossAxisCount: 2,
@@ -298,9 +438,7 @@ Color _fundColor(String code, String basis) {
     case 'welfare':
       return const Color(0xFF9333EA);
   }
-  return basis == 'welfare'
-      ? const Color(0xFFDB2777)
-      : const Color(0xFF64748B);
+  return basis == 'welfare' ? const Color(0xFFDB2777) : const Color(0xFF64748B);
 }
 
 class _Identity extends StatelessWidget {
@@ -319,8 +457,7 @@ class _Identity extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(
-                      member.fullName.isEmpty ? '—' : member.fullName,
+                  child: Text(member.fullName.isEmpty ? '—' : member.fullName,
                       style: Theme.of(context)
                           .textTheme
                           .titleLarge
@@ -338,7 +475,8 @@ class _Identity extends StatelessWidget {
             KeyValueRow(
                 'WhatsApp', member.whatsapp.isEmpty ? '—' : member.whatsapp),
             KeyValueRow('Email', member.email.isEmpty ? '—' : member.email),
-            if (member.address.isNotEmpty) KeyValueRow('Address', member.address),
+            if (member.address.isNotEmpty)
+              KeyValueRow('Address', member.address),
             KeyValueRow('KYC status', Fmt.label(member.kycStatus)),
             KeyValueRow('Joined', Fmt.date(member.joiningDate)),
             KeyValueRow('Total worth', Fmt.money(member.totalWorth),
@@ -352,9 +490,14 @@ class _Identity extends StatelessWidget {
 
 /// Sums the member's outstanding loan balances into a single card.
 class _LoanBalanceCard extends ConsumerWidget {
-  const _LoanBalanceCard({required this.memberId, required this.memberName});
+  const _LoanBalanceCard({
+    required this.memberId,
+    required this.memberName,
+    required this.initialBalance,
+  });
   final String memberId;
   final String memberName;
+  final num initialBalance;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -362,7 +505,7 @@ class _LoanBalanceCard extends ConsumerWidget {
     final value = async.maybeWhen(
       data: (loans) => Fmt.money(
           loans.where((l) => l.isOpen).fold<num>(0, (s, l) => s + l.balance)),
-      orElse: () => '—',
+      orElse: () => Fmt.money(initialBalance),
     );
     return BalanceCard(
         label: 'Loan balance',
@@ -374,6 +517,42 @@ class _LoanBalanceCard extends ConsumerWidget {
                   memberId: memberId, memberName: memberName),
             )));
   }
+}
+
+class _LoanStatusCard extends ConsumerWidget {
+  const _LoanStatusCard({
+    required this.memberId,
+    required this.initialStatus,
+  });
+
+  final String memberId;
+  final String initialStatus;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(memberLoansProvider(memberId)).maybeWhen(
+          data: _aggregateLoanStatus,
+          orElse: () => initialStatus.isEmpty ? 'none' : initialStatus,
+        );
+    return BalanceCard(
+      label: 'Loan status',
+      value: status == 'none' ? 'No active loan' : Fmt.label(status),
+      icon: status == 'overdue'
+          ? Icons.warning_amber_outlined
+          : Icons.fact_check_outlined,
+      color: status == 'overdue'
+          ? const Color(0xFFB91C1C)
+          : status == 'active'
+              ? const Color(0xFF0F766E)
+              : const Color(0xFF64748B),
+    );
+  }
+}
+
+String _aggregateLoanStatus(List<Loan> loans) {
+  if (loans.any((loan) => loan.status == 'overdue')) return 'overdue';
+  if (loans.any((loan) => loan.isOpen)) return 'active';
+  return 'none';
 }
 
 class _MemberLoans extends ConsumerWidget {
@@ -428,8 +607,8 @@ class _MemberLoanTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => LoanDetailScreen(loan: loan))),
+        onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => LoanDetailScreen(loan: loan))),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
@@ -477,8 +656,7 @@ class _MemberStatusSheet extends ConsumerStatefulWidget {
 }
 
 class _MemberStatusSheetState extends ConsumerState<_MemberStatusSheet> {
-  late String _status =
-      widget.current.isEmpty ? 'active' : widget.current;
+  late String _status = widget.current.isEmpty ? 'active' : widget.current;
   bool _busy = false;
 
   Future<void> _save() async {
@@ -591,8 +769,8 @@ class _MemberContactSheetState extends ConsumerState<_MemberContactSheet> {
       ref.invalidate(memberProvider(widget.member.id));
       ref.invalidate(membersProvider(''));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Member updated.')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Member updated.')));
         Navigator.of(context).pop();
       }
     } catch (e) {

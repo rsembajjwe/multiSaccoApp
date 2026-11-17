@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth_events.dart';
 import '../../core/config.dart';
+import '../../data/app_version_service.dart';
 import '../../domain/models.dart';
 import '../../providers.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -23,6 +25,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _confirmPassword = TextEditingController();
   final _code = TextEditingController();
   bool _busy = false;
+  bool _obscurePassword = true;
+  bool _obscureNewPassword = true;
+  bool _obscureConfirmPassword = true;
   String? _error;
   MfaChallenge? _mfa;
   FirstLoginRequirement? _firstLogin;
@@ -67,6 +72,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
     });
     try {
+      final policy = await ref.read(appVersionPolicyProvider.future);
+      if (policy?.upgradeRequired == true) {
+        if (mounted) {
+          setState(() => _error = policy!.message.isEmpty
+              ? 'Install the latest approved Staff app to continue.'
+              : policy.message);
+        }
+        return;
+      }
       final outcome = await ref.read(authRepositoryProvider).login(
             saccoCode: _sacco.text.trim(),
             username: _username.text.trim(),
@@ -95,7 +109,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
     if (_newPassword.text.length < 12) {
-      setState(() => _error = 'Use a new password with at least 12 characters.');
+      setState(
+          () => _error = 'Use a new password with at least 12 characters.');
       return;
     }
     setState(() {
@@ -154,6 +169,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final versionPolicy = ref.watch(appVersionPolicyProvider).asData?.value;
+    if (versionPolicy?.upgradeRequired == true) {
+      return _UpgradeRequiredScreen(
+        policy: versionPolicy!,
+        onRetry: () => ref.invalidate(appVersionPolicyProvider),
+      );
+    }
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -191,13 +213,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           .headlineSmall
                           ?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 4),
-                  Text(_firstLogin != null
-                      ? 'Secure your account'
-                      : _mfa == null
-                          ? 'Staff sign in'
-                          : 'Two-factor verification',
+                  Text(
+                      _firstLogin != null
+                          ? 'Secure your account'
+                          : _mfa == null
+                              ? 'Staff sign in'
+                              : 'Two-factor verification',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: scheme.onSurfaceVariant)),
+                  if (versionPolicy?.updateAvailable == true) ...[
+                    const SizedBox(height: 16),
+                    _UpdateAvailableNotice(policy: versionPolicy!),
+                  ],
                   const SizedBox(height: 28),
                   if (_firstLogin != null) ...[
                     Text(
@@ -207,38 +234,83 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _newPassword,
-                      obscureText: true,
+                      obscureText: _obscureNewPassword,
                       textInputAction: TextInputAction.next,
-                      decoration:
-                          const InputDecoration(labelText: 'New password'),
+                      decoration: InputDecoration(
+                        labelText: 'New password',
+                        suffixIcon: IconButton(
+                          tooltip: _obscureNewPassword
+                              ? 'Show new password'
+                              : 'Hide new password',
+                          onPressed: () => setState(
+                              () => _obscureNewPassword = !_obscureNewPassword),
+                          icon: Icon(
+                            _obscureNewPassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _confirmPassword,
-                      obscureText: true,
+                      obscureText: _obscureConfirmPassword,
                       onSubmitted: (_) => _changePassword(),
-                      decoration: const InputDecoration(
-                          labelText: 'Confirm new password'),
+                      decoration: InputDecoration(
+                        labelText: 'Confirm new password',
+                        suffixIcon: IconButton(
+                          tooltip: _obscureConfirmPassword
+                              ? 'Show confirm password'
+                              : 'Hide confirm password',
+                          onPressed: () => setState(() =>
+                              _obscureConfirmPassword =
+                                  !_obscureConfirmPassword),
+                          icon: Icon(
+                            _obscureConfirmPassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                        ),
+                      ),
                     ),
                   ] else if (_mfa == null) ...[
                     TextField(
                       controller: _sacco,
                       textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(labelText: 'SACCO code'),
+                      decoration:
+                          const InputDecoration(labelText: 'SACCO code'),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _username,
                       textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
-                          labelText: 'Username or email'),
+                        labelText: 'Email or phone number',
+                        hintText: '+256 700 123456',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _password,
-                      obscureText: true,
+                      obscureText: _obscurePassword,
                       onSubmitted: (_) => _submit(),
-                      decoration: const InputDecoration(labelText: 'Password'),
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        suffixIcon: IconButton(
+                          tooltip: _obscurePassword
+                              ? 'Show password'
+                              : 'Hide password',
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                        ),
+                      ),
                     ),
                   ] else ...[
                     Text(
@@ -276,6 +348,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ? 'Sign in'
                                 : 'Verify'),
                   ),
+                  if (_mfa == null && _firstLogin == null)
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => Navigator.of(context).push(MaterialPageRoute(
+                                builder: (_) => ForgotPasswordScreen(
+                                  saccoCode: _sacco.text.trim(),
+                                  identifier: _username.text.trim(),
+                                ),
+                              )),
+                      child: const Text('Forgot password?'),
+                    ),
                   if (_mfa != null)
                     TextButton(
                       onPressed: _busy
@@ -295,4 +379,88 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
+}
+
+class _UpdateAvailableNotice extends StatelessWidget {
+  const _UpdateAvailableNotice({required this.policy});
+
+  final AppVersionPolicy policy;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: Theme.of(context).colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              const Icon(Icons.system_update_alt),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(policy.message.isEmpty
+                    ? 'A newer approved Staff app is available.'
+                    : policy.message),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+class _UpgradeRequiredScreen extends StatelessWidget {
+  const _UpgradeRequiredScreen({required this.policy, required this.onRetry});
+
+  final AppVersionPolicy policy;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.system_update,
+                        size: 72, color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(height: 20),
+                    Text('Staff app update required',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineSmall),
+                    const SizedBox(height: 12),
+                    Text(
+                      policy.message.isEmpty
+                          ? 'Install the latest approved Staff app to continue.'
+                          : policy.message,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Installed build ${policy.currentVersionCode} · Minimum build ${policy.minimumVersionCode}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                    if (policy.updateUrl.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      SelectableText(policy.updateUrl,
+                          textAlign: TextAlign.center),
+                    ],
+                    const SizedBox(height: 20),
+                    FilledButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Check again'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 }

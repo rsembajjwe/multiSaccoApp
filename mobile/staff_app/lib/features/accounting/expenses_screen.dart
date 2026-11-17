@@ -52,8 +52,7 @@ class ExpensesScreen extends ConsumerWidget {
               message: 'No expenses recorded yet.',
             );
           }
-          final total =
-              expenses.fold<num>(0, (sum, e) => sum + e.amount);
+          final total = expenses.fold<num>(0, (sum, e) => sum + e.amount);
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(expensesProvider),
             child: ListView.separated(
@@ -120,6 +119,7 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
   String? _supplierId;
   String _channel = 'cash';
   bool _busy = false;
+  String? _formError;
 
   @override
   void dispose() {
@@ -130,8 +130,12 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_accountCode == null) return;
+    setState(() => _formError = null);
+    if (!_formKey.currentState!.validate() || _accountCode == null) {
+      setState(() => _formError =
+          'Complete the highlighted expense fields before posting.');
+      return;
+    }
     final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
     final confirmed = await confirmAction(
       context,
@@ -161,8 +165,8 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        setState(() =>
+            _formError = 'Expense was not recorded. Review and retry. $e');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -204,11 +208,29 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
                         child: Text('${a.name} (${a.code})',
                             overflow: TextOverflow.ellipsis)),
                 ],
-                onChanged: _busy
-                    ? null
-                    : (v) => setState(() => _accountCode = v),
+                onChanged:
+                    _busy ? null : (v) => setState(() => _accountCode = v),
                 validator: (v) => v == null ? 'Pick an expense account.' : null,
               ),
+              if (accountsAsync.hasError) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Could not load expense accounts.',
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => ref.invalidate(expenseAccountsProvider),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 10),
               SegmentedButton<String>(
                 segments: [
@@ -235,8 +257,8 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
                     for (final sup in suppliers)
                       DropdownMenuItem(
                           value: sup.id,
-                          child: Text(sup.name,
-                              overflow: TextOverflow.ellipsis)),
+                          child:
+                              Text(sup.name, overflow: TextOverflow.ellipsis)),
                   ],
                   onChanged:
                       _busy ? null : (v) => setState(() => _supplierId = v),
@@ -245,6 +267,9 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
               const SizedBox(height: 10),
               TextFormField(
                 controller: _amount,
+                onChanged: (_) {
+                  if (_formError != null) setState(() => _formError = null);
+                },
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
@@ -257,8 +282,8 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
               const SizedBox(height: 10),
               TextFormField(
                 controller: _reference,
-                decoration: const InputDecoration(
-                    labelText: 'Reference (optional)'),
+                decoration:
+                    const InputDecoration(labelText: 'Reference (optional)'),
               ),
               const SizedBox(height: 10),
               TextFormField(
@@ -269,6 +294,22 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
                     const InputDecoration(labelText: 'Description (optional)'),
               ),
               const SizedBox(height: 16),
+              if (_formError != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _formError!,
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onErrorContainer),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(

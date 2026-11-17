@@ -8,6 +8,7 @@ Production backend target: Java/Spring Boot in `backend-java`. Node API is demo-
 Java-backed routes currently implemented:
 
 - `GET /api/v1/health`
+- `GET /api/v1/mobile-app-policy` (public mobile minimum/latest build policy and force-upgrade decision)
 - `GET /api/v1/tenants`
 - `GET /api/v1/tenants/fleet` (platform fleet search, health, ownership, and server pagination)
 - `GET /api/v1/tenants/fleet/summary` (fleet-wide health, lifecycle, owner and district workloads, incident/SLA queue, six-month renewal forecast, billing, and onboarding metrics)
@@ -257,6 +258,9 @@ All JSON responses should follow one of these shapes:
 | POST | `/integrations/mobile-money/callback` | Receive idempotent mobile-money payment callbacks. | Public/provider |
 | GET | `/integrations/mobile-money/callbacks` | List tenant mobile-money callback history. | Required |
 | GET | `/notifications/deliveries` | List simulated SMS and email provider delivery history. | Required |
+| POST | `/notifications/messages/sms` | Send immediately or schedule custom/account-status SMS to all or selected members using SACCO credits. | `notifications:manage` |
+| GET | `/notifications/sms-schedules` | List the signed-in SACCO's scheduled SMS history. | `notifications:manage` |
+| PATCH | `/notifications/sms-schedules/{scheduleId}/cancel` | Cancel a pending scheduled SMS. | `notifications:manage` |
 | GET | `/governance-meetings` | List tenant governance meetings and resolutions. | Required |
 | POST | `/governance-meetings` | Create a governance meeting record. | SACCO staff |
 | POST | `/governance-meetings/:id/resolutions` | Record a meeting resolution. | SACCO staff |

@@ -7,6 +7,7 @@ class StaffSession {
     required this.userId,
     required this.userName,
     required this.email,
+    required this.phone,
     required this.roleNames,
     required this.permissions,
     required this.saccoName,
@@ -20,6 +21,7 @@ class StaffSession {
   final String userId;
   final String userName;
   final String email;
+  final String phone;
   final List<String> roleNames;
   final List<String> permissions;
   final String saccoName;
@@ -44,6 +46,7 @@ class StaffSession {
       userName:
           '${user?['fullName'] ?? user?['name'] ?? user?['username'] ?? ''}',
       email: '${user?['email'] ?? ''}',
+      phone: '${user?['phone'] ?? ''}',
       roleNames: _strList(j['roleNames']),
       permissions: _strList(j['permissionIds']),
       saccoName: '${tenant?['name'] ?? tenant?['saccoName'] ?? ''}',
@@ -68,6 +71,10 @@ class SaccoProfile {
     required this.loanInterestRate,
     required this.logoDataUrl,
     required this.membershipSubscriptionAmount,
+    required this.savingsCyclePeriod,
+    required this.savingsCycleStartMonth,
+    required this.savingsCycleStartDay,
+    required this.savingsWithdrawalWindowDays,
   });
 
   final String id;
@@ -79,6 +86,10 @@ class SaccoProfile {
   final num loanInterestRate;
   final String logoDataUrl;
   final num membershipSubscriptionAmount;
+  final String savingsCyclePeriod;
+  final int savingsCycleStartMonth;
+  final int savingsCycleStartDay;
+  final int savingsWithdrawalWindowDays;
 
   factory SaccoProfile.fromJson(Map<String, dynamic> j) => SaccoProfile(
         id: _str(j['id']),
@@ -90,6 +101,49 @@ class SaccoProfile {
         loanInterestRate: _num(j['loanInterestRate']),
         logoDataUrl: _str(j['logoDataUrl']),
         membershipSubscriptionAmount: _num(j['membershipSubscriptionAmount']),
+        savingsCyclePeriod: _str(j['savingsCyclePeriod']).isEmpty
+            ? 'continuous'
+            : _str(j['savingsCyclePeriod']),
+        savingsCycleStartMonth: _int(j['savingsCycleStartMonth'] ?? 1),
+        savingsCycleStartDay: _int(j['savingsCycleStartDay'] ?? 1),
+        savingsWithdrawalWindowDays:
+            _int(j['savingsWithdrawalWindowDays'] ?? 30),
+      );
+}
+
+class SmsSchedule {
+  const SmsSchedule({
+    required this.id,
+    required this.title,
+    required this.mode,
+    required this.status,
+    required this.scheduledAt,
+    required this.estimatedCredits,
+    required this.recipients,
+    required this.creditsUsed,
+    required this.failureReason,
+  });
+
+  final String id;
+  final String title;
+  final String mode;
+  final String status;
+  final DateTime? scheduledAt;
+  final int estimatedCredits;
+  final int recipients;
+  final int creditsUsed;
+  final String failureReason;
+
+  factory SmsSchedule.fromJson(Map<String, dynamic> j) => SmsSchedule(
+        id: _str(j['id']),
+        title: _str(j['title']),
+        mode: _str(j['mode']),
+        status: _str(j['status']),
+        scheduledAt: DateTime.tryParse(_str(j['scheduledAt'])),
+        estimatedCredits: _int(j['estimatedCredits']),
+        recipients: _int(j['recipients']),
+        creditsUsed: _int(j['creditsUsed']),
+        failureReason: _str(j['failureReason']),
       );
 }
 
@@ -242,6 +296,9 @@ class Member {
     required this.shares,
     required this.welfare,
     this.loanBalance = 0,
+    this.loanStatus = 'none',
+    this.guaranteedLoanBalance = 0,
+    this.guaranteeCapacity = 0,
   });
 
   final String id;
@@ -261,11 +318,14 @@ class Member {
   final num shares;
   final num welfare;
   final num loanBalance;
+  final String loanStatus;
+  final num guaranteedLoanBalance;
+  final num guaranteeCapacity;
 
   num get totalWorth => savings + shares + welfare;
 
   factory Member.fromJson(Map<String, dynamic> j) => Member(
-        id: _str(j['id']),
+        id: _str(j['id'] ?? j['memberId']),
         branchId: _str(j['branchId']),
         nationalId: _str(j['nationalId']),
         membershipNo: _str(j['membershipNo']),
@@ -281,8 +341,20 @@ class Member {
         savings: _num(j['savingsBalance']),
         shares: _num(j['sharesBalance']),
         welfare: _num(j['welfareBalance']),
-        loanBalance: _num(j['loanBalance']),
+        loanBalance: _num(j['loanBalance'] ?? j['openLoanBalance']),
+        loanStatus: _str(j['loanStatus']).isEmpty
+            ? (_num(j['loanBalance'] ?? j['openLoanBalance']) > 0
+                ? 'active'
+                : 'none')
+            : _str(j['loanStatus']),
+        guaranteedLoanBalance: _num(j['guaranteedLoanBalance']),
+        guaranteeCapacity: _num(j['guaranteeCapacity']),
       );
+}
+
+bool memberStatusAllowsLoanSelection(String status) {
+  final normalized = status.trim().toLowerCase();
+  return normalized.isEmpty || normalized == 'active';
 }
 
 class MemberFundBalance {
@@ -506,6 +578,7 @@ class MemberLoanExposure {
   final Loan? openLoan;
 
   bool get hasOpenLoan => openLoan != null;
+  num get totalLoanExposure => openLoanBalance + guaranteedLoanBalance;
 
   factory MemberLoanExposure.fromJson(Map<String, dynamic> j) =>
       MemberLoanExposure(

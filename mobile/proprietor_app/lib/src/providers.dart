@@ -48,6 +48,9 @@ final adminPackagesProvider = FutureProvider.autoDispose(
 final smsSalesProvider = FutureProvider.autoDispose(
   (ref) => ref.watch(platformRepositoryProvider).smsSales(),
 );
+final smsInventoryProvider = FutureProvider.autoDispose(
+  (ref) => ref.watch(platformRepositoryProvider).smsInventory(),
+);
 final smsBroadcastTenantsProvider = FutureProvider.autoDispose(
   (ref) => ref.watch(platformRepositoryProvider).tenants(),
 );

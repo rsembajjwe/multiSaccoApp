@@ -12,5 +12,18 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "StaffAppInfo")
+    let channel = FlutterMethodChannel(
+      name: "com.methaltech.sacco_staff_app/app_info",
+      binaryMessenger: registrar.messenger()
+    )
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "getBuildNumber" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      let buildNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+      result(Int(buildNumber ?? "0") ?? 0)
+    }
   }
 }

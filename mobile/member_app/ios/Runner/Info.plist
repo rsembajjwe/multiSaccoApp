@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-	<dict>
+<dict>
+	<key>NSContactsUsageDescription</key>
+	<string>Select phone contacts to send SMS messages using your Tereka SMS credits.</string>
 		<key>NSCameraUsageDescription</key>
 		<string>Take a profile photo.</string>
 		<key>NSPhotoLibraryUsageDescription</key>

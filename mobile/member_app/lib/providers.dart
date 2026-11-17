@@ -11,6 +11,7 @@ import 'data/profile_repository.dart';
 import 'data/payment_repository.dart';
 import 'data/push_service.dart';
 import 'data/session_store.dart';
+import 'data/sms_repository.dart';
 import 'domain/models.dart';
 
 final sessionStoreProvider = Provider<SessionStore>((ref) => SessionStore());
@@ -111,3 +112,7 @@ final biometricSupportedProvider =
 
 final biometricLockProvider =
     FutureProvider<bool>((ref) => ref.watch(sessionStoreProvider).biometricLockEnabled());
+
+final smsRepositoryProvider = Provider<SmsRepository>((ref) => SmsRepository(ref.watch(apiClientProvider)));
+
+final smsWalletProvider = FutureProvider<SmsWallet>((ref) => ref.watch(smsRepositoryProvider).wallet());

@@ -335,7 +335,8 @@ Most member features can use existing endpoints. Additive backend work still nee
 - Complete `openapi.yaml` for every member mobile endpoint.
 - Push-token registration and unregister endpoints.
 - Push fan-out integration in notification delivery.
-- App version/force-upgrade endpoint.
+- App version/force-upgrade endpoint. **Done for the Staff app:** public server policy, configurable
+  minimum/latest Android builds, optional update notice, and mandatory login blocking.
 - Member-scoped statement/receipt endpoints if not already exposed cleanly.
 - Mobile-specific API smoke script covering login, dashboard, loans, payments and notifications.
 - Optional app-device table for device metadata, revoked devices and audit.
@@ -426,4 +427,3 @@ Staff app target after member foundation: 8 to 12 weeks.
 6. Replace `lib/api_contract.dart` with generated client code.
 7. Finish Phase 1 login/session/dashboard flows against the Java API.
 8. Add the first mobile CI job.
-

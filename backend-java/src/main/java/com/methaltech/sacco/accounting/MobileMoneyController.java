@@ -22,6 +22,7 @@ import com.methaltech.sacco.member.MemberSubscriptionService;
 import com.methaltech.sacco.money.Money;
 import com.methaltech.sacco.notification.NotificationService;
 import com.methaltech.sacco.notification.SmsWalletService;
+import com.methaltech.sacco.notification.MemberSmsWalletService;
 import com.methaltech.sacco.subscription.Subscription;
 import com.methaltech.sacco.subscription.SubscriptionAccessService;
 import com.methaltech.sacco.subscription.SubscriptionPayment;
@@ -84,6 +85,7 @@ class MobileMoneyController {
     private final SubscriptionPaymentRepository subscriptionPaymentRepository;
     private final SubscriptionService subscriptionService;
     private final SmsWalletService smsWalletService;
+    private final MemberSmsWalletService memberSmsWalletService;
 
     @PostMapping("/payment-requests")
     ResponseEntity<?> requestPayment(
@@ -128,7 +130,9 @@ class MobileMoneyController {
             ResponseEntity<?> loanValidation = validateLoanRepaymentRequest(body.loanId(), member, amount);
             if (loanValidation != null) return loanValidation;
         }
-        if (!"membership_dues".equals(purpose) && !"personal_app_fee".equals(purpose)) {
+        if (!"membership_dues".equals(purpose)
+                && !"personal_app_fee".equals(purpose)
+                && !"platform_fee".equals(purpose)) {
             MemberSubscriptionService.MemberAppAccess memberAppAccess = memberSubscriptionService.accessFor(member);
             if (!memberAppAccess.allowed()) {
                 return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED)
@@ -479,6 +483,49 @@ class MobileMoneyController {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
     }
 
+    @PostMapping("/sms-payment-requests/member")
+    ResponseEntity<?> requestMemberSmsTopUpPayment(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody MemberSmsTopUpPaymentRequest body,
+            jakarta.servlet.http.HttpServletRequest servletRequest) {
+        MemberAuthService.CurrentMemberSession currentSession = memberAuthService.currentSession(authorization);
+        if (currentSession == null) return memberAuthService.authRequired();
+        ResponseEntity<?> providerValidation = validatePaymentProvider(body.provider());
+        if (providerValidation != null) return providerValidation;
+        Member member = currentSession.member();
+        int smsCount = body.smsCount() == null ? 0 : body.smsCount();
+        if (smsCount <= 0) {
+            return ResponseEntity.badRequest().body(ApiErrorResponse.of(400, "SMS_COUNT_REQUIRED", "Enter the number of SMS credits to buy."));
+        }
+        BigDecimal amount = memberSmsWalletService.amountFor(smsCount);
+        if (amount.signum() <= 0) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiErrorResponse.of(409, "SMS_RATE_NOT_CONFIGURED", "Platform admin must set a positive SMS rate first."));
+        }
+        String phone = body.payerPhone() == null || body.payerPhone().isBlank() ? member.getPhone() : body.payerPhone().trim();
+        if (phone == null || phone.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiErrorResponse.of(400, "PAYER_PHONE_REQUIRED", "A mobile-money phone number is required."));
+        }
+        TenantResponse tenant = tenantService.findById(member.getTenantId()).orElse(null);
+        if (tenant == null || !tenant.mobileMoneyCollectionAvailable()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiErrorResponse.of(403, "COLLECTION_METHOD_NOT_ALLOWED", "Online payment collection is not enabled for this SACCO."));
+        }
+        String reference = "MEMBER-SMS-" + UUID.randomUUID();
+        Map<String, Object> providerPayload = smsTopUpPayload(body.providerPayload(), smsCount);
+        MobileMoneyPaymentResult result;
+        try {
+            result = mobileMoneyRouter.resolve(body.provider()).requestPayment(new MobileMoneyPaymentRequest(
+                    member.getTenantId(), member.getId(), member.getMembershipNo(), "", "member_sms_topup",
+                    amount, tenant.currencyCode(), phone, reference, body.provider(), providerPayload));
+        } catch (MobileMoneyProviderException exception) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ApiErrorResponse.of(502, "PAYMENT_PROVIDER_UNAVAILABLE", exception.getMessage()));
+        }
+        MobileMoneyPaymentRequestEntity saved = paymentRequestRepository.save(MobileMoneyPaymentRequestEntity.from(
+                result, "", phone, payload(providerPayload)));
+        auditService.record(member.getTenantId(), member.getId(), member.getFullName(),
+                "Initiated personal SMS top-up for " + smsCount + " credits", "member_sms_wallet", member.getId(), servletRequest.getRemoteAddr());
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(ApiResponse.of(MobileMoneyPaymentRequestResponse.from(saved)));
+    }
+
     @PostMapping("/callback")
     @Transactional
     ResponseEntity<?> receiveCallback(@Valid @RequestBody MobileMoneyCallbackRequest body) {
@@ -541,6 +588,9 @@ class MobileMoneyController {
         }
         if ("password_reset_sms".equals(purpose)) {
             return activatePasswordResetSms(body, tenantId, externalReference, provider, member, amount);
+        }
+        if ("member_sms_topup".equals(purpose) && matchingRequest != null) {
+            return postMemberSmsTopUp(body, tenantId, externalReference, provider, member, amount, matchingRequest);
         }
         return ResponseEntity.badRequest()
                 .body(ApiErrorResponse.of(400, "INVALID_CALLBACK_PURPOSE", "Unsupported mobile-money payment purpose."));
@@ -959,6 +1009,26 @@ class MobileMoneyController {
                 "sms_wallet",
                 tenantId,
                 null);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
+    }
+
+    private ResponseEntity<?> postMemberSmsTopUp(
+            MobileMoneyCallbackRequest body, String tenantId, String externalReference, String provider,
+            Member member, BigDecimal amount, MobileMoneyPaymentRequestEntity matchingRequest) {
+        ResponseEntity<?> idempotencyConflict = reserveCallbackReference(tenantId, externalReference);
+        if (idempotencyConflict != null) return idempotencyConflict;
+        int requestedSms = smsCountFromPayload(matchingRequest.getProviderPayload());
+        BigDecimal expectedAmount = memberSmsWalletService.amountFor(requestedSms);
+        if (requestedSms <= 0 || amount.compareTo(expectedAmount) < 0) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiErrorResponse.of(409, "SMS_TOPUP_UNDERPAID", "SMS top-up payment does not match the requested credits."));
+        }
+        int credits = memberSmsWalletService.creditFromPayment(tenantId, member.getId(), amount, externalReference);
+        MobileMoneyCallback callback = callbackRepository.save(new MobileMoneyCallback(
+                "callback_" + UUID.randomUUID(), tenantId, member.getId(), body.purpose().trim(), amount,
+                externalReference, provider, payload(body.providerPayload()), "posted", "member_sms_wallet", member.getId()));
+        markMatchingPaymentRequestPosted(tenantId, externalReference, "member_sms_wallet", member.getId());
+        auditService.record(tenantId, member.getId(), member.getFullName(),
+                "Posted personal SMS top-up for " + credits + " credits", "member_sms_wallet", member.getId(), null);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(MobileMoneyCallbackResponse.from(callback)));
     }
 
@@ -1410,6 +1480,13 @@ class MobileMoneyController {
             @NotNull Integer smsCount,
             @NotBlank String payerPhone,
             String externalReference,
+            String provider,
+            Map<String, Object> providerPayload) {
+    }
+
+    record MemberSmsTopUpPaymentRequest(
+            @NotNull Integer smsCount,
+            String payerPhone,
             String provider,
             Map<String, Object> providerPayload) {
     }

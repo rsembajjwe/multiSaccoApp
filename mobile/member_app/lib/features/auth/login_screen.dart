@@ -20,6 +20,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _identifier = TextEditingController();
   final _password = TextEditingController();
   bool _busy = false;
+  bool _obscurePassword = true;
   String? _error;
 
   @override
@@ -133,14 +134,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     controller: _identifier,
                     textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
-                        labelText: 'Email, phone or membership no.'),
+                      labelText: 'Email or phone number',
+                      hintText: '+256 700 123456',
+                      helperText:
+                          'Use the email or phone registered with your SACCO.',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _password,
-                    obscureText: true,
+                    obscureText: _obscurePassword,
                     onSubmitted: (_) => _submit(),
-                    decoration: const InputDecoration(labelText: 'Password'),
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      suffixIcon: IconButton(
+                        tooltip: _obscurePassword
+                            ? 'Show password'
+                            : 'Hide password',
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   if (_error != null)
@@ -165,7 +185,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 builder: (_) => ForgotPasswordScreen(
                                     saccoCode: _sacco.text.trim().isEmpty
                                         ? 'GREE'
-                                        : _sacco.text.trim()),
+                                        : _sacco.text.trim(),
+                                    identifier: _identifier.text.trim()),
                               ),
                             ),
                     child: const Text('Forgot password?'),

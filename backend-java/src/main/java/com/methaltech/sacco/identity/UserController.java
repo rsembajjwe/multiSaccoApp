@@ -5,6 +5,7 @@ import com.methaltech.sacco.api.ApiResponse;
 import com.methaltech.sacco.member.Member;
 import com.methaltech.sacco.member.MemberRepository;
 import com.methaltech.sacco.security.PasswordHasher;
+import com.methaltech.sacco.security.PhoneNumberNormalizer;
 import com.methaltech.sacco.security.TokenGenerator;
 import com.methaltech.sacco.tenant.SaccoOfficialAssignment;
 import com.methaltech.sacco.tenant.SaccoOfficialAssignmentRepository;
@@ -142,7 +143,7 @@ class UserController {
 
         String normalizedEmail = request.email() == null ? "" : request.email().trim().toLowerCase();
         String email = normalizedEmail.isBlank() ? null : normalizedEmail;
-        String phone = request.phone() == null ? "" : request.phone().trim();
+        String phone = PhoneNumberNormalizer.normalizeUgandan(request.phone());
         String channel = request.deliveryChannel() == null || request.deliveryChannel().isBlank()
                 ? "email"
                 : request.deliveryChannel().trim().toLowerCase();
@@ -259,6 +260,72 @@ class UserController {
                 member.getId(), user.getId(), office, user.getEmail(), true)));
     }
 
+    @PostMapping("/official-staff-access/resend")
+    @Transactional
+    ResponseEntity<?> resendOfficialOnboarding(
+            @RequestHeader(name = "Authorization", required = false) String authorization,
+            @Valid @RequestBody ResendOfficialOnboardingRequest body,
+            HttpServletRequest request) {
+        AuthService.CurrentSession currentSession = authService.currentSession(authorization);
+        if (currentSession == null) return authService.authRequired();
+        if (!authService.isPlatform(currentSession.user()) || !authService.hasPermission(currentSession.user(), "users:create")) {
+            return authService.permissionRequired("users:create");
+        }
+
+        String office = normalizeOfficialOffice(body.office());
+        String channel = body.deliveryChannel().trim().toLowerCase();
+        Member member = memberRepository.findById(body.memberId().trim()).orElse(null);
+        if (office == null || member == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_OFFICIAL_MEMBER", "Select a chairperson, secretary, or treasurer."));
+        }
+        SaccoOfficialAssignment assignment = officialAssignmentRepository
+                .findByTenantIdAndOffice(member.getTenantId(), office)
+                .filter(candidate -> candidate.getMemberId().equals(member.getId()))
+                .orElse(null);
+        if (assignment == null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "OFFICIAL_ASSIGNMENT_REQUIRED", "The member is no longer assigned to that SACCO office."));
+        }
+        if (!Set.of("email", "sms").contains(channel)) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "INVALID_DELIVERY_CHANNEL", "Choose email or SMS for temporary-password delivery."));
+        }
+
+        User user = member.getLinkedUserId() == null
+                ? null
+                : userRepository.findById(member.getLinkedUserId()).orElse(null);
+        if (user == null || !user.getTenantId().equals(member.getTenantId())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "OFFICIAL_STAFF_ACCESS_REQUIRED", "Grant staff access to this official before resending an invitation."));
+        }
+        if (!user.isPasswordResetRequired()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiErrorResponse.of(409, "ONBOARDING_ALREADY_COMPLETED", "This official has already completed first login. Use password reset instead."));
+        }
+        String recipient = "sms".equals(channel) ? user.getPhone() : user.getEmail();
+        if ("sms".equals(channel) && (recipient == null || !recipient.matches("^\\+[1-9]\\d{7,14}$"))) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "PHONE_REQUIRED", "Add a valid international phone number before resending by SMS."));
+        }
+        if ("email".equals(channel) && (recipient == null || recipient.isBlank())) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(400, "EMAIL_REQUIRED", "Add an active email address before resending by email."));
+        }
+
+        User savedUser = staffOnboardingService.reissueTemporaryPassword(user, channel);
+        auditService.record(
+                member.getTenantId(),
+                currentSession.user(),
+                "Resent " + office + " onboarding invitation by " + channel,
+                "official_staff_access",
+                savedUser.getId(),
+                request.getRemoteAddr());
+        return ResponseEntity.ok(ApiResponse.of(new ResendOfficialOnboardingResponse(
+                member.getId(), savedUser.getId(), office, channel, maskRecipient(recipient),
+                savedUser.getOnboardingDeliveryStatus())));
+    }
+
     @PutMapping("/{userId}")
     ResponseEntity<?> updateUser(
             @RequestHeader(name = "Authorization", required = false) String authorization,
@@ -292,7 +359,7 @@ class UserController {
         targetUser.updateProfile(
                 request.fullName().trim(),
                 email,
-                request.phone() == null ? "" : request.phone().trim());
+                PhoneNumberNormalizer.normalizeUgandan(request.phone()));
         User savedUser = userRepository.save(targetUser);
         auditService.record(
                 targetUser.getTenantId(),
@@ -577,7 +644,7 @@ class UserController {
             return platformSuperAdminRequired("request platform user password reset");
         }
 
-        String resetToken = tokenGenerator.createToken();
+        String resetToken = tokenGenerator.createPasswordResetCode();
         Instant expiresAt = Instant.now().plus(Duration.ofMinutes(30));
         PasswordResetRequest resetRequest = passwordResetRequestRepository.save(new PasswordResetRequest(
                 "reset_" + UUID.randomUUID(),
@@ -798,6 +865,32 @@ class UserController {
     }
 
     record OfficialStaffAccessResponse(String memberId, String userId, String office, String email, boolean linked) {
+    }
+
+    record ResendOfficialOnboardingRequest(
+            @NotBlank String memberId,
+            @NotBlank String office,
+            @NotBlank String deliveryChannel) {
+    }
+
+    record ResendOfficialOnboardingResponse(
+            String memberId,
+            String userId,
+            String office,
+            String deliveryChannel,
+            String recipient,
+            String deliveryStatus) {
+    }
+
+    private String maskRecipient(String recipient) {
+        if (recipient == null || recipient.isBlank()) return "";
+        int at = recipient.indexOf('@');
+        if (at > 0) {
+            String local = recipient.substring(0, at);
+            return local.substring(0, 1) + "***" + recipient.substring(at);
+        }
+        String digits = recipient.replaceAll("[^0-9]", "");
+        return digits.length() < 4 ? "***" : "***" + digits.substring(digits.length() - 4);
     }
 
     private String normalizeOfficialOffice(String office) {

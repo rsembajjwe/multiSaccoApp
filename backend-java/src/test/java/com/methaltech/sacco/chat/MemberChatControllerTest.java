@@ -1,5 +1,6 @@
 package com.methaltech.sacco.chat;
 
+import com.methaltech.sacco.PostgresIntegrationTest;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,7 +21,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @AutoConfigureMockMvc
 @SpringBootTest(properties = "sacco.rate-limit.enabled=false")
-class MemberChatControllerTest {
+class MemberChatControllerTest extends PostgresIntegrationTest {
 
     private static final String OWN_THREAD = "chat_complaint_green_0001";
 

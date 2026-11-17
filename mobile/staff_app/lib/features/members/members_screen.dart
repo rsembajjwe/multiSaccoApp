@@ -30,8 +30,7 @@ class _MembersScreenState extends ConsumerState<MembersScreen> {
   @override
   Widget build(BuildContext context) {
     final canCreate =
-        ref.watch(sessionProvider).asData?.value.can('members:create') ??
-            false;
+        ref.watch(sessionProvider).asData?.value.can('members:create') ?? false;
     return Scaffold(
       appBar: AppBar(title: const Text('Members')),
       floatingActionButton: canCreate
@@ -140,59 +139,115 @@ class _MemberTile extends StatelessWidget {
         },
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 22,
-                backgroundColor: scheme.primaryContainer,
-                child: Text(initials,
-                    style: TextStyle(
-                        color: scheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w700)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(member.fullName.isEmpty ? '—' : member.fullName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text(
-                        '${member.membershipNo.isEmpty ? '—' : member.membershipNo} · ${member.phone}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 12, color: scheme.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              Row(
                 children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: scheme.primaryContainer,
+                    child: Text(initials,
+                        style: TextStyle(
+                            color: scheme.onPrimaryContainer,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(member.fullName.isEmpty ? '—' : member.fullName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(
+                            '${member.membershipNo.isEmpty ? '—' : member.membershipNo} · ${member.phone}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 12, color: scheme.onSurfaceVariant)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   StatusChip(member.status),
-                  if (showFinancials) ...[
-                    const SizedBox(height: 6),
-                    Text(Fmt.money(member.totalWorth),
-                        style: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w800)),
-                    if (member.loanBalance > 0) ...[
-                      const SizedBox(height: 2),
-                      Text('Loan Balance ${Fmt.money(member.loanBalance)}',
-                          style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFFB91C1C))),
-                    ],
-                  ],
                 ],
               ),
+              if (showFinancials) ...[
+                const Divider(height: 22),
+                Wrap(
+                  spacing: 18,
+                  runSpacing: 10,
+                  children: [
+                    _MemberFinancialMetric(
+                      label: 'Total savings',
+                      value: Fmt.money(member.savings),
+                    ),
+                    _MemberFinancialMetric(
+                      label: 'Loan balance',
+                      value: Fmt.money(member.loanBalance),
+                      color: member.loanBalance > 0
+                          ? const Color(0xFFB91C1C)
+                          : null,
+                    ),
+                    _MemberFinancialMetric(
+                      label: 'Loan status',
+                      value: member.loanStatus == 'none'
+                          ? 'No active loan'
+                          : Fmt.label(member.loanStatus),
+                      color: member.loanStatus == 'overdue'
+                          ? const Color(0xFFB91C1C)
+                          : member.loanStatus == 'active'
+                              ? const Color(0xFF0F766E)
+                              : null,
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MemberFinancialMetric extends StatelessWidget {
+  const _MemberFinancialMetric({
+    required this.label,
+    required this.value,
+    this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 105,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -232,8 +287,8 @@ class _AddMemberSheetState extends ConsumerState<_AddMemberSheet> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate() || _branchId == null) {
       if (_branchId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Choose a branch.')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Choose a branch.')));
       }
       return;
     }
@@ -249,8 +304,8 @@ class _AddMemberSheetState extends ConsumerState<_AddMemberSheet> {
             nationalId: _nationalId.text,
           );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Member created.')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Member created.')));
         Navigator.of(context).pop(true);
       }
     } catch (e) {
@@ -291,8 +346,7 @@ class _AddMemberSheetState extends ConsumerState<_AddMemberSheet> {
                           child: Text(b.name, overflow: TextOverflow.ellipsis),
                         ))
                     .toList(),
-                onChanged:
-                    _busy ? null : (v) => setState(() => _branchId = v),
+                onChanged: _busy ? null : (v) => setState(() => _branchId = v),
                 validator: (v) => v == null ? 'Choose a branch.' : null,
               ),
               const SizedBox(height: 10),
@@ -328,8 +382,8 @@ class _AddMemberSheetState extends ConsumerState<_AddMemberSheet> {
               const SizedBox(height: 10),
               TextFormField(
                 controller: _nationalId,
-                decoration: const InputDecoration(
-                    labelText: 'National ID (optional)'),
+                decoration:
+                    const InputDecoration(labelText: 'National ID (optional)'),
               ),
               const SizedBox(height: 10),
               TextFormField(

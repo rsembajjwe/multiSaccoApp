@@ -77,4 +77,34 @@ class StaffOnboardingServiceTest {
         assertFalse(user.isEmailVerified());
         assertFalse(user.isPasswordResetRequired());
     }
+
+    @Test
+    void reissueReplacesTemporaryPasswordAndUsesRequestedChannel() {
+        UserRepository userRepository = mock(UserRepository.class);
+        OnboardingNotificationService notificationService = mock(OnboardingNotificationService.class);
+        TenantService tenantService = mock(TenantService.class);
+        when(userRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tenantService.findById("tenant_green")).thenReturn(Optional.of(new TenantResponse(
+                "tenant_green", "A-Z Community Group", "GREE", "active", "REG", "Kampala",
+                "Uganda", "en-UG", "UGX", 0, LocalDate.now(), "starter", 100, "NONE",
+                false, false, false, false, null, null, null, null)));
+        PasswordHasher passwordHasher = new PasswordHasher();
+        StaffOnboardingService service = new StaffOnboardingService(
+                userRepository, passwordHasher, notificationService, tenantService);
+        User user = new User(
+                "user_one", "tenant_green", "Treasurer", "treasurer@example.com", "+256700000001",
+                "old-hash", "old-salt", "active");
+        user.beginOnboarding("email");
+
+        service.reissueTemporaryPassword(user, "sms");
+
+        ArgumentCaptor<String> temporaryPassword = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).sendTemporaryPassword(
+                eq("sms"), eq("+256700000001"), eq("Treasurer"),
+                eq("A-Z Community Group"), eq("GREE"), temporaryPassword.capture());
+        assertTrue(passwordHasher.matches(
+                temporaryPassword.getValue(), user.getPasswordSalt(), user.getPasswordHash()));
+        assertEquals("sms", user.getOnboardingChannel());
+        assertEquals("sent", user.getOnboardingDeliveryStatus());
+    }
 }

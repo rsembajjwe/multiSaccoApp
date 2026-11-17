@@ -111,6 +111,7 @@ class _LoanFormSheet extends ConsumerStatefulWidget {
 
 class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
   final _formKey = GlobalKey<FormState>();
+  final _scrollController = ScrollController();
   final _amount = TextEditingController();
   final _interestRate = TextEditingController();
   final _chargeFee = TextEditingController(text: '0');
@@ -121,14 +122,18 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
   Member? _borrower;
   MemberLoanExposure? _borrowerExposure;
   bool _loadingBorrower = false;
+  Future<void>? _borrowerLookup;
+  int _borrowerSelection = 0;
 
   String _product = _loanProducts.first;
   final List<Member> _guarantors = [];
   final Map<String, MemberLoanExposure> _guarantorExposures = {};
   bool _busy = false;
+  String? _formError;
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _amount.dispose();
     _interestRate.dispose();
     _chargeFee.dispose();
@@ -142,18 +147,46 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
       ref.read(sessionProvider).asData?.value.can('loans:terms') ?? false;
 
   Future<void> _pickBorrower() async {
-    final picked = await showMemberPicker(context, title: 'Select borrower');
+    final picked = await showMemberPicker(
+      context,
+      title: 'Select borrower',
+      fetchPage: (search, page) => ref
+          .read(adminRepositoryProvider)
+          .loanMemberCandidatesPage(search: search, page: page),
+      showLoanExposure: true,
+      unavailableReason: (member) =>
+          memberStatusAllowsLoanSelection(member.status)
+              ? null
+              : 'Unavailable: ${Fmt.label(member.status)} member',
+    );
     if (picked == null || !mounted) return;
+    if (!memberStatusAllowsLoanSelection(picked.status)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Only active members can apply for loans.')),
+      );
+      return;
+    }
+    final selection = ++_borrowerSelection;
     setState(() {
       _borrower = picked;
       _borrowerExposure = null;
       _loadingBorrower = true;
+      _formError = null;
+      _guarantors.clear();
+      _guarantorExposures.clear();
     });
+    final lookup = _loadBorrowerExposure(picked, selection);
+    _borrowerLookup = lookup;
+    await lookup;
+  }
+
+  Future<void> _loadBorrowerExposure(Member picked, int selection) async {
     try {
       final exposure =
           await ref.read(adminRepositoryProvider).memberLoanExposure(picked.id);
-      if (!mounted) return;
-      if (exposure.status != 'active') {
+      if (!mounted || selection != _borrowerSelection) return;
+      if (!memberStatusAllowsLoanSelection(exposure.status)) {
         setState(() {
           _borrower = null;
           _borrowerExposure = null;
@@ -177,15 +210,41 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
         }
       });
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _loadingBorrower = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Could not load member: $e')));
+      if (!mounted || selection != _borrowerSelection) return;
+      setState(() {
+        _borrowerExposure = null;
+        _loadingBorrower = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+          'Loan history could not be checked. You can still save; the server will validate the loan.',
+        ),
+      ));
     }
   }
 
   Future<void> _addGuarantor() async {
-    final picked = await showMemberPicker(context, title: 'Add guarantor');
+    final picked = await showMemberPicker(
+      context,
+      title: 'Add guarantor',
+      fetchPage: (search, page) =>
+          ref.read(adminRepositoryProvider).loanMemberCandidatesPage(
+                search: search,
+                page: page,
+                guarantorOnly: true,
+                excludeMemberId: _borrower?.id,
+              ),
+      showLoanExposure: true,
+      unavailableReason: (member) {
+        if (member.id == _borrower?.id) return 'Borrower cannot guarantee';
+        if (_guarantors.any((item) => item.id == member.id)) {
+          return 'Already selected';
+        }
+        return memberStatusAllowsLoanSelection(member.status)
+            ? null
+            : 'Unavailable: ${Fmt.label(member.status)} member';
+      },
+    );
     if (picked == null || !mounted) return;
     if (picked.id == _borrower?.id) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -193,7 +252,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
       );
       return;
     }
-    if (picked.status != 'active') {
+    if (!memberStatusAllowsLoanSelection(picked.status)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Only active members can guarantee.')),
       );
@@ -224,6 +283,8 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
   }
 
   Future<void> _save() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _formError = null);
     final borrower = _borrower;
     if (borrower == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -231,7 +292,30 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
       );
       return;
     }
-    if (!_formKey.currentState!.validate()) return;
+    final borrowerLookup = _borrowerLookup;
+    if (_loadingBorrower && borrowerLookup != null) {
+      setState(() => _busy = true);
+      await borrowerLookup;
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (_borrower?.id != borrower.id) return;
+    }
+    final form = _formKey.currentState;
+    if (form == null || !form.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Complete the highlighted loan fields before saving.'),
+        ),
+      );
+      if (_scrollController.hasClients) {
+        await _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+      return;
+    }
     final unclearedLoan = _borrowerExposure?.openLoan;
     final amount = num.parse(_amount.text.trim().replaceAll(',', ''));
     final months = int.parse(_months.text.trim());
@@ -239,14 +323,53 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
         ? null
         : num.parse(_interestRate.text.trim().replaceAll(',', ''));
     final chargeFee = num.parse(_chargeFee.text.trim().replaceAll(',', ''));
+    final session = ref.read(sessionProvider).asData?.value;
+    final defaultInterestRate = session == null
+        ? null
+        : ref
+            .read(saccoProfileProvider(session.tenantId))
+            .asData
+            ?.value
+            .loanInterestRate;
+    final estimatedTotal = _estimatedTotalPayable(defaultInterestRate);
+    final borrowerSavings = _borrowerExposure?.savings;
+    if (unclearedLoan == null &&
+        estimatedTotal != null &&
+        borrowerSavings != null) {
+      final shortfall =
+          (estimatedTotal - borrowerSavings).clamp(0, double.infinity);
+      final selectedCapacity = _guarantors.fold<num>(
+        0,
+        (total, guarantor) =>
+            total + (_guarantorExposures[guarantor.id]?.guaranteeCapacity ?? 0),
+      );
+      final allGuarantorCapacitiesLoaded = _guarantors.every(
+        (guarantor) => _guarantorExposures.containsKey(guarantor.id),
+      );
+      if (shortfall > 0 && _guarantors.isEmpty) {
+        setState(() => _formError =
+            'Select guarantors to cover ${Fmt.money(shortfall)}. Interest and charges are included.');
+        return;
+      }
+      if (allGuarantorCapacitiesLoaded && shortfall > selectedCapacity) {
+        setState(() => _formError =
+            'Selected guarantors are short by ${Fmt.money(shortfall - selectedCapacity)}.');
+        return;
+      }
+      if (shortfall == 0 && _guarantors.isNotEmpty) {
+        setState(() => _formError =
+            'Remove guarantors because the member savings cover the full repayment.');
+        return;
+      }
+    }
     final borrowerName = borrower.fullName;
     final confirmed = await confirmAction(
       context,
       title: unclearedLoan == null ? 'Save loan data?' : 'Top up loan?',
       message: unclearedLoan == null
-          ? 'Create a ${Fmt.money(amount)} $_product for $borrowerName over '
+          ? 'Record a completed ${Fmt.money(amount)} $_product for $borrowerName over '
               '$months month(s), charge fee ${Fmt.money(chargeFee)}, with '
-              '${_guarantors.length} guarantor(s).'
+              '${_guarantors.length} signed guarantor(s). All details will save together.'
           : 'Top up and restructure ${Fmt.label(unclearedLoan.product)} for '
               '$borrowerName. Existing balance is ${Fmt.money(unclearedLoan.balance)}, '
               'top-up is ${Fmt.money(amount)}, new term is $months month(s), '
@@ -268,6 +391,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
             );
         ref.invalidate(loansProvider(''));
         ref.invalidate(memberLoansProvider(borrower.id));
+        ref.invalidate(memberLoanExposureProvider(borrower.id));
         ref.invalidate(saccoStatusProvider);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -278,7 +402,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
         return;
       }
 
-      final loan = await ref.read(adminRepositoryProvider).createLoan(
+      await ref.read(adminRepositoryProvider).createLoan(
             memberId: borrower.id,
             product: _product,
             amount: amount,
@@ -287,29 +411,23 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
             repaymentMonths: months,
             purpose: _purpose.text,
             signedFormReference: _formRef.text,
+            guarantorMemberIds: _guarantors.map((item) => item.id).toList(),
           );
-      for (final guarantor in _guarantors) {
-        await ref.read(adminRepositoryProvider).createLoanGuarantor(
-              loanId: loan.id,
-              memberId: guarantor.id,
-            );
-      }
       ref.invalidate(loansProvider(''));
       ref.invalidate(memberLoansProvider(borrower.id));
-      ref.invalidate(guarantorRequestsProvider);
+      ref.invalidate(memberLoanExposureProvider(borrower.id));
       ref.invalidate(saccoStatusProvider);
+      ref.invalidate(guarantorRequestsProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_guarantors.isEmpty
-                ? 'Loan data saved.'
-                : 'Loan data and guarantors saved.'),
-          ),
-        );
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.of(context).pop();
+        messenger.showSnackBar(const SnackBar(
+          content: Text('Complete loan and guarantor details saved together.'),
+        ));
       }
     } catch (e) {
       if (mounted) {
+        setState(() => _formError = 'Loan was not saved: $e');
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('$e')));
       }
@@ -326,6 +444,20 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
     final borrower = _borrower;
     final exposure = _borrowerExposure;
     final unclearedLoan = exposure?.openLoan;
+    final session = ref.watch(sessionProvider).asData?.value;
+    final defaultInterestRate = session == null
+        ? null
+        : ref
+            .watch(saccoProfileProvider(session.tenantId))
+            .asData
+            ?.value
+            .loanInterestRate;
+    final estimatedTotal = _estimatedTotalPayable(defaultInterestRate);
+    final selectedGuaranteeCapacity = _guarantors.fold<num>(
+      0,
+      (total, guarantor) =>
+          total + (_guarantorExposures[guarantor.id]?.guaranteeCapacity ?? 0),
+    );
     return Padding(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -335,7 +467,9 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
       ),
       child: Form(
         key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
         child: SingleChildScrollView(
+          controller: _scrollController,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -417,6 +551,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
                     child: TextFormField(
                       controller: _months,
                       keyboardType: TextInputType.number,
+                      onChanged: (_) => setState(() {}),
                       decoration: InputDecoration(
                         labelText:
                             unclearedLoan == null ? 'Months' : 'New months',
@@ -436,6 +571,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
                 TextFormField(
                   controller: _interestRate,
                   keyboardType: TextInputType.number,
+                  onChanged: (_) => setState(() {}),
                   decoration: const InputDecoration(
                     labelText: 'Interest rate (%)',
                     hintText: 'Leave blank for product default',
@@ -454,6 +590,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
               TextFormField(
                 controller: _chargeFee,
                 keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
                 decoration: const InputDecoration(labelText: 'Charge fee'),
                 validator: (v) {
                   final parsed =
@@ -480,7 +617,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
                 textInputAction: TextInputAction.done,
                 decoration: InputDecoration(
                   labelText: unclearedLoan == null
-                      ? 'Signed form reference'
+                      ? 'Signed loan and guarantor form reference'
                       : 'Top-up form reference',
                 ),
                 validator: (v) => v == null || v.trim().isEmpty
@@ -488,6 +625,14 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
                     : null,
               ),
               const SizedBox(height: 16),
+              if (exposure != null && estimatedTotal != null) ...[
+                _LoanCoverageCard(
+                  totalPayable: estimatedTotal,
+                  borrowerSavings: exposure.savings,
+                  selectedGuaranteeCapacity: selectedGuaranteeCapacity,
+                ),
+                const SizedBox(height: 16),
+              ],
               Text(
                 'Guarantors',
                 style: Theme.of(context)
@@ -512,8 +657,7 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
                       child: _GuarantorCard(
                         member: g,
                         exposure: _guarantorExposures[g.id],
-                        onRemove:
-                            _busy ? null : () => _removeGuarantor(g.id),
+                        onRemove: _busy ? null : () => _removeGuarantor(g.id),
                       ),
                     )),
                 Align(
@@ -526,6 +670,21 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
                 ),
               ],
               const SizedBox(height: 16),
+              if (_formError != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: scheme.errorContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _formError!,
+                    style: TextStyle(color: scheme.onErrorContainer),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -536,15 +695,79 @@ class _LoanFormSheetState extends ConsumerState<_LoanFormSheet> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.save_outlined),
-                  label: Text(unclearedLoan == null
-                      ? 'Save loan'
-                      : 'Top up / restructure'),
+                  label: Text(_busy
+                      ? 'Saving...'
+                      : unclearedLoan == null
+                          ? 'Save loan'
+                          : 'Top up / restructure'),
                   onPressed: _busy ? null : _save,
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  num? _estimatedTotalPayable(num? defaultInterestRate) {
+    final amount = num.tryParse(_amount.text.trim().replaceAll(',', ''));
+    final months = int.tryParse(_months.text.trim());
+    final charge = num.tryParse(_chargeFee.text.trim().replaceAll(',', ''));
+    final enteredRate =
+        num.tryParse(_interestRate.text.trim().replaceAll(',', ''));
+    final rate = enteredRate ?? defaultInterestRate;
+    if (amount == null || amount <= 0 || months == null || months < 1) {
+      return null;
+    }
+    if (charge == null || charge < 0 || rate == null || rate < 0) return null;
+    return amount + (amount * rate * months / 100) + charge;
+  }
+}
+
+class _LoanCoverageCard extends StatelessWidget {
+  const _LoanCoverageCard({
+    required this.totalPayable,
+    required this.borrowerSavings,
+    required this.selectedGuaranteeCapacity,
+  });
+
+  final num totalPayable;
+  final num borrowerSavings;
+  final num selectedGuaranteeCapacity;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final shortfall =
+        totalPayable > borrowerSavings ? totalPayable - borrowerSavings : 0;
+    final requiresGuarantor = shortfall > 0;
+    final remainingShortfall =
+        (shortfall - selectedGuaranteeCapacity).clamp(0, double.infinity);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: requiresGuarantor
+            ? scheme.tertiaryContainer
+            : scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Estimated total repayment: ${Fmt.money(totalPayable)}'),
+          Text('Member savings: ${Fmt.money(borrowerSavings)}'),
+          const SizedBox(height: 4),
+          Text(
+            requiresGuarantor
+                ? remainingShortfall > 0
+                    ? 'Select guarantors for ${Fmt.money(remainingShortfall)} more. Interest and charges are included.'
+                    : 'Selected guarantors fully cover the ${Fmt.money(shortfall)} shortfall.'
+                : 'No guarantor required: member savings cover the loan, interest and charges.',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ],
       ),
     );
   }
@@ -648,12 +871,10 @@ class _GuarantorCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(member.fullName,
-                          style:
-                              const TextStyle(fontWeight: FontWeight.w700)),
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
                       Text(member.membershipNo,
                           style: TextStyle(
-                              fontSize: 12,
-                              color: scheme.onSurfaceVariant)),
+                              fontSize: 12, color: scheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -667,8 +888,8 @@ class _GuarantorCard extends StatelessWidget {
             if (data == null)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 4),
-                child: Text('Loading capacity...',
-                    style: TextStyle(fontSize: 12)),
+                child:
+                    Text('Loading capacity...', style: TextStyle(fontSize: 12)),
               )
             else ...[
               Wrap(
@@ -728,8 +949,8 @@ class _LoanTile extends StatelessWidget {
       margin: EdgeInsets.zero,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => LoanDetailScreen(loan: loan))),
+        onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => LoanDetailScreen(loan: loan))),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Column(
@@ -750,7 +971,8 @@ class _LoanTile extends StatelessWidget {
               Text(memberName ?? loan.memberId,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+                  style:
+                      TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
               const Divider(height: 18),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

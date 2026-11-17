@@ -17,9 +17,9 @@ These accounts are for local development and demo testing only. Seeded demo acco
 | Role | Code | Username | Password |
 | --- | --- | --- | --- |
 | SACCO Admin | GREE | admin@greenvalley.local | Sacco@12345 |
-| Treasurer | GREE | rsembajjwe1@gmail.com | Delivered by email; change on first login |
-| Secretary | GREE | rsembajjwe2@gmail.com | Delivered by email; change on first login |
-| Chairperson | GREE | rsembajjwe@gmail.com | Delivered by email; change on first login |
+| Treasurer | GREE | rsembajjwe1@gmail.com | Treasurer@123456 |
+| Secretary | GREE | rsembajjwe2@gmail.com | Secretary@123456 |
+| Chairperson | GREE | rsembajjwe@gmail.com | Chair@123456 |
 | Loans Officer | GREE | loans@greenvalley.local | Loans@12345 |
 | Accountant | GREE | accountant@greenvalley.local | Accountant@12345 |
 | Teller / Cashier | GREE | teller@greenvalley.local | Teller@12345 |
@@ -29,9 +29,9 @@ These accounts are for local development and demo testing only. Seeded demo acco
 
 | Role | Code | Username | Password |
 | --- | --- | --- | --- |
-| Treasurer | LAKE | rsembajjwe1@gmail.com | Delivered by email; change on first login |
-| Secretary | LAKE | rsembajjwe2@gmail.com | Delivered by email; change on first login |
-| Chairperson | LAKE | rsembajjwe@gmail.com | Delivered by email; change on first login |
+| Treasurer | LAKE | rsembajjwe1@gmail.com | Treasurer@123456 |
+| Secretary | LAKE | rsembajjwe2@gmail.com | Secretary@123456 |
+| Chairperson | LAKE | rsembajjwe@gmail.com | Chair@123456 |
 
 ## Member Portal
 

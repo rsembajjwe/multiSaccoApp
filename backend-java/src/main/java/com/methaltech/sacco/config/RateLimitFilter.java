@@ -107,6 +107,7 @@ class RateLimitFilter extends OncePerRequestFilter {
         // them would count successful logins and, behind a shared/proxy IP, lock out legitimate users.
         if (uri.endsWith("/api/v1/auth/mfa/verify")
                 || uri.endsWith("/api/v1/auth/password-reset/request")
+                || uri.endsWith("/api/v1/auth/password-reset/confirm")
                 || uri.endsWith("/api/v1/member-auth/password-reset/request")
                 || uri.endsWith("/api/v1/member-auth/password-reset/confirm")) {
             return new Policy("auth", authCapacity);

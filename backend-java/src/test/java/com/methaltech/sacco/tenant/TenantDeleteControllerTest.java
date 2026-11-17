@@ -1,5 +1,6 @@
 package com.methaltech.sacco.tenant;
 
+import com.methaltech.sacco.PostgresIntegrationTest;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
@@ -26,7 +27,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @AutoConfigureMockMvc
 @SpringBootTest(properties = { "sacco.rate-limit.enabled=false", "sacco.tenant-purge.enabled=true" })
-class TenantDeleteControllerTest {
+class TenantDeleteControllerTest extends PostgresIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;

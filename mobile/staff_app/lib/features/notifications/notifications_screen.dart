@@ -81,6 +81,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               actions: [
                 if (widget.canManage)
                   IconButton(
+                    tooltip: 'Scheduled SMS',
+                    icon: const Icon(Icons.schedule_send_outlined),
+                    onPressed: _showSchedules,
+                  ),
+                if (widget.canManage)
+                  IconButton(
                     tooltip: 'Send SMS',
                     icon: _busy
                         ? const SizedBox(
@@ -243,9 +249,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       return;
     }
     final segments = _smsSegments(draft.message);
-    final requiredCredits = recipientCount * segments;
+    final requiredCredits = draft.mode == 'account_status'
+        ? 0
+        : recipientCount * segments;
     final status = ref.read(saccoStatusProvider).asData?.value;
-    if (status != null && requiredCredits > status.smsBalance) {
+    if (requiredCredits > 0 &&
+        status != null &&
+        requiredCredits > status.smsBalance) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
@@ -261,25 +271,28 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       context,
       title: 'Send SMS broadcast?',
       message:
-          'Send this SMS to $recipientCount member(s). Estimated cost is '
-          '$requiredCredits SMS credit(s)'
-          '${status == null ? '.' : ', leaving ${status.smsBalance - requiredCredits}.'}',
+          'Send this SMS to $recipientCount member(s). '
+          '${draft.mode == 'account_status' ? 'The server will calculate credits for each personalized account message.' : 'Estimated cost is $requiredCredits SMS credit(s)${status == null ? '.' : ', leaving ${status.smsBalance - requiredCredits}.'}'}',
       confirmLabel: 'Send SMS',
       icon: Icons.sms_outlined,
     );
     if (!confirmed || !mounted) return;
     setState(() => _busy = true);
     try {
-      final balance = await ref.read(adminRepositoryProvider).sendSmsBroadcast(
+      final result = await ref.read(adminRepositoryProvider).sendSmsBroadcast(
             title: draft.title,
             message: draft.message,
             memberIds: draft.allMembers ? const [] : draft.memberIds,
+            mode: draft.mode,
+            scheduledAt: draft.scheduledAt,
           );
       ref.invalidate(notificationsFeedProvider(_query));
       ref.invalidate(saccoStatusProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('SMS sent. Balance: $balance SMS.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.scheduled
+                ? 'SMS scheduled successfully.'
+                : 'SMS sent. Balance: ${result.smsBalance} SMS.')));
       }
     } catch (e) {
       if (mounted) {
@@ -288,6 +301,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _showSchedules() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => _SmsSchedulesSheet(
+        load: () => ref.read(adminRepositoryProvider).smsSchedules(),
+        cancel: (id) async {
+          await ref.read(adminRepositoryProvider).cancelSmsSchedule(id);
+        },
+      ),
+    );
   }
 }
 
@@ -305,6 +331,8 @@ class _SmsDraft {
     required this.allMembers,
     required this.memberIds,
     required this.recipientCount,
+    required this.mode,
+    required this.scheduledAt,
   });
 
   final String title;
@@ -312,6 +340,8 @@ class _SmsDraft {
   final bool allMembers;
   final List<String> memberIds;
   final int recipientCount;
+  final String mode;
+  final DateTime? scheduledAt;
 }
 
 class _SmsComposeDialog extends ConsumerStatefulWidget {
@@ -329,6 +359,8 @@ class _SmsComposeDialogState extends ConsumerState<_SmsComposeDialog> {
   int? _allCount;
   bool _loadingCount = true;
   String? _countError;
+  bool _accountStatus = false;
+  DateTime? _scheduledAt;
 
   @override
   void initState() {
@@ -382,12 +414,32 @@ class _SmsComposeDialogState extends ConsumerState<_SmsComposeDialog> {
     setState(() => _recipients.removeWhere((m) => m.id == id));
   }
 
+  Future<void> _pickSchedule() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      initialDate: _scheduledAt ?? now,
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(
+          _scheduledAt ?? now.add(const Duration(minutes: 5))),
+    );
+    if (time == null) return;
+    setState(() => _scheduledAt =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute));
+  }
+
   @override
   Widget build(BuildContext context) {
     final count = _allMembers ? (_allCount ?? 0) : _recipients.length;
     final segments = _smsSegments(_message.text);
     final estimatedCredits = count * segments;
-    final canSend = count > 0 && _message.text.trim().isNotEmpty;
+    final canSend = count > 0 &&
+        (_accountStatus || _message.text.trim().isNotEmpty);
     return AlertDialog(
       title: const Text('Send SMS'),
       content: SizedBox(
@@ -403,6 +455,15 @@ class _SmsComposeDialogState extends ConsumerState<_SmsComposeDialog> {
                   labelText: 'Title',
                   prefixIcon: Icon(Icons.subject_outlined),
                 ),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Personalized account status'),
+                subtitle: const Text(
+                    'Adds each member’s status, savings and loan balance.'),
+                value: _accountStatus,
+                onChanged: (value) => setState(() => _accountStatus = value),
               ),
               const SizedBox(height: 10),
               TextField(
@@ -467,6 +528,27 @@ class _SmsComposeDialogState extends ConsumerState<_SmsComposeDialog> {
                   ),
                 ),
               ],
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.schedule_send_outlined),
+                title: Text(_scheduledAt == null
+                    ? 'Send now'
+                    : 'Scheduled: ${Fmt.dateTime(_scheduledAt!)}'),
+                trailing: Wrap(spacing: 4, children: [
+                  if (_scheduledAt != null)
+                    IconButton(
+                      tooltip: 'Clear schedule',
+                      icon: const Icon(Icons.close),
+                      onPressed: () => setState(() => _scheduledAt = null),
+                    ),
+                  IconButton(
+                    tooltip: 'Choose date and time',
+                    icon: const Icon(Icons.edit_calendar_outlined),
+                    onPressed: _pickSchedule,
+                  ),
+                ]),
+              ),
             ],
           ),
         ),
@@ -484,11 +566,104 @@ class _SmsComposeDialogState extends ConsumerState<_SmsComposeDialog> {
                     allMembers: _allMembers,
                     memberIds: _recipients.map((m) => m.id).toList(),
                     recipientCount: count,
+                    mode: _accountStatus ? 'account_status' : 'custom',
+                    scheduledAt: _scheduledAt,
                   )),
           icon: const Icon(Icons.send_outlined),
           label: Text('Send $count'),
         ),
       ],
+    );
+  }
+}
+
+class _SmsSchedulesSheet extends StatefulWidget {
+  const _SmsSchedulesSheet({required this.load, required this.cancel});
+
+  final Future<List<SmsSchedule>> Function() load;
+  final Future<void> Function(String id) cancel;
+
+  @override
+  State<_SmsSchedulesSheet> createState() => _SmsSchedulesSheetState();
+}
+
+class _SmsSchedulesSheetState extends State<_SmsSchedulesSheet> {
+  late Future<List<SmsSchedule>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.load();
+  }
+
+  Future<void> _cancel(SmsSchedule schedule) async {
+    await widget.cancel(schedule.id);
+    if (mounted) setState(() => _future = widget.load());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.72,
+        child: Column(children: [
+          ListTile(
+            title: const Text('Scheduled SMS',
+                style: TextStyle(fontWeight: FontWeight.w800)),
+            trailing: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<List<SmsSchedule>>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return ErrorRetry(
+                    message: 'Could not load scheduled SMS.',
+                    detail: '${snapshot.error}',
+                    onRetry: () => setState(() => _future = widget.load()),
+                  );
+                }
+                final rows = snapshot.data ?? const <SmsSchedule>[];
+                if (rows.isEmpty) {
+                  return const EmptyState(
+                      icon: Icons.schedule_send_outlined,
+                      message: 'No SMS has been scheduled.');
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (_, index) {
+                    final row = rows[index];
+                    return Card(
+                      child: ListTile(
+                        title: Text(row.title),
+                        subtitle: Text(
+                            '${Fmt.label(row.status)} · ${row.scheduledAt == null ? '-' : Fmt.dateTime(row.scheduledAt!)}\n'
+                            '${row.estimatedCredits} estimated credit(s)${row.failureReason.isEmpty ? '' : ' · ${row.failureReason}'}'),
+                        isThreeLine: true,
+                        trailing: row.status == 'scheduled'
+                            ? IconButton(
+                                tooltip: 'Cancel scheduled SMS',
+                                icon: const Icon(Icons.cancel_outlined),
+                                onPressed: () => _cancel(row),
+                              )
+                            : null,
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ]),
+      ),
     );
   }
 }

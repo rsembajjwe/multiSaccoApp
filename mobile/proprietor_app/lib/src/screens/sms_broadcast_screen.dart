@@ -32,6 +32,11 @@ class _SmsBroadcastScreenState extends ConsumerState<SmsBroadcastScreen> {
   @override
   Widget build(BuildContext context) {
     final tenants = ref.watch(smsBroadcastTenantsProvider);
+    final providerStatuses = ref.watch(notificationProviderStatusProvider);
+    NotificationProviderStatus? smsProvider;
+    providerStatuses.whenData((statuses) {
+      smsProvider = _smsProvider(statuses);
+    });
     final messageLength = _message.text.length;
     final segments = messageLength == 0
         ? 0
@@ -85,6 +90,44 @@ class _SmsBroadcastScreenState extends ConsumerState<SmsBroadcastScreen> {
                   ],
                 ),
               ),
+            ),
+            const SizedBox(height: 12),
+            providerStatuses.when(
+              loading: () => const Card(
+                child: ListTile(
+                  leading: CircularProgressIndicator(),
+                  title: Text('Checking SMS provider'),
+                ),
+              ),
+              error: (error, _) => Card(
+                child: ListTile(
+                  leading: const Icon(Icons.warning_amber_rounded),
+                  title: const Text('SMS provider status unavailable'),
+                  subtitle: Text('$error'),
+                ),
+              ),
+              data: (statuses) {
+                final sms = _smsProvider(statuses);
+                return Card(
+                  child: ListTile(
+                    leading: Icon(
+                      sms?.isReady == true
+                          ? Icons.check_circle_outline
+                          : Icons.error_outline,
+                    ),
+                    title: Text(
+                      sms?.isReady == true
+                          ? 'SMS provider ready'
+                          : 'SMS sending unavailable',
+                    ),
+                    subtitle: Text(
+                      sms == null
+                          ? 'No SMS provider is configured on the online backend. Configure the provider before broadcasting.'
+                          : '${sms.provider}: ${sms.message}${sms.balance.isEmpty ? '' : ' Balance: ${sms.balance}'}',
+                    ),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 12),
             Card(
@@ -147,7 +190,9 @@ class _SmsBroadcastScreenState extends ConsumerState<SmsBroadcastScreen> {
             ],
             const SizedBox(height: 18),
             FilledButton.icon(
-              onPressed: _sending ? null : _send,
+              onPressed: _sending || smsProvider?.isReady != true
+                  ? null
+                  : _send,
               icon: _sending
                   ? const SizedBox.square(
                       dimension: 18,
@@ -160,6 +205,15 @@ class _SmsBroadcastScreenState extends ConsumerState<SmsBroadcastScreen> {
         ),
       ),
     );
+  }
+
+  NotificationProviderStatus? _smsProvider(
+    List<NotificationProviderStatus> statuses,
+  ) {
+    for (final status in statuses) {
+      if (status.channel.toLowerCase() == 'sms') return status;
+    }
+    return null;
   }
 
   Future<void> _send() async {

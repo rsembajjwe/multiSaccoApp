@@ -299,6 +299,44 @@ class UserControllerTest {
         verify(userRoleRepository).save(any(UserRole.class));
     }
 
+    @Test
+    void proprietorCanResendOfficialOnboardingThroughSelectedChannel() {
+        allow("Bearer platform", platform, "users:create");
+        Member member = mock(Member.class);
+        when(member.getId()).thenReturn("member_one");
+        when(member.getTenantId()).thenReturn("tenant_one");
+        when(member.getLinkedUserId()).thenReturn("staff");
+        when(memberRepository.findById("member_one")).thenReturn(Optional.of(member));
+        when(assignmentRepository.findByTenantIdAndOffice("tenant_one", "treasurer"))
+                .thenReturn(Optional.of(new SaccoOfficialAssignment(
+                        "assignment_one", "tenant_one", "treasurer", "member_one", "platform")));
+        User staff = new User(
+                "staff", "tenant_one", "Treasurer", "treasurer@example.com", "+256700000001",
+                "hash", "salt", "active");
+        staff.beginOnboarding("email");
+        when(userRepository.findById("staff")).thenReturn(Optional.of(staff));
+        when(staffOnboardingService.reissueTemporaryPassword(staff, "sms")).thenAnswer(invocation -> {
+            staff.beginOnboarding("sms");
+            staff.markOnboardingSent();
+            return staff;
+        });
+
+        ResponseEntity<?> response = controller.resendOfficialOnboarding(
+                "Bearer platform",
+                new UserController.ResendOfficialOnboardingRequest("member_one", "treasurer", "sms"),
+                request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        UserController.ResendOfficialOnboardingResponse result =
+                (UserController.ResendOfficialOnboardingResponse) ((ApiResponse<?>) response.getBody()).data();
+        assertEquals("sms", result.deliveryChannel());
+        assertEquals("***0001", result.recipient());
+        assertEquals("sent", result.deliveryStatus());
+        verify(staffOnboardingService).reissueTemporaryPassword(staff, "sms");
+        verify(auditService).record(eq("tenant_one"), eq(platform), any(),
+                eq("official_staff_access"), eq("staff"), eq("127.0.0.1"));
+    }
+
     private void allow(String token, User user, String permission) {
         when(authService.currentSession(token)).thenReturn(session(user));
         when(authService.hasPermission(user, permission)).thenReturn(true);

@@ -13,13 +13,14 @@ class BillingAdministrationScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => DefaultTabController(
-    length: 4,
+    length: 5,
     child: Scaffold(
       appBar: AppBar(
         title: const Text('Billing administration'),
         bottom: const TabBar(
           isScrollable: true,
           tabs: [
+            Tab(text: 'SMS inventory'),
             Tab(text: 'Rates'),
             Tab(text: 'SACCO items'),
             Tab(text: 'Sales'),
@@ -29,6 +30,7 @@ class BillingAdministrationScreen extends ConsumerWidget {
       ),
       body: TabBarView(
         children: [
+          _SmsInventoryTab(canManage: session.can('subscriptions:manage')),
           _RatesTab(canManage: session.can('subscriptions:manage')),
           _BillingItemsTab(canManage: session.can('subscriptions:manage')),
           const _SalesTab(),
@@ -37,6 +39,258 @@ class BillingAdministrationScreen extends ConsumerWidget {
       ),
     ),
   );
+}
+
+class _SmsInventoryTab extends ConsumerWidget {
+  const _SmsInventoryTab({required this.canManage});
+
+  final bool canManage;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final inventory = ref.watch(smsInventoryProvider);
+    return AsyncPane(
+      value: inventory,
+      onRetry: () => ref.invalidate(smsInventoryProvider),
+      builder: (summary) => RefreshIndicator(
+        onRefresh: () => ref.refresh(smsInventoryProvider.future),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _alertCard(context, summary),
+            const SizedBox(height: 10),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'AfroSMS supply',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        StatusPill(summary.providerStatus),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _line('Cash balance', money(summary.providerBalance)),
+                    _line('Supply cost per SMS', money(summary.providerUnitCost)),
+                    _line(
+                      'Available provider SMS',
+                      _count(summary.providerAvailableCredits),
+                      bold: true,
+                    ),
+                    _line('Low-stock threshold', _count(summary.lowStockThreshold)),
+                  ],
+                ),
+              ),
+            ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Customer credit commitments',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _line('SACCO wallet credits', _count(summary.saccoCreditsOutstanding)),
+                    _line('Member wallet credits', _count(summary.memberCreditsOutstanding)),
+                    _line('Total credits owed', _count(summary.totalCreditsOutstanding)),
+                    const Divider(),
+                    _line(
+                      'Uncommitted reserve',
+                      _count(summary.reserveCredits),
+                      bold: true,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Pricing and sales',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _line('SACCO selling rate', money(summary.saccoSellingRate)),
+                    _line('Gross margin per SMS', money(summary.grossMarginPerSms)),
+                    _line('Gross margin', '${summary.grossMarginPercent.toStringAsFixed(2)}%'),
+                    _line('Credits sold to date', _count(summary.totalCreditsSold)),
+                    _line('Recorded SMS revenue', money(summary.totalSalesRevenue)),
+                  ],
+                ),
+              ),
+            ),
+            if (canManage)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: FilledButton.icon(
+                  onPressed: () => _editSettings(context, ref, summary),
+                  icon: const Icon(Icons.tune),
+                  label: const Text('Configure SMS pricing and warning'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _alertCard(BuildContext context, SmsInventorySummary summary) {
+    final critical = summary.alertLevel == 'critical';
+    final warning = summary.alertLevel == 'warning';
+    final color = critical
+        ? Theme.of(context).colorScheme.error
+        : warning
+        ? Colors.orange.shade800
+        : Colors.green.shade700;
+    return Card(
+      color: color.withValues(alpha: 0.10),
+      child: ListTile(
+        leading: Icon(
+          critical
+              ? Icons.error_outline
+              : warning
+              ? Icons.warning_amber_rounded
+              : Icons.check_circle_outline,
+          color: color,
+        ),
+        title: Text(
+          label(summary.alertCode),
+          style: TextStyle(fontWeight: FontWeight.w900, color: color),
+        ),
+        subtitle: Text(
+          summary.suggestedTopUpAmount > 0
+              ? '${summary.alertMessage}\nSuggested top-up: ${money(summary.suggestedTopUpAmount)}'
+              : summary.alertMessage,
+        ),
+        isThreeLine: summary.suggestedTopUpAmount > 0,
+      ),
+    );
+  }
+
+  Widget _line(String title, String value, {bool bold = false}) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      children: [
+        Expanded(child: Text(title)),
+        Text(
+          value,
+          style: TextStyle(fontWeight: bold ? FontWeight.w900 : null),
+        ),
+      ],
+    ),
+  );
+
+  String _count(int value) => NumberFormat.decimalPattern().format(value);
+
+  Future<void> _editSettings(
+    BuildContext context,
+    WidgetRef ref,
+    SmsInventorySummary summary,
+  ) async {
+    final providerCost = TextEditingController(
+      text: '${summary.providerUnitCost}',
+    );
+    final sellingRate = TextEditingController(
+      text: '${summary.saccoSellingRate}',
+    );
+    final threshold = TextEditingController(
+      text: '${summary.lowStockThreshold}',
+    );
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('SMS inventory settings'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: providerCost,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'AfroSMS supply cost per SMS (UGX)',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: sellingRate,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'SACCO selling rate per SMS (UGX)',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: threshold,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Low-stock warning reserve (SMS)',
+                  helperText: 'Warning uses provider capacity minus customer wallet credits.',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final cost = num.tryParse(providerCost.text.trim());
+    final rate = num.tryParse(sellingRate.text.trim());
+    final warningAt = int.tryParse(threshold.text.trim());
+    providerCost.dispose();
+    sellingRate.dispose();
+    threshold.dispose();
+    if (submit != true || cost == null || cost <= 0 || rate == null || rate <= 0 || warningAt == null || warningAt < 0) {
+      return;
+    }
+    try {
+      await ref.read(platformRepositoryProvider).updateSmsInventorySettings(
+        providerUnitCost: cost,
+        saccoSellingRate: rate,
+        lowStockThreshold: warningAt,
+      );
+      ref.invalidate(smsInventoryProvider);
+      ref.invalidate(billingCatalogProvider);
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$error')),
+        );
+      }
+    }
+  }
 }
 
 class _RatesTab extends ConsumerWidget {

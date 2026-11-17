@@ -171,6 +171,20 @@ class _SaccoControlsScreen extends ConsumerWidget {
                 _showInterestDialog(context, ref, session, profileAsync),
           ),
           _SettingsTile(
+            icon: Icons.event_repeat_outlined,
+            title: 'Savings cycle and withdrawals',
+            subtitle: profileAsync?.maybeWhen(
+                  data: (profile) => profile.savingsCyclePeriod == 'annual'
+                      ? 'Annual cycle; withdrawals open ${profile.savingsCycleStartDay}/${profile.savingsCycleStartMonth} for ${profile.savingsWithdrawalWindowDays} days'
+                      : 'Continuous withdrawals',
+                  orElse: () => 'Configure continuous or annual savings access',
+                ) ??
+                'Configure continuous or annual savings access',
+            enabled: canManageProfile && session.tenantId.isNotEmpty,
+            onTap: () =>
+                _showSavingsCycleDialog(context, ref, session, profileAsync),
+          ),
+          _SettingsTile(
             icon: Icons.account_balance_wallet_outlined,
             title: 'Fund types',
             subtitle: 'Savings, shares, welfare and custom funds',
@@ -292,6 +306,39 @@ class _SaccoControlsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _showSavingsCycleDialog(
+    BuildContext context,
+    WidgetRef ref,
+    StaffSession session,
+    AsyncValue<SaccoProfile>? profileAsync,
+  ) async {
+    final profile = profileAsync?.asData?.value;
+    final value = await showDialog<_SavingsCycleDraft>(
+      context: context,
+      builder: (_) => _SavingsCycleDialog(profile: profile),
+    );
+    if (value == null) return;
+    try {
+      await ref.read(adminRepositoryProvider).updateSaccoProfile(
+            session.tenantId,
+            savingsCyclePeriod: value.period,
+            savingsCycleStartMonth: value.startMonth,
+            savingsCycleStartDay: value.startDay,
+            savingsWithdrawalWindowDays: value.windowDays,
+          );
+      ref.invalidate(saccoProfileProvider(session.tenantId));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Savings withdrawal policy updated.')));
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
+  }
+
   String _mimeFor(String name) {
     final lower = name.toLowerCase();
     if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
@@ -343,6 +390,134 @@ class _AccessSummaryScreen extends StatelessWidget {
           _AccessSummaryCard(session: session),
         ],
       ),
+    );
+  }
+}
+
+class _SavingsCycleDraft {
+  const _SavingsCycleDraft({
+    required this.period,
+    required this.startMonth,
+    required this.startDay,
+    required this.windowDays,
+  });
+
+  final String period;
+  final int startMonth;
+  final int startDay;
+  final int windowDays;
+}
+
+class _SavingsCycleDialog extends StatefulWidget {
+  const _SavingsCycleDialog({required this.profile});
+
+  final SaccoProfile? profile;
+
+  @override
+  State<_SavingsCycleDialog> createState() => _SavingsCycleDialogState();
+}
+
+class _SavingsCycleDialogState extends State<_SavingsCycleDialog> {
+  late String _period;
+  late int _month;
+  late int _day;
+  late final TextEditingController _window;
+
+  @override
+  void initState() {
+    super.initState();
+    _period = widget.profile?.savingsCyclePeriod ?? 'continuous';
+    _month = widget.profile?.savingsCycleStartMonth ?? 1;
+    _day = widget.profile?.savingsCycleStartDay ?? 1;
+    _window = TextEditingController(
+        text: '${widget.profile?.savingsWithdrawalWindowDays ?? 30}');
+  }
+
+  @override
+  void dispose() {
+    _window.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final annual = _period == 'annual';
+    return AlertDialog(
+      title: const Text('Savings withdrawals'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: _period,
+              decoration: const InputDecoration(labelText: 'Savings cycle'),
+              items: const [
+                DropdownMenuItem(
+                    value: 'continuous', child: Text('Continuous access')),
+                DropdownMenuItem(
+                    value: 'annual', child: Text('Annual withdrawal window')),
+              ],
+              onChanged: (value) => setState(() => _period = value!),
+            ),
+            if (annual) ...[
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _month,
+                    decoration: const InputDecoration(labelText: 'Opening month'),
+                    items: [
+                      for (var month = 1; month <= 12; month++)
+                        DropdownMenuItem(value: month, child: Text('$month')),
+                    ],
+                    onChanged: (value) => setState(() => _month = value!),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _day,
+                    decoration: const InputDecoration(labelText: 'Opening day'),
+                    items: [
+                      for (var day = 1; day <= 31; day++)
+                        DropdownMenuItem(value: day, child: Text('$day')),
+                    ],
+                    onChanged: (value) => setState(() => _day = value!),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _window,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                    labelText: 'Withdrawal window (days)',
+                    helperText: 'Members may withdraw only during this period.'),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () {
+            final days = int.tryParse(_window.text.trim()) ?? 0;
+            if (days < 1 || days > 366) return;
+            Navigator.pop(
+                context,
+                _SavingsCycleDraft(
+                    period: _period,
+                    startMonth: _month,
+                    startDay: _day,
+                    windowDays: days));
+          },
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }
@@ -493,13 +668,13 @@ class _AccessSummaryCard extends StatelessWidget {
   }
 }
 
-class _ProfileCard extends StatelessWidget {
+class _ProfileCard extends ConsumerWidget {
   const _ProfileCard({required this.session, required this.profileAsync});
   final StaffSession session;
   final AsyncValue<SaccoProfile>? profileAsync;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final profile = profileAsync?.asData?.value;
     final logoBytes = _decodeLogo(profile?.logoDataUrl ?? '');
@@ -543,6 +718,10 @@ class _ProfileCard extends StatelessWidget {
                     Text(session.email,
                         style: TextStyle(
                             fontSize: 12, color: scheme.onSurfaceVariant)),
+                  if (session.phone.isNotEmpty)
+                    Text(session.phone,
+                        style: TextStyle(
+                            fontSize: 12, color: scheme.onSurfaceVariant)),
                   if (session.roleNames.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Wrap(
@@ -555,6 +734,26 @@ class _ProfileCard extends StatelessWidget {
                   ],
                 ],
               ),
+            ),
+            IconButton(
+              tooltip: 'Edit contact details',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () async {
+                final updated = await showModalBottomSheet<bool>(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => _StaffContactSheet(session: session),
+                );
+                if (updated == true) {
+                  ref.invalidate(sessionProvider);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Contact details updated.')),
+                    );
+                  }
+                }
+              },
             ),
           ],
         ),
@@ -571,6 +770,104 @@ class _ProfileCard extends StatelessWidget {
       return null;
     }
   }
+}
+
+class _StaffContactSheet extends ConsumerStatefulWidget {
+  const _StaffContactSheet({required this.session});
+
+  final StaffSession session;
+
+  @override
+  ConsumerState<_StaffContactSheet> createState() =>
+      _StaffContactSheetState();
+}
+
+class _StaffContactSheetState extends ConsumerState<_StaffContactSheet> {
+  late final TextEditingController _email =
+      TextEditingController(text: widget.session.email);
+  late final TextEditingController _phone =
+      TextEditingController(text: widget.session.phone);
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _phone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final email = _email.text.trim();
+    final phone = _phone.text.trim();
+    if (!email.contains('@') || phone.isEmpty) {
+      setState(() => _error = 'Enter a valid email and telephone number.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(authRepositoryProvider)
+          .updateContact(email: email, phone: phone);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = '$error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          MediaQuery.viewInsetsOf(context).bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Edit contact details',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email address'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phone,
+              keyboardType: TextInputType.phone,
+              decoration:
+                  const InputDecoration(labelText: 'Telephone number'),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.error)),
+            ],
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save changes'),
+            ),
+          ],
+        ),
+      );
 }
 
 class _SettingsTile extends StatelessWidget {

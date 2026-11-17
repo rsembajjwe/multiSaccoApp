@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,13 +45,16 @@ class NotificationControllerTest {
     private final AfroSmsCreditService afroSmsCreditService = mock(AfroSmsCreditService.class);
     private final SmsWalletService smsWalletService = mock(SmsWalletService.class);
     private final PlatformSmsBroadcastService platformSmsBroadcastService = mock(PlatformSmsBroadcastService.class);
+    private final SaccoSmsBroadcastService saccoSmsBroadcastService = mock(SaccoSmsBroadcastService.class);
+    private final SaccoSmsScheduleService saccoSmsScheduleService = mock(SaccoSmsScheduleService.class);
     private final HttpServletRequest request = mock(HttpServletRequest.class);
     private final User saccoUser = user("user_one", "tenant_one", "SACCO User");
     private final User platformUser = user("platform_one", "tenant_platform", "Platform User");
     private final NotificationController controller = new NotificationController(deliveryRepository,
             notificationRepository, memberRepository, notificationService, broadcastDispatcher, List.of(provider),
             evidenceService, runHistoryService, reconciliationJob, authService, auditService,
-            afroSmsCreditService, smsWalletService, platformSmsBroadcastService);
+            afroSmsCreditService, smsWalletService, platformSmsBroadcastService,
+            saccoSmsBroadcastService, saccoSmsScheduleService);
 
     @BeforeEach
     void configureDefaults() {
@@ -224,25 +226,22 @@ class NotificationControllerTest {
         assertError(controller.sendSmsMessage("Bearer manage", empty, request),
                 HttpStatus.BAD_REQUEST, "SMS_MESSAGE_REQUIRED");
 
-        Member noPhone = member("member_one", "tenant_one", " ");
-        when(memberRepository.findByTenantIdOrderByMembershipNoAsc("tenant_one")).thenReturn(List.of(noPhone));
         NotificationController.BroadcastMessageRequest body =
                 new NotificationController.BroadcastMessageRequest(null, null, "Hello members", List.of());
+        when(saccoSmsBroadcastService.send("tenant_one", List.of(), "custom", "SACCO message", "Hello members"))
+                .thenThrow(new IllegalArgumentException("No recipients"));
         assertError(controller.sendSmsMessage("Bearer manage", body, request),
                 HttpStatus.BAD_REQUEST, "NO_SMS_RECIPIENTS");
 
-        Member recipient = member("member_two", "tenant_one", "+256700000002");
-        when(memberRepository.findByTenantIdOrderByMembershipNoAsc("tenant_one")).thenReturn(List.of(recipient));
-        doThrow(new IllegalStateException("No credits")).when(smsWalletService)
-                .debit(eq("tenant_one"), any(Integer.class), any(), any());
+        org.mockito.Mockito.reset(saccoSmsBroadcastService);
+        when(saccoSmsBroadcastService.send("tenant_one", List.of(), "custom", "SACCO message", "Hello members"))
+                .thenThrow(new IllegalStateException("No credits"));
         assertError(controller.sendSmsMessage("Bearer manage", body, request),
                 HttpStatus.CONFLICT, "INSUFFICIENT_SMS_BALANCE");
 
-        org.mockito.Mockito.reset(smsWalletService);
-        Notification sent = notification("sms_one", "tenant_one", null, "broadcast", "SACCO message", "Hello members");
-        when(notificationService.notifySmsBroadcast("tenant_one", List.of(recipient), "SACCO message", "Hello members"))
-                .thenReturn(List.of(sent));
-        when(smsWalletService.balance("tenant_one")).thenReturn(9);
+        org.mockito.Mockito.reset(saccoSmsBroadcastService);
+        when(saccoSmsBroadcastService.send("tenant_one", List.of(), "custom", "SACCO message", "Hello members"))
+                .thenReturn(new SaccoSmsBroadcastService.SendResult(1, 1, 9));
         ResponseEntity<?> response = controller.sendSmsMessage("Bearer manage", body, request);
         assertEquals(HttpStatus.ACCEPTED, response.getStatusCode());
         NotificationController.SmsBroadcastResponse result =

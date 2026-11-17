@@ -18,8 +18,13 @@ The production backend path is Java/Spring Boot in `backend-java`. The Node serv
 - Java-backed dashboard and operations center with live health counts, alerts, release gates, and runbook links.
 - Member self-service portal.
 - Member login with balance viewing.
+- Email or SMS password reset in every mobile app; staff SMS resets debit the SACCO wallet while member SMS resets debit the member's personal wallet.
+- Member-owned prepaid SMS credits with mobile-money top-up and privacy-preserving selection of phone contacts for personal bulk SMS.
 - Reports, compliance snapshot, and audit trail.
 - Proprietor SMS broadcasts to all or selected SACCO leadership, restricted to verified telephone numbers and fully delivery-audited.
+- Proprietor SMS inventory management with live AfroSMS monetary balance, configurable supply cost and SACCO selling rate, customer-credit liability tracking, margin reporting, and low-stock/overcommitment warnings.
+- Staff SMS broadcasts to all or selected members, optional personalized account-status summaries, and audited future scheduling, all limited by the SACCO SMS wallet.
+- Continuous or annual savings withdrawal policies with configurable annual windows, active-member enforcement, collateral protection, and guarantee-liability protection.
 
 ## How to run
 
@@ -67,6 +72,16 @@ Copy-Item deploy\backend.env.example .env
 npm.cmd run deploy:backend
 ```
 
+The main Spring Boot integration suite runs against PostgreSQL through
+Testcontainers so Flyway migrations and SQL behavior match production. Start
+Docker before running it; when Docker is unavailable, that container-backed
+test class is skipped while the remaining unit and slice tests still run.
+
+```powershell
+cd backend-java
+mvn test
+```
+
 The local Java stack launcher automatically imports the ignored root `.env` file. Variables already
 set in the launching process take precedence, so CI and explicit shell configuration remain stable.
 
@@ -104,6 +119,10 @@ For hosted staging setup, use [docs/staging-environment.md](docs/staging-environ
 SMS, email, and mobile-money provider IDs are environment-managed through `SACCO_SMS_PROVIDER`, `SACCO_EMAIL_PROVIDER`, and `SACCO_MOBILE_MONEY_PROVIDER`. SMS can run through `afrosms`, email through `gmail_smtp`, and mobile-money collections through `mtn_momo`, `airtel_money`, or `mpesa_daraja` when the matching provider credentials are configured; demo values remain the default for local development. The production profile enables `SACCO_PRODUCTION_READINESS_ENABLED=true` by default so startup fails fast if real provider settings are missing.
 
 Staff onboarding is provider-backed. The administrator selects email or SMS, the backend generates and sends a temporary password, and no full session is issued until the recipient replaces it. Successful use of the delivered credential verifies the selected contact. To execute the one-time two-SACCO reseed, start the backend once with `SACCO_TWO_SACCO_RESEED_ENABLED=true`; the reseed is database-tracked and will not repeat after completion.
+
+If a SACCO official does not receive the original invitation, a proprietor can open **Manage SACCO** and resend a newly generated temporary password by email or SMS. Resending is limited to assigned officials who have not completed first login; the previous temporary password is invalidated only when the replacement delivery succeeds.
+
+Staff and members can sign in with either their registered email address or phone number. Ugandan phone numbers are stored in international format such as `+256700123456`; login also accepts equivalent `0700123456` and `256700123456` formats for compatibility with existing records. Proprietors can view each assigned official's email and phone under **Manage SACCO**.
 
 Secrets and provider credentials must stay outside Git. Use [docs/secrets-management.md](docs/secrets-management.md) for the storage and rotation runbook. `npm.cmd run check` includes a secrets-management contract check that scans deployment example files for real-looking secret values.
 
@@ -328,16 +347,22 @@ audit event written for each change.
 
 ## Production next steps
 
-This is now the first build foundation. A production build should add:
+The Java API, PostgreSQL/Flyway schema, authentication, MFA, RBAC, tenant controls, approval limits,
+provider adapters, and automated security/financial tests are implemented. Production completion now
+focuses on closing the remaining assurance and architecture gaps:
 
-- Java/Spring Boot REST API with `/api/v1/...` endpoints.
-- PostgreSQL schema with mandatory `tenant_id` on tenant-owned tables.
-- Strong authentication, MFA, RBAC, branch restrictions, and approval limits.
-- Additional mobile-money rails, bank integrations, SMS, and email adapters.
-- Immutable financial ledgers and balanced journal entries.
-- File uploads, malware scanning, and object storage.
-- Store signing, device acceptance testing, and managed Android/iOS release publication for all Flutter clients.
-- Automated tests for tenant isolation, permissions, financial calculations, and callbacks.
+- Persist immutable journal entries and journal lines, with database-enforced balanced postings.
+- Centralize branch authorization across every branch-sensitive module and add PostgreSQL row-level
+  security as defence in depth for tenant isolation.
+- Generalize member balances and posting rules from the three built-in funds to configurable funds.
+- Replace local document storage with encrypted object storage and malware scanning.
+- Complete live provider certification, callback evidence, settlement reconciliation, and operational
+  ownership for mobile money, SMS, and email.
+- Enforce release signing, device acceptance, accessibility, offline, and hosted-backend smoke tests for
+  all Flutter clients before store publication.
+- Capture hosted HA, alert routing, centralized logging, off-server backup, restore, RPO, and RTO evidence.
+- Expand pagination and OpenAPI coverage across the complete controller surface and enforce dependency,
+  container, and static-analysis security scans in CI.
 
 ## Planning
 

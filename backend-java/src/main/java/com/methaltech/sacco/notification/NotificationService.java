@@ -77,6 +77,24 @@ public class NotificationService {
         return notification;
     }
 
+    public Notification notifyGuarantorRecorded(
+            Member guarantor, Member applicant, String loanId, java.math.BigDecimal guaranteedAmount) {
+        String title = "Signed guarantee recorded";
+        String message = "Your signed guarantee for " + applicant.getFullName() + " was recorded for "
+                + guaranteedAmount.toPlainString() + ".";
+        Notification notification = notificationRepository.save(new Notification(
+                "notification_" + UUID.randomUUID(),
+                guarantor.getTenantId(),
+                guarantor.getId(),
+                "loan_guarantor_recorded",
+                title,
+                message,
+                "loan_guarantor",
+                loanId));
+        createDeliveries(notification, guarantor, title, message);
+        return notification;
+    }
+
     public Notification notifyGuarantorDecision(Member applicant, Member guarantor, String status, String loanId) {
         String title = "Guarantor " + status;
         String message = guarantor.getFullName() + " has " + status + " your loan guarantee request.";

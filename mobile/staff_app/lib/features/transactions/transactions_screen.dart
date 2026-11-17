@@ -378,7 +378,8 @@ class _WithdrawalSheetState extends ConsumerState<_WithdrawalSheet> {
                 onTap: _busy
                     ? null
                     : () async {
-                        final picked = await showMemberPicker(context);
+                        final picked = await showMemberPicker(context,
+                            unavailableReason: postingUnavailableReason);
                         if (picked != null && mounted) {
                           setState(() => _member = picked);
                         }

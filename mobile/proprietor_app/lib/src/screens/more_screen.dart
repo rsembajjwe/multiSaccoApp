@@ -7,6 +7,7 @@ import '../models.dart';
 import '../providers.dart';
 import '../widgets.dart';
 import 'advanced_reports_screen.dart';
+import 'billing_administration_screen.dart';
 import 'sms_broadcast_screen.dart';
 import 'notification_operations_screen.dart';
 import 'payment_operations_screen.dart';
@@ -27,8 +28,12 @@ class MoreScreen extends ConsumerWidget {
           child: ListTile(
             leading: const CircleAvatar(child: Icon(Icons.person)),
             title: Text(session.name),
-            subtitle: Text('${session.email}\n${session.roles.join(', ')}'),
+            subtitle: Text(
+              '${session.email}${session.phone.isEmpty ? '' : '\n${session.phone}'}\n${session.roles.join(', ')}',
+            ),
             isThreeLine: true,
+            trailing: const Icon(Icons.edit_outlined),
+            onTap: () => _editContact(context, ref),
           ),
         ),
         const SizedBox(height: 10),
@@ -45,6 +50,14 @@ class MoreScreen extends ConsumerWidget {
             title: 'Business reports',
             subtitle: 'Revenue, collections and portfolio exposure',
             page: AdvancedReportsScreen(session: session),
+          ),
+        if (session.can('subscriptions:view'))
+          _Link(
+            icon: Icons.inventory_2_outlined,
+            title: 'SMS inventory report',
+            subtitle:
+                'AfroSMS balance, available SMS, customer credits, margin and top-up warnings',
+            page: BillingAdministrationScreen(session: session),
           ),
         if (session.can('users:view'))
           _Link(
@@ -103,6 +116,117 @@ class MoreScreen extends ConsumerWidget {
       ],
     ),
   );
+
+  Future<void> _editContact(BuildContext context, WidgetRef ref) async {
+    final updated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _ProprietorContactSheet(session: session),
+    );
+    if (updated == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Contact details updated.')),
+      );
+    }
+  }
+}
+
+class _ProprietorContactSheet extends ConsumerStatefulWidget {
+  const _ProprietorContactSheet({required this.session});
+
+  final PlatformSession session;
+
+  @override
+  ConsumerState<_ProprietorContactSheet> createState() =>
+      _ProprietorContactSheetState();
+}
+
+class _ProprietorContactSheetState
+    extends ConsumerState<_ProprietorContactSheet> {
+  late final TextEditingController _email =
+      TextEditingController(text: widget.session.email);
+  late final TextEditingController _phone =
+      TextEditingController(text: widget.session.phone);
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _phone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final email = _email.text.trim();
+    final phone = _phone.text.trim();
+    if (!email.contains('@') || phone.isEmpty) {
+      setState(() => _error = 'Enter a valid email and telephone number.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(authControllerProvider.notifier)
+          .updateContact(email, phone);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = '$error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          MediaQuery.viewInsetsOf(context).bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Edit contact details',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'Email address'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phone,
+              keyboardType: TextInputType.phone,
+              decoration:
+                  const InputDecoration(labelText: 'Telephone number'),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.error)),
+            ],
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save changes'),
+            ),
+          ],
+        ),
+      );
 }
 
 class _Link extends StatelessWidget {

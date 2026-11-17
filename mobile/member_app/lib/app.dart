@@ -13,6 +13,7 @@ import 'features/messages/messages_screen.dart';
 import 'features/payments/payments_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/subscription/subscription_screen.dart';
+import 'features/sms/sms_screen.dart';
 import 'features/shell/home_shell.dart';
 import 'providers.dart';
 
@@ -48,6 +49,7 @@ class _SaccoMemberAppState extends ConsumerState<SaccoMemberApp>
         path: '/subscription',
         builder: (_, __) => const SubscriptionScreen(),
       ),
+      GoRoute(path: '/sms', builder: (_, __) => const SmsScreen()),
     ],
   );
 
