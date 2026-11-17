@@ -12,6 +12,7 @@ const containerName = `tereka-alert-routing-${process.pid}-${Date.now()}`;
 const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "tereka-alert-routing-"));
 const webhookSecretPath = path.join(temporaryDirectory, "alertmanager-webhook-url");
 const notifications = [];
+const usesHostNetwork = process.platform === "linux";
 
 const receiver = http.createServer((request, response) => {
   if (request.method !== "POST" || request.url !== "/alerts") {
@@ -36,21 +37,29 @@ try {
     receiver.listen(0, "0.0.0.0", resolve);
   });
   const receiverPort = receiver.address().port;
-  await writeFile(webhookSecretPath, `http://host.docker.internal:${receiverPort}/alerts`, { mode: 0o600 });
+  const webhookHost = usesHostNetwork ? "127.0.0.1" : "host.docker.internal";
+  await writeFile(webhookSecretPath, `http://${webhookHost}:${receiverPort}/alerts`, { mode: 0o600 });
 
-  await docker([
+  const dockerArguments = [
     "run", "--detach", "--rm", "--name", containerName,
-    "--publish", "127.0.0.1::9093",
-    "--add-host", "host.docker.internal:host-gateway",
+  ];
+  if (usesHostNetwork) {
+    dockerArguments.push("--network", "host");
+  } else {
+    dockerArguments.push("--publish", "127.0.0.1::9093");
+    dockerArguments.push("--add-host", "host.docker.internal:host-gateway");
+  }
+  dockerArguments.push(
     "--volume", `${path.join(root, "deploy", "alertmanager.yml")}:/etc/alertmanager/alertmanager.yml:ro`,
     "--volume", `${webhookSecretPath}:/run/secrets/alertmanager_webhook_url:ro`,
     "prom/alertmanager:v0.28.1",
     "--config.file=/etc/alertmanager/alertmanager.yml",
     "--storage.path=/alertmanager"
-  ]);
+  );
+  await docker(dockerArguments);
 
-  const portOutput = await waitForDockerPort();
-  const alertmanagerPort = Number(portOutput.trim().match(/:(\d+)$/)?.[1]);
+  const portOutput = usesHostNetwork ? "9093" : await waitForDockerPort();
+  const alertmanagerPort = usesHostNetwork ? 9093 : Number(portOutput.trim().match(/:(\d+)$/)?.[1]);
   assert.ok(alertmanagerPort, `Could not determine Alertmanager host port from: ${portOutput}`);
   const alertmanagerUrl = `http://127.0.0.1:${alertmanagerPort}`;
   await waitForReady(`${alertmanagerUrl}/-/ready`);

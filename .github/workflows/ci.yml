@@ -34,6 +34,8 @@ jobs:
 
       - name: Run project checks
         run: npm.cmd run check
+        env:
+          MAVEN_OPTS: -Djacoco.skip=true
 
       # Build the actual deployed artifact. Caddy serves dist-vite in production, so a broken
       # production bundle must fail the gate here rather than be discovered at deploy time.
