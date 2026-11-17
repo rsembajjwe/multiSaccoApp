@@ -6,16 +6,17 @@ import org.springframework.stereotype.Service;
 @Service
 public class MemberSmsDeliveryService {
 
-    private final NotificationProvider smsProvider;
+    private final List<NotificationProvider> providers;
 
     MemberSmsDeliveryService(List<NotificationProvider> providers) {
-        this.smsProvider = providers.stream()
-                .filter(provider -> "sms".equalsIgnoreCase(provider.channel()))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("An SMS provider must be configured."));
+        this.providers = List.copyOf(providers);
     }
 
     public boolean send(String phone, String message) {
+        NotificationProvider smsProvider = providers.stream()
+                .filter(provider -> "sms".equalsIgnoreCase(provider.channel()))
+                .findFirst()
+                .orElseThrow(() -> new NotificationProviderException("SMS provider is not configured."));
         NotificationSendResult result = smsProvider.sendTo(phone, "Tereka message", message);
         return "sent".equalsIgnoreCase(result.status());
     }
