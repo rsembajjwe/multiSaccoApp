@@ -201,7 +201,7 @@ try {
 
   const loanCheckerRole = await api("POST", "/roles", {
     name: `Smoke Loan Checker ${Date.now()}`,
-    permissionIds: ["loans:view", "loans:approve", "transactions:approve"]
+    permissionIds: ["loans:view", "loans:approve", "loans:disburse", "transactions:approve"]
   }, saccoToken);
   await api("PUT", `/users/${user.data.id}/roles`, {
     roleIds: [loanCheckerRole.data.id]
@@ -567,7 +567,10 @@ try {
   }
   assert(loan.data.id, "Loan application should be created");
   assert(loan.data.status === "submitted", "New loan application should start submitted");
-  assert(loan.data.stage === "Credit Appraisal", "New loan application should enter credit appraisal");
+  assert(
+    loan.data.stage === (productionWorkflow ? "Loan Committee" : "Credit Appraisal"),
+    "New loan application should enter the expected review stage"
+  );
   if (productionWorkflow) assert(loan.data.guarantors === 1, "Signed guarantor should be recorded with the loan application");
 
   const earlyDisbursement = await raw("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
@@ -629,7 +632,12 @@ try {
   assert(approvedLoan.data.stage === "Ready for Disbursement", "Approved loan should be ready for disbursement");
 
   // Loan approvals happen on paper; the system records the decision and disburses in one step.
-  const disbursedLoan = await api("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
+  let disbursedLoan = await api("POST", `/loans/${loan.data.id}/disburse`, null, saccoToken);
+  if (productionWorkflow) {
+    assert(disbursedLoan.data.status === "approved", "First officer should only initiate production disbursement");
+    assert(disbursedLoan.data.stage === "Awaiting Disbursement Approval", "Initiated disbursement should await a second officer");
+    disbursedLoan = await api("POST", `/loans/${loan.data.id}/disburse`, null, loanCheckerToken);
+  }
   assert(disbursedLoan.data.status === "active", "Recorded loan should become active on disbursement");
   assert(disbursedLoan.data.balance === disbursedLoan.data.totalPayable, "Disbursed loan balance should equal total payable");
   assert(Number(disbursedLoan.data.interestRate) > 0, "Disbursed loan should expose product interest rate");
@@ -989,7 +997,8 @@ try {
     title: "Smoke governance review",
     meetingType: "board",
     scheduledAt: "2026-07-30T09:00:00.000Z",
-    minutes: "Smoke test agenda"
+    minutes: "Smoke test agenda",
+    chairMemberId: "member_green_amina"
   }, saccoToken);
   assert(governanceMeeting.data.id, "Governance meeting should be created");
   assert(governanceMeeting.data.tenantId === "tenant_green", "Governance meeting should be tenant-scoped");
@@ -997,6 +1006,8 @@ try {
   const resolution = await api("POST", `/governance-meetings/${governanceMeeting.data.id}/resolutions`, {
     title: "Resolve smoke reconciliation exception",
     decision: "Assign accountant to review unmatched bank fees.",
+    ownerName: "Smoke Test Accountant",
+    ownerTitle: "Accountant",
     dueDate: "2026-08-05"
   }, saccoToken);
   assert(resolution.data.status === "open", "New governance resolution should start open");
