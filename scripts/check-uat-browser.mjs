@@ -169,7 +169,13 @@ async function assertSaccoMemberAdminTabs(page) {
   await page.locator("[data-member-tab='list']").click();
   await expectText(page, "Member list", "SACCO member list tab");
   const createdMemberId = uatData?.created?.member?.id;
-  if (!createdMemberId) throw new Error("UAT setup did not return the created member id");
+  const createdMembershipNo = uatData?.created?.member?.membershipNo;
+  if (!createdMemberId || !createdMembershipNo) throw new Error("UAT setup did not return the created member identity");
+  const memberSearch = page.locator("[data-table-search]");
+  const memberSearchCount = await memberSearch.count();
+  if (memberSearchCount !== 1) throw new Error(`Expected one member table search field, found ${memberSearchCount}`);
+  await memberSearch.fill(createdMembershipNo);
+  await expectText(page, createdMembershipNo, "UAT member list search result");
   const detailAction = page.locator(`[data-row-action='member-detail'][data-row-id='${createdMemberId}']`);
   const detailActionCount = await detailAction.count();
   if (detailActionCount !== 1) throw new Error(`Expected one detail action for UAT member ${createdMemberId}, found ${detailActionCount}`);
