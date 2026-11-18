@@ -168,17 +168,20 @@ async function assertSaccoMemberAdminTabs(page) {
   await navigateTo(page, "members");
   await page.locator("[data-member-tab='list']").click();
   await expectText(page, "Member list", "SACCO member list tab");
-  const detailAction = page.locator("[data-row-action='member-detail']").first();
-  if (await detailAction.count()) {
-    await detailAction.click();
-    await expectText(page, "Member detail and KYC approval", "SACCO member editable detail");
-    await expectText(page, "Save member profile", "SACCO member profile edit control");
-    await page.locator("[data-member-tab='contacts']").click();
-    await expectText(page, "Member contacts and documents", "SACCO member contacts tab");
-    await page.locator("[data-member-tab='statement']").click();
-    await expectText(page, "Member balance statement", "SACCO member statement tab");
-    await expectText(page, "Staff statement export controls", "SACCO member statement export controls");
-  }
+  const createdMemberId = uatData?.created?.member?.id;
+  if (!createdMemberId) throw new Error("UAT setup did not return the created member id");
+  const detailAction = page.locator(`[data-row-action='member-detail'][data-row-id='${createdMemberId}']`);
+  const detailActionCount = await detailAction.count();
+  if (detailActionCount !== 1) throw new Error(`Expected one detail action for UAT member ${createdMemberId}, found ${detailActionCount}`);
+  await detailAction.click();
+  await page.locator("#memberProfileForm").waitFor({ state: "attached" });
+  console.log("PASS SACCO member editable detail");
+  await expectText(page, "Save member profile", "SACCO member profile edit control");
+  await page.locator("[data-member-tab='contacts']").click();
+  await expectText(page, "Member contacts and documents", "SACCO member contacts tab");
+  await page.locator("[data-member-tab='statement']").click();
+  await expectText(page, "Member balance statement", "SACCO member statement tab");
+  await expectText(page, "Staff statement export controls", "SACCO member statement export controls");
   await page.locator("[data-member-tab='register']").click();
   await expectText(page, "Member registration", "SACCO member registration tab");
   console.log("PASS SACCO member admin tabs");
