@@ -63,6 +63,7 @@ function roleKind() {
     if (roles.includes("operations")) return "operations";
     return "super";
   }
+  if (state.roleNames.some((role) => String(role).trim().toLowerCase() === "sacco administrator")) return "admin";
   if (roles.includes("chairperson") || roles.includes("chairman")) return "chairperson";
   if (roles.includes("treasurer")) return "treasurer";
   if (roles.includes("secretary")) return "secretary";

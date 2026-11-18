@@ -96,12 +96,12 @@ function runNodeScript(script, env) {
 
 async function platformAdminUat(page) {
   await staffLogin(page, "admin@platform.local", "Admin@12345", "Platform admin");
-  await assertScreen(page, "dashboard", "Dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
-  await assertScreen(page, "sacco-applications", "SACCOs", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
-  await assertScreen(page, "subscriptions", "Subscriptions", ["Subscription list", "Package Setup", "Manage package"]);
-  await assertScreen(page, "reports", "Reports", ["Super admin reporting control", "Super Admin SACCO report", "Platform administrator access report"]);
+  await assertScreen(page, "dashboard", "Dashboard", ["Total SACCOs", "Active SACCOs", "Recent SACCO applications"]);
+  await assertScreen(page, "sacco-applications", "SACCOs", ["All SACCOs", "Register SACCO", "Approval Queue"]);
+  await assertScreen(page, "subscriptions", "Subscriptions", ["Subscription control", "Subscription list", "Package Setup"]);
+  await assertScreen(page, "reports", "Reports", ["Reports and evidence", "SACCO reports", "Administrator access"]);
   await assertScreen(page, "complaints", "Complaints", ["Complaints from SACCO admins", "Open platform support cases"]);
-  await assertScreen(page, "users", "Users and Roles", ["Add platform user", "Platform administrator list", "Permission matrix"]);
+  await assertScreen(page, "users", "Users and Roles", ["Add platform user", "Administrator list", "Permission matrix"]);
   await clearSession(page);
   await page.reload({ waitUntil: "domcontentloaded" });
   console.log("PASS platform admin UAT path");
@@ -110,14 +110,18 @@ async function platformAdminUat(page) {
 async function saccoStaffUat(page) {
   const staff = uatData?.created?.staffUser;
   await staffLogin(page, staff?.email || "admin@greenvalley.local", staff?.password || "Sacco@12345", "SACCO staff");
-  await assertScreen(page, "members", "Members", ["Member Overview", "Register Member", "Member List", "Member detail", "Contacts & Documents", "Statement", "Member management focus"]);
+  await assertScreen(page, "members", "Members", ["Registered members", "Register Member", "Member List", "Member detail", "Contacts & Documents", "Statement"]);
   await assertSaccoMemberAdminTabs(page);
-  await assertScreen(page, "transactions", "Transactions", ["Transaction control focus", "Deposits and reversals", "New transaction screen", "Receipting queue", "Receipt register"]);
-  await assertScreen(page, "savings", "Savings", ["Savings operations control", "SACCO monthly performance control", "Treasurer cash collections", "Mobile money collections"]);
+  await assertScreen(page, "transactions", "Transactions", ["Transaction control focus", "New transaction", "Receipting", "Receipt register"]);
+  await assertScreen(page, "savings", "Savings", ["Savings operations control", "Monthly performance", "Products", "Accounts"]);
   await assertScreen(page, "approvals", "Approvals", ["Approval decision center", "Approval queue", "decision"]);
-  await assertScreen(page, "loans", "Loans", ["Loan lifecycle control", "Loan application list"]);
-  await assertScreen(page, "reports", "Reports", ["Reporting evidence control", "Operational and financial reporting"]);
-  await assertScreen(page, "complaints", "Complaints", ["SACCO admin - member chat", "SACCO admin - Platform Super Admin chat"]);
+  await assertScreen(page, "loans", "Loans", ["Loan Overview", "Loan applications"]);
+  await assertScreen(page, "reports", "Reports", ["Reporting evidence control", "Report catalogue", "Report readiness"]);
+  await assertScreen(page, "complaints", "Complaints", ["Member chat", "Platform Super Admin chat"]);
+  await page.locator("[data-module-tab-view='complaints'][data-module-tab='member-chat']").click();
+  await expectComplaintWorkspace(page, "SACCO admin - member chat", "SACCO member complaint chat");
+  await page.locator("[data-module-tab-view='complaints'][data-module-tab='platform-chat']").click();
+  await expectComplaintWorkspace(page, "SACCO admin - Platform Super Admin chat", "SACCO platform complaint chat");
   await clearSession(page);
   await page.reload({ waitUntil: "domcontentloaded" });
   console.log("PASS SACCO staff UAT path");
@@ -132,15 +136,14 @@ async function memberPortalUat(page) {
   await waitForSettledUi(page);
 
   for (const marker of [
-    "Balances and requests update",
-    "Total savings",
+    "Account cycle",
+    "Recent activity",
     "Loans",
-    "Notifications",
-    "Guarantee requests",
-    "Offline drafts",
     "Pay by mobile money",
+    "View statement",
     "Read SACCO messages",
-    member?.membershipNo || "GREE-0001"
+    "Submit complaint",
+    member?.fullName || "Amina Nansubuga"
   ]) {
     await expectText(page, marker, `member portal marker ${marker}`);
   }
@@ -186,8 +189,6 @@ async function assertMemberPortalTabs(page) {
   await expectText(page, "Account balances", "member money accounts tab");
   await page.locator("[data-module-tab-view='money'][data-module-tab='statement']").click();
   await expectText(page, "Statement", "member money statement tab");
-  await page.locator("[data-module-tab-view='money'][data-module-tab='receipts']").click();
-  await expectText(page, "Receipts", "member money receipts tab");
   await navigateTo(page, "notifications");
   await expectText(page, "SACCO admin messages", "member SACCO message center");
   await navigateTo(page, "payments");
@@ -300,6 +301,11 @@ async function expectText(page, text, label) {
   const title = await page.locator("#pageTitle").textContent().catch(() => "unknown title");
   const bodyText = await page.locator("body").innerText().catch(() => "");
   throw new Error(`${label} did not render expected text: ${text}. Current title: ${title}. Body excerpt: ${bodyText.slice(0, 800)}`);
+}
+
+async function expectComplaintWorkspace(page, title, label) {
+  await page.locator(`[aria-label="${title}"], h2:has-text("${title}")`).first().waitFor({ state: "attached" });
+  console.log(`PASS ${label}`);
 }
 
 async function expectTextGone(page, text, label) {

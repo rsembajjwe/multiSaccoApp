@@ -1022,6 +1022,7 @@ function bindEvents() {
     state.selectedSubscriptionRenewalId = button.dataset.openSubscriptionRenewal;
     state.selectedSubscriptionId = button.dataset.openSubscriptionRenewal;
     state.selectedSubscriptionError = "";
+    state.moduleTabs.subscriptions = "expiring";
     renderShell();
   }));
   document.querySelectorAll("[data-row-action='subscription-renewal']").forEach((button) => button.addEventListener("click", () => {

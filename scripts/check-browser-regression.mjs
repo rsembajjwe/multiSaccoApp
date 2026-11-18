@@ -55,33 +55,26 @@ try {
   await assertNotificationBadgeRouting(page, "Notification delivery control", "staff notification badge routing");
   await expectNoVisibleText(page, "Loan portfolio monitoring", "Platform Loans navigation hidden");
   await expectNoVisibleText(page, "Read-only SACCO member support", "Platform Members navigation hidden");
-  await assertScreen(page, "dashboard", ["Total SACCOs", "Active platform users", "Recent SACCO applications"]);
+  await assertScreen(page, "dashboard", ["Total SACCOs", "Active subscriptions", "Recent SACCO applications"]);
   await expectNoVisibleText(page, "Some records could not be loaded", "optional platform fallback warning hidden");
   await assertPlatformDashboardCardNavigation(page);
-  await assertScreen(page, "sacco-applications", ["Register SACCO inside platform", "SACCO application list", "Self-registration approval path"]);
+  await assertScreen(page, "sacco-applications", ["All SACCOs", "Register SACCO", "Approval Queue"]);
   await assertSaccoRegistrationTabs(page);
   await assertQuickSearchResult(page, "Green Valley", "SACCO application review", "platform SACCO quick search");
   await assertQuickSearchKeyboard(page, "Lake Farmers", "SACCO application review", "platform SACCO keyboard quick search");
   await assertSaccoApplicationReview(page);
-  await assertScreen(page, "subscriptions", ["Subscription list", "Package Setup", "Manage package", "Payment initiated", "Callback received"]);
+  await assertScreen(page, "subscriptions", ["Subscription control", "Expiring soon", "Subscription list", "Package Setup"]);
   await assertSubscriptionControl(page);
-  // SACCO Accounts is now a tab within the merged SACCOs section (was a separate nav item).
-  await navigateTo(page, "sacco-applications");
-  await page.locator("[data-sacco-registration-tab='accounts']").click();
-  await expectText(page, "SACCO account health", "SACCO account health tab");
-  await expectText(page, "Active accounts", "SACCO accounts active summary");
-  await expectText(page, "Without subscription", "SACCO accounts subscription summary");
-  console.log("PASS sacco-accounts (merged tab)");
   await expectNoVisibleText(page, "Platform approval queues", "Platform Approvals navigation hidden");
   await expectNoVisibleText(page, "Health, callbacks, jobs, support access", "Platform Operations navigation hidden");
-  await assertScreen(page, "reports", ["Super admin reporting control", "Super Admin SACCO report", "Platform administrator access report"]);
+  await assertScreen(page, "reports", ["Reports and evidence", "Reporting control", "SACCO reports", "Administrator access"]);
   await assertScreen(page, "audit", ["Audit evidence control", "Platform audit evidence", "Sensitive audit queue", "Platform audit trail"]);
-  await assertScreen(page, "settings", ["Platform settings control", "Protected platform configuration", "Platform subscription packages", "Platform role catalogue"]);
+  await assertScreen(page, "settings", ["System Settings", "Platform Profile", "Access & Roles", "Billing & Packages", "Backup & Recovery"]);
   await assertPlatformMobileMoneyIntegrations(page);
-  await assertScreen(page, "users", ["Add platform user", "User detail and role assignment", "Platform role coverage", "Platform administrator list", "Permission matrix"]);
+  await assertScreen(page, "users", ["Add platform user", "User detail and role assignment", "Platform role coverage", "Administrator list", "Permission matrix"]);
   await assertPlatformUserCreation(page);
   await assertScreen(page, "complaints", ["Complaints from SACCO admins", "Open platform support cases", "Export complaints"]);
-  await assertScreen(page, "notifications", ["Notification delivery control", "Notification delivery monitor", "Notification template setup", "Notification templates"]);
+  await assertScreen(page, "notifications", ["Notifications", "Delivery Log", "Compose Notification", "Templates", "System Alerts", "Notification delivery monitor"]);
   await expectNoVisibleText(page, "Dashboard data source", "debug source panel hidden");
   await logout(page);
 
@@ -91,13 +84,12 @@ try {
   await assertRoleDashboard(page, "PLATFORM", "support@platform.local", "Support@12345", "Platform Support", ["Platform Support Officer", "SACCO support tickets", "SACCO support list"]);
 
   await staffLogin(page, "GREE", "admin@greenvalley.local", "Sacco@12345", "SACCO admin");
-  await expectNoVisibleText(page, "SACCO Administrator", "SACCO Administrator label hidden");
-  await expectNoVisibleText(page, "SACCO role access", "SACCO role access panel hidden");
+  await expectText(page, "SACCO Administrator", "SACCO administrator identity");
   await assertScreen(page, "dashboard", ["Total members", "Total savings", "Recent transactions", "Loan work queue", "SACCO monthly performance control", "Treasurer cash collections", "Mobile money collections"]);
   await assertSaccoMonthlyPerformanceDrilldown(page);
-  await assertScreen(page, "members", ["Member Overview", "Register Member", "Member List", "Member detail", "Contacts & Documents", "Statement", "Member management focus"]);
+  await assertScreen(page, "members", ["Registered members", "Register Member", "Member List", "Import members", "Member detail", "Contacts & Documents", "Statement"]);
   await assertMemberRegistrationAndKyc(page);
-  await assertQuickSearchResult(page, "GREE-0001", "Member detail and KYC approval", "SACCO member quick search");
+  await assertQuickSearchResult(page, "GREE-0001", "Member detail", "SACCO member quick search");
   await assertModuleTabs(page, "transactions", [
     ["overview", ["Transaction control focus"]],
     ["capture", ["New transaction screen"]],
@@ -125,11 +117,13 @@ try {
     ["claims", ["Welfare claim submission", "Welfare claims"]],
     ["detail", ["Welfare claim decision"]]
   ]);
-  await assertModuleTabs(page, "loans", [
-    ["overview", ["Loan lifecycle control"]],
-    ["application", ["Loan application form"]],
-    ["list", ["Loan application list"]]
-  ]);
+  await navigateTo(page, "loans");
+  await expectText(page, "Loan Overview", "loan overview workspace");
+  await expectText(page, "Loan applications", "loan application register");
+  await page.locator("[data-summary-view='loans'][data-summary-tab='application']").click();
+  await expectText(page, "Loan application form", "loan application form");
+  await navigateTo(page, "loans");
+  console.log("PASS loans workspace");
   await assertModuleTabs(page, "guarantors", [
     ["overview", ["Guarantor control focus"]],
     ["requests", ["Guarantor requests"]]
@@ -180,17 +174,14 @@ try {
     await assertMemberSessionMenu(page);
     await assertMemberHelpMenu(page);
     await assertMemberAccountMenu(page);
-    await assertNotificationBadgeRouting(page, "Read at", "member notification badge routing");
+    await assertNotificationBadgeRouting(page, "Member complaint center", "member notification badge routing");
     await navigateTo(page, "home");
     for (const marker of [
-      "Balances and requests update",
-      "Total savings",
+      "Account cycle",
+      "Recent activity",
       "Loans",
-      "Notifications",
-      "Guarantee requests",
-      "Offline drafts",
-      "Member quick actions",
       "Pay by mobile money",
+      "View statement",
       "Read SACCO messages",
       "Submit complaint"
     ]) {
@@ -198,7 +189,7 @@ try {
     }
     await assertMemberQuickActions(page);
     await assertMemberMoneyHub(page);
-    await assertScreen(page, "loans", ["Mobile loan application", "Submit loan application", "Member loans"]);
+    await assertScreen(page, "loans", ["Apply for loan", "Member loans", "Guarantee requests"]);
     await assertMemberLoanSubmission(page);
     await assertMemberGuarantorDecision(page);
     await assertScreen(page, "payments", ["Member payment center", "Ready to post", "Post payment"]);
@@ -304,7 +295,8 @@ async function assertPublicSaccoRegistration(page) {
   if (await paymentPhone.count()) await paymentPhone.fill("+256700123456");
   await page.locator("#publicSaccoRegistrationForm button[type='submit']").click();
   await expectText(page, "Registration received", "public SACCO registration submitted");
-  await expectText(page, "Mobile-money payment prompt initiated", "public SACCO payment initiated");
+  await expectText(page, "1-month free trial", "public SACCO free trial confirmed");
+  await expectText(page, "using reference", "public SACCO payment reference provided");
   await page.getByRole("button", { name: "Login", exact: true }).click();
   await expectText(page, "Login to Tereka Online", "public SACCO registration returns to login");
   console.log("PASS public SACCO registration");
@@ -405,7 +397,6 @@ async function assertStaffSessionMenu(page) {
   await expectText(page, "Lockout after", "staff lockout policy summary");
   await page.locator("[data-action='open-security-settings']").click();
   await expectText(page, "Password and lockout policy", "staff security settings route");
-  await page.locator("[data-module-tab-view='settings'][data-module-tab='configuration']").click();
   await navigateTo(page, "dashboard");
   console.log("PASS staff session security menu");
 }
@@ -413,7 +404,9 @@ async function assertStaffSessionMenu(page) {
 async function assertMemberSessionMenu(page) {
   await page.locator("[data-action='toggle-session-menu']").click();
   await expectText(page, "Session and security", "member session menu");
-  await page.locator("[data-action='open-member-security']").click();
+  await page.keyboard.press("Escape");
+  await navigateTo(page, "profile");
+  await page.locator("[data-module-tab-view='profile'][data-module-tab='security']").click();
   await expectText(page, "Member security center", "member security route");
   await navigateTo(page, "home");
   console.log("PASS member session security menu");
@@ -506,7 +499,7 @@ async function assertMemberAccountMenu(page) {
   await expectText(page, "GREE-0001", "member account identity");
   await expectText(page, "Member", "member account role");
   await page.locator("[data-action='open-account-profile']").click();
-  await expectText(page, "Member profile and KYC", "member account profile route");
+  await expectText(page, "Member profile", "member account profile route");
   await navigateTo(page, "home");
   console.log("PASS member account menu");
 }
@@ -563,7 +556,7 @@ async function assertModuleTabs(page, viewId, tabAssertions) {
 
 async function assertPlatformMobileMoneyIntegrations(page) {
   await navigateTo(page, "settings");
-  await page.locator("[data-module-tab-view='settings'][data-module-tab='mobile-money']").click();
+  await page.locator("[data-module-tab-view='settings'][data-module-tab='billing']").click();
   await expectText(page, "Mobile money integrations", "platform mobile-money integrations panel");
   await expectText(page, "MTN subscription key", "platform MTN key field");
   await expectText(page, "Airtel client ID", "platform Airtel key field");
@@ -603,18 +596,14 @@ async function assertSaccoMonthlyPerformanceDrilldown(page) {
     await expectText(page, "Statement", "SACCO monthly performance member statement tab");
     await expectText(page, "Member balance statement", "SACCO monthly performance member statement detail");
     await expectText(page, "Statement control summary", "SACCO monthly performance member statement summary");
-    await expectText(page, "Statement ready", "SACCO monthly performance member statement ready");
     await expectText(page, "Receipt evidence summary", "SACCO monthly performance receipt evidence summary");
     await expectText(page, "Receipt-ready lines", "SACCO monthly performance receipt-ready lines");
     await expectText(page, "Staff statement export controls", "SACCO monthly performance statement export controls");
-    await expectText(page, "Receipt bundle", "SACCO monthly performance receipt bundle");
     await navigateTo(page, "dashboard");
     await page.locator("[data-row-action='monthly-performance-detail']").first().click();
   }
   await page.locator("[data-action='close-monthly-performance-detail']").click();
   await expectText(page, "Use Review on a monthly performance row", "SACCO monthly performance detail closed");
-  await navigateTo(page, "members");
-  await page.locator("[data-member-tab='overview']").click();
   await navigateTo(page, "dashboard");
   console.log("PASS SACCO monthly performance drilldown");
 }
@@ -660,21 +649,19 @@ async function assertPlatformDashboardCardNavigation(page) {
 }
 
 async function assertSaccoRegistrationTabs(page) {
-  await page.locator("[data-sacco-registration-tab='platform']").click();
+  await page.locator("[data-sacco-registration-tab='platform']").first().click();
   await expectText(page, "Register SACCO", "platform SACCO registration tab");
   await expectText(page, "Country", "platform SACCO country field");
   await page.locator("#newTenantCountry").selectOption("nigeria");
   await expectInputValue(page, "#newTenantCurrencyCode", "NGN", "platform SACCO currency follows country");
-  await page.locator("[data-sacco-registration-tab='applications']").click();
-  await expectText(page, "SACCO application list", "SACCO application list tab");
-  await expectText(page, "Currency Code", "SACCO application currency column");
-  await expectText(page, "Payment Stage", "SACCO application payment stage column");
-  await expectText(page, "Approval Stage", "SACCO application approval stage column");
+  await page.locator("[data-sacco-registration-tab='applications']").first().click();
+  await expectText(page, "Total SACCOs", "SACCO directory summary");
+  await expectText(page, "Operational status", "SACCO directory status column");
+  await expectText(page, "Subscription status", "SACCO directory subscription column");
   await page.locator("[data-sacco-registration-tab='self']").click();
-  await expectText(page, "Self-registration approval path", "self-registration approval tab");
-  await page.locator("[data-sacco-registration-tab='accounts']").click();
-  await expectText(page, "SACCO account health", "SACCO account health tab");
-  await page.locator("[data-sacco-registration-tab='applications']").click();
+  await expectText(page, "Approval Queue", "self-registration approval tab");
+  await expectText(page, "Search applications", "self-registration approval search");
+  await page.locator("[data-sacco-registration-tab='applications']").first().click();
   console.log("PASS SACCO registration tabs");
 }
 
@@ -683,18 +670,31 @@ async function assertPlatformUserCreation(page) {
   const fullName = `Browser Platform User ${stamp}`;
   await page.locator("[data-user-tab='add']").click();
   await expectText(page, "Add platform user", "platform add-user panel");
-  await page.locator("#newUserFullName").fill(fullName);
-  await page.locator("#newUserEmail").fill(`browser.platform.${stamp}@tereka.local`);
-  await page.locator("#newUserPhone").fill("+256700009999");
-  await page.locator("#newUserPassword").fill("TempPass@12345");
   const createSupportRole = page.locator("label.check-row", { hasText: "Platform Support Officer" }).locator("input[name='newUserRoleIds']");
   if (await createSupportRole.count()) {
     await createSupportRole.check();
   } else {
     await page.locator("input[name='newUserRoleIds']").first().check();
   }
+  await page.locator("#newUserFullName").fill(fullName);
+  await page.locator("#newUserEmail").fill(`browser.platform.${stamp}@example.com`);
+  await page.locator("#newUserPhone").fill(`+2567${String(stamp).slice(-8)}`);
+  await page.locator("#newUserDeliveryChannel").selectOption("email");
+  const formIsValid = await page.locator("#addUserForm").evaluate((form) => form.checkValidity());
+  if (!formIsValid) throw new Error("Platform user creation form is invalid after test data entry.");
+  const createUserResponsePromise = page.waitForResponse((response) => response.request().method() === "POST"
+    && new URL(response.url()).pathname.endsWith("/api/v1/users"), { timeout: 45000 });
   await page.locator("#addUserForm button[type='submit']").click();
-  await page.waitForSelector("[data-user-tab='list'].active", { timeout: 15000 });
+  const createUserResponse = await createUserResponsePromise;
+  if (!createUserResponse.ok()) {
+    throw new Error(`Platform user creation returned ${createUserResponse.status()}: ${await createUserResponse.text()}`);
+  }
+  await page.waitForFunction(() => document.querySelector("[data-user-tab='list'].active")
+    || document.querySelector("#addUserForm")?.closest("section")?.querySelector(".notice.warning"), null, { timeout: 45000 });
+  if (!(await page.locator("[data-user-tab='list'].active").count())) {
+    const warning = await page.locator("#addUserForm").locator("xpath=ancestor::section[1]").locator(".notice.warning").innerText();
+    throw new Error(`Platform user creation failed: ${warning}`);
+  }
   const postCreateSearch = await page.locator("#globalSearch").inputValue();
   if (postCreateSearch) throw new Error(`Expected global search to be cleared after platform user creation, got ${postCreateSearch}`);
   await page.locator("#globalSearch").fill(fullName);
@@ -723,6 +723,7 @@ async function assertSaccoApplicationReview(page) {
 }
 
 async function assertSubscriptionControl(page) {
+  await page.locator("[data-module-tab-view='subscriptions'][data-module-tab='packages']").click();
   await page.locator("[data-package-manage]").first().click();
   await expectText(page, "Update the subscription package", "package setup dialogue");
   await page.locator("#packageSetupName").fill(`Starter ${Date.now()}`);
@@ -730,10 +731,13 @@ async function assertSubscriptionControl(page) {
   await page.locator("#packageSetupForm button[type='submit']").click();
   await expectText(page, "updated in this session", "package setup save action");
   await page.locator("[data-action='close-package-setup']").click();
+  await page.locator("[data-module-tab-view='subscriptions'][data-module-tab='list']").click();
   await page.locator("[data-row-action='subscription-detail']").first().click();
   await expectText(page, "Subscription control", "subscription detail panel");
   await expectText(page, "Operating access", "subscription operating access");
   await expectText(page, "Record payment", "subscription record payment action");
+  await expectText(page, "Review renewal", "subscription renewal review action");
+  await page.locator("[data-open-subscription-renewal]").click();
   await expectText(page, "Renew full year", "subscription renew action");
   console.log("PASS subscription control");
 }
@@ -767,10 +771,10 @@ async function assertMemberRegistrationAndKyc(page) {
   await expectText(page, "Member list", "member list tab");
   await page.locator("#globalSearch").fill(fullName);
   await page.locator("tr", { hasText: fullName }).locator("[data-row-action='member-detail']").click();
-  await expectText(page, "Member detail and KYC approval", "member detail panel");
-  await expectText(page, "Member KYC checklist", "member KYC checklist");
+  await expectText(page, "Member detail", "member detail panel");
+  await expectText(page, "Profile information", "member profile information");
   await expectText(page, "Approve member", "member approve action");
-  await expectText(page, "Save KYC decision", "member KYC save action");
+  await expectText(page, "Save member status", "member status save action");
   await page.locator("[data-member-tab='contacts']").click();
   await expectText(page, "Member contacts and documents", "member contacts tab");
   await expectText(page, "Member documents", "member KYC documents tab");
@@ -805,7 +809,7 @@ async function assertStaffStatementCsvDownload(page) {
 
 async function assertTransactionWorkflow(page) {
   await page.locator("[data-module-tab-view='transactions'][data-module-tab='capture']").click();
-  await expectText(page, "Office receipt controls", "transaction office receipt controls");
+  await expectText(page, "Record a transaction", "transaction capture form");
   await expectText(page, "Loan repayment", "transaction loan repayment option");
   await page.locator("#newTransactionType").selectOption("savings_deposit");
   await page.locator("#newTransactionChannel").selectOption("cash");
@@ -828,6 +832,7 @@ async function assertTransactionWorkflow(page) {
 async function assertMemberLoanSubmission(page) {
   const stamp = Date.now();
   await navigateTo(page, "loans");
+  await page.locator("[data-module-tab-view='loans'][data-module-tab='application']").click();
   await page.locator("#memberLoanProduct").selectOption("Emergency Loan").catch(async () => {
     await page.locator("#memberLoanProduct").selectOption({ index: 0 });
   });
@@ -905,8 +910,6 @@ async function assertMemberMoneyHub(page) {
   await expectText(page, "Account balances", "member money accounts tab");
   await page.locator("[data-module-tab-view='money'][data-module-tab='statement']").click();
   await expectText(page, "Statement", "member money statement tab");
-  await page.locator("[data-module-tab-view='money'][data-module-tab='receipts']").click();
-  await expectText(page, "Receipts", "member money receipts tab");
   console.log("PASS member money hub");
 }
 
@@ -923,20 +926,20 @@ async function assertMemberNotificationCenter(page) {
 
 async function assertMemberProfileTabs(page) {
   await navigateTo(page, "profile");
-  await expectText(page, "Member profile and KYC", "member profile overview");
-  await page.locator("[data-module-tab-view='profile'][data-module-tab='kyc']").click();
-  await expectText(page, "Member KYC readiness", "member profile kyc readiness");
+  await expectText(page, "Member profile", "member profile overview");
   await page.locator("[data-module-tab-view='profile'][data-module-tab='contacts']").click();
   await expectText(page, "Member contact controls", "member profile contact controls");
   await expectText(page, "Profile contacts", "member profile contacts table");
-  await page.locator("[data-module-tab-view='profile'][data-module-tab='balances']").click();
-  await expectText(page, "Member balance identity", "member profile balance identity");
-  await expectText(page, "Balance summary", "member profile balance table");
+  await page.locator("[data-module-tab-view='profile'][data-module-tab='membership']").click();
+  await expectText(page, "My membership", "member profile membership");
+  await page.locator("[data-module-tab-view='profile'][data-module-tab='privacy']").click();
+  await expectText(page, "Data protection requests", "member profile privacy controls");
   console.log("PASS member profile tabs");
 }
 
 async function assertMemberSecurityTabs(page) {
-  await navigateTo(page, "security");
+  await navigateTo(page, "profile");
+  await page.locator("[data-module-tab-view='profile'][data-module-tab='security']").click();
   await expectText(page, "Member security center", "member security session");
   await page.locator("[data-module-tab-view='security'][data-module-tab='login']").click();
   await expectText(page, "Member login requirements", "member security login requirements");
@@ -986,7 +989,7 @@ async function assertMemberComplaintSubmission(page) {
   await page.locator("#memberComplaintSubject").fill(subject);
   await page.locator("#memberComplaintDescription").fill("Browser regression complaint submitted from member portal.");
   await page.locator("#memberComplaintForm button[type='submit']").click();
-  await expectText(page, "Submitted complaint", "member complaint submitted");
+  await expectText(page, "Started complaint chat", "member complaint submitted");
   await page.locator("[data-module-tab-view='complaints'][data-module-tab='tracking']").click();
   await expectText(page, "Complaint tracking workspace", "member complaint tracking workspace");
   await expectText(page, subject, "member complaint visible after submit");

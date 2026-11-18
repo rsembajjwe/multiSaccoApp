@@ -379,12 +379,27 @@ function memberLoansView(cycle = null) {
     action: "member-loan-history",
     actionId: loan.id
   }));
-  const tabs = [["member-loans", "Member loans"]];
+  const tabs = [["application", "Apply for loan"], ["member-loans", "Member loans"], ["guarantor", "Guarantee requests"]];
   const tab = activeModuleTab("loans", tabs);
   return `
     ${moduleTabs("loans", tabs, tab)}
+    ${tab === "application" ? `${memberLoanApplicationPanel()}${memberReplaceGuarantorPanel()}` : ""}
     ${tab === "member-loans" ? `${memberLoanHistoryPanel()}${loanRows.length ? recordTable(`Member loans - ${cycle?.label || "current"}`, loanRows, ["product", "principalAmount", "totalPayableAmount", "postedRepaymentAmount", "outstandingBalance", "nextDueDate", "status"]) : emptyState("Member loans", "Submitted and active loans will appear here after SACCO review.")}` : ""}
+    ${tab === "guarantor" ? memberGuarantorRequestsPanel(cycle) : ""}
   `;
+}
+
+function memberGuarantorRequestsPanel(cycle = null) {
+  const requests = memberRowsInSelectedCycle(state.memberData.guarantorRequests || [], cycle, ["createdAt", "updatedAt"]);
+  return `
+    ${state.memberGuarantorMessage ? `<div class="notice compact"><strong>${escapeHtml(state.memberGuarantorMessage)}</strong></div>` : ""}
+    ${state.memberGuarantorError ? `<div class="notice warning"><strong>Guarantor decision failed.</strong><span>${escapeHtml(state.memberGuarantorError)}</span></div>` : ""}
+    <section class="panel">
+      <div class="panel-heading"><div><h2>Guarantee requests</h2><p>Accept or reject requests to guarantee another member's loan.</p></div><span class="status ${requests.some((request) => normal(request.status) === "pending") ? "pending" : "active"}">${requests.length} request(s)</span></div>
+      <div class="table-wrap"><table><thead><tr><th>Loan</th><th>Product</th><th>Requested</th><th>Guaranteed</th><th>Capacity</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        ${requests.map((request) => `<tr><td>${escapeHtml(request.applicationNo || request.loanId || "-")}</td><td>${escapeHtml(request.product || "Loan")}</td><td>${escapeHtml(money.format(request.requestedAmount || 0))}</td><td>${escapeHtml(money.format(request.guaranteedAmount || 0))}</td><td>${escapeHtml(request.capacity || "-")}</td><td>${escapeHtml(labelize(request.status || "pending"))}</td><td><div class="table-actions">${normal(request.status) === "pending" ? `<button class="table-action" type="button" data-row-id="${escapeHtml(request.id)}" data-member-guarantor-action="accepted">Accept</button><button class="table-action danger" type="button" data-row-id="${escapeHtml(request.id)}" data-member-guarantor-action="rejected">Reject</button>` : `<span class="status active">Decided</span>`}</div></td></tr>`).join("") || `<tr><td colspan="7"><div class="empty-state compact"><strong>No guarantee requests.</strong><span>Requests will appear here when another member selects you as guarantor.</span></div></td></tr>`}
+      </tbody></table></div>
+    </section>`;
 }
 
 function memberLoanTotalPayable(loan) {

@@ -1,5 +1,6 @@
 const baseUrl = (process.env.API_BASE_URL || "http://127.0.0.1:8080/api/v1").replace(/\/$/, "");
 const runId = process.env.UAT_RUN_ID || new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+const runDigits = runId.replace(/\D/g, "").padStart(8, "0");
 const memberPassword = process.env.UAT_MEMBER_PASSWORD || "Member@12345";
 const staffPassword = process.env.UAT_STAFF_PASSWORD || "Sacco@12345";
 
@@ -46,7 +47,7 @@ try {
     tenantId: "tenant_green",
     fullName: `UAT Staff ${runId}`,
     email: `uat.staff.${runId}@greenvalley.local`,
-    phone: "+256700555111",
+    phone: `+2567${runDigits.slice(-8)}`,
     password: staffPassword
   }, platformToken);
   evidence.created.staffUser = {
@@ -66,7 +67,7 @@ try {
     membershipNo: `UAT-${runId}`,
     fullName: `UAT Member ${runId}`,
     memberType: "individual",
-    phone: "+256700555222",
+    phone: `+2567${runDigits.slice(-7)}2`,
     email: `uat.member.${runId}@example.local`,
     nationalId: `UAT-NIN-${runId}`,
     kycStatus: "verified",
@@ -77,6 +78,20 @@ try {
     ...pick(activeMember.data, ["id", "membershipNo", "fullName", "phone", "email", "status", "kycStatus"]),
     password: memberPassword
   };
+
+  const memberships = await api("GET", "/member-subscriptions", null, saccoToken);
+  let membership = memberships.data.find((item) => item.memberId === activeMember.data.id);
+  if (!membership) {
+    membership = (await api("POST", "/member-subscriptions", {
+      tenantId: "tenant_green",
+      memberId: activeMember.data.id
+    }, saccoToken)).data;
+  }
+  if (String(membership.status || "").toLowerCase() !== "active") {
+    const amountDue = Math.max(Number(membership.amount || 5000) - Number(membership.paid || 0), 1);
+    membership = (await api("POST", `/member-subscriptions/${membership.id}/payments`, { amount: amountDue }, saccoToken)).data;
+  }
+  evidence.created.memberSubscription = pick(membership, ["id", "memberId", "amount", "paid", "status"]);
 
   const savings = await api("POST", "/financial-transactions", {
     memberId: activeMember.data.id,
@@ -103,8 +118,12 @@ try {
     narration: `UAT welfare contribution ${runId}`
   }, saccoToken);
 
-  const postedSavings = await api("PATCH", `/financial-transactions/${savings.data.id}/status`, { status: "posted" }, platformToken);
-  const postedShares = await api("PATCH", `/financial-transactions/${shares.data.id}/status`, { status: "posted" }, platformToken);
+  const postedSavings = String(savings.data.status || "").toLowerCase() === "posted"
+    ? savings
+    : await api("PATCH", `/financial-transactions/${savings.data.id}/status`, { status: "posted" }, platformToken);
+  const postedShares = String(shares.data.status || "").toLowerCase() === "posted"
+    ? shares
+    : await api("PATCH", `/financial-transactions/${shares.data.id}/status`, { status: "posted" }, platformToken);
   const pendingWelfare = welfare.data;
   evidence.created.transactions = {
     postedSavings: pick(postedSavings.data, ["id", "reference", "type", "status", "amount"]),
@@ -120,7 +139,9 @@ try {
     amount: 30000,
     narration: `UAT reversible deposit ${runId}`
   }, saccoToken);
-  const postedReversible = await api("PATCH", `/financial-transactions/${reversible.data.id}/status`, { status: "posted" }, platformToken);
+  const postedReversible = String(reversible.data.status || "").toLowerCase() === "posted"
+    ? reversible
+    : await api("PATCH", `/financial-transactions/${reversible.data.id}/status`, { status: "posted" }, platformToken);
   evidence.created.reversalCandidate = pick(postedReversible.data, ["id", "reference", "type", "status", "amount"]);
 
   const loan = await api("POST", "/loans", {
@@ -128,7 +149,9 @@ try {
     product: "Development Loan",
     amount: 900000,
     repaymentMonths: 10,
-    purpose: `UAT working capital ${runId}`
+    purpose: `UAT working capital ${runId}`,
+    signedFormReference: `UAT-LOAN-FORM-${runId}`,
+    guarantorMemberIds: ["member_green_grace"]
   }, saccoToken);
   evidence.created.loan = pick(loan.data, ["id", "memberId", "product", "amount", "status", "stage"]);
 
@@ -148,7 +171,8 @@ try {
     product: "Emergency Loan",
     amount: 250000,
     repaymentMonths: 6,
-    purpose: `UAT member portal loan ${runId}`
+    purpose: `UAT member portal loan ${runId}`,
+    guarantors: [{ membershipNo: "GREE-0008", pledgeAmount: 1000 }]
   }, memberToken);
   const complaint = await api("POST", "/member-auth/mobile-complaints", {
     subject: `UAT offline draft ${runId}`,
